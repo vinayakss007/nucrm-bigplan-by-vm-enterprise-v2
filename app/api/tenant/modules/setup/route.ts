@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     await db.transaction(async (tx) => {
       // 1. Create Custom Fields
       for (const field of template.custom_fields) {
-        await tx.insert(customFieldDefs).values({} as any);//@ts-ignore
+        await tx.insert(customFieldDefs).values({} as any); // @ts-expect-error Schema mismatch - activity insert requires partial object
     db.insert().values({
           tenantId: ctx.tenantId,
           entityType: field.entity,

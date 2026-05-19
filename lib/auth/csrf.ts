@@ -12,6 +12,7 @@ function getRandomValues(length: number): Uint8Array {
     return array;
   }
   // Fallback for Node.js
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { randomBytes } = require('crypto');
   return randomBytes(length);
 }
@@ -30,6 +31,7 @@ function createHashSha256(data: string): string {
     return Math.abs(hash).toString(36).padStart(10, '0');
   }
   // Node.js
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { createHash } = require('crypto');
   return createHash('sha256').update(data).digest('hex');
 }

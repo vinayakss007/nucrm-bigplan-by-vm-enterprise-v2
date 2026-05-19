@@ -261,7 +261,7 @@ export async function executeSelectiveRestore(
         });
         
         let newCount = 0;
-        let updatedCount = 0;
+        const updatedCount = 0;
         let skippedCount = 0;
         
         for (const statement of statements) {

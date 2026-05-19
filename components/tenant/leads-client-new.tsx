@@ -291,7 +291,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
     });
   };
 
-  const toggleSelect=(id:string)=>setSelectedLeads(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;});
+  const toggleSelect=(id:string)=>setSelectedLeads(prev=>{const n=new Set(prev);if(n.has(id)){n.delete(id);}else{n.add(id);}return n;});
 
   const kanbanGroups=useMemo(()=>{
     const g:Record<string,Lead[]>={};Object.keys(PIPELINE_CONFIG).forEach(s=>{g[s]=[];});
@@ -418,7 +418,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                <th className="px-4 py-3 w-10"><input type="checkbox" className="rounded border-border" onChange={e=>{e.target.checked?setSelectedLeads(new Set(leads.map(l=>l.id))):setSelectedLeads(new Set());}} checked={selectedLeads.size===leads.length&&leads.length>0}/></th>
+                <th className="px-4 py-3 w-10"><input type="checkbox" className="rounded border-border" onChange={e=>{if(e.target.checked){setSelectedLeads(new Set(leads.map(l=>l.id)));}else{setSelectedLeads(new Set());}}} checked={selectedLeads.size===leads.length&&leads.length>0}/></th>
                 {['Lead','Company','Contact','Status','Score','BANT','Activity',''].map(h=>(
                   <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}

@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Find or create contact
-    let contact = await db.query.contacts.findFirst({
+    const contact = await db.query.contacts.findFirst({
       where: eq(contacts.email, body.email),
     });
 

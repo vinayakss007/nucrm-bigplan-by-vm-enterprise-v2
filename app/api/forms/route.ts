@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    await db.insert(formSubmissions).values({} as any);//@ts-ignore
+    await db.insert(formSubmissions).values({} as any); // @ts-expect-error Schema mismatch - activity insert requires partial object
     db.insert().values({
       tenantId: form.tenantId,
       formId: form_id,

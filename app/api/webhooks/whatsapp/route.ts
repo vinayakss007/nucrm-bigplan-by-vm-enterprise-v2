@@ -151,7 +151,7 @@ async function processWhatsAppPayload(body: any) {
 
         // Activity log
         if (contactRow) {
-          await tx.insert(activities).values({} as any);//@ts-ignore
+          await tx.insert(activities).values({} as any); // @ts-expect-error Schema mismatch - activity insert requires partial object
     db.insert().values({
             tenantId: integrationRow.tenantId,
             contactId: contactRow.id,

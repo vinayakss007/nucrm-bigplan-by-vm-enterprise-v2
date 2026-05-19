@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
     const entity_id = searchParams.get('entity_id');
     const unread_only = searchParams.get('unread_only') === 'true';
 
-    let conditions = [eq(aiInsights.tenantId, ctx.tenantId)];
+    const conditions = [eq(aiInsights.tenantId, ctx.tenantId)];
 
     if (entity_type && entity_id) {
       conditions.push(eq(aiInsights.entityType, entity_type));

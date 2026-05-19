@@ -214,7 +214,7 @@ export default function LeadsClient({
 
   const toggleSelect = (id: string) => {
     const next = new Set(selectedLeads);
-    next.has(id) ? next.delete(id) : next.add(id);
+    if (next.has(id)) { next.delete(id); } else { next.add(id); }
     setSelectedLeads(next);
   };
 

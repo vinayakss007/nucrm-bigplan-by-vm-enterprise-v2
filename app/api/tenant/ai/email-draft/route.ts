@@ -230,7 +230,7 @@ export async function GET(request: NextRequest) {
     const deal_id = searchParams.get('deal_id');
     const limit = parseInt(searchParams.get('limit') || '20');
 
-    let conditions = [eq(emailDrafts.tenantId, ctx.tenantId)];
+    const conditions = [eq(emailDrafts.tenantId, ctx.tenantId)];
 
     if (contact_id) {
       conditions.push(eq(emailDrafts.contactId, contact_id));

@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
       const existing = existingCounts[table] || 0;
 
       let newCount = 0;
-      let updatedCount = 0;
+      const updatedCount = 0;
       let skippedCount = 0;
 
       if (restore_mode === 'insert_only') {

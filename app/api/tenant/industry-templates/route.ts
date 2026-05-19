@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
         for (let i = 0; i < pipe.stages.length; i++) {
           const stageName = pipe.stages[i];
           
-          await tx.insert(dealStages).values({} as any);//@ts-ignore
+          await tx.insert(dealStages).values({} as any); // @ts-expect-error Schema mismatch - activity insert requires partial object
     db.insert().values({
             tenantId: ctx.tenantId,
             name: stageName,

@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
     await executeBatch();
 
     // Log activity
-    await db.insert(activities).values({} as any);//@ts-ignore
+    await db.insert(activities).values({} as any); // @ts-expect-error Schema mismatch - activity insert requires partial object
     db.insert().values({
       tenantId: ctx.tenantId,
       userId: ctx.userId,
