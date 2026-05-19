@@ -1,0 +1,200 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 14% 96%;
+    --foreground: 222 24% 10%;
+    --card: 220 13% 99%;
+    --card-foreground: 222 24% 10%;
+    --popover: 220 13% 99%;
+    --popover-foreground: 222 24% 10%;
+    --primary: 250 84% 54%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 94%;
+    --secondary-foreground: 222 24% 10%;
+    --muted: 220 14% 94%;
+    --muted-foreground: 215 10% 42%;
+    --accent: 250 60% 96%;
+    --accent-foreground: 250 84% 40%;
+    --destructive: 0 80% 56%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 11% 86%;
+    --input: 220 11% 86%;
+    --ring: 250 84% 54%;
+    --radius: 0.75rem;
+  }
+  .dark {
+    --background: 222 24% 8%;
+    --foreground: 210 20% 92%;
+    --card: 222 20% 11%;
+    --card-foreground: 210 20% 92%;
+    --popover: 222 20% 11%;
+    --popover-foreground: 210 20% 92%;
+    --primary: 252 87% 67%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 20% 14%;
+    --secondary-foreground: 210 20% 92%;
+    --muted: 222 20% 14%;
+    --muted-foreground: 215 12% 62%;
+    --accent: 250 35% 16%;
+    --accent-foreground: 252 87% 74%;
+    --destructive: 0 70% 52%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 222 16% 18%;
+    --input: 222 16% 18%;
+    --ring: 252 87% 67%;
+  }
+}
+
+@layer base {
+  html { font-size: 15px; }
+  * { @apply border-border; box-sizing: border-box; }
+  body { @apply bg-background text-foreground; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  code, pre, kbd { font-family: 'JetBrains Mono', 'DM Mono', monospace; }
+
+  /* Heading scale — bolder, tighter tracking for modern SaaS feel */
+  h1 { @apply text-[1.75rem] font-bold leading-[1.2] tracking-tight; }
+  h2 { @apply text-[1.4rem] font-bold leading-[1.25] tracking-tight; }
+  h3 { @apply text-[1.15rem] font-semibold leading-[1.3] tracking-tight; }
+  h4 { @apply text-base font-semibold leading-[1.35] tracking-tight; }
+}
+
+@layer components {
+  .admin-card {
+    @apply bg-card border border-border rounded-xl;
+    @apply transition-all duration-300 ease-out;
+    @apply hover:shadow-lg hover:shadow-primary/5 hover:border-primary/30;
+  }
+  .admin-sidebar { background: hsl(222, 32%, 5%); border-right: 1px solid rgba(255,255,255,0.05); }
+  .admin-nav-item { @apply flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-medium transition-all duration-150; color: rgba(255,255,255,0.55); }
+  .admin-nav-item:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.85); }
+  .admin-nav-item.active { background: rgba(124,58,237,0.18); color: hsl(252,87%,74%); }
+  .tenant-sidebar { @apply bg-card border-r border-border; }
+  .tenant-nav-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-semibold;
+    @apply text-muted-foreground;
+    @apply transition-all duration-200 ease-out;
+    @apply relative;
+  }
+  .tenant-nav-item:hover { @apply bg-accent/60 text-foreground; }
+  .tenant-nav-item.active {
+    @apply bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 font-bold;
+  }
+  .tenant-nav-item.active::before {
+    content: '';
+    @apply absolute left-0 top-1/2 -translate-y-1/2;
+    @apply w-[3px] h-5 bg-violet-600 dark:bg-violet-400 rounded-r-full;
+  }
+}
+
+@layer utilities {
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: hsl(var(--border)) transparent; }
+  .scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 2px; }
+  .animate-scale-in { animation: scaleIn 0.2s ease-out; }
+  .animate-fade-in { animation: fadeIn 0.25s ease-out; }
+  .animate-slide-up { animation: slideUp 0.3s ease-out; }
+
+  /* Shimmer skeleton — premium loading state */
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--muted) / 0.4) 50%,
+      hsl(var(--muted)) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+
+  /* Staggered fade-in for lists */
+  @keyframes staggerFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-stagger {
+    animation: staggerFadeIn 0.3s ease-out both;
+  }
+
+  @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUp { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .text-gradient { background: linear-gradient(135deg,#7c3aed,#4f46e5); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+}
+
+/* ── Font rendering fix ───────────────────────────────────────── */
+html { font-size: 15px; text-rendering: optimizeLegibility; }
+body { font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "ss01" 1, "ss02" 1; }
+p, span, div, li, td, th { font-weight: 400; -webkit-font-smoothing: antialiased; }
+h1,h2,h3,h4,h5,h6 { letter-spacing: -0.02em; }
+
+/* ── Sidebar transition ───────────────────────────────────────── */
+.sidebar-enter { transform: translateX(-100%); }
+.sidebar-enter-active { transform: translateX(0); transition: transform 200ms ease; }
+.sidebar-exit-active { transform: translateX(-100%); transition: transform 200ms ease; }
+
+/* ── Better focus rings ───────────────────────────────────────── */
+:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+input:focus, textarea:focus, select:focus { outline: none; }
+
+/* ── Reduced motion ──────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── High contrast mode improvements ─────────────────────────── */
+@media (prefers-contrast: more) {
+  :focus-visible { outline-width: 3px; outline-offset: 1px; }
+  .admin-card { border-width: 2px; }
+}
+
+/* ── Table improvements ───────────────────────────────────────── */
+table { border-collapse: collapse; width: 100%; }
+th { white-space: nowrap; }
+
+/* Responsive table wrapper */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  @apply scrollbar-thin;
+}
+
+/* Better mobile cards */
+@media (max-width: 640px) {
+  .admin-card { @apply p-3; }
+  .hide-mobile { display: none !important; }
+  .full-mobile { width: 100% !important; }
+}
+
+/* ── Better selection color ───────────────────────────────────── */
+::selection { background: hsl(252 87% 67% / 0.2); color: inherit; }
+
+/* ── Superadmin dark scrollbar ────────────────────────────────── */
+.dark-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent; }
+.dark-scrollbar::-webkit-scrollbar { width: 4px; }
+.dark-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }

@@ -1,0 +1,33 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # PostgreSQL metrics via postgres_exporter
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:
+          service: 'nucrm-postgres'
+
+  # Redis metrics via redis_exporter
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'nucrm-redis'
+
+  # Node exporter for system metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'nucrm-host'
+
+  # NuCRM app health endpoint
+  - job_name: 'nucrm-app'
+    metrics_path: '/api/health'
+    static_configs:
+      - targets: ['app:3000']
+        labels:
+          service: 'nucrm-app'

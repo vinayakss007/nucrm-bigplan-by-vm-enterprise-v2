@@ -1,0 +1,69 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { apiError } from '@/lib/api-error';
+import { requireAuth } from '@/lib/auth/middleware';
+import { db } from '@/drizzle/db';
+import { integrations } from '@/drizzle/schema';
+import { eq, and } from 'drizzle-orm';
+
+export async function PATCH(req: NextRequest, { params }: any) {
+  try {
+    const ctx = await requireAuth(req);
+    if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+    const { id } = await params;
+    
+    const body = await req.json();
+    const { name, url, events, is_active } = body;
+    
+    // Get existing webhook to merge config
+    const existing = await db.query.integrations.findFirst({
+      where: and(eq(integrations.id, id), eq(integrations.tenantId, ctx.tenantId), eq(integrations.type, 'webhook'))
+    });
+    
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    
+    const currentConfig = (existing.config as any) || {};
+    const newConfig = {
+      ...currentConfig,
+      url: url || currentConfig.url,
+      events: events || currentConfig.events,
+    };
+    
+    const updateData: any = { updatedAt: new Date() };
+    if (name !== undefined) updateData.name = name;
+    if (is_active !== undefined) updateData.isActive = is_active;
+    if (url !== undefined || events !== undefined) updateData.config = newConfig;
+    
+    const [row] = await db
+      .update(integrations)
+      .set(updateData)
+      .where(and(eq(integrations.id, id), eq(integrations.tenantId, ctx.tenantId), eq(integrations.type, 'webhook')))
+      .returning();
+    
+    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    
+    return NextResponse.json({ 
+      data: { 
+        ...row, 
+        url: (row.config as any)?.url,
+        events: (row.config as any)?.events 
+      } 
+    });
+  } catch (err: any) { 
+    return apiError(err); 
+  }
+}
+
+export async function DELETE(req: NextRequest, { params }: any) {
+  try {
+    const ctx = await requireAuth(req);
+    if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+    const { id } = await params;
+
+    await db.delete(integrations)
+      .where(and(eq(integrations.id, id), eq(integrations.tenantId, ctx.tenantId), eq(integrations.type, 'webhook')));
+
+    return NextResponse.json({ ok: true });
+  } catch (err: any) { return apiError(err); }
+}

@@ -1,0 +1,40 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/process-sequences",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/retry-webhooks",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/task-reminders",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/trial-check",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/usage-snapshot",
+      "schedule": "0 0 * * 0"
+    },
+    {
+      "path": "/api/cron/auto-backup",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/backup-health",
+      "schedule": "0 3 * * 0"
+    },
+    {
+      "path": "/api/cron/cleanup",
+      "schedule": "0 4 * * 0"
+    },
+    {
+      "path": "/api/cron/warmup-emails",
+      "schedule": "0 9,13,17 * * *"
+    }
+  ]
+}

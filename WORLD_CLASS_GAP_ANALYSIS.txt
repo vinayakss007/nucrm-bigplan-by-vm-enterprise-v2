@@ -1,0 +1,48 @@
+WHAT IS STOPPING NUCRM FROM BEING WORLD-CLASS
+==============================================
+
+1. 577 TypeScript errors — Possibly undefined values, schema mismatches, missing properties. The compiler is screaming but the app runs anyway, meaning runtime crashes are inevitable.
+
+2. Schema-query mismatches — Columns named `entityType` in schema but queried as `resourceType`. These silent mismatches cause server component crashes with zero helpful error messages.
+
+3. No input validation — API routes trust raw `request.json()` without Zod/Yup schemas. Malformed payloads can crash routes, corrupt data, or bypass business logic entirely.
+
+4. XSS via dangerouslySetInnerHTML — Used in security page, email templates, and docs without DOMPurify sanitization. User-controlled content rendered as HTML is a direct injection vector.
+
+5. Weak dev secrets in .env — `JWT_SECRET=dev-jwt-secret-key-for-local-development-only`. If this leaks to production, anyone can forge admin tokens and own every tenant.
+
+6. No rate limiting — Login, API endpoints, and forms have no throttling. Brute-force attacks, credential stuffing, and API abuse are trivially easy.
+
+7. Fragile error handling — Server components throw "Something went wrong" with no recovery path, no retry logic, and no user-friendly fallback states.
+
+8. Deprecated v1 API with no migration — `/api/v1/*` routes exist but are marked deprecated with no versioning strategy or client migration guide.
+
+9. No caching layer — Every request hits PostgreSQL directly. No Redis caching for dashboard stats, contact lists, or settings — will choke at 100+ concurrent users.
+
+10. No pagination on heavy endpoints — Queries return up to 500 rows unbounded. Contact, deal, and activity lists will freeze the browser as data grows.
+
+11. `db:push` instead of migrations — Drizzle push alters production tables directly. No rollback, no migration history, no zero-downtime deploys possible.
+
+12. No CI/CD pipeline — Zero automated tests run on push. No linting gate, no typecheck gate, no E2E tests — broken code ships to production manually.
+
+13. No performance monitoring — Sentry captures errors but there are no dashboards, no APM, no slow query tracking, no Core Web Vitals monitoring.
+
+14. No backup integrity testing — Backups are created but never verified with restore drills. A corrupted backup discovered during a real outage is worthless.
+
+15. No load testing — Zero knowledge of how the app behaves under 1000+ concurrent users. No connection pooling tuning, no query optimization benchmarks.
+
+16. Zero accessibility (a11y) — No aria-labels, no keyboard navigation, no screen reader support, no focus management. Fails WCAG entirely — legal risk for enterprise buyers.
+
+17. No i18n/localization — Every string is hardcoded English. Cannot sell to non-English markets without a full rewrite of every component.
+
+18. No mobile-first design — Responsive but not optimized for mobile. Touch targets too small, no swipe gestures, heavy layouts on small screens.
+
+19. No API documentation — No OpenAPI/Swagger spec. Developers integrating with the API must read source code — a dealbreaker for enterprise adoption.
+
+20. No webhook delivery guarantees — Retries exist but without exponential backoff, dead letter queues, or delivery status tracking. Failed webhooks silently drop data.
+
+21. Audit logs lack integrity — Audit trails can be modified or deleted by admins with DB access. No cryptographic hashing or append-only storage for compliance.
+
+22. No tenant isolation testing — RLS is configured but never penetration-tested. A single misconfigured query could leak one tenant's data to another.
+
+23. No performance optimization — No image optimization, no lazy loading, no code splitting, no bundle analysis. Initial load ships megabytes of JavaScript for every user.

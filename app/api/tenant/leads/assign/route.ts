@@ -1,0 +1,138 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { db } from '@/drizzle/db';
+import { contacts, leadAssignments, tenantMembers, users } from '@/drizzle/schema';
+import { eq, and, inArray, sql } from 'drizzle-orm';
+import { createNotification } from '@/lib/notifications';
+import { logAudit } from '@/lib/audit';
+
+// POST: assign one or many contacts to a rep
+// { contact_ids: string[], assign_to: string, reason?: string }
+export async function POST(request: NextRequest) {
+  try {
+    const ctx = await requireAuth(request);
+    if (ctx instanceof NextResponse) return ctx;
+    const deny = requirePerm(ctx, 'contacts.assign');
+    if (deny) return deny;
+
+    const { contact_ids, assign_to, reason } = await request.json();
+    if (!contact_ids?.length) return NextResponse.json({ error:'contact_ids required' }, { status:400 });
+    if (!assign_to) return NextResponse.json({ error:'assign_to required' }, { status:400 });
+
+    // Validate assignee is a member
+    const [member] = await db
+      .select({ userId: tenantMembers.userId, fullName: users.fullName })
+      .from(tenantMembers)
+      .innerJoin(users, eq(users.id, tenantMembers.userId))
+      .where(
+        and(
+          eq(tenantMembers.tenantId, ctx.tenantId),
+          eq(tenantMembers.userId, assign_to),
+          eq(tenantMembers.status, 'active')
+        )
+      )
+      .limit(1);
+
+    if (!member) return NextResponse.json({ error:'Assignee is not an active team member' }, { status:400 });
+
+    // Bulk update
+    const result = await db
+      .update(contacts)
+      .set({ 
+        assignedTo: assign_to, 
+        lastAssignedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(
+        and(
+          inArray(contacts.id, contact_ids),
+          eq(contacts.tenantId, ctx.tenantId),
+          sql`${contacts.deletedAt} IS NULL`
+        )
+      );
+
+    const rowCount = result.rowCount ?? 0;
+
+    // Log assignment history
+    // Note: the Drizzle schema uses leadId for leadAssignments. 
+    // If these are contacts, we use sql to keep contact_id if the underlying table supports it, 
+    // or map to leadId if they are used interchangeably in the new schema.
+    // Based on the legacy code, we'll use sql to ensure we hit the right column.
+    for (const cid of contact_ids) {
+      await db.execute(sql`
+        INSERT INTO public.lead_assignments (tenant_id, contact_id, assigned_to, assigned_by, reason)
+        VALUES (${ctx.tenantId}, ${cid}, ${assign_to}, ${ctx.userId}, ${reason || null})
+      `).catch((err) => console.error('History log failed:', err));
+    }
+
+    // Notify assignee
+    if (assign_to !== ctx.userId) {
+      await createNotification({
+        userId: assign_to, tenantId: ctx.tenantId, type:'contact_assigned' as any,
+        title: `${rowCount} lead${rowCount!==1?'s':''} assigned to you`,
+        body: reason||undefined, link:'/tenant/leads', entity_type: 'lead' as any,
+      });
+    }
+
+    await logAudit({ 
+      tenantId:ctx.tenantId, 
+      userId:ctx.userId, 
+      action:'bulk_assign', 
+      entityType:'contact', 
+      newData:{ count:rowCount, assigned_to:assign_to } 
+    });
+
+    return NextResponse.json({ ok:true, assigned: rowCount });
+  } catch (err:any) { 
+    return NextResponse.json({ error:err.message }, { status:500 }); 
+  }
+}
+
+// DELETE: revoke (unassign) leads — set assigned_to = NULL or reassign to admin
+export async function DELETE(request: NextRequest) {
+  try {
+    const ctx = await requireAuth(request);
+    if (ctx instanceof NextResponse) return ctx;
+    const deny = requirePerm(ctx, 'contacts.assign');
+    if (deny) return deny;
+
+    const { contact_ids, reason } = await request.json();
+    if (!contact_ids?.length) return NextResponse.json({ error:'contact_ids required' }, { status:400 });
+
+    // Mark previous assignments as ended
+    await db.execute(sql`
+      UPDATE public.lead_assignments SET unassigned_at=now()
+      WHERE contact_id = ANY(${contact_ids}::uuid[]) AND unassigned_at IS NULL
+    `);
+
+    // Unassign — set to null (unowned)
+    const result = await db
+      .update(contacts)
+      .set({ 
+        assignedTo: null, 
+        lastAssignedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(
+        and(
+          inArray(contacts.id, contact_ids),
+          eq(contacts.tenantId, ctx.tenantId),
+          sql`${contacts.deletedAt} IS NULL`
+        )
+      );
+
+    const rowCount = result.rowCount ?? 0;
+
+    await logAudit({ 
+      tenantId:ctx.tenantId, 
+      userId:ctx.userId, 
+      action:'bulk_unassign', 
+      entityType:'contact', 
+      newData:{ count:rowCount, reason } 
+    });
+
+    return NextResponse.json({ ok:true, unassigned: rowCount });
+  } catch (err:any) { 
+    return NextResponse.json({ error:err.message }, { status:500 }); 
+  }
+}

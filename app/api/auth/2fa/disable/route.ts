@@ -1,0 +1,36 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth/middleware';
+import { db } from '@/drizzle/db';
+import { users } from '@/drizzle/schema';
+import { eq } from 'drizzle-orm';
+import { verifyPassword } from '@/lib/auth/session';
+
+export async function POST(req: NextRequest) {
+  try {
+    const ctx = await requireAuth(req);
+    if (ctx instanceof NextResponse) return ctx;
+    
+    const { password } = await req.json();
+    if (!password) return NextResponse.json({ error: 'Current password required to disable 2FA' }, { status: 400 });
+    
+    const user = await db.query.users.findFirst({
+      columns: { passwordHash: true, totpEnabled: true },
+      where: eq(users.id, ctx.userId)
+    });
+
+    if (!user?.totpEnabled) return NextResponse.json({ error: '2FA is not enabled' }, { status: 400 });
+    if (!user.passwordHash || !await verifyPassword(password, user.passwordHash)) return NextResponse.json({ error: 'Incorrect password' }, { status: 401 });
+    
+    await db.update(users)
+      .set({ 
+        totpEnabled: false, 
+        totpSecret: null, 
+        totpBackupCodes: null 
+      })
+      .where(eq(users.id, ctx.userId));
+
+    return NextResponse.json({ ok: true });
+  } catch (err: any) { 
+    return NextResponse.json({ error: err.message }, { status: 500 }); 
+  }
+}

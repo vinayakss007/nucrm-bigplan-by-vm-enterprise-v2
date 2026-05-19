@@ -1,0 +1,1066 @@
+openapi: 3.1.0
+info:
+  title: NuCRM API
+  description: |
+    The NuCRM REST API provides programmatic access to CRM functionality including contacts,
+    companies, deals, tasks, invoices, and more. All API requests must be authenticated
+    and scoped to a specific tenant.
+
+    ## Authentication
+    All API endpoints require authentication via cookie-based session or Bearer token.
+    Include the session cookie (`nucrm_session`) or `Authorization: Bearer <token>` header.
+
+    ## Tenant Context
+    Most endpoints operate within a tenant context. The tenant is determined by the
+    authenticated user's session or the `X-Tenant-ID` header for super admin operations.
+
+    ## Rate Limiting
+    API requests are rate-limited to 100 requests per minute per user.
+
+    ## Pagination
+    List endpoints support pagination via `limit` and `offset` query parameters.
+    Default: limit=50, offset=0. Maximum limit: 500.
+  version: 2.0.0
+  contact:
+    name: NuCRM API Support
+    email: api@nucrm.com
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.nucrm.com/api/v2
+    description: Production API
+  - url: http://localhost:3000/api/v2
+    description: Local development
+
+tags:
+  - name: Contacts
+    description: Manage contacts and relationships
+  - name: Companies
+    description: Manage companies and organizations
+  - name: Deals
+    description: Manage deals and sales pipeline
+  - name: Tasks
+    description: Manage tasks and activities
+  - name: Invoices
+    description: Manage invoices and payments
+  - name: Quotes
+    description: Manage quotes and estimates
+  - name: Orders
+    description: Manage orders and fulfillment
+  - name: Contracts
+    description: Manage contracts and agreements
+  - name: Services
+    description: Manage service offerings
+  - name: Workflows
+    description: Automate business processes
+  - name: Sequences
+    description: Email and outreach sequences
+  - name: Auth
+    description: Authentication and session management
+
+components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: nucrm_session
+      description: Session cookie issued after login
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for API access
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: "Invalid request payload"
+        code:
+          type: string
+          example: "VALIDATION_ERROR"
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 150
+        limit:
+          type: integer
+          example: 50
+        offset:
+          type: integer
+          example: 0
+        hasMore:
+          type: boolean
+          example: true
+
+    Contact:
+      type: object
+      required: [firstName, lastName]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        firstName:
+          type: string
+          maxLength: 100
+          example: "John"
+        lastName:
+          type: string
+          maxLength: 100
+          example: "Doe"
+        email:
+          type: string
+          format: email
+          nullable: true
+          example: "john@example.com"
+        phone:
+          type: string
+          nullable: true
+          example: "+1-555-0123"
+        jobTitle:
+          type: string
+          nullable: true
+          example: "CEO"
+        companyId:
+          type: string
+          format: uuid
+          nullable: true
+        ownerId:
+          type: string
+          format: uuid
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["vip", "enterprise"]
+        customFields:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    Company:
+      type: object
+      required: [name]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+          example: "Acme Corp"
+        website:
+          type: string
+          format: uri
+          nullable: true
+          example: "https://acme.com"
+        industry:
+          type: string
+          nullable: true
+          example: "Technology"
+        annualRevenue:
+          type: number
+          nullable: true
+          example: 5000000
+        employeeCount:
+          type: integer
+          nullable: true
+          example: 150
+        billingAddress:
+          type: object
+          properties:
+            street:
+              type: string
+            city:
+              type: string
+            state:
+              type: string
+            zipCode:
+              type: string
+            country:
+              type: string
+        ownerId:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    Deal:
+      type: object
+      required: [name, stageId]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+          example: "Enterprise License Deal"
+        value:
+          type: number
+          example: 50000
+        currency:
+          type: string
+          default: "USD"
+          example: "USD"
+        stageId:
+          type: string
+          format: uuid
+        contactId:
+          type: string
+          format: uuid
+          nullable: true
+        companyId:
+          type: string
+          format: uuid
+          nullable: true
+        ownerId:
+          type: string
+          format: uuid
+          nullable: true
+        expectedCloseDate:
+          type: string
+          format: date
+          nullable: true
+        probability:
+          type: integer
+          minimum: 0
+          maximum: 100
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    Task:
+      type: object
+      required: [title]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 200
+          example: "Follow up with client"
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, in_progress, completed, cancelled]
+          default: pending
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+          default: medium
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
+        assignedTo:
+          type: string
+          format: uuid
+          nullable: true
+        relatedEntityType:
+          type: string
+          nullable: true
+          example: "contact"
+        relatedEntityId:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    Invoice:
+      type: object
+      required: [contactId]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        invoiceNumber:
+          type: string
+          readOnly: true
+          example: "INV-2024-001"
+        title:
+          type: string
+          nullable: true
+        contactId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [draft, sent, viewed, partial, paid, overdue, cancelled]
+          default: draft
+        issueDate:
+          type: string
+          format: date
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              description:
+                type: string
+              quantity:
+                type: number
+              unitPrice:
+                type: number
+        subtotal:
+          type: number
+          readOnly: true
+        taxAmount:
+          type: number
+          readOnly: true
+        totalAmount:
+          type: number
+          readOnly: true
+        balanceDue:
+          type: number
+          readOnly: true
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+  parameters:
+    limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 50
+        maximum: 500
+      description: Number of items to return
+    offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        default: 0
+      description: Number of items to skip
+    search:
+      name: search
+      in: query
+      schema:
+        type: string
+      description: Search term
+    sort:
+      name: sort
+      in: query
+      schema:
+        type: string
+        default: "createdAt:desc"
+      description: Sort field and direction (field:asc|desc)
+
+security:
+  - SessionCookie: []
+  - BearerAuth: []
+
+paths:
+  /contacts:
+    get:
+      tags: [Contacts]
+      summary: List contacts
+      description: Retrieve a paginated list of contacts with optional filtering
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/search'
+        - $ref: '#/components/parameters/sort'
+        - name: companyId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by company
+        - name: ownerId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by owner
+        - name: tags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          description: Filter by tags
+      responses:
+        '200':
+          description: List of contacts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Contact'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+    post:
+      tags: [Contacts]
+      summary: Create contact
+      description: Create a new contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Contact'
+      responses:
+        '201':
+          description: Contact created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /contacts/{id}:
+    get:
+      tags: [Contacts]
+      summary: Get contact
+      description: Retrieve a single contact by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Contact details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+        '404':
+          description: Contact not found
+
+    patch:
+      tags: [Contacts]
+      summary: Update contact
+      description: Update an existing contact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Contact'
+      responses:
+        '200':
+          description: Contact updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+
+    delete:
+      tags: [Contacts]
+      summary: Delete contact
+      description: Soft delete a contact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Contact deleted
+        '404':
+          description: Contact not found
+
+  /companies:
+    get:
+      tags: [Companies]
+      summary: List companies
+      description: Retrieve a paginated list of companies
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/search'
+        - $ref: '#/components/parameters/sort'
+        - name: industry
+          in: query
+          schema:
+            type: string
+          description: Filter by industry
+      responses:
+        '200':
+          description: List of companies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Company'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags: [Companies]
+      summary: Create company
+      description: Create a new company
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Company'
+      responses:
+        '201':
+          description: Company created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+
+  /companies/{id}:
+    get:
+      tags: [Companies]
+      summary: Get company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Company details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+
+    patch:
+      tags: [Companies]
+      summary: Update company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Company'
+      responses:
+        '200':
+          description: Company updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+
+    delete:
+      tags: [Companies]
+      summary: Delete company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Company deleted
+
+  /deals:
+    get:
+      tags: [Deals]
+      summary: List deals
+      description: Retrieve a paginated list of deals
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/search'
+        - name: stageId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by pipeline stage
+        - name: ownerId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by owner
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, won, lost]
+          description: Filter by deal status
+      responses:
+        '200':
+          description: List of deals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Deal'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags: [Deals]
+      summary: Create deal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Deal'
+      responses:
+        '201':
+          description: Deal created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deal'
+
+  /deals/{id}:
+    get:
+      tags: [Deals]
+      summary: Get deal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deal details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deal'
+
+    patch:
+      tags: [Deals]
+      summary: Update deal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Deal'
+      responses:
+        '200':
+          description: Deal updated
+
+    delete:
+      tags: [Deals]
+      summary: Delete deal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deal deleted
+
+  /tasks:
+    get:
+      tags: [Tasks]
+      summary: List tasks
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/search'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, in_progress, completed, cancelled]
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, urgent]
+        - name: assignedTo
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: dueDateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dueDateTo
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags: [Tasks]
+      summary: Create task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Task'
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+
+  /tasks/{id}:
+    get:
+      tags: [Tasks]
+      summary: Get task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+
+    patch:
+      tags: [Tasks]
+      summary: Update task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Task'
+      responses:
+        '200':
+          description: Task updated
+
+    delete:
+      tags: [Tasks]
+      summary: Delete task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Task deleted
+
+  /invoices:
+    get:
+      tags: [Invoices]
+      summary: List invoices
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/search'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, sent, viewed, partial, paid, overdue, cancelled]
+        - name: contactId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of invoices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Invoice'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags: [Invoices]
+      summary: Create invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Invoice'
+      responses:
+        '201':
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+
+  /invoices/{id}:
+    get:
+      tags: [Invoices]
+      summary: Get invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Invoice details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+
+    patch:
+      tags: [Invoices]
+      summary: Update invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Invoice'
+      responses:
+        '200':
+          description: Invoice updated
+
+    delete:
+      tags: [Invoices]
+      summary: Delete invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Invoice deleted
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      description: Authenticate user and create session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+      responses:
+        '200':
+          description: Login successful
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Session cookie
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout
+      description: Invalidate current session
+      responses:
+        '204':
+          description: Session invalidated
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user
+      description: Retrieve authenticated user profile
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  email:
+                    type: string
+                    format: email
+                  fullName:
+                    type: string
+                  avatarUrl:
+                    type: string
+                    nullable: true
+                  role:
+                    type: string
+                  tenantId:
+                    type: string
+                    format: uuid

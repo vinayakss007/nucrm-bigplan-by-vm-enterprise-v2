@@ -1,0 +1,90 @@
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: nucrm-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nucrm
+      POSTGRES_PASSWORD: nucrm_secure_password
+      POSTGRES_DB: nucrm
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nucrm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: nucrm-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      args:
+        DATABASE_URL: postgresql://nucrm:nucrm_secure_password@db:5432/nucrm?sslmode=disable
+        JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-prod}
+        SENTRY_DSN: ${SENTRY_DSN:-}
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+        SENTRY_ORG: ${SENTRY_ORG:-}
+        SENTRY_PROJECT: ${SENTRY_PROJECT:-}
+        SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
+    container_name: nucrm-app
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgresql://nucrm:nucrm_secure_password@db:5432/nucrm?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-prod-long-enough-for-hmac}
+      SESSION_SECRET: ${SESSION_SECRET:-dev-session-secret-long-enough}
+      SETUP_KEY: ${SETUP_KEY:-dev-setup-key-long-enough-for-testing}
+      CRON_SECRET: ${CRON_SECRET:-dev-cron-secret-long-enough-for-hmac}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      COOKIE_SECURE: "false"
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+      SENTRY_ORG: ${SENTRY_ORG:-}
+      SENTRY_PROJECT: ${SENTRY_PROJECT:-}
+      SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
+      SENTRY_ENABLE: ${SENTRY_ENABLE:-false}
+      SENTRY_TRACES_SAMPLE_RATE: "0.1"
+    ports:
+      - "3000:3000"
+
+  worker:
+    build:
+      context: .
+      args:
+        DATABASE_URL: postgresql://nucrm:nucrm_secure_password@db:5432/nucrm?sslmode=disable
+        JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-prod}
+    container_name: nucrm-worker
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgresql://nucrm:nucrm_secure_password@db:5432/nucrm?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-prod-long-enough-for-hmac}
+    command: ["npm", "run", "worker"]
+
+volumes:
+  postgres_data:

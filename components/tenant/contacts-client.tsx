@@ -1,0 +1,522 @@
+'use client';
+import { useState, useCallback } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import {
+  Plus, Search, Grid, List, Trash2, ChevronRight, Download, Upload,
+  Users, AlertCircle, X, Mail, Phone, Building2, User, Tag,
+  MoreHorizontal, Filter, ChevronDown, Star, Zap, Eye, Activity,
+  CheckCircle, XCircle, RotateCcw, Archive, Globe, Edit,
+} from 'lucide-react';
+import { cn, formatDate, getInitials, toSnakeCase } from '@/lib/utils';
+import ImportModal from './import-modal';
+import Pagination from './pagination';
+import toast from 'react-hot-toast';
+import { confirmThen } from '@/components/ui/confirm-dialog';
+import { showUndoToast } from '@/lib/undo';
+import { BulkActionBar } from '@/components/ui/bulk-action-bar';
+import { Swipeable } from '@/components/ui/swipeable';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel,
+} from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+
+const STATUS_CONFIG: Record<string,{label:string;color:string;dot:string;icon:any}> = {
+  new:         { label:'New',          color:'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',         dot:'bg-slate-400',   icon:Star },
+  contacted:   { label:'Contacted',    color:'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',              dot:'bg-sky-500',     icon:Phone },
+  qualified:   { label:'Qualified',    color:'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',  dot:'bg-violet-500',  icon:CheckCircle },
+  unqualified: { label:'Disqualified', color:'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',              dot:'bg-red-500',     icon:XCircle },
+  converted:   { label:'Converted',    color:'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',dot:'bg-emerald-500',icon:Zap },
+  lost:        { label:'Lost',         color:'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',             dot:'bg-gray-400',    icon:Archive },
+};
+
+const LIFECYCLE_COLORS: Record<string,string> = {
+  visitor:'bg-slate-100 text-slate-600', lead:'bg-sky-100 text-sky-700',
+  marketing_qualified_lead:'bg-violet-100 text-violet-700', sales_qualified_lead:'bg-indigo-100 text-indigo-700',
+  opportunity:'bg-amber-100 text-amber-700', customer:'bg-emerald-100 text-emerald-700',
+  evangelist:'bg-pink-100 text-pink-700',
+};
+
+const SOURCE_LABELS: Record<string,string> = {
+  website:'Website', referral:'Referral', cold_outreach:'Cold Outreach',
+  social_media:'Social', event:'Event', inbound:'Inbound', advertisement:'Ad', other:'Other',
+};
+
+interface Props {
+  initialContacts: any[];
+  companies: any[];
+  teamMembers: any[];
+  permissions: { canCreate:boolean; canEdit:boolean; canDelete:boolean; canViewAll:boolean; canImport?:boolean; canExport?:boolean; canAssign?:boolean };
+  totalCount?: number;
+  tenantId: string;
+  userId: string;
+  initialOffset?: number;
+  initialQ?: string;
+  initialStatus?: string;
+}
+
+function AddContactModal({ companies, teamMembers, onClose, onSuccess }: any) {
+  const [form,setForm] = useState({first_name:'',last_name:'',email:'',phone:'',company_id:'',lead_status:'new',lead_source:'',assigned_to:'',title:'',tags:''});
+  const [saving,setSaving] = useState(false);
+  const [dupWarning,setDupWarning] = useState<{id:string}|null>(null);
+
+  const handle = async (e: React.FormEvent) => {
+    e.preventDefault(); setSaving(true); setDupWarning(null);
+    const tagsArray = form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+    const res = await fetch('/api/tenant/contacts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ ...form, tags: tagsArray })});
+    const data = await res.json();
+    if (!res.ok) {
+      if (data.is_duplicate) { setDupWarning({id:data.duplicate_id}); setSaving(false); return; }
+      toast.error(data.error||'Failed'); setSaving(false); return;
+    }
+    toast.success('Contact added'); onSuccess(); onClose();
+    setSaving(false);
+  };
+
+  const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-shadow";
+  const lbl = "block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide";
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2.5 text-base">
+            <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+              <Users className="w-3.5 h-3.5 text-emerald-600"/>
+            </div>
+            New Contact
+          </DialogTitle>
+        </DialogHeader>
+
+        {dupWarning && (
+          <div className="flex items-start gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5"/>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Duplicate email detected</p>
+              <p className="text-xs text-amber-600/80 mt-0.5">A contact with this email already exists.</p>
+            </div>
+            <Link href={`/tenant/contacts/${dupWarning.id}`} className="text-xs font-semibold text-amber-600 hover:underline whitespace-nowrap">View existing →</Link>
+          </div>
+        )}
+
+        <form onSubmit={handle} className="mt-1 space-y-5">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><User className="w-3 h-3"/>Identity</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lbl}>First Name *</label><input required className={inp} value={form.first_name} onChange={e=>setForm(p=>({...p,first_name:e.target.value}))}/></div>
+              <div><label className={lbl}>Last Name</label><input className={inp} value={form.last_name} onChange={e=>setForm(p=>({...p,last_name:e.target.value}))}/></div>
+              <div><label className={lbl}>Email</label><input type="email" className={inp} value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))}/></div>
+              <div><label className={lbl}>Phone</label><input type="tel" className={inp} value={form.phone} onChange={e=>setForm(p=>({...p,phone:e.target.value}))}/></div>
+              <div><label className={lbl}>Job Title</label><input className={inp} placeholder="e.g. Marketing Director" value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))}/></div>
+              <div><label className={lbl}>Company</label>
+                <select className={inp} value={form.company_id} onChange={e=>setForm(p=>({...p,company_id:e.target.value}))}>
+                  <option value="">No company</option>
+                  {companies.map((c:any)=><option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+          <div className="border-t border-border/50 pt-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><Tag className="w-3 h-3"/>Classification</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lbl}>Status</label>
+                <select className={inp} value={form.lead_status} onChange={e=>setForm(p=>({...p,lead_status:e.target.value}))}>
+                  {Object.entries(STATUS_CONFIG).map(([v,c])=><option key={v} value={v}>{c.label}</option>)}
+                </select>
+              </div>
+              <div><label className={lbl}>Lead Source</label>
+                <select className={inp} value={form.lead_source} onChange={e=>setForm(p=>({...p,lead_source:e.target.value}))}>
+                  <option value="">Unknown</option>
+                  {Object.entries(SOURCE_LABELS).map(([v,l])=><option key={v} value={v}>{l}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className={lbl}>Tags (comma separated)</label>
+                <input className={inp} placeholder="e.g. vip, conference-2024" value={form.tags} onChange={e=>setForm(p=>({...p,tags:e.target.value}))}/>
+              </div>
+            </div>
+          </div>
+          {teamMembers.length>0&&(
+            <div className="border-t border-border/50 pt-4">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><Users className="w-3 h-3"/>Assignment</p>
+              <select className={inp} value={form.assigned_to} onChange={e=>setForm(p=>({...p,assigned_to:e.target.value}))}>
+                <option value="">Unassigned</option>
+                {teamMembers.map((m:any)=><option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="flex gap-2 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
+            <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700 text-white" disabled={saving}>{saving?'Adding...':'Add Contact'}</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default function TenantContactsClient({ initialContacts, companies, teamMembers, permissions, tenantId, userId, totalCount, initialOffset, initialQ, initialStatus }: Props) {
+  const normalize = (data: any[]) => (data || []).map((c: any) => toSnakeCase(c));
+  const [contacts, setContacts] = useState(normalize(initialContacts));
+  const [total, setTotal]       = useState(totalCount ?? initialContacts.length);
+  const [offset, setOffset]     = useState(initialOffset ?? 0);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const limit                   = 50;
+  const [view, setView]         = useState<'list'|'grid'>('list');
+  const [search, setSearch]     = useState(initialQ || '');
+  const [statusFilter, setStatusFilter] = useState(initialStatus || 'all');
+  const [showAdd, setShowAdd]   = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const router = useRouter();
+
+  const load = useCallback(async (newOffset=0, q=search, status=statusFilter) => {
+    setLoading(true);
+    const params = new URLSearchParams({ offset:String(newOffset) });
+    if (q) params.set('q', q);
+    if (status !== 'all') params.set('status', status);
+    router.push(`/tenant/contacts?${params.toString()}`, { scroll: false });
+    const res = await fetch('/api/tenant/contacts?'+params.toString());
+    const data = await res.json();
+    setContacts(normalize(data.data));
+    setTotal(data.total ?? 0);
+    setOffset(newOffset);
+    setLoading(false);
+  }, [limit, search, statusFilter, router]);
+
+  const handleSearch = (q:string) => { setSearch(q); load(0, q, statusFilter); };
+  const handleStatus = (s:string) => { setStatusFilter(s); load(0, search, s); };
+
+  const deleteContact = async (id:string, name:string) => {
+    await confirmThen(`Delete ${name}?`, async () => {
+      const contact = contacts.find(c => c['id'] === id);
+      const res = await fetch(`/api/tenant/contacts/${id}`, { method:'DELETE' });
+      if (res.ok) {
+        showUndoToast(`Deleted ${name}`, async () => {
+          if (contact) {
+            await fetch('/api/tenant/contacts', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(contact),
+            });
+          }
+        });
+        load(offset);
+      }
+      else toast.error('Failed to delete');
+    });
+  };
+
+  const exportCSV = async () => {
+    setExporting(true);
+    const q = new URLSearchParams();
+    if (search) q.set('q', search);
+    const res = await fetch('/api/tenant/contacts/export?'+q);
+    if (!res.ok) { toast.error('Nothing to export'); setExporting(false); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `contacts_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url); toast.success('Exported contacts'); setExporting(false);
+  };
+
+  return (
+    <div className="space-y-5 animate-fade-in">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center shrink-0 shadow-sm">
+            <Users className="w-5 h-5 text-sky-600"/>
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold tracking-tight">Contacts</h1>
+              <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/30 px-2 py-0.5 rounded-full uppercase tracking-wider">{total.toLocaleString()}</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">Your contact database</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-thin">
+          {/* View toggle - hidden on mobile since we use card view */}
+          <div className="hidden md:flex items-center border border-border rounded-lg overflow-hidden text-xs bg-card shrink-0">
+            <button onClick={()=>setView('list')} className={cn('px-2.5 py-1.5 font-medium transition-colors flex items-center gap-1.5',view==='list'?'bg-accent text-foreground':'text-muted-foreground hover:bg-accent/50')}>
+              <List className="w-3.5 h-3.5"/><span>List</span>
+            </button>
+            <button onClick={()=>setView('grid')} className={cn('px-2.5 py-1.5 font-medium transition-colors flex items-center gap-1.5',view==='grid'?'bg-accent text-foreground':'text-muted-foreground hover:bg-accent/50')}>
+              <Grid className="w-3.5 h-3.5"/><span>Grid</span>
+            </button>
+          </div>
+          {permissions.canImport&&(
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs shrink-0 min-h-[44px]" onClick={()=>setShowImport(true)}>
+              <Upload className="w-3.5 h-3.5"/>Import
+            </Button>
+          )}
+          {permissions.canCreate&&(
+            <Button size="sm" className="gap-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs shrink-0 shadow-md min-h-[44px]" onClick={()=>setShowAdd(true)}>
+              <Plus className="w-3.5 h-3.5"/>New Contact
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Status filter pills */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+        <button onClick={()=>handleStatus('all')} className={cn('px-3 py-1.5 rounded-full text-xs font-semibold transition-all border shrink-0',statusFilter==='all'?'bg-foreground text-background border-foreground':'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground')}>
+          All contacts
+        </button>
+        {Object.entries(STATUS_CONFIG).map(([status,cfg])=>{
+          return (
+            <button key={status} onClick={()=>handleStatus(status)} className={cn('px-3 py-1.5 rounded-full text-xs font-semibold transition-all border flex items-center gap-1.5 shrink-0',statusFilter===status?`${cfg.color} border-current`:'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30')}>
+              <div className={cn('w-1.5 h-1.5 rounded-full',cfg.dot)}/>{cfg.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Search toolbar */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+        <div className="relative w-full sm:flex-1 sm:max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"/>
+          <input value={search} onChange={e=>handleSearch(e.target.value)} placeholder="Search by name, email, company..." className="w-full pl-9 pr-4 py-2 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40 shadow-sm"/>
+          {search&&<button onClick={()=>handleSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5"/></button>}
+        </div>
+      </div>
+
+      {/* List view */}
+      {view==='list'&&(
+        <div className="admin-card overflow-hidden">
+          <div className="table-responsive">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                {['Contact','Company','Email & Phone','Status','Lifecycle','Added',''].map(h=>(
+                  <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading&&<tr><td colSpan={7} className="py-16 text-center"><div className="flex items-center justify-center gap-2 text-muted-foreground text-sm"><div className="w-4 h-4 border-2 border-violet-500 border-t-transparent rounded-full animate-spin"/>Loading contacts...</div></td></tr>}
+              {!loading&&!contacts.length&&(
+                <tr><td colSpan={7} className="py-20 text-center">
+                  <div className="max-w-sm mx-auto">
+                    <div className="w-14 h-14 rounded-2xl bg-sky-50 dark:bg-sky-900/20 flex items-center justify-center mx-auto mb-4"><Users className="w-7 h-7 text-sky-400"/></div>
+                    <p className="text-sm font-semibold mb-1">{search||statusFilter!=='all'?'No contacts match your filters':'No contacts yet'}</p>
+                    <p className="text-xs text-muted-foreground mb-4">{search?'Try a different search term':'Add your first contact or import from CSV'}</p>
+                    {!search&&statusFilter==='all'&&permissions.canCreate&&(
+                      <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white" onClick={()=>setShowAdd(true)}><Plus className="w-3.5 h-3.5 mr-1.5"/>Add Contact</Button>
+                    )}
+                  </div>
+                </td></tr>
+              )}
+              {contacts.map(c=>{
+                const status=STATUS_CONFIG[c['lead_status']]||STATUS_CONFIG['new'];
+                const StatusIcon=status!.icon;
+                const lifecycleColor=LIFECYCLE_COLORS[c['lifecycle_stage']]||'bg-slate-100 text-slate-600';
+                return (
+                  <Swipeable
+                    key={c['id']}
+                    rightActions={[
+                      { label:'Edit', icon:<Edit className="w-5 h-5"/>, color:'text-white', bg:'bg-violet-500', onClick:()=>router.push(`/tenant/contacts/${c['id']}`) },
+                      ...(permissions.canDelete ? [{ label:'Delete', icon:<Trash2 className="w-5 h-5"/>, color:'text-white', bg:'bg-red-500', onClick:async()=>deleteContact(c['id'],`${c['first_name']} ${c['last_name']}`) }] : []),
+                    ]}
+                  >
+                    <tr className="border-b border-border last:border-0 hover:bg-accent/30 transition-colors cursor-pointer group" onClick={()=>router.push(`/tenant/contacts/${c['id']}`)}>
+                    {/* Contact */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm">
+                          {getInitials(`${c['first_name'] ?? ''} ${c['last_name'] ?? ''}`)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold hover:text-violet-600 transition-colors truncate">{c['first_name']} {c['last_name']}</p>
+                          {c['title']&&<p className="text-[10px] text-muted-foreground truncate">{c['title']}</p>}
+                          {c['assigned_name']&&!c['title']&&<p className="text-[10px] text-muted-foreground">→ {c['assigned_name']}</p>}
+                        </div>
+                      </div>
+                    </td>
+                    {/* Company */}
+                    <td className="px-4 py-3">
+                      {c['company_name']
+                        ?<div className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0"/><span className="text-sm truncate max-w-[140px]">{c['company_name']}</span></div>
+                        :<span className="text-sm text-muted-foreground">—</span>
+                      }
+                      {c['lead_source']&&<div className="flex items-center gap-1 mt-0.5 text-[10px] text-muted-foreground"><Globe className="w-2.5 h-2.5"/>{SOURCE_LABELS[c['lead_source']]||c['lead_source']}</div>}
+                    </td>
+                    {/* Contact info */}
+                    <td className="px-4 py-3">
+                      <div className="space-y-0.5">
+                        {c['email']&&<a href={`mailto:${c['email']}`} onClick={e=>e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"><Mail className="w-3 h-3 shrink-0"/><span className="truncate max-w-[160px]">{c['email']}</span></a>}
+                        {c['phone']&&<a href={`tel:${c['phone']}`} onClick={e=>e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"><Phone className="w-3 h-3 shrink-0"/>{c['phone']}</a>}
+                      </div>
+                    </td>
+                    {/* Status */}
+                    <td className="px-4 py-3">
+                      <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold',status!.color)}>
+                        <StatusIcon className="w-3 h-3"/>{status!.label}
+                      </span>
+                    </td>
+                    {/* Lifecycle */}
+                    <td className="px-4 py-3">
+                      {c['lifecycle_stage']
+                        ?<span className={cn('inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize',lifecycleColor)}>{c['lifecycle_stage']?.replace(/_/g,' ')}</span>
+                        :<span className="text-xs text-muted-foreground">—</span>
+                      }
+                    </td>
+                    {/* Added */}
+                    <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDate(c['created_at'])}</td>
+                    {/* Actions */}
+                    <td className="px-4 py-3" onClick={e=>e.stopPropagation()}>
+                      <div className="flex items-center gap-1 max-md:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        {permissions.canDelete&&(
+                          <button onClick={()=>deleteContact(c['id'],`${c['first_name']} ${c['last_name']}`)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-muted-foreground hover:text-red-500 transition-colors">
+                            <X className="w-3.5 h-3.5"/>
+                          </button>
+                        )}
+                        <ChevronRight className="w-4 h-4 text-muted-foreground"/>
+                      </div>
+                    </td>
+                  </tr>
+                  </Swipeable>
+                );
+              })}
+            </tbody>
+          </table>
+          </div>
+          <div className="px-4 py-3 border-t border-border bg-muted/10 flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              Showing <span className="font-semibold text-foreground">{contacts.length>0?offset+1:0}–{Math.min(offset+contacts.length,total)}</span> of <span className="font-semibold text-foreground">{total.toLocaleString()}</span>
+            </p>
+            <Pagination total={total} offset={offset} limit={limit} onChange={o=>load(o)}/>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile card view */}
+      <div className="space-y-3 md:hidden">
+        {!contacts.length&&!loading&&(
+          <div className="text-center py-20 rounded-xl border border-border bg-card">
+            <div className="w-14 h-14 rounded-2xl bg-sky-50 dark:bg-sky-900/20 flex items-center justify-center mx-auto mb-4"><Users className="w-7 h-7 text-sky-400"/></div>
+            <p className="text-sm font-semibold mb-1">No contacts found</p>
+            <p className="text-xs text-muted-foreground">Try adjusting your search or filters</p>
+          </div>
+        )}
+        {contacts.map(c=>{
+          const status=STATUS_CONFIG[c['lead_status']]||STATUS_CONFIG['new'];
+          const StatusIcon=status!.icon;
+          return (
+            <Swipeable
+              key={c['id']}
+              rightActions={[
+                { label:'Edit', icon:<Edit className="w-5 h-5"/>, color:'text-white', bg:'bg-violet-500', onClick:()=>router.push(`/tenant/contacts/${c['id']}`) },
+                ...(permissions.canDelete ? [{ label:'Delete', icon:<Trash2 className="w-5 h-5"/>, color:'text-white', bg:'bg-red-500', onClick:async()=>deleteContact(c['id'],`${c['first_name']} ${c['last_name']}`) }] : []),
+              ]}
+            >
+              <div
+                className="bg-card border border-border rounded-xl p-4 active:bg-accent/50 transition-colors"
+                onClick={()=>router.push(`/tenant/contacts/${c['id']}`)}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-sm shrink-0">
+                    {getInitials(`${c['first_name'] ?? ''} ${c['last_name'] ?? ''}`)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold truncate">{c['first_name']} {c['last_name']}</p>
+                      <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold',status!.color)}>
+                        <div className={cn('w-1.5 h-1.5 rounded-full',status!.dot)}/>{status!.label}
+                      </span>
+                    </div>
+                    {c['title']&&<p className="text-[10px] text-muted-foreground truncate mt-0.5">{c['title']}</p>}
+                    <div className="flex items-center gap-3 mt-2">
+                      {c['email']&&<div className="flex items-center gap-1 text-[10px] text-muted-foreground"><Mail className="w-3 h-3 shrink-0"/><span className="truncate">{c['email']}</span></div>}
+                      {c['phone']&&<div className="flex items-center gap-1 text-[10px] text-muted-foreground"><Phone className="w-3 h-3 shrink-0"/><span>{c['phone']}</span></div>}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1">
+                      {c['company_name']&&<div className="flex items-center gap-1 text-[10px] text-muted-foreground"><Building2 className="w-3 h-3 shrink-0"/><span className="truncate">{c['company_name']}</span></div>}
+                      {c['lifecycle_stage']&&<span className={cn('inline-flex px-1.5 py-0.5 rounded-full text-[9px] font-semibold capitalize',LIFECYCLE_COLORS[c['lifecycle_stage']]||'bg-slate-100 text-slate-600')}>{c['lifecycle_stage']?.replace(/_/g,' ')}</span>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Swipeable>
+          );
+        })}
+        <Pagination total={total} offset={offset} limit={limit} onChange={o=>load(o)}/>
+      </div>
+
+      {/* Grid view - desktop only */}
+      {view==='grid'&&(
+        <div className="hidden md:block space-y-4">
+          {!contacts.length&&!loading&&(
+            <div className="text-center py-20 rounded-xl border border-border bg-card">
+              <div className="w-14 h-14 rounded-2xl bg-sky-50 dark:bg-sky-900/20 flex items-center justify-center mx-auto mb-4"><Users className="w-7 h-7 text-sky-400"/></div>
+              <p className="text-sm font-semibold mb-1">No contacts found</p>
+              <p className="text-xs text-muted-foreground">Try adjusting your search or filters</p>
+            </div>
+          )}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {contacts.map(c=>{
+              const status=STATUS_CONFIG[c['lead_status']]||STATUS_CONFIG['new'];
+              const StatusIcon=status!.icon;
+              return (
+                <Link key={c['id']} href={`/tenant/contacts/${c['id']}`} className="group bg-card border border-border rounded-xl p-4 hover:border-violet-400/50 hover:shadow-sm transition-all block">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-sm">
+                      {getInitials(`${c['first_name'] ?? ''} ${c['last_name'] ?? ''}`)}
+                    </div>
+                    <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold',status!.color)}>
+                      <div className={cn('w-1.5 h-1.5 rounded-full',status!.dot)}/>{status!.label}
+                    </span>
+                  </div>
+                  <p className="text-sm font-semibold truncate group-hover:text-violet-600 transition-colors">{c['first_name']} {c['last_name']}</p>
+                  {c['title']&&<p className="text-[10px] text-muted-foreground truncate mt-0.5">{c['title']}</p>}
+                  {c['company_name']&&(
+                    <div className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground">
+                      <Building2 className="w-2.5 h-2.5 shrink-0"/><span className="truncate">{c['company_name']}</span>
+                    </div>
+                  )}
+                  {c['email']&&(
+                    <div className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
+                      <Mail className="w-2.5 h-2.5 shrink-0"/><span className="truncate">{c['email']}</span>
+                    </div>
+                  )}
+                  {c['last_activity_at']&&(
+                    <div className="flex items-center gap-1 mt-2 text-[10px] text-muted-foreground border-t border-border/50 pt-2">
+                      <Activity className="w-2.5 h-2.5"/>{formatDate(c['last_activity_at'])}
+                    </div>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+          <Pagination total={total} offset={offset} limit={limit} onChange={o=>load(o)}/>
+        </div>
+      )}
+
+      {showAdd&&<AddContactModal companies={companies} teamMembers={teamMembers} onClose={()=>setShowAdd(false)} onSuccess={()=>load(0)}/>}
+      {showImport&&<ImportModal onDone={()=>{setShowImport(false);load(0);}} onClose={()=>setShowImport(false)}/>}
+
+      <BulkActionBar
+        selectedCount={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        actions={[
+          { label: 'Delete', icon: Trash2, variant: 'danger', onClick: async () => {
+            if (selectedIds.size === 0) return;
+            await confirmThen(`Delete ${selectedIds.size} contacts?`, async () => {
+              for (const id of selectedIds) {
+                await fetch(`/api/tenant/contacts/${id}`, { method: 'DELETE' });
+              }
+              setSelectedIds(new Set());
+              toast.success(`Deleted ${selectedIds.size} contacts`);
+              load(offset);
+            });
+          }},
+        ]}
+      />
+    </div>
+  );
+}

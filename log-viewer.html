@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NuCRM Live Logs</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: #161b22;
+      padding: 12px 20px;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 {
+      font-size: 16px;
+      color: #58a6ff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .pulse {
+      width: 8px;
+      height: 8px;
+      background: #3fb950;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .filter-input {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      width: 250px;
+    }
+    .filter-input:focus {
+      outline: none;
+      border-color: #58a6ff;
+    }
+    button {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    button:hover { background: #30363d; }
+    button.active { background: #1f6feb; border-color: #58a6ff; }
+    .level-filters { display: flex; gap: 5px; }
+    #log-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+    .log-entry {
+      padding: 8px 12px;
+      margin-bottom: 4px;
+      border-radius: 4px;
+      font-size: 13px;
+      line-height: 1.5;
+      border-left: 3px solid transparent;
+      animation: fadeIn 0.2s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .log-entry.info {
+      background: rgba(56, 139, 253, 0.05);
+      border-left-color: #388bfd;
+    }
+    .log-entry.warn {
+      background: rgba(210, 153, 34, 0.05);
+      border-left-color: #d29922;
+    }
+    .log-entry.error {
+      background: rgba(248, 81, 73, 0.05);
+      border-left-color: #f85149;
+    }
+    .log-entry.success {
+      background: rgba(63, 185, 80, 0.05);
+      border-left-color: #3fb950;
+    }
+    .log-time {
+      color: #8b949e;
+      font-size: 12px;
+      margin-right: 10px;
+    }
+    .log-level {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-right: 8px;
+    }
+    .log-level.info { background: #388bfd20; color: #388bfd; }
+    .log-level.warn { background: #d2992220; color: #d29922; }
+    .log-level.error { background: #f8514920; color: #f85149; }
+    .log-level.success { background: #3fb95020; color: #3fb950; }
+    .log-msg { color: #e6edf3; }
+    .log-meta {
+      color: #8b949e;
+      font-size: 12px;
+      margin-top: 4px;
+      padding-left: 20px;
+    }
+    #stats {
+      background: #161b22;
+      padding: 8px 20px;
+      border-top: 1px solid #30363d;
+      display: flex;
+      gap: 20px;
+      font-size: 12px;
+      color: #8b949e;
+    }
+    .stat { display: flex; gap: 5px; }
+    .stat-value { color: #58a6ff; font-weight: 600; }
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #8b949e;
+    }
+    .empty-state h2 { font-size: 18px; margin-bottom: 10px; color: #c9d1d9; }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #0d1117; }
+    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>
+      <div class="pulse"></div>
+      NuCRM Live Logs
+    </h1>
+    <div class="controls">
+      <input type="text" class="filter-input" id="filterInput" placeholder="🔍 Filter logs...">
+      <div class="level-filters">
+        <button class="active" data-level="all">All</button>
+        <button data-level="info">Info</button>
+        <button data-level="warn">Warn</button>
+        <button data-level="error">Error</button>
+      </div>
+      <button id="clearBtn">🗑 Clear</button>
+      <button id="pauseBtn">⏸ Pause</button>
+      <button id="exportBtn">💾 Export</button>
+    </div>
+  </header>
+
+  <div id="log-container">
+    <div class="empty-state">
+      <h2>📡 Waiting for logs...</h2>
+      <p>Logs will appear here in real-time</p>
+    </div>
+  </div>
+
+  <div id="stats">
+    <div class="stat">Total: <span class="stat-value" id="totalCount">0</span></div>
+    <div class="stat">Info: <span class="stat-value" id="infoCount">0</span></div>
+    <div class="stat">Warn: <span class="stat-value" id="warnCount">0</span></div>
+    <div class="stat">Error: <span class="stat-value" id="errorCount">0</span></div>
+    <div class="stat">Rate: <span class="stat-value" id="logRate">0</span>/min</div>
+  </div>
+
+  <script>
+    const logs = [];
+    let isPaused = false;
+    let currentFilter = 'all';
+    let searchQuery = '';
+    let startTime = Date.now();
+    let lastMinuteCount = 0;
+
+    const container = document.getElementById('log-container');
+    const filterInput = document.getElementById('filterInput');
+    const clearBtn = document.getElementById('clearBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const exportBtn = document.getElementById('exportBtn');
+
+    // Simulated log stream (in production, connect to your log endpoint)
+    function generateDemoLogs() {
+      const messages = {
+        info: [
+          'User logged in successfully',
+          'Contact created: john@example.com',
+          'Deal moved to negotiation stage',
+          'API request completed in 45ms',
+          'Cache hit for query: active_users',
+          'Session refreshed for user #1234',
+          'Email queued: Welcome Series #1',
+          'Task assigned to sales_rep_2',
+        ],
+        warn: [
+          'Rate limit approaching: 85% used',
+          'Slow query detected: 1200ms',
+          'API key expires in 3 days',
+          'Memory usage at 78%',
+          'Failed login attempt: invalid credentials',
+        ],
+        error: [
+          'Database connection timeout after 5s',
+          'Email delivery failed: SMTP error',
+          'Webhook delivery failed: 503',
+          'Queue job failed: send-notification',
+          'Redis connection lost, using fallback',
+        ]
+      };
+
+      const level = Math.random() < 0.7 ? 'info' : Math.random() < 0.7 ? 'warn' : 'error';
+      const msgs = messages[level];
+      return {
+        level,
+        message: msgs[Math.floor(Math.random() * msgs.length)],
+        timestamp: new Date().toISOString(),
+        meta: { userId: `user_${Math.floor(Math.random() * 100)}` }
+      };
+    }
+
+    function addLog(log) {
+      logs.unshift(log);
+      if (!isPaused) renderLogs();
+      updateStats();
+    }
+
+    function renderLogs() {
+      if (logs.length === 0) {
+        container.innerHTML = '<div class="empty-state"><h2>📡 Waiting for logs...</h2><p>Logs will appear here in real-time</p></div>';
+        return;
+      }
+
+      let filtered = logs;
+      if (currentFilter !== 'all') {
+        filtered = filtered.filter(l => l.level === currentFilter);
+      }
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        filtered = filtered.filter(l => 
+          l.message.toLowerCase().includes(q) ||
+          JSON.stringify(l.meta).toLowerCase().includes(q)
+        );
+      }
+
+      const html = filtered.slice(0, 500).map(log => {
+        const time = new Date(log.timestamp).toLocaleTimeString();
+        const metaStr = log.meta ? `<div class="log-meta">${JSON.stringify(log.meta)}</div>` : '';
+        return `
+          <div class="log-entry ${log.level}">
+            <span class="log-time">${time}</span>
+            <span class="log-level ${log.level}">${log.level}</span>
+            <span class="log-msg">${escapeHtml(log.message)}</span>
+            ${metaStr}
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = html;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function updateStats() {
+      document.getElementById('totalCount').textContent = logs.length;
+      document.getElementById('infoCount').textContent = logs.filter(l => l.level === 'info').length;
+      document.getElementById('warnCount').textContent = logs.filter(l => l.level === 'warn').length;
+      document.getElementById('errorCount').textContent = logs.filter(l => l.level === 'error').length;
+
+      const elapsed = (Date.now() - startTime) / 60000;
+      const rate = elapsed > 0 ? Math.round(logs.length / elapsed) : 0;
+      document.getElementById('logRate').textContent = rate;
+    }
+
+    // Event listeners
+    filterInput.addEventListener('input', (e) => {
+      searchQuery = e.target.value;
+      renderLogs();
+    });
+
+    document.querySelectorAll('[data-level]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-level]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.level;
+        renderLogs();
+      });
+    });
+
+    clearBtn.addEventListener('click', () => {
+      logs.length = 0;
+      renderLogs();
+      updateStats();
+    });
+
+    pauseBtn.addEventListener('click', () => {
+      isPaused = !isPaused;
+      pauseBtn.textContent = isPaused ? '▶ Resume' : '⏸ Pause';
+      pauseBtn.classList.toggle('active', isPaused);
+    });
+
+    exportBtn.addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `nucrm-logs-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // Connect to server logs via EventSource (if backend supports it)
+    function connectToServer() {
+      try {
+        const eventSource = new EventSource('/api/logs/stream');
+        eventSource.onmessage = (event) => {
+          const log = JSON.parse(event.data);
+          addLog(log);
+        };
+        eventSource.onerror = () => {
+          console.log('Server log stream unavailable, using demo mode');
+        };
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    // Auto-generate demo logs if no server connection
+    const connected = connectToServer();
+    if (!connected) {
+      // Generate demo logs every 1-3 seconds
+      setInterval(() => {
+        addLog(generateDemoLogs());
+      }, 1000 + Math.random() * 2000);
+    }
+
+    // Auto-scroll on new logs
+    container.addEventListener('DOMNodeInserted', () => {
+      if (!isPaused) {
+        container.scrollTop = 0;
+      }
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.key === '/' && document.activeElement !== filterInput) {
+        e.preventDefault();
+        filterInput.focus();
+      }
+      if (e.key === 'Escape') {
+        filterInput.blur();
+        filterInput.value = '';
+        searchQuery = '';
+        renderLogs();
+      }
+    });
+  </script>
+</body>
+</html>

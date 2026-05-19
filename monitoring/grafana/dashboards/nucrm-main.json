@@ -1,0 +1,256 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "nucrm-main",
+    "title": "NuCRM - Main Dashboard",
+    "tags": ["nucrm", "crm", "saas"],
+    "timezone": "browser",
+    "schemaVersion": 30,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Database Connections",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "pg_stat_activity_count{datname=\"nucrm\"}",
+            "legendFormat": "Connections"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 50 },
+                { "color": "red", "value": 90 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Redis Memory Usage",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+        "targets": [
+          {
+            "expr": "redis_memory_used_bytes",
+            "legendFormat": "Memory"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "color": { "mode": "palette-classic" }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Active Tenants",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+        "targets": [
+          {
+            "refId": "A",
+            "rawSql": "SELECT COUNT(*) as value FROM tenants WHERE deleted_at IS NULL AND status = 'active'",
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "blue", "value": null }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Total Contacts",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+        "targets": [
+          {
+            "refId": "A",
+            "rawSql": "SELECT COUNT(*) as value FROM contacts WHERE deleted_at IS NULL",
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "palette-classic" }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Contacts by Status",
+        "type": "piechart",
+        "gridPos": { "h": 8, "w": 8, "x": 0, "y": 4 },
+        "targets": [
+          {
+            "refId": "A",
+            "rawSql": "SELECT lead_status as metric, COUNT(*) as value FROM contacts WHERE deleted_at IS NULL GROUP BY lead_status",
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "palette-classic" }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Deals Pipeline Value",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 8, "x": 8, "y": 4 },
+        "targets": [
+          {
+            "refId": "A",
+            "rawSql": "SELECT COALESCE(SUM(value), 0) as value FROM deals WHERE deleted_at IS NULL AND stage NOT IN ('won', 'lost')",
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD",
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Won Deals This Month",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 8, "x": 16, "y": 4 },
+        "targets": [
+          {
+            "refId": "A",
+            "rawSql": "SELECT COUNT(*) as value FROM deals WHERE deleted_at IS NULL AND stage = 'won' AND created_at >= date_trunc('month', now())",
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "emerald", "value": null }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Deals by Stage",
+        "type": "bargauge",
+        "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+        "targets": [
+          {
+            "refId": "A",
+            "rawSql": "SELECT stage as metric, COUNT(*) as value FROM deals WHERE deleted_at IS NULL GROUP BY stage ORDER BY value DESC",
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "palette-classic" },
+            "orientation": "horizontal"
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Recent Activities (24h)",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 8, "x": 16, "y": 8 },
+        "targets": [
+          {
+            "refId": "A",
+            "rawSql": "SELECT COUNT(*) as value FROM activities WHERE created_at >= now() - interval '24 hours'",
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "palette-classic" }
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Top Companies by Deal Value",
+        "type": "table",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+        "targets": [
+          {
+            "refId": "A",
+            "rawSql": "SELECT c.name as company, COUNT(d.id) as deals, COALESCE(SUM(d.value), 0) as total_value FROM companies c LEFT JOIN deals d ON d.company_id = c.id WHERE c.deleted_at IS NULL GROUP BY c.id, c.name ORDER BY total_value DESC LIMIT 10",
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto",
+              "displayMode": "auto"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": { "id": "byName", "options": "total_value" },
+              "properties": [
+                { "id": "unit", "value": "currencyUSD" }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 11,
+        "title": "Contacts Created (Last 7 Days)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+        "targets": [
+          {
+            "refId": "A",
+            "rawSql": "SELECT date_trunc('day', created_at) as time, COUNT(*) as value FROM contacts WHERE created_at >= now() - interval '7 days' GROUP BY time ORDER BY time",
+            "format": "time_series"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "palette-classic" },
+            "custom": {
+              "fillOpacity": 20,
+              "lineWidth": 2
+            }
+          }
+        }
+      }
+    ],
+    "time": { "from": "now-6h", "to": "now" }
+  },
+  "overwrite": true
+}
