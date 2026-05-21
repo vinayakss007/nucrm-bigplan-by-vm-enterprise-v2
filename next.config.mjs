@@ -5,7 +5,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 let nextConfig = {
-  // Turbopack for faster dev
+  allowedDevOrigins: ['136.119.162.223', 'localhost:3000'],
   turbopack: {
     root: __dirname,
   },

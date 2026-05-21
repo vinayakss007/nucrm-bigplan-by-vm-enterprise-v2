@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { Inter, JetBrains_Mono } from 'next/font/google';
 import { ThemeProvider } from '@/components/shared/theme-provider';
 import { ErrorWrapper } from '@/components/shared/error-wrapper';
 import { Toaster } from 'react-hot-toast';
@@ -8,6 +9,20 @@ import { ServiceWorkerRegistration } from '@/components/shared/service-worker-re
 import { SkipLink } from '@/components/ui/skip-link';
 import { I18nProvider } from '@/lib/i18n/provider';
 import './globals.css';
+
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800', '900'],
+  variable: '--font-inter',
+  display: 'swap',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-jetbrains-mono',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: { default: 'NuCRM', template: '%s | NuCRM' },
@@ -25,19 +40,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" />
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" />
-        <noscript>
-          <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" />
-        </noscript>
-        <meta name="theme-color" content="#7c3aed" />
-        <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
-      </head>
-      <body suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable}`}>
+      <body suppressHydrationWarning className="font-sans">
         <I18nProvider>
           <SkipLink />
           <ThemeProvider>

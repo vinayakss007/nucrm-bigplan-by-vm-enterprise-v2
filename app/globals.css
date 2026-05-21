@@ -51,8 +51,8 @@
 @layer base {
   html { font-size: 15px; }
   * { @apply border-border; box-sizing: border-box; }
-  body { @apply bg-background text-foreground; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-  code, pre, kbd { font-family: 'JetBrains Mono', 'DM Mono', monospace; }
+  body { @apply bg-background text-foreground; font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  code, pre, kbd { font-family: var(--font-jetbrains-mono), 'DM Mono', monospace; }
 
   /* Heading scale — bolder, tighter tracking for modern SaaS feel */
   h1 { @apply text-[1.75rem] font-bold leading-[1.2] tracking-tight; }
