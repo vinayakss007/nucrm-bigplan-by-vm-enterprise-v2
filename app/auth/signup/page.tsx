@@ -1,6 +1,5 @@
 'use client';
 import { useState, Suspense } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Zap, Building2, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -12,21 +11,35 @@ function SignupForm() {
   const [password, setPassword] = useState('');
   const [workspaceName, setWorkspaceName] = useState('');
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  const [step1Loading, setStep1Loading] = useState(false);
+
+  const validatePassword = (pw: string): string | null => {
+    if (pw.length < 12) return 'Password must be at least 12 characters';
+    if (!/[A-Z]/.test(pw)) return 'Password must contain at least one uppercase letter';
+    if (!/[0-9]/.test(pw)) return 'Password must contain at least one number';
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(pw)) return 'Password must contain at least one special character';
+    return null;
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
-    const res = await fetch('/api/auth/signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, full_name: name, workspace_name: workspaceName }),
-    });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error || 'Signup failed'); setLoading(false); return; }
-    toast.success('Workspace created! Welcome to NuCRM.');
-    router.push('/tenant/dashboard');
-    router.refresh();
+    try {
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password, full_name: name, workspace_name: workspaceName }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Signup failed'); setLoading(false); return; }
+      toast.success('Workspace created! Welcome to NuCRM.');
+      window.location.replace('/tenant/dashboard');
+    } catch {
+      toast.error('Connection error. Please try again.');
+      setLoading(false);
+    }
   };
 
   const inp = "w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:ring-2 focus:ring-violet-500 placeholder:text-muted-foreground";
@@ -55,11 +68,14 @@ function SignupForm() {
           {step==='account'?(
             <>
               <h1 className="text-xl font-bold mb-5">Create your account</h1>
-              <form onSubmit={e=>{e.preventDefault();if(password.length<12||!/[A-Z]/.test(password)||!/[0-9]/.test(password)||!/[!@#$%^&*(),.?":{}|<>]/.test(password)){toast.error('Password must be 12+ chars with uppercase, number & special char');return;}setStep('workspace');}} className="space-y-4">
+              <form onSubmit={e=>{e.preventDefault();const pwErr=validatePassword(password);if(pwErr){toast.error(pwErr);return;}setStep1Loading(true);setTimeout(()=>{setStep1Loading(false);setStep('workspace');},300);}} className="space-y-4">
                 <div><label className="block text-sm font-medium mb-1.5">Full Name</label><input value={name} onChange={e=>setName(e.target.value)} required placeholder="Jane Smith" className={inp}/></div>
                 <div><label className="block text-sm font-medium mb-1.5">Email</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} required placeholder="jane@company.com" className={inp}/></div>
                 <div><label className="block text-sm font-medium mb-1.5">Password</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} required minLength={12} placeholder="12+ chars, uppercase, number, special" className={inp}/></div>
-                <button type="submit" className="w-full py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl text-sm font-semibold hover:opacity-90 shadow-lg shadow-violet-500/25">Continue →</button>
+                <button type="submit" disabled={step1Loading} className="w-full py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl text-sm font-semibold hover:opacity-90 shadow-lg shadow-violet-500/25 disabled:opacity-50 flex items-center justify-center gap-2">
+                    {step1Loading&&<Loader2 className="w-4 h-4 animate-spin"/>}
+                    {step1Loading?'Checking...':'Continue →'}
+                  </button>
               </form>
             </>
           ):(

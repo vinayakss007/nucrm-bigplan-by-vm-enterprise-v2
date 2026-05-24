@@ -27,7 +27,7 @@ export default function LoginPage() {
 
       const data = await res.json();
       if (res.ok) {
-        window.location.href = '/tenant/dashboard';
+        window.location.replace('/tenant/dashboard');
       } else {
         setError(data.error || 'Invalid email or password');
         setLoading(false);
