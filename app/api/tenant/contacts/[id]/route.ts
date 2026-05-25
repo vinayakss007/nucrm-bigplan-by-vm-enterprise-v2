@@ -204,7 +204,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       contactId: contactId,
       entityId: contactId,
       entityType: 'contact',
-      type: 'note',
+      eventType: 'note',
       description: `Updated contact ${row.firstName} ${row.lastName || ''}`.trim(),
       action: 'update',
     }).catch(err => console.error('[contacts PATCH] activity log failed:', err));
