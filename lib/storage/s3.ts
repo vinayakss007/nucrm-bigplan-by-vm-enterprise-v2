@@ -3,7 +3,14 @@
  * Handles database backups to S3/R2
  */
 
-import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  DeleteObjectsCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
 
 const s3Client = new S3Client({
@@ -97,4 +104,33 @@ export async function getSignedUrl(key: string, expiresIn: number = 3600): Promi
   const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
   const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
   return getSignedUrl(s3Client as any, command, { expiresIn });
+}
+
+/**
+ * Generate a presigned PUT URL for direct browser uploads. The browser
+ * uploads bytes straight to S3/R2; the server only records metadata
+ * after the upload reports success. ContentType is locked into the URL
+ * so the browser must re-send it on PUT.
+ */
+export async function getSignedPutUrl(args: {
+  key: string;
+  contentType: string;
+  expiresInSeconds?: number;
+  contentLengthBytes?: number;
+}): Promise<string> {
+  const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
+  const command = new PutObjectCommand({
+    Bucket: BUCKET,
+    Key: args.key,
+    ContentType: args.contentType,
+    ...(args.contentLengthBytes ? { ContentLength: args.contentLengthBytes } : {}),
+  });
+  return getSignedUrl(s3Client as any, command, {
+    expiresIn: args.expiresInSeconds ?? 600, // 10 minutes
+  });
+}
+
+/** Hard-delete a single object. Caller decides what to do about the metadata row. */
+export async function deleteObject(key: string): Promise<void> {
+  await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
 }

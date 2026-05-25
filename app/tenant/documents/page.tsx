@@ -1,295 +1,323 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+/**
+ * Workspace documents page.
+ *
+ * Lists all documents the tenant has uploaded with search, filters,
+ * and a drag-and-drop upload zone. Uploads use the two-step flow:
+ *   1. POST /api/tenant/documents/upload-url -> presigned PUT URL
+ *   2. PUT bytes directly to S3 from the browser
+ *   3. POST /api/tenant/documents to record metadata
+ */
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  FileText,
+  Loader2,
+  Search,
+  Trash2,
+  Upload,
+  Download,
+  X,
+  Tag,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
 
-interface DocumentFile {
+interface Document {
   id: string;
   name: string;
-  mimeType: string;
-  sizeBytes: number;
-  uploadedBy: string;
-  createdAt: string;
-  folderId: string | null;
+  mime_type: string;
+  size_bytes: number;
+  description: string | null;
+  tags: string[] | null;
+  linked_entity_type: string | null;
+  linked_entity_id: string | null;
+  uploaded_by_name: string | null;
+  created_at: string;
 }
 
-interface Folder {
-  id: string;
-  name: string;
-  parentId: string | null;
-  createdAt: string;
-}
+const inp =
+  'w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500';
 
 export default function DocumentsPage() {
-  const [documents, setDocuments] = useState<DocumentFile[]>([]);
-  const [folders, setFolders] = useState<Folder[]>([]);
+  const [docs, setDocs] = useState<Document[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [currentFolder, setCurrentFolder] = useState<string | null>(null);
-  const [breadcrumb, setBreadcrumb] = useState<{ id: string | null; name: string }[]>([
-    { id: null, name: 'Root' },
-  ]);
+  const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [showNewFolder, setShowNewFolder] = useState(false);
-  const [newFolderName, setNewFolderName] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const loadDocuments = useCallback(async () => {
+  const load = useCallback(async (q: string) => {
+    setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (currentFolder) params.set('folderId', currentFolder);
-      const res = await fetch(`/api/tenant/documents?${params}`);
-      if (res.ok) {
-        const { data } = await res.json();
-        setDocuments(data.documents ?? []);
-        setFolders(data.folders ?? []);
-      }
-    } catch {
-      // Handle error silently
+      const url = q ? `/api/tenant/documents?q=${encodeURIComponent(q)}` : '/api/tenant/documents';
+      const res = await fetch(url);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to load');
+      setDocs(json.data ?? []);
+      setTotal(json.total ?? 0);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load');
     } finally {
       setLoading(false);
     }
-  }, [currentFolder]);
+  }, []);
 
-  useEffect(() => { loadDocuments(); }, [loadDocuments]);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), 250);
+    return () => clearTimeout(t);
+  }, [query]);
 
-  function navigateToFolder(folder: Folder) {
-    setCurrentFolder(folder.id);
-    setBreadcrumb(prev => [...prev, { id: folder.id, name: folder.name }]);
-    setLoading(true);
-  }
+  useEffect(() => {
+    load(debouncedQuery);
+  }, [debouncedQuery, load]);
 
-  function navigateToBreadcrumb(index: number) {
-    const item = breadcrumb[index];
-    if (!item) return;
-    setCurrentFolder(item.id);
-    setBreadcrumb(prev => prev.slice(0, index + 1));
-    setLoading(true);
-  }
-
-  async function handleUpload(files: FileList | null) {
-    if (!files || files.length === 0) return;
+  const uploadFile = async (file: File) => {
     setUploading(true);
-    setMessage(null);
-
+    const id = toast.loading(`Uploading ${file.name}…`);
     try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i]!;
-        const res = await fetch('/api/tenant/documents', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: file.name,
-            mimeType: file.type || 'application/octet-stream',
-            sizeBytes: file.size,
-            folderId: currentFolder,
-          }),
-        });
+      // Step 1: ask the server for a signed upload URL
+      const signRes = await fetch('/api/tenant/documents/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: file.name,
+          mime_type: file.type || 'application/octet-stream',
+          size_bytes: file.size,
+        }),
+      });
+      const sign = await signRes.json();
+      if (!signRes.ok) throw new Error(sign.error || 'Could not start upload');
 
-        if (res.ok) {
-          const { data } = await res.json();
-          // Upload file to presigned URL
-          if (data.uploadUrl) {
-            await fetch(data.uploadUrl, {
-              method: 'PUT',
-              body: file,
-              headers: { 'Content-Type': file.type || 'application/octet-stream' },
-            });
-          }
-        }
-      }
-      setMessage({ type: 'success', text: `${files.length} file(s) uploaded successfully` });
-      await loadDocuments();
-    } catch {
-      setMessage({ type: 'error', text: 'Failed to upload files' });
+      // Step 2: PUT the bytes to S3 directly
+      const putRes = await fetch(sign.upload_url, {
+        method: 'PUT',
+        headers: sign.required_headers ?? {},
+        body: file,
+      });
+      if (!putRes.ok) throw new Error(`Upload failed (${putRes.status})`);
+
+      // Step 3: record metadata
+      const metaRes = await fetch('/api/tenant/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: file.name,
+          storage_key: sign.storage_key,
+          mime_type: file.type || 'application/octet-stream',
+          size_bytes: file.size,
+        }),
+      });
+      const meta = await metaRes.json();
+      if (!metaRes.ok) throw new Error(meta.error || 'Could not record document');
+
+      toast.success(`Uploaded ${file.name}`, { id });
+      load(debouncedQuery);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed', { id });
     } finally {
       setUploading(false);
     }
-  }
+  };
 
-  async function createFolder() {
-    if (!newFolderName.trim()) return;
-    try {
-      const res = await fetch('/api/tenant/documents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newFolderName.trim(), folderId: currentFolder, createFolder: true }),
-      });
-      if (res.ok) {
-        setNewFolderName('');
-        setShowNewFolder(false);
-        await loadDocuments();
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Failed to create folder' });
+  const onFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    for (const file of Array.from(files)) {
+      // Sequential upload keeps the toast UX clean and avoids hammering S3.
+      await uploadFile(file);
     }
-  }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
-  async function deleteDocument(id: string) {
+  const downloadDocument = async (doc: Document) => {
     try {
-      const res = await fetch(`/api/tenant/documents?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setDocuments(prev => prev.filter(d => d.id !== id));
-        setMessage({ type: 'success', text: 'Document deleted' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Failed to delete document' });
+      const res = await fetch(`/api/tenant/documents/${doc.id}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Could not get download URL');
+      window.open(json.data.download_url, '_blank');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Download failed');
     }
-  }
+  };
 
-  function formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
-  function getFileIcon(mimeType: string): string {
-    if (mimeType.startsWith('image/')) return '🖼️';
-    if (mimeType.startsWith('video/')) return '🎬';
-    if (mimeType.includes('pdf')) return '📕';
-    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return '📊';
-    if (mimeType.includes('document') || mimeType.includes('word')) return '📄';
-    return '📎';
-  }
-
-  if (loading) {
-    return (
-      <div className="animate-pulse space-y-4">
-        <div className="h-7 w-48 bg-muted rounded-xl" />
-        <div className="h-40 bg-muted rounded-xl" />
-      </div>
-    );
-  }
+  const deleteDocument = async (doc: Document) => {
+    if (!confirm(`Delete "${doc.name}"? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/tenant/documents/${doc.id}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Delete failed');
+      toast.success('Deleted');
+      load(debouncedQuery);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Delete failed');
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Documents</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowNewFolder(!showNewFolder)}
-            className="px-3 py-2 text-sm bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80"
-          >
-            New Folder
-          </button>
-          <label className="px-3 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 cursor-pointer">
-            Upload Files
-            <input
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => handleUpload(e.target.files)}
-              disabled={uploading}
-            />
-          </label>
+    <div className="space-y-6 max-w-6xl">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold flex items-center gap-2">
+            <FileText className="w-6 h-6 text-violet-500" />
+            Documents
+          </h1>
+          <p className="text-sm text-foreground/60 mt-1">
+            Upload and share files across your team. {total > 0 && `${total} total.`}
+          </p>
         </div>
       </div>
 
-      {message && (
-        <div className={`p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
-          {message.text}
-        </div>
-      )}
-
-      {/* Breadcrumb */}
-      <nav className="flex gap-1 text-sm text-muted-foreground">
-        {breadcrumb.map((item, i) => (
-          <span key={i} className="flex items-center gap-1">
-            {i > 0 && <span>/</span>}
-            <button
-              onClick={() => navigateToBreadcrumb(i)}
-              className="hover:text-foreground hover:underline"
-            >
-              {item.name}
-            </button>
-          </span>
-        ))}
-      </nav>
-
-      {/* New folder form */}
-      {showNewFolder && (
-        <div className="flex gap-2 items-center p-3 bg-muted/50 rounded-lg">
-          <input
-            type="text"
-            value={newFolderName}
-            onChange={(e) => setNewFolderName(e.target.value)}
-            placeholder="Folder name"
-            className="flex-1 px-3 py-1.5 border rounded-lg text-sm"
-            onKeyDown={(e) => e.key === 'Enter' && createFolder()}
-          />
-          <button onClick={createFolder} className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg">
-            Create
-          </button>
-          <button onClick={() => setShowNewFolder(false)} className="px-3 py-1.5 text-sm text-muted-foreground">
-            Cancel
-          </button>
-        </div>
-      )}
-
-      {/* Drop zone */}
+      {/* upload zone */}
       <div
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => {
           e.preventDefault();
           setDragOver(false);
-          handleUpload(e.dataTransfer.files);
+          onFiles(e.dataTransfer.files);
         }}
-        className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-          dragOver ? 'border-primary bg-primary/5' : 'border-border'
+        className={`rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
+          dragOver ? 'border-violet-500 bg-violet-500/5' : 'border-border'
         }`}
       >
-        <p className="text-muted-foreground text-sm">
-          {uploading ? 'Uploading...' : 'Drag and drop files here, or use the Upload button'}
+        <Upload className="w-8 h-8 mx-auto text-foreground/40 mb-2" />
+        <p className="text-sm text-foreground/70">
+          Drag files here or{' '}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="font-medium text-violet-600 hover:underline"
+          >
+            browse
+          </button>
+          .{' '}
+          {uploading && (
+            <span className="inline-flex items-center gap-1 text-foreground/50 ml-2">
+              <Loader2 className="w-3 h-3 animate-spin" /> Uploading…
+            </span>
+          )}
         </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => onFiles(e.target.files)}
+        />
       </div>
 
-      {/* Folders */}
-      {folders.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          {folders.map(folder => (
-            <button
-              key={folder.id}
-              onClick={() => navigateToFolder(folder)}
-              className="flex flex-col items-center gap-1 p-4 rounded-lg border hover:bg-muted/50 transition-colors"
-            >
-              <span className="text-3xl">📁</span>
-              <span className="text-xs font-medium truncate w-full text-center">{folder.name}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      {/* search */}
+      <div className="relative max-w-md">
+        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-foreground/40" />
+        <input
+          className={`${inp} pl-9 pr-9`}
+          placeholder="Search by name or description"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        {query && (
+          <button
+            onClick={() => setQuery('')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-foreground/10"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        )}
+      </div>
 
-      {/* Files */}
-      {documents.length > 0 ? (
-        <div className="admin-card overflow-hidden">
-          <div className="divide-y divide-border">
-            {documents.map(doc => (
-              <div key={doc.id} className="flex items-center gap-4 px-4 py-3 hover:bg-muted/30">
-                <span className="text-xl">{getFileIcon(doc.mimeType)}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{doc.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatSize(doc.sizeBytes)} &middot; {new Date(doc.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <button
-                  onClick={() => deleteDocument(doc.id)}
-                  className="text-xs text-red-600 hover:text-red-700 px-2 py-1 rounded"
-                >
-                  Delete
-                </button>
-              </div>
-            ))}
-          </div>
+      {/* list */}
+      {loading ? (
+        <div className="flex items-center justify-center py-16 text-foreground/40">
+          <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading…
+        </div>
+      ) : docs.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border p-10 text-center">
+          <FileText className="w-10 h-10 text-foreground/30 mx-auto mb-3" />
+          <p className="text-sm text-foreground/60">
+            {debouncedQuery
+              ? 'No documents match that search.'
+              : 'No documents yet. Upload your first file above.'}
+          </p>
         </div>
       ) : (
-        folders.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground">
-            <p className="text-lg">No documents yet</p>
-            <p className="text-sm mt-1">Upload files or create folders to get started</p>
-          </div>
-        )
+        <div className="border border-border rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-foreground/[0.03] text-foreground/60">
+              <tr>
+                <th className="text-left font-medium px-4 py-2.5">Name</th>
+                <th className="text-left font-medium px-4 py-2.5">Size</th>
+                <th className="text-left font-medium px-4 py-2.5">Uploaded by</th>
+                <th className="text-left font-medium px-4 py-2.5">Date</th>
+                <th className="px-4 py-2.5"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {docs.map((d) => (
+                <tr key={d.id} className="border-t border-border hover:bg-foreground/[0.02]">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-foreground/50 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{d.name}</div>
+                        {d.description && (
+                          <div className="text-xs text-foreground/50 truncate">
+                            {d.description}
+                          </div>
+                        )}
+                        {d.tags && d.tags.length > 0 && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <Tag className="w-3 h-3 text-foreground/40" />
+                            {d.tags.map((t) => (
+                              <span
+                                key={t}
+                                className="text-xs px-1.5 py-0.5 rounded bg-foreground/10"
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-foreground/70">{formatBytes(d.size_bytes)}</td>
+                  <td className="px-4 py-3 text-foreground/70">{d.uploaded_by_name ?? '—'}</td>
+                  <td className="px-4 py-3 text-foreground/70">
+                    {new Date(d.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <button
+                      onClick={() => downloadDocument(d)}
+                      className="p-2 rounded-lg hover:bg-foreground/10"
+                      title="Download"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => deleteDocument(d)}
+                      className="p-2 rounded-lg hover:bg-foreground/10 text-rose-600"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
