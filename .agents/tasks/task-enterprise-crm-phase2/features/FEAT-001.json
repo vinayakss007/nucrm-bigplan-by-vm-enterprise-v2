@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "feat",
   "description": "Expand industry templates from 3 to 13 and build Stripe billing integration with module add-on purchases. This combines the industry templates expansion with the billing system since billing enables module purchases per template/use-case.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Expand lib/modules/industry-templates.ts to add 10 new templates: recruitment_hr, insurance, healthcare, education, ecommerce, legal, fitness_wellness, travel, automotive, financial_services. Each template must define: id, name, description, icon, custom_fields (2-4 fields per template with entity/label/key/type), pipelines (1-2 pipelines with 4-6 stages each), automations (1-2 automations with trigger/action/config), and a new 'modules' field listing which module IDs from BUILTIN_MODULES should auto-enable for that template.",
     "Update lib/modules/auto-install.ts to accept an optional industryTemplate parameter. When provided, merge the template's modules list with the plan's default modules. Add a new function installTemplateModules(tenantId, templateId) that installs template-specific modules.",
@@ -26,5 +26,5 @@
     "npm test"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 31 new tests pass. TypeScript strict mode compiles cleanly. Build failure (JWT_SECRET missing) is pre-existing and unrelated. The 2 test failures (backup-integrity, tenant-isolation) are pre-existing DB-dependent tests that fail without PostgreSQL. The constructWebhookEvent function needed explicit buffer length check for timingSafeEqual."
 }
