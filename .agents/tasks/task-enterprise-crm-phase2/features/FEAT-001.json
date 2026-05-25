@@ -1,0 +1,30 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Expand industry templates from 3 to 13 and build Stripe billing integration with module add-on purchases. This combines the industry templates expansion with the billing system since billing enables module purchases per template/use-case.",
+  "status": "in_progress",
+  "steps": [
+    "Expand lib/modules/industry-templates.ts to add 10 new templates: recruitment_hr, insurance, healthcare, education, ecommerce, legal, fitness_wellness, travel, automotive, financial_services. Each template must define: id, name, description, icon, custom_fields (2-4 fields per template with entity/label/key/type), pipelines (1-2 pipelines with 4-6 stages each), automations (1-2 automations with trigger/action/config), and a new 'modules' field listing which module IDs from BUILTIN_MODULES should auto-enable for that template.",
+    "Update lib/modules/auto-install.ts to accept an optional industryTemplate parameter. When provided, merge the template's modules list with the plan's default modules. Add a new function installTemplateModules(tenantId, templateId) that installs template-specific modules.",
+    "Update the BUILTIN_MODULES entry for 'industry-templates' in lib/modules/registry.ts to list all 13 template names in its features array.",
+    "Create lib/stripe.ts with: (a) getStripeClient() that returns configured Stripe API helpers using fetch-based calls to api.stripe.com (the project already does this in checkout/route.ts - follow same pattern), (b) createCheckoutSession(tenantId, planId, options) helper, (c) createPortalSession(tenantId) for customer portal, (d) createModuleCheckoutSession(tenantId, moduleId, priceInCents) for individual module add-on purchases, (e) constructWebhookEvent(payload, signature, secret) for webhook verification, (f) cancelSubscription(subscriptionId) and updateSubscription(subscriptionId, newPlanId) helpers.",
+    "Create app/api/tenant/billing/stripe/route.ts with POST handler for creating portal sessions (redirect to Stripe customer portal). Refactor existing checkout/route.ts to use the new lib/stripe.ts helper.",
+    "Create app/api/tenant/billing/modules/route.ts with POST handler that creates a checkout session for purchasing a specific module add-on (using module pricing from registry). Requires auth and checks the module exists and has a price.",
+    "Create app/api/webhooks/stripe/route.ts (public route - already in PUBLIC_PATHS in middleware.ts) with POST handler that: verifies Stripe webhook signature, handles events (checkout.session.completed - activate plan/module, customer.subscription.updated - sync plan, customer.subscription.deleted - downgrade to free, invoice.payment_failed - mark tenant as past_due). Store events in billingEvents table.",
+    "Add unit tests in tests/unit/industry-templates.test.ts that verify: all 13 templates exist with required fields, each template has valid module references (modules exist in BUILTIN_MODULES), the IndustryTemplate interface is satisfied, and the new installTemplateModules function returns correct module lists. Add tests in tests/unit/stripe.test.ts for the stripe helper functions (mock fetch)."
+  ],
+  "acceptance_criteria": [
+    "lib/modules/industry-templates.ts exports 13 templates (real_estate, saas, consulting + 10 new ones) each with custom_fields, pipelines, automations, and modules",
+    "lib/stripe.ts exports createCheckoutSession, createPortalSession, createModuleCheckoutSession, constructWebhookEvent, cancelSubscription, updateSubscription",
+    "app/api/webhooks/stripe/route.ts handles checkout.session.completed, customer.subscription.updated, customer.subscription.deleted, invoice.payment_failed",
+    "app/api/tenant/billing/modules/route.ts allows purchasing individual module add-ons via Stripe",
+    "npx tsc --noEmit passes with 0 errors",
+    "npm test passes (157+ tests, new tests for templates and stripe included)"
+  ],
+  "verification": [
+    "npx tsc --noEmit",
+    "npm test"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
