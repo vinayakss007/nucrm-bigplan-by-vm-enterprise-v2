@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contracts } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
+import { logAudit } from '@/lib/audit';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'contracts.view');
+    if (deny) return deny;
 
     const contractId = (await params).id;
 
@@ -38,8 +42,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
+    const deny = requirePerm(ctx, 'contracts.edit');
+    if (deny) return deny;
+
     const contractId = (await params).id;
     const body = await req.json();
+
+    // Validate numeric fields
+    if (body.totalValue !== undefined) {
+      const v = parseFloat(body.totalValue);
+      if (isNaN(v)) {
+        return NextResponse.json({ error: 'totalValue must be a valid number' }, { status: 400 });
+      }
+      body.totalValue = v;
+    }
 
     const allowedFields: Record<string, any> = {};
     const mutable = ['title', 'status', 'contractType', 'startDate', 'endDate', 'totalValue', 'terms', 'notes', 'billingFrequency'] as const;
@@ -75,6 +91,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       .where(and(eq(contracts.id, contractId), eq(contracts.tenantId, ctx.tenantId)))
       .returning();
 
+    await logAudit({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: 'contract.updated',
+      entityType: 'contract',
+      entityId: contractId,
+      metadata: { changes: allowedFields },
+    });
+
     return NextResponse.json({ data: updated });
   } catch (err: any) {
     console.error('[contracts [id] PUT]', err);
@@ -86,6 +111,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'contracts.delete');
+    if (deny) return deny;
 
     const contractId = (await params).id;
 
@@ -105,6 +133,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       .returning({ id: contracts.id });
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    await logAudit({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: 'contract.deleted',
+      entityType: 'contract',
+      entityId: contractId,
+    });
 
     return NextResponse.json({ data: { id: row.id, deleted: true } });
   } catch (err: any) {

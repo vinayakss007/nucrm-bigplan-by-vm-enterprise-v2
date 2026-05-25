@@ -1,0 +1,24 @@
+{
+  "id": "FEAT-006",
+  "type": "fix",
+  "description": "Address review feedback on [id] API routes: add permission gating, input validation for numeric fields, audit logging, and order status state machine guard.",
+  "status": "in_progress",
+  "steps": [
+    "Add requirePerm calls to GET/PUT/DELETE in contracts, subscriptions, orders, quotes [id] routes",
+    "Add numeric validation for financial fields (totalValue, totalAmount, subtotal, discount, amount) in PUT handlers",
+    "Add logAudit calls to PUT and DELETE in all 4 routes",
+    "Add order status state machine guard in orders [id] PUT route"
+  ],
+  "acceptance_criteria": [
+    "All 4 routes use requirePerm for view/edit/delete permissions",
+    "PUT handlers validate numeric fields with parseFloat/isNaN checks, returning 400 on invalid input",
+    "PUT and DELETE handlers call logAudit with appropriate action names",
+    "Orders PUT validates status transitions against a defined state machine"
+  ],
+  "verification": [
+    "npx tsc --noEmit - 0 errors",
+    "npm run build - succeeds"
+  ],
+  "blocked_reason": null,
+  "findings": null
+}
