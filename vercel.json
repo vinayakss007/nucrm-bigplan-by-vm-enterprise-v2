@@ -17,6 +17,10 @@
       "schedule": "0 0 * * *"
     },
     {
+      "path": "/api/cron/subscription-check",
+      "schedule": "0 5 * * *"
+    },
+    {
       "path": "/api/cron/usage-snapshot",
       "schedule": "0 0 * * 0"
     },
