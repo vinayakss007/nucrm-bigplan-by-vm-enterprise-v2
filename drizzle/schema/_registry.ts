@@ -251,6 +251,11 @@ import {
   fieldSnapshots,
 } from './history';
 
+import {
+  productTemplates,
+  tenantTemplates,
+} from './templates';
+
 // =============================================================================
 // TABLE REGISTRY DEFINITION
 // =============================================================================
@@ -2573,6 +2578,37 @@ export const TABLE_REGISTRY = {
       description: 'Field-level snapshots for edit history',
       isCore: false,
       indexes: [],
+    },
+  },
+  // Product template tables
+  productTemplates: {
+    table: productTemplates,
+    metadata: {
+      name: 'product_templates',
+      schemaGroup: 'modules',
+      hasTenantId: false,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['users'],
+      description: 'Product template definitions for onboarding',
+      isCore: false,
+      indexes: ['idx_product_templates_slug', 'idx_product_templates_status'],
+    },
+  },
+  tenantTemplates: {
+    table: tenantTemplates,
+    metadata: {
+      name: 'tenant_templates',
+      schemaGroup: 'modules',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'productTemplates', 'users'],
+      description: 'Template assignments to tenants',
+      isCore: false,
+      indexes: ['idx_tenant_templates_unique'],
     },
   },
 };

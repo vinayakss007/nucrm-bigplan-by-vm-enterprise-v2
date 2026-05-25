@@ -25,3 +25,4 @@ export * from './esignature';
 export * from './territories';
 export * from './hierarchy';
 export * from './visitors';
+export * from './templates';

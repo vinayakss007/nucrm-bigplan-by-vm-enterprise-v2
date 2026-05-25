@@ -1,0 +1,30 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Create product registry, Drizzle schema for custom templates, and super admin template builder API. This is the foundational data layer that all product pages and onboarding depend on.",
+  "status": "in_progress",
+  "steps": [
+    "Create lib/products/registry.ts - Define a PRODUCT_REGISTRY mapping 8 product IDs to their configuration (entry page route, template_id link, dashboard layout config with cards array, sidebar items, quick actions, feature highlights). Products: proposal-generator (maps to consulting template), ai-sales-crm (saas), whatsapp-automation (ecommerce with whatsapp-bot focus), helpdesk (healthcare with service-helpdesk focus), recruitment-ats (recruitment_hr), real-estate-crm (real_estate), ecommerce-crm (ecommerce), invoice-billing (financial_services). Each entry has: id, name, description, icon, templateId, route, dashboardCards (array of {title, stat_key, icon}), sidebarItems (array of {label, href, icon}), quickActions (array of {label, action, icon}), mainPipeline (name of primary pipeline from template).",
+    "Create drizzle/schema/templates.ts - Define product_templates table: id (utils.pk()), name (text not null), slug (text unique), description (text), icon (text), modules (jsonb default []), custom_fields (jsonb default []), pipelines (jsonb default []), automations (jsonb default []), is_builtin (boolean default false), status (text default 'active' - active/draft/archived), created_by (uuid references users), tenant_count (integer default 0), ...utils.lifecycle(). Also define tenant_templates table: id (utils.pk()), tenant_id (utils.tenantId()), template_id (uuid not null references product_templates), applied_at (timestamp defaultNow), applied_by (uuid references users), ...utils.lifecycle(). Add unique index on tenant_templates(tenant_id, template_id). Add index on product_templates(slug).",
+    "Register the new schema tables in drizzle/schema/_registry.ts - Import productTemplates and tenantTemplates from ./templates, add them to TABLE_REGISTRY with appropriate metadata (schemaGroup: 'modules', dependencies, description).",
+    "Export the new tables from drizzle/schema/index.ts (or wherever the central schema barrel file is that other files import from).",
+    "Create app/api/superadmin/templates/route.ts - GET: list all templates (requireAuth + isSuperAdmin check), join with tenant_count. POST: create new template (validate with Zod schema: name, description, icon, modules, custom_fields, pipelines, automations, status). Follow the pattern in app/api/superadmin/modules/route.ts.",
+    "Create app/api/superadmin/templates/[id]/route.ts - GET: single template by id. PATCH: update template fields. DELETE: soft-delete (set status to 'archived').",
+    "Create app/api/superadmin/templates/[id]/assign/route.ts - POST: assign template to a tenant (body: {tenant_id}). Insert into tenant_templates table. Optionally call installTemplateModules for the tenant with the template's modules array.",
+    "Create tests/unit/product-registry.test.ts - Test PRODUCT_REGISTRY has 8 entries, each has required fields (id, name, templateId, route, dashboardCards, sidebarItems, quickActions). Test that each product's templateId maps to a valid template in INDUSTRY_TEMPLATES."
+  ],
+  "acceptance_criteria": [
+    "PRODUCT_REGISTRY exports 8 product entries each with id, name, templateId, route, dashboardCards, sidebarItems, quickActions",
+    "product_templates and tenant_templates Drizzle schema compiles without TypeScript errors",
+    "Super admin templates API supports GET (list), POST (create), PATCH (update), DELETE (archive)",
+    "Template assignment API creates tenant_template record",
+    "npx tsc --noEmit passes with 0 errors",
+    "npm test passes including new product-registry tests"
+  ],
+  "verification": [
+    "npx tsc --noEmit",
+    "npm test"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
