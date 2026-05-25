@@ -1,0 +1,37 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Sentry integration in lib/api-error.ts + error boundaries, Saved Views schema + API, Call Logging page, Contact Scoring UI, Revenue Forecasting page, and Meeting Scheduling enhancements",
+  "status": "in_progress",
+  "steps": [
+    "Step 1 - Sentry in api-error.ts: Update lib/api-error.ts to import @sentry/nextjs and call Sentry.captureException in the apiError() function when status >= 500. Add Sentry.addBreadcrumb for 4xx errors. This is the central error handler used by all API routes.",
+    "Step 2 - Sentry in error boundaries: Update app/tenant/error.tsx to import @sentry/nextjs and call Sentry.captureException(error) in the useEffect, similar to how app/global-error.tsx already does it.",
+    "Step 3 - Saved Views schema: Add a savedViews table to drizzle/schema/crm.ts (after contacts table) with columns: id (utils.pk()), tenantId (utils.tenantId()), userId (uuid ref to users), name (text notNull), entityType (text notNull - 'contacts'|'deals'|'leads'|etc), filters (jsonb notNull), columns (jsonb - optional visible columns config), isShared (boolean default false), isDefault (boolean default false), metadata (utils.metadata()), ...utils.lifecycle(). Add tenant + entityType indexes. Export from drizzle/schema/index.ts (already exports crm.ts). Register in drizzle/schema/_registry.ts.",
+    "Step 4 - Saved Views API: Create app/api/tenant/views/route.ts with GET (list views for user+tenant, filtered by entity_type query param) and POST (create a view). Follow the requireAuth + apiError pattern from app/api/tenant/contacts/route.ts. Also create app/api/tenant/views/[id]/route.ts with GET, PATCH, DELETE for individual views.",
+    "Step 5 - Call Logging page: Create app/tenant/calls/page.tsx (server component that fetches calls via the existing /api/tenant/calls endpoint), app/tenant/calls/loading.tsx, app/tenant/calls/error.tsx, and a components/tenant/calls-client.tsx client component with: a data table showing calls (direction, contact name, duration formatted as mm:ss, notes preview, date), a 'Log Call' button that opens a modal form (contact select, direction radio, duration input, notes textarea, phone number input). Follow the pattern from app/tenant/calendar/page.tsx for the server component and components/tenant/contacts-client.tsx for the client component pattern.",
+    "Step 6 - Contact Scoring UI: Modify components/tenant/contact-detail-client.tsx to add a visual score badge component. Add a ScoreBadge showing hot (>=70, red/fire), warm (40-69, amber/yellow), cold (<40, blue/ice) with a progress bar (score/100). Follow the ScoreBadge pattern already in components/tenant/leads-client-new.tsx (line 57). Also modify components/tenant/contacts-client.tsx (or the data table) to show a small colored dot/badge next to contact names in the list view indicating their score tier.",
+    "Step 7 - Revenue Forecasting page: Create app/tenant/analytics/forecast/page.tsx (server component), app/tenant/analytics/forecast/loading.tsx, app/tenant/analytics/forecast/error.tsx. Create components/tenant/forecast-client.tsx with: pipeline value summary cards (total pipeline, weighted forecast, avg deal size), a bar chart using recharts showing monthly projected revenue (group deals by expected close month, weight by stage probability: lead=10%, qualified=25%, proposal=50%, negotiation=75%, closed_won=100%), a table of top deals with their weighted values. The API at /api/tenant/analytics/forecast already exists - use it or fall back to fetching deals directly from /api/tenant/deals.",
+    "Step 8 - Meeting Scheduling enhancements: Enhance app/tenant/calendar/page.tsx MeetingForm to include: location input, meeting URL input, description textarea, and deal_id select. These fields already exist in the meetings API schema. Also add availability slots UI concept - add a section showing the user's meetings for the selected day in a timeline view (8am-6pm with hourly slots, shading booked times).",
+    "Step 9 - Unit tests: Create tests/unit/saved-views.test.ts testing the saved views API logic (mock db, test create/list/update/delete flows). Create tests/unit/call-logging.test.ts testing call log creation validation. Create tests/unit/contact-scoring.test.ts testing the score badge logic (hot/warm/cold thresholds). Create tests/unit/forecast.test.ts testing revenue weighting calculation logic. Follow the vitest describe/it pattern from tests/unit/api-error.test.ts."
+  ],
+  "acceptance_criteria": [
+    "lib/api-error.ts calls Sentry.captureException for 500 errors",
+    "app/tenant/error.tsx reports errors to Sentry",
+    "savedViews table exists in drizzle/schema/crm.ts with proper indexes",
+    "GET/POST /api/tenant/views and GET/PATCH/DELETE /api/tenant/views/[id] routes exist and compile",
+    "app/tenant/calls/page.tsx exists with loading.tsx and error.tsx",
+    "Contact detail page shows visual score badge with hot/warm/cold indicators",
+    "app/tenant/analytics/forecast/page.tsx exists with recharts-based projection chart",
+    "Calendar MeetingForm includes location, meeting_url, description, deal_id fields",
+    "npx tsc --noEmit produces 0 errors",
+    "npx vitest run passes all tests including new ones",
+    "npm run build succeeds"
+  ],
+  "verification": [
+    "npx tsc --noEmit",
+    "npx vitest run",
+    "npm run build"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

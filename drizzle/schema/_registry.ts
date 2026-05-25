@@ -112,6 +112,7 @@ import {
   conversationMetrics,
   conversationKeywords,
   revenueProjections,
+  savedViews,
 } from './crm';
 
 import {
@@ -1057,6 +1058,21 @@ export const TABLE_REGISTRY = {
       description: 'Sales revenue forecasts',
       isCore: false,
       indexes: ['idx_rev_projections_tenant', 'idx_revenue_projections_tenant', 'idx_revenue_projections_metadata_g'],
+    },
+  },
+  savedViews: {
+    table: savedViews,
+    metadata: {
+      name: 'saved_views',
+      schemaGroup: 'crm',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants', 'users'],
+      description: 'User-saved list views with custom filters and columns',
+      isCore: false,
+      indexes: ['idx_saved_views_tenant', 'idx_saved_views_entity_tenant'],
     },
   },
 

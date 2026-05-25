@@ -1,8 +1,16 @@
 import { NextResponse } from 'next/server';
+import * as Sentry from '@sentry/nextjs';
 
 export function apiError(err: unknown, message = 'Internal server error', status = 500) {
   const isDev = process.env.NODE_ENV === 'development';
   console.error(`[API Error ${status}]`, err instanceof Error ? err.message : err);
+
+  if (status >= 500) {
+    Sentry.captureException(err);
+  } else {
+    Sentry.addBreadcrumb({ category: 'api', message, level: 'warning' });
+  }
+
   return NextResponse.json(
     { error: isDev && err instanceof Error ? err.message : message },
     { status }
