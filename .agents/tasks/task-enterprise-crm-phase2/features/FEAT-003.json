@@ -2,7 +2,7 @@
   "id": "FEAT-003",
   "type": "feat",
   "description": "Advanced RBAC (field-level and record-level permissions, approval workflows), webhook system enhancement, and SSO/SAML support. These enterprise features complete the platform's readiness for multi-frontend SaaS products.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Create lib/rbac/field-permissions.ts with: (a) getFieldPermissions(tenantId, roleId, entityType) that queries the fieldPermissions table (already exists in drizzle/schema/core.ts), (b) checkFieldAccess(tenantId, roleId, entityType, fieldName) returns 'none'|'read'|'write', (c) filterFieldsByPermission(tenantId, roleId, entityType, data, accessLevel) that strips fields the role cannot see from a record object, (d) setFieldPermission(tenantId, roleId, entityType, fieldName, accessLevel) to upsert a field permission rule.",
     "Create lib/rbac/record-permissions.ts with: (a) checkRecordAccess(tenantId, userId, roleId, entityType, entityId) that checks recordPermissions table (already exists in drizzle/schema/core.ts) and also checks if 'own records only' policy applies (record.assignedTo === userId or record.createdBy === userId), (b) grantRecordAccess(tenantId, roleId, entityType, entityId, accessLevel, grantedBy), (c) revokeRecordAccess(tenantId, roleId, entityType, entityId), (d) getRecordAccessFilter(tenantId, userId, roleId, entityType) that returns a SQL condition for use in WHERE clauses to only show accessible records.",
@@ -32,5 +32,5 @@
     "npm test"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 30+ new tests pass (12 RBAC, 10 SSO, 8 webhooks). TypeScript strict mode compiles cleanly. Test suite: 246 passed, 2 pre-existing DB-dependent failures (backup-integrity requiring PostgreSQL). The .gitignore has a logs/ rule that matches any directory named 'logs' - used git add -f for webhook logs route. The approval_requests table was added to core.ts and registered in _registry.ts. SSO route added to PUBLIC_PATHS for unauthenticated callback access."
 }
