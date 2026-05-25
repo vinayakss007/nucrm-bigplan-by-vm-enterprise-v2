@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { handleSigningWebhook, getProviderAdapter } from '@/lib/esignature';
 import type { SigningProvider, SigningEventType } from '@/lib/esignature';
+import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
 
 /**
  * POST /api/tenant/esignature/webhook
@@ -9,6 +10,9 @@ import type { SigningProvider, SigningEventType } from '@/lib/esignature';
  */
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit public endpoint
+    const rateLimited = checkPublicRateLimit(req, { max: 100, windowMs: 60_000, prefix: 'esign-webhook' });
+    if (rateLimited) return rateLimited;
     const body = await req.json();
     const { searchParams } = new URL(req.url);
     const provider = searchParams.get('provider') as SigningProvider | null;

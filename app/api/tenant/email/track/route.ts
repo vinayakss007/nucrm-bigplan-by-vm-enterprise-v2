@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { db } from '@/drizzle/db';
 import { emailOpens, emailClicks } from '@/drizzle/schema/email-tracking';
+import { tenants } from '@/drizzle/schema/core';
+import { eq } from 'drizzle-orm';
+import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
 
 /**
  * Email Open/Click Tracking Endpoints
@@ -18,6 +21,10 @@ const TRACKING_PIXEL = Buffer.from(
 
 export async function GET(req: NextRequest) {
   try {
+    // Rate limit public endpoint
+    const rateLimited = checkPublicRateLimit(req, { max: 100, windowMs: 60_000, prefix: 'email-track' });
+    if (rateLimited) return rateLimited;
+
     const { searchParams } = new URL(req.url);
     const type = searchParams.get('type'); // 'open' or 'click'
     const tenantId = searchParams.get('tid');
@@ -27,6 +34,20 @@ export async function GET(req: NextRequest) {
 
     if (!tenantId) {
       // Return pixel anyway to avoid broken images
+      return new NextResponse(TRACKING_PIXEL, {
+        status: 200,
+        headers: { 'Content-Type': 'image/gif', 'Cache-Control': 'no-store, no-cache' },
+      });
+    }
+
+    // Validate that the tenant exists before writing tracking records
+    const tenantRows = await db
+      .select({ id: tenants.id })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId));
+
+    if (tenantRows.length === 0) {
+      // Return pixel anyway to avoid broken images but don't record data
       return new NextResponse(TRACKING_PIXEL, {
         status: 200,
         headers: { 'Content-Type': 'image/gif', 'Cache-Control': 'no-store, no-cache' },

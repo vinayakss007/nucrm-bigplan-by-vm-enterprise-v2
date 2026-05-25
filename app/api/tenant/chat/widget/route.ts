@@ -3,6 +3,8 @@ import { apiError } from '@/lib/api-error';
 import { createChatSession } from '@/lib/chat';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
+import { requireModule } from '@/lib/modules/gate';
+import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
 
 /**
  * Public Chat Widget Endpoint
@@ -53,10 +55,18 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit public endpoint
+    const rateLimited = checkPublicRateLimit(req, { max: 100, windowMs: 60_000, prefix: 'chat-widget' });
+    if (rateLimited) return rateLimited;
+
     const body = await req.json();
     const validated = validateBody(createVisitorSessionSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
+
+    // Verify tenant has the service-helpdesk module enabled
+    const moduleGate = await requireModule(v.tenantId, 'service-helpdesk');
+    if (moduleGate) return moduleGate;
 
     const session = await createChatSession({
       visitorId: v.visitorId,

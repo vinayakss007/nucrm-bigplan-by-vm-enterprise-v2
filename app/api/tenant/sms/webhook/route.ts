@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { validateTwilioSignature, handleIncomingSMS, updateDeliveryStatus } from '@/lib/sms';
 import type { IncomingSMSPayload, DeliveryStatusPayload } from '@/lib/sms';
+import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
 
 /**
  * Twilio SMS Webhook Handler
@@ -11,6 +12,9 @@ import type { IncomingSMSPayload, DeliveryStatusPayload } from '@/lib/sms';
  */
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit public endpoint
+    const rateLimited = checkPublicRateLimit(req, { max: 100, windowMs: 60_000, prefix: 'sms-webhook' });
+    if (rateLimited) return rateLimited;
     const contentType = req.headers.get('content-type') || '';
     let params: Record<string, string> = {};
 

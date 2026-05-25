@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
+import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 
@@ -42,6 +43,9 @@ export async function GET(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const moduleGate = await requireModule(ctx.tenantId, 'analytics-pro');
+    if (moduleGate) return moduleGate;
 
     const { searchParams } = new URL(req.url);
     const metric = (searchParams.get('metric') || 'deals_won') as Metric;

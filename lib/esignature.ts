@@ -8,6 +8,7 @@
 import { db } from '@/drizzle/db';
 import { signingRequests, signingEvents } from '@/drizzle/schema/esignature';
 import { eq, and } from 'drizzle-orm';
+import { createHmac } from 'crypto';
 
 // ── Types ─────────────────────────────────────────────
 
@@ -113,10 +114,24 @@ export class DocuSignAdapter implements SigningProviderAdapter {
     return mapDocuSignStatus(data.status);
   }
 
-  validateWebhook(_payload: unknown, headers: Record<string, string>): boolean {
+  validateWebhook(payload: unknown, headers: Record<string, string>): boolean {
     // DocuSign uses HMAC-SHA256 signature in x-docusign-signature-1 header
     const signature = headers['x-docusign-signature-1'];
-    return !!signature;
+    if (!signature) return false;
+
+    const webhookSecret = process.env['DOCUSIGN_WEBHOOK_SECRET'];
+    if (!webhookSecret) {
+      // Fall back to presence check if no secret is configured
+      return !!signature;
+    }
+
+    // Compute HMAC-SHA256 and compare
+    const payloadString = typeof payload === 'string' ? payload : JSON.stringify(payload);
+    const computed = createHmac('sha256', webhookSecret)
+      .update(payloadString)
+      .digest('base64');
+
+    return computed === signature;
   }
 }
 
@@ -171,10 +186,24 @@ export class HelloSignAdapter implements SigningProviderAdapter {
     return mapHelloSignStatus(data.signature_request?.status_code);
   }
 
-  validateWebhook(_payload: unknown, headers: Record<string, string>): boolean {
+  validateWebhook(payload: unknown, headers: Record<string, string>): boolean {
     // HelloSign uses event hash validation
     const eventHash = headers['x-hellosign-event-hash'];
-    return !!eventHash;
+    if (!eventHash) return false;
+
+    const webhookSecret = process.env['HELLOSIGN_WEBHOOK_SECRET'];
+    if (!webhookSecret) {
+      // Fall back to presence check if no secret is configured
+      return !!eventHash;
+    }
+
+    // Compute HMAC-SHA256 and compare
+    const payloadString = typeof payload === 'string' ? payload : JSON.stringify(payload);
+    const computed = createHmac('sha256', webhookSecret)
+      .update(payloadString)
+      .digest('hex');
+
+    return computed === eventHash;
   }
 }
 

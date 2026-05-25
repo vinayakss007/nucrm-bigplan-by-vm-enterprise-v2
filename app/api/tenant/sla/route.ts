@@ -83,11 +83,20 @@ export async function PUT(req: NextRequest) {
     if (moduleGate) return moduleGate;
 
     const body = await req.json();
-    const { id, ...updates } = body;
+    const { id } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
+
+    // Allowlist mutable fields to prevent overwriting tenantId, createdAt, etc.
+    const updates: Record<string, unknown> = {};
+    if (body['name'] !== undefined) updates['name'] = body['name'];
+    if (body['priority'] !== undefined) updates['priority'] = body['priority'];
+    if (body['responseTimeMinutes'] !== undefined) updates['responseTimeMinutes'] = body['responseTimeMinutes'];
+    if (body['resolutionTimeMinutes'] !== undefined) updates['resolutionTimeMinutes'] = body['resolutionTimeMinutes'];
+    if (body['escalationRules'] !== undefined) updates['escalationRules'] = body['escalationRules'];
+    if (body['isActive'] !== undefined) updates['isActive'] = body['isActive'];
 
     const [updated] = await db.update(slaPolicies)
       .set({ ...updates, updatedAt: new Date() })

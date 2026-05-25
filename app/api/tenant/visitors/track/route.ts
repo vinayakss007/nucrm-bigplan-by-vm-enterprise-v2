@@ -1,25 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { visitors, pageViews } from '@/drizzle/schema/visitors';
+import { apiKeys } from '@/drizzle/schema/core';
 import { eq, and } from 'drizzle-orm';
 import { scorePageUrl } from '@/lib/visitor-tracking';
+import { createHash } from 'crypto';
+import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
 
 /**
  * Public endpoint for visitor tracking.
  * No auth required - uses x-api-key header to resolve tenant.
+ * The API key is looked up in the api_keys table to determine the tenant.
  * Lightweight and fast for use by frontend tracking scripts.
  */
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit public endpoint
+    const rateLimited = checkPublicRateLimit(req, { max: 100, windowMs: 60_000, prefix: 'visitor-track' });
+    if (rateLimited) return rateLimited;
+
     const apiKey = req.headers.get('x-api-key');
     if (!apiKey) {
       return NextResponse.json({ error: 'x-api-key header required' }, { status: 401 });
     }
 
-    // Resolve tenant from API key
-    // In production, look up the tenant via API key table
-    // For now, use the key directly as tenantId (simplified)
-    const tenantId = apiKey;
+    // Resolve tenant from API key by hashing and looking up in the api_keys table
+    const keyHash = createHash('sha256').update(apiKey).digest('hex');
+    const keyRows = await db
+      .select({ tenantId: apiKeys.tenantId })
+      .from(apiKeys)
+      .where(and(eq(apiKeys.keyHash, keyHash), eq(apiKeys.isActive, true)));
+
+    const keyRow = keyRows[0];
+    if (!keyRow) {
+      return NextResponse.json({ error: 'Invalid API key' }, { status: 401 });
+    }
+
+    const tenantId = keyRow.tenantId;
 
     const body = await req.json();
     const { visitorId, fingerprintId, url, title, referrer, duration } = body;
