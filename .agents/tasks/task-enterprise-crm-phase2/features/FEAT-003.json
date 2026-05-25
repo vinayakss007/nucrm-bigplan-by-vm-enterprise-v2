@@ -1,0 +1,36 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Advanced RBAC (field-level and record-level permissions, approval workflows), webhook system enhancement, and SSO/SAML support. These enterprise features complete the platform's readiness for multi-frontend SaaS products.",
+  "status": "in_progress",
+  "steps": [
+    "Create lib/rbac/field-permissions.ts with: (a) getFieldPermissions(tenantId, roleId, entityType) that queries the fieldPermissions table (already exists in drizzle/schema/core.ts), (b) checkFieldAccess(tenantId, roleId, entityType, fieldName) returns 'none'|'read'|'write', (c) filterFieldsByPermission(tenantId, roleId, entityType, data, accessLevel) that strips fields the role cannot see from a record object, (d) setFieldPermission(tenantId, roleId, entityType, fieldName, accessLevel) to upsert a field permission rule.",
+    "Create lib/rbac/record-permissions.ts with: (a) checkRecordAccess(tenantId, userId, roleId, entityType, entityId) that checks recordPermissions table (already exists in drizzle/schema/core.ts) and also checks if 'own records only' policy applies (record.assignedTo === userId or record.createdBy === userId), (b) grantRecordAccess(tenantId, roleId, entityType, entityId, accessLevel, grantedBy), (c) revokeRecordAccess(tenantId, roleId, entityType, entityId), (d) getRecordAccessFilter(tenantId, userId, roleId, entityType) that returns a SQL condition for use in WHERE clauses to only show accessible records.",
+    "Create lib/rbac/approval-workflows.ts with: (a) ApprovalRule interface (id, tenantId, entityType, condition - e.g. 'deal.amount > 50000', approverRoleSlug, autoApproveRoles), (b) checkNeedsApproval(tenantId, entityType, entityData) that evaluates conditions against the data, (c) requestApproval(tenantId, entityType, entityId, requestedBy) that creates an approval request, (d) approveRequest(requestId, approvedBy), (e) rejectRequest(requestId, rejectedBy, reason). Use the existing activities table to log approval events.",
+    "Create drizzle/schema/_registry.ts update - add approval_requests table with: id, tenantId, entityType, entityId, ruleId, status ('pending'|'approved'|'rejected'), requestedBy, approvedBy, rejectedBy, reason, createdAt, updatedAt. Wait - check if _registry.ts already exists and what it contains before modifying.",
+    "Create app/api/tenant/permissions/fields/route.ts with GET (list field permissions for a role) and POST (set field permission). Create app/api/tenant/permissions/approvals/route.ts with GET (list pending approvals) and POST (create approval rule).",
+    "Enhance lib/webhooks.ts: (a) Expand WebhookEvent type to include more events: 'lead.created'|'lead.converted'|'ticket.created'|'ticket.resolved'|'invoice.created'|'invoice.paid'|'form.submitted'|'automation.triggered'|'module.installed'|'module.disabled', (b) Add webhook event metadata enrichment - include entity snapshot in payload, (c) Add exponential backoff to retryFailedWebhooks (current is flat 1 hour).",
+    "Create app/api/tenant/webhooks/logs/route.ts with GET handler that returns recent webhook deliveries (from webhookQueue table) for the tenant's webhooks. Include status, attempt count, response status, timestamps. Paginated.",
+    "Create lib/auth/sso.ts with: (a) SSOProvider interface matching the ssoProviders table schema in drizzle/schema/infra.ts, (b) initiateSSO(tenantId, providerId) that generates auth URL for SAML or OIDC, (c) handleSSOCallback(tenantId, providerId, code/assertion) that validates the response and creates/links user account, (d) generateSAMLMetadata(tenantId, providerId) for SP metadata XML, (e) validateOIDCToken(token, providerConfig) for OIDC token validation.",
+    "Create app/api/auth/sso/[provider]/route.ts with GET (initiate SSO redirect) and POST (handle callback). Uses ssoProviders and ssoSessions tables already defined in drizzle/schema/infra.ts.",
+    "Add unit tests in tests/unit/rbac.test.ts for: filterFieldsByPermission correctly strips unauthorized fields, checkRecordAccess returns correct access levels, checkNeedsApproval evaluates conditions correctly. Add tests in tests/unit/sso.test.ts for: generateSAMLMetadata produces valid XML structure, validateOIDCToken rejects expired tokens. Add tests in tests/unit/webhooks-enhanced.test.ts for: expanded webhook event types are valid, exponential backoff calculation is correct."
+  ],
+  "acceptance_criteria": [
+    "lib/rbac/field-permissions.ts exports getFieldPermissions, checkFieldAccess, filterFieldsByPermission, setFieldPermission",
+    "lib/rbac/record-permissions.ts exports checkRecordAccess, grantRecordAccess, revokeRecordAccess, getRecordAccessFilter",
+    "lib/rbac/approval-workflows.ts exports checkNeedsApproval, requestApproval, approveRequest, rejectRequest with ApprovalRule interface",
+    "WebhookEvent type in lib/webhooks.ts includes 10+ new event types",
+    "lib/auth/sso.ts exports initiateSSO, handleSSOCallback, generateSAMLMetadata, validateOIDCToken",
+    "app/api/auth/sso/[provider]/route.ts handles SSO initiation and callback",
+    "app/api/tenant/webhooks/logs/route.ts returns paginated webhook delivery logs",
+    "app/api/tenant/permissions/fields/route.ts and approvals/route.ts exist with proper auth",
+    "npx tsc --noEmit passes with 0 errors",
+    "npm test passes with all new tests"
+  ],
+  "verification": [
+    "npx tsc --noEmit",
+    "npm test"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

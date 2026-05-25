@@ -14,6 +14,7 @@ const PUBLIC_PATHS = [
   '/api/auth/forgot-password', '/api/auth/reset-password', '/api/auth/verify-email',
   '/api/auth/resend-verification', '/api/auth/accept-invite', '/api/auth/invite-details',
   '/api/auth/2fa/setup', '/api/auth/2fa/verify', '/api/auth/2fa/disable',
+  '/api/auth/sso',
   '/api/forms/submit', '/api/leads/public',
   '/api/webhooks/stripe', '/api/webhooks/resend', '/api/webhooks/whatsapp', '/api/webhooks/inbound',
   '/api/health', '/api/track/click', '/api/track/open', '/api/unsubscribe',
