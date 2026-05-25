@@ -1,0 +1,26 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Create SMS inbox, Chat agent panel, Visitor tracking dashboard, and E-signature management pages - 4 module UIs for communication and document features. These are app/tenant/ level pages (not settings).",
+  "status": "in_progress",
+  "steps": [
+    "Create app/tenant/sms/page.tsx - 'use client' page with SMS inbox showing sent/received messages (to, body/template, status, timestamp). Compose new SMS form with to/body fields and template selection. Fetches from /api/tenant/sms. Include loading.tsx and error.tsx.",
+    "Create app/tenant/chat/page.tsx - 'use client' agent panel showing active chat sessions list (visitor name, status, channel, created time). Click session to expand messages (fetch from /api/tenant/chat/[sessionId]/messages). Include loading.tsx and error.tsx.",
+    "Create app/tenant/visitors/page.tsx - 'use client' dashboard showing visitors table (IP, pages viewed, score, identified contact link). Filter by identified/anonymous, min/max score. Fetches from /api/tenant/visitors. Include loading.tsx and error.tsx.",
+    "Create app/tenant/esignature/page.tsx - 'use client' page listing signing requests (document, signers count, provider, status, created date). Create signing request modal (document ID, signers array, provider selection). Fetches from /api/tenant/esignature. Include loading.tsx and error.tsx."
+  ],
+  "acceptance_criteria": [
+    "All 4 pages render without TypeScript errors",
+    "Each page has loading.tsx and error.tsx",
+    "SMS page supports viewing messages and composing new ones (direct body or template)",
+    "Chat page shows sessions and messages within sessions",
+    "Visitors page supports filter by identified/anonymous and score range",
+    "E-signature page shows list and supports creating new signing requests"
+  ],
+  "verification": [
+    "npx tsc --noEmit - 0 errors",
+    "npm run build - succeeds with all 4 new pages compiled"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
