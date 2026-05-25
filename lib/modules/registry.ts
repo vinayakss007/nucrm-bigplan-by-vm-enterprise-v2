@@ -128,6 +128,15 @@ export const BUILTIN_MODULES: ModuleManifest[] = [
     pages: ['/tenant/deals'],
   },
   {
+    id: 'compliance', name: 'Compliance Suite', version: '1.0.0',
+    description: 'GDPR data export/deletion, SOC 2 reports, and data retention policies',
+    author: 'NuCRM', category: 'utility', icon: '🛡️', minCrmVersion: '1.0.0',
+    pricing: { free:{enabled:false},starter:{enabled:false},pro:{enabled:true,price:29},enterprise:{enabled:true,price:0} },
+    features: ['GDPR Data Export','Right to Deletion','SOC 2 Reports','Data Retention Policies','Audit Trail'],
+    permissions: ['compliance.view','compliance.manage'],
+    pages: ['/tenant/settings/compliance'],
+  },
+  {
     id: 'marketing-segments', name: 'Smart Segments', version: '1.0.0',
     description: 'Advanced contact segmentation and dynamic lists',
     author: 'NuCRM', category: 'messaging', icon: '🎯', minCrmVersion: '1.0.0',

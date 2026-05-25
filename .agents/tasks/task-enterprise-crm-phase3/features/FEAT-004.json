@@ -1,0 +1,37 @@
+{
+  "id": "FEAT-004",
+  "type": "feat",
+  "description": "GROUP D: Financial + Operations - Multi-Currency Support, Tax Management, E-Signature Integration",
+  "status": "pending",
+  "steps": [
+    "Create lib/currency.ts - Multi-currency engine: convertAmount(amount, fromCurrency, toCurrency, date?), getExchangeRate(from, to) using cached rates, formatCurrency(amount, currencyCode, locale), supported currencies list (USD, EUR, GBP, INR, AUD, CAD, JPY, CNY + 20 more). Cache exchange rates in memory with 1h TTL. Include fetchLatestRates() that calls exchangerate-api.com or similar free API.",
+    "Create lib/tax.ts - Tax calculation engine: calculateTax(amount, taxRateId, tenantId), getTaxRatesForRegion(country, state?), applyTaxToLineItems(items, taxConfig). Support: percentage-based tax, compound tax, tax-exempt items, multiple tax lines (e.g., GST+PST).",
+    "Create drizzle/schema/financial.ts - Tables: exchange_rates (id, baseCurrency, targetCurrency, rate numeric, fetchedAt, source), tax_rates (id, tenantId, name, rate numeric, type ['percentage','fixed'], country, state, isDefault, isActive, lifecycle), tax_exemptions (id, tenantId, entityType, entityId, reason, lifecycle). Export from index.ts.",
+    "Create app/api/tenant/currency/route.ts - GET supported currencies with current rates, POST set tenant default currency. No module gate (available to all).",
+    "Create app/api/tenant/tax/route.ts - CRUD for tax rates. GET list rates, POST create, PUT update, DELETE soft-delete. Module-gated to 'sales-quotes' module.",
+    "Create app/api/tenant/tax/calculate/route.ts - POST calculate tax for given amount/items. Returns breakdown with each tax line.",
+    "Create lib/esignature.ts - E-signature integration: createSigningRequest(documentId, signers[], tenantId), getSigningStatus(requestId), handleSigningWebhook(payload). Support DocuSign and HelloSign via adapter pattern. Include types for SigningRequest, Signer, SigningStatus.",
+    "Create drizzle/schema/esignature.ts - Tables: signing_requests (id, tenantId, documentId, provider ['docusign','hellosign','internal'], status ['pending','sent','viewed','signed','declined','expired'], externalId, metadata jsonb, lifecycle), signing_events (id, requestId, tenantId, signerEmail, event ['sent','viewed','signed','declined'], eventAt, metadata jsonb). Export from index.ts.",
+    "Create app/api/tenant/esignature/route.ts - POST create signing request, GET list requests with status. Module-gated to 'sales-quotes'.",
+    "Create app/api/tenant/esignature/webhook/route.ts - Handle DocuSign/HelloSign webhooks. Update signing status, fire webhook events.",
+    "Create tests/unit/currency.test.ts - Test currency conversion, exchange rate caching, formatting. At least 6 test cases.",
+    "Create tests/unit/tax.test.ts - Test tax calculation, compound tax, exemptions. At least 6 test cases.",
+    "Create tests/unit/esignature.test.ts - Test signing request creation, status transitions, webhook handling. At least 5 test cases."
+  ],
+  "acceptance_criteria": [
+    "npx tsc --noEmit passes with 0 errors",
+    "npm test passes with all new currency, tax, and esignature tests passing",
+    "npm run build succeeds",
+    "Currency conversion correctly applies exchange rates",
+    "Tax calculation handles compound taxes and exemptions",
+    "E-signature adapter pattern supports both DocuSign and HelloSign providers",
+    "Financial schema tables are exported from drizzle/schema/index.ts"
+  ],
+  "verification": [
+    "npx tsc --noEmit",
+    "npm test",
+    "npm run build"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

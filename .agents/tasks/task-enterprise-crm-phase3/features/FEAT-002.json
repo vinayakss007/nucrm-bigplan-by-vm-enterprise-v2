@@ -1,0 +1,39 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "GROUP B: Vertical Feature Modules - SLA Management, Auto-Assignment Rules, Document Management, Custom Report Builder",
+  "status": "pending",
+  "steps": [
+    "Create lib/sla.ts - SLA engine with: defineSLA (name, conditions, responseTimeMinutes, resolutionTimeMinutes, escalationRules), checkSLABreach (compare current time vs target), getEscalationChain (determine who to notify at each breach level). Support priority-based SLAs (critical: 1h, high: 4h, medium: 8h, low: 24h).",
+    "Create drizzle/schema/sla.ts - Tables: sla_policies (id, tenantId, name, priority, responseTimeMinutes, resolutionTimeMinutes, escalationRules jsonb, isActive, lifecycle), sla_breaches (id, tenantId, policyId, entityType, entityId, breachType ['response','resolution'], breachedAt, notifiedUsers jsonb, lifecycle). Export from index.ts.",
+    "Create app/api/tenant/sla/route.ts - CRUD for SLA policies. GET list with breach counts, POST create, PUT update. Module-gated to 'service-helpdesk'.",
+    "Create lib/assignment.ts - Assignment engine with: roundRobin (rotate through team members), territoryBased (match lead location to territory owner), skillBased (match tags/category to agent skills), weightedRandom (distribute by configured weights). Each returns assigned userId.",
+    "Create drizzle/schema/assignment.ts - Tables: assignment_rules (id, tenantId, name, type ['round_robin','territory','skill_based','weighted'], config jsonb, isActive, priority int, lifecycle), assignment_logs (id, tenantId, ruleId, entityType, entityId, assignedTo, reason, lifecycle). Export from index.ts.",
+    "Create app/api/tenant/assignment-rules/route.ts - CRUD for assignment rules. GET list, POST create, PUT update, DELETE soft-delete. Module-gated to 'automation-pro'.",
+    "Create app/api/tenant/documents/route.ts - Document management API. GET list documents (filter by entityType, entityId), POST upload (generate S3 presigned URL for client-side upload, store metadata), DELETE soft-delete. Include folder support. Module-gated to 'core-crm'.",
+    "Create drizzle/schema/documents.ts - Tables: documents (id, tenantId, name, mimeType, sizeBytes, s3Key, s3Bucket, folderId nullable, entityType, entityId, uploadedBy, lifecycle), document_folders (id, tenantId, name, parentId nullable, lifecycle). Export from index.ts.",
+    "Create app/tenant/documents/page.tsx - File browser UI with folder tree, upload button (drag-drop zone), file list with name/size/date/uploader, preview/download actions. Follow existing page patterns with loading/error states.",
+    "Create app/tenant/documents/loading.tsx and error.tsx.",
+    "Create app/tenant/reports/builder/page.tsx - Report builder UI with: data source selector (contacts, deals, companies, tasks), field picker (drag fields into columns), filter builder (field + operator + value), chart type selector (bar, line, pie, table), preview area. Use @dnd-kit for drag-drop. Follow recharts pattern already in deps.",
+    "Create app/tenant/reports/builder/loading.tsx and error.tsx.",
+    "Create app/api/tenant/reports/builder/route.ts - POST to save report config, GET to list saved reports. Stores report definition as JSON. Module-gated to 'analytics-pro'.",
+    "Create tests/unit/sla.test.ts - Test SLA breach detection, escalation chain logic. At least 6 test cases.",
+    "Create tests/unit/assignment.test.ts - Test round-robin distribution, territory matching, skill-based routing. At least 6 test cases."
+  ],
+  "acceptance_criteria": [
+    "npx tsc --noEmit passes with 0 errors",
+    "npm test passes with all new SLA and assignment tests passing",
+    "npm run build succeeds",
+    "SLA breach detection correctly identifies overdue tickets based on time thresholds",
+    "Assignment engine distributes leads using round-robin, territory, and skill-based strategies",
+    "Document API generates presigned URLs for S3 upload",
+    "Report builder page renders with drag-drop functionality"
+  ],
+  "verification": [
+    "npx tsc --noEmit",
+    "npm test",
+    "npm run build"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

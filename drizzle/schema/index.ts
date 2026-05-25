@@ -13,3 +13,4 @@ export * from './history';
 export * from './knowledge';
 export * from './security';
 export * from './usage';
+export * from './compliance';
