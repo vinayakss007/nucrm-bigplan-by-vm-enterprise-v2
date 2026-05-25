@@ -2,7 +2,7 @@
   "id": "FEAT-003",
   "type": "feat",
   "description": "Create Tax settings, Currency settings, Webhook delivery logs, Email analytics, Plugin marketplace, and Compliance export status UI pages - 6 remaining settings/admin pages for existing backend APIs.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Create app/tenant/settings/tax/page.tsx - 'use client' page listing tax rates (name, rate, type, country, state, isDefault). Create/edit modal. Delete with soft-delete. Fetches from /api/tenant/tax. Include loading.tsx and error.tsx.",
     "Create app/tenant/settings/currency/page.tsx - 'use client' page showing supported currencies with exchange rates, let admin set tenant default currency. Fetches from /api/tenant/currency. Include loading.tsx and error.tsx.",
@@ -25,5 +25,5 @@
     "npm run build - succeeds with all new pages compiled"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 5 new pages + 15 files total (page.tsx, loading.tsx, error.tsx each) created successfully. tsc --noEmit passes with 0 errors. npm run build succeeds with all 5 new routes compiled (/tenant/settings/tax, /tenant/settings/currency, /tenant/settings/webhooks/logs, /tenant/analytics/email, /tenant/plugins). Had to fix .gitignore logs/ pattern to /logs/ (rooted) so the webhooks/logs directory was not ignored. Used typed spread object instead of Record<string,unknown> in tax page to avoid TS4111 index signature errors. Compliance page already fully covers GDPR export status with past requests table - no changes needed."
 }
