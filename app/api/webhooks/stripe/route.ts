@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
-import { tenants, billingEvents } from '@/drizzle/schema';
+import { tenants, billingEvents, subscriptions } from '@/drizzle/schema';
 import { eq, and, or, inArray } from 'drizzle-orm';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { alertSuperAdmin } from '@/lib/email/service';
@@ -44,6 +44,56 @@ export async function POST(request: NextRequest) {
 
   try {
     switch (event.type) {
+      case 'checkout.session.completed': {
+        // Fired when a customer finishes the hosted checkout. Persist the
+        // customer + subscription IDs so future portal sessions and webhooks
+        // can resolve them. The subscriptions row was inserted with the
+        // customer ID at checkout time; here we fill in the rest.
+        const tenantId = obj.metadata?.tenant_id ?? obj.client_reference_id;
+        const planId = obj.metadata?.plan_id;
+        const stripeCustomerId = typeof obj.customer === 'string' ? obj.customer : obj.customer?.id;
+        const stripeSubscriptionId = typeof obj.subscription === 'string' ? obj.subscription : obj.subscription?.id;
+
+        if (tenantId && stripeCustomerId) {
+          const [existing] = await db
+            .select({ id: subscriptions.id })
+            .from(subscriptions)
+            .where(eq(subscriptions.tenantId, tenantId))
+            .limit(1);
+
+          const subValues = {
+            tenantId,
+            planId: planId || undefined,
+            status: 'active',
+            stripeCustomerId,
+            stripeSubscriptionId: stripeSubscriptionId || null,
+            updatedAt: new Date(),
+          };
+
+          if (existing) {
+            await db.update(subscriptions).set(subValues).where(eq(subscriptions.id, existing.id));
+          } else {
+            await db.insert(subscriptions).values(subValues);
+          }
+
+          if (planId) {
+            await db
+              .update(tenants)
+              .set({ planId, status: 'active', updatedAt: new Date() })
+              .where(eq(tenants.id, tenantId));
+          }
+
+          await db.insert(billingEvents).values({
+            tenantId,
+            eventType: 'checkout.session.completed',
+            stripeEventId: event.id,
+            stripeSubscriptionId: stripeSubscriptionId || null,
+            metadata: { plan_id: planId, customer: stripeCustomerId },
+          });
+        }
+        break;
+      }
+
       case 'invoice.paid': {
         const tenantId = obj.metadata?.tenant_id;
         

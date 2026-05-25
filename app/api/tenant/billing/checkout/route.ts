@@ -1,92 +1,165 @@
+/**
+ * POST /api/tenant/billing/checkout
+ *
+ * Creates a Stripe Checkout Session for the requested plan and returns the
+ * hosted URL. The billing page redirects the browser to that URL; once the
+ * user completes payment Stripe fires `checkout.session.completed` and the
+ * webhook persists the customer + subscription IDs.
+ *
+ * Body: { plan_id: string }
+ * Response: { url: string }
+ */
 import { NextRequest, NextResponse } from 'next/server';
-import { apiError } from '@/lib/api-error';
-import { validateBody } from '@/lib/api/validate';
-import { checkoutSessionSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { plans, tenants } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { tenants, users, subscriptions } from '@/drizzle/schema';
+import { eq } from 'drizzle-orm';
+import {
+  isStripeConfigured,
+  priceIdForPlan,
+  stripeFetch,
+  StripeNotConfiguredError,
+  StripeApiError,
+  type StripeCheckoutSession,
+  type StripeCustomer,
+} from '@/lib/stripe';
 
-function flatten(prefix: string, obj: any): Record<string, string> {
-  const r: Record<string,string> = {};
-  for (const [k,v] of Object.entries(obj)) {
-    const key = prefix ? `${prefix}[${k}]` : k;
-    if (v === null || v === undefined) continue;
-    if (Array.isArray(v)) { v.forEach((item,i) => { if (typeof item==='object') Object.assign(r, flatten(`${key}[${i}]`, item)); else r[`${key}[${i}]`]=String(item); }); }
-    else if (typeof v === 'object') Object.assign(r, flatten(key, v));
-    else r[key] = String(v);
-  }
-  return r;
-}
-
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const ctx = await requireAuth(req);
+    const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    if (!ctx.isAdmin) return NextResponse.json({ error:'Admin required' }, { status:403 });
-    
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
-    if (!stripeKey) return NextResponse.json({ error:'Stripe not configured — add STRIPE_SECRET_KEY' }, { status:503 });
-    
-    const rawBody = await req.json();
-    const validated = validateBody(checkoutSessionSchema, rawBody);
-    if (validated instanceof NextResponse) return validated;
-    const { plan_id } = validated.data;
-    
-    const [plan] = await db.select()
-      .from(plans)
-      .where(and(eq(plans.id, plan_id), eq(plans.isActive, true)))
+    if (!ctx.isAdmin) {
+      return NextResponse.json({ error: 'Only workspace admins can change the plan.' }, { status: 403 });
+    }
+
+    if (!isStripeConfigured()) {
+      return NextResponse.json(
+        { error: 'Billing is not configured. Contact support to upgrade.' },
+        { status: 503 },
+      );
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const planId: string | undefined = body.plan_id;
+    if (!planId || typeof planId !== 'string') {
+      return NextResponse.json({ error: 'plan_id is required' }, { status: 400 });
+    }
+
+    const priceId = priceIdForPlan(planId);
+    if (!priceId) {
+      return NextResponse.json(
+        { error: `No Stripe price configured for plan "${planId}". Set STRIPE_PRICE_${planId.toUpperCase()} in env.` },
+        { status: 400 },
+      );
+    }
+
+    // Resolve workspace + admin user (for prefilled customer email)
+    const [workspace] = await db
+      .select({ id: tenants.id, name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId))
+      .limit(1);
+    if (!workspace) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+    const [adminUser] = await db
+      .select({ email: users.email, fullName: users.fullName })
+      .from(users)
+      .where(eq(users.id, ctx.userId))
       .limit(1);
 
-    const [tenant] = await db.select({
-      id: tenants.id,
-      name: tenants.name,
-      billingEmail: tenants.billingEmail,
-      stripeCustomerId: tenants.stripeCustomerId
-    })
-    .from(tenants)
-    .where(eq(tenants.id, ctx.tenantId))
-    .limit(1);
-
-    if (!plan) return NextResponse.json({ error:'Plan not found' }, { status:404 });
-    
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-    const currency = process.env['STRIPE_CURRENCY'] || 'usd';
-    const billingInterval = process.env['STRIPE_DEFAULT_INTERVAL'] || 'month';
-    
-    const unitAmount = Math.round(Number(plan.price ?? plan.priceMonthly ?? 0) * 100);
-
-    const sessionData: any = {
-      mode: 'subscription', 
-      payment_method_types: ['card'],
-      line_items: [{ 
-        price_data: { 
-          currency, 
-          recurring: { interval: billingInterval }, 
-          unit_amount: unitAmount, 
-          product_data: { name: `NuCRM ${plan.name}` } 
-        }, 
-        quantity: 1 
-      }],
-      metadata: { tenant_id: ctx.tenantId, plan_id },
-      success_url: `${appUrl}/tenant/settings/billing?upgraded=1`,
-      cancel_url:  `${appUrl}/tenant/settings/billing`,
-    };
-
-    if (tenant?.stripeCustomerId) sessionData.customer = tenant.stripeCustomerId;
-    else if (tenant?.billingEmail) sessionData.customer_email = tenant.billingEmail;
-
-    const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
-      method:'POST',
-      headers:{ 'Authorization':`Bearer ${stripeKey}`, 'Content-Type':'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(flatten('', sessionData)).toString(),
+    // Get-or-create the Stripe customer. We persist the customer ID on the
+    // subscriptions row so subsequent checkouts / portal sessions reuse it.
+    const customerId = await getOrCreateStripeCustomer({
+      tenantId: ctx.tenantId,
+      tenantName: workspace.name,
+      adminEmail: adminUser?.email,
+      adminName: adminUser?.fullName ?? null,
     });
 
-    const session = await res.json() as any;
-    if (!res.ok) return NextResponse.json({ error: session.error?.message ?? 'Stripe error' }, { status:400 });
-    
+    const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000';
+
+    const session = await stripeFetch<StripeCheckoutSession>('/checkout/sessions', {
+      method: 'POST',
+      params: {
+        mode: 'subscription',
+        customer: customerId,
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: `${appUrl}/tenant/settings/billing?upgraded=1`,
+        cancel_url: `${appUrl}/tenant/settings/billing?cancelled=1`,
+        client_reference_id: ctx.tenantId,
+        // metadata flows back through the webhook events
+        metadata: {
+          tenant_id: ctx.tenantId,
+          plan_id: planId,
+          initiated_by: ctx.userId,
+        },
+        subscription_data: {
+          metadata: {
+            tenant_id: ctx.tenantId,
+            plan_id: planId,
+          },
+        },
+        allow_promotion_codes: true,
+      },
+    });
+
     return NextResponse.json({ url: session.url });
-  } catch (err: any) { 
-    return NextResponse.json({ error: err.message }, { status:500 }); 
+  } catch (err) {
+    if (err instanceof StripeNotConfiguredError) {
+      return NextResponse.json(
+        { error: 'Billing is not configured. Contact support to upgrade.' },
+        { status: 503 },
+      );
+    }
+    if (err instanceof StripeApiError) {
+      console.error('[billing/checkout] stripe error', err.status, err.message);
+      return NextResponse.json({ error: err.message }, { status: 502 });
+    }
+    console.error('[billing/checkout]', err);
+    return NextResponse.json({ error: 'Could not start checkout' }, { status: 500 });
   }
+}
+
+/**
+ * Find the existing stripeCustomerId on the subscriptions row, or create a
+ * new Stripe customer and persist it. Idempotent: a second call returns the
+ * same customer ID.
+ */
+async function getOrCreateStripeCustomer(args: {
+  tenantId: string;
+  tenantName: string;
+  adminEmail?: string;
+  adminName?: string | null;
+}): Promise<string> {
+  const [existing] = await db
+    .select({ id: subscriptions.id, stripeCustomerId: subscriptions.stripeCustomerId })
+    .from(subscriptions)
+    .where(eq(subscriptions.tenantId, args.tenantId))
+    .limit(1);
+  if (existing?.stripeCustomerId) return existing.stripeCustomerId;
+
+  const created = await stripeFetch<StripeCustomer>('/customers', {
+    method: 'POST',
+    params: {
+      name: args.tenantName,
+      email: args.adminEmail,
+      metadata: { tenant_id: args.tenantId, admin_user_name: args.adminName ?? '' },
+    },
+  });
+
+  if (existing) {
+    await db
+      .update(subscriptions)
+      .set({ stripeCustomerId: created.id, updatedAt: new Date() })
+      .where(eq(subscriptions.id, existing.id));
+  } else {
+    await db.insert(subscriptions).values({
+      tenantId: args.tenantId,
+      stripeCustomerId: created.id,
+      status: 'incomplete',
+    });
+  }
+
+  return created.id;
 }
