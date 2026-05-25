@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "feat",
   "description": "Sentry integration in lib/api-error.ts + error boundaries, Saved Views schema + API, Call Logging page, Contact Scoring UI, Revenue Forecasting page, and Meeting Scheduling enhancements",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Step 1 - Sentry in api-error.ts: Update lib/api-error.ts to import @sentry/nextjs and call Sentry.captureException in the apiError() function when status >= 500. Add Sentry.addBreadcrumb for 4xx errors. This is the central error handler used by all API routes.",
     "Step 2 - Sentry in error boundaries: Update app/tenant/error.tsx to import @sentry/nextjs and call Sentry.captureException(error) in the useEffect, similar to how app/global-error.tsx already does it.",
@@ -33,5 +33,5 @@
     "npm run build"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "Build requires JWT_SECRET env var (.env.local created for build). Integration tests fail due to no PostgreSQL (pre-existing). All 380 unit tests pass including 30 new tests. TypeScript compiles cleanly with 0 errors."
 }
