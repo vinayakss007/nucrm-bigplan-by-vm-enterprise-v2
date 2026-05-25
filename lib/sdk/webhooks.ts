@@ -57,7 +57,7 @@ export class WebhookRouter {
     }
   }
 
-  async handle(rawBody: string, signature: string): Promise<{ acknowledged: boolean; event: string }> {
+  async handle(rawBody: string, signature: string): Promise<{ acknowledged: boolean; event: string; errors?: string[] }> {
     const valid = this.verifier.verify(rawBody, signature);
     if (!valid) {
       return { acknowledged: false, event: '' };
@@ -65,11 +65,21 @@ export class WebhookRouter {
 
     const payload = this.verifier.parse(rawBody);
     const handlers = this.handlers.get(payload.event);
+    const errors: string[] = [];
 
     if (handlers) {
       for (const handler of handlers) {
-        await handler(payload);
+        try {
+          await handler(payload);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          errors.push(message);
+        }
       }
+    }
+
+    if (errors.length > 0) {
+      return { acknowledged: true, event: payload.event, errors };
     }
 
     return { acknowledged: true, event: payload.event };

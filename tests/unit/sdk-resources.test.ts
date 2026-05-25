@@ -142,10 +142,39 @@ describe('NuCRM SDK', () => {
       expect(mockRequest).toHaveBeenCalledWith('POST', '/files/upload', {
         name: 'doc.pdf',
         content: 'base64data',
+        contentEncoding: 'base64',
         mimeType: 'application/pdf',
         entityType: 'deal',
         entityId: 'deal-1',
       });
+    });
+
+    it('uploads with explicit contentEncoding', async () => {
+      const { FileSDK } = await import('@/lib/sdk/files');
+      const mockRequest = vi.fn().mockResolvedValue({ id: 'f2', url: 'https://files.example.com/f2' });
+      const files = new FileSDK(mockRequest);
+      await files.upload({ name: 'readme.txt', content: 'Hello', mimeType: 'text/plain', contentEncoding: 'utf8' });
+      expect(mockRequest).toHaveBeenCalledWith('POST', '/files/upload', {
+        name: 'readme.txt',
+        content: 'Hello',
+        contentEncoding: 'utf8',
+        mimeType: 'text/plain',
+      });
+    });
+
+    it('has uploadPresigned method', async () => {
+      const { FileSDK } = await import('@/lib/sdk/files');
+      const mockRequest = vi.fn().mockResolvedValue({ uploadUrl: 'https://s3.example.com/presigned', fileId: 'f3', expiresAt: '2024-01-01T01:00:00Z' });
+      const files = new FileSDK(mockRequest);
+      const result = await files.uploadPresigned('big-file.zip', 'application/zip', 'deal', 'deal-1');
+      expect(mockRequest).toHaveBeenCalledWith('POST', '/files/upload/presigned', {
+        name: 'big-file.zip',
+        mimeType: 'application/zip',
+        entityType: 'deal',
+        entityId: 'deal-1',
+      });
+      expect(result.uploadUrl).toBe('https://s3.example.com/presigned');
+      expect(result.fileId).toBe('f3');
     });
   });
 
@@ -165,7 +194,7 @@ describe('NuCRM SDK', () => {
     it('throws when EventSource is not available', async () => {
       const { RealtimeSDK } = await import('@/lib/sdk/realtime');
       const rt = new RealtimeSDK({ baseUrl: 'https://api.example.com', apiKey: 'key' });
-      expect(() => rt.connect()).toThrow('EventSource is not available');
+      await expect(rt.connect()).rejects.toThrow('EventSource is not available');
     });
   });
 
@@ -277,6 +306,51 @@ describe('NuCRM SDK', () => {
       const result = await router.handle(payload, signature);
       expect(result.acknowledged).toBe(true);
       expect(result.event).toBe('deal.created');
+    });
+
+    it('catches handler errors and continues execution', async () => {
+      const { WebhookRouter } = await import('@/lib/sdk/webhooks');
+      const router = new WebhookRouter(secret);
+      const handler1 = vi.fn().mockRejectedValue(new Error('handler1 failed'));
+      const handler2 = vi.fn().mockResolvedValue(undefined);
+
+      router.register('contact.created', handler1);
+      router.register('contact.created', handler2);
+
+      const payload = JSON.stringify({
+        event: 'contact.created',
+        timestamp: '2024-01-01T00:00:00Z',
+        tenant_id: 'tenant-1',
+        data: { id: 'c1' },
+      });
+      const signature = createSignature(payload);
+
+      const result = await router.handle(payload, signature);
+      expect(result.acknowledged).toBe(true);
+      expect(result.event).toBe('contact.created');
+      expect(result.errors).toEqual(['handler1 failed']);
+      expect(handler1).toHaveBeenCalledTimes(1);
+      expect(handler2).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns no errors array when all handlers succeed', async () => {
+      const { WebhookRouter } = await import('@/lib/sdk/webhooks');
+      const router = new WebhookRouter(secret);
+      const handler = vi.fn().mockResolvedValue(undefined);
+
+      router.register('contact.created', handler);
+
+      const payload = JSON.stringify({
+        event: 'contact.created',
+        timestamp: '2024-01-01T00:00:00Z',
+        tenant_id: 'tenant-1',
+        data: { id: 'c1' },
+      });
+      const signature = createSignature(payload);
+
+      const result = await router.handle(payload, signature);
+      expect(result.acknowledged).toBe(true);
+      expect(result.errors).toBeUndefined();
     });
   });
 

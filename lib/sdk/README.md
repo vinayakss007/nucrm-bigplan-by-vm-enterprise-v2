@@ -354,15 +354,37 @@ const filtered = await client.search.advanced('contacts', [
 ## File Management
 
 ```typescript
-// Upload a file
+// Upload a file (content must be base64-encoded for binary files)
 const uploaded = await client.files.upload(
-  { name: 'proposal.pdf', content: '<base64-encoded-content>', mimeType: 'application/pdf' },
+  {
+    name: 'proposal.pdf',
+    content: '<base64-encoded-content>',
+    mimeType: 'application/pdf',
+    contentEncoding: 'base64', // default, tells server to decode from base64
+  },
   'deal',
   'deal-123'
 );
 
+// Upload plain text files with utf8 encoding
+const textFile = await client.files.upload({
+  name: 'notes.txt',
+  content: 'Plain text content here',
+  mimeType: 'text/plain',
+  contentEncoding: 'utf8',
+});
+
+// For large files (>10MB), use presigned upload to bypass body size limits
+const { uploadUrl, fileId, expiresAt } = await client.files.uploadPresigned(
+  'large-video.mp4',
+  'video/mp4',
+  'deal',
+  'deal-123'
+);
+// Then PUT the raw file bytes directly to uploadUrl
+
 // Download a file (get temporary URL)
-const { url, expiresAt } = await client.files.download('file-id');
+const { url, expiresAt: downloadExpiry } = await client.files.download('file-id');
 
 // Get a presigned URL
 const presignedUrl = await client.files.getPresignedUrl('file-id', 3600);

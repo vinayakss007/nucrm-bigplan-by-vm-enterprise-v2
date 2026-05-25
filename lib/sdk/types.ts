@@ -499,9 +499,20 @@ export interface SearchOptions {
 // ─── File Upload ────────────────────────────────────────────────────────────
 
 export interface FileUploadInput {
+  /** File name including extension */
   name: string;
+  /**
+   * File content as a string. For binary files, this must be base64-encoded.
+   * Set `contentEncoding` to 'base64' (the default) so the server knows to decode it.
+   */
   content: string;
+  /** MIME type of the file (e.g. 'application/pdf', 'image/png') */
   mimeType: string;
+  /**
+   * Encoding of the content field. Defaults to 'base64'.
+   * The server uses this to determine whether to decode the content.
+   */
+  contentEncoding?: 'base64' | 'utf8';
 }
 
 export interface FileUploadResult {

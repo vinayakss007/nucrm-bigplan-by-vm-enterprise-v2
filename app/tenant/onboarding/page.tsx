@@ -52,14 +52,50 @@ export default function OnboardingPage() {
     );
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   const canProceed = () => {
     if (step === 0) return selectedProduct !== null;
     if (step === 1) return enabledModules.length > 0;
-    if (step === 2) return companyName.trim().length > 0;
+    if (step === 2) return companyName.trim().length > 0 && !isSubmitting;
     return true;
   };
 
+  const submitOnboarding = async () => {
+    if (!selectedProduct) return;
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch('/api/tenant/onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateId: selected?.templateId ?? selectedProduct,
+          modules: enabledModules,
+          companyName: companyName.trim(),
+          pipelineName: pipelineName.trim() || 'Sales Pipeline',
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: 'Provisioning failed' }));
+        setSubmitError((data as { error?: string }).error ?? 'Provisioning failed');
+        setIsSubmitting(false);
+        return;
+      }
+      setStep(3);
+    } catch {
+      setSubmitError('Network error. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const goNext = () => {
+    if (step === 2) {
+      void submitOnboarding();
+      return;
+    }
     if (step < STEPS.length - 1) setStep(step + 1);
   };
 
@@ -212,6 +248,11 @@ export default function OnboardingPage() {
                 <span>CSV import will be available after setup</span>
               </div>
             </div>
+            {submitError && (
+              <div className="p-3 rounded-xl border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/20 text-sm text-red-700 dark:text-red-300">
+                {submitError}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -256,7 +297,7 @@ export default function OnboardingPage() {
             disabled={!canProceed()}
             className="flex items-center gap-2 px-6 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {step === 2 ? 'Complete Setup' : 'Next'} <ArrowRight className="w-4 h-4" />
+            {step === 2 ? (isSubmitting ? 'Setting up...' : 'Complete Setup') : 'Next'} <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       )}

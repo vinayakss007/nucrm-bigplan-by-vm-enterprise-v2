@@ -11,6 +11,13 @@ import type {
 export class FileSDK {
   constructor(private readonly request: RequestFn) {}
 
+  /**
+   * Upload a file. The `content` field must be base64-encoded for binary files.
+   * The server uses `contentEncoding: 'base64'` to determine decoding.
+   *
+   * For large files (>10MB), prefer `uploadPresigned()` which provides a direct
+   * upload URL that bypasses request body size limits.
+   */
   async upload(
     file: FileUploadInput,
     entityType?: string,
@@ -19,11 +26,39 @@ export class FileSDK {
     const body: Record<string, unknown> = {
       name: file.name,
       content: file.content,
+      contentEncoding: file.contentEncoding ?? 'base64',
       mimeType: file.mimeType,
     };
     if (entityType) body['entityType'] = entityType;
     if (entityId) body['entityId'] = entityId;
     return this.request<FileUploadResult>('POST', '/files/upload', body);
+  }
+
+  /**
+   * Get a presigned URL for direct file upload. Use this for large files
+   * to bypass API request body size limits. The returned URL accepts a PUT
+   * request with the raw file bytes.
+   *
+   * @param fileName - Name of the file to upload
+   * @param mimeType - MIME type of the file
+   * @param entityType - Optional entity type to associate with
+   * @param entityId - Optional entity ID to associate with
+   * @returns Presigned upload URL and the file ID that will be assigned
+   */
+  async uploadPresigned(
+    fileName: string,
+    mimeType: string,
+    entityType?: string,
+    entityId?: string
+  ): Promise<{ uploadUrl: string; fileId: string; expiresAt: string }> {
+    const body: Record<string, unknown> = { name: fileName, mimeType };
+    if (entityType) body['entityType'] = entityType;
+    if (entityId) body['entityId'] = entityId;
+    return this.request<{ uploadUrl: string; fileId: string; expiresAt: string }>(
+      'POST',
+      '/files/upload/presigned',
+      body
+    );
   }
 
   async download(fileId: string): Promise<FileDownloadResult> {

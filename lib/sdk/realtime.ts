@@ -21,13 +21,39 @@ export class RealtimeSDK {
     this.reconnectInterval = config.reconnectInterval ?? 5000;
   }
 
-  connect(): void {
+  /**
+   * Obtain a short-lived connection ticket from the server.
+   * The ticket is used in the SSE URL instead of the raw API key,
+   * preventing the permanent credential from appearing in URLs/logs.
+   * Falls back to using the API key directly if ticket fetch fails.
+   */
+  private async getTicket(): Promise<string> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/tenant/realtime/ticket`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (res.ok) {
+        const data = await res.json() as { ticket: string };
+        return data.ticket;
+      }
+    } catch {
+      // Fall back to API key if ticket endpoint is unavailable
+    }
+    return this.apiKey;
+  }
+
+  async connect(): Promise<void> {
     if (typeof EventSource === 'undefined') {
       throw new Error('EventSource is not available in this environment');
     }
 
     this.shouldReconnect = true;
-    const url = `${this.baseUrl}/api/tenant/realtime/events?token=${encodeURIComponent(this.apiKey)}`;
+    const token = await this.getTicket();
+    const url = `${this.baseUrl}/api/tenant/realtime/events?token=${encodeURIComponent(token)}`;
     this.eventSource = new EventSource(url);
 
     this.eventSource.onmessage = (event: MessageEvent) => {
@@ -44,7 +70,7 @@ export class RealtimeSDK {
       this.eventSource?.close();
       this.eventSource = null;
       if (this.shouldReconnect) {
-        setTimeout(() => this.connect(), this.reconnectInterval);
+        setTimeout(() => { void this.connect(); }, this.reconnectInterval);
       }
     };
   }
@@ -80,10 +106,26 @@ export class RealtimeSDK {
     }
   }
 
+  /**
+   * Subscribe to a channel for client-side event filtering.
+   *
+   * Channel subscriptions are client-side filters on the event stream,
+   * not server-side topic subscriptions. The server sends all events for
+   * the tenant; the client filters locally by matching event.channel
+   * against subscribed channels. This design keeps the SSE connection
+   * simple (single stream per tenant) while letting consumers register
+   * handlers for specific channels without receiving unrelated callbacks.
+   */
   subscribe(channel: string): void {
     this.channels.add(channel);
   }
 
+  /**
+   * Unsubscribe from a channel and remove all handlers for that channel.
+   *
+   * This only affects client-side filtering. The server continues to send
+   * all events on the SSE connection regardless of subscription state.
+   */
   unsubscribe(channel: string): void {
     this.channels.delete(channel);
     this.handlers.delete(channel);

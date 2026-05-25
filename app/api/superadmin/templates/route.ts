@@ -3,8 +3,8 @@ import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { productTemplates } from '@/drizzle/schema';
-import { eq, desc, sql } from 'drizzle-orm';
+import { productTemplates, tenantTemplates } from '@/drizzle/schema';
+import { desc, sql } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,8 +12,26 @@ export async function GET(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
+    // Compute tenant_count dynamically from the tenant_templates join
+    // rather than reading the stored value, which can drift over time
     const templates = await db
-      .select()
+      .select({
+        id: productTemplates.id,
+        name: productTemplates.name,
+        slug: productTemplates.slug,
+        description: productTemplates.description,
+        icon: productTemplates.icon,
+        modules: productTemplates.modules,
+        customFields: productTemplates.customFields,
+        pipelines: productTemplates.pipelines,
+        automations: productTemplates.automations,
+        isBuiltin: productTemplates.isBuiltin,
+        status: productTemplates.status,
+        createdBy: productTemplates.createdBy,
+        tenantCount: sql<number>`(SELECT count(*)::int FROM ${tenantTemplates} WHERE ${tenantTemplates.templateId} = ${productTemplates.id} AND ${tenantTemplates.deletedAt} IS NULL)`,
+        createdAt: productTemplates.createdAt,
+        updatedAt: productTemplates.updatedAt,
+      })
       .from(productTemplates)
       .where(sql`${productTemplates.deletedAt} IS NULL`)
       .orderBy(desc(productTemplates.createdAt));
