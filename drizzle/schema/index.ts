@@ -20,3 +20,5 @@ export * from './documents';
 export * from './sms';
 export * from './chat';
 export * from './email-tracking';
+export * from './financial';
+export * from './esignature';
