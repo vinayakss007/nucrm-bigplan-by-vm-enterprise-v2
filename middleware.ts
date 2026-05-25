@@ -23,7 +23,7 @@ const PUBLIC_PATHS = [
   '/sw.js', '/manifest.json',
 ];
 
-const PUBLIC_PREFIXES = ['/_next', '/favicon', '/images', '/static', '/icons'];
+const PUBLIC_PREFIXES = ['/_next', '/favicon', '/images', '/static', '/icons', '/api/v2'];
 
 const ALLOWED_ORIGINS = (process.env['ALLOWED_ORIGINS'] || 'http://localhost:3000').split(',').map(s => s.trim());
 
