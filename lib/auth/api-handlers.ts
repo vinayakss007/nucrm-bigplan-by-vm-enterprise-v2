@@ -12,6 +12,7 @@ import { devLogger } from '@/lib/dev-logger';
 import { logger } from '@/lib/logger';
 import { randomBytes, createHash, createHmac } from 'crypto';
 import { ModuleRegistry } from '@/lib/modules/registry';
+import { installDefaultModules } from '@/lib/modules/auto-install';
 import { isBlocked, recordFailedAttempt, recordSuccessfulLogin, getBruteForceStatus } from '@/lib/security/brute-force';
 
 // ── Login ─────────────────────────────────────────────────────
@@ -281,6 +282,9 @@ export async function POST_signup(request: NextRequest) {
       await ModuleRegistry.install(t.id, 'core-crm', u.id);
       await ModuleRegistry.install(t.id, 'automation-basic', u.id);
       await ModuleRegistry.install(t.id, 'service-helpdesk', u.id);
+
+      // 4b. Install plan-based default modules
+      await installDefaultModules(t.id, 'free');
       
       // Normalized onboarding progress
       await tx.insert(onboardingProgress).values({

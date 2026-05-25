@@ -4,6 +4,7 @@ import { users, tenants, tenantMembers, plans, roles, onboardingProgress, sessio
 import { eq, count, sql, and } from 'drizzle-orm';
 import { hashPassword, createToken, hashToken, setSessionCookie, validatePassword } from '@/lib/auth/session';
 import { ModuleRegistry } from '@/lib/modules/registry';
+import { installDefaultModules } from '@/lib/modules/auto-install';
 
 export async function POST(request: NextRequest) {
   try {
@@ -148,6 +149,9 @@ export async function POST(request: NextRequest) {
       await ModuleRegistry.install(t.id, 'core-crm', u.id);
       await ModuleRegistry.install(t.id, 'automation-basic', u.id);
       await ModuleRegistry.install(t.id, 'service-helpdesk', u.id);
+
+      // 4b. Install plan-based default modules
+      await installDefaultModules(t.id, planId);
 
       // 7. Initialize onboarding progress
       await tx.insert(onboardingProgress).values({
