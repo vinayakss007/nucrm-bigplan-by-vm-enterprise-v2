@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { validateBody } from '@/lib/api/validate';
+import { backupConfigSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
@@ -163,7 +165,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const body = await request.json().catch(() => ({}));
+    const rawBody = await request.json().catch(() => ({}));
+    const validated = validateBody(backupConfigSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
     const {
       endpoint_url = '',
       bucket,
@@ -175,7 +180,7 @@ export async function PUT(request: NextRequest) {
       schedule = '0 2 * * *',
       retention_days = 30,
       point_in_time_recovery = false,
-    } = body;
+    } = v;
 
     if (!bucket || !bucket.trim()) {
       return NextResponse.json({ error: 'Bucket name is required' }, { status: 400 });

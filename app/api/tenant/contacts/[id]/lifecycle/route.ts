@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { updateContactSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, contactLifecycleHistory, users } from '@/drizzle/schema';
@@ -20,8 +22,12 @@ export async function POST(
     }
 
     const { id } = await params;
-    const body = await request.json();
-    const { lifecycle_stage, reason } = body;
+    const rawBody = await request.json();
+    const validated = validateBody(updateContactSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const lifecycle_stage = rawBody.lifecycle_stage;
+    const reason = rawBody.reason;
 
     const validStages = [
       'subscriber',

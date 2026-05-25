@@ -4,6 +4,8 @@ import { requireAuth, requireModule } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { forms } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { validateBody } from '@/lib/api/validate';
+import { createFormSchema } from '@/lib/api/schemas';
 
 export async function GET(req: NextRequest) {
   try {
@@ -45,8 +47,11 @@ export async function POST(req: NextRequest) {
 
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const { name, description, fields = [], settings = {} } = await req.json();
-    if (!name?.trim()) return NextResponse.json({ error: 'name required' }, { status: 400 });
+    const rawBody = await req.json();
+    const validated = validateBody(createFormSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { name, description, fields = [], redirect_url, success_message } = v;
 
     const slug = name.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'').slice(0,40) + '-' + Date.now().toString(36);
     

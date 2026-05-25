@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { modules, tenantModules } from '@/drizzle/schema';
@@ -47,6 +49,12 @@ export async function GET(req: NextRequest) {
   }
 }
 
+const updateModuleSchema = z.object({
+  module_id: z.string().min(1),
+  pricing: z.record(z.any()).optional(),
+  is_available: z.boolean().optional(),
+});
+
 export async function PATCH(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
@@ -54,21 +62,23 @@ export async function PATCH(req: NextRequest) {
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const body = await req.json();
+    const validated = validateBody(updateModuleSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
 
-    if (body.pricing) {
-      // Update per-plan pricing config
+    if (v.pricing) {
       await db.update(modules)
         .set({
-          manifest: sql`jsonb_set(COALESCE(manifest, '{}'::jsonb), '{pricing}', ${JSON.stringify(body.pricing)}::jsonb)`,
+          manifest: sql`jsonb_set(COALESCE(manifest, '{}'::jsonb), '{pricing}', ${JSON.stringify(v.pricing)}::jsonb)`,
         })
-        .where(eq(modules.id, body.module_id));
+        .where(eq(modules.id, v.module_id));
 
       return NextResponse.json({ ok: true });
     }
 
-    if (body.is_available !== undefined) {
+    if (v.is_available !== undefined) {
       await db.execute(sql`
-        UPDATE public.modules SET is_available = ${body.is_available}, updated_at = now() WHERE id = ${body.module_id}
+        UPDATE public.modules SET is_available = ${v.is_available}, updated_at = now() WHERE id = ${v.module_id}
       `);
       return NextResponse.json({ ok: true });
     }

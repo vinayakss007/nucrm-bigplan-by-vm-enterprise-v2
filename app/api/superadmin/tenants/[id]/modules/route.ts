@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { modules, tenantModules } from '@/drizzle/schema';
@@ -43,6 +45,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
+const moduleActionSchema = z.object({
+  module_id: z.string().min(1),
+  action: z.string().min(1),
+  settings: z.record(z.any()).optional(),
+  force_enabled: z.boolean().optional(),
+});
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireAuth(request);
@@ -51,28 +60,30 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id: tenantId } = await params;
 
     const body = await request.json();
-    if (!body.module_id) return NextResponse.json({ error: 'module_id required' }, { status: 400 });
+    const validated = validateBody(moduleActionSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
 
     // Super admin can force-install ANY module — bypass plan gates
-    if (body.action === 'install') {
-      await ModuleRegistry.install(tenantId, body.module_id, ctx.userId, body.settings || {});
+    if (v.action === 'install') {
+      await ModuleRegistry.install(tenantId, v.module_id, ctx.userId, v.settings || {});
       // Mark as force-enabled so plan-gate checks pass
       await db.update(tenantModules)
-        .set({ forceEnabled: body.force_enabled !== false })
-        .where(and(eq(tenantModules.tenantId, tenantId), eq(tenantModules.moduleId, body.module_id)));
+        .set({ forceEnabled: v.force_enabled !== false })
+        .where(and(eq(tenantModules.tenantId, tenantId), eq(tenantModules.moduleId, v.module_id)));
       return NextResponse.json({ success: true, message: 'Module installed for tenant' });
     }
 
-    if (body.action === 'disable') {
-      await ModuleRegistry.disable(tenantId, body.module_id);
+    if (v.action === 'disable') {
+      await ModuleRegistry.disable(tenantId, v.module_id);
       return NextResponse.json({ success: true });
     }
 
-    if (body.action === 'force') {
+    if (v.action === 'force') {
       // Toggle force-enable override
       await db.update(tenantModules)
-        .set({ forceEnabled: body.force_enabled, status: body.force_enabled ? 'active' : 'disabled' })
-        .where(and(eq(tenantModules.tenantId, tenantId), eq(tenantModules.moduleId, body.module_id)));
+        .set({ forceEnabled: v.force_enabled, status: v.force_enabled ? 'active' : 'disabled' })
+        .where(and(eq(tenantModules.tenantId, tenantId), eq(tenantModules.moduleId, v.module_id)));
       return NextResponse.json({ success: true });
     }
 

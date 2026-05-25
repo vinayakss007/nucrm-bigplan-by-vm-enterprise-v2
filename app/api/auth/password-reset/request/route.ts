@@ -4,8 +4,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { requestPasswordReset } from '@/lib/auth/password-reset';
 import { checkRateLimit } from '@/lib/rate-limit';
+
+const schema = z.object({ email: z.string().email() });
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,19 +22,11 @@ export async function POST(request: NextRequest) {
     if (limited) return limited;
 
     const body = await request.json();
-    const email = body.email?.trim();
+    const validated = validateBody(schema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
 
-    if (!email) {
-      return NextResponse.json({ error: 'Email is required' }, { status: 400 });
-    }
-
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
-    }
-
-    const result = await requestPasswordReset(email);
+    const result = await requestPasswordReset(v.email);
 
     // Always return success to prevent email enumeration
     return NextResponse.json({

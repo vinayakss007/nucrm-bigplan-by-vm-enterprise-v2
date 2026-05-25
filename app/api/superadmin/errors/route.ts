@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { errorLogs, tenants, users } from '@/drizzle/schema';
@@ -68,9 +70,27 @@ export async function GET(request: NextRequest) {
   }
 }
 
+const createErrorSchema = z.object({
+  level: z.string().optional().default('error'),
+  code: z.string().optional().nullable(),
+  message: z.string().optional().nullable(),
+  tenant_id: z.string().optional().nullable(),
+  stack: z.string().optional().nullable(),
+  context: z.any().optional().nullable(),
+});
+
+const resolveErrorSchema = z.object({
+  id: z.string().optional(),
+  resolveAll: z.boolean().optional(),
+  level: z.string().optional(),
+});
+
 export async function POST(request: NextRequest) {
   try {
-    const { level = 'error', code, message, tenant_id, stack, context } = await request.json();
+    const body = await request.json();
+    const validated = validateBody(createErrorSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { level = 'error', code, message, tenant_id, stack, context } = validated.data;
     await db.insert(errorLogs).values({
       level,
       code: code || null,
@@ -91,7 +111,10 @@ export async function PATCH(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const { id, resolveAll, level } = await request.json();
+    const body = await request.json();
+    const validated = validateBody(resolveErrorSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { id, resolveAll, level } = validated.data;
     
     if (resolveAll) {
       const filters = [eq(errorLogs.resolved, false)];

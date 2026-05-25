@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { validateBody } from '@/lib/api/validate';
+import { inviteMemberSchema, updateMemberSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { 
@@ -18,7 +20,11 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const { email, password, full_name, role_slug = 'sales_rep' } = await request.json();
+    const rawBody = await request.json();
+    const validated = validateBody(inviteMemberSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const { email, password, full_name, role_slug = 'sales_rep' } = rawBody;
+
     if (!email || !password || !full_name) {
       return NextResponse.json({ error: 'email, password, and full_name are required' }, { status: 400 });
     }
@@ -156,7 +162,12 @@ export async function PATCH(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const { memberId, roleSlug, action, reassignTo, reason } = await request.json();
+    const rawPatch = await request.json();
+    const patchValidated = validateBody(updateMemberSchema, rawPatch);
+    if (patchValidated instanceof NextResponse) return patchValidated;
+    const pv = patchValidated.data;
+    const { email, role_slug: roleSlug } = pv;
+    const { memberId, action, reassignTo, reason } = rawPatch;
     if (!memberId || !action) return NextResponse.json({ error: 'memberId and action required' }, { status: 400 });
 
     const [target] = await db.select({

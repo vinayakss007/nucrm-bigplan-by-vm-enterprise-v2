@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { apiError } from '@/lib/api-error';
-import { validateBody } from '@/lib/api/validate';
-import { createTicketSchema } from '@/lib/api/schemas';
+import { validateBody, validateQuery } from '@/lib/api/validate';
+import { createTicketSchema, ticketQuerySchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, requireModule } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { supportTickets, contacts, users } from '@/drizzle/schema';
@@ -29,10 +29,15 @@ async function _GET(request: NextRequest) {
     if (permErr) return permErr;
 
     const { searchParams } = new URL(request.url);
+    const qParams = Object.fromEntries(searchParams.entries());
+    const qValidated = validateQuery(ticketQuerySchema, qParams);
+    const q = qValidated instanceof NextResponse
+      ? { offset: 0, limit: 50 }
+      : qValidated.data;
     const status = searchParams.get('status');
     const contactId = searchParams.get('contact_id');
-    const limit = Math.min(100, parseInt(searchParams.get('limit') ?? '50'));
-    const offset = parseInt(searchParams.get('offset') ?? '0');
+    const limit = Math.min(100, q.limit);
+    const offset = q.offset;
 
     const filters = [
       eq(supportTickets.tenantId, ctx.tenantId),

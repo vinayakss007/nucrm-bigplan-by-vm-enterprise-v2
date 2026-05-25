@@ -9,6 +9,8 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { emailTemplates } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
+import { validateBody } from '@/lib/api/validate';
+import { updateEmailTemplateSchema } from '@/lib/api/schemas';
 
 export async function GET(request: NextRequest, { params }: any) {
   try {
@@ -45,13 +47,16 @@ export async function PATCH(request: NextRequest, { params }: any) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;
-    const { name, subject, body, category } = await request.json();
+    const rawBody = await request.json();
+    const validated = validateBody(updateEmailTemplateSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
 
     const updateData: any = { updatedAt: new Date() };
-    if (name     !== undefined) updateData.name = name.trim();
-    if (subject  !== undefined) updateData.subject = subject.trim();
-    if (body     !== undefined) updateData.bodyHtml = body.trim();
-    if (category !== undefined) updateData.category = category;
+    if (v.name     !== undefined) updateData.name = v.name.trim();
+    if (v.subject  !== undefined) updateData.subject = v.subject.trim();
+    if (v.body     !== undefined) updateData.bodyHtml = v.body.trim();
+    if (v.category !== undefined) updateData.category = v.category;
 
     if (Object.keys(updateData).length <= 1) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });

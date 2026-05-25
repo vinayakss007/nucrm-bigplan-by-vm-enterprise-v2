@@ -4,8 +4,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { resetPassword } from '@/lib/auth/password-reset';
 import { checkRateLimit } from '@/lib/rate-limit';
+
+const schema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,22 +25,11 @@ export async function POST(request: NextRequest) {
     if (limited) return limited;
 
     const body = await request.json();
-    const token = body.token?.trim();
-    const newPassword = body.password || body.new_password;
+    const validated = validateBody(schema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
 
-    if (!token) {
-      return NextResponse.json({ error: 'Reset token is required' }, { status: 400 });
-    }
-
-    if (!newPassword) {
-      return NextResponse.json({ error: 'New password is required' }, { status: 400 });
-    }
-
-    if (newPassword.length < 8) {
-      return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
-    }
-
-    const result = await resetPassword(token, newPassword);
+    const result = await resetPassword(v.token, v.password);
 
     if (!result.success) {
       return NextResponse.json({ error: result.message }, { status: 400 });

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { validateBody } from '@/lib/api/validate';
+import { onboardingStepSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { onboardingProgress } from '@/drizzle/schema';
@@ -33,9 +35,12 @@ export async function PATCH(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    const body = await request.json();
+    const rawBody = await request.json();
+    const validated = validateBody(onboardingStepSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
 
-    if (body.complete) {
+    if (v.complete) {
       await db.insert(onboardingProgress).values({
         tenantId: ctx.tenantId,
         userId: ctx.userId,
@@ -46,11 +51,11 @@ export async function PATCH(request: NextRequest) {
         target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
         set: { isCompleted: true, completedAt: new Date() }
       });
-    } else if (body.step) {
+    } else if (v.step) {
       await db.insert(onboardingProgress).values({
         tenantId: ctx.tenantId,
         userId: ctx.userId,
-        stepName: body.step,
+        stepName: v.step,
         isCompleted: true,
         completedAt: new Date(),
       }).onConflictDoUpdate({

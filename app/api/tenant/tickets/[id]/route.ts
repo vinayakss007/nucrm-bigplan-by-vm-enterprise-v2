@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { validateBody } from '@/lib/api/validate';
+import { updateTicketSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { supportTickets, ticketReplies, contacts, users } from '@/drizzle/schema';
 import { eq, and, desc, asc } from 'drizzle-orm';
@@ -63,11 +65,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (permErr) return permErr;
 
     const body = await request.json();
+    const validated = validateBody(updateTicketSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+
     const updates: Record<string, any> = {};
 
-    if (body['status']) updates['status'] = body['status'];
-    if (body['priority']) updates['priority'] = body['priority'];
-    if (body['assignedTo']) updates['assignedTo'] = body['assignedTo'];
+    if (v.status) updates['status'] = v.status;
+    if (v.priority) updates['priority'] = v.priority;
+    if (v.assigned_to) updates['assignedTo'] = v.assigned_to;
 
     await db.update(supportTickets)
       .set(updates)

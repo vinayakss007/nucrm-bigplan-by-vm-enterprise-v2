@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { validateBody } from '@/lib/api/validate';
+import { updateDealSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { deals, contacts, tenants, activities, pipelines, dealStages } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
@@ -69,6 +71,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const dealId = (await params).id;
     const body = await req.json();
+    const validated = validateBody(updateDealSchema, body);
+    if (validated instanceof NextResponse) return validated;
 
     // Validation
     if (body.amount !== undefined) {

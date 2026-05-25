@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { createContactSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
@@ -16,8 +18,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const { email, phone, exclude_contact_id } = body || {};
+    const rawBody = await request.json();
+    const validated = validateBody(createContactSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { email, phone, exclude_contact_id } = { ...v, exclude_contact_id: rawBody.exclude_contact_id };
 
     if (!email && !phone) {
       return NextResponse.json({ 

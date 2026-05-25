@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { validateBody } from '@/lib/api/validate';
+import { updateContactSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, sequences, sequenceSteps, sequenceEnrollments } from '@/drizzle/schema';
@@ -12,7 +14,10 @@ export async function POST(req: NextRequest, { params }: any) {
     const deny = requirePerm(ctx, 'automations.manage');
     if (deny) return deny;
     
-    const { sequence_id } = await req.json();
+    const rawBody = await req.json();
+    const validated = validateBody(updateContactSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const { sequence_id } = rawBody;
     if (!sequence_id) return NextResponse.json({ error: 'sequence_id required' }, { status: 400 });
 
     const contactId = (await params).id;
@@ -92,7 +97,10 @@ export async function DELETE(req: NextRequest, { params }: any) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     
-    const { sequence_id } = await req.json();
+    const rawDelBody = await req.json();
+    const delValidated = validateBody(updateContactSchema, rawDelBody);
+    if (delValidated instanceof NextResponse) return delValidated;
+    const { sequence_id } = rawDelBody;
     if (!sequence_id) return NextResponse.json({ error: 'sequence_id required' }, { status: 400 });
 
     const contactId = (await params).id;

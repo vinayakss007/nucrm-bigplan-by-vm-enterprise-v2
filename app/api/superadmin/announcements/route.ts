@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { createPlanSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { announcements } from '@/drizzle/schema';
@@ -41,7 +43,10 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     
-    const b = await request.json();
+    const rawBody = await request.json();
+    const validated = validateBody(createPlanSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const b = rawBody;
     if (!b.title || !b.body) return NextResponse.json({ error: 'title and body required' }, { status: 400 });
 
     const [row] = await db

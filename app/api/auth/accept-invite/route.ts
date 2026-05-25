@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth/session';
 import { db } from '@/drizzle/db';
 import { invitations, tenants, users, roles, tenantMembers } from '@/drizzle/schema';
 import { eq, and, gt, isNull, sql } from 'drizzle-orm';
+
+const schema = z.object({ token: z.string().min(1) });
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,8 +18,10 @@ export async function POST(request: NextRequest) {
     const payload = await verifyToken(token);
     if (!payload) return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
 
-    const { token: inviteToken } = await request.json();
-    if (!inviteToken) return NextResponse.json({ error: 'Invitation token required' }, { status: 400 });
+    const body = await request.json();
+    const validated = validateBody(schema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { token: inviteToken } = validated.data;
 
     const inv = await db
       .select({

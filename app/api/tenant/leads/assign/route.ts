@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { assignContactSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, leadAssignments, tenantMembers, users } from '@/drizzle/schema';
@@ -15,7 +17,11 @@ export async function POST(request: NextRequest) {
     const deny = requirePerm(ctx, 'contacts.assign');
     if (deny) return deny;
 
-    const { contact_ids, assign_to, reason } = await request.json();
+    const rawBody = await request.json();
+    const validated = validateBody(assignContactSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { contact_ids, assign_to, reason } = v;
     if (!contact_ids?.length) return NextResponse.json({ error:'contact_ids required' }, { status:400 });
     if (!assign_to) return NextResponse.json({ error:'assign_to required' }, { status:400 });
 
@@ -96,7 +102,11 @@ export async function DELETE(request: NextRequest) {
     const deny = requirePerm(ctx, 'contacts.assign');
     if (deny) return deny;
 
-    const { contact_ids, reason } = await request.json();
+    const rawDelBody = await request.json();
+    const delValidated = validateBody(assignContactSchema, rawDelBody);
+    if (delValidated instanceof NextResponse) return delValidated;
+    const dv = delValidated.data;
+    const { contact_ids, reason } = dv;
     if (!contact_ids?.length) return NextResponse.json({ error:'contact_ids required' }, { status:400 });
 
     // Mark previous assignments as ended

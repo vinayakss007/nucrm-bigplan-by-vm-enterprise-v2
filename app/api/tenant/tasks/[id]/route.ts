@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { validateBody } from '@/lib/api/validate';
+import { updateTaskSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { tasks } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -13,22 +15,22 @@ export async function PATCH(req: NextRequest, { params }: any) {
     
     const id = (await params).id;
     const body = await req.json();
-
-    if (body.title !== undefined && !body.title?.trim())
-      return NextResponse.json({ error: 'title cannot be empty' }, { status: 400 });
+    const validated = validateBody(updateTaskSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
 
     const updateData: any = {
       updatedAt: new Date(),
     };
 
-    if (body.title !== undefined) updateData.title = body.title.trim();
-    if (body.description !== undefined) updateData.description = body.description;
-    if (body.due_date !== undefined) updateData.dueDate = body.due_date ? new Date(body.due_date) : null;
-    if (body.priority !== undefined) updateData.priority = body.priority;
-    if (body.contact_id !== undefined) updateData.contactId = body.contact_id;
-    if (body.deal_id !== undefined) updateData.dealId = body.deal_id;
-    if (body.assigned_to !== undefined) updateData.assignedTo = body.assigned_to;
-    if (body.status !== undefined) updateData.status = body.status;
+    if (v.title !== undefined) updateData.title = v.title;
+    if (v.description !== undefined) updateData.description = v.description;
+    if (v.due_date !== undefined) updateData.dueDate = v.due_date ? new Date(v.due_date) : null;
+    if (v.priority !== undefined) updateData.priority = v.priority;
+    if (v.contact_id !== undefined) updateData.contactId = v.contact_id;
+    if (v.deal_id !== undefined) updateData.dealId = v.deal_id;
+    if (v.assigned_to !== undefined) updateData.assignedTo = v.assigned_to;
+    if (v.status !== undefined) updateData.status = v.status;
     
     if (body.completed === true) {
       updateData.status = 'completed';

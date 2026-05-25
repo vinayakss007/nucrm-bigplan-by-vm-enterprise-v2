@@ -5,6 +5,8 @@
  * Marks the lead as converted and stores the resulting contact_id.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { convertLeadSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { leads, contacts, companies, deals, pipelines, leadActivities, activities, dealStages } from '@/drizzle/schema';
@@ -26,7 +28,10 @@ export async function POST(
     }
 
     const { id } = await params;
-    const body = await request.json().catch(() => ({}));
+    const rawBody = await request.json().catch(() => ({}));
+    const validated = validateBody(convertLeadSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
     const {
       create_deal    = false,
       deal_title,
@@ -34,7 +39,7 @@ export async function POST(
       deal_stage,
       pipeline_id,
       assigned_to,
-    } = body;
+    } = v;
 
     // Load the lead
     const lead = await db.query.leads.findFirst({

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { createWorkflowSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { workflows, workflowActions, workflowExecutions } from '@/drizzle/schema';
@@ -58,15 +60,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
 
-    const body = await request.json();
+    const rawBody = await request.json();
+    const validated = validateBody(createWorkflowSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
     const {
       name,
       description,
       trigger_type,
       trigger_config = {},
       nodes = [],
-      actions = [],
-    } = body;
+    } = v;
+    const actions = rawBody.actions || [];
 
     if (!name || !name.trim()) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });

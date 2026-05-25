@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { backupRecords, errorLogs } from '@/drizzle/schema';
@@ -84,6 +86,11 @@ export async function GET(request: NextRequest) {
   }
 }
 
+const restoreSchema = z.object({
+  backup_id: z.string().min(1),
+  confirm_restore: z.boolean(),
+});
+
 // POST: restore from a specific backup
 export async function POST(request: NextRequest) {
   try {
@@ -91,14 +98,10 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
 
-    const { backup_id, confirm_restore } = await request.json();
-    if (!backup_id) return NextResponse.json({ error: 'backup_id required' }, { status: 400 });
-    if (!confirm_restore) {
-      return NextResponse.json({
-        error: 'Set confirm_restore: true to proceed. WARNING: This will overwrite all current data.',
-        warning: true,
-      }, { status: 400 });
-    }
+    const body = await request.json();
+    const validated = validateBody(restoreSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { backup_id, confirm_restore } = validated.data;
 
     const [backup] = await db
       .select()

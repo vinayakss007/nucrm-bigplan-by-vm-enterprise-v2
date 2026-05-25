@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { createNoteSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { activities, users, contacts } from '@/drizzle/schema';
@@ -85,8 +87,13 @@ export async function POST(
     }
 
     const { id } = await params;
-    const body = await request.json();
-    const { event_type, description, metadata } = body;
+    const rawBody = await request.json();
+    const validated = validateBody(createNoteSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const description = v.content;
+    const event_type = rawBody.event_type;
+    const metadata = rawBody.metadata;
 
     if (!event_type) {
       return NextResponse.json({ error: 'event_type is required' }, { status: 400 });

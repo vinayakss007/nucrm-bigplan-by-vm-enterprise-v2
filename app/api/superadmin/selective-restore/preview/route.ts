@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { superAdminBackups } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { parseBackupFile } from '@/lib/restore/backup-parser';
 import { existsSync } from 'fs';
+
+const schema = z.object({ backup_id: z.string().min(1) });
 
 /**
  * POST: Parse and preview backup file contents
@@ -19,11 +23,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { backup_id } = body;
-
-    if (!backup_id) {
-      return NextResponse.json({ error: 'backup_id required' }, { status: 400 });
-    }
+    const validated = validateBody(schema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { backup_id } = validated.data;
 
     const [existingBackup] = await db
       .select()

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { validateBody } from '@/lib/api/validate';
+import { updatePipelineSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { pipelines, dealStages } from '@/drizzle/schema';
@@ -13,12 +15,16 @@ export async function PATCH(req: NextRequest, { params }: any) {
 
     const { id } = await params;
     const body = await req.json();
+    const validated = validateBody(updatePipelineSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
     
     const result = await db.transaction(async (tx) => {
       // 1. Update pipeline basic info
       const updateData: any = { updatedAt: new Date() };
-      if (body.name !== undefined) updateData.name = body.name;
-      if (body.description !== undefined) updateData.description = body.description;
+      if (v.name !== undefined) updateData.name = v.name;
+      if (v.description !== undefined) updateData.description = v.description;
+      if (v.is_active !== undefined) updateData.isActive = v.is_active;
       
       let pipelineRow;
       if (Object.keys(updateData).length > 1) {

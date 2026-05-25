@@ -4,14 +4,19 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { roles } from '@/drizzle/schema';
 import { eq, and, inArray } from 'drizzle-orm';
+import { validateBody } from '@/lib/api/validate';
+import { updateRoleSchema } from '@/lib/api/schemas';
 
 export async function PATCH(request: NextRequest, { params }: any) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
-    const { name, description, permissions } = await request.json();
     const { id } = await params;
+    const rawBody = await request.json();
+    const validated = validateBody(updateRoleSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const { name, description, permissions } = validated.data;
 
     const [row] = await db.update(roles)
       .set({

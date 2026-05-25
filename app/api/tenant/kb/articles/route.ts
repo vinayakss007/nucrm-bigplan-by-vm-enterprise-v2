@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { validateBody } from '@/lib/api/validate';
+import { createKbArticleSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { kbArticles, kbCategories } from '@/drizzle/schema';
 import { eq, and, desc, isNull, asc, ilike, sql } from 'drizzle-orm';
@@ -50,18 +52,19 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const body = await request.json();
-    if (!body.title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
-    if (!body.content?.trim()) return NextResponse.json({ error: 'Content is required' }, { status: 400 });
+    const validated = validateBody(createKbArticleSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
 
-    const slug = body.slug || body.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 100);
+    const slug = body.slug || v.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 100);
 
     const [row] = await db.insert(kbArticles).values({
       tenantId: ctx.tenantId, createdBy: ctx.userId,
-      categoryId: body.category_id || null,
-      title: body.title, slug, content: body.content,
-      excerpt: body.excerpt, status: body.status || 'draft',
-      tags: body.tags || [],
-      publishedAt: body.status === 'published' ? new Date() : null,
+      categoryId: v.category_id || null,
+      title: v.title, slug, content: v.content,
+      excerpt: body.excerpt, status: v.status || 'draft',
+      tags: v.tags || [],
+      publishedAt: v.status === 'published' ? new Date() : null,
     }).returning();
 
     return NextResponse.json({ data: row }, { status: 201 });

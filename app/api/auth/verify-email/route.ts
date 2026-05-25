@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { users, emailVerifications } from '@/drizzle/schema';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 import { createHash } from 'crypto';
 
+const schema = z.object({ token: z.string().min(1) });
+
 export async function POST(request: NextRequest) {
   try {
-    const { token } = await request.json();
-    if (!token) return NextResponse.json({ error: 'Token required' }, { status: 400 });
+    const body = await request.json();
+    const validated = validateBody(schema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { token } = validated.data;
     
     const hash = createHash('sha256').update(token).digest('hex');
     

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { superAdminBackups, tenants } from '@/drizzle/schema';
@@ -6,6 +8,15 @@ import { eq, and, sql } from 'drizzle-orm';
 import { extractTenantSQL } from '@/lib/restore/backup-parser';
 import { countExistingRecords, validateTenant } from '@/lib/restore/restore-executor';
 import { existsSync } from 'fs';
+
+const scopeSchema = z.object({
+  backup_id: z.string().min(1),
+  tenant_id: z.string().min(1),
+  tables: z.array(z.string()).min(1),
+  restore_mode: z.string().optional().default('insert_only'),
+  user_id: z.string().optional(),
+  contact_id: z.string().optional(),
+});
 
 /**
  * POST: Get restore scope preview
@@ -20,11 +31,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { backup_id, tenant_id, tables, restore_mode = 'insert_only', user_id, contact_id } = body;
-
-    if (!backup_id || !tenant_id || !tables || !Array.isArray(tables) || tables.length === 0) {
-      return NextResponse.json({ error: 'backup_id, tenant_id, and tables array are required' }, { status: 400 });
-    }
+    const validated = validateBody(scopeSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { backup_id, tenant_id, tables, restore_mode, user_id, contact_id } = validated.data;
 
     const tenantValidation = await validateTenant(tenant_id);
     if (!tenantValidation.valid) {

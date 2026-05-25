@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { supportTickets, tenants, users } from '@/drizzle/schema';
@@ -64,13 +66,30 @@ export async function GET(request: NextRequest) {
   }
 }
 
+const createTicketSchema = z.object({
+  subject: z.string().min(1),
+  body: z.string().min(1),
+  category: z.string().optional().default('general'),
+  priority: z.string().optional().default('normal'),
+  tenant_id: z.string().optional(),
+});
+
+const updateTicketSchema = z.object({
+  id: z.string().min(1),
+  status: z.string().optional(),
+  resolution: z.string().optional(),
+  assigned_to: z.string().optional().nullable(),
+});
+
 export async function POST(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const { subject, body, category = 'general', priority = 'normal', tenant_id } = await request.json();
-    if (!subject || !body) return NextResponse.json({ error: 'subject and body required' }, { status: 400 });
+    const body = await request.json();
+    const validated = validateBody(createTicketSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { subject, body: ticketBody, category, priority, tenant_id } = validated.data;
 
     const tid = tenant_id || ctx.tenantId;
 
@@ -80,7 +99,7 @@ export async function POST(request: NextRequest) {
         tenantId: tid,
         createdBy: ctx.userId,
         subject,
-        body,
+        body: ticketBody,
         category,
         priority,
       })
@@ -99,8 +118,10 @@ export async function PATCH(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const { id, status, resolution, assigned_to } = await request.json();
-    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+    const body = await request.json();
+    const validated = validateBody(updateTicketSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { id, status, resolution, assigned_to } = validated.data;
 
     const updateData: any = { updatedAt: new Date() };
     if (status) {

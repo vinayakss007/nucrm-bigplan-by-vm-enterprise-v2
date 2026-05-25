@@ -1,6 +1,8 @@
 import { checkRateLimit } from '@/lib/rate-limit';
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { testEmailSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { sendEmail } from '@/lib/email/service';
 
@@ -12,7 +14,10 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const { to, provider, config } = await request.json();
+    const rawBody = await request.json();
+    const validated = validateBody(testEmailSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const { to, provider, config } = validated.data;
     if (!to) return NextResponse.json({ error: 'Recipient email required' }, { status: 400 });
 
     // Override env vars with provided config for this test

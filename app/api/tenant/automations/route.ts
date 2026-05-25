@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm, requireModule } from '@/lib/auth/middleware';
+import { validateBody } from '@/lib/api/validate';
+import { createAutomationSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { automations, automationRuns, users } from '@/drizzle/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
@@ -65,22 +67,22 @@ export async function POST(req: NextRequest) {
     if (deny) return deny;
 
     const body = await req.json();
-    const { name, description, trigger_type, trigger_config = {}, actions = [], conditions = [], is_active = true } = body;
-
-    if (!name?.trim()) return NextResponse.json({ error: 'name required' }, { status: 400 });
-    if (!trigger_type) return NextResponse.json({ error: 'trigger_type required' }, { status: 400 });
-    if (!Array.isArray(actions) || !actions.length) return NextResponse.json({ error: 'at least one action required' }, { status: 400 });
+    const validated = validateBody(createAutomationSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const trigger_type = body.trigger_type;
+    const trigger_config = body.trigger_config || {};
 
     const [newAutomation] = await db.insert(automations)
       .values({
         tenantId: ctx.tenantId,
-        name: name.trim(),
-        description: description?.trim() || null,
+        name: v.name,
+        description: v.description?.trim() || null,
         triggerType: trigger_type,
         triggerConfig: trigger_config,
-        actions: actions,
-        conditions: conditions,
-        isActive: is_active,
+        actions: v.actions,
+        conditions: v.conditions || [],
+        isActive: v.is_active,
         createdBy: ctx.userId,
       })
       .returning();

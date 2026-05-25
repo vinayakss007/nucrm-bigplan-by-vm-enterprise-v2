@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { users, passwordResets, sessions } from '@/drizzle/schema';
 import { eq, and, gt, isNull, sql } from 'drizzle-orm';
@@ -6,10 +8,17 @@ import { createHash } from 'crypto';
 import { hashPassword, createToken, hashToken, setSessionCookie, validatePassword } from '@/lib/auth/session';
 import { sendTelegramToUser } from '@/lib/email/service';
 
+const schema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8),
+});
+
 export async function POST(request: NextRequest) {
   try {
-    const { token, password } = await request.json();
-    if (!token || !password) return NextResponse.json({ error: 'Token and password required' }, { status: 400 });
+    const body = await request.json();
+    const validated = validateBody(schema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { token, password } = validated.data;
 
     const pwError = validatePassword(password);
     if (pwError) return NextResponse.json({ error: pwError }, { status: 400 });

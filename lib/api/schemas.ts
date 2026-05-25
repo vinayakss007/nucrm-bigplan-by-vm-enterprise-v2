@@ -1,31 +1,38 @@
 import { z } from 'zod';
 
 // ── Common helpers ──
-const uuid = z.string().uuid().optional().nullable();
+const uuid = z.string().uuid().optional().nullable().or(z.literal(''));
 const optionalString = z.string().trim();
 const requiredString = z.string().trim().min(1);
 const optionalDate = z.string().datetime().optional().nullable();
 const optionalNumber = z.number().optional().nullable();
 
+// Accept URLs with or without protocol — auto-prepend https://
+const urlField = z.string().max(500).optional().nullable().or(z.literal('')).transform(v => {
+  if (!v) return v;
+  if (v.startsWith('http://') || v.startsWith('https://')) return v;
+  return `https://${v}`;
+});
+
 // ── Contact schemas ──
 export const createContactSchema = z.object({
   first_name: requiredString.max(100, 'First name too long'),
   last_name: z.string().trim().max(100).nullable().optional(),
-  email: z.string().email('Invalid email').max(255).optional().nullable(),
-  phone: z.string().regex(/^[\d\s\-+()]{0,20}$/, 'Invalid phone').optional().nullable(),
+  email: z.string().email('Invalid email').max(255).optional().nullable().or(z.literal('')),
+  phone: z.string().max(30).optional().nullable(),
   job_title: z.string().trim().max(200).nullable().optional(),
   title: z.string().trim().max(200).nullable().optional(),
   company_id: uuid,
-  lead_status: z.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']).optional().nullable(),
+  lead_status: z.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost', 'archived', 'disqualified', 'unqualified', 'converted']).optional().nullable(),
   lead_source: z.string().trim().max(100).nullable().optional(),
   notes: z.string().max(5000).optional().nullable(),
   tags: z.array(z.string()).optional().default([]),
   score: z.coerce.number().int().min(0).max(1000).optional().default(0),
   city: z.string().trim().max(100).nullable().optional(),
   country: z.string().trim().max(100).nullable().optional(),
-  website: z.string().url().max(500).optional().nullable().or(z.literal('')),
-  linkedin_url: z.string().url().max(500).optional().nullable().or(z.literal('')),
-  twitter_url: z.string().url().max(500).optional().nullable().or(z.literal('')),
+  website: urlField,
+  linkedin_url: urlField,
+  twitter_url: urlField,
   custom_fields: z.record(z.string(), z.unknown()).optional().default({}),
   assigned_to: uuid,
 });
@@ -37,7 +44,7 @@ export const contactQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   q: z.string().optional(),
   lead_status: z.string().optional(),
-  company_id: z.string().uuid().optional(),
+  company_id: z.string().uuid().optional().or(z.literal('')),
 });
 
 // ── Deal schemas ──
@@ -75,17 +82,17 @@ export const createCompanySchema = z.object({
   size: z.string().max(50).optional().nullable(),
   annual_revenue: z.coerce.number().min(0).optional().nullable(),
   description: z.string().trim().max(2000).nullable().optional(),
-  website: z.string().url().max(500).optional().nullable().or(z.literal('')),
-  phone: z.string().regex(/^[\d\s\-+()]{0,20}$/, 'Invalid phone').optional().nullable(),
+  website: urlField,
+  phone: z.string().max(30).optional().nullable(),
   billing_address: z.string().max(500).optional().nullable(),
   shipping_address: z.string().max(500).optional().nullable(),
   city: z.string().trim().max(100).nullable().optional(),
   state: z.string().trim().max(100).nullable().optional(),
   country: z.string().trim().max(100).nullable().optional(),
   postal_code: z.string().trim().max(20).nullable().optional(),
-  linkedin_url: z.string().url().max(500).optional().nullable().or(z.literal('')),
-  twitter_url: z.string().url().max(500).optional().nullable().or(z.literal('')),
-  facebook_url: z.string().url().max(500).optional().nullable().or(z.literal('')),
+  linkedin_url: urlField,
+  twitter_url: urlField,
+  facebook_url: urlField,
   tags: z.array(z.string()).optional().default([]),
   custom_fields: z.record(z.string(), z.unknown()).optional().default({}),
   assigned_to: uuid,
@@ -104,12 +111,12 @@ export const companyQuerySchema = z.object({
 export const createLeadSchema = z.object({
   first_name: requiredString.max(100),
   last_name: z.string().trim().max(100).nullable().optional(),
-  email: z.string().email().max(255).optional().nullable(),
-  phone: z.string().regex(/^[\d\s\-+()]{0,20}$/, 'Invalid phone').optional().nullable(),
+  email: z.string().email().max(255).optional().nullable().or(z.literal('')),
+  phone: z.string().max(30).optional().nullable(),
   company: z.string().trim().max(200).nullable().optional(),
   job_title: z.string().trim().max(200).nullable().optional(),
   source: z.string().trim().max(100).nullable().optional(),
-  status: z.enum(['new', 'contacted', 'qualified', 'converted', 'rejected']).optional().default('new'),
+  status: z.enum(['new', 'contacted', 'qualified', 'converted', 'rejected', 'junk', 'archived', 'unqualified']).optional().default('new'),
   notes: z.string().trim().max(5000).nullable().optional(),
   score: z.coerce.number().int().min(0).max(1000).optional().default(0),
   assigned_to: uuid,
@@ -133,7 +140,7 @@ export const leadQuerySchema = z.object({
 export const createTaskSchema = z.object({
   title: requiredString.max(200, 'Title too long'),
   description: z.string().trim().max(2000).nullable().optional(),
-  status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']).optional().default('pending'),
+  status: z.enum(['pending', 'in_progress', 'completed', 'cancelled', 'deferred', 'on_hold']).optional().default('pending'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
   due_date: z.string().date().optional().nullable(),
   contact_id: uuid,
@@ -160,11 +167,10 @@ export const taskQuerySchema = z.object({
 export const createTicketSchema = z.object({
   subject: requiredString.max(300, 'Subject too long'),
   description: z.string().trim().max(10000).nullable().optional(),
-  status: z.enum(['open', 'in_progress', 'pending', 'resolved', 'closed']).optional().default('open'),
+  status: z.enum(['open', 'in_progress', 'pending', 'resolved', 'closed', 'awaiting_customer', 'on_hold', 'escalated']).optional().default('open'),
   priority: z.enum(['low', 'medium', 'high', 'urgent', 'critical']).optional().default('medium'),
   category: z.string().trim().max(100).nullable().optional(),
   contact_id: uuid,
-  company_id: uuid,
   assigned_to: uuid,
   tags: z.array(z.string()).optional().default([]),
 });
@@ -190,9 +196,9 @@ export const ticketReplySchema = z.object({
 export const createInvoiceSchema = z.object({
   contact_id: uuid,
   company_id: uuid,
-  issue_date: z.string().date().optional().nullable(),
+  issue_date: z.string().date().default(() => new Date().toISOString().split('T')[0]!),
   due_date: z.string().date().optional().nullable(),
-  status: z.enum(['draft', 'sent', 'paid', 'overdue', 'cancelled']).optional().default('draft'),
+  status: z.enum(['draft', 'sent', 'paid', 'overdue', 'cancelled', 'refunded', 'partially_paid', 'void']).optional().default('draft'),
   line_items: z.array(z.object({
     description: z.string().max(500),
     quantity: z.coerce.number().min(0),
@@ -219,7 +225,7 @@ export const createQuoteSchema = z.object({
   contact_id: uuid,
   company_id: uuid,
   title: requiredString.max(200),
-  status: z.enum(['draft', 'sent', 'accepted', 'rejected', 'expired']).optional().default('draft'),
+  status: z.enum(['draft', 'sent', 'accepted', 'rejected', 'expired', 'negotiating', 'won', 'lost']).optional().default('draft'),
   issue_date: z.string().date().optional().nullable(),
   expiry_date: z.string().date().optional().nullable(),
   line_items: z.array(z.object({
@@ -258,8 +264,8 @@ export const createContractSchema = z.object({
   contact_id: uuid,
   company_id: uuid,
   type: z.string().trim().max(100).nullable().optional(),
-  status: z.enum(['draft', 'active', 'expired', 'terminated', 'renewed']).optional().default('draft'),
-  start_date: z.string().date().optional().nullable(),
+  status: z.enum(['draft', 'active', 'expired', 'terminated', 'renewed', 'signed', 'pending_approval']).optional().default('draft'),
+  start_date: z.string().date().default(() => new Date().toISOString().split('T')[0]!),
   end_date: z.string().date().optional().nullable(),
   value: z.coerce.number().min(0).optional().default(0),
   description: z.string().trim().max(5000).nullable().optional(),
@@ -273,7 +279,7 @@ export const createSubscriptionSchema = z.object({
   contact_id: uuid,
   company_id: uuid,
   service_id: uuid,
-  status: z.enum(['trial', 'active', 'paused', 'cancelled', 'expired']).optional().default('trial'),
+  status: z.enum(['trial', 'active', 'paused', 'cancelled', 'expired', 'past_due', 'incomplete']).optional().default('trial'),
   start_date: z.string().date().optional().nullable(),
   end_date: z.string().date().optional().nullable(),
   trial_end_date: z.string().date().optional().nullable(),
@@ -291,10 +297,10 @@ export const createMeetingSchema = z.object({
   start_time: z.string().datetime(),
   end_time: z.string().datetime(),
   location: z.string().trim().max(500).nullable().optional(),
-  meeting_url: z.string().url().max(500).optional().nullable().or(z.literal('')),
+  meeting_url: urlField,
   contact_id: uuid,
   deal_id: uuid,
-  status: z.enum(['scheduled', 'completed', 'cancelled', 'no_show']).optional().default('scheduled'),
+  status: z.enum(['scheduled', 'completed', 'cancelled', 'no_show', 'rescheduled', 'waiting_acceptance']).optional().default('scheduled'),
   attendees: z.array(z.string()).optional().default([]),
 });
 
@@ -329,7 +335,7 @@ export const createDealStageSchema = z.object({
   name: requiredString.max(100),
   order: z.coerce.number().int().min(0).optional().default(0),
   probability: z.coerce.number().min(0).max(100).optional().default(0),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().nullable(),
+  color: z.string().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional().nullable(),
 });
 
 export const updateDealStageSchema = createDealStageSchema.partial();
@@ -385,7 +391,7 @@ export const updateSequenceSchema = createSequenceSchema.partial();
 // ── Webhook schemas ──
 export const createWebhookSchema = z.object({
   name: requiredString.max(200),
-  url: z.string().url().max(500),
+  url: z.string().max(500),
   events: z.array(z.string()).min(1, 'At least one event required'),
   secret: z.string().trim().max(100).nullable().optional(),
   is_active: z.boolean().optional().default(true),
@@ -415,7 +421,7 @@ export const createFormSchema = z.object({
     options: z.array(z.string()).optional(),
   })).min(1, 'At least one field required'),
   is_active: z.boolean().optional().default(true),
-  redirect_url: z.string().url().max(500).optional().nullable().or(z.literal('')),
+  redirect_url: urlField,
   success_message: z.string().trim().max(500).nullable().optional(),
 });
 
@@ -488,7 +494,7 @@ export const createKbArticleSchema = z.object({
   title: requiredString.max(300),
   content: requiredString.max(50000),
   category_id: z.string().uuid().optional(),
-  status: z.enum(['draft', 'published', 'archived']).optional().default('draft'),
+  status: z.enum(['draft', 'published', 'archived', 'review', 'needs_review']).optional().default('draft'),
   tags: z.array(z.string()).optional().default([]),
   order: z.coerce.number().int().min(0).optional().default(0),
   meta_description: z.string().max(300).optional().nullable(),
@@ -500,7 +506,7 @@ export const updateKbArticleSchema = createKbArticleSchema.partial();
 export const createKbCategorySchema = z.object({
   name: requiredString.max(100),
   description: z.string().trim().max(500).nullable().optional(),
-  slug: z.string().regex(/^[a-z0-9-]+$/, 'Invalid slug').max(100),
+  slug: z.string().regex(/^[a-zA-Z0-9_-]+$/, 'Invalid slug').max(100).transform(v => v.toLowerCase()),
   parent_id: uuid,
   order: z.coerce.number().int().min(0).optional().default(0),
   is_public: z.boolean().optional().default(true),
@@ -583,7 +589,7 @@ export const updateProfileSchema = z.object({
   last_name: z.string().trim().max(100).nullable().optional(),
   email: z.string().email().max(255).optional(),
   phone: z.string().trim().max(20).nullable().optional(),
-  avatar_url: z.string().url().max(500).optional().nullable().or(z.literal('')),
+  avatar_url: urlField,
   timezone: z.string().trim().max(50).nullable().optional(),
   language: z.string().trim().max(10).nullable().optional(),
 });
@@ -592,8 +598,8 @@ export const updateProfileSchema = z.object({
 export const updateTenantSettingsSchema = z.object({
   name: z.string().trim().max(200).nullable().optional(),
   domain: z.string().max(255).optional().nullable(),
-  logo_url: z.string().url().max(500).optional().nullable().or(z.literal('')),
-  primary_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().nullable(),
+  logo_url: urlField,
+  primary_color: z.string().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional().nullable(),
   timezone: z.string().trim().max(50).nullable().optional(),
   currency: z.string().length(3).optional(),
   date_format: z.string().trim().max(20).nullable().optional(),
@@ -612,6 +618,250 @@ export const createScheduledReportSchema = z.object({
 });
 
 export const updateScheduledReportSchema = createScheduledReportSchema.partial();
+
+
+// ── Backup schemas ──
+export const createBackupSchema = z.object({
+  backup_type: z.enum(['full', 'schema']).optional().default('full'),
+});
+
+export const backupConfigSchema = z.object({
+  endpoint_url: z.string().max(500).optional().default(''),
+  bucket: requiredString.max(200),
+  access_key: requiredString.max(200),
+  secret_key: z.string().max(500).optional(),
+  region: z.string().max(100).optional().default('us-east-1'),
+  backup_type: z.enum(['full', 'schema']).optional().default('full'),
+  enabled: z.boolean().optional().default(true),
+  schedule: z.string().max(100).optional().default('0 2 * * *'),
+  retention_days: z.coerce.number().int().min(1).max(365).optional().default(30),
+  point_in_time_recovery: z.boolean().optional().default(false),
+});
+
+// ── Custom Field schemas ──
+const customFieldTypes = ['text', 'number', 'date', 'select', 'multiselect', 'boolean', 'url', 'email', 'phone', 'currency', 'json'] as const;
+
+export const createCustomFieldSchema = z.object({
+  entityType: requiredString.max(50),
+  fieldKey: z.string().regex(/^[a-zA-Z0-9_]+$/, 'fieldKey must be alphanumeric (underscores allowed)').max(100),
+  fieldLabel: requiredString.max(200),
+  fieldType: z.enum(customFieldTypes).optional().default('text'),
+  fieldOptions: z.array(z.string()).optional().nullable(),
+  isRequired: z.boolean().optional().default(false),
+  isSearchable: z.boolean().optional().default(true),
+  defaultValue: z.unknown().optional(),
+  displayOrder: z.coerce.number().int().min(0).optional().default(0),
+  isCalculated: z.boolean().optional().default(false),
+  formula: z.string().max(1000).optional().nullable(),
+});
+
+export const updateCustomFieldSchema = z.object({
+  fieldId: z.string().uuid(),
+  fieldLabel: z.string().trim().max(200).optional(),
+  fieldType: z.enum(customFieldTypes).optional(),
+  fieldOptions: z.array(z.string()).optional().nullable(),
+  isRequired: z.boolean().optional(),
+  isSearchable: z.boolean().optional(),
+  displayOrder: z.coerce.number().int().min(0).optional(),
+  isCalculated: z.boolean().optional(),
+  formula: z.string().max(1000).optional().nullable(),
+});
+
+// ── Contact Merge schema ──
+export const mergeContactSchema = z.object({
+  primary_contact_id: z.string().uuid(),
+  duplicate_contact_id: z.string().uuid(),
+  merge_strategy: z.record(z.string(), z.unknown()).optional().default({}),
+  reason: z.string().trim().max(500).optional().nullable(),
+});
+
+// ── Lead Convert schema ──
+export const convertLeadSchema = z.object({
+  create_deal: z.boolean().optional().default(false),
+  deal_title: z.string().trim().max(200).optional().nullable(),
+  deal_value: z.coerce.number().min(0).optional().default(0),
+  deal_stage: z.string().uuid().optional().nullable(),
+  pipeline_id: z.string().uuid().optional().nullable(),
+  assigned_to: z.string().uuid().optional().nullable(),
+});
+
+// ── Trigger Workflow schema ──
+export const triggerWorkflowSchema = z.object({
+  trigger_entity_type: requiredString.max(100),
+  trigger_entity_id: z.string().uuid(),
+});
+
+// ── WhatsApp Send schema ──
+export const sendWhatsAppSchema = z.object({
+  to: requiredString.max(20),
+  message_type: z.enum(['template', 'text']).optional().default('text'),
+  content: z.record(z.string(), z.unknown()).optional().default({}),
+  template_name: z.string().trim().max(100).optional().nullable(),
+  language: z.string().max(10).optional().default('en'),
+  contact_id: z.string().uuid().optional().nullable(),
+});
+
+// ── Email Test schema ──
+export const testEmailSchema = z.object({
+  to: z.string().email('Invalid recipient email'),
+  provider: z.string().trim().max(50).optional().nullable(),
+  config: z.record(z.string(), z.unknown()).optional().default({}),
+});
+
+// ── Public Lead Capture schema ──
+export const publicLeadCaptureSchema = z.object({
+  first_name: z.string().trim().max(100).optional().nullable(),
+  last_name: z.string().trim().max(100).optional().nullable(),
+  email: z.string().email('Invalid email'),
+  phone: z.string().max(30).optional().nullable(),
+  company: z.string().trim().max(200).optional().nullable(),
+  message: z.string().trim().max(5000).optional().nullable(),
+  source: z.string().trim().max(100).optional().default('Website Form'),
+  tenant_id: z.string().uuid(),
+  form_id: z.string().uuid().optional().nullable(),
+  tags: z.array(z.string()).optional().default([]),
+});
+
+// ── Public Form Submit schema ──
+export const publicFormSubmitSchema = z.object({
+  form_id: z.string().uuid(),
+  data: z.record(z.string(), z.unknown()).optional().default({}),
+  values: z.record(z.string(), z.unknown()).optional().default({}),
+});
+
+// ── IP Whitelist schema ──
+export const ipWhitelistSchema = z.object({
+  ips: z.array(z.string().regex(/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/, 'Invalid IP address')).optional().default([]),
+  enabled: z.boolean().optional().default(true),
+});
+
+// ── Email Warmup Config schema ──
+export const emailWarmupConfigSchema = z.object({
+  from_email: z.string().email('Invalid from email'),
+  from_name: z.string().trim().max(200).optional().default(''),
+  daily_limit_start: z.coerce.number().int().min(1).max(1000).optional().default(5),
+  daily_limit_max: z.coerce.number().int().min(1).max(10000).optional().default(50),
+  ramp_up_days: z.coerce.number().int().min(1).max(90).optional().default(21),
+  participants: z.array(z.object({
+    email: z.string().email(),
+    name: z.string().trim().max(200).optional().default(''),
+  })).optional().default([]),
+});
+
+// ── Onboarding Step schema ──
+export const onboardingStepSchema = z.object({
+  step: z.string().trim().max(100).optional(),
+  complete: z.boolean().optional(),
+});
+
+// ── AI Assistant schema ──
+export const aiAssistantSchema = z.object({
+  action: z.enum(['draft_email', 'score_lead', 'predict_deal', 'suggest_followup', 'enrich_contact']),
+  contact: z.object({
+    first_name: z.string().max(100).optional(),
+    last_name: z.string().max(100).optional(),
+    company_name: z.string().max(200).optional(),
+    lead_status: z.string().max(50).optional(),
+    score: z.coerce.number().optional(),
+    notes: z.string().max(300).optional(),
+    tags: z.array(z.string()).optional(),
+  }).optional().nullable(),
+  deal: z.object({
+    title: z.string().max(200).optional(),
+    stage: z.string().max(50).optional(),
+    value: z.coerce.number().optional(),
+    probability: z.coerce.number().optional(),
+    first_name: z.string().max(100).optional(),
+    last_name: z.string().max(100).optional(),
+    close_date: z.string().max(50).optional(),
+  }).optional().nullable(),
+  context: z.string().max(500).optional().nullable(),
+});
+
+// ── Assign Contact schema (bulk assign) ──
+export const assignContactSchema = z.object({
+  contact_ids: z.array(z.string().uuid()).min(1, 'At least one contact ID required').max(500),
+  assign_to: z.string().uuid(),
+  reason: z.string().trim().max(500).optional().nullable(),
+});
+
+// ── Update Member schema ──
+export const updateMemberSchema = z.object({
+  email: z.string().email().optional(),
+  password: z.string().min(8).optional(),
+  full_name: z.string().trim().max(200).optional(),
+  role_slug: z.string().trim().max(50).optional(),
+  permissions: z.record(z.string(), z.boolean()).optional(),
+});
+
+// ── Telegram Settings schema ──
+export const updateTelegramSchema = z.object({
+  telegram_bot_token: z.string().trim().max(200).optional().nullable(),
+  telegram_chat_id: z.string().trim().max(100).optional().nullable(),
+  telegram_enabled: z.boolean().optional(),
+  telegram_notify_login: z.boolean().optional(),
+  telegram_notify_signup: z.boolean().optional(),
+  telegram_notify_password_change: z.boolean().optional(),
+  telegram_notify_2fa_change: z.boolean().optional(),
+  telegram_notify_security_alerts: z.boolean().optional(),
+  action: z.enum(['test']).optional(),
+});
+
+// ── Checkout Session schema ──
+export const checkoutSessionSchema = z.object({
+  plan_id: z.string().uuid(),
+});
+
+// ── Superadmin schemas ──
+export const createPlanSchema = z.object({
+  id: z.string().max(50).optional(),
+  name: requiredString.max(200),
+  slug: z.string().max(100).optional(),
+  price_monthly: z.coerce.number().min(0).optional().default(0),
+  price_yearly: z.coerce.number().min(0).optional().default(0),
+  max_users: z.coerce.number().int().min(1).optional().default(5),
+  max_contacts: z.coerce.number().int().min(0).optional().default(1000),
+  max_deals: z.coerce.number().int().min(0).optional().default(500),
+  max_storage_gb: z.coerce.number().min(0).optional().default(1),
+  max_automations: z.coerce.number().int().min(0).optional().default(5),
+  max_forms: z.coerce.number().int().min(0).optional().default(3),
+  max_api_calls_day: z.coerce.number().int().min(0).optional().default(1000),
+  features: z.array(z.string()).optional().default([]),
+  sort_order: z.coerce.number().int().min(0).optional().default(99),
+  description: z.string().trim().max(500).optional().nullable(),
+});
+
+export const updatePlanSchema = createPlanSchema.partial().extend({
+  id: z.string().uuid(),
+});
+
+export const createTenantSchema = z.object({
+  name: requiredString.max(200),
+  plan_id: z.string().max(50).optional().default('free'),
+  status: z.enum(['active', 'trialing', 'suspended', 'cancelled']).optional().default('active'),
+  billing_email: z.string().email().optional().nullable(),
+  primary_color: z.string().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional().default('#7c3aed'),
+  owner_email: z.string().email().optional().nullable(),
+  owner_name: z.string().trim().max(200).optional().nullable(),
+  owner_password: z.string().min(8).optional().nullable(),
+  trial_days: z.coerce.number().int().min(0).max(365).optional().default(14),
+});
+
+export const updateTenantSchema = z.object({
+  name: z.string().trim().max(200).optional(),
+  status: z.enum(['active', 'trialing', 'suspended', 'cancelled']).optional(),
+  billing_email: z.string().email().optional().nullable(),
+  primary_color: z.string().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+  plan_id: z.string().max(50).optional(),
+  admin_notes: z.string().max(2000).optional().nullable(),
+  manual_paid_until: z.string().date().optional().nullable(),
+});
+
+export const platformSettingsSchema = z.record(
+  z.string(),
+  z.union([z.string(), z.number(), z.boolean()])
+);
+
 
 // ── Type exports ──
 export type CreateContactInput = z.infer<typeof createContactSchema>;
@@ -659,3 +909,27 @@ export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type UpdateTenantSettingsInput = z.infer<typeof updateTenantSettingsSchema>;
 export type CreateScheduledReportInput = z.infer<typeof createScheduledReportSchema>;
+
+export type CreateBackupInput = z.infer<typeof createBackupSchema>;
+export type BackupConfigInput = z.infer<typeof backupConfigSchema>;
+export type CreateCustomFieldInput = z.infer<typeof createCustomFieldSchema>;
+export type UpdateCustomFieldInput = z.infer<typeof updateCustomFieldSchema>;
+export type MergeContactInput = z.infer<typeof mergeContactSchema>;
+export type ConvertLeadInput = z.infer<typeof convertLeadSchema>;
+export type TriggerWorkflowInput = z.infer<typeof triggerWorkflowSchema>;
+export type SendWhatsAppInput = z.infer<typeof sendWhatsAppSchema>;
+export type TestEmailInput = z.infer<typeof testEmailSchema>;
+export type PublicLeadCaptureInput = z.infer<typeof publicLeadCaptureSchema>;
+export type PublicFormSubmitInput = z.infer<typeof publicFormSubmitSchema>;
+export type IpWhitelistInput = z.infer<typeof ipWhitelistSchema>;
+export type EmailWarmupConfigInput = z.infer<typeof emailWarmupConfigSchema>;
+export type OnboardingStepInput = z.infer<typeof onboardingStepSchema>;
+export type AiAssistantInput = z.infer<typeof aiAssistantSchema>;
+export type AssignContactInput = z.infer<typeof assignContactSchema>;
+export type UpdateMemberInput = z.infer<typeof updateMemberSchema>;
+export type UpdateTelegramInput = z.infer<typeof updateTelegramSchema>;
+export type CheckoutSessionInput = z.infer<typeof checkoutSessionSchema>;
+export type CreatePlanInput = z.infer<typeof createPlanSchema>;
+export type UpdatePlanInput = z.infer<typeof updatePlanSchema>;
+export type CreateTenantInput = z.infer<typeof createTenantSchema>;
+export type UpdateTenantInput = z.infer<typeof updateTenantSchema>;

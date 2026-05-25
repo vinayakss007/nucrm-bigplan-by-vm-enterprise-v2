@@ -4,6 +4,8 @@ import { leads, users, leadActivities } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { updateLeadSchema } from '@/lib/api/schemas';
 
 /**
  * GET /api/tenant/leads/[id]
@@ -96,8 +98,13 @@ export async function PATCH(
     if (ctx instanceof NextResponse) return ctx;
     
     const { id } = await params;
-    const body = await request.json();
-    
+    const rawBody = await request.json();
+
+    // Validate shared fields with schema
+    const validated = validateBody(updateLeadSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+
     // Verify lead exists and belongs to tenant
     const existing = await db.query.leads.findFirst({
       where: and(
@@ -117,32 +124,32 @@ export async function PATCH(
       updatedAt: new Date(),
     };
 
-    if (body.first_name !== undefined) updateData.firstName = body.first_name;
-    if (body.last_name !== undefined) updateData.lastName = body.last_name;
-    if (body.email !== undefined) updateData.email = body.email;
-    if (body.phone !== undefined) updateData.phone = body.phone;
-    if (body.title !== undefined) updateData.title = body.title;
-    if (body.company_name !== undefined) updateData.companyName = body.company_name;
-    if (body.company_id !== undefined) updateData.companyId = body.company_id;
-    if (body.lead_source !== undefined) updateData.source = body.lead_source;
-    if (body.lead_status !== undefined) updateData.leadStatus = body.lead_status;
-    if (body.lifecycle_stage !== undefined) updateData.lifecycleStage = body.lifecycle_stage;
-    if (body.authority_level !== undefined) updateData.authorityLevel = body.authority_level;
-    if (body.need_description !== undefined) updateData.needDescription = body.need_description;
-    if (body.timeline !== undefined) updateData.timeline = body.timeline;
-    if (body.timeline_target_date !== undefined) updateData.timelineTargetDate = body.timeline_target_date;
-    if (body.country !== undefined) updateData.country = body.country;
-    if (body.state !== undefined) updateData.state = body.state;
-    if (body.city !== undefined) updateData.city = body.city;
-    if (body.address !== undefined) updateData.address = body.address;
-    if (body.postal_code !== undefined) updateData.postalCode = body.postal_code;
-    if (body.linkedin_url !== undefined) updateData.linkedinUrl = body.linkedin_url;
-    if (body.website !== undefined) updateData.website = body.website;
-    if (body.assigned_to !== undefined) updateData.assignedTo = body.assigned_to;
-    if (body.tags !== undefined) updateData.tags = body.tags;
-    if (body.notes !== undefined) updateData.internalNotes = body.notes;
-    if (body.custom_fields !== undefined) updateData.customFields = body.custom_fields;
-    if (body.score !== undefined) updateData.score = body.score;
+    if (v.first_name !== undefined) updateData.firstName = v.first_name;
+    if (v.last_name !== undefined) updateData.lastName = v.last_name;
+    if (v.email !== undefined) updateData.email = v.email;
+    if (v.phone !== undefined) updateData.phone = v.phone;
+    if (rawBody.title !== undefined) updateData.title = rawBody.title;
+    if (rawBody.company_name !== undefined) updateData.companyName = rawBody.company_name;
+    if (rawBody.company_id !== undefined) updateData.companyId = rawBody.company_id;
+    if (v.source !== undefined) updateData.source = v.source;
+    if (v.status !== undefined) updateData.leadStatus = v.status;
+    if (rawBody.lifecycle_stage !== undefined) updateData.lifecycleStage = rawBody.lifecycle_stage;
+    if (rawBody.authority_level !== undefined) updateData.authorityLevel = rawBody.authority_level;
+    if (rawBody.need_description !== undefined) updateData.needDescription = rawBody.need_description;
+    if (rawBody.timeline !== undefined) updateData.timeline = rawBody.timeline;
+    if (rawBody.timeline_target_date !== undefined) updateData.timelineTargetDate = rawBody.timeline_target_date;
+    if (rawBody.country !== undefined) updateData.country = rawBody.country;
+    if (rawBody.state !== undefined) updateData.state = rawBody.state;
+    if (rawBody.city !== undefined) updateData.city = rawBody.city;
+    if (rawBody.address !== undefined) updateData.address = rawBody.address;
+    if (rawBody.postal_code !== undefined) updateData.postalCode = rawBody.postal_code;
+    if (rawBody.linkedin_url !== undefined) updateData.linkedinUrl = rawBody.linkedin_url;
+    if (rawBody.website !== undefined) updateData.website = rawBody.website;
+    if (v.assigned_to !== undefined) updateData.assignedTo = v.assigned_to;
+    if (rawBody.tags !== undefined) updateData.tags = rawBody.tags;
+    if (v.notes !== undefined) updateData.internalNotes = v.notes;
+    if (v.custom_fields !== undefined) updateData.customFields = v.custom_fields;
+    if (v.score !== undefined) updateData.score = v.score;
 
     const [updatedLead] = await db.update(leads)
       .set(updateData)

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
+import { validateBody } from '@/lib/api/validate';
+import { createRoleSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { roles } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
@@ -37,19 +39,19 @@ export async function POST(request: NextRequest) {
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const body = await request.json();
-    const { name, description, permissions } = body;
+    const validated = validateBody(createRoleSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
 
-    if (!name?.trim()) return NextResponse.json({ error: 'name required' }, { status: 400 });
-
-    const slug = name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const slug = v.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
 
     const [newRole] = await db.insert(roles)
       .values({
         tenantId: ctx.tenantId,
-        name: name.trim(),
+        name: v.name,
         slug,
-        description: description || null,
-        permissions: permissions || {},
+        description: v.description || null,
+        permissions: v.permissions || {},
       })
       .returning();
 

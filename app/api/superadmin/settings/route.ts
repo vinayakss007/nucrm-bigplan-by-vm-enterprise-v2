@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { platformSettingsSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
@@ -74,21 +76,24 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const body = await request.json();
+    const rawBody = await request.json();
+    const validated = validateBody(platformSettingsSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
 
     await db.transaction(async (tx) => {
-      for (const [k, v] of Object.entries(body)) {
+      for (const [k, val] of Object.entries(v)) {
         if (ALLOWED.includes(k)) {
           await tx
             .insert(platformSettings)
             .values({
               key: k,
-              value: String(v),
+              value: String(val),
               tenantId: null,
             })
             .onConflictDoUpdate({
               target: [platformSettings.key, platformSettings.tenantId],
-              set: { value: String(v), updatedAt: new Date() },
+              set: { value: String(val), updatedAt: new Date() },
             });
         }
       }

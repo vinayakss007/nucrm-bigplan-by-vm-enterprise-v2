@@ -1,10 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, users, tenantBackupRecords, tenantRestoreRecords } from '@/drizzle/schema';
 import { eq, and, desc, sql, count, max } from 'drizzle-orm';
 import { TenantDataExporter } from '@/lib/tenant-data-export';
 import { TenantDataImporter } from '@/lib/tenant-data-import';
+
+const backupSchema = z.object({
+  tenantId: z.string().min(1),
+  includeTables: z.array(z.string()).optional(),
+  backupNote: z.string().optional().nullable(),
+});
+
+const restoreSchema = z.object({
+  backupId: z.string().optional(),
+  tenantId: z.string().optional(),
+  confirmRestore: z.boolean(),
+  restoreOptions: z.object({ deleteExisting: z.boolean().optional(), skipTables: z.array(z.string()).optional() }).optional(),
+});
 
 /**
  * Per-tenant backup/restore API
@@ -100,11 +115,9 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { tenantId, includeTables, backupNote } = body;
-
-    if (!tenantId) {
-      return NextResponse.json({ error: 'tenantId is required' }, { status: 400 });
-    }
+    const validated = validateBody(backupSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { tenantId, includeTables, backupNote } = validated.data;
 
     // Verify tenant exists
     const tenant = await db.query.tenants.findFirst({
@@ -155,14 +168,9 @@ export async function PUT(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { backupId, tenantId, confirmRestore, restoreOptions } = body;
-
-    if (!confirmRestore) {
-      return NextResponse.json({
-        error: 'confirmRestore must be true',
-        safetyCheck: 'You must explicitly confirm the restore operation',
-      }, { status: 400 });
-    }
+    const validated = validateBody(restoreSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { backupId, tenantId, confirmRestore, restoreOptions } = validated.data;
 
     if (!backupId && !tenantId) {
       return NextResponse.json({ error: 'backupId or tenantId is required' }, { status: 400 });

@@ -4,16 +4,18 @@ import { db } from '@/drizzle/db';
 import { users, sessions } from '@/drizzle/schema';
 import { eq, and, lt } from 'drizzle-orm';
 import { verifyPassword, hashPassword } from '@/lib/auth/session';
+import { validateBody } from '@/lib/api/validate';
+import { changePasswordSchema } from '@/lib/api/schemas';
 
 export async function PATCH(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    
-    const { current_password, new_password } = await request.json();
-    if (!current_password || !new_password) {
-      return NextResponse.json({ error: 'Both passwords required' }, { status: 400 });
-    }
+
+    const rawBody = await request.json();
+    const validated = validateBody(changePasswordSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const { current_password, new_password } = validated.data;
     
     // Password validation
     if (new_password.length < 12) return NextResponse.json({ error: 'New password must be at least 12 characters' }, { status: 400 });

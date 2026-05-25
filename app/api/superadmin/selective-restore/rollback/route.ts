@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { selectiveRestoreLogs, selectiveRestoreAuditLog, superAdminBackups } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { rollbackToSnapshot } from '@/lib/restore/restore-executor';
+
+const schema = z.object({ restore_log_id: z.string().min(1) });
 
 /**
  * POST: Rollback a failed or unwanted restore to pre-restore snapshot
@@ -17,11 +21,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { restore_log_id } = body;
-
-    if (!restore_log_id) {
-      return NextResponse.json({ error: 'restore_log_id required' }, { status: 400 });
-    }
+    const validated = validateBody(schema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { restore_log_id } = validated.data;
 
     const [restoreLog] = await db
       .select({

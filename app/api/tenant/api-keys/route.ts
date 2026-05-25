@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, can } from '@/lib/auth/middleware';
+import { validateBody } from '@/lib/api/validate';
+import { createApiKeySchema } from '@/lib/api/schemas';
 import { generateApiKey } from '@/lib/auth/api-key';
 import { db } from '@/drizzle/db';
 import { apiKeys } from '@/drizzle/schema';
@@ -57,15 +59,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, scopes, expires_in_days } = body;
-
-    if (!name || !name.trim()) {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
-    }
-
-    if (!Array.isArray(scopes) || scopes.length === 0) {
-      return NextResponse.json({ error: 'At least one scope is required' }, { status: 400 });
-    }
+    const validated = validateBody(createApiKeySchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const expires_in_days = body.expires_in_days;
 
     // Calculate expiry date
     let expiresAt = null;
@@ -78,8 +75,8 @@ export async function POST(request: NextRequest) {
     const { key, prefix } = await generateApiKey(
       ctx.tenantId,
       ctx.userId,
-      name.trim(),
-      scopes,
+      v.name,
+      v.scopes,
       expiresAt ? expiresAt.toISOString() : null
     );
 

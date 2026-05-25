@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { validateBody } from '@/lib/api/validate';
+import { checkoutSessionSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { plans, tenants } from '@/drizzle/schema';
@@ -26,7 +28,10 @@ export async function POST(req: NextRequest) {
     const stripeKey = process.env.STRIPE_SECRET_KEY;
     if (!stripeKey) return NextResponse.json({ error:'Stripe not configured — add STRIPE_SECRET_KEY' }, { status:503 });
     
-    const { plan_id } = await req.json();
+    const rawBody = await req.json();
+    const validated = validateBody(checkoutSessionSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const { plan_id } = validated.data;
     
     const [plan] = await db.select()
       .from(plans)

@@ -3,6 +3,8 @@
  * Send WhatsApp messages (template or free-form) via Meta Cloud API
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { sendWhatsAppSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { integrations, whatsappConversations, whatsappMessages } from '@/drizzle/schema';
@@ -14,8 +16,11 @@ export async function POST(req: NextRequest) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json();
-    const { to, message_type, content, template_name, language, contact_id } = body;
+    const rawBody = await req.json();
+    const validated = validateBody(sendWhatsAppSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { to, message_type, content, template_name, language, contact_id } = v;
 
     if (!to) {
       return NextResponse.json({ error: 'to (phone number) is required' }, { status: 400 });

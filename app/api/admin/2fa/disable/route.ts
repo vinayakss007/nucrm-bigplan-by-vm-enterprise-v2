@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users, activities } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
+
+const schema = z.object({
+  user_email: z.string().email(),
+  reason: z.string().optional().nullable(),
+});
 
 /**
  * Admin Recovery: Disable 2FA for a user
@@ -18,11 +25,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
     }
 
-    const { user_email, reason } = await request.json();
-
-    if (!user_email) {
-      return NextResponse.json({ error: 'User email required' }, { status: 400 });
-    }
+    const body = await request.json();
+    const validated = validateBody(schema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { user_email, reason } = validated.data;
 
     // Find user
     const userRow = await db.query.users.findFirst({

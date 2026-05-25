@@ -6,6 +6,8 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { bulkUpdateSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, tenantMembers } from '@/drizzle/schema';
@@ -21,8 +23,12 @@ export async function POST(req: NextRequest) {
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json();
-    const { action, contact_ids, payload = {} } = body;
+    const rawBody = await req.json();
+    const validated = validateBody(bulkUpdateSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { ids: contact_ids, updates: payload } = v;
+    const action = rawBody.action;
 
     if (!Array.isArray(contact_ids) || !contact_ids.length)
       return NextResponse.json({ error: 'contact_ids array required' }, { status: 400 });

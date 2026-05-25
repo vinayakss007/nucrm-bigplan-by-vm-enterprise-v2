@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { validateBody } from '@/lib/api/validate';
+import { updateCompanySchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { companies, contacts } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
@@ -54,9 +56,8 @@ export async function PATCH(req: NextRequest, { params }: any) {
 
     const id = (await params).id;
     const body = await req.json();
-
-    if (body.name !== undefined && !body.name?.trim())
-      return NextResponse.json({ error: 'name cannot be empty' }, { status: 400 });
+    const validated = validateBody(updateCompanySchema, body);
+    if (validated instanceof NextResponse) return validated;
 
     const updateData: any = {
       updatedAt: new Date(),

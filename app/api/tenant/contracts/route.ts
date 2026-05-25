@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { createContractSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { contracts } from '@/drizzle/schema';
 import { eq, and, desc, count } from 'drizzle-orm';
@@ -39,8 +41,11 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     const { tenantId, userId } = ctx;
 
-    const body = await request.json();
-    const { contactId, companyId, title, contractNumber, contractType, startDate, endDate, totalValue, billingFrequency, terms, notes, documentUrl } = body;
+    const rawBody = await request.json();
+    const validated = validateBody(createContractSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { contact_id: contactId, company_id: companyId, title, type: contractType, start_date: startDate, end_date: endDate, value: totalValue, description, terms, status } = v;
 
     if (!title || !startDate) {
       return NextResponse.json({ error: 'Title and start date are required' }, { status: 400 });
@@ -51,16 +56,16 @@ export async function POST(request: NextRequest) {
       contactId: contactId || null,
       companyId: companyId || null,
       title,
-      contractNumber,
+      contractNumber: null,
       contractType: contractType || 'other',
-      status: 'draft',
+      status: status ?? 'draft',
       startDate: new Date(startDate),
       endDate: endDate ? new Date(endDate) : null,
       totalValue: totalValue ? String(totalValue) : null,
-      billingFrequency,
+      billingFrequency: null,
       terms,
-      notes,
-      documentUrl,
+      notes: description,
+      documentUrl: null,
       createdBy: userId,
     } as any).returning();
 

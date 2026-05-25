@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { users, passwordResets } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
@@ -6,13 +8,17 @@ import { createHash, randomBytes } from 'crypto';
 import { sendEmail } from '@/lib/email/service';
 import { checkRateLimit } from '@/lib/rate-limit';
 
+const schema = z.object({ email: z.string().email() });
+
 export async function POST(request: NextRequest) {
   try {
     const limited = await checkRateLimit(request, { action: 'forgot_password', max: 3, windowMinutes: 60 });
     if (limited) return limited;
 
-    const { email } = await request.json();
-    if (!email) return NextResponse.json({ error: 'Email required' }, { status: 400 });
+    const body = await request.json();
+    const validated = validateBody(schema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { email } = validated.data;
 
     // Always return success — never reveal if email exists
     const user = await db.query.users.findFirst({

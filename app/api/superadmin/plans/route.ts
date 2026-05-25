@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { createPlanSchema, updatePlanSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { plans, tenants } from '@/drizzle/schema';
@@ -28,30 +30,33 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
     
-    const b = await request.json();
-    const slug = (b.id || b.slug || b.name || 'plan').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const rawBody = await request.json();
+    const validated = validateBody(createPlanSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const slug = (v.id || v.slug || v.name || 'plan').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 
     const [row] = await db
       .insert(plans)
       .values({
-        id: b.id || sql`gen_random_uuid()`,
-        name: b.name || slug,
+        id: v.id || sql`gen_random_uuid()`,
+        name: v.name || slug,
         slug,
-        priceMonthly: (b.price_monthly ?? 0).toString(),
-        priceYearly: (b.price_yearly ?? 0).toString(),
-        maxUsers: b.max_users ?? 5,
-        maxContacts: b.max_contacts ?? 1000,
-        maxDeals: b.max_deals ?? 500,
-        maxStorageGb: (b.max_storage_gb ?? 1).toString(),
-        maxAutomations: b.max_automations ?? 5,
-        maxForms: b.max_forms ?? 3,
-        maxApiCallsDay: b.max_api_calls_day ?? 1000,
-        features: b.features ?? [],
-        sortOrder: b.sort_order ?? 99,
+        priceMonthly: (v.price_monthly ?? 0).toString(),
+        priceYearly: (v.price_yearly ?? 0).toString(),
+        maxUsers: v.max_users ?? 5,
+        maxContacts: v.max_contacts ?? 1000,
+        maxDeals: v.max_deals ?? 500,
+        maxStorageGb: (v.max_storage_gb ?? 1).toString(),
+        maxAutomations: v.max_automations ?? 5,
+        maxForms: v.max_forms ?? 3,
+        maxApiCallsDay: v.max_api_calls_day ?? 1000,
+        features: v.features ?? [],
+        sortOrder: v.sort_order ?? 99,
         isActive: true,
-        description: b.description || null,
-        priceCents: (b.price_monthly ?? 0) * 100,
-        price: (b.price_monthly ?? 0).toString(),
+        description: v.description || null,
+        priceCents: (v.price_monthly ?? 0) * 100,
+        price: (v.price_monthly ?? 0).toString(),
       })
       .returning();
 
@@ -71,35 +76,38 @@ export async function PATCH(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
     
-    const { id, ...b } = await request.json();
+    const rawBody = await request.json();
+    const validated = validateBody(updatePlanSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { id } = v;
     if (!id) return NextResponse.json({ error: 'Plan ID required' }, { status: 400 });
 
     const updateData: any = { updatedAt: new Date() };
     
-    // Mapping and transformation
-    if (b.name !== undefined) {
-      updateData.name = b.name;
-      updateData.slug = b.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    if (v.name !== undefined) {
+      updateData.name = v.name;
+      updateData.slug = v.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     }
-    if (b.price_monthly !== undefined) {
-      updateData.priceMonthly = b.price_monthly.toString();
-      updateData.price = b.price_monthly.toString();
-      updateData.priceCents = Math.round(b.price_monthly * 100);
+    if (v.price_monthly !== undefined) {
+      updateData.priceMonthly = v.price_monthly.toString();
+      updateData.price = v.price_monthly.toString();
+      updateData.priceCents = Math.round(v.price_monthly * 100);
     }
-    if (b.price_yearly !== undefined) {
-      updateData.priceYearly = b.price_yearly.toString();
+    if (v.price_yearly !== undefined) {
+      updateData.priceYearly = v.price_yearly.toString();
     }
-    if (b.max_users !== undefined) updateData.maxUsers = b.max_users;
-    if (b.max_contacts !== undefined) updateData.maxContacts = b.max_contacts;
-    if (b.max_deals !== undefined) updateData.maxDeals = b.max_deals;
-    if (b.max_storage_gb !== undefined) updateData.maxStorageGb = b.max_storage_gb.toString();
-    if (b.max_automations !== undefined) updateData.maxAutomations = b.max_automations;
-    if (b.max_forms !== undefined) updateData.maxForms = b.max_forms;
-    if (b.max_api_calls_day !== undefined) updateData.maxApiCallsDay = b.max_api_calls_day;
-    if (b.features !== undefined) updateData.features = b.features;
-    if (b.sort_order !== undefined) updateData.sortOrder = b.sort_order;
-    if (b.is_active !== undefined) updateData.isActive = b.is_active;
-    if (b.description !== undefined) updateData.description = b.description;
+    if (v.max_users !== undefined) updateData.maxUsers = v.max_users;
+    if (v.max_contacts !== undefined) updateData.maxContacts = v.max_contacts;
+    if (v.max_deals !== undefined) updateData.maxDeals = v.max_deals;
+    if (v.max_storage_gb !== undefined) updateData.maxStorageGb = v.max_storage_gb.toString();
+    if (v.max_automations !== undefined) updateData.maxAutomations = v.max_automations;
+    if (v.max_forms !== undefined) updateData.maxForms = v.max_forms;
+    if (v.max_api_calls_day !== undefined) updateData.maxApiCallsDay = v.max_api_calls_day;
+    if (v.features !== undefined) updateData.features = v.features;
+    if (v.sort_order !== undefined) updateData.sortOrder = v.sort_order;
+    if (rawBody.is_active !== undefined) updateData.isActive = rawBody.is_active;
+    if (v.description !== undefined) updateData.description = v.description;
 
     const [row] = await db
       .update(plans)

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { mergeContactSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, contactMergeHistory } from '@/drizzle/schema';
@@ -17,15 +19,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
 
-    const body = await request.json();
+    const rawBody = await request.json();
+    const validated = validateBody(mergeContactSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
     const {
       primary_contact_id,
       duplicate_contact_id,
       merge_strategy = {},
       reason,
-    } = body;
+    } = v;
 
-    // Validate required fields
     if (!primary_contact_id || !duplicate_contact_id) {
       return NextResponse.json({ 
         error: 'primary_contact_id and duplicate_contact_id are required' 

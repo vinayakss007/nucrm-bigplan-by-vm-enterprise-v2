@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { importSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, tenants, plans, activities } from '@/drizzle/schema';
@@ -70,8 +72,11 @@ export async function POST(request: NextRequest) {
     const deny = requirePerm(ctx, 'contacts.import');
     if (deny) return deny;
 
-    const body = await request.json();
-    const { csv, skipDuplicates = true, updateExisting = false } = body;
+    const rawBody = await request.json();
+    const validated = validateBody(importSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { csv, skipDuplicates = true, updateExisting = false } = { ...rawBody, csv: rawBody.csv };
     if (!csv) return NextResponse.json({ error:'csv field required' }, { status:400 });
 
     const rows = parseCSV(csv);

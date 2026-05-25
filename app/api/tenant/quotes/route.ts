@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { createQuoteSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { quotes, quoteLineItems } from '@/drizzle/schema';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
@@ -47,8 +49,12 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     const { tenantId, userId } = ctx;
 
-    const body = await request.json();
-    const { contactId, dealId, title, expiresAt, notes, terms, items, discount, tax } = body;
+    const rawBody = await request.json();
+    const validated = validateBody(createQuoteSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { contact_id: contactId, company_id: companyId, title, line_items: items, notes, terms, discount, status, issue_date: issueDate, expiry_date: expiryDate } = v;
+    const tax = 0;
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
@@ -68,15 +74,15 @@ export async function POST(request: NextRequest) {
     const [quote] = await db.insert(quotes).values({
       tenantId,
       contactId: contactId || null,
-      dealId: dealId || null,
+      dealId: null,
       quoteNumber,
       title,
-      status: 'draft',
+      status: status ?? 'draft',
       subtotal: String(subtotal.toFixed(2)),
-      discount: discount ? String(discount) : '0',
-      tax: tax ? String(tax) : '0',
+      discount: String(discount ?? 0),
+      tax: String(tax),
       totalAmount: String(totalAmount.toFixed(2)),
-      expiresAt: expiresAt ? new Date(expiresAt) : null,
+      expiresAt: expiryDate ? new Date(expiryDate) : null,
       notes,
       terms,
       createdBy: userId,
@@ -85,13 +91,13 @@ export async function POST(request: NextRequest) {
     if (items?.length) {
       const lineItems = items.map((item: any, idx: number) => ({
         quoteId: (quote as any)[0].id,
-        productId: item.productId || null,
+        productId: null,
         description: item.description,
         quantity: String(item.quantity || 1),
-        unitPrice: String(item.unitPrice || 0),
-        discountPercent: item.discountPercent ? String(item.discountPercent) : '0',
-        taxPercent: item.taxPercent ? String(item.taxPercent) : '0',
-        total: String(((parseFloat(item.quantity) || 1) * (parseFloat(item.unitPrice) || 0)).toFixed(2)),
+        unitPrice: String(item.unit_price || 0),
+        discountPercent: '0',
+        taxPercent: String(item.tax_rate || 0),
+        total: String(((parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0)).toFixed(2)),
         sortOrder: idx,
       }));
       await db.insert(quoteLineItems).values(lineItems);

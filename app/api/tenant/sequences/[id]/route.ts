@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { updateSequenceSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { sequences, sequenceSteps } from '@/drizzle/schema';
@@ -64,7 +66,11 @@ export async function PATCH(
 
     const sequenceId = (await params).id;
     const body = await request.json();
-    const { name, description, status, steps } = body;
+    const validated = validateBody(updateSequenceSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { name, description, status } = v;
+    const { steps } = body;
 
     // Update sequence
     await db.transaction(async (tx) => {

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { validateBody } from '@/lib/api/validate';
+import { createCustomFieldSchema, updateCustomFieldSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { customFieldDefs, contacts, companies, deals, leads } from '@/drizzle/schema';
@@ -245,19 +247,15 @@ export async function POST(req: NextRequest) {
   }
 
   // Create a custom field definition
-  const body = await req.json();
-  const { 
-    entityType, fieldKey, fieldLabel, fieldType, fieldOptions, 
-    isRequired, isSearchable, defaultValue, displayOrder,
-    isCalculated, formula 
-  } = body;
+  const rawBody = await req.json();
+  const validated = validateBody(createCustomFieldSchema, rawBody);
+  if (validated instanceof NextResponse) return validated;
+  const v = validated.data;
+  const { entityType, fieldKey, fieldLabel, fieldType, fieldOptions, isRequired, isSearchable, defaultValue, displayOrder, isCalculated, formula } = v;
 
   if (!entityType || !fieldKey || !fieldLabel) {
     return NextResponse.json({ error: 'entityType, fieldKey, and fieldLabel are required' }, { status: 400 });
   }
-
-  const validTypes = ['text', 'number', 'date', 'select', 'multiselect', 'boolean', 'url', 'email', 'phone', 'currency', 'json'];
-  const safeType = validTypes.includes(fieldType) ? fieldType : 'text';
 
   const existing = await db.query.customFieldDefs.findFirst({
     where: and(
@@ -300,12 +298,11 @@ export async function PUT(req: NextRequest) {
   const ctx = await requireAuth(req);
   if (ctx instanceof NextResponse) return ctx;
 
-  const body = await req.json();
-  const { 
-    fieldId, fieldLabel, fieldType, fieldOptions, 
-    isRequired, isSearchable, displayOrder,
-    isCalculated, formula 
-  } = body;
+  const rawBody = await req.json();
+  const validated = validateBody(updateCustomFieldSchema, rawBody);
+  if (validated instanceof NextResponse) return validated;
+  const v = validated.data;
+  const { fieldId, fieldLabel, fieldType, fieldOptions, isRequired, isSearchable, displayOrder, isCalculated, formula } = v;
 
   if (!fieldId) {
     return NextResponse.json({ error: 'fieldId is required' }, { status: 400 });
@@ -317,8 +314,7 @@ export async function PUT(req: NextRequest) {
 
   if (fieldLabel !== undefined) setValues.fieldLabel = fieldLabel;
   if (fieldType !== undefined) {
-    const validTypes = ['text', 'number', 'date', 'select', 'multiselect', 'boolean', 'url', 'email', 'phone', 'currency', 'json'];
-    if (validTypes.includes(fieldType)) setValues.fieldType = fieldType;
+    setValues.fieldType = fieldType;
   }
   if (fieldOptions !== undefined) setValues.fieldOptions = fieldOptions;
   if (isRequired !== undefined) setValues.isRequired = isRequired;

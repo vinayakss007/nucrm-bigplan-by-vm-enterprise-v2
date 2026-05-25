@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { validateBody } from '@/lib/api/validate';
+import { ipWhitelistSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
@@ -41,16 +43,12 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const { ips, enabled } = await request.json();
-
-    const ipArray = Array.isArray(ips) ? ips : [];
-    
-    for (const ip of ipArray) {
-      const ipRegex = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/;
-      if (!ipRegex.test(ip)) {
-        return NextResponse.json({ error: `Invalid IP address: ${ip}` }, { status: 400 });
-      }
-    }
+    const rawBody = await request.json();
+    const validated = validateBody(ipWhitelistSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const ipArray = v.ips;
+    const enabled = v.enabled;
 
     const value = enabled && ipArray.length > 0 ? JSON.stringify(ipArray) : '[]';
 

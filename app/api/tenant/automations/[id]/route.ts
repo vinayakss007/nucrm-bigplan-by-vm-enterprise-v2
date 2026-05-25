@@ -4,6 +4,8 @@ import { requireAuth, requirePerm, requireModule } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { automations, automationRuns, users } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
+import { validateBody } from '@/lib/api/validate';
+import { updateAutomationSchema } from '@/lib/api/schemas';
 
 /**
  * GET /api/tenant/automations/[id]
@@ -90,7 +92,10 @@ export async function PATCH(
     if (deny) return deny;
 
     const { id } = await params;
-    const body = await req.json();
+    const rawBody = await req.json();
+    const validated = validateBody(updateAutomationSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const body = validated.data;
 
     const updateData: any = {
       updatedAt: new Date(),
@@ -100,7 +105,7 @@ export async function PATCH(
     if (body.description !== undefined) updateData.description = body.description;
     if (body.is_active !== undefined) updateData.isActive = body.is_active;
     if (body.trigger_type !== undefined) updateData.triggerType = body.trigger_type;
-    if (body.trigger_config !== undefined) updateData.triggerConfig = body.trigger_config;
+    if (rawBody.trigger_config !== undefined) updateData.triggerConfig = rawBody.trigger_config;
     if (body.actions !== undefined) updateData.actions = body.actions;
     if (body.conditions !== undefined) updateData.conditions = body.conditions;
 

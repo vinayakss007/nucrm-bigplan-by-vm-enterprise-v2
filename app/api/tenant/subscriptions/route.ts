@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { createSubscriptionSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { serviceSubscriptions } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
@@ -37,29 +39,32 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     const { tenantId, userId } = ctx;
 
-    const body = await request.json();
-    const { contactId, companyId, name, planName, startDate, currentPeriodEnd, amount, currency, billingFrequency, autoRenew, paymentMethod, last4, trialEndDate } = body;
+    const rawBody = await request.json();
+    const validated = validateBody(createSubscriptionSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { contact_id: contactId, company_id: companyId, status, start_date: startDate, end_date: endDate, trial_end_date: trialEndDate, billing_frequency: billingFrequency, auto_renew: autoRenew, quantity } = v;
 
-    if (!name || !startDate || !amount || !billingFrequency) {
-      return NextResponse.json({ error: 'Name, start date, amount, and billing frequency are required' }, { status: 400 });
+    if (!startDate || !billingFrequency) {
+      return NextResponse.json({ error: 'Start date and billing frequency are required' }, { status: 400 });
     }
 
     const [subscription] = await db.insert(serviceSubscriptions).values({
       tenantId,
       contactId: contactId || null,
       companyId: companyId || null,
-      name,
-      planName,
-      status: 'active',
+      name: 'Subscription',
+      planName: null,
+      status: status ?? 'active',
       startDate: new Date(startDate),
       currentPeriodStart: new Date(startDate),
-      currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd) : null,
-      amount: String(amount),
-      currency: currency || 'USD',
+      currentPeriodEnd: endDate ? new Date(endDate) : null,
+      amount: '0',
+      currency: 'USD',
       billingFrequency,
       autoRenew: autoRenew ?? true,
-      paymentMethod,
-      last4,
+      paymentMethod: null,
+      last4: null,
       trialEndDate: trialEndDate ? new Date(trialEndDate) : null,
       createdBy: userId,
     } as any).returning();

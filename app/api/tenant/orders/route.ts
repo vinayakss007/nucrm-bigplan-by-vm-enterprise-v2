@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { createOrderSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { orders, orderLineItems } from '@/drizzle/schema';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
@@ -51,39 +53,46 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     const { tenantId, userId } = ctx;
 
-    const body = await request.json();
-    const { contactId, companyId, title, orderDate, expectedDeliveryDate, notes, customerNotes, items, subtotal, discountAmount, taxAmount, shippingAmount, shippingAddress, shippingCity, shippingState, shippingCountry, shippingPostalCode } = body;
+    const rawBody = await request.json();
+    const validated = validateBody(createOrderSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { contact_id: contactId, company_id: companyId, line_items: items, shipping_address: shippingAddress, tracking_number: trackingNumber, notes, status } = v;
 
-    if (!orderDate) {
-      return NextResponse.json({ error: 'Order date is required' }, { status: 400 });
+    if (!items?.length) {
+      return NextResponse.json({ error: 'At least one line item is required' }, { status: 400 });
     }
 
     const countResult = await db.select({ count: sql<number>`count(*)` }).from(orders).where(eq(orders.tenantId, tenantId));
     const orderNumber = `ORD-${String((countResult[0]?.count ?? 0) + 1).padStart(5, '0')}`;
 
-    const totalAmount = (parseFloat(subtotal) || 0) - (parseFloat(discountAmount) || 0) + (parseFloat(taxAmount) || 0) + (parseFloat(shippingAmount) || 0);
+    let subtotal = 0;
+    for (const item of items) {
+      subtotal += (parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0);
+    }
+    const totalAmount = subtotal;
 
     const [order] = await db.insert(orders).values({
       tenantId,
       contactId: contactId ?? null,
       companyId: companyId ?? null,
       orderNumber,
-      title: title ?? `Order ${orderNumber}`,
-      status: 'draft',
-      orderDate: new Date(orderDate).toISOString().split('T')[0],
-      expectedDeliveryDate: expectedDeliveryDate ? new Date(expectedDeliveryDate).toISOString().split('T')[0] : null,
-      subtotal: subtotal ? String(subtotal) : '0',
-      discountAmount: discountAmount ? String(discountAmount) : '0',
-      taxAmount: taxAmount ? String(taxAmount) : '0',
-      shippingAmount: shippingAmount ? String(shippingAmount) : '0',
+      title: `Order ${orderNumber}`,
+      status: status ?? 'pending',
+      orderDate: new Date().toISOString().split('T')[0],
+      expectedDeliveryDate: null,
+      subtotal: String(subtotal.toFixed(2)),
+      discountAmount: '0',
+      taxAmount: '0',
+      shippingAmount: '0',
       totalAmount: String(totalAmount.toFixed(2)),
       shippingAddress: shippingAddress ?? null,
-      shippingCity: shippingCity ?? null,
-      shippingState: shippingState ?? null,
-      shippingCountry: shippingCountry ?? null,
-      shippingPostalCode: shippingPostalCode ?? null,
+      shippingCity: null,
+      shippingState: null,
+      shippingCountry: null,
+      shippingPostalCode: null,
       notes: notes ?? null,
-      customerNotes: customerNotes ?? null,
+      customerNotes: null,
       createdBy: userId,
     } as any).returning();
 
@@ -92,13 +101,13 @@ export async function POST(request: NextRequest) {
     if (items?.length) {
       const lineItems = items.map((item: any, idx: number) => ({
         orderId: order.id,
-        productId: item.productId || null,
-        serviceId: item.serviceId || null,
+        productId: null,
+        serviceId: null,
         description: item.description,
-        itemType: item.itemType || 'product',
+        itemType: 'product',
         quantity: String(item.quantity || 1),
-        unitPrice: String(item.unitPrice || 0),
-        total: String(((parseFloat(item.quantity) || 1) * (parseFloat(item.unitPrice) || 0)).toFixed(2)),
+        unitPrice: String(item.unit_price || 0),
+        total: String(((parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0)).toFixed(2)),
         sortOrder: idx,
       }));
 

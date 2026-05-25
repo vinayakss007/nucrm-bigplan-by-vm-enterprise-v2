@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { createServiceSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { services, serviceCategories } from '@/drizzle/schema';
 import { eq, and, desc, sql, like } from 'drizzle-orm';
@@ -45,8 +47,11 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     const { tenantId, userId } = ctx;
 
-    const body = await request.json();
-    const { name, description, category, pricingType, unitPrice, hourlyRate, monthlyPrice, yearlyPrice, taxRate, taxable, currency, durationMinutes, durationHours, imageUrl, tags, contactId, companyId } = body;
+    const rawBody = await request.json();
+    const validated = validateBody(createServiceSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { name, description, category, hourly_rate: hourlyRate, monthly_rate: monthlyPrice, yearly_rate: yearlyPrice, is_active: isActive } = v;
 
     if (!name) {
       return NextResponse.json({ error: 'Service name is required' }, { status: 400 });
@@ -54,23 +59,23 @@ export async function POST(request: NextRequest) {
 
     const [service] = await db.insert(services).values({
       tenantId,
-      contactId: contactId || null,
-      companyId: companyId || null,
+      contactId: null,
+      companyId: null,
       name,
       description,
       category,
-      pricingType: pricingType || 'fixed',
-      unitPrice: unitPrice ? String(unitPrice) : null,
+      pricingType: 'fixed',
+      unitPrice: null,
       hourlyRate: hourlyRate ? String(hourlyRate) : null,
       monthlyPrice: monthlyPrice ? String(monthlyPrice) : null,
       yearlyPrice: yearlyPrice ? String(yearlyPrice) : null,
-      taxRate: taxRate ? String(taxRate) : '0',
-      taxable: taxable ?? true,
-      currency: currency || 'USD',
-      durationMinutes: durationMinutes ? Number(durationMinutes) : null,
-      durationHours: durationHours ? Number(durationHours) : null,
-      imageUrl,
-      tags: tags || [],
+      taxRate: '0',
+      taxable: true,
+      currency: 'USD',
+      durationMinutes: null,
+      durationHours: null,
+      imageUrl: null,
+      tags: [],
       createdBy: userId,
     }).returning();
 

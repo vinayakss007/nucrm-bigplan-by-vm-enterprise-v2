@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { validateBody } from '@/lib/api/validate';
+import { updateFormSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { forms, formSubmissions, contacts } from '@/drizzle/schema';
@@ -44,27 +46,17 @@ export async function PATCH(req: NextRequest, { params }: any) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
     const { id } = await params;
-    const body = await req.json();
+    const raw = await req.json();
+    const validated = validateBody(updateFormSchema, raw);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
     
-    const allowed = ['name','description','fields','settings','isActive'];
     const updateData: any = { updatedAt: new Date(), updatedBy: ctx.userId };
-    
-    let hasValidFields = false;
-    for (const key of allowed) {
-      if (body[key] !== undefined) {
-        // Handle mapping from is_active to isActive if needed
-        const apiKey = key === 'isActive' && body.is_active !== undefined ? 'is_active' : key;
-        updateData[key] = body[apiKey] ?? body[key];
-        hasValidFields = true;
-      }
-    }
-    // Also check for is_active directly for legacy compatibility
-    if (body.is_active !== undefined) {
-      updateData.isActive = body.is_active;
-      hasValidFields = true;
-    }
-
-    if (!hasValidFields) return NextResponse.json({ error: 'No valid fields' }, { status: 400 });
+    if (v.name !== undefined) updateData.name = v.name;
+    if (v.description !== undefined) updateData.description = v.description;
+    if (v.fields !== undefined) updateData.fields = v.fields;
+    if (v.is_active !== undefined) updateData.isActive = v.is_active;
+    if (raw.settings !== undefined) updateData.settings = raw.settings;
 
     const [row] = await db
       .update(forms)

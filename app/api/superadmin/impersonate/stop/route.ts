@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
+
+const schema = z.object({ sessionId: z.string().min(1) });
 
 /**
  * POST /api/superadmin/impersonate/stop
@@ -14,10 +18,10 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
     
-    const { sessionId } = await request.json();
-    if (!sessionId) {
-      return NextResponse.json({ error: 'sessionId required' }, { status: 400 });
-    }
+    const body = await request.json();
+    const validated = validateBody(schema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { sessionId } = validated.data;
 
     // End impersonation session (updates DB + creates audit log)
     await db.execute(sql`SELECT public.end_impersonation(${sessionId})`);

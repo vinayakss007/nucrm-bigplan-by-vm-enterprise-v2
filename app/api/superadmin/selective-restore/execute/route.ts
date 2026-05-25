@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { selectiveRestoreLogs, selectiveRestoreAuditLog, superAdminBackups } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { existsSync } from 'fs';
 import { executeSelectiveRestore, validateTenant, createPreRestoreSnapshot } from '@/lib/restore/restore-executor';
+
+const executeRestoreSchema = z.object({
+  backup_id: z.string().min(1),
+  tenant_id: z.string().min(1),
+  tables: z.array(z.string()).min(1),
+  restore_mode: z.enum(['insert_only', 'upsert', 'replace']),
+  confirm_restore: z.boolean().optional(),
+  user_id: z.string().optional(),
+  contact_id: z.string().optional(),
+});
 
 /**
  * POST: Execute selective restore with SSE streaming
@@ -19,20 +31,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { backup_id, tenant_id, tables, restore_mode, confirm_restore, user_id, contact_id } = body;
-
-    // Validate inputs
-    if (!backup_id || !tenant_id || !tables || !restore_mode) {
-      return NextResponse.json({
-        error: 'backup_id, tenant_id, tables, and restore_mode are required',
-      }, { status: 400 });
-    }
-
-    if (!['insert_only', 'upsert', 'replace'].includes(restore_mode)) {
-      return NextResponse.json({
-        error: 'restore_mode must be one of: insert_only, upsert, replace',
-      }, { status: 400 });
-    }
+    const validated = validateBody(executeRestoreSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { backup_id, tenant_id, tables, restore_mode, confirm_restore, user_id, contact_id } = validated.data;
 
     if (restore_mode === 'replace' && !confirm_restore) {
       return NextResponse.json({

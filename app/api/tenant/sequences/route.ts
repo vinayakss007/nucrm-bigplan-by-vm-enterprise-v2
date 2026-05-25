@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { createSequenceSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { sequences, sequenceSteps } from '@/drizzle/schema';
@@ -55,8 +57,11 @@ export async function POST(request: NextRequest) {
     const deny = requirePerm(ctx, 'automations.manage');
     if (deny) return deny;
 
-    const body = await request.json();
-    const { name, description, steps = [] } = body;
+    const rawBody = await request.json();
+    const validated = validateBody(createSequenceSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { name, description, steps } = v;
 
     if (!name || !name.trim()) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -82,9 +87,9 @@ export async function POST(request: NextRequest) {
         stepType: step.type || 'email',
         subject: step.subject || null,
         body: step.body || null,
-        delayHours: step.delay_hours || 0,
-        delayMinutes: step.delay_minutes || 0,
-        delayDays: step.delay_days || 0,
+        delayHours: Math.floor((step.delay_minutes || 0) / 60),
+        delayMinutes: (step.delay_minutes || 0) % 60,
+        delayDays: 0,
       }));
 
       await db.insert(sequenceSteps).values(stepValues);

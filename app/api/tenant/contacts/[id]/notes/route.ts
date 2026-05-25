@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { validateBody } from '@/lib/api/validate';
+import { createNoteSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { activities, users, contacts } from '@/drizzle/schema';
@@ -49,7 +51,13 @@ export async function POST(
     if (ctx instanceof NextResponse) return ctx;
     
     const { id } = await params;
-    const { type = 'note', description, metadata } = await request.json();
+    const rawBody = await request.json();
+    const validated = validateBody(createNoteSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const description = v.content;
+    const type = 'note';
+    const metadata = {};
     
     if (!description?.trim()) {
       return NextResponse.json({ error: 'description required' }, { status: 400 });

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { validateBody } from '@/lib/api/validate';
+import { createMeetingSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { meetings, contacts } from '@/drizzle/schema';
@@ -78,24 +80,24 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     
     const body = await request.json();
-    if (!body.title || !body.start_time) {
-      return NextResponse.json({ error: 'title and start_time required' }, { status: 400 });
-    }
+    const validated = validateBody(createMeetingSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
     
-    const endTime = body.end_time || new Date(new Date(body.start_time).getTime() + 3600000).toISOString();
+    const endTime = v.end_time || new Date(new Date(v.start_time).getTime() + 3600000).toISOString();
     
     const [row] = await db.insert(meetings).values({
       tenantId: ctx.tenantId,
       userId: ctx.userId,
-      contactId: body.contact_id || null,
-      dealId: body.deal_id || null,
-      title: body.title,
-      description: body.description || null,
-      startTime: new Date(body.start_time),
+      contactId: v.contact_id || null,
+      dealId: v.deal_id || null,
+      title: v.title,
+      description: v.description || null,
+      startTime: new Date(v.start_time),
       endTime: new Date(endTime),
-      location: body.location || null,
-      meetingUrl: body.meeting_url || null,
-      status: 'scheduled',
+      location: v.location || null,
+      meetingUrl: v.meeting_url || null,
+      status: v.status || 'scheduled',
     }).returning();
 
     return NextResponse.json({ data: row }, { status: 201 });

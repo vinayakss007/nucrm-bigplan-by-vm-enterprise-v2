@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { validateBody } from '@/lib/api/validate';
+import { triggerWorkflowSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { workflows } from '@/drizzle/schema';
@@ -31,8 +33,11 @@ export async function POST(
       return NextResponse.json({ error: 'Workflow not found' }, { status: 404 });
     }
 
-    const body = await request.json();
-    const { trigger_entity_type, trigger_entity_id } = body;
+    const rawBody = await request.json();
+    const validated = validateBody(triggerWorkflowSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { trigger_entity_type, trigger_entity_id } = v;
 
     if (!trigger_entity_type || !trigger_entity_id) {
       return NextResponse.json(

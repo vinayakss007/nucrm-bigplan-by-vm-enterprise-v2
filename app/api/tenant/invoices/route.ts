@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody, validateQuery } from '@/lib/api/validate';
+import { createInvoiceSchema, invoiceQuerySchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { invoices, invoiceLineItems } from '@/drizzle/schema';
 import { eq, and, desc, sql, like, count } from 'drizzle-orm';
@@ -11,11 +13,16 @@ export async function GET(request: NextRequest) {
     const { tenantId } = ctx;
 
     const { searchParams } = new URL(request.url);
+    const qParams = Object.fromEntries(searchParams.entries());
+    const qValidated = validateQuery(invoiceQuerySchema, qParams);
+    const q = qValidated instanceof NextResponse
+      ? { offset: 0, limit: 50 }
+      : qValidated.data;
     const status = searchParams.get('status');
     const contactId = searchParams.get('contactId');
     const search = searchParams.get('search');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const page = Math.floor(q.offset / q.limit) + 1;
+    const limit = q.limit;
 
     const whereConditions = [eq(invoices.tenantId, tenantId)];
 
@@ -52,8 +59,11 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     const { tenantId, userId } = ctx;
 
-    const body = await request.json();
-    const { contactId, companyId, title, issueDate, dueDate, notes, terms, items, discountType, discountValue, taxRate } = body;
+    const rawBody = await request.json();
+    const validated = validateBody(createInvoiceSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { issue_date: issueDate, due_date: dueDate, line_items: items, notes, terms, discount, tax_rate: taxRate, contact_id: contactId, company_id: companyId, status } = v;
 
     if (!issueDate) {
       return NextResponse.json({ error: 'Issue date is required' }, { status: 400 });
@@ -68,17 +78,14 @@ export async function POST(request: NextRequest) {
     if (items?.length) {
       for (const item of items) {
         const qty = parseFloat(item.quantity) || 1;
-        const price = parseFloat(item.unitPrice) || 0;
+        const price = parseFloat(item.unit_price) || 0;
         subtotal += qty * price;
       }
     }
 
-    const discountAmount = discountType === 'fixed' 
-      ? parseFloat(discountValue) || 0 
-      : (subtotal * (parseFloat(discountValue) || 0) / 100);
-    
+    const discountAmount = discount;
     const taxableAmount = subtotal - discountAmount;
-    const taxAmount = (parseFloat(taxRate) || 0) / 100 * taxableAmount;
+    const taxAmount = taxRate / 100 * taxableAmount;
     const totalAmount = taxableAmount + taxAmount;
 
     const [invoice] = await db.insert(invoices).values({
@@ -87,14 +94,14 @@ export async function POST(request: NextRequest) {
       companyId: companyId ?? null,
       invoiceNumber,
       title: title ?? `Invoice ${invoiceNumber}`,
-      status: 'draft',
+      status: status ?? 'draft',
       issueDate: new Date(issueDate).toISOString().split('T')[0],
       dueDate: dueDate ? new Date(dueDate).toISOString().split('T')[0] : null,
       subtotal: String(subtotal.toFixed(2)),
-      discountType: discountType ?? 'percentage',
-      discountValue: discountValue ? String(discountValue) : '0',
+      discountType: discount > 0 ? 'fixed' : 'percentage',
+      discountValue: String(discount),
       discountAmount: String(discountAmount.toFixed(2)),
-      taxRate: taxRate ? String(taxRate) : '0',
+      taxRate: String(taxRate),
       taxAmount: String(taxAmount.toFixed(2)),
       totalAmount: String(totalAmount.toFixed(2)),
       amountPaid: '0',
@@ -110,18 +117,18 @@ export async function POST(request: NextRequest) {
     if (items?.length) {
       const lineItems = items.map((item: any, idx: number) => ({
         invoiceId: invoice.id,
-        productId: item.productId || null,
-        serviceId: item.serviceId || null,
+        productId: null,
+        serviceId: null,
         description: item.description,
-        itemType: item.itemType || 'custom',
+        itemType: 'custom',
         quantity: String(item.quantity || 1),
-        unitPrice: String(item.unitPrice || 0),
-        discountType: item.discountType || 'percentage',
-        discountValue: item.discountValue ? String(item.discountValue) : '0',
+        unitPrice: String(item.unit_price || 0),
+        discountType: 'percentage',
+        discountValue: '0',
         discountAmount: '0',
-        taxRate: item.taxRate ? String(item.taxRate) : '0',
+        taxRate: String(item.tax_rate || 0),
         taxAmount: '0',
-        total: String(((parseFloat(item.quantity) || 1) * (parseFloat(item.unitPrice) || 0)).toFixed(2)),
+        total: String(((parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0)).toFixed(2)),
         sortOrder: idx,
       }));
 

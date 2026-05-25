@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
@@ -351,6 +353,19 @@ async function handleSearch(searchParams: URLSearchParams) {
 
 // ── Update a Record ─────────────────────────────────────────────────────────
 
+const updateRecordSchema = z.object({
+  table: z.string().min(1),
+  id: z.string().min(1),
+  field: z.string().min(1),
+  value: z.any(),
+});
+
+const deleteRecordSchema = z.object({
+  table: z.string().min(1),
+  id: z.string().min(1),
+  softDelete: z.boolean().optional(),
+});
+
 export async function PUT(req: NextRequest) {
   const ctx = await requireAuth(req);
   if (!ctx || ctx instanceof NextResponse) {
@@ -362,11 +377,9 @@ export async function PUT(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { table, id, field, value } = body;
-
-    if (!table || !id || !field) {
-      return NextResponse.json({ error: 'table, id, and field are required' }, { status: 400 });
-    }
+    const validated = validateBody(updateRecordSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { table, id, field, value } = validated.data;
 
     const allowedTables = [
       'tenants', 'contacts', 'leads', 'deals', 'companies',
@@ -414,7 +427,9 @@ export async function DELETE(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { table, id, softDelete } = body;
+    const validated = validateBody(deleteRecordSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { table, id, softDelete } = validated.data;
 
     if (!table || !id) {
       return NextResponse.json({ error: 'table and id are required' }, { status: 400 });

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { createTenantSchema, updateTenantSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, users, tenantMembers, plans } from '@/drizzle/schema';
@@ -86,11 +88,14 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const body = await request.json();
+    const rawBody = await request.json();
+    const validated = validateBody(createTenantSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
     const { 
       name, plan_id = 'free', status = 'active', billing_email, primary_color = '#7c3aed',
       owner_email, owner_name, owner_password, trial_days = 14 
-    } = body;
+    } = { ...v, ...rawBody };
 
     if (!name?.trim()) return NextResponse.json({ error: 'name required' }, { status: 400 });
 
@@ -177,7 +182,12 @@ export async function PATCH(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const { id, ...updates } = await request.json();
+    const rawBody = await request.json();
+    const validated = validateBody(updateTenantSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const id = v.id || rawBody.id;
+    const updates = rawBody;
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
     const allowed = ['name', 'planId', 'status', 'billingEmail', 'primaryColor', 'logoUrl', 'customDomain', 'trialEndsAt', 'adminNotes', 'billingType', 'manualPaidUntil'];

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
+import { validateBody } from '@/lib/api/validate';
+import { createWebhookSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { webhookQueue } from '@/drizzle/schema/support';
@@ -62,17 +64,18 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
     
-    const { name, url, events = [] } = await req.json();
-    if (!name?.trim() || !url?.trim()) return NextResponse.json({ error: 'name and url required' }, { status: 400 });
-    try { new URL(url); } catch { return NextResponse.json({ error: 'Invalid URL' }, { status: 400 }); }
+    const body = await req.json();
+    const validated = validateBody(createWebhookSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
     
     const signingSecret = randomBytes(24).toString('hex');
     const [row] = await db.insert(integrations).values({
       tenantId: ctx.tenantId,
       userId: ctx.userId,
       type: 'webhook',
-      name: name.trim(),
-      config: { url, events, secret: signingSecret },
+      name: v.name,
+      config: { url: v.url, events: v.events, secret: signingSecret },
       isActive: true,
     }).returning({
       id: integrations.id,

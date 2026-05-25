@@ -7,6 +7,8 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateBody } from '@/lib/api/validate';
+import { aiAssistantSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenantModules } from '@/drizzle/schema/modules';
@@ -82,7 +84,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No Anthropic API key configured. Add one in the AI Assistant module settings.' }, { status: 503 });
     }
 
-    const { action, contact, deal, context } = await req.json();
+    const rawBody = await req.json();
+    const validated = validateBody(aiAssistantSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { action, contact, deal, context } = v;
 
     // FIX HIGH-03: Sanitize all user inputs before using in prompts
     const sanitizedContact = contact ? {

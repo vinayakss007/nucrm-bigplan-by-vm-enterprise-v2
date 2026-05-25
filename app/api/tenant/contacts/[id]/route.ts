@@ -198,8 +198,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     // Activity log
-    await db.insert(activities).values({} as any); // @ts-expect-error Schema mismatch - activity insert requires partial object
-    db.insert().values({
+    await db.insert(activities).values({
       tenantId: ctx.tenantId,
       userId: ctx.userId,
       contactId: contactId,

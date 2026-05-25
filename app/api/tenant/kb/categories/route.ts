@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { validateBody } from '@/lib/api/validate';
+import { createKbCategorySchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { kbCategories } from '@/drizzle/schema';
 import { eq, and, asc, isNull } from 'drizzle-orm';
@@ -24,11 +26,13 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const body = await request.json();
-    if (!body.name?.trim()) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
-    const slug = body.slug || body.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const validated = validateBody(createKbCategorySchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const slug = v.slug || v.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     const [row] = await db.insert(kbCategories).values({
       tenantId: ctx.tenantId, createdBy: ctx.userId,
-      name: body.name, slug, description: body.description, icon: body.icon, order: body.order || 0,
+      name: v.name, slug, description: v.description, icon: body.icon || null, order: v.order || 0,
     }).returning();
     return NextResponse.json({ data: row }, { status: 201 });
   } catch (err: any) {
