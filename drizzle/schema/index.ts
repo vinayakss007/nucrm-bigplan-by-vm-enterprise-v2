@@ -14,3 +14,6 @@ export * from './knowledge';
 export * from './security';
 export * from './usage';
 export * from './compliance';
+export * from './sla';
+export * from './assignment';
+export * from './documents';

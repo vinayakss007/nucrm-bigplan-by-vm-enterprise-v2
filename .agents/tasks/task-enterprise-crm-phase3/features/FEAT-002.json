@@ -2,7 +2,7 @@
   "id": "FEAT-002",
   "type": "feat",
   "description": "GROUP B: Vertical Feature Modules - SLA Management, Auto-Assignment Rules, Document Management, Custom Report Builder",
-  "status": "pending",
+  "status": "in_progress",
   "steps": [
     "Create lib/sla.ts - SLA engine with: defineSLA (name, conditions, responseTimeMinutes, resolutionTimeMinutes, escalationRules), checkSLABreach (compare current time vs target), getEscalationChain (determine who to notify at each breach level). Support priority-based SLAs (critical: 1h, high: 4h, medium: 8h, low: 24h).",
     "Create drizzle/schema/sla.ts - Tables: sla_policies (id, tenantId, name, priority, responseTimeMinutes, resolutionTimeMinutes, escalationRules jsonb, isActive, lifecycle), sla_breaches (id, tenantId, policyId, entityType, entityId, breachType ['response','resolution'], breachedAt, notifiedUsers jsonb, lifecycle). Export from index.ts.",
