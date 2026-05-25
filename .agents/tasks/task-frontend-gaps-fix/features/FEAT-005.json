@@ -2,7 +2,7 @@
   "id": "FEAT-005",
   "type": "feat",
   "description": "Create Kanban boards for Tickets and Tasks - reuse the @dnd-kit drag-and-drop pattern from app/tenant/deals/kanban/page.tsx with ticket statuses (open, in_progress, waiting, resolved, closed) and task statuses (todo, in_progress, review, done).",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Create app/tenant/tickets/kanban/page.tsx - 'use client' kanban board with columns for Open, In Progress, Waiting, Resolved, Closed. Cards show ticket subject, priority badge, assigned agent, contact name. Drag to change status via PATCH/PUT to /api/tenant/tickets/[id]. Reuse DndContext/SortableContext pattern from deals/kanban/page.tsx. Include loading.tsx and error.tsx.",
     "Create app/tenant/tasks/kanban/page.tsx - 'use client' kanban board with columns for Todo, In Progress, Review, Done. Cards show task title, priority, due date, assigned user. Drag to change status. Uses /api/tenant/tasks endpoint for fetching and updating. Reuse same DndContext pattern. Include loading.tsx and error.tsx.",
@@ -22,5 +22,5 @@
     "npm run build - succeeds with all new kanban pages compiled"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "Used actual DB statuses: tickets have open/in_progress/resolved/closed (4 columns), tasks have pending/in_progress/completed/cancelled (4 columns). The schema validation allows additional task statuses (deferred, on_hold) but the kanban uses the 4 main ones. Both /api/tenant/tickets/[id] and /api/tenant/tasks/[id] PATCH routes already existed and accept {status: 'value'}. TypeScript strict mode requires bracket notation for Record index signature access (PRIORITY_COLORS['medium'] not PRIORITY_COLORS.medium)."
 }
