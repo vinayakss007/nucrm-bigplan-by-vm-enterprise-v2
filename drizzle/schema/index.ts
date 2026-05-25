@@ -17,3 +17,6 @@ export * from './compliance';
 export * from './sla';
 export * from './assignment';
 export * from './documents';
+export * from './sms';
+export * from './chat';
+export * from './email-tracking';
