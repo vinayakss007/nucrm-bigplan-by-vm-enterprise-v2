@@ -13,6 +13,7 @@ interface Deal {
   closeDate?: string;
   stage_name?: string;
   stageName?: string;
+  stage?: string;
 }
 
 interface MonthlyForecast {
@@ -49,7 +50,7 @@ export default function ForecastPage() {
     const total = matching.reduce((s, d) => s + parseFloat(String(d.amount || 0)), 0);
     const weighted = matching.reduce((s, d) => {
       const amt = parseFloat(String(d.amount || 0));
-      const stage = d.stage_name || d.stageName || '';
+      const stage = d.stage_name || d.stageName || d.stage || '';
       return s + calculateWeightedValue(amt, stage);
     }, 0);
     return { month: ym, total, weighted, count: matching.length };
@@ -57,7 +58,7 @@ export default function ForecastPage() {
 
   const totalPipeline = deals.reduce((s, d) => s + parseFloat(String(d.amount || 0)), 0);
   const weightedForecast = deals.reduce((s, d) => {
-    const stage = d.stage_name || d.stageName || '';
+    const stage = d.stage_name || d.stageName || d.stage || '';
     return s + calculateWeightedValue(parseFloat(String(d.amount || 0)), stage);
   }, 0);
   const dealCount = deals.length;
@@ -67,8 +68,8 @@ export default function ForecastPage() {
   const topDeals = [...deals]
     .map(d => ({
       ...d,
-      weightedValue: calculateWeightedValue(parseFloat(String(d.amount || 0)), d.stage_name || d.stageName || ''),
-      probability: getStageProbability(d.stage_name || d.stageName || ''),
+      weightedValue: calculateWeightedValue(parseFloat(String(d.amount || 0)), d.stage_name || d.stageName || d.stage || ''),
+      probability: getStageProbability(d.stage_name || d.stageName || d.stage || ''),
     }))
     .sort((a, b) => b.weightedValue - a.weightedValue)
     .slice(0, 10);
@@ -161,7 +162,7 @@ export default function ForecastPage() {
             ) : topDeals.map(d => (
               <tr key={d.id} className="border-b border-border hover:bg-accent/30 transition-colors">
                 <td className="px-4 py-2.5 font-medium">{d.title}</td>
-                <td className="px-4 py-2.5 text-muted-foreground capitalize">{(d.stage_name || d.stageName || 'unknown').replace(/_/g, ' ')}</td>
+                <td className="px-4 py-2.5 text-muted-foreground capitalize">{(d.stage_name || d.stageName || d.stage || 'Unknown stage').replace(/_/g, ' ')}</td>
                 <td className="px-4 py-2.5 text-right">{formatCurrency(parseFloat(String(d.amount || 0)))}</td>
                 <td className="px-4 py-2.5 text-right">{Math.round(d.probability * 100)}%</td>
                 <td className="px-4 py-2.5 text-right font-semibold text-violet-600">{formatCurrency(d.weightedValue)}</td>

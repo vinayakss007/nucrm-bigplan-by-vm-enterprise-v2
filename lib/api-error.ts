@@ -7,8 +7,6 @@ export function apiError(err: unknown, message = 'Internal server error', status
 
   if (status >= 500) {
     Sentry.captureException(err);
-  } else {
-    Sentry.addBreadcrumb({ category: 'api', message, level: 'warning' });
   }
 
   return NextResponse.json(

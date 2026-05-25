@@ -10,6 +10,7 @@ import {
   FileText, ShoppingCart, FileSignature, RefreshCw, DollarSign,
 } from 'lucide-react';
 import { cn, formatCurrency, formatDateTimeShort, formatDate, formatRelativeTime, getInitials } from '@/lib/utils';
+import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
 import toast from 'react-hot-toast';
 
 // ── Constants ─────────────────────────────────────────────────
@@ -440,10 +441,8 @@ export default function ContactDetailClient({
                 {(contact.city || contact.country) && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Location</span><span className="font-medium">{[contact.city,contact.country].filter(Boolean).join(', ')}</span></div>}
                 {contact.score > 0 && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Score</span><span className="font-bold text-violet-600">{contact.score}</span></div>}
                 {contact.score > 0 && (() => {
-                  const tier = contact.score >= 70 ? 'hot' : contact.score >= 40 ? 'warm' : 'cold';
-                  const cfg = tier === 'hot' ? { label: 'Hot', color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-950/20', bar: 'bg-red-500' }
-                    : tier === 'warm' ? { label: 'Warm', color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-950/20', bar: 'bg-amber-500' }
-                    : { label: 'Cold', color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-950/20', bar: 'bg-blue-500' };
+                  const tier = getScoreTier(contact.score);
+                  const cfg = getScoreTierConfig(tier);
                   return (
                     <div className={cn('mt-2 p-2 rounded-lg', cfg.bg)}>
                       <div className="flex items-center justify-between mb-1">
