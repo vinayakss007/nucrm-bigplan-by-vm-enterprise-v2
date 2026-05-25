@@ -2,7 +2,7 @@
   "id": "FEAT-006",
   "type": "fix",
   "description": "Address review feedback on [id] API routes: add permission gating, input validation for numeric fields, audit logging, and order status state machine guard.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Add requirePerm calls to GET/PUT/DELETE in contracts, subscriptions, orders, quotes [id] routes",
     "Add numeric validation for financial fields (totalValue, totalAmount, subtotal, discount, amount) in PUT handlers",
@@ -20,5 +20,5 @@
     "npm run build - succeeds"
   ],
   "blocked_reason": null,
-  "findings": null
+  "findings": "All 4 routes updated with requirePerm, logAudit, numeric validation. Orders route has full state machine guard. tsc --noEmit: 0 errors. npm run build: success."
 }
