@@ -22,3 +22,6 @@ export * from './chat';
 export * from './email-tracking';
 export * from './financial';
 export * from './esignature';
+export * from './territories';
+export * from './hierarchy';
+export * from './visitors';

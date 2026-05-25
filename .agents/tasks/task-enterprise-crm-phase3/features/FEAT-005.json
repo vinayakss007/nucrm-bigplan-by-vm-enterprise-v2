@@ -2,7 +2,7 @@
   "id": "FEAT-005",
   "type": "feat",
   "description": "GROUP E: Sales Intelligence - Team Leaderboards, Territory Management, Multi-Tenant Hierarchy, Visitor Tracking",
-  "status": "pending",
+  "status": "in_progress",
   "steps": [
     "Create app/tenant/leaderboards/page.tsx - Leaderboard UI with: time period selector (this week, this month, this quarter, custom), metrics tabs (deals won, revenue closed, activities completed, conversion rate), ranked user list with avatar/name/stats, bar chart visualization using recharts. Follow existing page patterns.",
     "Create app/tenant/leaderboards/loading.tsx and error.tsx.",
