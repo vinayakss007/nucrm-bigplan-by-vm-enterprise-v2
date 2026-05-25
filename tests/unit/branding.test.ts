@@ -188,4 +188,55 @@ describe('Branding Engine', () => {
       expect(DEFAULT_BRANDING.customCss).toBeNull();
     });
   });
+
+  describe('sanitizeCustomCss', () => {
+    it('strips style tag breakout with script injection', async () => {
+      const { sanitizeCustomCss } = await import('@/lib/branding');
+
+      const malicious = "</style><script>alert('xss')</script><style>";
+      const result = sanitizeCustomCss(malicious);
+      expect(result).not.toContain('<');
+      expect(result).not.toContain('>');
+      expect(result).not.toContain('script');
+    });
+
+    it('strips expression() CSS attack', async () => {
+      const { sanitizeCustomCss } = await import('@/lib/branding');
+
+      const malicious = "expression(alert('xss'))";
+      const result = sanitizeCustomCss(malicious);
+      expect(result).not.toMatch(/expression\s*\(/i);
+    });
+
+    it('strips @import directives', async () => {
+      const { sanitizeCustomCss } = await import('@/lib/branding');
+
+      const malicious = "@import url('evil.css')";
+      const result = sanitizeCustomCss(malicious);
+      expect(result).not.toMatch(/@import/i);
+    });
+
+    it('strips javascript: URLs in background property', async () => {
+      const { sanitizeCustomCss } = await import('@/lib/branding');
+
+      const malicious = "background: url(javascript:alert('xss'))";
+      const result = sanitizeCustomCss(malicious);
+      expect(result).not.toMatch(/javascript\s*:/i);
+    });
+
+    it('passes through valid CSS unchanged', async () => {
+      const { sanitizeCustomCss } = await import('@/lib/branding');
+
+      const valid = 'color: red; font-size: 14px;';
+      const result = sanitizeCustomCss(valid);
+      expect(result).toBe(valid);
+    });
+
+    it('returns empty string for empty input', async () => {
+      const { sanitizeCustomCss } = await import('@/lib/branding');
+
+      const result = sanitizeCustomCss('');
+      expect(result).toBe('');
+    });
+  });
 });

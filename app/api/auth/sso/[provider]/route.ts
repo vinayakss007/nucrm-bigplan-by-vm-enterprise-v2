@@ -76,7 +76,7 @@ export async function POST(
       expectedState: expectedState || undefined,
     });
 
-    // Clear SSO state cookies and set session
+    // Clear SSO state cookies and set session cookie directly on the response
     const response = NextResponse.json({
       data: {
         user_id: result.userId,
@@ -87,6 +87,13 @@ export async function POST(
     });
     response.cookies.delete('sso_state');
     response.cookies.delete('sso_tenant_id');
+    response.cookies.set('nucrm_session', result.token, {
+      httpOnly: true,
+      secure: process.env['NODE_ENV'] === 'production',
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60,
+      path: '/',
+    });
 
     return response;
   } catch (err: unknown) { return apiError(err); }

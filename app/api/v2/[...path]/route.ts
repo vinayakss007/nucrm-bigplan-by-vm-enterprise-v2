@@ -51,8 +51,13 @@ async function handleRequest(request: NextRequest, params: { path: string[] }): 
     targetUrl.searchParams.set(key, value);
   });
 
-  // Rewrite to internal path
-  const response = NextResponse.rewrite(targetUrl);
+  // Rewrite to internal path, injecting the resolved tenant ID as a header
+  // so downstream routes can validate it against the user's session tenant.
+  const headers = new Headers(request.headers);
+  headers.set('X-NuCRM-Gateway-Tenant', resolution.tenantId);
+  const response = NextResponse.rewrite(targetUrl, {
+    request: { headers },
+  });
   return setCORSHeaders(response, origin);
 }
 

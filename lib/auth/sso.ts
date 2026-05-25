@@ -3,7 +3,7 @@ import { ssoProviders, ssoSessions } from '@/drizzle/schema/infra';
 import { users, sessions } from '@/drizzle/schema/core';
 import { eq, and } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
-import { createToken, hashToken, setSessionCookie } from '@/lib/auth/session';
+import { createToken, hashToken } from '@/lib/auth/session';
 
 export interface SSOProviderConfig {
   id: string;
@@ -232,8 +232,6 @@ export async function handleSSOCallback(
     tokenHash,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
   });
-
-  await setSessionCookie(token);
 
   return { userId, sessionId: session.sessionId, email, token };
 }

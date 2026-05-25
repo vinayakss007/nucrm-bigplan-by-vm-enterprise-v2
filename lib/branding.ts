@@ -105,7 +105,7 @@ export async function getBrandingForDomain(domain: string): Promise<BrandingConf
  * Sanitize custom CSS to prevent XSS attacks.
  * Strips any content that could break out of a <style> tag or inject scripts.
  */
-function sanitizeCustomCss(css: string): string {
+export function sanitizeCustomCss(css: string): string {
   // Remove any HTML tags (e.g., </style><script>)
   let sanitized = css.replace(/<\/?[a-z][^>]*>/gi, '');
   // Remove any remaining < or > that could form tags
