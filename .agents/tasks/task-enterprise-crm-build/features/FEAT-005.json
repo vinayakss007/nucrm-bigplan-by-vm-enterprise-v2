@@ -1,0 +1,40 @@
+{
+  "id": "FEAT-005",
+  "type": "feat",
+  "description": "Fix frontend inconsistencies: implement the settings layout redesign (remove narrow max-w constraints from all 19 tenant settings pages, add proper sub-navigation). Also fix the superadmin settings page width. Follow the SETTINGS_LAYOUT_REDESIGN.md specification exactly.",
+  "status": "in_progress",
+  "steps": [
+    "Read the existing app/tenant/settings/layout.tsx and components/tenant/settings/settings-nav.tsx to understand current structure",
+    "Update app/tenant/settings/layout.tsx to use full width with proper padding (p-6 lg:p-8), no max-w constraint, and ensure the SettingsNav is displayed properly",
+    "Read and update app/tenant/settings/profile/page.tsx - remove max-w-2xl, use responsive grid layout",
+    "Read and update app/tenant/settings/security/page.tsx - remove max-w-2xl, use two-column grid for password/2FA",
+    "Read and update app/tenant/settings/general/page.tsx - remove max-w-2xl",
+    "Read and update app/tenant/settings/sessions/page.tsx - remove max-w-2xl",
+    "Read and update app/tenant/settings/telegram/page.tsx - remove max-w-2xl",
+    "Read and update app/tenant/settings/email/page.tsx - remove max-w-2xl",
+    "Read and update app/tenant/settings/api-keys/page.tsx - remove max-w-3xl",
+    "Read and update app/tenant/settings/backup/page.tsx - remove max-w-3xl",
+    "Read and update app/tenant/settings/billing/page.tsx - remove max-w-3xl",
+    "Read and update app/tenant/settings/integrations/page.tsx - remove max-w-3xl",
+    "Read and update app/tenant/settings/pipelines/page.tsx - remove max-w-3xl",
+    "Read and update app/tenant/settings/portal/page.tsx - remove max-w-3xl",
+    "Read and update app/tenant/settings/webhooks/page.tsx - remove max-w-3xl",
+    "Read and update app/tenant/settings/roles/page.tsx - remove max-w-4xl",
+    "Read and update app/superadmin/settings/page.tsx - change max-w-3xl to max-w-6xl or remove constraint",
+    "Ensure all pages compile without TypeScript errors"
+  ],
+  "acceptance_criteria": [
+    "No settings page uses max-w-2xl or max-w-3xl constraints",
+    "Settings layout provides full-width content area",
+    "Superadmin settings uses at least max-w-6xl",
+    "All pages compile without TypeScript errors",
+    "npm run build succeeds"
+  ],
+  "verification": [
+    "npx tsc --noEmit 2>&1 | grep 'error TS' | wc -l should output 0",
+    "grep -r 'max-w-2xl\\|max-w-3xl' app/tenant/settings/ should return no results",
+    "npm run build completes successfully"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
