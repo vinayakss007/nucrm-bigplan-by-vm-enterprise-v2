@@ -2,7 +2,7 @@
   "id": "FEAT-006",
   "type": "fix",
   "description": "Address all 8 security and validation issues from the phase 3 review",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Fix chat widget module gate bypass",
     "Fix visitor tracking raw API key as tenantId",
