@@ -2,7 +2,7 @@
   "id": "FEAT-005",
   "type": "feat",
   "description": "GROUP E: Sales Intelligence - Team Leaderboards, Territory Management, Multi-Tenant Hierarchy, Visitor Tracking",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Create app/tenant/leaderboards/page.tsx - Leaderboard UI with: time period selector (this week, this month, this quarter, custom), metrics tabs (deals won, revenue closed, activities completed, conversion rate), ranked user list with avatar/name/stats, bar chart visualization using recharts. Follow existing page patterns.",
     "Create app/tenant/leaderboards/loading.tsx and error.tsx.",
@@ -35,5 +35,5 @@
     "npm run build"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 20 new tests pass. Build requires JWT_SECRET env var (pre-existing). 360 tests passing total (up from 358 baseline). Pre-existing backup integrity test failures (2) remain due to missing PostgreSQL. Territory module-gated to core-crm, visitor tracking gated to ai-assistant. Leaderboards are core (no gate)."
 }
