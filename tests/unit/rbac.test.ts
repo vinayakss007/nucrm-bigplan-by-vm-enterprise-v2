@@ -70,14 +70,17 @@ vi.mock('@/drizzle/schema/infra', () => ({
   },
 }));
 
-vi.mock('drizzle-orm', () => ({
-  eq: vi.fn((...args: unknown[]) => args),
-  and: vi.fn((...args: unknown[]) => args),
-  or: vi.fn((...args: unknown[]) => args),
-  sql: vi.fn(),
-  isNull: vi.fn(),
-  gt: vi.fn(),
-}));
+vi.mock('drizzle-orm', () => {
+  const sqlFn = Object.assign(vi.fn(), { raw: vi.fn((val: string) => val) });
+  return {
+    eq: vi.fn((...args: unknown[]) => args),
+    and: vi.fn((...args: unknown[]) => args),
+    or: vi.fn((...args: unknown[]) => args),
+    sql: sqlFn,
+    isNull: vi.fn(),
+    gt: vi.fn(),
+  };
+});
 
 describe('RBAC - Field Permissions', () => {
   beforeEach(() => {

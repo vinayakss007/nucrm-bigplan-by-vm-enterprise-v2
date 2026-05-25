@@ -1,8 +1,9 @@
 import { db } from '@/drizzle/db';
 import { ssoProviders, ssoSessions } from '@/drizzle/schema/infra';
-import { users } from '@/drizzle/schema/core';
+import { users, sessions } from '@/drizzle/schema/core';
 import { eq, and } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
+import { createToken, hashToken, setSessionCookie } from '@/lib/auth/session';
 
 export interface SSOProviderConfig {
   id: string;
@@ -111,12 +112,18 @@ export async function initiateSSO(
 
 /**
  * Handle SSO callback: validate the response and create/find user + session.
+ * Issues a JWT session token so the user is authenticated for subsequent requests.
  */
 export async function handleSSOCallback(
   tenantId: string,
   providerId: string,
-  params: { code?: string; SAMLResponse?: string; state?: string }
-): Promise<{ userId: string; sessionId: string; email: string }> {
+  params: { code?: string; SAMLResponse?: string; state?: string },
+  options?: { expectedState?: string }
+): Promise<{ userId: string; sessionId: string; email: string; token: string }> {
+  // Validate state parameter to prevent CSRF attacks
+  if (options?.expectedState && params.state !== options.expectedState) {
+    throw new Error('Invalid SSO state parameter. Possible CSRF attack.');
+  }
   const results = await db.select()
     .from(ssoProviders)
     .where(and(
@@ -136,7 +143,12 @@ export async function handleSSOCallback(
   let samlAssertion: string | undefined;
 
   if (provider.providerType === 'saml' && params.SAMLResponse) {
-    // Parse SAML response (simplified - in production, use a proper SAML library)
+    // WARNING: This is a simplified SAML implementation that does NOT verify
+    // the XML signature against the IdP certificate. Production deployments
+    // MUST use a proper SAML library (e.g., saml2-js, passport-saml, or node-saml)
+    // to validate signatures, assertion conditions (NotBefore, NotOnOrAfter),
+    // audience restrictions, and replay protection. Without signature verification,
+    // an attacker could forge arbitrary SAML assertions.
     samlAssertion = params.SAMLResponse;
     const decoded = Buffer.from(params.SAMLResponse, 'base64').toString('utf-8');
     const emailMatch = decoded.match(/<saml:NameID[^>]*>([^<]+)<\/saml:NameID>/);
@@ -212,7 +224,18 @@ export async function handleSSOCallback(
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
   });
 
-  return { userId, sessionId: session.sessionId, email };
+  // Issue a JWT session token (same as standard login flow)
+  const token = await createToken(userId);
+  const tokenHash = await hashToken(token);
+  await db.insert(sessions).values({
+    userId,
+    tokenHash,
+    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+  });
+
+  await setSessionCookie(token);
+
+  return { userId, sessionId: session.sessionId, email, token };
 }
 
 /**

@@ -177,13 +177,13 @@ async function handleSubscriptionDeleted(obj: Record<string, unknown>): Promise<
 
 /**
  * Handle invoice.payment_failed:
- * Mark the tenant as past_due.
+ * Mark the tenant as past_due and emit a payment failure event for alerting.
  */
 async function handlePaymentFailed(obj: Record<string, unknown>): Promise<void> {
   const subscriptionId = obj['subscription'] as string | undefined;
   if (!subscriptionId) return;
 
-  // Find tenant by subscription ID
+  // Find tenant by subscription ID or metadata
   const metadata = (obj['metadata'] ?? {}) as Record<string, unknown>;
   const tenantId = metadata['tenant_id'] as string | undefined;
 
@@ -191,5 +191,27 @@ async function handlePaymentFailed(obj: Record<string, unknown>): Promise<void> 
     await db.update(tenants)
       .set({ status: 'past_due' })
       .where(eq(tenants.id, tenantId));
+
+    // Log payment failure event for operational visibility and alerting
+    console.error(
+      '[stripe-webhook] Payment failed for tenant',
+      { tenantId, subscriptionId, invoiceId: obj['id'], event: 'invoice.payment_failed' }
+    );
+
+    // Emit a billing event that can be consumed by notification systems
+    try {
+      await db.insert(billingEvents).values({
+        tenantId,
+        eventType: 'payment_failed',
+        amount: obj['amount_due'] ? String(Number(obj['amount_due']) / 100) : null,
+        currency: (obj['currency'] as string) ?? 'usd',
+        stripeEventId: (obj['id'] as string) ?? null,
+        stripeInvoiceId: (obj['id'] as string) ?? null,
+        stripeSubscriptionId: subscriptionId,
+        metadata: { ...metadata, requires_admin_attention: true },
+      });
+    } catch {
+      // Non-fatal: event logging should not break webhook processing
+    }
   }
 }

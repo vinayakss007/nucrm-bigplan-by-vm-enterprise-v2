@@ -65,18 +65,24 @@ export async function POST(
       );
     }
 
+    // Validate state parameter against the stored cookie to prevent CSRF
+    const expectedState = req.cookies.get('sso_state')?.value;
+
     const result = await handleSSOCallback(tenantId, provider, {
       code: body.code,
       SAMLResponse: body.SAMLResponse,
       state: body.state,
+    }, {
+      expectedState: expectedState || undefined,
     });
 
-    // Clear SSO state cookies
+    // Clear SSO state cookies and set session
     const response = NextResponse.json({
       data: {
         user_id: result.userId,
         session_id: result.sessionId,
         email: result.email,
+        token: result.token,
       },
     });
     response.cookies.delete('sso_state');

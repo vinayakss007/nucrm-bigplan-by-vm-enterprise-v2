@@ -99,15 +99,63 @@ export async function revokeRecordAccess(
 }
 
 /**
+ * Entity-to-column mapping for record access filters.
+ * Different entities may use different column names for ownership tracking.
+ */
+export interface EntityColumnMapping {
+  /** Column name for the record's primary key (default: 'id') */
+  idColumn: string;
+  /** Column name for the assigned user (default: 'assigned_to') */
+  assignedToColumn: string;
+  /** Column name for the record creator (default: 'created_by') */
+  createdByColumn: string;
+}
+
+const DEFAULT_COLUMN_MAPPING: EntityColumnMapping = {
+  idColumn: 'id',
+  assignedToColumn: 'assigned_to',
+  createdByColumn: 'created_by',
+};
+
+/**
+ * Entity-specific column mappings for entities with non-standard column names.
+ */
+const ENTITY_COLUMN_MAPPINGS: Record<string, Partial<EntityColumnMapping>> = {
+  contacts: { assignedToColumn: 'assigned_to', createdByColumn: 'created_by' },
+  deals: { assignedToColumn: 'assigned_to', createdByColumn: 'created_by' },
+  tasks: { assignedToColumn: 'assigned_to', createdByColumn: 'created_by' },
+  companies: { assignedToColumn: 'owner_id', createdByColumn: 'created_by' },
+  tickets: { assignedToColumn: 'assignee_id', createdByColumn: 'reporter_id' },
+  documents: { assignedToColumn: 'owner_id', createdByColumn: 'uploaded_by' },
+};
+
+/**
+ * Get the column mapping for a given entity type.
+ */
+export function getColumnMapping(entityType: string): EntityColumnMapping {
+  const override = ENTITY_COLUMN_MAPPINGS[entityType];
+  if (override) {
+    return { ...DEFAULT_COLUMN_MAPPING, ...override };
+  }
+  return DEFAULT_COLUMN_MAPPING;
+}
+
+/**
  * Returns a SQL condition fragment for filtering records by access.
  * Use in WHERE clauses to only show records the user/role can access.
+ * 
+ * Column names are resolved from the entity-to-column mapping to support
+ * entities with different column naming conventions.
  */
 export function getRecordAccessFilter(
   tenantId: string,
   userId: string,
   roleId: string,
-  entityType: string
+  entityType: string,
+  columnMapping?: Partial<EntityColumnMapping>
 ) {
+  const mapping = { ...getColumnMapping(entityType), ...columnMapping };
+
   // Returns a SQL expression that can be used in a WHERE clause:
   // Records where:
   //   1. An explicit record permission exists for this role, OR
@@ -119,12 +167,12 @@ export function getRecordAccessFilter(
       WHERE rp.tenant_id = ${tenantId}
         AND rp.role_id = ${roleId}
         AND rp.entity_type = ${entityType}
-        AND rp.entity_id = id
+        AND rp.entity_id = ${sql.raw(mapping.idColumn)}
         AND rp.deleted_at IS NULL
         AND (rp.expires_at IS NULL OR rp.expires_at > NOW())
         AND rp.access_level != 'none'
     )
-    OR assigned_to = ${userId}
-    OR created_by = ${userId}
+    OR ${sql.raw(mapping.assignedToColumn)} = ${userId}
+    OR ${sql.raw(mapping.createdByColumn)} = ${userId}
   )`;
 }

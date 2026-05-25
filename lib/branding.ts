@@ -102,6 +102,26 @@ export async function getBrandingForDomain(domain: string): Promise<BrandingConf
 }
 
 /**
+ * Sanitize custom CSS to prevent XSS attacks.
+ * Strips any content that could break out of a <style> tag or inject scripts.
+ */
+function sanitizeCustomCss(css: string): string {
+  // Remove any HTML tags (e.g., </style><script>)
+  let sanitized = css.replace(/<\/?[a-z][^>]*>/gi, '');
+  // Remove any remaining < or > that could form tags
+  sanitized = sanitized.replace(/</g, '').replace(/>/g, '');
+  // Remove javascript: URLs
+  sanitized = sanitized.replace(/javascript\s*:/gi, '');
+  // Remove expression() (IE CSS expression attack)
+  sanitized = sanitized.replace(/expression\s*\(/gi, '');
+  // Remove @import to prevent loading external stylesheets
+  sanitized = sanitized.replace(/@import\b/gi, '');
+  // Remove url() with data: or javascript: schemes
+  sanitized = sanitized.replace(/url\s*\(\s*['"]?\s*(data|javascript)\s*:/gi, 'url(blocked:');
+  return sanitized;
+}
+
+/**
  * Generate CSS custom properties from branding config.
  */
 export function generateCSSVariables(config: BrandingConfig): string {
@@ -116,7 +136,7 @@ export function generateCSSVariables(config: BrandingConfig): string {
   }
 
   if (config.customCss) {
-    vars.push(config.customCss);
+    vars.push(sanitizeCustomCss(config.customCss));
   }
 
   return `:root {\n  ${vars.join('\n  ')}\n}`;

@@ -42,11 +42,33 @@ vi.mock('@/drizzle/schema/core', () => ({
     email: 'email',
     emailVerified: 'email_verified',
   },
+  sessions: {
+    userId: 'user_id',
+    tokenHash: 'token_hash',
+    expiresAt: 'expires_at',
+    ipAddress: 'ip_address',
+    userAgent: 'user_agent',
+  },
 }));
 
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((...args: unknown[]) => args),
   and: vi.fn((...args: unknown[]) => args),
+  sql: vi.fn(),
+}));
+
+vi.mock('@/lib/auth/session', () => ({
+  createToken: vi.fn(() => Promise.resolve('mock-jwt-token')),
+  hashToken: vi.fn(() => Promise.resolve('mock-hash')),
+  setSessionCookie: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock('@/drizzle/schema', () => ({
+  sessions: {
+    userId: 'user_id',
+    tokenHash: 'token_hash',
+    expiresAt: 'expires_at',
+  },
 }));
 
 describe('SSO - SAML Metadata', () => {

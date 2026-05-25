@@ -37,9 +37,20 @@ export async function resolveGatewayTenant(request: NextRequest): Promise<Gatewa
     };
   }
 
-  // 2. Check X-Tenant-ID header
+  // 2. Check X-Tenant-ID header (requires authentication via JWT cookie or Authorization header)
   const tenantIdHeader = request.headers.get('x-tenant-id');
   if (tenantIdHeader) {
+    // X-Tenant-ID header-based resolution requires that the request also carries
+    // authentication (JWT cookie or Authorization Bearer token). Without auth,
+    // anyone could access any tenant's data by setting the header.
+    const authHeader = request.headers.get('authorization');
+    const sessionCookie = request.cookies.get('nucrm_session')?.value;
+
+    if (!authHeader && !sessionCookie) {
+      // Reject unauthenticated header-based resolution
+      return null;
+    }
+
     return {
       tenantId: tenantIdHeader,
       authContext: null,

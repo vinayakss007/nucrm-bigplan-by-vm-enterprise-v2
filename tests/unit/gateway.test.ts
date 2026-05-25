@@ -115,6 +115,7 @@ describe('API Gateway', () => {
         headers: {
           host: 'localhost:3000',
           'x-tenant-id': 'tenant-abc-123',
+          'authorization': 'Bearer some-token',
         },
       });
 
@@ -128,6 +129,25 @@ describe('API Gateway', () => {
       expect(result!.tenantId).toBe('tenant-abc-123');
       expect(result!.source).toBe('header');
       expect(result!.authContext).toBeNull();
+    });
+
+    it('rejects X-Tenant-ID header without authentication', async () => {
+      const { resolveGatewayTenant } = await import('@/lib/api/gateway');
+
+      const request = new Request('http://localhost:3000/api/v2/contacts', {
+        headers: {
+          host: 'localhost:3000',
+          'x-tenant-id': 'tenant-abc-123',
+        },
+      });
+
+      const nextReq = Object.assign(request, {
+        nextUrl: new URL('http://localhost:3000/api/v2/contacts'),
+        cookies: { get: () => undefined },
+      });
+
+      const result = await resolveGatewayTenant(nextReq as any);
+      expect(result).toBeNull();
     });
   });
 
