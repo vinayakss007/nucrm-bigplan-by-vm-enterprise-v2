@@ -2,7 +2,7 @@
   "id": "FEAT-004",
   "type": "fix",
   "description": "Address code review issues: onboarding wizard persistence, webhook error handling, realtime ticket auth, file upload documentation, auth SDK JSDoc, template tenant_count drift, and realtime subscribe documentation.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Create app/api/tenant/onboarding/route.ts - POST endpoint that accepts {templateId, modules, companyName, pipelineName}, calls installTemplateModules, and creates a pipeline",
     "Update app/tenant/onboarding/page.tsx - Add submit handler in step 3 that calls POST /api/tenant/onboarding",
@@ -29,5 +29,6 @@
     "npx tsc --noEmit",
     "npm test"
   ],
-  "blocked_reason": null
+  "blocked_reason": null,
+  "findings": "All 7 review issues addressed. TypeScript compiles with 0 errors. 397 tests pass (4 new). The 2 integration test failures are pre-existing (PostgreSQL ECONNREFUSED). RealtimeSDK.connect() is now async since it fetches a ticket first."
 }
