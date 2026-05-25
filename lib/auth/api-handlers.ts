@@ -1,7 +1,7 @@
 import { logError } from '@/lib/errors';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
-import { users, sessions, tenants, roles, tenantMembers, emailVerifications, pipelines, dealStages, tenantModules, platformSettings } from '@/drizzle/schema';
+import { users, sessions, tenants, roles, tenantMembers, emailVerifications, pipelines, dealStages, platformSettings } from '@/drizzle/schema';
 import { onboardingProgress } from '@/drizzle/schema';
 import { isNull } from 'drizzle-orm';
 import { eq, and, sql } from 'drizzle-orm';
@@ -11,7 +11,6 @@ import { sendEmail, sendWebhookNotification, sendTelegram } from '@/lib/email/se
 import { devLogger } from '@/lib/dev-logger';
 import { logger } from '@/lib/logger';
 import { randomBytes, createHash, createHmac } from 'crypto';
-import { ModuleRegistry } from '@/lib/modules/registry';
 import { installDefaultModules } from '@/lib/modules/auto-install';
 import { isBlocked, recordFailedAttempt, recordSuccessfulLogin, getBruteForceStatus } from '@/lib/security/brute-force';
 
@@ -278,12 +277,7 @@ export async function POST_signup(request: NextRequest) {
         });
       }
 
-      // 4. Activate Core Modules
-      await ModuleRegistry.install(t.id, 'core-crm', u.id);
-      await ModuleRegistry.install(t.id, 'automation-basic', u.id);
-      await ModuleRegistry.install(t.id, 'service-helpdesk', u.id);
-
-      // 4b. Install plan-based default modules
+      // 4. Install plan-based default modules (covers core-crm, automation-basic, etc.)
       await installDefaultModules(t.id, 'free');
       
       // Normalized onboarding progress

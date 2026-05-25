@@ -11,6 +11,29 @@ import { userUsage, planLimits } from '@/drizzle/schema/usage';
 import { tenants } from '@/drizzle/schema/core';
 import { eq, and, sql } from 'drizzle-orm';
 
+/**
+ * Allowlist of valid custom metric names for JSONB counter storage.
+ * Only these metrics can be used in the custom counter path to prevent
+ * SQL injection via sql.raw().
+ */
+const VALID_CUSTOM_METRICS: readonly string[] = [
+  'emails_sent',
+  'sms_sent',
+  'whatsapp_sent',
+  'forms_submitted',
+  'automations_triggered',
+  'webhooks_sent',
+  'reports_generated',
+  'contacts_imported',
+  'files_uploaded',
+  'sequences_started',
+  'ai_requests',
+  'calls_made',
+  'meetings_scheduled',
+  'notes_created',
+  'tasks_completed',
+] as const;
+
 export interface LimitCheckResult {
   allowed: boolean;
   current: number;
@@ -90,11 +113,16 @@ export async function incrementUsage(
         break;
 
       default:
-        // Custom counter stored in the JSONB counters field
+        // Custom counter stored in the JSONB counters field.
+        // Validate metric name against allowlist to prevent SQL injection via sql.raw().
+        if (!VALID_CUSTOM_METRICS.includes(metric)) {
+          console.warn(`[usage/tracker] Rejected invalid metric name: ${metric}`);
+          return;
+        }
         await db
           .update(userUsage)
           .set({
-            counters: sql`jsonb_set(COALESCE(counters, '{}'), ${sql.raw(`'{${metric}}'`)}, to_jsonb(COALESCE((counters->>${'metric'})::int, 0) + ${amount}))`,
+            counters: sql`jsonb_set(COALESCE(counters, '{}'), ${sql.raw(`'{${metric}}'`)}, to_jsonb(COALESCE((counters->>'${sql.raw(metric)}')::int, 0) + ${amount}))`,
             lastActivityAt: new Date(),
             updatedAt: new Date(),
           })

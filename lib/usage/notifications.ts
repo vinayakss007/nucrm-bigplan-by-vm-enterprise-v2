@@ -20,7 +20,7 @@ interface ThresholdCheck {
   percentage: number;
 }
 
-const THRESHOLDS = [80, 90, 100] as const;
+const THRESHOLDS = [100, 90, 80] as const;
 
 /**
  * Check usage thresholds for a tenant and create notifications
