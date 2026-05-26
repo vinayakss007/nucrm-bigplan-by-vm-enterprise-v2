@@ -190,3 +190,53 @@ export function randomToken(bytes: number = 32): string {
   crypto.getRandomValues(buf);
   return Buffer.from(buf).toString('base64url');
 }
+
+/**
+ * Materialise an OidcProviderConfig from the JSONB stored on
+ * sso_providers.config. Decrypts client_secret_enc with ENCRYPTION_KEY
+ * (or accepts a plaintext client_secret if the row predates encryption,
+ * for forward-compat with manual seed data).
+ */
+export function loadProviderConfig(
+  raw: unknown,
+  decryptFn: (ciphertext: string, key: string) => string,
+): OidcProviderConfig {
+  const cfg = (raw ?? {}) as Record<string, unknown>;
+  const issuer = String(cfg['issuer'] ?? '');
+  const clientId = String(cfg['client_id'] ?? '');
+  const encryptedSecret = cfg['client_secret_enc'] ? String(cfg['client_secret_enc']) : null;
+  const plaintextSecret = cfg['client_secret'] ? String(cfg['client_secret']) : null;
+
+  let clientSecret = '';
+  if (encryptedSecret) {
+    const key = process.env['ENCRYPTION_KEY'];
+    if (!key) {
+      throw new OidcError(
+        'encryption_key_missing',
+        'ENCRYPTION_KEY is not configured; cannot decrypt SSO client_secret',
+      );
+    }
+    try {
+      clientSecret = decryptFn(encryptedSecret, key);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'decrypt failed';
+      throw new OidcError('decrypt_failed', `Failed to decrypt SSO client_secret: ${msg}`);
+    }
+  } else if (plaintextSecret) {
+    clientSecret = plaintextSecret;
+  }
+
+  return {
+    issuer,
+    client_id: clientId,
+    client_secret: clientSecret,
+    authorization_endpoint: cfg['authorization_endpoint']
+      ? String(cfg['authorization_endpoint'])
+      : undefined,
+    token_endpoint: cfg['token_endpoint'] ? String(cfg['token_endpoint']) : undefined,
+    jwks_uri: cfg['jwks_uri'] ? String(cfg['jwks_uri']) : undefined,
+    email_domains: Array.isArray(cfg['email_domains'])
+      ? (cfg['email_domains'] as unknown[]).map((d) => String(d))
+      : [],
+  };
+}

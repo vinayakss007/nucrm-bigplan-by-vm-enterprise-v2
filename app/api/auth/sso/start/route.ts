@@ -15,10 +15,11 @@ import { eq, and, sql, isNull } from 'drizzle-orm';
 import {
   domainsFor,
   getAuthorizeUrl,
+  loadProviderConfig,
   randomToken,
-  type OidcProviderConfig,
 } from '@/lib/auth/sso/oidc';
 import { setSsoState } from '@/lib/auth/sso/state';
+import { decrypt } from '@/lib/crypto';
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -61,7 +62,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const cfg = row.config as OidcProviderConfig;
+  let cfg;
+  try {
+    cfg = loadProviderConfig(row.config, decrypt);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Provider config could not be decrypted';
+    console.error('[sso/start] decrypt failed', msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
   // Defence in depth: domain match should already be true via the SQL filter,
   // but reject if the JSON shape was tampered with at write time.
   if (!domainsFor(cfg).includes(domain)) {
