@@ -3,8 +3,9 @@ import { apiError } from '@/lib/api-error';
 import { validateBody, validateQuery } from '@/lib/api/validate';
 import { createDealSchema, dealQuerySchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
+import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
-import { deals, contacts, companies, users, tenants, plans, activities, pipelines, dealStages } from '@/drizzle/schema';
+import { deals, contacts, companies, users, tenants, activities, pipelines, dealStages } from '@/drizzle/schema';
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 
@@ -115,20 +116,9 @@ export async function POST(request: NextRequest) {
     
     const amount = v.amount ?? v.value ?? 0;
 
-    // Plan limit check
-    const [tenantWithPlan] = await db.select({
-      currentDeals: tenants.currentDeals,
-      maxDeals: plans.maxDeals,
-    })
-    .from(tenants)
-    .innerJoin(plans, eq(plans.id, tenants.planId))
-    .where(eq(tenants.id, ctx.tenantId));
-
-    if (tenantWithPlan && tenantWithPlan.maxDeals != null && (tenantWithPlan.currentDeals ?? 0) >= tenantWithPlan.maxDeals) {
-      return NextResponse.json({
-        error: `Deal limit reached (${tenantWithPlan.maxDeals}). Upgrade your plan to add more deals.`,
-      }, { status: 403 });
-    }
+    // Plan limit check (records a violation + alerts owner; only blocks when USAGE_LIMITS=on)
+    const overLimit = await checkLimit(ctx, 'deals');
+    if (overLimit) return overLimit;
 
     const [deal] = await db.insert(deals)
       .values({

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requireModule } from '@/lib/auth/middleware';
+import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
 import { forms } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
@@ -46,6 +47,9 @@ export async function POST(req: NextRequest) {
     if (modErr) return modErr;
 
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+
+    const overLimit = await checkLimit(ctx, 'forms');
+    if (overLimit) return overLimit;
 
     const rawBody = await req.json();
     const validated = validateBody(createFormSchema, rawBody);
