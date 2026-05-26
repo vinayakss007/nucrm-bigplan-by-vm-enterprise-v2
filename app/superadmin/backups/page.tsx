@@ -547,7 +547,7 @@ export default function SuperAdminBackups() {
             </div>
 
             {/* Record Info */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <InfoField label="Table" value={selectedBackup.table_name} />
               <InfoField label="Record ID" value={selectedBackup.record_id} />
               <InfoField label="Deleted At" value={new Date(selectedBackup.backed_up_at).toLocaleString()} />
