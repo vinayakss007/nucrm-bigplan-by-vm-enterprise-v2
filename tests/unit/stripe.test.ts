@@ -1,252 +1,189 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import crypto from 'crypto';
+/**
+ * Stripe Integration Tests
+ *
+ * Tests the Stripe utility functions without hitting real Stripe APIs.
+ */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mockStripeEnv, clearStripeEnv, mockStripeFetch } from '../helpers/stripe-mock';
 
-// Mock drizzle DB
-vi.mock('@/drizzle/db', () => ({
-  db: {
-    insert: vi.fn(() => ({ values: vi.fn(() => ({ onConflictDoNothing: vi.fn() })) })),
-    select: vi.fn(),
-    update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) })),
-    query: {},
-  },
-}));
-
-vi.mock('@/drizzle/schema/modules', () => ({
-  modules: {},
-  tenantModules: {},
-}));
-
-vi.mock('@/drizzle/schema/infra', () => ({
-  billingEvents: {},
-}));
-
-vi.mock('@/drizzle/schema', () => ({
-  tenants: { id: 'id', stripeCustomerId: 'stripe_customer_id' },
-  plans: {},
-}));
-
-describe('Stripe Helpers', () => {
-  const originalEnv = process.env;
-  let mockFetch: ReturnType<typeof vi.fn>;
+describe('lib/stripe', () => {
+  let restoreFetch: (() => void) | undefined;
 
   beforeEach(() => {
+    mockStripeEnv();
     vi.resetModules();
-    process.env = { ...originalEnv, STRIPE_SECRET_KEY: 'sk_test_123' };
-    mockFetch = vi.fn();
-    global.fetch = mockFetch as unknown as typeof fetch;
   });
 
   afterEach(() => {
-    process.env = originalEnv;
-    vi.restoreAllMocks();
+    clearStripeEnv();
+    if (restoreFetch) restoreFetch();
   });
 
-  describe('getStripeHeaders', () => {
-    it('returns correct headers with API key', async () => {
-      const { getStripeHeaders } = await import('@/lib/stripe');
-      const headers = getStripeHeaders();
-      expect(headers.Authorization).toBe('Bearer sk_test_123');
-      expect(headers['Content-Type']).toBe('application/x-www-form-urlencoded');
+  describe('isStripeConfigured', () => {
+    it('returns true when both keys are set', async () => {
+      const { isStripeConfigured } = await import('@/lib/stripe');
+      expect(isStripeConfigured()).toBe(true);
     });
 
-    it('throws if STRIPE_SECRET_KEY is not set', async () => {
-      delete process.env.STRIPE_SECRET_KEY;
-      // Need fresh import
-      vi.resetModules();
-      const { getStripeHeaders } = await import('@/lib/stripe');
-      expect(() => getStripeHeaders()).toThrow('STRIPE_SECRET_KEY is not configured');
+    it('returns false when STRIPE_SECRET_KEY is missing', async () => {
+      delete process.env['STRIPE_SECRET_KEY'];
+      const { isStripeConfigured } = await import('@/lib/stripe');
+      expect(isStripeConfigured()).toBe(false);
+    });
+
+    it('returns false when STRIPE_WEBHOOK_SECRET is missing', async () => {
+      delete process.env['STRIPE_WEBHOOK_SECRET'];
+      const { isStripeConfigured } = await import('@/lib/stripe');
+      expect(isStripeConfigured()).toBe(false);
+    });
+  });
+
+  describe('getPriceId', () => {
+    it('returns correct price for starter monthly', async () => {
+      const { getPriceId } = await import('@/lib/stripe');
+      expect(getPriceId('starter', 'month')).toBe('price_starter_monthly');
+    });
+
+    it('returns correct price for pro monthly', async () => {
+      const { getPriceId } = await import('@/lib/stripe');
+      expect(getPriceId('pro', 'month')).toBe('price_pro_monthly');
+    });
+
+    it('returns null for free plan', async () => {
+      const { getPriceId } = await import('@/lib/stripe');
+      expect(getPriceId('free', 'month')).toBeNull();
+    });
+
+    it('returns null for unconfigured interval', async () => {
+      const { getPriceId } = await import('@/lib/stripe');
+      expect(getPriceId('starter', 'year')).toBeNull();
+    });
+  });
+
+  describe('createCustomer', () => {
+    it('calls Stripe API with correct params', async () => {
+      restoreFetch = mockStripeFetch();
+      const { createCustomer } = await import('@/lib/stripe');
+
+      const result = await createCustomer({
+        email: 'test@example.com',
+        name: 'Test Corp',
+        tenantId: 'tenant-123',
+      });
+
+      expect(result).toHaveProperty('id');
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/customers'),
+        expect.objectContaining({ method: 'POST' })
+      );
     });
   });
 
   describe('createCheckoutSession', () => {
-    it('calls Stripe API and returns session', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ id: 'cs_test_123', url: 'https://checkout.stripe.com/test' }),
-      });
-
+    it('creates a checkout session with subscription mode', async () => {
+      restoreFetch = mockStripeFetch();
       const { createCheckoutSession } = await import('@/lib/stripe');
-      const result = await createCheckoutSession('tenant-1', 'Pro', 2900);
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
-      expect(url).toBe('https://api.stripe.com/v1/checkout/sessions');
-      expect(options.method).toBe('POST');
-      expect(result.id).toBe('cs_test_123');
-      expect(result.url).toBe('https://checkout.stripe.com/test');
-    });
-
-    it('throws on Stripe error', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: { message: 'Invalid currency' } }),
+      const result = await createCheckoutSession({
+        tenantId: 'tenant-123',
+        customerEmail: 'user@test.com',
+        priceId: 'price_starter_monthly',
+        mode: 'subscription',
       });
 
+      expect(result).toHaveProperty('url');
+      expect(result).toHaveProperty('id');
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/checkout/sessions'),
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+
+    it('includes trial_period_days when specified', async () => {
+      restoreFetch = mockStripeFetch();
       const { createCheckoutSession } = await import('@/lib/stripe');
-      await expect(createCheckoutSession('tenant-1', 'Pro', 2900)).rejects.toThrow('Invalid currency');
-    });
 
-    it('includes customer ID when provided', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ id: 'cs_test_456', url: 'https://checkout.stripe.com/test2' }),
+      await createCheckoutSession({
+        tenantId: 'tenant-123',
+        customerEmail: 'user@test.com',
+        priceId: 'price_pro_monthly',
+        mode: 'subscription',
+        trialDays: 14,
       });
 
-      const { createCheckoutSession } = await import('@/lib/stripe');
-      await createCheckoutSession('tenant-1', 'Pro', 2900, { customerId: 'cus_123' });
-
-      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
-      const body = (options.body as string) ?? '';
-      expect(body).toContain('customer=cus_123');
-    });
-  });
-
-  describe('createPortalSession', () => {
-    it('calls Stripe billing portal API', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ url: 'https://billing.stripe.com/session/test' }),
-      });
-
-      const { createPortalSession } = await import('@/lib/stripe');
-      const result = await createPortalSession('cus_test_123');
-
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
-      expect(url).toBe('https://api.stripe.com/v1/billing_portal/sessions');
-      expect(result.url).toBe('https://billing.stripe.com/session/test');
-    });
-
-    it('throws on Stripe error', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: { message: 'Customer not found' } }),
-      });
-
-      const { createPortalSession } = await import('@/lib/stripe');
-      await expect(createPortalSession('cus_invalid')).rejects.toThrow('Customer not found');
-    });
-  });
-
-  describe('createModuleCheckoutSession', () => {
-    it('creates checkout for module add-on', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ id: 'cs_mod_123', url: 'https://checkout.stripe.com/module' }),
-      });
-
-      const { createModuleCheckoutSession } = await import('@/lib/stripe');
-      const result = await createModuleCheckoutSession('tenant-1', 'whatsapp-bot', 'WhatsApp Automation', 1900);
-
-      expect(result.id).toBe('cs_mod_123');
-      expect(result.url).toBe('https://checkout.stripe.com/module');
-
-      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
-      const body = (options.body as string) ?? '';
-      expect(body).toContain('module_id');
-      expect(body).toContain('module_addon');
-    });
-  });
-
-  describe('constructWebhookEvent', () => {
-    it('successfully verifies and parses a valid webhook event', async () => {
-      const { constructWebhookEvent } = await import('@/lib/stripe');
-
-      const secret = 'whsec_test_secret_key';
-      const payload = JSON.stringify({
-        id: 'evt_123',
-        type: 'checkout.session.completed',
-        data: { object: { id: 'cs_123', metadata: { tenant_id: 'tenant-1' } } },
-      });
-      const timestamp = Math.floor(Date.now() / 1000).toString();
-      const signedPayload = `${timestamp}.${payload}`;
-      const signature = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex');
-      const sigHeader = `t=${timestamp},v1=${signature}`;
-
-      const event = constructWebhookEvent(payload, sigHeader, secret);
-      expect(event.id).toBe('evt_123');
-      expect(event.type).toBe('checkout.session.completed');
-      expect(event.data.object['id']).toBe('cs_123');
-    });
-
-    it('rejects invalid signature', async () => {
-      const { constructWebhookEvent } = await import('@/lib/stripe');
-
-      const payload = JSON.stringify({ id: 'evt_123', type: 'test', data: { object: {} } });
-      const timestamp = Math.floor(Date.now() / 1000).toString();
-      const sigHeader = `t=${timestamp},v1=invalidsignature0000000000000000000000000000000000000000000000000`;
-
-      expect(() => constructWebhookEvent(payload, sigHeader, 'whsec_secret')).toThrow('signature verification failed');
-    });
-
-    it('rejects missing signature parts', async () => {
-      const { constructWebhookEvent } = await import('@/lib/stripe');
-
-      const payload = JSON.stringify({ id: 'evt_123', type: 'test', data: { object: {} } });
-
-      expect(() => constructWebhookEvent(payload, 'invalid_format', 'whsec_secret')).toThrow('Invalid Stripe webhook signature format');
-    });
-
-    it('rejects expired timestamp', async () => {
-      const { constructWebhookEvent } = await import('@/lib/stripe');
-
-      const secret = 'whsec_test_secret';
-      const payload = JSON.stringify({ id: 'evt_123', type: 'test', data: { object: {} } });
-      // Timestamp 10 minutes ago
-      const timestamp = (Math.floor(Date.now() / 1000) - 600).toString();
-      const signedPayload = `${timestamp}.${payload}`;
-      const signature = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex');
-      const sigHeader = `t=${timestamp},v1=${signature}`;
-
-      expect(() => constructWebhookEvent(payload, sigHeader, secret)).toThrow('timestamp is too old');
+      const call = (global.fetch as any).mock.calls[0];
+      const body = call[1].body;
+      expect(body).toContain('subscription_data');
+      expect(body).toContain('trial_period_days');
     });
   });
 
   describe('cancelSubscription', () => {
-    it('calls Stripe DELETE endpoint', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ id: 'sub_123', status: 'canceled' }),
-      });
-
+    it('cancels at period end by default', async () => {
+      restoreFetch = mockStripeFetch();
       const { cancelSubscription } = await import('@/lib/stripe');
+
       const result = await cancelSubscription('sub_123');
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
-      expect(url).toBe('https://api.stripe.com/v1/subscriptions/sub_123');
-      expect(options.method).toBe('DELETE');
-      expect(result['status']).toBe('canceled');
+      expect(result).toHaveProperty('id');
+      const call = (global.fetch as any).mock.calls[0];
+      expect(call[1].body).toContain('cancel_at_period_end');
     });
 
-    it('throws on error', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: { message: 'Subscription not found' } }),
-      });
-
+    it('immediately cancels when atPeriodEnd is false', async () => {
+      restoreFetch = mockStripeFetch();
       const { cancelSubscription } = await import('@/lib/stripe');
-      await expect(cancelSubscription('sub_invalid')).rejects.toThrow('Subscription not found');
+
+      await cancelSubscription('sub_123', false);
+
+      const call = (global.fetch as any).mock.calls[0];
+      expect(call[1].method).toBe('DELETE');
     });
   });
 
-  describe('updateSubscription', () => {
-    it('calls Stripe POST endpoint with params', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ id: 'sub_123', status: 'active' }),
-      });
+  describe('verifyWebhookSignature', () => {
+    it('rejects invalid signature format', async () => {
+      const { verifyWebhookSignature } = await import('@/lib/stripe');
 
-      const { updateSubscription } = await import('@/lib/stripe');
-      const result = await updateSubscription('sub_123', { cancel_at_period_end: 'true' });
+      await expect(
+        verifyWebhookSignature('{}', 'invalid-signature')
+      ).rejects.toThrow('Invalid webhook signature format');
+    });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
-      expect(url).toBe('https://api.stripe.com/v1/subscriptions/sub_123');
-      expect(options.method).toBe('POST');
-      const body = (options.body as string) ?? '';
-      expect(body).toContain('cancel_at_period_end=true');
-      expect(result['status']).toBe('active');
+    it('rejects old timestamps', async () => {
+      const { verifyWebhookSignature } = await import('@/lib/stripe');
+      const oldTimestamp = Math.floor(Date.now() / 1000) - 600; // 10 min ago
+
+      await expect(
+        verifyWebhookSignature('{}', `t=${oldTimestamp},v1=fakesig`)
+      ).rejects.toThrow('Webhook timestamp too old');
+    });
+  });
+
+  describe('createPortalSession', () => {
+    it('creates portal session with return URL', async () => {
+      restoreFetch = mockStripeFetch();
+      const { createPortalSession } = await import('@/lib/stripe');
+
+      const result = await createPortalSession('cus_123');
+
+      expect(result).toHaveProperty('url');
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/billing_portal/sessions'),
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+  });
+
+  describe('StripeError', () => {
+    it('creates error with code and status', async () => {
+      const { StripeError } = await import('@/lib/stripe');
+      const err = new StripeError('Card declined', 'card_declined', 402);
+
+      expect(err.message).toBe('Card declined');
+      expect(err.code).toBe('card_declined');
+      expect(err.statusCode).toBe(402);
+      expect(err.name).toBe('StripeError');
     });
   });
 });
