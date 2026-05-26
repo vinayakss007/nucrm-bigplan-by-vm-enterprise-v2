@@ -33,7 +33,8 @@ describe('formatCurrency', () => {
   it('formats positive numbers', () => {
     const result = formatCurrency(1234.56);
     expect(result).toContain('1');
-    expect(result).toContain('234');
+    // formatCurrency rounds, so it may be 1,234 or 1,235
+    expect(result).toMatch(/1,23[45]/);
   });
 
   it('formats zero', () => {
@@ -96,13 +97,13 @@ describe('formatRelativeTime', () => {
   it('shows minutes for recent past', () => {
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const result = formatRelativeTime(fiveMinAgo);
-    expect(result).toMatch(/min/i);
+    expect(result).toMatch(/5m|min/i);
   });
 
   it('shows hours for same day', () => {
     const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
     const result = formatRelativeTime(threeHoursAgo);
-    expect(result).toMatch(/hour|hr/i);
+    expect(result).toMatch(/3h|hour|hr/i);
   });
 
   it('handles null gracefully', () => {

@@ -62,7 +62,9 @@
     "logs:watch": "node scripts/watch-logs.js",
     "logs:errors": "node scripts/watch-logs.js error",
     "logs:view": "echo '📡 Opening log viewer... && open log-viewer.html || xdg-open log-viewer.html'",
-    "analyze:bundle": "ANALYZE=true npm run build && npx tsx scripts/analyze-bundle.ts"
+    "analyze:bundle": "ANALYZE=true npm run build && npx tsx scripts/analyze-bundle.ts",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build -o storybook-static"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1024.0",
