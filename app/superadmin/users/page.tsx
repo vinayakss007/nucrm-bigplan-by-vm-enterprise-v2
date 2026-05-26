@@ -75,7 +75,7 @@ export default function SuperAdminUsersPage() {
 
   return (
     <div className="space-y-5 max-w-6xl">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold text-foreground flex items-center gap-2"><Users className="w-5 h-5 text-violet-400"/>All Users</h1>
           <p className="text-xs text-muted-foreground">{users.length} users across all organizations · {users.filter(u=>u.is_super_admin).length} super admin(s)</p>
@@ -140,7 +140,7 @@ export default function SuperAdminUsersPage() {
             <p className="text-sm font-semibold text-foreground">Create User</p>
             <p className="text-[10px] px-2 py-1 rounded bg-violet-100 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 font-bold">Regular user only</p>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className={lbl}>Email *</label><input type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} required className={inp}/></div>
             <div><label className={lbl}>Full Name</label><input value={form.full_name} onChange={e=>setForm(f=>({...f,full_name:e.target.value}))} className={inp}/></div>
             <div><label className={lbl}>Password *</label><input type="password" value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} required minLength={12} placeholder="12+ chars, uppercase, number, special" className={inp}/></div>

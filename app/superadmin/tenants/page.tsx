@@ -57,7 +57,7 @@ function EditModal({ tenant, onSave, onClose }: any) {
           <button onClick={onClose} className="text-white/30 hover:text-white"><X className="w-4 h-4"/></button>
         </div>
         <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-white/50 mb-1">Plan</label>
               <select value={f.plan_id} onChange={e=>setF(p=>({...p,plan_id:e.target.value}))} className={inp}>
@@ -205,7 +205,7 @@ export default function SuperAdminTenantsPage() {
     <div className="space-y-5 max-w-7xl">
       {editTenant && <EditModal tenant={editTenant} onSave={()=>{setEditTenant(null);load();}} onClose={()=>setEditTenant(null)}/>}
 
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold text-foreground flex items-center gap-2"><Building2 className="w-5 h-5 text-violet-400"/>Organizations</h1>
           <div className="flex items-center gap-3 mt-1">
@@ -241,8 +241,8 @@ export default function SuperAdminTenantsPage() {
         <div className="rounded-xl border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between"><p className="text-sm font-semibold text-foreground">New Organization</p><button onClick={()=>setShowCreate(false)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4"/></button></div>
           <form onSubmit={create} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2"><label className={lbl}>Organization Name *</label><input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} required className={inp} placeholder="Acme Corp" autoFocus/></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2"><label className={lbl}>Organization Name *</label><input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} required className={inp} placeholder="Acme Corp" autoFocus/></div>
               <div><label className={lbl}>Plan</label><select value={form.plan_id} onChange={e=>setForm(f=>({...f,plan_id:e.target.value}))} className={inp}>{PLANS.map(p=><option key={p} value={p} className="bg-card capitalize">{p}</option>)}</select></div>
               <div><label className={lbl}>Status</label><select value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))} className={inp}>{STATUSES.map(s=><option key={s} value={s} className="bg-card capitalize">{s}</option>)}</select></div>
               <div><label className={lbl}>Billing Type</label><select value={form.billing_type} onChange={e=>setForm(f=>({...f,billing_type:e.target.value}))} className={inp}>{BILLING_TYPES.map(b=><option key={b} value={b} className="bg-card capitalize">{b}</option>)}</select></div>
@@ -251,7 +251,7 @@ export default function SuperAdminTenantsPage() {
             </div>
             <div className="border-t border-border pt-3">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Owner Account (optional — login credentials)</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div><label className={lbl}>Owner Email</label><input type="email" value={form.owner_email} onChange={e=>setForm(f=>({...f,owner_email:e.target.value}))} className={inp} placeholder="admin@acme.com"/></div>
                 <div><label className={lbl}>Owner Name</label><input value={form.owner_name} onChange={e=>setForm(f=>({...f,owner_name:e.target.value}))} className={inp} placeholder="Jane Smith"/></div>
                 <div><label className={lbl}>Password</label><input type="password" value={form.owner_password} onChange={e=>setForm(f=>({...f,owner_password:e.target.value}))} className={inp} placeholder="Auto-generated if empty"/></div>
