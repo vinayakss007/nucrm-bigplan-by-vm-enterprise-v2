@@ -177,22 +177,37 @@ export async function del(key: string): Promise<void> {
 
 /**
  * Delete multiple keys by pattern
+ * FIXED: Use SCAN instead of KEYS to avoid blocking Redis
  */
 export async function delByPattern(pattern: string): Promise<void> {
   const redis = getRedisClient();
 
   if (redis) {
     try {
-      const keys = await redis.keys(`nucrm:${pattern}`);
-      if (keys.length > 0) {
-        await redis.del(...keys);
-      }
+      // Use SCAN to avoid blocking the Redis event loop on large datasets
+      let cursor = '0';
+      do {
+        const [nextCursor, keys] = await redis.scan(
+          cursor,
+          'MATCH', `nucrm:${pattern}`,
+          'COUNT', '100'
+        );
+        cursor = nextCursor;
+        if (keys.length > 0) {
+          await redis.del(...keys);
+        }
+      } while (cursor !== '0');
     } catch (error) {
       console.error('[Cache] Delete pattern error:', error);
     }
   } else {
-    // Fallback: clear all memory cache
-    memoryCache.clear();
+    // Fallback: clear matching entries from memory cache
+    const prefix = `nucrm:${pattern.replace('*', '')}`;
+    for (const key of memoryCache.keys()) {
+      if (key.startsWith(prefix) || key.includes(pattern.replace('*', ''))) {
+        memoryCache.delete(key);
+      }
+    }
   }
 }
 

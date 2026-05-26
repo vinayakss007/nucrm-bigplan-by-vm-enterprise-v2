@@ -79,26 +79,42 @@ const notificationWorker = new Worker(
 );
 
 // Bulk emails worker
+// FIXED: Process emails in parallel batches of 10 instead of sequentially
+const BULK_BATCH_SIZE = 10;
+
 const bulkEmailWorker = new Worker(
   'send-bulk-emails',
   async (job) => {
     const { recipients, subject, body, tenantId } = job.data;
     console.log(`[Bulk Email Worker] Processing job: ${job.id} - Sending to ${recipients.length} recipients`);
     
-    const results = [];
-    for (const recipient of recipients) {
-      try {
-        const { sendEmail } = await import('@/lib/email/service');
-        await sendEmail({
-          to: recipient.email,
-          subject,
-          html: body.replace(/\{first_name\}/g, recipient.first_name || ''),
-          text: body.replace(/\{first_name\}/g, recipient.first_name || ''),
-        });
-        results.push({ email: recipient.email, success: true });
-      } catch (error: any) {
-        console.error(`[Bulk Email Worker] Failed for ${recipient.email}:`, error.message);
-        results.push({ email: recipient.email, success: false, error: error.message });
+    const results: Array<{ email: string; success: boolean; error?: string }> = [];
+    const { sendEmail } = await import('@/lib/email/service');
+
+    // Process in parallel batches to reduce total time
+    for (let i = 0; i < recipients.length; i += BULK_BATCH_SIZE) {
+      const batch = recipients.slice(i, i + BULK_BATCH_SIZE);
+      const batchResults = await Promise.allSettled(
+        batch.map(async (recipient: any) => {
+          await sendEmail({
+            to: recipient.email,
+            subject,
+            html: body.replace(/\{first_name\}/g, recipient.first_name || ''),
+            text: body.replace(/\{first_name\}/g, recipient.first_name || ''),
+          });
+          return { email: recipient.email, success: true };
+        })
+      );
+
+      for (let j = 0; j < batchResults.length; j++) {
+        const result = batchResults[j]!;
+        const recipient = batch[j]!;
+        if (result.status === 'fulfilled') {
+          results.push(result.value);
+        } else {
+          console.error(`[Bulk Email Worker] Failed for ${recipient.email}:`, result.reason?.message);
+          results.push({ email: recipient.email, success: false, error: result.reason?.message });
+        }
       }
     }
     
