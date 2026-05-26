@@ -5,11 +5,36 @@ import { webhookQueue } from '@/drizzle/schema/support';
 import { eq, and, lte, lt, sql, asc } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
 
+/**
+ * Get retry delay using exponential backoff.
+ * attempt 1 = 5 min, attempt 2 = 30 min, attempt 3 = 2 hr, attempt 4 = 12 hr, attempt 5 = dead letter
+ */
+export function getRetryDelay(attempt: number): number {
+  const delays = [
+    5 * 60 * 1000,       // 5 minutes
+    30 * 60 * 1000,      // 30 minutes
+    2 * 60 * 60 * 1000,  // 2 hours
+    12 * 60 * 60 * 1000, // 12 hours
+  ];
+
+  if (attempt <= 0) return delays[0]!;
+  if (attempt > delays.length) return -1; // Dead letter
+  return delays[attempt - 1]!;
+}
+
+const MAX_RETRIES = 5;
+
 export type WebhookEvent =
-  | 'contact.created' | 'contact.updated' | 'contact.deleted'
-  | 'deal.created'    | 'deal.updated'    | 'deal.stage_changed' | 'deal.won' | 'deal.lost'
+  | 'contact.created' | 'contact.updated' | 'contact.deleted' | 'contact.restored'
+  | 'deal.created'    | 'deal.updated'    | 'deal.stage_changed' | 'deal.won' | 'deal.lost' | 'deal.deleted'
   | 'task.created'    | 'task.completed'
-  | 'company.created';
+  | 'company.created' | 'company.updated'
+  | 'lead.created'    | 'lead.converted'
+  | 'ticket.created'  | 'ticket.resolved'
+  | 'invoice.created' | 'invoice.paid'
+  | 'form.submitted'
+  | 'automation.triggered'
+  | 'module.installed' | 'module.disabled';
 
 export async function fireWebhooks(
   tenantId: string,
@@ -88,12 +113,13 @@ export async function fireWebhooks(
             .where(eq(webhookQueue.id, delivery.id));
         } else {
           const responseBody = await res.text().catch(() => '');
+          const retryDelay = getRetryDelay(1);
           await db.update(webhookQueue)
             .set({
               status: 'failed',
               responseStatus: res.status,
               responseBody: responseBody.slice(0, 1000),
-              nextRetryAt: new Date(Date.now() + 3600000), // Retry in 1 hour
+              nextRetryAt: new Date(Date.now() + retryDelay),
             })
             .where(eq(webhookQueue.id, delivery.id));
         }
@@ -119,7 +145,7 @@ export async function retryFailedWebhooks(): Promise<number> {
       .from(webhookQueue)
       .where(and(
         eq(webhookQueue.status, 'failed'),
-        lt(webhookQueue.attempt, 3),
+        lt(webhookQueue.attempt, MAX_RETRIES),
         lte(webhookQueue.nextRetryAt, new Date())
       ))
       .orderBy(asc(webhookQueue.createdAt))
@@ -148,20 +174,30 @@ export async function retryFailedWebhooks(): Promise<number> {
             .where(eq(webhookQueue.id, item.id));
           retried++;
         } else {
+          const nextAttempt = item.attempt + 1;
+          const retryDelay = getRetryDelay(nextAttempt);
+          const isDeadLetter = retryDelay < 0 || nextAttempt >= MAX_RETRIES;
+
           await db.update(webhookQueue)
             .set({
-              attempt: item.attempt + 1,
+              attempt: nextAttempt,
               responseStatus: res.status,
-              nextRetryAt: new Date(Date.now() + 3600000),
+              status: isDeadLetter ? 'dead_letter' : 'failed',
+              nextRetryAt: isDeadLetter ? null : new Date(Date.now() + retryDelay),
             })
             .where(eq(webhookQueue.id, item.id));
         }
       } catch (err: any) {
+        const nextAttempt = item.attempt + 1;
+        const retryDelay = getRetryDelay(nextAttempt);
+        const isDeadLetter = retryDelay < 0 || nextAttempt >= MAX_RETRIES;
+
         await db.update(webhookQueue)
           .set({
-            attempt: item.attempt + 1,
+            attempt: nextAttempt,
             errorMessage: err.message,
-            nextRetryAt: new Date(Date.now() + 3600000),
+            status: isDeadLetter ? 'dead_letter' : 'failed',
+            nextRetryAt: isDeadLetter ? null : new Date(Date.now() + retryDelay),
           })
           .where(eq(webhookQueue.id, item.id));
       }

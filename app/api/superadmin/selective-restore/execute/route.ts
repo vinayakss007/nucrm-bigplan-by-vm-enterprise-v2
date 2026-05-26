@@ -140,6 +140,7 @@ export async function POST(request: NextRequest) {
               tables,
               restoreMode: restore_mode as any,
               performedBy: ctx.userId,
+              userId: user_id,
             },
             (progress) => {
               sendEvent('progress', progress);

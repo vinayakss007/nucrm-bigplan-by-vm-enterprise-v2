@@ -861,3 +861,23 @@ export const revenueProjections = pgTable('revenue_projections', {
     metadataGinIdx: utils.metadataIdx(table),
   };
 });
+
+// ── 24. SAVED VIEWS ──────────────────────────────────
+export const savedViews = pgTable('saved_views', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  name: text('name').notNull(),
+  entityType: text('entity_type').notNull(),
+  filters: jsonb('filters').notNull().default({}),
+  columns: jsonb('columns'),
+  isShared: boolean('is_shared').default(false),
+  isDefault: boolean('is_default').default(false),
+  metadata: utils.metadata(),
+  ...utils.lifecycle(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    entityTypeTenantIdx: index('idx_saved_views_entity_tenant').on(table.entityType, table.tenantId),
+  };
+});

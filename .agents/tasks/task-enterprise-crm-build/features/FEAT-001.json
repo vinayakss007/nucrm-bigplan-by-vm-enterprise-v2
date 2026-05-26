@@ -1,0 +1,37 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Fix all 63 TypeScript compilation errors across the codebase. These are in API routes (contacts/bulk, custom-fields, forms, invoices, leads, notification-prefs, orders, quotes, whatsapp, ai, automations, superadmin modules/tenants/errors) and lib/api/deprecation.ts. Must achieve zero TypeScript errors with npx tsc --noEmit.",
+  "status": "completed",
+  "steps": [
+    "Fix app/api/tenant/contacts/bulk/route.ts - property access via index signature (use ['prop'] instead of .prop), type narrowing for unknown values, and SQL overload issues",
+    "Fix app/api/tenant/custom-fields/route.ts - remove reference to undefined 'safeType', fix Drizzle insert type mismatch",
+    "Fix app/api/tenant/forms/route.ts - fix undefined 'settings' variable reference",
+    "Fix app/api/tenant/invoices/route.ts - convert number args to string for decimal fields, fix undefined 'title'",
+    "Fix app/api/tenant/leads/[id]/route.ts - fix undefined 'body' variable references (likely needs const body = await request.json())",
+    "Fix app/api/tenant/notification-prefs/route.ts - use bracket notation for index signature properties",
+    "Fix app/api/tenant/orders/route.ts - convert number to string for decimal fields",
+    "Fix app/api/tenant/quotes/route.ts - fix 'unitPrice' -> 'unit_price' property name, convert numbers to strings for decimal fields",
+    "Fix app/api/tenant/whatsapp/send/route.ts - use bracket notation for index signature properties",
+    "Fix app/api/tenant/ai/route.ts - add null/undefined checks for string|undefined args (use ?? '' or non-null assertions with validation)",
+    "Fix app/api/tenant/automations/[id]/route.ts - add 'trigger_type' to the Zod schema or access correctly",
+    "Fix app/api/tenant/contacts/[id]/route.ts - fix Drizzle overload mismatch",
+    "Fix app/api/superadmin/errors/route.ts - fix overload mismatch",
+    "Fix app/api/superadmin/modules/route.ts - fix wrong number of arguments",
+    "Fix app/api/superadmin/tenants/[id]/modules/route.ts - fix wrong number of arguments",
+    "Fix app/api/superadmin/tenants/route.ts - property 'id' does not exist on update body type",
+    "Fix app/api/user/profile/route.ts - add null checks for v.first_name/v.last_name",
+    "Fix lib/api/deprecation.ts - type 'response' as NextResponse instead of unknown",
+    "Run npx tsc --noEmit and confirm 0 errors"
+  ],
+  "acceptance_criteria": [
+    "npx tsc --noEmit returns 0 errors",
+    "npm run build succeeds without TypeScript errors"
+  ],
+  "verification": [
+    "npx tsc --noEmit 2>&1 | grep 'error TS' | wc -l should output 0",
+    "npm run build completes successfully"
+  ],
+  "blocked_reason": null,
+  "findings": "All 63 TypeScript errors fixed across 18 files. Key patterns: (1) Zod v4 requires z.record(z.string(), z.any()) instead of z.record(z.any()), (2) noPropertyAccessFromIndexSignature applies to Record<string,any> types - must use bracket notation for all index-signature typed objects, (3) Build requires JWT_SECRET env var for page data collection phase but TypeScript check passes without it."
+}

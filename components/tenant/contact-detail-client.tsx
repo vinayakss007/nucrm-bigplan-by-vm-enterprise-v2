@@ -10,6 +10,7 @@ import {
   FileText, ShoppingCart, FileSignature, RefreshCw, DollarSign,
 } from 'lucide-react';
 import { cn, formatCurrency, formatDateTimeShort, formatDate, formatRelativeTime, getInitials } from '@/lib/utils';
+import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
 import toast from 'react-hot-toast';
 
 // ── Constants ─────────────────────────────────────────────────
@@ -439,6 +440,21 @@ export default function ContactDetailClient({
                 {contact.assigned_name && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Owner</span><span className="font-medium">{contact.assigned_name}</span></div>}
                 {(contact.city || contact.country) && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Location</span><span className="font-medium">{[contact.city,contact.country].filter(Boolean).join(', ')}</span></div>}
                 {contact.score > 0 && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Score</span><span className="font-bold text-violet-600">{contact.score}</span></div>}
+                {contact.score > 0 && (() => {
+                  const tier = getScoreTier(contact.score);
+                  const cfg = getScoreTierConfig(tier);
+                  return (
+                    <div className={cn('mt-2 p-2 rounded-lg', cfg.bg)}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={cn('text-[10px] font-bold uppercase', cfg.color)}>{cfg.label}</span>
+                        <span className={cn('text-xs font-bold', cfg.color)}>{contact.score}/100</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className={cn('h-full rounded-full transition-all', cfg.bar)} style={{ width: `${Math.min(100, contact.score)}%` }} />
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="flex justify-between text-xs"><span className="text-muted-foreground">Created</span><span className="font-medium">{formatDate(contact.created_at)}</span></div>
               </div>
               {(contact.tags ?? []).length > 0 && (
