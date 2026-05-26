@@ -4,8 +4,9 @@ import { validateBody, validateQuery } from '@/lib/api/validate';
 import { createContactSchema, contactQuerySchema } from '@/lib/api/schemas';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
+import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, companies, users, tenants, plans, activities } from '@/drizzle/schema';
+import { contacts, companies, users, tenants, activities } from '@/drizzle/schema';
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -134,21 +135,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Plan limit check
-    const [tenantWithPlan] = await db.select({
-      currentContacts: tenants.currentContacts,
-      maxContacts: plans.maxContacts,
-    })
-    .from(tenants)
-    .innerJoin(plans, eq(plans.id, tenants.planId))
-    .where(eq(tenants.id, ctx.tenantId));
-
-    if (tenantWithPlan && tenantWithPlan.maxContacts != null && (tenantWithPlan.currentContacts ?? 0) >= tenantWithPlan.maxContacts) {
-      return NextResponse.json({
-        error: `Contact limit reached (${tenantWithPlan.maxContacts}). Upgrade your plan to add more contacts.`,
-        limit_exceeded: true,
-      }, { status: 403 });
-    }
+    // Plan limit check (records a violation + alerts owner; only blocks when USAGE_LIMITS=on)
+    const overLimit = await checkLimit(ctx, 'contacts');
+    if (overLimit) return overLimit;
 
     const [contact] = await db.insert(contacts)
       .values({
