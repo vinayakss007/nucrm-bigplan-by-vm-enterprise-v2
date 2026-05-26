@@ -161,14 +161,14 @@ export async function PATCH(
       .returning();
     
     // Log activity for status changes
-    if (body.lead_status) {
+    if (rawBody.lead_status) {
       await db.insert(leadActivities).values({
         tenantId: ctx.tenantId,
         leadId: id,
         performedBy: ctx.userId,
         activityType: 'status_change',
-        description: `Lead status changed to ${body.lead_status}`,
-        activityData: { new_status: body.lead_status },
+        description: `Lead status changed to ${rawBody.lead_status}`,
+        activityData: { new_status: rawBody.lead_status },
       });
     }
     

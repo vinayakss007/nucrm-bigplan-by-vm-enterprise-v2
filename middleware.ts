@@ -14,6 +14,7 @@ const PUBLIC_PATHS = [
   '/api/auth/forgot-password', '/api/auth/reset-password', '/api/auth/verify-email',
   '/api/auth/resend-verification', '/api/auth/accept-invite', '/api/auth/invite-details',
   '/api/auth/2fa/setup', '/api/auth/2fa/verify', '/api/auth/2fa/disable',
+  '/api/auth/sso',
   '/api/forms/submit', '/api/leads/public',
   '/api/webhooks/stripe', '/api/webhooks/resend', '/api/webhooks/whatsapp', '/api/webhooks/inbound',
   '/api/health', '/api/track/click', '/api/track/open', '/api/unsubscribe',
@@ -23,7 +24,7 @@ const PUBLIC_PATHS = [
   '/sw.js', '/manifest.json',
 ];
 
-const PUBLIC_PREFIXES = ['/_next', '/favicon', '/images', '/static', '/icons'];
+const PUBLIC_PREFIXES = ['/_next', '/favicon', '/images', '/static', '/icons', '/api/v2'];
 
 const ALLOWED_ORIGINS = (process.env['ALLOWED_ORIGINS'] || 'http://localhost:3000').split(',').map(s => s.trim());
 

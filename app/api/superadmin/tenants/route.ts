@@ -186,7 +186,7 @@ export async function PATCH(request: NextRequest) {
     const validated = validateBody(updateTenantSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
-    const id = v.id || rawBody.id;
+    const id = rawBody.id;
     const updates = rawBody;
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 

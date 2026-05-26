@@ -194,24 +194,37 @@ export default function CalendarPage() {
                 })}
               </div>
             ) : viewMode === 'day' ? (
-              <div className="p-3 sm:p-4 space-y-2 min-h-[200px] sm:min-h-[300px]">
+              <div className="p-3 sm:p-4 space-y-0 min-h-[200px] sm:min-h-[300px]">
                 {(() => {
                   const day = currentMonth;
                   const de = events.filter(e => e.date && isSameDay(new Date(e.date), day));
-                  if (!de.length) return <div className="text-center py-8 text-sm text-muted-foreground">No events for this day</div>;
-                  return de.map(e => (
-                    <div key={e.id} className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors">
-                      <div className={cn('w-1 h-full min-h-[2rem] sm:min-h-[3rem] rounded-full shrink-0', e.color.replace('bg-', 'bg-').replace('500', '400'))} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <e.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-muted-foreground shrink-0" />
-                          <p className="text-xs sm:text-sm font-medium truncate">{e.title}</p>
-                          {e.time && <span className="text-xs text-muted-foreground ml-auto">{e.time}</span>}
-                        </div>
-                        {e.contact && <p className="text-xs text-muted-foreground mt-0.5">{e.contact}</p>}
-                      </div>
+                  const hours = Array.from({ length: 11 }, (_, i) => i + 8); // 8am-6pm
+                  return (
+                    <div className="space-y-0">
+                      {hours.map(h => {
+                        const hourStr = `${h.toString().padStart(2, '0')}`;
+                        const hourEvents = de.filter(e => e.time && e.time.startsWith(hourStr));
+                        const hasEvent = hourEvents.length > 0;
+                        return (
+                          <div key={h} className={cn('flex items-stretch border-b border-border min-h-[40px]', hasEvent && 'bg-violet-50 dark:bg-violet-950/10')}>
+                            <div className="w-14 sm:w-16 shrink-0 px-2 py-2 text-[10px] sm:text-xs text-muted-foreground font-medium border-r border-border">
+                              {h > 12 ? `${h - 12} PM` : h === 12 ? '12 PM' : `${h} AM`}
+                            </div>
+                            <div className="flex-1 px-2 py-1 flex flex-wrap gap-1 items-center">
+                              {hourEvents.map(e => (
+                                <div key={e.id} onClick={() => { setEditingEvent((e as any).entity); setShowMeetingForm(true); }}
+                                  className={cn('text-[9px] sm:text-xs font-medium px-2 py-1 rounded text-white cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1', e.color)}>
+                                  <e.icon className="w-2.5 h-2.5 shrink-0" />
+                                  <span className="truncate max-w-[120px] sm:max-w-[200px]">{e.title}</span>
+                                  {e.contact && <span className="opacity-70 hidden sm:inline">- {e.contact}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ));
+                  );
                 })()}
               </div>
             ) : (
@@ -457,6 +470,9 @@ function MeetingForm({ contacts, editEvent, onSaved, onClose }: any) {
           <div><label className="block text-xs font-medium text-muted-foreground mb-1">Contact</label>
             <select value={form.contact_id} onChange={e => setForm(p => ({ ...p, contact_id: e.target.value }))} className={inp}><option value="">No contact</option>{contacts.map((c: any) => <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>)}</select>
           </div>
+          <div><label className="block text-xs font-medium text-muted-foreground mb-1">Location</label><input value={form.location} onChange={e => setForm(p => ({ ...p, location: e.target.value }))} className={inp} placeholder="Office, Room 3B..." /></div>
+          <div><label className="block text-xs font-medium text-muted-foreground mb-1">Meeting URL</label><input value={form.meeting_url} onChange={e => setForm(p => ({ ...p, meeting_url: e.target.value }))} className={inp} placeholder="https://meet.google.com/..." /></div>
+          <div><label className="block text-xs font-medium text-muted-foreground mb-1">Description</label><textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} className={inp} rows={2} placeholder="Meeting agenda..." /></div>
           <div className="flex gap-3"><button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-accent">Cancel</button><button type="submit" disabled={saving} className="flex-1 py-2.5 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 disabled:opacity-50">{saving ? 'Saving...' : 'Schedule'}</button></div>
         </form>
       </div>

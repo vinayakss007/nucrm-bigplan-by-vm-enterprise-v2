@@ -474,12 +474,14 @@ async function enrichTenantNames(filePath: string, tenantMap: Map<string, Tenant
  * Extract SQL statements for a specific tenant from backup.
  * Supports multi-row INSERTs — splits them into single-row INSERTs
  * so only matching tenant rows are included.
- * Returns array of INSERT statements filtered by tenant_id.
+ * Optionally filters by user_id if provided.
+ * Returns array of INSERT statements filtered by tenant_id (and optionally user_id).
  */
 export async function extractTenantSQL(
   filePath: string,
   tenantId: string,
-  tables: string[]
+  tables: string[],
+  userId?: string
 ): Promise<Record<string, string[]>> {
   const result: Record<string, string[]> = {};
 
@@ -502,18 +504,30 @@ export async function extractTenantSQL(
     const tenantIdIdx = parsed.columns.indexOf('tenant_id');
     if (tenantIdIdx === -1) continue;
 
+    // If userId filter is specified, find the user_id column index
+    const userIdIdx = userId ? parsed.columns.indexOf('user_id') : -1;
+
     // Parse all value groups for multi-row support
     const valuesStrMatch = trimmed.match(/VALUES\s+(.+);?\s*$/i);
     if (!valuesStrMatch || !valuesStrMatch[1]) continue;
     const allValueGroups = parseValueGroups(valuesStrMatch[1]);
 
-    // Filter rows matching the target tenant
+    // Filter rows matching the target tenant (and optionally user)
     const matchingRows: string[] = [];
     for (const values of allValueGroups) {
       const tenantIdVal = values[tenantIdIdx];
       if (tenantIdVal === undefined) continue;
       const rowTenantId = extractUUIDValue(tenantIdVal);
       if (rowTenantId !== tenantId) continue;
+
+      // If userId filter is active and the table has a user_id column, filter by it
+      if (userId && userIdIdx !== -1) {
+        const rowUserId = values[userIdIdx];
+        if (rowUserId === undefined) continue;
+        const extractedUserId = extractUUIDValue(rowUserId);
+        if (extractedUserId !== userId) continue;
+      }
+
       matchingRows.push(`(${values.join(', ')})`);
     }
 

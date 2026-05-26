@@ -20,7 +20,7 @@ const v1ToV2Mapping: Record<string, string> = {
   '/api/v1/auth': '/api/auth',
 };
 
-export function withDeprecationHeaders(handler: (...args: unknown[]) => Promise<unknown>) {
+export function withDeprecationHeaders(handler: (...args: unknown[]) => Promise<Response>) {
   return async function deprecatedHandler(request: Request, context: any) {
     const response = await handler(request, context);
 

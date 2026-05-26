@@ -48,7 +48,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 const moduleActionSchema = z.object({
   module_id: z.string().min(1),
   action: z.string().min(1),
-  settings: z.record(z.any()).optional(),
+  settings: z.record(z.string(), z.any()).optional(),
   force_enabled: z.boolean().optional(),
 });
 

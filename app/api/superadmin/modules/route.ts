@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
 
 const updateModuleSchema = z.object({
   module_id: z.string().min(1),
-  pricing: z.record(z.any()).optional(),
+  pricing: z.record(z.string(), z.any()).optional(),
   is_available: z.boolean().optional(),
 });
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useMemo } from 'react'
-import { Plus, MoreHorizontal, Edit, Trash2, CheckCircle, Clock, AlertTriangle } from 'lucide-react'
+import { Plus, MoreHorizontal, Edit, Trash2, CheckCircle, Clock, AlertTriangle, Columns } from 'lucide-react'
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
@@ -277,12 +277,18 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
           <h1 className="text-lg font-bold">Tasks</h1>
           <p className="text-sm text-muted-foreground">{total.toLocaleString()} total</p>
         </div>
-        {permissions.canCreate && (
-          <Button onClick={() => setShowAdd(!showAdd)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Task
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <Link href="/tenant/tasks/kanban" className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm font-medium hover:bg-accent transition-all">
+            <Columns className="w-4 h-4" />
+            <span className="hidden sm:inline">Kanban</span>
+          </Link>
+          {permissions.canCreate && (
+            <Button onClick={() => setShowAdd(!showAdd)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Task
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Add Task Form */}

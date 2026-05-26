@@ -20,8 +20,8 @@ export async function PATCH(request: NextRequest) {
       updatedAt: new Date()
     };
     
-    if (v.first_name !== undefined) updates.fullName = v.first_name.trim();
-    if (v.last_name !== undefined) updates.lastName = v.last_name.trim();
+    if (v.first_name !== undefined) updates.fullName = (v.first_name ?? '').trim();
+    if (v.last_name !== undefined) updates.lastName = (v.last_name ?? '').trim();
     if (v.email !== undefined) updates.email = v.email;
     if (v.phone !== undefined) updates.phone = v.phone?.trim() || null;
     if (v.timezone !== undefined) updates.timezone = v.timezone;

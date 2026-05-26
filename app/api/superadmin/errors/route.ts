@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     await db.insert(errorLogs).values({
       level,
       code: code || null,
-      message,
+      message: message || '',
       tenantId: tenant_id || null,
       stack: stack || null,
       context: context || null,

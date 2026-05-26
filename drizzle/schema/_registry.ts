@@ -65,6 +65,7 @@ import {
   impersonationSessions,
   fieldPermissions,
   recordPermissions,
+  approvalRequests,
   apiKeys,
   apiKeyUsage,
   auditLogs,
@@ -111,6 +112,7 @@ import {
   conversationMetrics,
   conversationKeywords,
   revenueProjections,
+  savedViews,
 } from './crm';
 
 import {
@@ -249,6 +251,11 @@ import {
   editHistory,
   fieldSnapshots,
 } from './history';
+
+import {
+  productTemplates,
+  tenantTemplates,
+} from './templates';
 
 // =============================================================================
 // TABLE REGISTRY DEFINITION
@@ -404,6 +411,21 @@ export const TABLE_REGISTRY = {
       description: 'Record-level security',
       isCore: true,
       indexes: ['idx_record_permissions_entity', 'idx_record_permissions_role'],
+    },
+  },
+  approvalRequests: {
+    table: approvalRequests,
+    metadata: {
+      name: 'approval_requests',
+      schemaGroup: 'core',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Approval workflow requests',
+      isCore: true,
+      indexes: ['idx_approval_requests_entity', 'idx_approval_requests_status'],
     },
   },
   apiKeys: {
@@ -1036,6 +1058,21 @@ export const TABLE_REGISTRY = {
       description: 'Sales revenue forecasts',
       isCore: false,
       indexes: ['idx_rev_projections_tenant', 'idx_revenue_projections_tenant', 'idx_revenue_projections_metadata_g'],
+    },
+  },
+  savedViews: {
+    table: savedViews,
+    metadata: {
+      name: 'saved_views',
+      schemaGroup: 'crm',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants', 'users'],
+      description: 'User-saved list views with custom filters and columns',
+      isCore: false,
+      indexes: ['idx_saved_views_tenant', 'idx_saved_views_entity_tenant'],
     },
   },
 
@@ -2557,6 +2594,37 @@ export const TABLE_REGISTRY = {
       description: 'Field-level snapshots for edit history',
       isCore: false,
       indexes: [],
+    },
+  },
+  // Product template tables
+  productTemplates: {
+    table: productTemplates,
+    metadata: {
+      name: 'product_templates',
+      schemaGroup: 'modules',
+      hasTenantId: false,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['users'],
+      description: 'Product template definitions for onboarding',
+      isCore: false,
+      indexes: ['idx_product_templates_slug', 'idx_product_templates_status'],
+    },
+  },
+  tenantTemplates: {
+    table: tenantTemplates,
+    metadata: {
+      name: 'tenant_templates',
+      schemaGroup: 'modules',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'productTemplates', 'users'],
+      description: 'Template assignments to tenants',
+      isCore: false,
+      indexes: ['idx_tenant_templates_unique'],
     },
   },
 };

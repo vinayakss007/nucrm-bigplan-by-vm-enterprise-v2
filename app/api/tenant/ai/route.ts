@@ -93,24 +93,24 @@ export async function POST(req: NextRequest) {
     // FIX HIGH-03: Sanitize all user inputs before using in prompts
     const sanitizedContact = contact ? {
       ...contact,
-      first_name: sanitizeInput(contact.first_name, 100),
-      last_name: sanitizeInput(contact.last_name, 100),
-      company_name: sanitizeInput(contact.company_name, 200),
-      lead_status: sanitizeInput(contact.lead_status, 50),
-      notes: sanitizeInput(contact.notes, 300),
+      first_name: sanitizeInput(contact.first_name ?? '', 100),
+      last_name: sanitizeInput(contact.last_name ?? '', 100),
+      company_name: sanitizeInput(contact.company_name ?? '', 200),
+      lead_status: sanitizeInput(contact.lead_status ?? '', 50),
+      notes: sanitizeInput(contact.notes ?? '', 300),
       tags: Array.isArray(contact.tags) ? contact.tags.slice(0, 20).map((t: string) => sanitizeInput(t, 50)) : [],
     } : null;
 
     const sanitizedDeal = deal ? {
       ...deal,
-      title: sanitizeInput(deal.title, 200),
-      stage: sanitizeInput(deal.stage, 50),
-      first_name: sanitizeInput(deal.first_name, 100),
-      last_name: sanitizeInput(deal.last_name, 100),
-      close_date: sanitizeInput(deal.close_date, 50),
+      title: sanitizeInput(deal.title ?? '', 200),
+      stage: sanitizeInput(deal.stage ?? '', 50),
+      first_name: sanitizeInput(deal.first_name ?? '', 100),
+      last_name: sanitizeInput(deal.last_name ?? '', 100),
+      close_date: sanitizeInput(deal.close_date ?? '', 50),
     } : null;
 
-    const sanitizedContext = sanitizeInput(context, 500);
+    const sanitizedContext = sanitizeInput(context ?? '', 500);
 
     // FIX MEDIUM-05: Make AI cost estimation configurable and more realistic
     const estimatedCostCents = parseInt(process.env['AI_ESTIMATED_COST_CENTS'] || '50');
