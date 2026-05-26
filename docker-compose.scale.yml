@@ -1,0 +1,185 @@
+##############################################################################
+# NuCRM — Multi-Instance Docker Compose (Horizontal Scaling)
+#
+# Runs multiple frontend instances behind an nginx load balancer.
+# Scale up/down with: docker compose -f docker-compose.scale.yml up --scale web=4
+#
+# Architecture:
+#   Client → nginx (port 80/443) → web-1, web-2, web-3, web-N (port 3000 each)
+#                                 → worker-1, worker-2 (background jobs)
+#   All instances share: PostgreSQL, Redis
+#
+# Usage:
+#   docker compose -f docker-compose.scale.yml up -d              # Start (2 web default)
+#   docker compose -f docker-compose.scale.yml up -d --scale web=6  # Scale to 6
+#   docker compose -f docker-compose.scale.yml down                # Stop all
+##############################################################################
+
+version: '3.9'
+
+services:
+  # ── Nginx Load Balancer ──────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: nucrm-lb
+    ports:
+      - "${NUCRM_PUBLIC_PORT:-80}:80"
+      - "${NUCRM_PUBLIC_SSL_PORT:-443}:443"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ── Web Frontend (Next.js) — scalable ────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+    expose:
+      - "3000"
+    deploy:
+      replicas: ${NUCRM_WEB_REPLICAS:-2}
+      resources:
+        limits:
+          memory: ${NUCRM_WEB_MEMORY_LIMIT:-512M}
+          cpus: '${NUCRM_WEB_CPU_LIMIT:-1.0}'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 60s
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── Background Worker (BullMQ) — scalable ────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    command: ["node", "--import", "tsx", "worker.ts"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+    deploy:
+      replicas: ${NUCRM_WORKER_REPLICAS:-2}
+      resources:
+        limits:
+          memory: ${NUCRM_WORKER_MEMORY_LIMIT:-768M}
+          cpus: '${NUCRM_WORKER_CPU_LIMIT:-1.0}'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── PostgreSQL ───────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: nucrm-db
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-nucrm}
+      - POSTGRES_USER=${POSTGRES_USER:-nucrm}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '2.0'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nucrm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── Redis ────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: nucrm-redis
+    command: >
+      redis-server
+      --maxmemory ${REDIS_MAXMEMORY:-256mb}
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+      --appendonly yes
+    volumes:
+      - redisdata:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local
+
+networks:
+  nucrm-net:
+    driver: bridge
