@@ -65,7 +65,8 @@
   .admin-card {
     @apply bg-card border border-border rounded-xl;
     @apply transition-all duration-300 ease-out;
-    @apply hover:shadow-lg hover:shadow-primary/5 hover:border-primary/30;
+    @apply hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20;
+    @apply hover:-translate-y-[1px];
   }
   .admin-sidebar { background: hsl(222, 32%, 5%); border-right: 1px solid rgba(255,255,255,0.05); }
   .admin-nav-item { @apply flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-medium transition-all duration-150; color: rgba(255,255,255,0.55); }
@@ -139,6 +140,34 @@
     100% { background-position: 200% 0; }
   }
   .text-gradient { background: linear-gradient(135deg,#7c3aed,#4f46e5); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+
+  /* Page content entrance animation */
+  .page-enter {
+    animation: pageEnter 0.35s ease-out;
+  }
+  @keyframes pageEnter {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Scroll progress bar */
+  .scroll-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 2px;
+    background: linear-gradient(90deg, #7c3aed, #4f46e5);
+    z-index: 9999;
+    transition: width 0.1s linear;
+  }
+
+  /* Subtle card active/editing state */
+  .card-active {
+    @apply ring-2 ring-primary/30 border-primary/40 shadow-lg shadow-primary/10;
+  }
+
+  /* Number count-up animation helper */
+  .tabular-nums { font-variant-numeric: tabular-nums; }
 }
 
 /* ── Font rendering fix ───────────────────────────────────────── */

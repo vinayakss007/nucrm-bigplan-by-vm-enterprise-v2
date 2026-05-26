@@ -204,7 +204,7 @@ export default function TenantShell({ tenant, profile, roleSlug, permissions, is
             tenant={tenant} profile={profile} roleSlug={roleSlug}
             onToggleSidebar={() => { if (window.innerWidth < 768) setMobileOpen(o=>!o); else toggle(); }}
           />
-          <main id="main-content" className="flex-1 overflow-y-auto scrollbar-than p-4 sm:p-6" role="main">
+          <main id="main-content" className="flex-1 overflow-y-auto scrollbar-thin p-4 sm:p-6 page-enter" role="main">
             {children}
           </main>
         </div>
