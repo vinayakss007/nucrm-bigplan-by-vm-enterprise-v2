@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
-import { createModuleCheckoutSession } from '@/lib/stripe';
+import { createCheckoutSession } from '@/lib/stripe';
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
@@ -62,16 +62,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Module is free on your plan, no payment needed' }, { status: 400 });
     }
 
-    const session = await createModuleCheckoutSession(
-      ctx.tenantId,
-      module_id,
-      manifest.name,
-      priceInCents,
-      {
-        customerId: tenant.stripeCustomerId ?? undefined,
-        customerEmail: tenant.billingEmail ?? undefined,
-      }
-    );
+    const session = await createCheckoutSession({
+      tenantId: ctx.tenantId,
+      customerId: tenant.stripeCustomerId ?? undefined,
+      customerEmail: !tenant.stripeCustomerId ? (tenant.billingEmail ?? undefined) : undefined,
+      priceId: `price_module_${module_id}`, // Module-specific price ID from Stripe
+      mode: 'subscription',
+      metadata: { module_id, type: 'module_addon' },
+    });
 
     return NextResponse.json({ url: session.url, session_id: session.id });
   } catch (err: unknown) {
