@@ -17,9 +17,10 @@ import {
   sessions,
 } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
-import { exchangeAndVerify, type OidcProviderConfig } from '@/lib/auth/sso/oidc';
+import { exchangeAndVerify, loadProviderConfig } from '@/lib/auth/sso/oidc';
 import { readSsoState, clearSsoState } from '@/lib/auth/sso/state';
 import { createToken, hashToken, setSessionCookie } from '@/lib/auth/session';
+import { decrypt } from '@/lib/crypto';
 
 const SESSION_TTL_DAYS = 30;
 
@@ -63,7 +64,15 @@ export async function GET(request: NextRequest) {
     return redirectToLogin('SSO provider is no longer available');
   }
 
-  const cfg = provider.config as OidcProviderConfig;
+  let cfg;
+  try {
+    cfg = loadProviderConfig(provider.config, decrypt);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Provider config could not be decrypted';
+    console.error('[sso/callback] decrypt failed', msg);
+    await clearSsoState();
+    return redirectToLogin('SSO provider configuration is invalid');
+  }
   const redirectUri = absoluteCallbackUrl(request);
 
   // Token exchange + ID token verification. exchangeAndVerify checks
