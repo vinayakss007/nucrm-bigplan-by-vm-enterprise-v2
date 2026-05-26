@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatRelativeTime, formatDate, cn } from '@/lib/utils';
 import Link from 'next/link';
+import { AnimatedNumber } from '@/components/shared/animated-number';
+import { Breadcrumb } from '@/components/shared/breadcrumb';
 
 const STAGE_COLORS: Record<string,string> = {
   lead:'text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400',
@@ -18,7 +20,7 @@ const STAGE_COLORS: Record<string,string> = {
 };
 
 function Skeleton({ className }: { className?: string }) {
-  return <div className={cn('animate-pulse bg-muted rounded-lg', className)} />;
+  return <div className={cn('skeleton-shimmer rounded-lg', className)} />;
 }
 
 function StatCard({ icon: Icon, label, value, sub, color, href, loading }: any) {
@@ -31,8 +33,8 @@ function StatCard({ icon: Icon, label, value, sub, color, href, loading }: any) 
         </div>
       </div>
       {loading
-        ? <Skeleton className="h-7 w-24 mb-1" />
-        : <p className="text-2xl font-bold tracking-tight">{value}</p>}
+        ? <div className="h-7 w-24 rounded-lg skeleton-shimmer mb-1" />
+        : <p className="text-2xl font-bold tracking-tight tabular-nums">{value}</p>}
       {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
     </div>
   );
