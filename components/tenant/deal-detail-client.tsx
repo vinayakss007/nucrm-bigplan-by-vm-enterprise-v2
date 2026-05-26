@@ -9,6 +9,7 @@ import {
   FileText, Plus, MoreHorizontal
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency, formatRelativeTime } from '@/lib/utils';
+import DocumentsPanel from '@/components/documents/documents-panel';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -54,7 +55,7 @@ interface Props {
 
 export default function DealDetailClient({ deal, tasks, activities, permissions, tenantId, userId }: Props) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'activities'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'activities' | 'documents'>('overview');
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -200,7 +201,7 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
-        {(['overview', 'tasks', 'activities'] as const).map(tab => (
+        {(['overview', 'tasks', 'activities', 'documents'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -364,6 +365,17 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'documents' && (
+        <div className="admin-card overflow-hidden">
+          <div className="px-5 py-3 border-b border-border">
+            <h2 className="text-sm font-semibold">Documents</h2>
+          </div>
+          <div className="p-5">
+            <DocumentsPanel entityType="deal" entityId={deal.id} />
+          </div>
         </div>
       )}
 
