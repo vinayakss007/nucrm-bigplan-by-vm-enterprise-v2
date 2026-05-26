@@ -37,6 +37,12 @@ export async function GET(request: NextRequest) {
         // Surface the Stripe customer ID so the billing UI can decide
         // whether to show "Manage Billing" / "Invoices" buttons.
         stripe_customer_id: subscriptions.stripeCustomerId,
+        // Cancellation state — the billing UI uses these to render
+        // "Your plan ends on …" banners when the subscription is set
+        // to cancel at period end.
+        subscription_status: subscriptions.status,
+        subscription_cancel_at_period_end: subscriptions.cancelAtPeriodEnd,
+        subscription_current_period_end: subscriptions.currentPeriodEnd,
       })
       .from(tenants)
       .leftJoin(plans, eq(plans.id, tenants.planId))

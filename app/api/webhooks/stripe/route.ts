@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
             status: 'active',
             stripeCustomerId,
             stripeSubscriptionId: stripeSubscriptionId || null,
+            cancelAtPeriodEnd: false,
             updatedAt: new Date(),
           };
 
@@ -119,23 +120,69 @@ export async function POST(request: NextRequest) {
       }
 
       case 'customer.subscription.updated': {
+        // Three states matter here:
+        //   1. status='active' + cancel_at_period_end=true:
+        //        user clicked "Cancel" in the portal. Subscription stays
+        //        active (paid features keep working) until current_period_end.
+        //   2. status='active' + cancel_at_period_end=false:
+        //        either a fresh subscription, or the user un-cancelled.
+        //   3. status='canceled' / 'incomplete_expired':
+        //        subscription is over, drop the tenant to the free plan.
         const tenantId = obj.metadata?.tenant_id;
         const planId = obj.metadata?.plan_id;
-        
+
         if (tenantId) {
           const statusMap: Record<string, string> = {
             'active': 'active',
             'past_due': 'past_due',
             'canceled': 'cancelled',
             'unpaid': 'past_due',
+            'incomplete_expired': 'cancelled',
           };
-          const newStatus = statusMap[obj.status];
+          const stripeStatus = obj.status as string;
+          const newTenantStatus = statusMap[stripeStatus];
+          const cancelAtPeriodEnd = obj.cancel_at_period_end === true;
+          const periodStart = obj.current_period_start
+            ? new Date(obj.current_period_start * 1000)
+            : null;
+          const periodEnd = obj.current_period_end
+            ? new Date(obj.current_period_end * 1000)
+            : null;
+          const isExpired = stripeStatus === 'canceled' || stripeStatus === 'incomplete_expired';
 
-          await db.update(tenants)
-            .set({ 
-              status: newStatus || undefined, 
-              planId: planId || undefined,
-              updatedAt: new Date()
+          // Mirror everything onto the subscriptions row first
+          const subValues = {
+            tenantId,
+            status: stripeStatus,
+            planId: planId || undefined,
+            stripeSubscriptionId: obj.id as string,
+            stripeCustomerId:
+              typeof obj.customer === 'string' ? obj.customer : obj.customer?.id ?? null,
+            currentPeriodStart: periodStart,
+            currentPeriodEnd: periodEnd,
+            cancelAtPeriodEnd,
+            updatedAt: new Date(),
+          };
+          const [existingSub] = await db
+            .select({ id: subscriptions.id })
+            .from(subscriptions)
+            .where(eq(subscriptions.tenantId, tenantId))
+            .limit(1);
+          if (existingSub) {
+            await db.update(subscriptions).set(subValues).where(eq(subscriptions.id, existingSub.id));
+          } else {
+            await db.insert(subscriptions).values(subValues);
+          }
+
+          // Then reflect onto the tenants row. When the subscription has
+          // truly ended, snap the tenant back to the free plan so plan
+          // limits re-take effect.
+          await db
+            .update(tenants)
+            .set({
+              status: newTenantStatus || undefined,
+              planId: isExpired ? 'free' : planId || undefined,
+              updatedAt: new Date(),
             })
             .where(eq(tenants.id, tenantId));
 
@@ -144,18 +191,38 @@ export async function POST(request: NextRequest) {
             eventType: 'subscription_updated',
             stripeEventId: event.id,
             stripeSubscriptionId: obj.id,
-            metadata: { status: obj.status, plan_id: planId },
+            metadata: {
+              status: stripeStatus,
+              plan_id: planId,
+              cancel_at_period_end: cancelAtPeriodEnd,
+              current_period_end: obj.current_period_end ?? null,
+            },
           });
         }
         break;
       }
 
       case 'customer.subscription.deleted': {
+        // Final state — Stripe has fully cleaned the subscription up. Drop
+        // the tenant back to the free plan and clear the subscription ID
+        // so the portal won't surface a stale link.
         const tenantId = obj.metadata?.tenant_id;
         if (tenantId) {
-          await db.update(tenants)
-            .set({ status: 'cancelled', updatedAt: new Date() })
+          await db
+            .update(tenants)
+            .set({ status: 'cancelled', planId: 'free', updatedAt: new Date() })
             .where(eq(tenants.id, tenantId));
+
+          await db
+            .update(subscriptions)
+            .set({
+              status: 'canceled',
+              planId: 'free',
+              stripeSubscriptionId: null,
+              cancelAtPeriodEnd: false,
+              updatedAt: new Date(),
+            })
+            .where(eq(subscriptions.tenantId, tenantId));
         }
         await db.insert(billingEvents).values({
           tenantId: tenantId || null,
