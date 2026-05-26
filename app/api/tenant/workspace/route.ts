@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { tenants, users, plans } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { tenants, users, plans, subscriptions } from '@/drizzle/schema';
+import { eq } from 'drizzle-orm';
 import { dbCache, invalidateCache } from '@/lib/db/cache';
 
 export async function GET(request: NextRequest) {
@@ -34,9 +34,13 @@ export async function GET(request: NextRequest) {
         max_contacts: plans.maxContacts,
         max_deals: plans.maxDeals,
         features: plans.features,
+        // Surface the Stripe customer ID so the billing UI can decide
+        // whether to show "Manage Billing" / "Invoices" buttons.
+        stripe_customer_id: subscriptions.stripeCustomerId,
       })
       .from(tenants)
       .leftJoin(plans, eq(plans.id, tenants.planId))
+      .leftJoin(subscriptions, eq(subscriptions.tenantId, tenants.id))
       .where(eq(tenants.id, ctx.tenantId))
       .limit(1);
       return row;
