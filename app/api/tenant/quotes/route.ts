@@ -4,12 +4,16 @@ import { createQuoteSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { quotes, quoteLineItems } from '@/drizzle/schema';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requireModule } from '@/lib/auth/middleware';
 
 export async function GET(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const modErr = await requireModule(ctx, 'sales-quotes');
+    if (modErr) return modErr;
+
     const { tenantId } = ctx;
 
     const { searchParams } = new URL(request.url);
@@ -47,6 +51,10 @@ export async function POST(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const modErr = await requireModule(ctx, 'sales-quotes');
+    if (modErr) return modErr;
+
     const { tenantId, userId } = ctx;
 
     const rawBody = await request.json();

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm, requireModule } from '@/lib/auth/middleware';
+import { checkLimit } from '@/lib/usage/middleware';
 import { validateBody } from '@/lib/api/validate';
 import { createAutomationSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
@@ -65,6 +66,9 @@ export async function POST(req: NextRequest) {
 
     const deny = requirePerm(ctx, 'automations.manage');
     if (deny) return deny;
+
+    const overLimit = await checkLimit(ctx, 'automations');
+    if (overLimit) return overLimit;
 
     const body = await req.json();
     const validated = validateBody(createAutomationSchema, body);

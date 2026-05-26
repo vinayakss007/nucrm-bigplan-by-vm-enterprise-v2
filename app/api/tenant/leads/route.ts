@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, validateQuery } from '@/lib/api/validate';
 import { createLeadSchema, leadQuerySchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
+import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
 import { leads, users, companies, leadActivities } from '@/drizzle/schema';
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
@@ -160,6 +161,9 @@ export async function POST(request: NextRequest) {
 
     const limited = await checkRateLimit(request, { action: 'leads_create', max: 100, windowMinutes: 60 });
     if (limited) return limited;
+
+    const overLimit = await checkLimit(ctx, 'leads');
+    if (overLimit) return overLimit;
 
     const body = await request.json();
     const validated = validateBody(createLeadSchema, body);
