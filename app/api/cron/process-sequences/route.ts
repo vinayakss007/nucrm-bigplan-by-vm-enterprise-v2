@@ -24,18 +24,35 @@ export async function POST(req: NextRequest) {
       limit: 100,
     });
 
+    if (dueEnrollments.length === 0) {
+      return NextResponse.json({ ok: true, processed: 0 });
+    }
+
+    // FIXED: Batch-fetch all steps upfront to avoid N+1 queries
+    const stepLookups = dueEnrollments.map(e => ({
+      sequenceId: e.sequenceId,
+      stepNumber: e.currentStep,
+    }));
+    // Get unique sequence IDs to fetch all relevant steps in one query
+    const uniqueSequenceIds = [...new Set(stepLookups.map(s => s.sequenceId))];
+    const allSteps = await db.query.sequenceSteps.findMany({
+      where: and(
+        sql`${sequenceSteps.sequenceId} IN (${sql.join(uniqueSequenceIds.map(id => sql`${id}::uuid`), sql`, `)})`,
+        eq(sequenceSteps.isActive, true)
+      ),
+    });
+    // Build lookup map: sequenceId:stepNumber -> step
+    const stepMap = new Map<string, typeof allSteps[number]>();
+    for (const step of allSteps) {
+      stepMap.set(`${step.sequenceId}:${step.stepNumber}`, step);
+    }
+
     let processed = 0;
 
     for (const enrollment of dueEnrollments) {
       try {
-        // 2. Fetch the current step
-        const step = await db.query.sequenceSteps.findFirst({
-          where: and(
-            eq(sequenceSteps.sequenceId, enrollment.sequenceId),
-            eq(sequenceSteps.stepNumber, enrollment.currentStep),
-            eq(sequenceSteps.isActive, true)
-          )
-        });
+        // 2. Lookup the current step from pre-fetched map (O(1) instead of N queries)
+        const step = stepMap.get(`${enrollment.sequenceId}:${enrollment.currentStep}`);
 
         if (!step) {
           // No more steps or current step is inactive, mark as completed
