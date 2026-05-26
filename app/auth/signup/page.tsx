@@ -77,7 +77,7 @@ export default function SignupPage() {
         return;
       }
       toast.success('Workspace created! Welcome to NuCRM.');
-      window.location.replace('/tenant/dashboard');
+      window.location.replace('/tenant/onboarding');
     } catch {
       setError('Connection error. Please try again.');
       setLoading(false);
