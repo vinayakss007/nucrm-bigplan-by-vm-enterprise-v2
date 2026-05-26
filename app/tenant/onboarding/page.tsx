@@ -83,6 +83,19 @@ export default function OnboardingPage() {
         setIsSubmitting(false);
         return;
       }
+
+      // Mark onboarding as complete so user won't be redirected back here
+      await fetch('/api/tenant/onboarding/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_id: selectedProduct,
+          modules: enabledModules,
+          company_name: companyName.trim(),
+          pipeline_name: pipelineName.trim() || 'Sales Pipeline',
+        }),
+      }).catch(() => {}); // Non-blocking — don't fail onboarding if this fails
+
       setStep(3);
     } catch {
       setSubmitError('Network error. Please try again.');
@@ -105,6 +118,23 @@ export default function OnboardingPage() {
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 space-y-6 animate-fade-in">
+      {/* Skip button */}
+      <div className="flex justify-end">
+        <button
+          onClick={async () => {
+            await fetch('/api/tenant/onboarding/complete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ product_id: 'skip', modules: [] }),
+            }).catch(() => {});
+            router.push('/tenant/dashboard');
+          }}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Skip setup →
+        </button>
+      </div>
+
       {/* Step indicator */}
       <div className="flex items-center justify-center gap-2 mb-8">
         {STEPS.map((label, idx) => (
@@ -269,7 +299,7 @@ export default function OnboardingPage() {
             capabilities - this product is your curated starting point.
           </p>
           <button
-            onClick={() => router.push(`/tenant/products/${selectedProduct}`)}
+            onClick={() => router.push('/tenant/dashboard')}
             className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition-colors mt-4"
           >
             Go to Dashboard <ArrowRight className="w-4 h-4" />
