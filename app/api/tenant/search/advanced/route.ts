@@ -135,13 +135,13 @@ export async function POST(request: NextRequest) {
           conditions.push(ilike(deals.title, pattern));
         }
         if (filters.stage?.length) {
-          conditions.push(inArray(deals.stage, filters.stage));
+          conditions.push(inArray(deals.stageId, filters.stage));
         }
         if (filters.valueMin !== undefined) {
-          conditions.push(gte(deals.value, String(filters.valueMin)));
+          conditions.push(gte(deals.amount, String(filters.valueMin)));
         }
         if (filters.valueMax !== undefined) {
-          conditions.push(lte(deals.value, String(filters.valueMax)));
+          conditions.push(lte(deals.amount, String(filters.valueMax)));
         }
         if (filters.dateFrom) {
           conditions.push(gte(deals.createdAt, new Date(filters.dateFrom)));
@@ -156,9 +156,9 @@ export async function POST(request: NextRequest) {
           db.select({
             id: deals.id,
             title: deals.title,
-            value: deals.value,
-            stage: deals.stage,
-            probability: deals.probability,
+            amount: deals.amount,
+            stageId: deals.stageId,
+            metadata: deals.metadata,
             closeDate: deals.closeDate,
             createdAt: deals.createdAt,
           })
@@ -175,9 +175,9 @@ export async function POST(request: NextRequest) {
         data = rows.map(r => ({
           id: r.id,
           title: r.title,
-          value: r.value,
-          stage: r.stage,
-          probability: r.probability,
+          value: r.amount,
+          stage: r.stageId,
+          probability: null,
           close_date: r.closeDate,
           created_at: r.createdAt,
         }));
@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
             name: companies.name,
             domain: companies.domain,
             industry: companies.industry,
-            size: companies.size,
+            size: companies.companySize,
             createdAt: companies.createdAt,
           })
             .from(companies)

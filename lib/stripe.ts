@@ -174,13 +174,13 @@ export async function createCheckoutSession(params: CheckoutParams): Promise<{ i
   };
 
   if (params.customerId) {
-    body.customer = params.customerId;
+    body['customer'] = params.customerId;
   } else if (params.customerEmail) {
-    body.customer_email = params.customerEmail;
+    body['customer_email'] = params.customerEmail;
   }
 
   if (params.mode === 'subscription' && params.trialDays) {
-    body.subscription_data = {
+    body['subscription_data'] = {
       trial_period_days: params.trialDays,
       metadata: { tenant_id: params.tenantId },
     };
@@ -226,12 +226,12 @@ export async function updateSubscription(subscriptionId: string, params: {
     const sub = await getSubscription(subscriptionId);
     const itemId = sub.items?.data?.[0]?.id;
     if (itemId) {
-      body.items = [{ id: itemId, price: params.priceId, quantity: params.quantity || 1 }];
+      body['items'] = [{ id: itemId, price: params.priceId, quantity: params.quantity || 1 }];
     }
   }
 
   if (params.metadata) {
-    body.metadata = params.metadata;
+    body['metadata'] = params.metadata;
   }
 
   return stripeRequest(`/subscriptions/${subscriptionId}`, 'POST', body);
