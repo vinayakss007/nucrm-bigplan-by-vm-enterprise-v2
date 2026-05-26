@@ -1,217 +1,228 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { constructWebhookEvent } from '@/lib/stripe';
+import { verifyWebhookSignature, isStripeConfigured, StripeError } from '@/lib/stripe';
 import { db } from '@/drizzle/db';
-import { billingEvents } from '@/drizzle/schema/infra';
 import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 
 /**
- * POST /api/webhooks/stripe
- * Handles incoming Stripe webhook events.
- * This is a public route (listed in PUBLIC_PATHS in middleware.ts).
+ * Stripe Webhook Handler
+ *
+ * Processes Stripe events for subscription lifecycle management.
+ * Endpoint: POST /api/webhooks/stripe
+ *
+ * Events handled:
+ * - checkout.session.completed → Activate subscription
+ * - customer.subscription.updated → Sync plan changes
+ * - customer.subscription.deleted → Downgrade to free
+ * - invoice.payment_succeeded → Record payment
+ * - invoice.payment_failed → Flag tenant as past_due
  */
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
+  if (!isStripeConfigured()) {
+    return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
+  }
+
+  const signature = request.headers.get('stripe-signature');
+  if (!signature) {
+    return NextResponse.json({ error: 'Missing stripe-signature header' }, { status: 400 });
+  }
+
+  let event: any;
+
   try {
-    const secret = process.env.STRIPE_WEBHOOK_SECRET;
-    if (!secret) {
-      return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 503 });
+    const body = await request.text();
+    event = await verifyWebhookSignature(body, signature);
+  } catch (err) {
+    console.error('[Stripe Webhook] Verification failed:', err);
+    if (err instanceof StripeError) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
     }
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
+  }
 
-    const signature = req.headers.get('stripe-signature');
-    if (!signature) {
-      return NextResponse.json({ error: 'Missing stripe-signature header' }, { status: 400 });
-    }
+  const eventType = event.type;
+  const data = event.data?.object;
 
-    const payload = await req.text();
+  console.log(`[Stripe Webhook] Processing event: ${eventType}`);
 
-    let event: { id: string; type: string; data: { object: Record<string, unknown> } };
-    try {
-      event = constructWebhookEvent(payload, signature, secret);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Signature verification failed';
-      return NextResponse.json({ error: message }, { status: 400 });
-    }
-
-    const obj = event.data.object;
-    const metadata = (obj['metadata'] ?? {}) as Record<string, unknown>;
-    const tenantId = metadata['tenant_id'] as string | undefined;
-
-    // Store the event in billingEvents table
-    if (tenantId) {
-      try {
-        await db.insert(billingEvents).values({
-          tenantId,
-          eventType: event.type,
-          amount: obj['amount_total'] ? String(Number(obj['amount_total']) / 100) : null,
-          currency: (obj['currency'] as string) ?? 'usd',
-          stripeEventId: event.id,
-          stripeInvoiceId: (obj['invoice'] as string) ?? null,
-          stripeSubscriptionId: (obj['subscription'] as string) ?? null,
-          metadata: obj,
-        });
-      } catch {
-        // Non-fatal: event logging should not break webhook processing
+  try {
+    switch (eventType) {
+      case 'checkout.session.completed': {
+        await handleCheckoutCompleted(data);
+        break;
       }
-    }
 
-    // Handle specific event types
-    switch (event.type) {
-      case 'checkout.session.completed':
-        await handleCheckoutCompleted(obj, metadata);
+      case 'customer.subscription.updated': {
+        await handleSubscriptionUpdated(data);
         break;
+      }
 
-      case 'customer.subscription.updated':
-        await handleSubscriptionUpdated(obj);
+      case 'customer.subscription.deleted': {
+        await handleSubscriptionDeleted(data);
         break;
+      }
 
-      case 'customer.subscription.deleted':
-        await handleSubscriptionDeleted(obj);
+      case 'invoice.payment_succeeded': {
+        await handlePaymentSucceeded(data);
         break;
+      }
 
-      case 'invoice.payment_failed':
-        await handlePaymentFailed(obj);
+      case 'invoice.payment_failed': {
+        await handlePaymentFailed(data);
         break;
+      }
+
+      default:
+        console.log(`[Stripe Webhook] Unhandled event: ${eventType}`);
     }
 
     return NextResponse.json({ received: true });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Webhook processing failed';
-    console.error('[stripe-webhook] Error:', message);
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (err: any) {
+    console.error(`[Stripe Webhook] Error processing ${eventType}:`, err.message);
+    // Return 200 to prevent Stripe from retrying (we logged the error)
+    return NextResponse.json({ received: true, error: err.message });
   }
 }
 
-/**
- * Handle checkout.session.completed:
- * Activate the plan or module for the tenant.
- */
-async function handleCheckoutCompleted(
-  obj: Record<string, unknown>,
-  metadata: Record<string, unknown>
-): Promise<void> {
-  const tenantId = metadata['tenant_id'] as string | undefined;
-  if (!tenantId) return;
+// ── Event Handlers ───────────────────────────────────────────────────────────
 
-  const subscriptionId = obj['subscription'] as string | undefined;
-  const customerId = obj['customer'] as string | undefined;
-
-  // Update tenant with Stripe IDs
-  const updates: Record<string, unknown> = {};
-  if (subscriptionId) updates['stripeSubscriptionId'] = subscriptionId;
-  if (customerId) updates['stripeCustomerId'] = customerId;
-
-  if (Object.keys(updates).length > 0) {
-    await db.update(tenants)
-      .set(updates)
-      .where(eq(tenants.id, tenantId));
+async function handleCheckoutCompleted(session: any) {
+  const tenantId = session.metadata?.tenant_id;
+  if (!tenantId) {
+    console.warn('[Stripe] Checkout completed but no tenant_id in metadata');
+    return;
   }
 
-  // If this is a module add-on purchase, activate the module
-  const moduleId = metadata['module_id'] as string | undefined;
-  const purchaseType = metadata['type'] as string | undefined;
-  if (moduleId && purchaseType === 'module_addon') {
-    // Module activation is handled via the module registry
-    // The tenant can now access the module
-    const { ModuleRegistry } = await import('@/lib/modules/registry');
-    await ModuleRegistry.install(tenantId, moduleId, 'stripe_webhook');
-  }
+  const customerId = session.customer;
+  const subscriptionId = session.subscription;
 
-  // If plan_id is in metadata, update the tenant plan
-  const planId = metadata['plan_id'] as string | undefined;
-  if (planId) {
-    await db.update(tenants)
-      .set({ planId, status: 'active' })
-      .where(eq(tenants.id, tenantId));
-  }
-}
-
-/**
- * Handle customer.subscription.updated:
- * Sync the plan with the current subscription status.
- */
-async function handleSubscriptionUpdated(obj: Record<string, unknown>): Promise<void> {
-  const subscriptionId = obj['id'] as string | undefined;
-  if (!subscriptionId) return;
-
-  const status = obj['status'] as string | undefined;
-  const metadata = (obj['metadata'] ?? {}) as Record<string, unknown>;
-  const tenantId = metadata['tenant_id'] as string | undefined;
-
-  if (!tenantId) return;
-
-  // Map Stripe subscription status to tenant status
-  const statusMap: Record<string, string> = {
-    active: 'active',
-    past_due: 'past_due',
-    canceled: 'cancelled',
-    unpaid: 'past_due',
-    trialing: 'trialing',
-  };
-
-  const tenantStatus = (status && statusMap[status]) ? statusMap[status] : undefined;
-  if (tenantStatus) {
-    await db.update(tenants)
-      .set({ status: tenantStatus as 'active' | 'past_due' | 'cancelled' | 'trialing' })
-      .where(eq(tenants.id, tenantId));
-  }
-}
-
-/**
- * Handle customer.subscription.deleted:
- * Downgrade the tenant to the free plan.
- */
-async function handleSubscriptionDeleted(obj: Record<string, unknown>): Promise<void> {
-  const metadata = (obj['metadata'] ?? {}) as Record<string, unknown>;
-  const tenantId = metadata['tenant_id'] as string | undefined;
-
-  if (!tenantId) return;
+  // Determine plan from price
+  const planId = determinePlanFromSession(session);
 
   await db.update(tenants)
     .set({
-      planId: 'free',
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: subscriptionId,
+      planId: planId || 'starter',
       status: 'active',
-      stripeSubscriptionId: null,
+      billingType: 'stripe',
+      updatedAt: new Date(),
     })
     .where(eq(tenants.id, tenantId));
+
+  console.log(`[Stripe] Tenant ${tenantId} activated with plan ${planId}`);
 }
 
-/**
- * Handle invoice.payment_failed:
- * Mark the tenant as past_due and emit a payment failure event for alerting.
- */
-async function handlePaymentFailed(obj: Record<string, unknown>): Promise<void> {
-  const subscriptionId = obj['subscription'] as string | undefined;
-  if (!subscriptionId) return;
+async function handleSubscriptionUpdated(subscription: any) {
+  const tenantId = subscription.metadata?.tenant_id;
+  if (!tenantId) return;
 
-  // Find tenant by subscription ID or metadata
-  const metadata = (obj['metadata'] ?? {}) as Record<string, unknown>;
-  const tenantId = metadata['tenant_id'] as string | undefined;
+  const status = subscription.status;
+  const cancelAtPeriodEnd = subscription.cancel_at_period_end;
 
-  if (tenantId) {
+  // Map Stripe status to NuCRM status
+  let nuCrmStatus = 'active';
+  if (status === 'past_due') nuCrmStatus = 'past_due';
+  else if (status === 'canceled' || status === 'unpaid') nuCrmStatus = 'cancelled';
+  else if (cancelAtPeriodEnd) nuCrmStatus = 'active'; // Still active until period ends
+
+  const planId = determinePlanFromSubscription(subscription);
+
+  await db.update(tenants)
+    .set({
+      planId: planId || undefined,
+      status: nuCrmStatus,
+      updatedAt: new Date(),
+    })
+    .where(eq(tenants.id, tenantId));
+
+  console.log(`[Stripe] Tenant ${tenantId} subscription updated: status=${nuCrmStatus}, plan=${planId}`);
+}
+
+async function handleSubscriptionDeleted(subscription: any) {
+  const tenantId = subscription.metadata?.tenant_id;
+  if (!tenantId) return;
+
+  // Downgrade to free plan
+  await db.update(tenants)
+    .set({
+      planId: 'free',
+      status: 'active', // Don't suspend — just downgrade
+      stripeSubscriptionId: null,
+      billingType: 'trial',
+      updatedAt: new Date(),
+    })
+    .where(eq(tenants.id, tenantId));
+
+  console.log(`[Stripe] Tenant ${tenantId} subscription cancelled — downgraded to free`);
+}
+
+async function handlePaymentSucceeded(invoice: any) {
+  const customerId = invoice.customer;
+  if (!customerId) return;
+
+  // Find tenant by Stripe customer ID
+  const tenant = await db.query.tenants.findFirst({
+    where: eq(tenants.stripeCustomerId, customerId),
+    columns: { id: true },
+  });
+
+  if (tenant) {
+    // Ensure status is active after successful payment
     await db.update(tenants)
-      .set({ status: 'past_due' })
-      .where(eq(tenants.id, tenantId));
+      .set({ status: 'active', updatedAt: new Date() })
+      .where(eq(tenants.id, tenant.id));
 
-    // Log payment failure event for operational visibility and alerting
-    console.error(
-      '[stripe-webhook] Payment failed for tenant',
-      { tenantId, subscriptionId, invoiceId: obj['id'], event: 'invoice.payment_failed' }
-    );
-
-    // Emit a billing event that can be consumed by notification systems
-    try {
-      await db.insert(billingEvents).values({
-        tenantId,
-        eventType: 'payment_failed',
-        amount: obj['amount_due'] ? String(Number(obj['amount_due']) / 100) : null,
-        currency: (obj['currency'] as string) ?? 'usd',
-        stripeEventId: (obj['id'] as string) ?? null,
-        stripeInvoiceId: (obj['id'] as string) ?? null,
-        stripeSubscriptionId: subscriptionId,
-        metadata: { ...metadata, requires_admin_attention: true },
-      });
-    } catch {
-      // Non-fatal: event logging should not break webhook processing
-    }
+    console.log(`[Stripe] Payment succeeded for tenant ${tenant.id}`);
   }
+}
+
+async function handlePaymentFailed(invoice: any) {
+  const customerId = invoice.customer;
+  if (!customerId) return;
+
+  const tenant = await db.query.tenants.findFirst({
+    where: eq(tenants.stripeCustomerId, customerId),
+    columns: { id: true },
+  });
+
+  if (tenant) {
+    await db.update(tenants)
+      .set({ status: 'past_due', updatedAt: new Date() })
+      .where(eq(tenants.id, tenant.id));
+
+    console.log(`[Stripe] Payment failed for tenant ${tenant.id} — marked as past_due`);
+  }
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function determinePlanFromSession(session: any): string | null {
+  // Try to extract from line items metadata or price lookup
+  const amountTotal = session.amount_total; // in cents
+  if (!amountTotal) return null;
+
+  // Simple heuristic based on amount (configure properly with price IDs)
+  if (amountTotal <= 2900) return 'starter';
+  if (amountTotal <= 7900) return 'pro';
+  return 'enterprise';
+}
+
+function determinePlanFromSubscription(subscription: any): string | null {
+  const priceId = subscription.items?.data?.[0]?.price?.id;
+  if (!priceId) return null;
+
+  // Check against configured price IDs
+  const starterMonthly = process.env['STRIPE_PRICE_STARTER_MONTHLY'];
+  const starterYearly = process.env['STRIPE_PRICE_STARTER_YEARLY'];
+  const proMonthly = process.env['STRIPE_PRICE_PRO_MONTHLY'];
+  const proYearly = process.env['STRIPE_PRICE_PRO_YEARLY'];
+  const enterpriseMonthly = process.env['STRIPE_PRICE_ENTERPRISE_MONTHLY'];
+  const enterpriseYearly = process.env['STRIPE_PRICE_ENTERPRISE_YEARLY'];
+
+  if (priceId === starterMonthly || priceId === starterYearly) return 'starter';
+  if (priceId === proMonthly || priceId === proYearly) return 'pro';
+  if (priceId === enterpriseMonthly || priceId === enterpriseYearly) return 'enterprise';
+
+  return null;
 }
