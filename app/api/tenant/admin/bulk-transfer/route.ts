@@ -16,7 +16,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { tenantMembers, leads, contacts, deals, tasks, tickets } from '@/drizzle/schema';
+import { tenantMembers, leads, contacts, deals, tasks, supportTickets as tickets } from '@/drizzle/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';

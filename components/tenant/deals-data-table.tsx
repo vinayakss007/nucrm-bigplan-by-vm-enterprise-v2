@@ -336,7 +336,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
         if (!input) return toast.error('Pick a close stage (Won / Lost)')
         const reason = window.prompt('Close reason (optional)') ?? null
         const stage = stages.find(s => s.id === input)
-        const outcome = stage && /lost/i.test(stage.name) ? 'lost' : /won/i.test(stage.name) ? 'won' : undefined
+        const outcome = stage && (/lost/i.test(stage.name) ? 'lost' : /won/i.test(stage.name) ? 'won' : undefined)
         await callBulk('close', ids, { stage_id: input, reason, outcome })
       },
     },
