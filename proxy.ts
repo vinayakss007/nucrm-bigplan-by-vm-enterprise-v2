@@ -48,7 +48,7 @@ function setCORS(response: NextResponse, origin: string | null, pathname: string
   response.headers.set('Vary', 'Origin');
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const origin = request.headers.get('origin');
 
