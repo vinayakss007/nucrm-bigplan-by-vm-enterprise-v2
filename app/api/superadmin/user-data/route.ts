@@ -125,14 +125,14 @@ export async function GET(request: NextRequest) {
           .from(contacts)
           .where(and(
             eq(contacts.tenantId, scopeTenantId),
-            eq(contacts.ownerId, userId),
+            eq(contacts.assignedTo, userId),
             sql`${contacts.deletedAt} IS NULL`
           )),
         db.select({ count: sql<number>`count(*)::int` })
           .from(deals)
           .where(and(
             eq(deals.tenantId, scopeTenantId),
-            eq(deals.ownerId, userId),
+            eq(deals.assignedTo, userId),
             sql`${deals.deletedAt} IS NULL`
           )),
         db.select({ count: sql<number>`count(*)::int` })
@@ -179,7 +179,7 @@ export async function GET(request: NextRequest) {
           .from(contacts)
           .where(and(
             eq(contacts.tenantId, scopeTenantId),
-            eq(contacts.ownerId, userId),
+            eq(contacts.assignedTo, userId),
             sql`${contacts.deletedAt} IS NULL`
           ))
           .orderBy(desc(contacts.createdAt))
@@ -188,14 +188,14 @@ export async function GET(request: NextRequest) {
         db.select({
           id: deals.id,
           title: deals.title,
-          value: deals.value,
-          stage: deals.stage,
+          value: deals.amount,
+          stage: deals.stageId,
           createdAt: deals.createdAt,
         })
           .from(deals)
           .where(and(
             eq(deals.tenantId, scopeTenantId),
-            eq(deals.ownerId, userId),
+            eq(deals.assignedTo, userId),
             sql`${deals.deletedAt} IS NULL`
           ))
           .orderBy(desc(deals.createdAt))
@@ -219,7 +219,7 @@ export async function GET(request: NextRequest) {
 
         db.select({
           id: activities.id,
-          type: activities.type,
+          type: activities.eventType,
           description: activities.description,
           createdAt: activities.createdAt,
         })
@@ -297,7 +297,7 @@ export async function POST(request: NextRequest) {
             ...contact,
             id: undefined, // Let DB generate new ID
             tenantId: tenant_id,
-            ownerId: user_id,
+            assignedTo: user_id,
             createdAt: new Date(),
             updatedAt: new Date(),
             deletedAt: null,
@@ -305,7 +305,7 @@ export async function POST(request: NextRequest) {
           restored++;
         } catch { errors++; }
       }
-      results.contacts = { restored, errors };
+      results['contacts'] = { restored, errors };
     }
 
     // Restore deals
@@ -318,7 +318,7 @@ export async function POST(request: NextRequest) {
             ...deal,
             id: undefined,
             tenantId: tenant_id,
-            ownerId: user_id,
+            assignedTo: user_id,
             createdAt: new Date(),
             updatedAt: new Date(),
             deletedAt: null,
@@ -326,7 +326,7 @@ export async function POST(request: NextRequest) {
           restored++;
         } catch { errors++; }
       }
-      results.deals = { restored, errors };
+      results['deals'] = { restored, errors };
     }
 
     // Restore tasks
@@ -346,7 +346,7 @@ export async function POST(request: NextRequest) {
           restored++;
         } catch { errors++; }
       }
-      results.tasks = { restored, errors };
+      results['tasks'] = { restored, errors };
     }
 
     console.log(`[User Data Restore] user=${user.email}, tenant=${tenant_id}, source=${source}, results=`, results);
@@ -394,7 +394,7 @@ export async function DELETE(request: NextRequest) {
       .set({ deletedAt: now })
       .where(and(
         eq(contacts.tenantId, tenantId),
-        eq(contacts.ownerId, userId),
+        eq(contacts.assignedTo, userId),
         sql`${contacts.deletedAt} IS NULL`
       ));
 
@@ -403,7 +403,7 @@ export async function DELETE(request: NextRequest) {
       .set({ deletedAt: now })
       .where(and(
         eq(deals.tenantId, tenantId),
-        eq(deals.ownerId, userId),
+        eq(deals.assignedTo, userId),
         sql`${deals.deletedAt} IS NULL`
       ));
 

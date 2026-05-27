@@ -96,7 +96,7 @@ export default function PreferencesPage() {
     if (res.ok) {
       toast.success('Preferences saved');
       setOriginal(prefs);
-      setTheme(prefs.theme);
+      setTheme(prefs['theme']);
       // Notify the global applier to reapply data attributes
       window.dispatchEvent(new Event('nucrm:prefs-changed'));
     } else {
@@ -171,20 +171,20 @@ export default function PreferencesPage() {
 
       {/* Sections */}
       {(activeSection === 'appearance' || q) && (
-        <Section icon={Palette} title="Appearance" hidden={q && !match('appearance theme font dark light density accent color motion contrast sidebar avatar', q)}>
+        <Section icon={Palette} title="Appearance" hidden={!!(q && !match('appearance theme font dark light density accent color motion contrast sidebar avatar', q))}>
           <Field label="Language">
-            <select className={inp} value={prefs.locale ?? 'en'} onChange={e => set('locale', e.target.value)}>
+            <select className={inp} value={prefs['locale'] ?? 'en'} onChange={e => set('locale', e.target.value)}>
               {LOCALES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
             </select>
           </Field>
 
           <Field label="Theme">
-            <RadioGroup value={prefs.theme ?? 'system'} onChange={v => set('theme', v)}
+            <RadioGroup value={prefs['theme'] ?? 'system'} onChange={v => set('theme', v)}
               options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, { value: 'system', label: 'System' }]} />
           </Field>
 
           <Field label="Font size" hint="Large helps readability on smaller screens or for long sessions.">
-            <RadioGroup value={prefs.font_size ?? 'normal'} onChange={v => set('font_size', v)}
+            <RadioGroup value={prefs['font_size'] ?? 'normal'} onChange={v => set('font_size', v)}
               options={[
                 { value: 'small',  label: 'Small',  className: 'text-[11px]' },
                 { value: 'normal', label: 'Normal', className: 'text-[13px]' },
@@ -194,7 +194,7 @@ export default function PreferencesPage() {
           </Field>
 
           <Field label="UI density" hint="How tightly information is packed">
-            <RadioGroup value={prefs.ui_density ?? 'cozy'} onChange={v => set('ui_density', v)}
+            <RadioGroup value={prefs['ui_density'] ?? 'cozy'} onChange={v => set('ui_density', v)}
               options={[{ value: 'compact', label: 'Compact' }, { value: 'cozy', label: 'Cozy' }, { value: 'comfy', label: 'Comfortable' }]} />
           </Field>
 
@@ -204,11 +204,11 @@ export default function PreferencesPage() {
                 <button key={c.value} type="button" onClick={() => set('accent_color', c.value)}
                   className={cn(
                     'w-9 h-9 rounded-lg border-2 transition-all flex items-center justify-center',
-                    prefs.accent_color === c.value ? 'border-foreground scale-110' : 'border-transparent hover:scale-105'
+                    prefs['accent_color'] === c.value ? 'border-foreground scale-110' : 'border-transparent hover:scale-105'
                   )}
                   title={c.label}
                   style={{ background: c.hex }}>
-                  {prefs.accent_color === c.value && (
+                  {prefs['accent_color'] === c.value && (
                     <span className="w-2 h-2 rounded-full bg-white" />
                   )}
                 </button>
@@ -217,146 +217,146 @@ export default function PreferencesPage() {
           </Field>
 
           <Field label="Sidebar default">
-            <RadioGroup value={prefs.sidebar_default ?? 'expanded'} onChange={v => set('sidebar_default', v)}
+            <RadioGroup value={prefs['sidebar_default'] ?? 'expanded'} onChange={v => set('sidebar_default', v)}
               options={[{ value: 'expanded', label: 'Expanded' }, { value: 'collapsed', label: 'Collapsed' }]} />
           </Field>
 
-          <ToggleRow label="Show avatars in lists" checked={prefs.show_avatars !== false}
+          <ToggleRow label="Show avatars in lists" checked={prefs['show_avatars'] !== false}
             onChange={v => set('show_avatars', v)}
             desc="Profile pictures next to names in tables and cards." />
 
-          <ToggleRow label="Reduce motion" checked={prefs.reduce_motion === true}
+          <ToggleRow label="Reduce motion" checked={prefs['reduce_motion'] === true}
             onChange={v => set('reduce_motion', v)}
             desc="Disable animations and transitions across the app." />
 
-          <ToggleRow label="High contrast" checked={prefs.high_contrast === true}
+          <ToggleRow label="High contrast" checked={prefs['high_contrast'] === true}
             onChange={v => set('high_contrast', v)}
             desc="Stronger borders and focus rings for better visibility." />
         </Section>
       )}
 
       {(activeSection === 'datetime' || q) && (
-        <Section icon={Calendar} title="Date & time" hidden={q && !match('date time week format calendar fiscal', q)}>
+        <Section icon={Calendar} title="Date & time" hidden={!!(q && !match('date time week format calendar fiscal', q))}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Field label="Date format">
-              <select className={inp} value={prefs.date_format ?? 'MM/DD/YYYY'} onChange={e => set('date_format', e.target.value)}>
+              <select className={inp} value={prefs['date_format'] ?? 'MM/DD/YYYY'} onChange={e => set('date_format', e.target.value)}>
                 <option value="MM/DD/YYYY">MM/DD/YYYY (US)</option>
                 <option value="DD/MM/YYYY">DD/MM/YYYY (UK / EU)</option>
                 <option value="YYYY-MM-DD">YYYY-MM-DD (ISO)</option>
               </select>
             </Field>
             <Field label="Time format">
-              <select className={inp} value={prefs.time_format ?? '12h'} onChange={e => set('time_format', e.target.value)}>
+              <select className={inp} value={prefs['time_format'] ?? '12h'} onChange={e => set('time_format', e.target.value)}>
                 <option value="12h">12-hour (AM/PM)</option>
                 <option value="24h">24-hour</option>
               </select>
             </Field>
             <Field label="Week starts on">
-              <select className={inp} value={prefs.week_start ?? 'sunday'} onChange={e => set('week_start', e.target.value)}>
+              <select className={inp} value={prefs['week_start'] ?? 'sunday'} onChange={e => set('week_start', e.target.value)}>
                 <option value="sunday">Sunday</option>
                 <option value="monday">Monday</option>
               </select>
             </Field>
           </div>
           <Field label="Default calendar view">
-            <RadioGroup value={prefs.default_calendar_view ?? 'week'} onChange={v => set('default_calendar_view', v)}
+            <RadioGroup value={prefs['default_calendar_view'] ?? 'week'} onChange={v => set('default_calendar_view', v)}
               options={[{ value: 'day', label: 'Day' }, { value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }, { value: 'agenda', label: 'Agenda' }]} />
           </Field>
         </Section>
       )}
 
       {(activeSection === 'productivity' || q) && (
-        <Section icon={Zap} title="Productivity" hidden={q && !match('landing default page size view confirm keyboard shortcut link tab filter tip autosave', q)}>
+        <Section icon={Zap} title="Productivity" hidden={!!(q && !match('landing default page size view confirm keyboard shortcut link tab filter tip autosave', q))}>
           <Field label="Landing page after login">
-            <select className={inp} value={prefs.default_landing ?? '/tenant/dashboard'} onChange={e => set('default_landing', e.target.value)}>
+            <select className={inp} value={prefs['default_landing'] ?? '/tenant/dashboard'} onChange={e => set('default_landing', e.target.value)}>
               {LANDING.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
             </select>
           </Field>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Field label="Default record view">
-              <RadioGroup value={prefs.default_record_view ?? 'list'} onChange={v => set('default_record_view', v)}
+              <RadioGroup value={prefs['default_record_view'] ?? 'list'} onChange={v => set('default_record_view', v)}
                 options={[{ value: 'list', label: 'List' }, { value: 'kanban', label: 'Kanban' }, { value: 'card', label: 'Card' }, { value: 'calendar', label: 'Calendar' }]} />
             </Field>
             <Field label="Default page size">
-              <RadioGroup value={String(prefs.default_page_size ?? 25)}
+              <RadioGroup value={String(prefs['default_page_size'] ?? 25)}
                 onChange={v => set('default_page_size', Number(v))}
                 options={[{ value: '10', label: '10' }, { value: '25', label: '25' }, { value: '50', label: '50' }, { value: '100', label: '100' }]} />
             </Field>
           </div>
 
           <Field label="Confirm destructive actions" hint="Always = confirm even small deletions. Danger only = bulk-delete & permanent ops.">
-            <RadioGroup value={prefs.confirm_destructive ?? 'always'} onChange={v => set('confirm_destructive', v)}
+            <RadioGroup value={prefs['confirm_destructive'] ?? 'always'} onChange={v => set('confirm_destructive', v)}
               options={[{ value: 'always', label: 'Always' }, { value: 'danger_only', label: 'Danger only' }, { value: 'never', label: 'Never' }]} />
           </Field>
 
           <ToggleRow label="Keyboard shortcuts"
             desc="⌘K palette, g+d Dashboard, n+c New contact, ? for full list."
-            checked={prefs.keyboard_shortcuts_enabled !== false}
+            checked={prefs['keyboard_shortcuts_enabled'] !== false}
             onChange={v => set('keyboard_shortcuts_enabled', v)} />
           <ToggleRow label="Auto-save form drafts"
             desc="Save in-progress edits in your browser if you navigate away."
-            checked={prefs.autosave_drafts !== false}
+            checked={prefs['autosave_drafts'] !== false}
             onChange={v => set('autosave_drafts', v)} />
           <ToggleRow label="Sticky filters"
             desc="Remember filters you applied on a list when you come back."
-            checked={prefs.sticky_filters !== false}
+            checked={prefs['sticky_filters'] !== false}
             onChange={v => set('sticky_filters', v)} />
           <ToggleRow label="Open external links in new tab"
-            checked={prefs.links_open_new_tab === true}
+            checked={prefs['links_open_new_tab'] === true}
             onChange={v => set('links_open_new_tab', v)} />
           <ToggleRow label="Show tips & onboarding"
             desc="Hints and empty-state suggestions throughout the app."
-            checked={prefs.show_tips !== false}
+            checked={prefs['show_tips'] !== false}
             onChange={v => set('show_tips', v)} />
           <ToggleRow label="Show keyboard hints in menus"
-            checked={prefs.show_keyboard_hints !== false}
+            checked={prefs['show_keyboard_hints'] !== false}
             onChange={v => set('show_keyboard_hints', v)} />
         </Section>
       )}
 
       {(activeSection === 'communication' || q) && (
-        <Section icon={Mail} title="Communication" hidden={q && !match('email signature tracking cc meeting duration calendar default', q)}>
+        <Section icon={Mail} title="Communication" hidden={!!(q && !match('email signature tracking cc meeting duration calendar default', q))}>
           <Field label="Email signature" hint="Appended to outbound email from this CRM. Plain text or basic HTML, max 5,000 chars.">
             <textarea
               rows={5}
               className={inp}
-              value={prefs.email_signature ?? ''}
+              value={prefs['email_signature'] ?? ''}
               onChange={e => set('email_signature', e.target.value)}
               placeholder={`Best regards,\nYour Name\nYour Role`}
               maxLength={5000}
             />
             <p className="text-[11px] text-muted-foreground mt-1 text-right">
-              {(prefs.email_signature ?? '').length} / 5,000
+              {(prefs['email_signature'] ?? '').length} / 5,000
             </p>
           </Field>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Field label="Email tracking by default">
-              <RadioGroup value={prefs.email_tracking_default ?? 'on'} onChange={v => set('email_tracking_default', v)}
+              <RadioGroup value={prefs['email_tracking_default'] ?? 'on'} onChange={v => set('email_tracking_default', v)}
                 options={[{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }, { value: 'ask', label: 'Ask each time' }]} />
             </Field>
             <Field label="Default meeting duration">
-              <RadioGroup value={String(prefs.default_meeting_duration ?? 30)}
+              <RadioGroup value={String(prefs['default_meeting_duration'] ?? 30)}
                 onChange={v => set('default_meeting_duration', Number(v))}
                 options={[{ value: '15', label: '15m' }, { value: '30', label: '30m' }, { value: '45', label: '45m' }, { value: '60', label: '60m' }, { value: '90', label: '90m' }]} />
             </Field>
           </div>
           <ToggleRow label="Auto-CC myself on outbound emails"
             desc="A copy of every email lands in your own inbox."
-            checked={prefs.auto_cc_self === true}
+            checked={prefs['auto_cc_self'] === true}
             onChange={v => set('auto_cc_self', v)} />
         </Section>
       )}
 
       {(activeSection === 'privacy' || q) && (
-        <Section icon={Lock} title="Privacy" hidden={q && !match('privacy online status activity visible team manager', q)}>
+        <Section icon={Lock} title="Privacy" hidden={!!(q && !match('privacy online status activity visible team manager', q))}>
           <Field label="Online status visible to">
-            <RadioGroup value={prefs.online_status_visible ?? 'team'} onChange={v => set('online_status_visible', v)}
+            <RadioGroup value={prefs['online_status_visible'] ?? 'team'} onChange={v => set('online_status_visible', v)}
               options={[{ value: 'everyone', label: 'Everyone' }, { value: 'team', label: 'My team' }, { value: 'nobody', label: 'Nobody' }]} />
           </Field>
           <Field label="Activity feed visible to" hint="Records you created or edited that show up in others' activity streams.">
-            <RadioGroup value={prefs.activity_visible_to ?? 'team'} onChange={v => set('activity_visible_to', v)}
+            <RadioGroup value={prefs['activity_visible_to'] ?? 'team'} onChange={v => set('activity_visible_to', v)}
               options={[{ value: 'everyone', label: 'Everyone' }, { value: 'team', label: 'Team' }, { value: 'managers', label: 'Managers' }, { value: 'nobody', label: 'Nobody' }]} />
           </Field>
         </Section>
@@ -364,8 +364,8 @@ export default function PreferencesPage() {
 
       {(activeSection === 'sidebar' || q) && (
         <SidebarCustomizeSection
-          hidden={q && !match('sidebar nav navigation hide show role view', q)}
-          hiddenItems={prefs.hidden_nav_items ?? []}
+          hidden={!!(q && !match('sidebar nav navigation hide show role view', q))}
+          hiddenItems={prefs['hidden_nav_items'] ?? []}
           onChange={(next: string[]) => set('hidden_nav_items', next)}
         />
       )}
