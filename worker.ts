@@ -9,16 +9,43 @@ import { eq, and, isNull, sql } from 'drizzle-orm';
 
 const REDIS_URL = process.env['REDIS_URL'] || 'redis://localhost:6379';
 
+if (!process.env['REDIS_URL']) {
+  console.error('[Worker] FATAL: REDIS_URL is not set. Worker requires Redis to function.');
+  console.error('[Worker] Set REDIS_URL=redis://host:6379 in your environment.');
+  process.exit(1);
+}
+
 const connection = new IORedis(REDIS_URL, {
   maxRetriesPerRequest: null,
   retryStrategy: (times) => {
-    if (times > 10) return null;
-    return Math.min(times * 100, 3000);
+    if (times > 20) {
+      console.error(`[Worker] Redis connection failed after ${times} retries. Exiting.`);
+      process.exit(1);
+    }
+    const delay = Math.min(times * 500, 30_000);
+    console.warn(`[Worker] Redis retry #${times} in ${delay}ms...`);
+    return delay;
+  },
+  reconnectOnError: (err) => {
+    const targetErrors = ['READONLY', 'ECONNRESET', 'ETIMEDOUT'];
+    return targetErrors.some(e => err.message.includes(e));
   },
 });
 
-console.log('[Worker] Background worker started');
-console.log('[Worker] Connected to Redis:', REDIS_URL);
+connection.on('error', (err) => {
+  console.error('[Worker] Redis connection error:', err.message);
+});
+
+connection.on('connect', () => {
+  console.log('[Worker] Redis connected successfully');
+});
+
+connection.on('reconnecting', () => {
+  console.warn('[Worker] Redis reconnecting...');
+});
+
+console.log('[Worker] Background worker starting...');
+console.log('[Worker] Redis URL:', REDIS_URL.replace(/\/\/.*:.*@/, '//*****@'));
 
 // Heartbeat MUST be declared before signal handlers to avoid ReferenceError on shutdown
 const heartbeatInterval = setInterval(() => {
