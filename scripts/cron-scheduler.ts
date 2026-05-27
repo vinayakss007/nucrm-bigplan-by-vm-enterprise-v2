@@ -14,8 +14,8 @@
  *   pm2 start ecosystem.config.js --only cron
  */
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'http://localhost:3000';
-const CRON_SECRET = process.env.CRON_SECRET || '';
+const APP_URL = process.env['NEXT_PUBLIC_APP_URL'] || process.env['APP_URL'] || 'http://localhost:3000';
+const CRON_SECRET = process.env['CRON_SECRET'] || '';
 
 if (!CRON_SECRET) {
   console.error('[cron-scheduler] FATAL: CRON_SECRET is required');
