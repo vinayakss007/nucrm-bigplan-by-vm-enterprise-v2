@@ -35,7 +35,7 @@ const GROUPS: Group[] = [
     id: 'me-account', label: 'Account', scope: 'personal',
     items: [
       { href: '/tenant/settings/profile',         label: 'My Profile',       icon: User,        desc: 'Name, avatar, phone',           keywords: 'name avatar phone email' },
-      { href: '/tenant/settings/preferences',     label: 'Preferences',      icon: SettingsIcon, desc: 'Locale, theme, formats',        badge: 'new', keywords: 'locale language theme dark light density date time format week' },
+      { href: '/tenant/settings/preferences',     label: 'Preferences',      icon: SettingsIcon, desc: 'Font size, theme, layout, productivity, privacy', badge: 'new', keywords: 'locale language theme dark light density date time format week font size accent color motion contrast sidebar avatar shortcut keyboard page size landing view confirm prompt link tab filter tip autosave email signature tracking meeting duration online status activity visibility privacy' },
       { href: '/tenant/settings/security',        label: 'Security & 2FA',   icon: ShieldCheck, desc: 'Password, two-factor',           keywords: 'password 2fa totp authenticator' },
       { href: '/tenant/settings/sessions',        label: 'Sessions & Devices', icon: Smartphone, desc: 'Active logins',                 keywords: 'devices login active' },
     ],
@@ -55,6 +55,7 @@ const GROUPS: Group[] = [
     items: [
       { href: '/tenant/settings/general',         label: 'Workspace',        icon: Building2,   desc: 'Name, logo, brand color',        keywords: 'name logo branding subdomain' },
       { href: '/tenant/settings/branding',        label: 'Branding',         icon: PenLine,     desc: 'Logo, color, theme',             keywords: 'logo color theme' },
+      { href: '/tenant/settings/user-defaults',   label: 'User Defaults',    icon: SettingsIcon, desc: 'Default UI preferences for everyone', adminOnly:true, badge: 'new', keywords: 'font size theme density accent color sidebar default page size landing record view confirm prompt keyboard shortcuts' },
       { href: '/tenant/settings/localization',    label: 'Localization',     icon: Globe,       desc: 'Timezone, fiscal, week start',   badge: 'new', keywords: 'timezone fiscal year week start business hours holidays' },
       { href: '/tenant/settings/currency',        label: 'Currencies',       icon: DollarSign,  desc: 'Multi-currency rates',           keywords: 'currency exchange rates' },
       { href: '/tenant/settings/tax',             label: 'Tax Rates',        icon: Receipt,     desc: 'Configure tax',                  keywords: 'tax vat gst' },

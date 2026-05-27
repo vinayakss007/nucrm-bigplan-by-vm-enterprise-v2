@@ -8,6 +8,7 @@ import EmailVerifyBanner from '@/components/tenant/email-verify-banner';
 import ImpersonationBanner from '@/components/shared/impersonation-banner';
 import { CommandPalette } from '@/components/shared/command-palette';
 import { ShortcutsModal } from '@/components/shared/shortcuts-modal';
+import UserPreferencesApplier from '@/components/shared/user-preferences-applier';
 
 interface Props {
   tenant:any; profile:any; roleSlug:string;
@@ -162,6 +163,7 @@ export default function TenantShell({ tenant, profile, roleSlug, permissions, is
 
   return (
     <>
+      <UserPreferencesApplier />
       <ImpersonationBanner />
       <div className="flex h-screen bg-background overflow-hidden">
         {/* Mobile overlay */}

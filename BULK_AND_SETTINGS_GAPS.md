@@ -398,3 +398,89 @@ The 3-scope settings sub-rail (`Personal / Workspace / Admin`) is already role-a
 \** Managers can be granted scoped admin items via `roles.permissions` JSONB.
 
 The UI today checks `is_admin` from `/api/tenant/me` to show/hide. Server-side every PATCH endpoint re-checks `ctx.isAdmin` and returns 403 if not — UI gating is never relied upon for security.
+
+
+
+---
+
+## 11. Top-CRM-grade Preferences (v2 — this iteration)
+
+The first iteration's Preferences page only had locale, theme, density, basic formats. Real CRMs (Salesforce, HubSpot, Pipedrive, Zoho, Freshsales, Monday) expose much more. This round closes the gap.
+
+### 11.1 What's now in Preferences
+
+| Group | Setting | Notes |
+|---|---|---|
+| **Appearance** | Language (locale) | 12 locales |
+| | Theme | light / dark / system |
+| | **Font size** | small / normal / large / xl — applied globally via `html[data-font-size]` ⭐ user-requested |
+| | UI density | compact / cozy / comfy — exposes `--ui-density` for components |
+| | **Accent colour** | 8 palette swatches override the violet primary |
+| | Sidebar default | expanded / collapsed |
+| | Show avatars in lists | toggle |
+| | **Reduce motion** | global animation/transition kill-switch |
+| | **High contrast** | thicker borders + focus rings |
+| **Date & time** | Date format | MM/DD/YYYY · DD/MM/YYYY · YYYY-MM-DD |
+| | Time format | 12h / 24h |
+| | Week starts on | sun / mon |
+| | Default calendar view | day / week / month / agenda |
+| **Productivity** | Default landing page | dashboard / leads / contacts / deals / tasks / calendar / tickets |
+| | Default record view | list / kanban / card / calendar |
+| | Default page size | 10 / 25 / 50 / 100 |
+| | Confirm destructive actions | always / danger only / never |
+| | Keyboard shortcuts | toggle |
+| | Auto-save form drafts | toggle |
+| | Sticky filters | toggle |
+| | Open external links in new tab | toggle |
+| | Show tips & onboarding | toggle |
+| | Show keyboard hints | toggle |
+| **Communication** | Email signature | textarea, max 5,000 chars |
+| | Email tracking by default | on / off / ask |
+| | Auto-CC self | toggle |
+| | Default meeting duration | 15 / 30 / 45 / 60 / 90 min |
+| **Privacy** | Online status visible to | everyone / team / nobody |
+| | Activity feed visible to | everyone / team / managers / nobody |
+
+### 11.2 Resolution chain
+
+For any preference field, the value the user actually sees is computed as:
+
+```
+user.metadata.prefs.<field>          (their override)
+  ↳ tenants.settings.user_defaults.<field>   (admin-set workspace default — NEW)
+    ↳ hard-coded platform DEFAULTS
+```
+
+A new admin-only page at `/tenant/settings/user-defaults` lets workspace admins set defaults that auto-apply to every member who hasn't customised that field. Each setting has an "Unset" option so admins can hand a field back to platform defaults without nuking the rest.
+
+`DELETE /api/user/preferences` clears every user override at once; `DELETE /api/tenant/admin/user-defaults` clears every workspace default.
+
+### 11.3 Live application
+
+A new client component `<UserPreferencesApplier />` mounts inside the tenant shell. On first paint it:
+1. Reads `sessionStorage["nucrm.prefs.cache"]` for the previous session's resolved prefs and applies them immediately (no FOUC for font-size/accent).
+2. Calls `/api/user/preferences` and applies the fresh resolved values onto `<html data-font-size data-density data-accent data-reduce-motion data-high-contrast>`.
+3. Listens for the `nucrm:prefs-changed` window event, so the Preferences page can refresh the styles in place after Save.
+
+`globals.css` got a new block of `html[data-...]` rules — font sizing, motion kill, high-contrast borders, and 8 accent-colour HSL overrides for `--primary`.
+
+### 11.4 Super-admin — Adoption & Drift
+
+New page: `/superadmin/adoption` (linked from the super-admin sidebar under Operations).
+
+Aggregates every active tenant in a single SQL round-trip and surfaces:
+
+- **Stats:** active tenants · active users · users with custom prefs · members currently OOO.
+- **Settings tree adoption:** percentage bars for Localization, Login Policy, Picklists, User Defaults.
+- **Security drift:** rows showing tenants with weak password policy (min < 12), 2FA off, IP allowlist on (positive), self-signup on (info), 2FA required (positive).
+
+The existing `/superadmin/tenants/[id]/settings` audit drill-in was extended to include the `user_defaults` tree.
+
+### 11.5 What still falls under TODO
+
+- Email signature WYSIWYG (currently plain text / basic HTML)
+- "Theme switcher in app header" using the same accent colour live preview
+- Field-level `confirm_destructive` honouring across modals (mostly UI plumbing)
+- `default_record_view` honouring on every list page
+- Audit log for `update_user_defaults` already lands; could be visualised on the per-tenant audit page
+- Per-team overrides (currently it's user > workspace; teams sit between in some plans)
