@@ -172,8 +172,19 @@ export function initEnv(): EnvConfig {
   
   if (config.resendApiKey) {
     console.log(`   Email: ${config.resendApiKey.startsWith('re_test_') ? 'Resend (test mode)' : 'Resend (live)'}`);
+  } else if (process.env.SMTP_HOST) {
+    console.log(`   Email: SMTP (${process.env.SMTP_HOST})`);
+  } else if (config.nodeEnv === 'production') {
+    console.error('');
+    console.error('  ╔══════════════════════════════════════════════════════════════╗');
+    console.error('  ║  ⚠️  WARNING: NO EMAIL PROVIDER CONFIGURED                   ║');
+    console.error('  ║                                                              ║');
+    console.error('  ║  Password resets, invitations, notifications will NOT send.  ║');
+    console.error('  ║  Set RESEND_API_KEY or SMTP_HOST in your .env file.          ║');
+    console.error('  ╚══════════════════════════════════════════════════════════════╝');
+    console.error('');
   } else {
-    console.log(`   Email: Not configured (mock mode)`);
+    console.log(`   Email: Not configured (dev console mode)`);
   }
   
   if (config.sentryDsn) {
