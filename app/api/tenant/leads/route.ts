@@ -3,10 +3,12 @@ import { validateBody, validateQuery } from '@/lib/api/validate';
 import { createLeadSchema, leadQuerySchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { leads, users, companies, leadActivities } from '@/drizzle/schema';
+import { leads, users, companies, leadActivities, activities } from '@/drizzle/schema';
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { resolveOrCreateContactForLead } from '@/lib/contacts/resolve';
+import { generateLeadOid } from '@/lib/leads/oid';
 
 // Whitelist for sort columns to prevent SQL injection
 const ALLOWED_SORT_COLUMNS: Record<string, any> = {
@@ -182,46 +184,81 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [newLead] = await db.insert(leads)
-      .values({
-        tenantId: ctx.tenantId,
+    // ── Workflow: every lead is attached to a contact at intake (one contact, many leads) ──
+    const newLead = await db.transaction(async (tx) => {
+      // Resolve-or-create the contact for this lead (email dedup).
+      const resolve = await resolveOrCreateContactForLead(tx, ctx.tenantId, ctx.userId, {
         firstName: v.first_name,
-        lastName: v.last_name || '',
-        email: (v.email ?? '').toLowerCase(),
-        phone: v.phone || null,
-        title: v.job_title || null,
-        companyName: v.company || null,
-        companyId: null,
-        source: v.source || 'website',
-        leadStatus: v.status,
+        lastName: v.last_name,
+        email: v.email,
+        phone: v.phone,
+        title: v.job_title,
+        companyName: v.company,
+        source: v.source,
         score: v.score,
-        country: null,
-        state: null,
-        city: null,
-        address: null,
-        postalCode: null,
-        website: null,
         assignedTo: v.assigned_to || ctx.userId,
-        createdBy: ctx.userId,
-        tags: [],
-        internalNotes: null,
-        customFields: v.custom_fields,
-      })
-      .returning();
+      });
 
-    if (!newLead) {
-      return NextResponse.json({ error: 'Failed to create lead' }, { status: 500 });
-    }
+      // Generate human-readable lead OID (per tenant, per year)
+      const leadOid = await generateLeadOid(tx, ctx.tenantId);
 
-    await db.insert(leadActivities)
-      .values({
+      const [inserted] = await tx.insert(leads)
+        .values({
+          tenantId: ctx.tenantId,
+          firstName: v.first_name,
+          lastName: v.last_name || '',
+          email: (v.email ?? '').toLowerCase(),
+          phone: v.phone || null,
+          title: v.job_title || null,
+          companyName: v.company || null,
+          companyId: resolve.companyId,
+          source: v.source || 'website',
+          leadStatus: v.status,
+          score: v.score,
+          country: null,
+          state: null,
+          city: null,
+          address: null,
+          postalCode: null,
+          website: null,
+          assignedTo: v.assigned_to || ctx.userId,
+          createdBy: ctx.userId,
+          tags: [],
+          internalNotes: null,
+          customFields: v.custom_fields,
+          contactId: resolve.contactId,
+          leadOid,
+          productId: (v as any).product_id || null,
+        })
+        .returning();
+
+      if (!inserted) throw new Error('Failed to create lead');
+
+      // Lead activity (legacy table for the lead detail page)
+      await tx.insert(leadActivities).values({
         tenantId: ctx.tenantId,
-        leadId: newLead.id,
+        leadId: inserted.id,
         performedBy: ctx.userId,
         activityType: 'created',
         description: 'Lead created',
-        activityData: {},
+        activityData: { lead_oid: leadOid, contact_id: resolve.contactId, is_new_contact: resolve.isNewContact },
       });
+
+      // Unified activities row so the lead shows up on the contact's system-events timeline
+      await tx.insert(activities).values({
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        contactId: resolve.contactId,
+        entityType: 'lead',
+        entityId: inserted.id,
+        eventType: 'lead_created',
+        action: 'create',
+        description: `Lead ${leadOid} created${resolve.isNewContact ? ' (new contact)' : ' (linked to existing contact)'}`,
+        metadata: { lead_oid: leadOid, lead_status: v.status, lead_source: v.source ?? 'website' },
+      });
+
+      return inserted;
+    });
 
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
