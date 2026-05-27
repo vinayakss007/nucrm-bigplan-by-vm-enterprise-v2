@@ -117,38 +117,38 @@ export default function UserDefaultsPage() {
       {/* Appearance defaults */}
       <Section icon={Palette} title="Appearance">
         <Field label="Default theme">
-          <SelectOrUnset value={defaults.theme} onChange={v => setVal('theme', v)}
+          <SelectOrUnset value={defaults['theme']} onChange={v => setVal('theme', v)}
             options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, { value: 'system', label: 'System (follow OS)' }]} />
         </Field>
         <Field label="Default font size">
-          <SelectOrUnset value={defaults.font_size} onChange={v => setVal('font_size', v)}
+          <SelectOrUnset value={defaults['font_size']} onChange={v => setVal('font_size', v)}
             options={[{ value: 'small', label: 'Small' }, { value: 'normal', label: 'Normal' }, { value: 'large', label: 'Large' }, { value: 'xl', label: 'Extra Large' }]} />
         </Field>
         <Field label="Default UI density">
-          <SelectOrUnset value={defaults.ui_density} onChange={v => setVal('ui_density', v)}
+          <SelectOrUnset value={defaults['ui_density']} onChange={v => setVal('ui_density', v)}
             options={[{ value: 'compact', label: 'Compact' }, { value: 'cozy', label: 'Cozy' }, { value: 'comfy', label: 'Comfortable' }]} />
         </Field>
         <Field label="Default accent colour" hint="Replaces platform violet for everyone.">
           <div className="flex flex-wrap gap-1.5 items-center">
             <button type="button" onClick={() => setVal('accent_color', undefined)}
               className={cn('px-3 h-8 rounded-lg border text-xs font-medium transition-colors',
-                !defaults.accent_color ? 'border-foreground bg-muted' : 'border-border text-muted-foreground hover:bg-accent')}>
+                !defaults['accent_color'] ? 'border-foreground bg-muted' : 'border-border text-muted-foreground hover:bg-accent')}>
               Unset
             </button>
             {ACCENT_COLORS.map(c => (
               <button key={c.value} type="button" onClick={() => setVal('accent_color', c.value)}
                 className={cn(
                   'w-8 h-8 rounded-lg border-2 transition-all flex items-center justify-center',
-                  defaults.accent_color === c.value ? 'border-foreground scale-110' : 'border-transparent hover:scale-105'
+                  defaults['accent_color'] === c.value ? 'border-foreground scale-110' : 'border-transparent hover:scale-105'
                 )}
                 title={c.label} style={{ background: c.hex }}>
-                {defaults.accent_color === c.value && <span className="w-2 h-2 rounded-full bg-white" />}
+                {defaults['accent_color'] === c.value && <span className="w-2 h-2 rounded-full bg-white" />}
               </button>
             ))}
           </div>
         </Field>
         <Field label="Default sidebar state">
-          <SelectOrUnset value={defaults.sidebar_default} onChange={v => setVal('sidebar_default', v)}
+          <SelectOrUnset value={defaults['sidebar_default']} onChange={v => setVal('sidebar_default', v)}
             options={[{ value: 'expanded', label: 'Expanded' }, { value: 'collapsed', label: 'Collapsed' }]} />
         </Field>
       </Section>
@@ -157,15 +157,15 @@ export default function UserDefaultsPage() {
       <Section icon={Calendar} title="Date & time">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Field label="Date format">
-            <SelectOrUnset value={defaults.date_format} onChange={v => setVal('date_format', v)}
+            <SelectOrUnset value={defaults['date_format']} onChange={v => setVal('date_format', v)}
               options={[{ value: 'MM/DD/YYYY', label: 'MM/DD/YYYY' }, { value: 'DD/MM/YYYY', label: 'DD/MM/YYYY' }, { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD' }]} />
           </Field>
           <Field label="Time format">
-            <SelectOrUnset value={defaults.time_format} onChange={v => setVal('time_format', v)}
+            <SelectOrUnset value={defaults['time_format']} onChange={v => setVal('time_format', v)}
               options={[{ value: '12h', label: '12-hour' }, { value: '24h', label: '24-hour' }]} />
           </Field>
           <Field label="Week starts on">
-            <SelectOrUnset value={defaults.week_start} onChange={v => setVal('week_start', v)}
+            <SelectOrUnset value={defaults['week_start']} onChange={v => setVal('week_start', v)}
               options={[{ value: 'sunday', label: 'Sunday' }, { value: 'monday', label: 'Monday' }]} />
           </Field>
         </div>
@@ -174,7 +174,7 @@ export default function UserDefaultsPage() {
       {/* Productivity */}
       <Section icon={Zap} title="Productivity">
         <Field label="Default landing page">
-          <SelectOrUnset value={defaults.default_landing} onChange={v => setVal('default_landing', v)}
+          <SelectOrUnset value={defaults['default_landing']} onChange={v => setVal('default_landing', v)}
             options={[
               { value: '/tenant/dashboard', label: 'Dashboard' },
               { value: '/tenant/leads',     label: 'Leads' },
@@ -187,20 +187,20 @@ export default function UserDefaultsPage() {
         </Field>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Field label="Default record view">
-            <SelectOrUnset value={defaults.default_record_view} onChange={v => setVal('default_record_view', v)}
+            <SelectOrUnset value={defaults['default_record_view']} onChange={v => setVal('default_record_view', v)}
               options={[
                 { value: 'list', label: 'List' }, { value: 'kanban', label: 'Kanban' },
                 { value: 'card', label: 'Card' }, { value: 'calendar', label: 'Calendar' },
               ]} />
           </Field>
           <Field label="Default page size">
-            <SelectOrUnset value={defaults.default_page_size != null ? String(defaults.default_page_size) : undefined}
+            <SelectOrUnset value={defaults['default_page_size'] != null ? String(defaults['default_page_size']) : undefined}
               onChange={v => setVal('default_page_size', v ? Number(v) : undefined)}
               options={[{ value: '10', label: '10' }, { value: '25', label: '25' }, { value: '50', label: '50' }, { value: '100', label: '100' }]} />
           </Field>
         </div>
         <Field label="Confirm destructive actions">
-          <SelectOrUnset value={defaults.confirm_destructive} onChange={v => setVal('confirm_destructive', v)}
+          <SelectOrUnset value={defaults['confirm_destructive']} onChange={v => setVal('confirm_destructive', v)}
             options={[{ value: 'always', label: 'Always' }, { value: 'danger_only', label: 'Danger only' }, { value: 'never', label: 'Never' }]} />
         </Field>
         <BoolDefault label="Keyboard shortcuts on by default" k="keyboard_shortcuts_enabled" defaults={defaults} setVal={setVal} />
@@ -213,11 +213,11 @@ export default function UserDefaultsPage() {
       <Section icon={Mail} title="Communication">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Field label="Email tracking by default">
-            <SelectOrUnset value={defaults.email_tracking_default} onChange={v => setVal('email_tracking_default', v)}
+            <SelectOrUnset value={defaults['email_tracking_default']} onChange={v => setVal('email_tracking_default', v)}
               options={[{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }, { value: 'ask', label: 'Ask each time' }]} />
           </Field>
           <Field label="Default meeting duration">
-            <SelectOrUnset value={defaults.default_meeting_duration != null ? String(defaults.default_meeting_duration) : undefined}
+            <SelectOrUnset value={defaults['default_meeting_duration'] != null ? String(defaults['default_meeting_duration']) : undefined}
               onChange={v => setVal('default_meeting_duration', v ? Number(v) : undefined)}
               options={[{ value: '15', label: '15m' }, { value: '30', label: '30m' }, { value: '45', label: '45m' }, { value: '60', label: '60m' }, { value: '90', label: '90m' }]} />
           </Field>
@@ -226,7 +226,7 @@ export default function UserDefaultsPage() {
           <textarea
             rows={4}
             className={inp}
-            value={defaults.email_signature ?? ''}
+            value={defaults['email_signature'] ?? ''}
             onChange={e => setVal('email_signature', e.target.value || undefined)}
             placeholder={`Best regards,\nThe Acme Team`}
             maxLength={5000}
@@ -237,11 +237,11 @@ export default function UserDefaultsPage() {
       {/* Privacy */}
       <Section icon={Lock} title="Privacy">
         <Field label="Default online-status visibility">
-          <SelectOrUnset value={defaults.online_status_visible} onChange={v => setVal('online_status_visible', v)}
+          <SelectOrUnset value={defaults['online_status_visible']} onChange={v => setVal('online_status_visible', v)}
             options={[{ value: 'everyone', label: 'Everyone' }, { value: 'team', label: 'Team' }, { value: 'nobody', label: 'Nobody' }]} />
         </Field>
         <Field label="Default activity-feed visibility">
-          <SelectOrUnset value={defaults.activity_visible_to} onChange={v => setVal('activity_visible_to', v)}
+          <SelectOrUnset value={defaults['activity_visible_to']} onChange={v => setVal('activity_visible_to', v)}
             options={[
               { value: 'everyone', label: 'Everyone' }, { value: 'team', label: 'Team' },
               { value: 'managers', label: 'Managers' }, { value: 'nobody', label: 'Nobody' },
