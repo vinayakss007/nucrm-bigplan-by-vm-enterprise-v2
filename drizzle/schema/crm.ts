@@ -185,6 +185,16 @@ export const leads = pgTable('leads', {
   isConverted: boolean('is_converted').notNull().default(false),
   convertedAt: timestamp('converted_at', { withTimezone: true }),
   convertedContactId: uuid('converted_contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+
+  // ── Workflow: lead is always linked to a contact (one contact, many leads) ──
+  // contactId is set at intake; convertedContactId is kept for backward compat
+  contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+
+  // Human-readable lead identifier per tenant, e.g. "LD-2025-001"
+  leadOid: text('lead_oid'),
+
+  // Which product entry the lead came in through (lib/products/registry.ts key)
+  productId: text('product_id'),
   
   metadata: utils.metadata(),
   
@@ -196,6 +206,9 @@ export const leads = pgTable('leads', {
     tenantStatusIdx: index('idx_leads_tenant_status').on(table.tenantId, table.leadStatus),
     assignedIdx: index('idx_leads_assigned').on(table.assignedTo),
     tenantCreatedIdx: index('idx_leads_tenant_created').on(table.tenantId, table.createdAt),
+    contactIdx: index('idx_leads_contact').on(table.contactId),
+    leadOidIdx: index('idx_leads_tenant_oid').on(table.tenantId, table.leadOid),
+    productIdx: index('idx_leads_tenant_product').on(table.tenantId, table.productId),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
   };
@@ -691,6 +704,33 @@ export const leadAssignments = pgTable('lead_assignments', {
     contactIdx: index('idx_lead_assignments_contact').on(table.contactId),
     userIdx: index('idx_lead_assignments_user').on(table.userId),
     tenantIdx: utils.tenantIdx(table),
+  };
+});
+
+// ── 17b. LEAD OFFERS (what was offered to the client per lead) ──
+export const leadOffers = pgTable('lead_offers', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  leadId: uuid('lead_id').notNull().references(() => leads.id, { onDelete: 'cascade' }),
+  // Either a catalog service or freeform — at least one of serviceId/description must be set
+  serviceId: uuid('service_id'), // FK enforced at app level (services live in billing.ts)
+  productId: text('product_id'), // optional pointer to lib/products/registry.ts key
+  description: text('description'),
+  quantity: decimal('quantity', { precision: 12, scale: 2 }).notNull().default('1'),
+  unitPrice: decimal('unit_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  currency: text('currency').notNull().default('USD'),
+  // proposed | accepted | rejected | withdrawn
+  status: text('status').notNull().default('proposed'),
+  notes: text('notes'),
+  metadata: utils.metadata(),
+  ...utils.audit(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    leadIdx: index('idx_lead_offers_lead').on(table.leadId),
+    statusIdx: index('idx_lead_offers_tenant_status').on(table.tenantId, table.status),
+    metadataGinIdx: utils.metadataIdx(table),
+    activeIdx: utils.activeIdx(table),
   };
 });
 
