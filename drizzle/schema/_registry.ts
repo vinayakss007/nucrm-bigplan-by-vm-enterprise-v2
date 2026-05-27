@@ -257,6 +257,11 @@ import {
   tenantTemplates,
 } from './templates';
 
+import {
+  aiProviderSecrets,
+  aiActivity,
+} from './ai';
+
 // =============================================================================
 // TABLE REGISTRY DEFINITION
 // =============================================================================
@@ -2625,6 +2630,36 @@ export const TABLE_REGISTRY = {
       description: 'Template assignments to tenants',
       isCore: false,
       indexes: ['idx_tenant_templates_unique'],
+    },
+  },
+  aiProviderSecrets: {
+    table: aiProviderSecrets,
+    metadata: {
+      name: 'ai_provider_secrets',
+      schemaGroup: 'tokens',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Encrypted per-tenant per-provider API keys for the AI gateway',
+      isCore: false,
+      indexes: ['idx_ai_provider_secrets_tenant', 'idx_ai_provider_secrets_unique', 'idx_ai_provider_secrets_active'],
+    },
+  },
+  aiActivity: {
+    table: aiActivity,
+    metadata: {
+      name: 'ai_activity',
+      schemaGroup: 'tokens',
+      hasTenantId: true,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants', 'users'],
+      description: 'Per-call AI gateway invocation log',
+      isCore: false,
+      indexes: ['idx_ai_activity_tenant_time', 'idx_ai_activity_action', 'idx_ai_activity_user', 'idx_ai_activity_status'],
     },
   },
 };
