@@ -57,6 +57,27 @@
       "when": 1746989200000,
       "tag": "0007_workflow_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1746989300000,
+      "tag": "0008_services_contacts_companies",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1746989400000,
+      "tag": "0009_audit_hash_chain",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1748332800000,
+      "tag": "0010_workflow_foundation",
+      "breakpoints": true
     }
   ]
 }
