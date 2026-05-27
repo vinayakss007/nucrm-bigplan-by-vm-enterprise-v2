@@ -193,6 +193,8 @@ export default function ContactDetailClient({
   const [activeTab, setActiveTab]   = useState('activity'); // 'activity' | 'tasks' | 'deals' | 'history' | 'billing'
   const [history, setHistory]           = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [contactLeads, setContactLeads]            = useState<any[]>([]);
+  const [loadingContactLeads, setLoadingContactLeads] = useState(false);
   const [editing, setEditing]       = useState(false);
   const [editForm, setEditForm]     = useState({ ...initialContact });
   const [noteText, setNoteText]     = useState('');
@@ -217,6 +219,18 @@ export default function ContactDetailClient({
         .then(data => setHistory(data.data || []))
         .catch(err => console.error('Failed to load history', err))
         .finally(() => setLoadingHistory(false));
+    }
+  }, [activeTab]);
+
+  // Fetch the contact's leads (one contact, many leads) on first open
+  useEffect(() => {
+    if (activeTab === 'leads' && contactLeads.length === 0 && !loadingContactLeads) {
+      setLoadingContactLeads(true);
+      fetch(`/api/tenant/contacts/${contact.id}/leads`)
+        .then(res => res.json())
+        .then(data => setContactLeads(data.data || []))
+        .catch(err => console.error('Failed to load contact leads', err))
+        .finally(() => setLoadingContactLeads(false));
     }
   }, [activeTab]);
 
@@ -485,6 +499,7 @@ export default function ContactDetailClient({
           <div className="flex items-center gap-1 bg-muted/30 rounded-xl p-1 w-fit">
             {[
               { id:'activity', label:`Activity (${activities.length})` },
+              { id:'leads',    label:`Leads${contactLeads.length ? ` (${contactLeads.length})` : ''}` },
               { id:'tasks',    label:`Tasks (${tasks.filter(t=>!t.completed).length} open)` },
               { id:'deals',    label:`Deals (${deals.length})` },
               { id:'billing',  label:`Billing (${invoices.length + orders.length + contracts.length + subscriptions.length + quotes.length})`, icon: DollarSign },
@@ -680,6 +695,108 @@ export default function ContactDetailClient({
                     <span className="text-xs font-semibold text-muted-foreground">Total pipeline</span>
                     <span className="text-sm font-bold">{formatCurrency(deals.filter((d:any)=>!['lost'].includes(d.stage)).reduce((s:number,d:any)=>s+Number(d.value),0))}</span>
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── LEADS TAB (every lead this contact has been on — past + present) ── */}
+          {activeTab === 'leads' && (
+            <div className="admin-card overflow-hidden">
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                <p className="text-sm font-semibold">Leads</p>
+                <span className="text-xs text-muted-foreground">
+                  Every sales conversation with this person
+                </span>
+              </div>
+              {loadingContactLeads ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">Loading…</div>
+              ) : !contactLeads.length ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+                  No leads linked to this contact yet
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {contactLeads.map((l: any) => {
+                    const status = LEAD_STATUSES.find(s => s.id === l.lead_status) ?? LEAD_STATUSES[0]!;
+                    const offerLabel = l.offer_total > 0
+                      ? `${l.offer_currency} ${Number(l.offer_total).toLocaleString()}`
+                      : null;
+                    return (
+                      <div
+                        key={l.id}
+                        onClick={() => router.push(`/tenant/leads/${l.id}`)}
+                        className="px-5 py-4 hover:bg-accent/20 cursor-pointer transition-colors group"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-mono text-muted-foreground">
+                                {l.lead_oid ?? l.id.slice(0, 8)}
+                              </span>
+                              <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold', status.color)}>
+                                {status.label}
+                              </span>
+                              {l.product_id && (
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-violet-600 bg-violet-50 dark:bg-violet-900/20 px-2 py-0.5 rounded-full">
+                                  {l.product_id}
+                                </span>
+                              )}
+                              {l.lifecycle_stage && (
+                                <span className="text-[10px] capitalize text-muted-foreground">
+                                  · {l.lifecycle_stage.replace(/_/g, ' ')}
+                                </span>
+                              )}
+                            </div>
+                            {(l.need_description || l.timeline || l.budget) && (
+                              <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">
+                                {[
+                                  l.budget && `${l.budget_currency || 'USD'} ${Number(l.budget).toLocaleString()} budget`,
+                                  l.timeline && `${l.timeline}`,
+                                  l.need_description,
+                                ].filter(Boolean).join(' · ')}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
+                              {l.assigned_name && (
+                                <span className="flex items-center gap-1">
+                                  <User className="w-3 h-3" />
+                                  {l.assigned_name}
+                                </span>
+                              )}
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {formatRelativeTime(l.last_activity_at || l.updated_at || l.created_at)}
+                              </span>
+                              {l.score > 0 && (
+                                <span className="flex items-center gap-1">
+                                  <Star className="w-3 h-3" />
+                                  {l.score}/100
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            {offerLabel && (
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Open offers</p>
+                                <p className="text-sm font-bold text-violet-600">{offerLabel}</p>
+                                <p className="text-[10px] text-muted-foreground">{l.offer_count} item{l.offer_count === 1 ? '' : 's'}</p>
+                              </div>
+                            )}
+                            {!offerLabel && l.value && (
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Estimated value</p>
+                                <p className="text-sm font-bold text-violet-600">
+                                  {l.budget_currency || 'USD'} {Number(l.value).toLocaleString()}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
