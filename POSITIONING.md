@@ -79,3 +79,76 @@ CRMs fail because of UX, integrations, data quality, price pressure and complian
 2. **Roadmap planning** — the gap log is the queue. Top of the list is what closes the deal in the next demo.
 3. **Engineering reviews** — every PR description should reference whether it advances a row in the gap log or strengthens a row in the proof table.
 4. **Onboarding new team members** — read this before `MASTER_PLAN.md` to understand what game we're playing.
+
+---
+
+## AI is **one place**, not "this AI thing, that AI thing"
+
+A common failure mode of AI features in CRMs is sprinkling them across the
+product — drafting in email, scoring on the lead page, summaries on the
+contact panel, providers buried in admin settings. Users can't find them and
+admins can't govern them.
+
+We deliberately consolidate. Every AI capability lives under `/tenant/ai` with
+a shared shell, and admin-side configuration lives under one settings group.
+
+| Capability | Page | Admin config | Depends on |
+|---|---|---|---|
+| AI Hub (overview + quick actions) | `/tenant/ai` | — | provider |
+| Auto-Draft (emails, replies, notes) | `/tenant/ai/draft` | `/tenant/settings/ai-templates` | provider · email |
+| Lead Scoring | `/tenant/ai/lead-scoring` | `/tenant/settings/lead-scoring` | provider · leads · picklists |
+| At-Risk Deals | `/tenant/ai/at-risk` | `/tenant/settings/at-risk-rules` | provider · deals · stages |
+| Summarize | `/tenant/ai/summarize` | — | provider · activities |
+| Activity Log | `/tenant/ai/activity` | `/tenant/settings/ai-activity` | provider |
+| Providers | — | `/tenant/settings/ai-providers` | — |
+
+Each capability page declares its dependencies right on the screen, so the
+user always sees *why* something isn't ready. No more hunting through three
+settings pages to make a single feature work.
+
+## Per-user views (not just per-role)
+
+CRMs add features non-stop. The result on most products is a sidebar with 40
+items and a salesperson scrolling past 35 they don't use. We solved this two
+ways:
+
+1. **Six role presets** in Preferences > Sidebar — Sales Rep, SDR/BDR,
+   Customer Success, Manager, Admin, Minimal — flip many toggles at once to
+   match a persona.
+2. **Per-item hide toggle** — every nav item has its own switch. Persisted
+   to `users.metadata.prefs.hidden_nav_items[]`, applied live by the same
+   `<UserPreferencesApplier />` that handles font size & theme.
+
+Pinned items override hiding (so a hidden item the user pinned still appears
+at the top of the rail).
+
+## Channels live together
+
+Telegram was sitting in personal **Communications** alongside Notifications
+and OOO — wrong neighbourhood. Channels (Telegram, Email, future WhatsApp /
+SMS / Slack) belong in **Integrations**. That's where they are now:
+
+- Personal **My Connections** group — per-user channel hooks (Telegram bot,
+  Slack DM, Calendar OAuth)
+- Workspace **Channels & Customer-Facing** — Email Sending, Customer Portal
+- Admin **Integrations & Developer** — Connected apps, Webhooks
+
+## Updated gap log
+
+| Gap | Status | Priority |
+|---|---|---|
+| AI auto-draft email — UI shell live | Page exists w/ shell + dep tracker | High — wire backend |
+| At-risk deal flagging — UI shell + 14d default | Page + dep tracker shipped | High |
+| Lead scoring — UI shell + dep tracker | Page + dep tracker shipped | High |
+| AI activity log — schema TODO | UI ready, table not | High |
+| WhatsApp inbound + outbound | Foundation only | High in Africa / India / LatAm |
+| Voice → CRM updates | Not started | Medium |
+| Stripe / accounting 2-way sync | Webhooks foundation only | High |
+| LinkedIn / social ingest | Not started | Medium |
+| Saved views / saved searches | Not started | Medium |
+| Bulk update custom field value | Not started | Medium |
+| Bulk add-to-sequence / list / segment | Not started | Medium |
+| Field permissions UI (DB exists) | Not started | Medium |
+| Maintenance mode + global feature flags | Not started | Medium |
+| AI provider keys — secrets vault | Stored in jsonb (presence flag only); needs proper secrets table | High — security |
+| Per-team / per-role sidebar override (admin sets) | User-level done; team-level not | Medium |

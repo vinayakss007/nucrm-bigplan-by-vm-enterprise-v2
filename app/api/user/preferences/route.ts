@@ -91,6 +91,9 @@ const DEFAULTS = {
   // Privacy
   online_status_visible: 'team',
   activity_visible_to: 'team',
+
+  // Sidebar customization (array of nav-item hrefs to hide)
+  hidden_nav_items: [] as string[],
 };
 
 const BOOLEAN_KEYS = [
@@ -175,6 +178,15 @@ export async function PATCH(req: NextRequest) {
       if (body[k] !== undefined) patch[k] = body[k] === true;
     }
     if (typeof body.email_signature === 'string') patch['email_signature'] = body.email_signature;
+
+    // Sidebar customization — array of nav hrefs the user has hidden
+    if (Array.isArray(body.hidden_nav_items)) {
+      const cleaned = body.hidden_nav_items
+        .filter((s: any) => typeof s === 'string' && s.startsWith('/tenant/'))
+        .map((s: string) => s.trim().slice(0, 200))
+        .slice(0, 200);
+      patch['hidden_nav_items'] = cleaned;
+    }
 
     if (Object.keys(patch).length > 0) {
       update.metadata = sql`

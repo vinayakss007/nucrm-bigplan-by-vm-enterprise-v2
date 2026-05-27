@@ -10,7 +10,9 @@ import {
   Building2, Globe, DollarSign, Users, Workflow, ListChecks,
   Tag, Library, ShieldUser, Crown, Receipt, Lock, ShieldCheck, KeyRound,
   Network, MapPin, Repeat, Timer, Mail, Webhook, History,
-  Scale, Shield, Save, ArrowRightLeft, Upload,
+  Scale, Shield, Save, ArrowRightLeft, Upload, Send,
+  // AI-related icons
+  Sparkles, BrainCircuit, FileEdit, Target, AlertTriangle, Activity,
 } from 'lucide-react';
 
 export type SettingsItem = {
@@ -50,17 +52,23 @@ export const GROUPS: SettingsGroup[] = [
     id: 'me-account', label: 'Account', scope: 'personal',
     items: [
       { href: '/tenant/settings/profile',         label: 'My Profile',       icon: User,        desc: 'Name, avatar, phone',           keywords: 'name avatar phone email' },
-      { href: '/tenant/settings/preferences',     label: 'Preferences',      icon: SettingsIcon, desc: 'Font size, theme, layout, productivity, privacy', badge: 'new', keywords: 'locale language theme dark light density date time format week font size accent color motion contrast sidebar avatar shortcut keyboard page size landing view confirm prompt link tab filter tip autosave email signature tracking meeting duration online status activity visibility privacy' },
+      { href: '/tenant/settings/preferences',     label: 'Preferences',      icon: SettingsIcon, desc: 'Font size, theme, layout, productivity, privacy, sidebar', badge: 'new', keywords: 'locale language theme dark light density date time format week font size accent color motion contrast sidebar avatar shortcut keyboard page size landing view confirm prompt link tab filter tip autosave email signature tracking meeting duration online status activity visibility privacy hide nav navigation' },
       { href: '/tenant/settings/security',        label: 'Security & 2FA',   icon: ShieldCheck, desc: 'Password, two-factor',           keywords: 'password 2fa totp authenticator' },
       { href: '/tenant/settings/sessions',        label: 'Sessions & Devices', icon: Smartphone, desc: 'Active logins',                 keywords: 'devices login active' },
     ],
   },
   {
-    id: 'me-comms', label: 'Communications', scope: 'personal',
+    id: 'me-availability', label: 'Notifications & Availability', scope: 'personal',
     items: [
       { href: '/tenant/settings/notifications',   label: 'Notifications',    icon: Bell,        desc: 'Per-event channels',             badge: 'new', keywords: 'email in-app push telegram alerts' },
       { href: '/tenant/settings/out-of-office',   label: 'Out of Office',    icon: Plane,       desc: 'Auto-reassign while away',       badge: 'new', keywords: 'vacation away leave ooo' },
-      { href: '/tenant/settings/telegram',        label: 'Telegram',         icon: Bell,        desc: 'Personal Telegram bot',          keywords: 'telegram bot' },
+    ],
+  },
+  {
+    id: 'me-connections', label: 'My Connections', scope: 'personal',
+    items: [
+      { href: '/tenant/settings/telegram',        label: 'Telegram',         icon: Send,        desc: 'Personal Telegram bot',          keywords: 'telegram bot chat channel integration connect' },
+      // Future per-user connections land here — Slack, Calendar OAuth, Twilio personal numbers, etc.
     ],
   },
 
@@ -70,7 +78,7 @@ export const GROUPS: SettingsGroup[] = [
     items: [
       { href: '/tenant/settings/general',         label: 'Workspace',        icon: Building2,   desc: 'Name, logo, brand color',        keywords: 'name logo branding subdomain' },
       { href: '/tenant/settings/branding',        label: 'Branding',         icon: PenLine,     desc: 'Logo, color, theme',             keywords: 'logo color theme' },
-      { href: '/tenant/settings/user-defaults',   label: 'User Defaults',    icon: SettingsIcon, desc: 'Default UI preferences for everyone', adminOnly:true, badge: 'new', keywords: 'font size theme density accent color sidebar default page size landing record view confirm prompt keyboard shortcuts' },
+      { href: '/tenant/settings/user-defaults',   label: 'User Defaults',    icon: SettingsIcon, desc: 'Default UI preferences for everyone', adminOnly:true, badge: 'new', keywords: 'font size theme density accent color sidebar default page size landing record view confirm prompt keyboard shortcuts persona role view' },
       { href: '/tenant/settings/localization',    label: 'Localization',     icon: Globe,       desc: 'Timezone, fiscal, week start',   badge: 'new', keywords: 'timezone fiscal year week start business hours holidays' },
       { href: '/tenant/settings/currency',        label: 'Currencies',       icon: DollarSign,  desc: 'Multi-currency rates',           keywords: 'currency exchange rates' },
       { href: '/tenant/settings/tax',             label: 'Tax Rates',        icon: Receipt,     desc: 'Configure tax',                  keywords: 'tax vat gst' },
@@ -97,10 +105,10 @@ export const GROUPS: SettingsGroup[] = [
     ],
   },
   {
-    id: 'ws-portal', label: 'Customer-Facing', scope: 'workspace',
+    id: 'ws-channels', label: 'Channels & Customer-Facing', scope: 'workspace',
     items: [
+      { href: '/tenant/settings/email',           label: 'Email Sending',    icon: Mail,        desc: 'From address, signatures, SPF/DKIM', keywords: 'email smtp signature spf dkim sending' },
       { href: '/tenant/settings/portal',          label: 'Customer Portal',  icon: Globe,       desc: 'Branding, access',              adminOnly: true, keywords: 'portal customer self-service' },
-      { href: '/tenant/settings/email',           label: 'Email Sending',    icon: Mail,        desc: 'From address, signatures',      keywords: 'email smtp signature' },
     ],
   },
 
@@ -110,6 +118,16 @@ export const GROUPS: SettingsGroup[] = [
     items: [
       { href: '/tenant/settings/admin',           label: 'Org Admin',        icon: Crown,       desc: 'Plan, usage, members',           adminOnly: true, keywords: 'overview admin' },
       { href: '/tenant/settings/billing',         label: 'Plan & Billing',   icon: Receipt,     desc: 'Subscription, invoices',         keywords: 'plan billing subscription invoice' },
+    ],
+  },
+  {
+    id: 'admin-ai', label: 'AI', scope: 'admin',
+    items: [
+      { href: '/tenant/settings/ai-providers',    label: 'AI Providers',     icon: BrainCircuit, desc: 'OpenAI / Anthropic / Groq / Ollama', adminOnly: true, badge: 'new', keywords: 'ai providers openai anthropic groq ollama llm model api key gateway' },
+      { href: '/tenant/settings/ai-templates',    label: 'Auto-Draft Templates', icon: FileEdit, desc: 'Email & message draft prompts',     adminOnly: true, badge: 'new', keywords: 'ai email draft template prompt followup' },
+      { href: '/tenant/settings/lead-scoring',    label: 'Lead Scoring Rules', icon: Target,    desc: 'Factors, weights, recompute',       adminOnly: true, badge: 'new', keywords: 'ai lead score scoring rules factors weights' },
+      { href: '/tenant/settings/at-risk-rules',   label: 'At-Risk Detection', icon: AlertTriangle, desc: 'Stalled deals & accounts',         adminOnly: true, badge: 'new', keywords: 'ai at risk deal stalled days inactivity' },
+      { href: '/tenant/settings/ai-activity',     label: 'AI Activity Log',   icon: Activity,    desc: 'Tokens used, suggestions made',     adminOnly: true, badge: 'new', keywords: 'ai activity log tokens usage cost' },
     ],
   },
   {
@@ -133,9 +151,9 @@ export const GROUPS: SettingsGroup[] = [
     ],
   },
   {
-    id: 'admin-developer', label: 'Developer', scope: 'admin',
+    id: 'admin-integrations', label: 'Integrations & Developer', scope: 'admin',
     items: [
-      { href: '/tenant/settings/integrations',    label: 'Integrations',     icon: Plug,        desc: 'Connected apps',                keywords: 'integrations apps connectors' },
+      { href: '/tenant/settings/integrations',    label: 'Integrations',     icon: Plug,        desc: 'Connected apps & channels',     keywords: 'integrations apps connectors channels telegram whatsapp slack' },
       { href: '/tenant/settings/webhooks',        label: 'Webhooks',         icon: Webhook,     desc: 'Outbound events',               adminOnly: true, keywords: 'webhooks events callbacks' },
     ],
   },
