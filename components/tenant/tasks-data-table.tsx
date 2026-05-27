@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useMemo } from 'react'
-import { Plus, MoreHorizontal, Edit, Trash2, CheckCircle, Clock, AlertTriangle, Columns } from 'lucide-react'
+import { Plus, MoreHorizontal, Edit, Trash2, CheckCircle, Clock, AlertTriangle, Columns, UserPlus, Flag, Calendar as CalendarIcon, RotateCcw } from 'lucide-react'
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
@@ -141,7 +141,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
 
   const columns: ColumnDef<Task>[] = useMemo(() => [
     {
-      id: 'complete',
+      id: 'select',
       header: ({ table }) => (
         <Checkbox
           checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
@@ -149,6 +149,19 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
           aria-label="Select all"
         />
       ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      id: 'complete',
+      header: '',
       cell: ({ row }) => (
         <Checkbox
           checked={row.original.completed}
@@ -266,6 +279,83 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
       },
     },
   ], [pagination.pageIndex, loadData])
+
+  // ── Bulk actions ──────────────────────────────────────────
+  const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, any> = {}) => {
+    const res = await fetch('/api/tenant/tasks/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, task_ids: ids, payload }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      toast.success(`${data.action}: ${data.affected} task(s)`)
+      loadData(pagination.pageIndex)
+    } else {
+      toast.error(data.error || `Failed to ${action} tasks`)
+    }
+  }, [loadData, pagination.pageIndex])
+
+  const bulkActions = useMemo(() => [
+    {
+      id: 'complete',
+      label: 'Mark Complete',
+      icon: <CheckCircle className="w-3.5 h-3.5" />,
+      onClick: async (ids: string[]) => callBulk('complete', ids),
+    },
+    {
+      id: 'reopen',
+      label: 'Reopen',
+      icon: <RotateCcw className="w-3.5 h-3.5" />,
+      onClick: async (ids: string[]) => callBulk('reopen', ids),
+    },
+    {
+      id: 'priority',
+      label: 'Priority',
+      icon: <Flag className="w-3.5 h-3.5" />,
+      requiresSelect: true,
+      selectOptions: [
+        { value: 'urgent', label: 'Urgent' },
+        { value: 'high',   label: 'High' },
+        { value: 'medium', label: 'Medium' },
+        { value: 'low',    label: 'Low' },
+      ],
+      onClick: async (ids: string[], input?: string) => {
+        if (!input) return toast.error('Pick a priority')
+        await callBulk('priority', ids, { priority: input })
+      },
+    },
+    ...(teamMembers.length > 0 ? [{
+      id: 'assign',
+      label: 'Assign',
+      icon: <UserPlus className="w-3.5 h-3.5" />,
+      requiresSelect: true,
+      selectOptions: teamMembers.map((m: any) => ({ value: m.user_id, label: m.full_name })),
+      onClick: async (ids: string[], input?: string) => {
+        if (!input) return toast.error('Pick a teammate')
+        await callBulk('assign', ids, { assigned_to: input })
+      },
+    }] : []),
+    {
+      id: 'due',
+      label: 'Set Due Date',
+      icon: <CalendarIcon className="w-3.5 h-3.5" />,
+      requiresInput: true,
+      inputPlaceholder: 'YYYY-MM-DD',
+      onClick: async (ids: string[], input?: string) => {
+        if (!input?.trim()) return toast.error('Pick a date (YYYY-MM-DD)')
+        await callBulk('due', ids, { due_date: input.trim() })
+      },
+    },
+    {
+      id: 'delete',
+      label: 'Delete',
+      icon: <Trash2 className="w-3.5 h-3.5" />,
+      requiresConfirmation: true,
+      confirmationMessage: 'Soft-delete the selected tasks? They can be restored from Trash.',
+      onClick: async (ids: string[]) => callBulk('delete', ids),
+    },
+  ], [teamMembers, callBulk])
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
 
@@ -395,6 +485,8 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
         globalFilter={globalFilter}
         onGlobalFilterChange={handleGlobalFilterChange}
         enableRowSelection
+        enableBulkActions
+        bulkActions={bulkActions}
         searchPlaceholder="Search tasks by title, contact, or deal..."
         manualPagination
         pageIndex={pagination.pageIndex}

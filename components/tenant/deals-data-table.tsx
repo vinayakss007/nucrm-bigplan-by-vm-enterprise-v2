@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useCallback, useMemo } from 'react'
-import { Plus, MoreHorizontal, Edit, Trash2, DollarSign, User, Building, Calendar } from 'lucide-react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { Plus, MoreHorizontal, Edit, Trash2, DollarSign, User, Building, Calendar, Tag, UserPlus, ArrowRightLeft, Trophy, X as XIcon, Layers } from 'lucide-react'
 import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
@@ -55,6 +55,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
   const [showAdd, setShowAdd] = useState(false)
   const [globalFilter, setGlobalFilter] = useState('')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
+  const [stages, setStages] = useState<{ id: string; name: string; pipeline: string }[]>([])
   const [form, setForm] = useState({
     title: '',
     amount: '',
@@ -98,6 +99,25 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
     setGlobalFilter(filter)
     loadData(0)
   }, [loadData])
+
+  // Load pipelines/stages once for the bulk-stage selector
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/tenant/pipelines')
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then((d: any) => {
+        if (cancelled) return
+        const flat: { id: string; name: string; pipeline: string }[] = []
+        for (const p of d.data ?? []) {
+          for (const s of p.stages ?? []) {
+            flat.push({ id: s.id, name: s.name, pipeline: p.name })
+          }
+        }
+        setStages(flat)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   const addDeal = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -234,6 +254,102 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
     },
   ], [pagination.pageIndex, loadData])
 
+  // ── Bulk actions ──────────────────────────────────────────
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, any> = {}) => {
+    setBulkBusy(true)
+    try {
+      const res = await fetch('/api/tenant/deals/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, deal_ids: ids, payload }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`${data.action}: ${data.affected} deal(s)`)
+        loadData(pagination.pageIndex)
+      } else {
+        toast.error(data.error || `Failed to ${action} deals`)
+      }
+    } finally {
+      setBulkBusy(false)
+    }
+  }, [loadData, pagination.pageIndex])
+
+  const bulkActions = useMemo(() => [
+    {
+      id: 'assign',
+      label: 'Assign',
+      icon: <UserPlus className="w-3.5 h-3.5" />,
+      requiresSelect: true,
+      selectOptions: teamMembers.map((m: any) => ({ value: m.user_id, label: m.full_name })),
+      onClick: async (ids: string[], input?: string) => {
+        if (!input) return toast.error('Pick a teammate')
+        await callBulk('assign', ids, { assigned_to: input })
+      },
+    },
+    {
+      id: 'transfer',
+      label: 'Transfer',
+      icon: <ArrowRightLeft className="w-3.5 h-3.5" />,
+      requiresSelect: true,
+      selectOptions: teamMembers.map((m: any) => ({ value: m.user_id, label: m.full_name })),
+      onClick: async (ids: string[], input?: string) => {
+        if (!input) return toast.error('Pick a teammate')
+        await callBulk('transfer', ids, { assigned_to: input })
+      },
+    },
+    {
+      id: 'stage',
+      label: 'Move Stage',
+      icon: <Layers className="w-3.5 h-3.5" />,
+      requiresSelect: true,
+      selectOptions: stages.map(s => ({
+        value: s.id,
+        label: stages.filter(x => x.pipeline === s.pipeline).length > 1 ? `${s.pipeline} → ${s.name}` : s.name,
+      })),
+      onClick: async (ids: string[], input?: string) => {
+        if (!input) return toast.error('Pick a stage')
+        await callBulk('stage', ids, { stage_id: input })
+      },
+    },
+    {
+      id: 'tag',
+      label: 'Add Tag',
+      icon: <Tag className="w-3.5 h-3.5" />,
+      requiresInput: true,
+      inputPlaceholder: 'Tag name',
+      onClick: async (ids: string[], input?: string) => {
+        if (!input?.trim()) return toast.error('Tag name required')
+        await callBulk('tag', ids, { tag: input.trim() })
+      },
+    },
+    {
+      id: 'close',
+      label: 'Close (Won/Lost)',
+      icon: <Trophy className="w-3.5 h-3.5" />,
+      requiresSelect: true,
+      selectOptions: stages
+        .filter(s => /won|lost|closed/i.test(s.name))
+        .map(s => ({ value: s.id, label: `${s.pipeline} → ${s.name}` })),
+      onClick: async (ids: string[], input?: string) => {
+        if (!input) return toast.error('Pick a close stage (Won / Lost)')
+        const reason = window.prompt('Close reason (optional)') ?? null
+        const stage = stages.find(s => s.id === input)
+        const outcome = stage && /lost/i.test(stage.name) ? 'lost' : /won/i.test(stage.name) ? 'won' : undefined
+        await callBulk('close', ids, { stage_id: input, reason, outcome })
+      },
+    },
+    {
+      id: 'delete',
+      label: 'Delete',
+      icon: <Trash2 className="w-3.5 h-3.5" />,
+      requiresConfirmation: true,
+      confirmationMessage: 'Soft-delete the selected deals? They can be restored from Trash.',
+      onClick: async (ids: string[]) => callBulk('delete', ids),
+    },
+  ], [teamMembers, stages, callBulk])
+
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
 
   return (
@@ -365,6 +481,8 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
         globalFilter={globalFilter}
         onGlobalFilterChange={handleGlobalFilterChange}
         enableRowSelection
+        enableBulkActions
+        bulkActions={bulkActions}
         searchPlaceholder="Search deals by title, contact, or company..."
         manualPagination
         pageIndex={pagination.pageIndex}

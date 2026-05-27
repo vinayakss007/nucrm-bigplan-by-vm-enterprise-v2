@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import Link from 'next/link'
-import { Plus, MoreHorizontal, Edit, Trash2, Building2, Globe, Phone, Users } from 'lucide-react'
+import { Plus, MoreHorizontal, Edit, Trash2, Building2, Globe, Phone, Users, Tag, UserPlus, Archive, ArrowRightLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { confirmThen } from '@/components/ui/confirm-dialog'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
@@ -35,9 +35,10 @@ interface Props {
   permissions: { canCreate: boolean; canEdit: boolean; canDelete: boolean }
   tenantId: string
   userId: string
+  teamMembers?: { user_id: string; full_name: string }[]
 }
 
-export default function CompaniesDataTable({ initialCompanies, permissions, tenantId, userId }: Props) {
+export default function CompaniesDataTable({ initialCompanies, permissions, tenantId, userId, teamMembers = [] }: Props) {
   const [companies, setCompanies] = useState(initialCompanies)
   const [total, setTotal] = useState(initialCompanies.length)
   const [loading, setLoading] = useState(false)
@@ -224,6 +225,76 @@ export default function CompaniesDataTable({ initialCompanies, permissions, tena
     },
   ], [pagination.pageIndex, loadData])
 
+  // ── Bulk actions ──────────────────────────────────────────
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, any> = {}) => {
+    setBulkBusy(true)
+    try {
+      const res = await fetch('/api/tenant/companies/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, company_ids: ids, payload }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`${data.action}: ${data.affected} compan${data.affected === 1 ? 'y' : 'ies'}`)
+        loadData(pagination.pageIndex)
+      } else {
+        toast.error(data.error || `Failed to ${action} companies`)
+      }
+    } finally {
+      setBulkBusy(false)
+    }
+  }, [loadData, pagination.pageIndex])
+
+  const bulkActions = useMemo(() => [
+    ...(teamMembers.length > 0 ? [{
+      id: 'assign',
+      label: 'Assign Owner',
+      icon: <UserPlus className="w-3.5 h-3.5" />,
+      requiresSelect: true,
+      selectOptions: teamMembers.map(m => ({ value: m.user_id, label: m.full_name })),
+      onClick: async (ids: string[], input?: string) => {
+        if (!input) return toast.error('Pick a teammate')
+        await callBulk('assign', ids, { assigned_to: input })
+      },
+    }] : []),
+    {
+      id: 'tag',
+      label: 'Add Tag',
+      icon: <Tag className="w-3.5 h-3.5" />,
+      requiresInput: true,
+      inputPlaceholder: 'Tag name',
+      onClick: async (ids: string[], input?: string) => {
+        if (!input?.trim()) return toast.error('Tag name required')
+        await callBulk('tag', ids, { tag: input.trim() })
+      },
+    },
+    {
+      id: 'status',
+      label: 'Set Status',
+      icon: <Archive className="w-3.5 h-3.5" />,
+      requiresSelect: true,
+      selectOptions: [
+        { value: 'active',   label: 'Active' },
+        { value: 'inactive', label: 'Inactive' },
+        { value: 'archived', label: 'Archived' },
+      ],
+      onClick: async (ids: string[], input?: string) => {
+        if (!input) return toast.error('Pick a status')
+        await callBulk('status', ids, { status: input })
+      },
+    },
+    {
+      id: 'delete',
+      label: 'Delete',
+      icon: <Trash2 className="w-3.5 h-3.5" />,
+      requiresConfirmation: true,
+      confirmationMessage: 'Soft-delete the selected companies? They can be restored from Trash.',
+      onClick: async (ids: string[]) => callBulk('delete', ids),
+    },
+  ], [teamMembers, callBulk])
+
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
 
   return (
@@ -312,6 +383,8 @@ export default function CompaniesDataTable({ initialCompanies, permissions, tena
         globalFilter={globalFilter}
         onGlobalFilterChange={handleGlobalFilterChange}
         enableRowSelection
+        enableBulkActions
+        bulkActions={bulkActions}
         searchPlaceholder="Search companies by name, industry, or website..."
         manualPagination
         pageIndex={pagination.pageIndex}
