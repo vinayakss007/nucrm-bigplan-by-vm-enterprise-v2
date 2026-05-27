@@ -227,3 +227,55 @@ th { white-space: nowrap; }
 .dark-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent; }
 .dark-scrollbar::-webkit-scrollbar { width: 4px; }
 .dark-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+
+
+/* ────────────────────────────────────────────────────────────────
+   User Preferences — applied via data attributes on <html>.
+   Set by <UserPreferencesApplier /> on every tenant page mount.
+   Falls back to workspace defaults if no per-user override exists.
+   ──────────────────────────────────────────────────────────────── */
+
+/* Font size scale — overrides the base 15px set above */
+html[data-font-size="small"]  { font-size: 13px; }
+html[data-font-size="normal"] { font-size: 15px; }
+html[data-font-size="large"]  { font-size: 17px; }
+html[data-font-size="xl"]     { font-size: 19px; }
+
+/* UI density — surfaces a custom property components can opt into */
+html                              { --ui-density: 1;     }
+html[data-density="compact"]      { --ui-density: 0.85;  }
+html[data-density="cozy"]         { --ui-density: 1;     }
+html[data-density="comfy"]        { --ui-density: 1.18;  }
+
+/* Reduce motion — globally tame animations & transitions */
+html[data-reduce-motion="true"] *,
+html[data-reduce-motion="true"] *::before,
+html[data-reduce-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Accent colour — overrides the violet primary */
+html[data-accent="violet"]  { --primary: 261 73% 53%; }
+html[data-accent="indigo"]  { --primary: 239 84% 67%; }
+html[data-accent="blue"]    { --primary: 217 91% 60%; }
+html[data-accent="cyan"]    { --primary: 188 95% 43%; }
+html[data-accent="emerald"] { --primary: 158 64% 40%; }
+html[data-accent="amber"]   { --primary:  38 92% 50%; }
+html[data-accent="rose"]    { --primary: 351 83% 57%; }
+html[data-accent="slate"]   { --primary: 215 20% 35%; }
+
+/* High contrast — bumps borders & focus rings */
+html[data-high-contrast="true"] {
+  --border: 220 13% 30%;
+}
+html[data-high-contrast="true"]:not(.dark) {
+  --border: 220 13% 70%;
+}
+html[data-high-contrast="true"] *:focus-visible {
+  outline: 2px solid hsl(var(--primary)) !important;
+  outline-offset: 2px !important;
+}

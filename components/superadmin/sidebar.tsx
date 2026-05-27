@@ -21,6 +21,7 @@ const NAV = [
   { href:'/superadmin/billing',        label:'Plans & Billing',icon:CreditCard },
   { href:'/superadmin/usage',          label:'Usage',          icon:Gauge },
   { section: 'Operations' },
+  { href:'/superadmin/adoption',       label:'Adoption & Drift', icon:TrendingUp },
   { href:'/superadmin/backups',        label:'Backups',        icon:Database },
   { href:'/superadmin/selective-restore', label:'Selective Restore', icon:RotateCcw },
   { href:'/superadmin/errors',         label:'Error Logs',     icon:AlertTriangle },

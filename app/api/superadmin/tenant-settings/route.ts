@@ -66,11 +66,12 @@ export async function GET(req: NextRequest) {
       },
       // Surface every settings sub-tree the tenant admin can edit
       settings: {
-        localization: settings.localization ?? null,
-        login_policy: settings.login_policy ?? null,
-        picklists:    settings.picklists ?? null,
+        localization:  settings.localization ?? null,
+        login_policy:  settings.login_policy ?? null,
+        picklists:     settings.picklists ?? null,
+        user_defaults: settings.user_defaults ?? null,
         // Other arbitrary keys (anything tenants drop into settings)
-        other_keys: Object.keys(settings).filter(k => !['localization','login_policy','picklists'].includes(k)),
+        other_keys: Object.keys(settings).filter(k => !['localization','login_policy','picklists','user_defaults'].includes(k)),
       },
     });
   } catch (err: any) {
