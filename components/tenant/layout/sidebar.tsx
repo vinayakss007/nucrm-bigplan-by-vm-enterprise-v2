@@ -8,7 +8,7 @@ import {
   LifeBuoy, Package, FileText, ShoppingCart, FileSignature, RefreshCw, Library, Plug,
   Command, Star, StarOff, Database, Upload, Workflow, Mail, MessageSquare,
   Trophy, Wrench, Boxes, Sparkles, ListChecks, ArrowRightLeft, Tag, Globe, Filter,
-  BrainCircuit, EyeOff,
+  BrainCircuit, EyeOff, Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -60,6 +60,7 @@ const NAV_SECTIONS: NavSection[] = [
     id: 'sales', label: 'Sales',
     items: [
       { href:'/tenant/quotes',        label:'Quotes',        icon:FileText,      keywords:'proposal estimate' },
+      { href:'/tenant/offers',        label:'Offers',        icon:Send,          keywords:'buyer link accept decline public' },
       { href:'/tenant/orders',        label:'Orders',        icon:ShoppingCart,  keywords:'sales order' },
       { href:'/tenant/contracts',     label:'Contracts',     icon:FileSignature, keywords:'agreements legal' },
       { href:'/tenant/invoices',      label:'Invoices',      icon:FileText,      keywords:'billing receipts' },
