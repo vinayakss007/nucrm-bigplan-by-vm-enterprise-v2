@@ -8,6 +8,7 @@ import {
   LifeBuoy, Package, FileText, ShoppingCart, FileSignature, RefreshCw, Library, Plug,
   Command, Star, StarOff, Database, Upload, Workflow, Mail, MessageSquare,
   Trophy, Wrench, Boxes, Sparkles, ListChecks, ArrowRightLeft, Tag, Globe, Filter,
+  BrainCircuit, EyeOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -44,6 +45,15 @@ const NAV_SECTIONS: NavSection[] = [
       { href:'/tenant/deals',     label:'Deals',      icon:TrendingUp,      shortcut:'⌘5', keywords:'opportunities pipeline' },
       { href:'/tenant/tasks',     label:'Tasks',      icon:CheckSquare,     shortcut:'⌘6', keywords:'todo activities' },
       { href:'/tenant/calendar',  label:'Calendar',   icon:Calendar,        keywords:'meetings events' },
+    ],
+  },
+  {
+    id: 'intelligence', label: 'Intelligence', defaultOpen: true,
+    items: [
+      { href:'/tenant/ai',           label:'AI Hub',         icon:Sparkles,     keywords:'ai artificial intelligence draft scoring at-risk summarize' },
+      { href:'/tenant/ai/draft',     label:'Auto-Draft',     icon:Mail,         keywords:'ai draft email follow-up reply' },
+      { href:'/tenant/ai/lead-scoring', label:'Lead Scoring', icon:Trophy,      keywords:'ai score leads ranking next-best-action' },
+      { href:'/tenant/ai/at-risk',   label:'At-Risk Deals',  icon:Zap,          keywords:'ai stalled deal risk pipeline' },
     ],
   },
   {
@@ -134,6 +144,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
   const [pinned, setPinned] = useState<string[]>([]);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [hiddenItems, setHiddenItems] = useState<string[]>([]);
   const color = tenant?.primary_color || '#7c3aed';
 
   // ── Hydrate state from localStorage ─────────────────────────
@@ -149,7 +160,32 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
       } else {
         setOpenSections(Object.fromEntries(NAV_SECTIONS.map(s => [s.id, !!s.defaultOpen])));
       }
+
+      // Read hidden_nav_items from the resolved-prefs cache that
+      // <UserPreferencesApplier /> populates on mount.
+      const cached = sessionStorage.getItem('nucrm.prefs.cache');
+      if (cached) {
+        const prefs = JSON.parse(cached);
+        if (Array.isArray(prefs?.hidden_nav_items)) {
+          setHiddenItems(prefs.hidden_nav_items);
+        }
+      }
     } catch {}
+  }, []);
+
+  // React to live preference changes (Save on Preferences page emits this)
+  useEffect(() => {
+    const handler = () => {
+      try {
+        const cached = sessionStorage.getItem('nucrm.prefs.cache');
+        if (cached) {
+          const prefs = JSON.parse(cached);
+          setHiddenItems(Array.isArray(prefs?.hidden_nav_items) ? prefs.hidden_nav_items : []);
+        }
+      } catch {}
+    };
+    window.addEventListener('nucrm:prefs-changed', handler);
+    return () => window.removeEventListener('nucrm:prefs-changed', handler);
   }, []);
 
   // Persist filter
@@ -197,6 +233,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
 
   const hasPerm = (item: NavItem) => {
     if (item.adminOnly && !isAdmin) return false;
+    if (hiddenItems.includes(item.href)) return false;
     if (!item.perm) return true;
     return isAdmin || permissions?.['all'] || permissions?.[item.perm];
   };
@@ -215,7 +252,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
       ...sec,
       items: sec.items.filter(i => hasPerm(i) && matches(i)),
     })).filter(sec => sec.items.length > 0)
-  , [q, isAdmin, permissions]);
+  , [q, isAdmin, permissions, hiddenItems]);
 
   // ── Resolve pinned items ────────────────────────────────────
   const pinnedItems = useMemo(() => {
@@ -223,7 +260,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
     return pinned
       .map(href => all.find(i => i.href === href))
       .filter((i): i is NavItem => !!i && hasPerm(i) && matches(i));
-  }, [pinned, q, isAdmin, permissions]);
+  }, [pinned, q, isAdmin, permissions, hiddenItems]);
 
   // ── Collapsed mini sidebar ──────────────────────────────────
   if (collapsed) {

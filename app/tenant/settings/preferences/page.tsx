@@ -9,6 +9,7 @@ import {
 import { useTheme } from 'next-themes';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import SidebarCustomizeSection from '@/components/tenant/settings/sidebar-customize-section';
 
 const LOCALES = [
   { value: 'en',    label: 'English (US)' },
@@ -52,6 +53,7 @@ const SECTIONS = [
   { id: 'productivity',  label: 'Productivity',   icon: Zap },
   { id: 'communication', label: 'Communication',  icon: Mail },
   { id: 'privacy',       label: 'Privacy',        icon: Lock },
+  { id: 'sidebar',       label: 'Sidebar',        icon: PanelLeftClose },
 ] as const;
 
 type SectionId = typeof SECTIONS[number]['id'];
@@ -358,6 +360,14 @@ export default function PreferencesPage() {
               options={[{ value: 'everyone', label: 'Everyone' }, { value: 'team', label: 'Team' }, { value: 'managers', label: 'Managers' }, { value: 'nobody', label: 'Nobody' }]} />
           </Field>
         </Section>
+      )}
+
+      {(activeSection === 'sidebar' || q) && (
+        <SidebarCustomizeSection
+          hidden={q && !match('sidebar nav navigation hide show role view', q)}
+          hiddenItems={prefs.hidden_nav_items ?? []}
+          onChange={(next: string[]) => set('hidden_nav_items', next)}
+        />
       )}
 
       {Object.keys(workspaceDefaults).length > 0 && (
