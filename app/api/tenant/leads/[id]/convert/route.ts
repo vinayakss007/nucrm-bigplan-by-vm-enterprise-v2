@@ -91,11 +91,29 @@ export async function POST(
         }
       }
 
-      // ── 2. Check for existing contact with same email ───────────────
-      let contactId: string | null = null;
+      // ── 2. Resolve target contact ───────────────────────────────────
+      // New workflow: every lead has a contact_id at intake. Trust that link
+      // and skip the email-dedup path. Legacy leads without contact_id fall
+      // through to the email-dedup + create-contact path for backwards compat.
+      let contactId: string | null = lead.contactId ?? null;
       let isNewContact = false;
 
-      if (lead.email) {
+      if (contactId) {
+        // Update the linked contact with merged lead fields (only fill blanks).
+        await tx.update(contacts).set({
+          phone: lead.phone || undefined,
+          jobTitle: lead.title || undefined,
+          companyId: companyId || undefined,
+          assignedTo: assignee as any,
+          leadStatus: 'qualified',
+          lifecycleStage: 'opportunity',
+          score: sql`GREATEST(coalesce(${contacts.score}, 0), ${lead.score ?? 0})`,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(contacts.id, contactId),
+          eq(contacts.tenantId, ctx.tenantId),
+        ));
+      } else if (lead.email) {
         const existing = await tx.query.contacts.findFirst({
           where: and(
             eq(contacts.tenantId, ctx.tenantId),
@@ -148,6 +166,11 @@ export async function POST(
         }).returning({ id: contacts.id });
         if (!contact) throw new Error('Failed to create contact');
         contactId = contact.id;
+      }
+
+      // Backfill the lead's contact_id pointer if it was missing (legacy lead path).
+      if (!lead.contactId && contactId) {
+        await tx.update(leads).set({ contactId }).where(eq(leads.id, id));
       }
 
       // ── 3. Mark lead as converted ───────────────────────────────────
