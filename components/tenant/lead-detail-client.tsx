@@ -62,6 +62,41 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
   const [activeTab, setActiveTab] = useState<'overview' | 'activities' | 'notes'>('overview');
   const [showEdit, setShowEdit] = useState(false);
   const [editData, setEditData] = useState(lead);
+  const [showHandoff, setShowHandoff] = useState(false);
+  const [handoffSaving, setHandoffSaving] = useState(false);
+  const [handoffDraft, setHandoffDraft] = useState({ assigned_to: '', reason: '' });
+
+  const submitHandoff = async () => {
+    if (!handoffDraft.assigned_to) {
+      toast.error('Pick a team member to hand off to');
+      return;
+    }
+    setHandoffSaving(true);
+    try {
+      const res = await fetch(`/api/tenant/leads/${lead.id}/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(handoffDraft),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || 'Handoff failed');
+        return;
+      }
+      if (data.no_op) {
+        toast('Already assigned to that user', { icon: 'ℹ️' });
+      } else {
+        toast.success('Lead handed off');
+      }
+      setShowHandoff(false);
+      setHandoffDraft({ assigned_to: '', reason: '' });
+      router.refresh();
+    } catch {
+      toast.error('Handoff failed');
+    } finally {
+      setHandoffSaving(false);
+    }
+  };
 
   const statusConfig = PIPELINE_CONFIG[lead.lead_status as keyof typeof PIPELINE_CONFIG] || PIPELINE_CONFIG.new;
   const StatusIcon = statusConfig.icon;
@@ -166,6 +201,10 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
           <Button variant="outline" onClick={() => setShowEdit(true)}>
             <Edit className="w-4 h-4 mr-2" />
             Edit
+          </Button>
+          <Button variant="outline" onClick={() => setShowHandoff(true)} title="Hand this lead off to another team member">
+            <User className="w-4 h-4 mr-2" />
+            Hand off
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -534,6 +573,80 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
                 <ExternalLink className="w-4 h-4 text-muted-foreground" />
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Handoff dialog */}
+      {showHandoff && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => !handoffSaving && setShowHandoff(false)}
+        >
+          <div
+            className="admin-card p-6 w-full max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-semibold flex items-center gap-2 mb-4">
+              <User className="w-4 h-4" />
+              Hand off lead
+            </h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              Reassign this lead to another team member. The handoff is logged on the contact's
+              activity timeline so the next person sees the full history.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                  Hand off to
+                </label>
+                <select
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                  value={handoffDraft.assigned_to}
+                  onChange={(e) => setHandoffDraft((p) => ({ ...p, assigned_to: e.target.value }))}
+                  disabled={handoffSaving}
+                >
+                  <option value="">Select team member…</option>
+                  {teamMembers
+                    .filter((m: any) => m.user_id !== lead.assigned_to)
+                    .map((m: any) => (
+                      <option key={m.user_id} value={m.user_id}>
+                        {m.full_name || m.email}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                  Reason / handoff notes <span className="font-normal">(optional, but recommended)</span>
+                </label>
+                <textarea
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                  rows={3}
+                  placeholder="e.g. Handing over for the demo on Tuesday — they're keen on the Pro tier."
+                  value={handoffDraft.reason}
+                  onChange={(e) => setHandoffDraft((p) => ({ ...p, reason: e.target.value }))}
+                  disabled={handoffSaving}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={handoffSaving}
+                  onClick={() => setShowHandoff(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={handoffSaving || !handoffDraft.assigned_to}
+                  onClick={() => void submitHandoff()}
+                >
+                  {handoffSaving ? 'Handing off…' : 'Hand off'}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}

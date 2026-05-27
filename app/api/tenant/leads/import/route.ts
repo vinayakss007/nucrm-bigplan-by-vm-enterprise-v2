@@ -4,9 +4,11 @@ import { validateBody } from '@/lib/api/validate';
 import { importSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { leads, activities } from '@/drizzle/schema';
+import { leads, leadActivities, activities } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { resolveOrCreateContactForLead } from '@/lib/contacts/resolve';
+import { generateLeadOid } from '@/lib/leads/oid';
 
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -57,6 +59,8 @@ const LEAD_COLUMN_MAP: Record<string, string> = {
   'authority_level': 'authorityLevel', 'authority': 'authorityLevel',
   'need_description': 'needDescription', 'need': 'needDescription', 'pain_point': 'needDescription', 'painpoint': 'needDescription',
   'timeline': 'timeline', 'purchase_timeline': 'timeline', 'timeline_target_date': 'timelineTargetDate',
+  // Product
+  'product_id': 'productId', 'product': 'productId',
   // Assignment
   'assigned_to': 'assignedTo', 'owner': 'assignedTo', 'owner_id': 'assignedTo',
   // Address
@@ -93,7 +97,7 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.json();
     const validated = validateBody(importSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
-    const v = validated.data;
+
     const { skipDuplicates = true, updateExisting = false } = rawBody;
     const csv = rawBody.csv;
     if (!csv) return NextResponse.json({ error: 'csv field required' }, { status: 400 });
@@ -102,15 +106,13 @@ export async function POST(request: NextRequest) {
     if (!rows.length) return NextResponse.json({ error: 'No data rows found in CSV' }, { status: 400 });
     if (rows.length > 50000) return NextResponse.json({ error: 'CSV too large (max 50,000 rows)' }, { status: 400 });
 
-    const results = { imported: 0, updated: 0, skipped: 0, errors: [] as string[] };
-    const BATCH_SIZE = 500;
-    const insertBatch: any[] = [];
-
-    const executeBatch = async () => {
-      if (insertBatch.length === 0) return;
-      await db.insert(leads).values(insertBatch);
-      results.imported += insertBatch.length;
-      insertBatch.length = 0;
+    const results = {
+      imported: 0,
+      updated: 0,
+      skipped: 0,
+      newContacts: 0,
+      mergedContacts: 0,
+      errors: [] as string[],
     };
 
     for (const [index, row] of rows.entries()) {
@@ -122,11 +124,17 @@ export async function POST(request: NextRequest) {
         }
 
         const firstName = mapped.firstName?.trim();
-        if (!firstName) { results.errors.push(`Row ${index + 2}: first_name is required`); results.skipped++; continue; }
+        if (!firstName) {
+          results.errors.push(`Row ${index + 2}: first_name is required`);
+          results.skipped++;
+          continue;
+        }
 
         const email = mapped.email?.toLowerCase().trim() || null;
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          results.errors.push(`Row ${index + 2}: invalid email "${email}"`); results.skipped++; continue;
+          results.errors.push(`Row ${index + 2}: invalid email "${email}"`);
+          results.skipped++;
+          continue;
         }
 
         const leadStatus = VALID_STATUSES.includes(mapped.leadStatus) ? mapped.leadStatus : 'new';
@@ -137,21 +145,23 @@ export async function POST(request: NextRequest) {
         const budgetVal = mapped.budget ? mapped.budget.toString() : null;
         const valueVal = mapped.value ? mapped.value.toString() : null;
 
+        // ── Existing-lead handling: dedupe / update / skip ────────────────
         if (email) {
           const [existing] = await db
             .select({ id: leads.id })
             .from(leads)
-            .where(
-              and(
-                eq(leads.tenantId, ctx.tenantId),
-                eq(sql`lower(${leads.email})`, email),
-                sql`${leads.deletedAt} IS NULL`
-              )
-            )
+            .where(and(
+              eq(leads.tenantId, ctx.tenantId),
+              eq(sql`lower(${leads.email})`, email),
+              sql`${leads.deletedAt} IS NULL`,
+            ))
             .limit(1);
 
           if (existing) {
-            if (skipDuplicates && !updateExisting) { results.skipped++; continue; }
+            if (skipDuplicates && !updateExisting) {
+              results.skipped++;
+              continue;
+            }
             if (updateExisting) {
               await db
                 .update(leads)
@@ -161,7 +171,6 @@ export async function POST(request: NextRequest) {
                   phone: mapped.phone || null,
                   mobile: mapped.mobile || null,
                   title: mapped.title || null,
-                  companyId: mapped.department || null,
                   companyName: mapped.companyName || null,
                   companySize: mapped.companySize || null,
                   companyIndustry: mapped.companyIndustry || null,
@@ -169,89 +178,129 @@ export async function POST(request: NextRequest) {
                   lifecycleStage: lifecycle,
                   score: scoreVal,
                   budget: budgetVal,
+                  budgetCurrency: mapped.budgetCurrency || 'USD',
                   authorityLevel: authority,
+                  needDescription: mapped.needDescription?.slice(0, 5000) || null,
                   timeline: mapped.timeline || null,
+                  productId: mapped.productId || null,
                   country: mapped.country || null,
                   city: mapped.city || null,
                   state: mapped.state || null,
-                  tags,
-                  internalNotes: mapped.internalNotes?.slice(0, 5000) || null,
-                  updatedAt: new Date(),
+                  postalCode: mapped.postalCode || null,
+                  addressLine1: mapped.addressLine1 || null,
                   website: mapped.website || null,
                   linkedinUrl: mapped.linkedinUrl || null,
                   twitterHandle: mapped.twitterHandle || null,
-                  needDescription: mapped.needDescription?.slice(0, 5000) || null,
-                  addressLine1: mapped.addressLine1 || null,
-                  postalCode: mapped.postalCode || null,
-                  value: valueVal
+                  tags,
+                  internalNotes: mapped.internalNotes?.slice(0, 5000) || null,
+                  value: valueVal,
+                  updatedAt: new Date(),
                 })
                 .where(eq(leads.id, existing.id));
-              results.updated++; continue;
+              results.updated++;
+              continue;
             }
           }
         }
 
-        insertBatch.push({
-          tenantId: ctx.tenantId,
-          createdBy: ctx.userId,
-          assignedTo: mapped.assignedTo || null,
-          firstName,
-          lastName: mapped.lastName || '',
-          email,
-          phone: mapped.phone || null,
-          mobile: mapped.mobile || null,
-          title: mapped.title || null,
-          companyId: mapped.department || null,
-          companyName: mapped.companyName || null,
-          companySize: mapped.companySize || null,
-          companyIndustry: mapped.companyIndustry || null,
-          source: mapped.source || 'website',
-          leadStatus,
-          lifecycleStage: lifecycle,
-          score: scoreVal,
-          budget: budgetVal,
-          budgetCurrency: mapped.budgetCurrency || 'USD',
-          authorityLevel: authority,
-          needDescription: mapped.needDescription?.slice(0, 5000) || null,
-          timeline: mapped.timeline || null,
-          country: mapped.country || null,
-          state: mapped.state || null,
-          city: mapped.city || null,
-          addressLine1: mapped.addressLine1 || null,
-          postalCode: mapped.postalCode || null,
-          website: mapped.website || null,
-          linkedinUrl: mapped.linkedinUrl || null,
-          twitterHandle: mapped.twitterHandle || null,
-          facebookUrl: mapped.facebookUrl || null,
-          utmSource: mapped.utmSource || null,
-          utmMedium: mapped.utmMedium || null,
-          utmCampaign: mapped.utmCampaign || null,
-          tags,
-          internalNotes: mapped.internalNotes?.slice(0, 5000) || null,
+        // ── New-lead path: resolve-or-create contact + insert lead, atomic per row ─
+        await db.transaction(async (tx) => {
+          const resolve = await resolveOrCreateContactForLead(tx, ctx.tenantId, ctx.userId, {
+            firstName,
+            lastName: mapped.lastName || '',
+            email,
+            phone: mapped.phone || null,
+            title: mapped.title || null,
+            companyName: mapped.companyName || null,
+            companyIndustry: mapped.companyIndustry || null,
+            website: mapped.website || null,
+            source: mapped.source || 'csv_import',
+            score: scoreVal,
+            tags,
+            country: mapped.country || null,
+            city: mapped.city || null,
+            linkedinUrl: mapped.linkedinUrl || null,
+            internalNotes: mapped.internalNotes?.slice(0, 5000) || null,
+            assignedTo: mapped.assignedTo || null,
+          });
+
+          const leadOid = await generateLeadOid(tx, ctx.tenantId);
+
+          const [inserted] = await tx.insert(leads).values({
+            tenantId: ctx.tenantId,
+            createdBy: ctx.userId,
+            assignedTo: mapped.assignedTo || null,
+            firstName,
+            lastName: mapped.lastName || '',
+            email,
+            phone: mapped.phone || null,
+            mobile: mapped.mobile || null,
+            title: mapped.title || null,
+            companyId: resolve.companyId,
+            companyName: mapped.companyName || null,
+            companySize: mapped.companySize || null,
+            companyIndustry: mapped.companyIndustry || null,
+            source: mapped.source || 'csv_import',
+            leadStatus,
+            lifecycleStage: lifecycle,
+            score: scoreVal,
+            budget: budgetVal,
+            budgetCurrency: mapped.budgetCurrency || 'USD',
+            authorityLevel: authority,
+            needDescription: mapped.needDescription?.slice(0, 5000) || null,
+            timeline: mapped.timeline || null,
+            country: mapped.country || null,
+            state: mapped.state || null,
+            city: mapped.city || null,
+            addressLine1: mapped.addressLine1 || null,
+            postalCode: mapped.postalCode || null,
+            website: mapped.website || null,
+            linkedinUrl: mapped.linkedinUrl || null,
+            twitterHandle: mapped.twitterHandle || null,
+            utmSource: mapped.utmSource || null,
+            utmMedium: mapped.utmMedium || null,
+            utmCampaign: mapped.utmCampaign || null,
+            tags,
+            internalNotes: mapped.internalNotes?.slice(0, 5000) || null,
+            value: valueVal,
+            contactId: resolve.contactId,
+            leadOid,
+            productId: mapped.productId || null,
+          }).returning({ id: leads.id });
+
+          if (!inserted) throw new Error('Insert returned no row');
+
+          await tx.insert(leadActivities).values({
+            tenantId: ctx.tenantId,
+            leadId: inserted.id,
+            performedBy: ctx.userId,
+            activityType: 'created',
+            description: 'Lead imported from CSV',
+            activityData: { lead_oid: leadOid, contact_id: resolve.contactId, is_new_contact: resolve.isNewContact, source: 'csv_import' },
+          });
+
+          await tx.insert(activities).values({
+            tenantId: ctx.tenantId,
+            userId: ctx.userId,
+            contactId: resolve.contactId,
+            entityType: 'lead',
+            entityId: inserted.id,
+            eventType: 'lead_created',
+            action: 'create',
+            description: `Lead ${leadOid} imported from CSV${resolve.isNewContact ? ' (new contact)' : ' (linked to existing contact)'}`,
+            metadata: { lead_oid: leadOid, source: 'csv_import' },
+          });
+
+          if (resolve.isNewContact) results.newContacts++;
+          else results.mergedContacts++;
         });
 
-        if (insertBatch.length >= BATCH_SIZE) {
-          await executeBatch();
-        }
+        results.imported++;
       } catch (rowErr: any) {
         results.errors.push(`Row ${index + 2}: ${rowErr.message}`);
         results.skipped++;
       }
     }
-
-    await executeBatch();
-
-    // Log activity
-    await db.insert(activities).values({} as any); // @ts-expect-error Schema mismatch - activity insert requires partial object
-    db.insert().values({
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      type: 'lead_created',
-      description: `Imported ${results.imported} leads (${results.updated} updated, ${results.skipped} skipped)`,
-      entityType: 'bulk_import',
-      entityId: sql`gen_random_uuid()`,
-      action: 'import_completed',
-    });
 
     return NextResponse.json({ ok: true, results });
   } catch (err: any) {
