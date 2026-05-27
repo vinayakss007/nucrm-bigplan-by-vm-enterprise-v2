@@ -138,6 +138,10 @@ export async function PATCH(
     if (rawBody.need_description !== undefined) updateData.needDescription = rawBody.need_description;
     if (rawBody.timeline !== undefined) updateData.timeline = rawBody.timeline;
     if (rawBody.timeline_target_date !== undefined) updateData.timelineTargetDate = rawBody.timeline_target_date;
+    if (rawBody.budget !== undefined) updateData.budget = rawBody.budget === '' || rawBody.budget == null ? null : String(rawBody.budget);
+    if (rawBody.budget_currency !== undefined) updateData.budgetCurrency = rawBody.budget_currency;
+    if (rawBody.company_industry !== undefined) updateData.companyIndustry = rawBody.company_industry;
+    if (rawBody.value !== undefined) updateData.value = rawBody.value === '' || rawBody.value == null ? null : String(rawBody.value);
     if (rawBody.country !== undefined) updateData.country = rawBody.country;
     if (rawBody.state !== undefined) updateData.state = rawBody.state;
     if (rawBody.city !== undefined) updateData.city = rawBody.city;
