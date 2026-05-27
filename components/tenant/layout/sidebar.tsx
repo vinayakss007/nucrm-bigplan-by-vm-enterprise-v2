@@ -259,7 +259,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
     const all = NAV_SECTIONS.flatMap(s => s.items);
     return pinned
       .map(href => all.find(i => i.href === href))
-      .filter((i): i is NavItem => !!i && hasPerm(i) && matches(i));
+      .filter((i): i is NavItem => !!(i && hasPerm(i) && matches(i)));
   }, [pinned, q, isAdmin, permissions, hiddenItems]);
 
   // ── Collapsed mini sidebar ──────────────────────────────────
