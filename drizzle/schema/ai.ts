@@ -88,3 +88,39 @@ export const aiActivity = pgTable('ai_activity', {
   userIdx: index('idx_ai_activity_user').on(table.tenantId, table.userId, table.createdAt),
   statusIdx: index('idx_ai_activity_status').on(table.tenantId, table.status),
 }));
+
+// ── 3. AI DRAFT TEMPLATES ────────────────────────────
+// Per-tenant prompt templates for the Auto-Draft surface
+// (/tenant/ai/draft). Each template captures kind (email / note / reply
+// / call_prep), entity types it applies to, system + user prompt, and
+// default tone/subject. Soft-delete on edit. Unique on (tenant, slug).
+export const aiDraftTemplates = pgTable('ai_draft_templates', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  /** Stable slug, e.g. 'follow-up-after-demo' */
+  slug: text('slug').notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  /** 'email' | 'note' | 'reply' | 'call_prep' */
+  kind: text('kind').notNull().default('email'),
+  /** Comma-separated entity types this template can target */
+  entityTypes: text('entity_types').notNull().default('contact,deal'),
+  /** System prompt — sets tone / persona / output format */
+  systemPrompt: text('system_prompt').notNull(),
+  /** User prompt template — supports {{contact.first_name}}, {{deal.title}} etc. */
+  userPrompt: text('user_prompt').notNull(),
+  /** Default tone hint surfaced in the picker UI */
+  tone: text('tone').default('professional'),
+  /** Optional default subject line (email kind only) */
+  defaultSubject: text('default_subject'),
+  active: boolean('active').notNull().default(true),
+  ...utils.lifecycle(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+}, (table) => ({
+  tenantIdx: utils.tenantIdx(table),
+  slugUnique: uniqueIndex('idx_ai_draft_templates_slug')
+    .on(table.tenantId, table.slug)
+    .where(sql`deleted_at IS NULL`),
+  kindIdx: index('idx_ai_draft_templates_kind').on(table.tenantId, table.kind, table.active),
+}));

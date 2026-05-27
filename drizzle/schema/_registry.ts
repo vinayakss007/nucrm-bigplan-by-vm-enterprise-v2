@@ -260,6 +260,7 @@ import {
 import {
   aiProviderSecrets,
   aiActivity,
+  aiDraftTemplates,
 } from './ai';
 
 // =============================================================================
@@ -2660,6 +2661,21 @@ export const TABLE_REGISTRY = {
       description: 'Per-call AI gateway invocation log',
       isCore: false,
       indexes: ['idx_ai_activity_tenant_time', 'idx_ai_activity_action', 'idx_ai_activity_user', 'idx_ai_activity_status'],
+    },
+  },
+  aiDraftTemplates: {
+    table: aiDraftTemplates,
+    metadata: {
+      name: 'ai_draft_templates',
+      schemaGroup: 'tokens',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: true,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Per-tenant Auto-Draft prompt templates (email / note / reply / call_prep)',
+      isCore: false,
+      indexes: ['idx_ai_draft_templates_slug', 'idx_ai_draft_templates_kind'],
     },
   },
 };
