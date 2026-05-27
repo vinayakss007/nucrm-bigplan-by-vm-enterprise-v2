@@ -1,9 +1,20 @@
 /**
- * AI Assistant API — powered by Claude.
- * Actions: draft_email, score_lead, predict_deal, enrich_contact, suggest_followup
- * Requires: ai-assistant module installed for tenant, and ANTHROPIC_API_KEY set.
+ * AI Assistant API — multi-provider gateway.
  *
- * Integrated with token tracking and rate limits from lib/ai/common.ts
+ * Actions: draft_email, score_lead, predict_deal, suggest_followup
+ *
+ * Replaces the previous direct call to Anthropic. The actual provider call
+ * goes through `lib/ai/gateway.ts` which handles provider selection, fallback
+ * chain, and per-attempt logging into `ai_activity`.
+ *
+ * Still gates on:
+ *   • `ai-assistant` module installed for the tenant
+ *   • `checkTokenAndLimits()` — platform/tenant/user budgets (lib/ai/common.ts)
+ *   • per-IP rate limit (30/hour)
+ *
+ * After a successful call we still call `recordUsage()` so the existing
+ * token-budget machinery (apiKeysRegistry, tokenBudgets, aiUsageAggregated,
+ * aiUsageLogs) keeps working alongside the new ai_activity log.
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
@@ -16,13 +27,11 @@ import { eq, and } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { checkTokenAndLimits, recordUsage } from '@/lib/ai/common';
 import { logError } from '@/lib/errors';
-
-const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+import { chat, GatewayError, type GatewayRequest } from '@/lib/ai/gateway';
 
 // FIX HIGH-03: Sanitize inputs to prevent prompt injection
 function sanitizeInput(input: string, maxLength: number = 500): string {
   if (!input) return '';
-  // Remove potentially malicious patterns
   return String(input)
     .slice(0, maxLength)
     .replace(/[<>]/g, '') // Remove angle brackets
@@ -30,30 +39,29 @@ function sanitizeInput(input: string, maxLength: number = 500): string {
     .trim();
 }
 
-// FIX MEDIUM-04: Make AI model configurable via env var
-const AI_MODEL = process.env['AI_MODEL'] || 'claude-3-5-haiku-20241022';
+/**
+ * Map a tenant action to the metric module name used by lib/ai/common.ts.
+ * Different actions count against different per-tenant monthly limits.
+ */
+function moduleForAction(action: string): string {
+  switch (action) {
+    case 'score_lead':       return 'lead_scoring';
+    case 'predict_deal':     return 'revenue_agent';
+    case 'draft_email':
+    case 'suggest_followup':
+    default:                 return 'ai-assistant';
+  }
+}
 
-async function callClaude(systemPrompt: string, userMessage: string, apiKey: string): Promise<{ text: string; usage: any }> {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userMessage }],
-    }),
-  });
-  if (!res.ok) throw new Error(`Claude API error: ${res.status}`);
-  const data = await res.json();
-  return { 
-    text: data.content?.[0]?.text ?? '',
-    usage: data.usage || {}
-  };
+/** Map gateway action label written to ai_activity. */
+function activityActionFor(action: string): string {
+  switch (action) {
+    case 'draft_email':      return 'draft';
+    case 'score_lead':       return 'lead_scoring';
+    case 'predict_deal':     return 'predict_deal';
+    case 'suggest_followup': return 'suggest_followup';
+    default:                 return action;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -65,23 +73,19 @@ export async function POST(req: NextRequest) {
     const limited = await checkRateLimit(req, { action: 'ai_assistant', max: 30, windowMinutes: 60 });
     if (limited) return limited;
 
-    // Check module is installed
+    // Module gate
     const moduleInstalled = await db.query.tenantModules.findFirst({
       where: and(
         eq(tenantModules.tenantId, ctx.tenantId),
         eq(tenantModules.moduleId, 'ai-assistant'),
-        eq(tenantModules.status, 'active')
-      )
+        eq(tenantModules.status, 'active'),
+      ),
     });
     if (!moduleInstalled) {
-      return NextResponse.json({ error: 'AI Assistant module not installed. Install it from Settings → Modules.' }, { status: 403 });
-    }
-
-    // Use tenant's API key or fall back to platform key
-    const tenantKey = (moduleInstalled.settings as any)?.anthropic_api_key;
-    const apiKey = tenantKey || ANTHROPIC_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: 'No Anthropic API key configured. Add one in the AI Assistant module settings.' }, { status: 503 });
+      return NextResponse.json(
+        { error: 'AI Assistant module not installed. Install it from Settings → Modules.' },
+        { status: 403 },
+      );
     }
 
     const rawBody = await req.json();
@@ -90,7 +94,7 @@ export async function POST(req: NextRequest) {
     const v = validated.data;
     const { action, contact, deal, context } = v;
 
-    // FIX HIGH-03: Sanitize all user inputs before using in prompts
+    // Sanitise everything before it gets near a prompt
     const sanitizedContact = contact ? {
       ...contact,
       first_name: sanitizeInput(contact.first_name ?? '', 100),
@@ -112,154 +116,185 @@ export async function POST(req: NextRequest) {
 
     const sanitizedContext = sanitizeInput(context ?? '', 500);
 
-    // FIX MEDIUM-05: Make AI cost estimation configurable and more realistic
+    // Token-budget gate (platform / tenant / user). Service is "ai" since the
+    // actual provider is decided inside the gateway via the fallback chain.
     const estimatedCostCents = parseInt(process.env['AI_ESTIMATED_COST_CENTS'] || '50');
+    const moduleName = moduleForAction(action);
     const tokenCheck = await checkTokenAndLimits(
       ctx.tenantId,
       ctx.userId,
-      'ai-assistant',
-      'anthropic',
-      estimatedCostCents
+      moduleName,
+      'ai',
+      estimatedCostCents,
     );
-
     if (!tokenCheck.allowed) {
       return NextResponse.json({
         error: `AI usage limit exceeded: ${tokenCheck.reason}`,
-        remaining: tokenCheck.remaining
+        remaining: tokenCheck.remaining,
       }, { status: 429 });
     }
 
+    // Build the prompt for the requested action
+    let system: string;
+    let user: string;
     switch (action) {
-      case 'draft_email': {
-        const result = await callClaude(
-          `You are a sales assistant. Write professional, concise sales emails.
-           Always use the contact's first name. Keep emails under 150 words.
-           Output only the email body text, no subject line.`,
-          `Write a follow-up email to ${sanitizedContact?.first_name ?? 'the contact'} at ${sanitizedContact?.company_name ?? 'their company'}.
-           Their status: ${sanitizedContact?.lead_status ?? 'unknown'}.
-           Context: ${sanitizedContext ?? 'General follow-up'}.
-           Tone: Professional but warm.`,
-          apiKey
-        );
-        
-        // Record actual usage
-        const actualCostCents = Math.round((result.usage.output_tokens || 0) * 0.001); // Approximate cost calculation
-        await recordUsage(
-          ctx.tenantId,
-          ctx.userId,
-          'ai-assistant',
-          'anthropic',
-          actualCostCents,
-          result.usage.total_tokens || 0,
-          { action, tokensUsed: result.usage }
-        );
-        
-        return NextResponse.json({ result: result.text, action, usage: result.usage });
-      }
+      case 'draft_email':
+        system = `You are a sales assistant. Write professional, concise sales emails. Always use the contact's first name. Keep emails under 150 words. Output only the email body text, no subject line.`;
+        user = `Write a follow-up email to ${sanitizedContact?.first_name ?? 'the contact'} at ${sanitizedContact?.company_name ?? 'their company'}.
+Their status: ${sanitizedContact?.lead_status ?? 'unknown'}.
+Context: ${sanitizedContext || 'General follow-up'}.
+Tone: Professional but warm.`;
+        break;
 
-      case 'score_lead': {
-        const result = await callClaude(
-          `You are a lead scoring expert. Score leads 0-100 based on their profile.
-           Return ONLY a JSON object: { "score": number, "reason": "short explanation", "next_action": "what to do next" }`,
-          `Score this lead:
-           Name: ${sanitizedContact?.first_name} ${sanitizedContact?.last_name}
-           Company: ${sanitizedContact?.company_name ?? 'Unknown'}
-           Status: ${sanitizedContact?.lead_status}
-           Score so far: ${sanitizedContact?.score ?? 0}
-           Tags: ${(sanitizedContact?.tags ?? []).join(', ') || 'none'}
-           Notes: ${sanitizedContact?.notes?.slice(0, 200) ?? 'none'}`,
-          apiKey
-        );
-        
-        // Record usage
-        const actualCostCents = Math.round((result.usage.output_tokens || 0) * 0.001);
-        await recordUsage(
-          ctx.tenantId,
-          ctx.userId,
-          'lead_scoring',
-          'anthropic',
-          actualCostCents,
-          result.usage.total_tokens || 0,
-          { action, tokensUsed: result.usage }
-        );
-        
-        try {
-          const parsed = JSON.parse(result.text);
-          return NextResponse.json({ result: parsed, action, raw: result.text, usage: result.usage });
-        } catch {
-          return NextResponse.json({ result: { score: 50, reason: String(result.text), next_action: 'Review manually' }, action, usage: result.usage });
-        }
-      }
+      case 'score_lead':
+        system = `You are a lead scoring expert. Score leads 0-100 based on their profile. Return ONLY a JSON object: { "score": number, "reason": "short explanation", "next_action": "what to do next" }`;
+        user = `Score this lead:
+Name: ${sanitizedContact?.first_name ?? ''} ${sanitizedContact?.last_name ?? ''}
+Company: ${sanitizedContact?.company_name ?? 'Unknown'}
+Status: ${sanitizedContact?.lead_status ?? ''}
+Score so far: ${sanitizedContact?.score ?? 0}
+Tags: ${(sanitizedContact?.tags ?? []).join(', ') || 'none'}
+Notes: ${sanitizedContact?.notes?.slice(0, 200) || 'none'}`;
+        break;
 
-      case 'predict_deal': {
-        const result = await callClaude(
-          `You are a sales analyst. Predict deal outcomes based on pipeline data.
-           Return ONLY JSON: { "win_probability": number (0-100), "estimated_close": "timeframe", "risk_factors": ["factor1"], "recommendations": ["action1"] }`,
-          `Analyze this deal:
-           Title: ${sanitizedDeal?.title}
-           Value: $${sanitizedDeal?.value ?? 0}
-           Stage: ${sanitizedDeal?.stage}
-           Current probability: ${sanitizedDeal?.probability ?? 0}%
-           Close date: ${sanitizedDeal?.close_date ?? 'not set'}
-           Contact: ${sanitizedDeal?.first_name} ${sanitizedDeal?.last_name}
-           Days in stage: unknown`,
-          apiKey
-        );
-        
-        // Record usage
-        const actualCostCents = Math.round((result.usage.output_tokens || 0) * 0.001);
-        await recordUsage(
-          ctx.tenantId,
-          ctx.userId,
-          'revenue_agent',
-          'anthropic',
-          actualCostCents,
-          result.usage.total_tokens || 0,
-          { action, tokensUsed: result.usage }
-        );
-        
-        try {
-          return NextResponse.json({ result: JSON.parse(result.text), action, usage: result.usage });
-        } catch {
-          return NextResponse.json({ result: { win_probability: deal?.probability ?? 50, estimated_close: '30 days', risk_factors: [], recommendations: [result.text] }, action, usage: result.usage });
-        }
-      }
+      case 'predict_deal':
+        system = `You are a sales analyst. Predict deal outcomes based on pipeline data. Return ONLY JSON: { "win_probability": number (0-100), "estimated_close": "timeframe", "risk_factors": ["factor1"], "recommendations": ["action1"] }`;
+        user = `Analyze this deal:
+Title: ${sanitizedDeal?.title ?? ''}
+Value: $${sanitizedDeal?.value ?? 0}
+Stage: ${sanitizedDeal?.stage ?? ''}
+Current probability: ${sanitizedDeal?.probability ?? 0}%
+Close date: ${sanitizedDeal?.close_date || 'not set'}
+Contact: ${sanitizedDeal?.first_name ?? ''} ${sanitizedDeal?.last_name ?? ''}
+Days in stage: unknown`;
+        break;
 
-      case 'suggest_followup': {
-        const result = await callClaude(
-          `You are a CRM advisor. Suggest the best next action for a sales rep.
-           Be specific and actionable. Return ONLY JSON: { "action": "what to do", "timing": "when", "channel": "email/call/meeting", "script": "what to say" }`,
-          `Contact: ${sanitizedContact?.first_name} ${sanitizedContact?.last_name} at ${sanitizedContact?.company_name ?? 'their company'}
-           Status: ${sanitizedContact?.lead_status}
-           Last activity: ${sanitizedContext ?? 'Unknown'}
-           Score: ${sanitizedContact?.score ?? 0}/100`,
-          apiKey
-        );
-        
-        // Record usage
-        const actualCostCents = Math.round((result.usage.output_tokens || 0) * 0.001);
-        await recordUsage(
-          ctx.tenantId,
-          ctx.userId,
-          'ai-assistant',
-          'anthropic',
-          actualCostCents,
-          result.usage.total_tokens || 0,
-          { action, tokensUsed: result.usage }
-        );
-        
-        try {
-          return NextResponse.json({ result: JSON.parse(result.text), action, usage: result.usage });
-        } catch {
-          return NextResponse.json({ result: { action: result.text, timing: 'Today', channel: 'email', script: '' }, action, usage: result.usage });
-        }
-      }
+      case 'suggest_followup':
+        system = `You are a CRM advisor. Suggest the best next action for a sales rep. Be specific and actionable. Return ONLY JSON: { "action": "what to do", "timing": "when", "channel": "email/call/meeting", "script": "what to say" }`;
+        user = `Contact: ${sanitizedContact?.first_name ?? ''} ${sanitizedContact?.last_name ?? ''} at ${sanitizedContact?.company_name ?? 'their company'}
+Status: ${sanitizedContact?.lead_status ?? ''}
+Last activity: ${sanitizedContext || 'Unknown'}
+Score: ${sanitizedContact?.score ?? 0}/100`;
+        break;
 
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }
-  } catch (err: any) {
-    logError({ error: err, context: 'ai-assistant' }).catch(()=>{});
+
+    // Send through the gateway
+    const gatewayReq: GatewayRequest = {
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: activityActionFor(action),
+      system,
+      messages: [{ role: 'user', content: user }],
+      metadata: { module: moduleName },
+    };
+
+    let resp;
+    try {
+      resp = await chat(gatewayReq);
+    } catch (err) {
+      if (err instanceof GatewayError) {
+        if (err.code === 'no_provider_enabled') {
+          return NextResponse.json({
+            error: 'No AI provider is enabled. Configure one at Settings → AI Providers.',
+            code: err.code,
+          }, { status: 503 });
+        }
+        if (err.code === 'no_key_for_provider') {
+          return NextResponse.json({
+            error: `No API key stored for ${err.provider ?? 'the requested provider'}.`,
+            code: err.code,
+          }, { status: 503 });
+        }
+        return NextResponse.json({
+          error: err.message,
+          code: err.code,
+        }, { status: 502 });
+      }
+      throw err;
+    }
+
+    // Update existing token-budget books (apiKeysRegistry, tokenBudgets, aiUsageAggregated, aiUsageLogs)
+    const tokensUsed = resp.tokensIn + resp.tokensOut;
+    // Approximate cost was already computed inside the gateway and written to ai_activity;
+    // we re-estimate here only for the legacy bookkeeping path which keys on `service`.
+    const actualCostCents = Math.round(tokensUsed * 0.001);
+    try {
+      await recordUsage(
+        ctx.tenantId,
+        ctx.userId,
+        moduleName,
+        resp.provider,
+        actualCostCents,
+        tokensUsed,
+        { action, gateway_activity_id: resp.activityId, fallbacks_used: resp.fallbacksUsed },
+      );
+    } catch (err) {
+      // Bookkeeping failure must not break the user response
+      logError({ error: err, context: 'ai-assistant-recordUsage' }).catch(() => {});
+    }
+
+    const envelope = {
+      action,
+      provider: resp.provider,
+      model: resp.model,
+      usage: {
+        input_tokens: resp.tokensIn,
+        output_tokens: resp.tokensOut,
+        total_tokens: tokensUsed,
+        latency_ms: resp.latencyMs,
+        fallbacks_used: resp.fallbacksUsed,
+      },
+      activity_id: resp.activityId,
+    };
+
+    // Try to JSON-parse for the structured actions; fall back to a sensible shape.
+    if (action === 'draft_email') {
+      return NextResponse.json({ ...envelope, result: resp.text });
+    }
+    if (action === 'score_lead') {
+      try {
+        return NextResponse.json({ ...envelope, result: JSON.parse(resp.text), raw: resp.text });
+      } catch {
+        return NextResponse.json({
+          ...envelope,
+          result: { score: 50, reason: resp.text, next_action: 'Review manually' },
+          raw: resp.text,
+        });
+      }
+    }
+    if (action === 'predict_deal') {
+      try {
+        return NextResponse.json({ ...envelope, result: JSON.parse(resp.text) });
+      } catch {
+        return NextResponse.json({
+          ...envelope,
+          result: {
+            win_probability: deal?.probability ?? 50,
+            estimated_close: '30 days',
+            risk_factors: [],
+            recommendations: [resp.text],
+          },
+        });
+      }
+    }
+    if (action === 'suggest_followup') {
+      try {
+        return NextResponse.json({ ...envelope, result: JSON.parse(resp.text) });
+      } catch {
+        return NextResponse.json({
+          ...envelope,
+          result: { action: resp.text, timing: 'Today', channel: 'email', script: '' },
+        });
+      }
+    }
+
+    // Unreachable — switch above already handled every value.
+    return NextResponse.json({ ...envelope, result: resp.text });
+  } catch (err) {
+    logError({ error: err, context: 'ai-assistant' }).catch(() => {});
     return apiError(err);
   }
 }
