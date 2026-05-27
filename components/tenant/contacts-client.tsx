@@ -1,12 +1,13 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Plus, Search, Grid, List, Trash2, ChevronRight, Download, Upload,
   Users, AlertCircle, X, Mail, Phone, Building2, User, Tag,
   MoreHorizontal, Filter, ChevronDown, Star, Zap, Eye, Activity,
-  CheckCircle, XCircle, RotateCcw, Archive, Globe, Edit,
+  CheckCircle, XCircle, RotateCcw, Archive, Globe, Edit, UserPlus,
+  CircleDot,
 } from 'lucide-react';
 import { cn, formatDate, getInitials, toSnakeCase } from '@/lib/utils';
 import ImportModal from './import-modal';
@@ -23,6 +24,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const STATUS_CONFIG: Record<string,{label:string;color:string;dot:string;icon:any}> = {
   new:         { label:'New',          color:'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',         dot:'bg-slate-400',   icon:Star },
@@ -164,6 +166,14 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
   const [total, setTotal]       = useState(totalCount ?? initialContacts.length);
   const [offset, setOffset]     = useState(initialOffset ?? 0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkPrompt, setBulkPrompt] = useState<
+    | { kind: 'tag' | 'untag'; title: string; placeholder: string }
+    | { kind: 'assign'; title: string }
+    | { kind: 'status'; title: string }
+    | null
+  >(null);
+  const [bulkInput, setBulkInput] = useState('');
   const limit                   = 50;
   const [view, setView]         = useState<'list'|'grid'>('list');
   const [search, setSearch]     = useState(initialQ || '');
@@ -223,6 +233,114 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url); toast.success('Exported contacts'); setExporting(false);
   };
+
+  // ── Selection helpers ────────────────────────────────────────────────
+  const toggleOne = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const allSelectedOnPage = useMemo(
+    () => contacts.length > 0 && contacts.every(c => selectedIds.has(c['id'])),
+    [contacts, selectedIds],
+  );
+  const someSelectedOnPage = useMemo(
+    () => contacts.some(c => selectedIds.has(c['id'])) && !allSelectedOnPage,
+    [contacts, selectedIds, allSelectedOnPage],
+  );
+
+  const toggleAllOnPage = useCallback(() => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      const allOn = contacts.length > 0 && contacts.every(c => next.has(c['id']));
+      if (allOn) {
+        for (const c of contacts) next.delete(c['id']);
+      } else {
+        for (const c of contacts) next.add(c['id']);
+      }
+      return next;
+    });
+  }, [contacts]);
+
+  // ── Real bulk-API integration ────────────────────────────────────────
+  const callBulk = useCallback(async (
+    action: 'delete' | 'tag' | 'untag' | 'assign' | 'status',
+    payload?: Record<string, unknown>,
+  ) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await fetch('/api/tenant/contacts/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ids, updates: payload ?? {} }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || `Bulk ${action} failed`);
+        return;
+      }
+      const verb =
+        action === 'delete' ? 'Deleted' :
+        action === 'tag' ? 'Tagged' :
+        action === 'untag' ? 'Untagged' :
+        action === 'assign' ? 'Assigned' :
+        'Updated';
+      toast.success(`${verb} ${data.affected ?? ids.length} contacts`);
+      setSelectedIds(new Set());
+      load(offset);
+    } catch (err) {
+      toast.error(`Bulk ${action} failed`);
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [selectedIds, load, offset]);
+
+  const bulkExportCSV = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await fetch('/api/tenant/contacts/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) {
+        toast.error('Export failed');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `contacts_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${ids.length} contacts`);
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [selectedIds]);
+
+  const submitBulkPrompt = useCallback(async () => {
+    if (!bulkPrompt) return;
+    const value = bulkInput.trim();
+    if (!value) { toast.error('Value required'); return; }
+    if (bulkPrompt.kind === 'tag' || bulkPrompt.kind === 'untag') {
+      await callBulk(bulkPrompt.kind, { tag: value });
+    } else if (bulkPrompt.kind === 'assign') {
+      await callBulk('assign', { assign_to: value });
+    } else if (bulkPrompt.kind === 'status') {
+      await callBulk('status', { lead_status: value });
+    }
+    setBulkPrompt(null);
+    setBulkInput('');
+  }, [bulkPrompt, bulkInput, callBulk]);
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -293,15 +411,22 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
+                <th className="w-10 px-4 py-3">
+                  <Checkbox
+                    aria-label="Select all on page"
+                    checked={allSelectedOnPage ? true : someSelectedOnPage ? 'indeterminate' : false}
+                    onCheckedChange={() => toggleAllOnPage()}
+                  />
+                </th>
                 {['Contact','Company','Email & Phone','Status','Lifecycle','Added',''].map(h=>(
                   <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {loading&&<tr><td colSpan={7} className="py-16 text-center"><div className="flex items-center justify-center gap-2 text-muted-foreground text-sm"><div className="w-4 h-4 border-2 border-violet-500 border-t-transparent rounded-full animate-spin"/>Loading contacts...</div></td></tr>}
+              {loading&&<tr><td colSpan={8} className="py-16 text-center"><div className="flex items-center justify-center gap-2 text-muted-foreground text-sm"><div className="w-4 h-4 border-2 border-violet-500 border-t-transparent rounded-full animate-spin"/>Loading contacts...</div></td></tr>}
               {!loading&&!contacts.length&&(
-                <tr><td colSpan={7} className="py-20 text-center">
+                <tr><td colSpan={8} className="py-20 text-center">
                   <div className="max-w-sm mx-auto">
                     <div className="w-14 h-14 rounded-2xl bg-sky-50 dark:bg-sky-900/20 flex items-center justify-center mx-auto mb-4"><Users className="w-7 h-7 text-sky-400"/></div>
                     <p className="text-sm font-semibold mb-1">{search||statusFilter!=='all'?'No contacts match your filters':'No contacts yet'}</p>
@@ -324,7 +449,18 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                       ...(permissions.canDelete ? [{ label:'Delete', icon:<Trash2 className="w-5 h-5"/>, color:'text-white', bg:'bg-red-500', onClick:async()=>deleteContact(c['id'],`${c['first_name']} ${c['last_name']}`) }] : []),
                     ]}
                   >
-                    <tr className="border-b border-border last:border-0 hover:bg-accent/30 transition-colors cursor-pointer group" onClick={()=>router.push(`/tenant/contacts/${c['id']}`)}>
+                    <tr className={cn(
+                      "border-b border-border last:border-0 hover:bg-accent/30 transition-colors cursor-pointer group",
+                      selectedIds.has(c['id']) && "bg-violet-50/50 dark:bg-violet-900/10"
+                    )} onClick={()=>router.push(`/tenant/contacts/${c['id']}`)}>
+                    {/* Selection */}
+                    <td className="w-10 px-4 py-3" onClick={e=>e.stopPropagation()}>
+                      <Checkbox
+                        aria-label={`Select ${c['first_name']} ${c['last_name']}`}
+                        checked={selectedIds.has(c['id'])}
+                        onCheckedChange={() => toggleOne(c['id'])}
+                      />
+                    </td>
                     {/* Contact */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
@@ -504,19 +640,98 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
         selectedCount={selectedIds.size}
         onClear={() => setSelectedIds(new Set())}
         actions={[
-          { label: 'Delete', icon: Trash2, variant: 'danger', onClick: async () => {
-            if (selectedIds.size === 0) return;
-            await confirmThen(`Delete ${selectedIds.size} contacts?`, async () => {
-              for (const id of selectedIds) {
-                await fetch(`/api/tenant/contacts/${id}`, { method: 'DELETE' });
-              }
-              setSelectedIds(new Set());
-              toast.success(`Deleted ${selectedIds.size} contacts`);
-              load(offset);
-            });
-          }},
+          {
+            label: 'Tag',
+            icon: Tag,
+            onClick: () => { setBulkInput(''); setBulkPrompt({ kind: 'tag', title: 'Add tag to selected contacts', placeholder: 'e.g. vip' }); },
+          },
+          {
+            label: 'Untag',
+            icon: X,
+            onClick: () => { setBulkInput(''); setBulkPrompt({ kind: 'untag', title: 'Remove tag from selected contacts', placeholder: 'tag to remove' }); },
+          },
+          ...(permissions.canAssign && teamMembers.length > 0 ? [{
+            label: 'Assign',
+            icon: UserPlus,
+            onClick: () => { setBulkInput(''); setBulkPrompt({ kind: 'assign' as const, title: 'Assign selected contacts to' }); },
+          }] : []),
+          {
+            label: 'Status',
+            icon: CircleDot,
+            onClick: () => { setBulkInput('new'); setBulkPrompt({ kind: 'status', title: 'Change status of selected contacts' }); },
+          },
+          {
+            label: 'Export',
+            icon: Download,
+            onClick: () => { void bulkExportCSV(); },
+          },
+          ...(permissions.canDelete ? [{
+            label: 'Delete',
+            icon: Trash2,
+            variant: 'danger' as const,
+            onClick: async () => {
+              const count = selectedIds.size;
+              if (count === 0) return;
+              await confirmThen(`Delete ${count} contacts?`, async () => {
+                await callBulk('delete');
+              });
+            },
+          }] : []),
         ]}
       />
+
+      {/* Bulk action input prompt */}
+      {bulkPrompt && (
+        <Dialog open onOpenChange={(o)=>{ if (!o) { setBulkPrompt(null); setBulkInput(''); } }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-sm">{bulkPrompt.title}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 pt-2">
+              {bulkPrompt.kind === 'assign' ? (
+                <select
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                  value={bulkInput}
+                  onChange={e => setBulkInput(e.target.value)}
+                >
+                  <option value="">Select team member…</option>
+                  {teamMembers.map((m: any) => (
+                    <option key={m.user_id} value={m.user_id}>{m.full_name}</option>
+                  ))}
+                </select>
+              ) : bulkPrompt.kind === 'status' ? (
+                <select
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                  value={bulkInput}
+                  onChange={e => setBulkInput(e.target.value)}
+                >
+                  {Object.entries(STATUS_CONFIG).map(([v, cfg]) => (
+                    <option key={v} value={v}>{cfg.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  autoFocus
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                  placeholder={'placeholder' in bulkPrompt ? bulkPrompt.placeholder : ''}
+                  value={bulkInput}
+                  onChange={e => setBulkInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void submitBulkPrompt(); } }}
+                />
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                Affects {selectedIds.size} selected contact{selectedIds.size === 1 ? '' : 's'}.
+              </p>
+              <div className="flex gap-2 justify-end pt-1">
+                <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => { setBulkPrompt(null); setBulkInput(''); }}>Cancel</Button>
+                <Button size="sm" disabled={bulkBusy || !bulkInput.trim()} onClick={() => void submitBulkPrompt()}>
+                  {bulkBusy ? 'Working…' : 'Apply'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
