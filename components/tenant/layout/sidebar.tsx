@@ -8,7 +8,7 @@ import {
   LifeBuoy, Package, FileText, ShoppingCart, FileSignature, RefreshCw, Library, Plug,
   Command, Star, StarOff, Database, Upload, Workflow, Mail, MessageSquare,
   Trophy, Wrench, Boxes, Sparkles, ListChecks, ArrowRightLeft, Tag, Globe, Filter,
-  BrainCircuit, EyeOff,
+  BrainCircuit, EyeOff, Send, ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -60,6 +60,8 @@ const NAV_SECTIONS: NavSection[] = [
     id: 'sales', label: 'Sales',
     items: [
       { href:'/tenant/quotes',        label:'Quotes',        icon:FileText,      keywords:'proposal estimate' },
+      { href:'/tenant/offers',        label:'Offers',        icon:Send,          keywords:'buyer link accept decline public' },
+      { href:'/tenant/approvals',     label:'Approvals',     icon:ShieldCheck,   keywords:'pending review approve reject', adminOnly:true },
       { href:'/tenant/orders',        label:'Orders',        icon:ShoppingCart,  keywords:'sales order' },
       { href:'/tenant/contracts',     label:'Contracts',     icon:FileSignature, keywords:'agreements legal' },
       { href:'/tenant/invoices',      label:'Invoices',      icon:FileText,      keywords:'billing receipts' },
@@ -259,7 +261,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
     const all = NAV_SECTIONS.flatMap(s => s.items);
     return pinned
       .map(href => all.find(i => i.href === href))
-      .filter((i): i is NavItem => !!i && hasPerm(i) && matches(i));
+      .filter((i): i is NavItem => !!(i && hasPerm(i) && matches(i)));
   }, [pinned, q, isAdmin, permissions, hiddenItems]);
 
   // ── Collapsed mini sidebar ──────────────────────────────────

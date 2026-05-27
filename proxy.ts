@@ -20,7 +20,7 @@ const PUBLIC_PATHS = [
   '/api/health', '/api/track/click', '/api/track/open', '/api/unsubscribe',
   '/api/keepalive', '/api/test-email', '/api/cron', '/api/metrics', '/api/embed', '/api/emergency',
   '/api/setup/check', '/api/setup/create-admin', '/api/lead-capture', '/api/lead-capture/submit',
-  '/api/public/tickets', '/api/public/invoices', '/api/public/kb',
+  '/api/public/tickets', '/api/public/invoices', '/api/public/kb', '/api/public/offers',
   '/sw.js', '/manifest.json',
 ];
 
@@ -48,7 +48,7 @@ function setCORS(response: NextResponse, origin: string | null, pathname: string
   response.headers.set('Vary', 'Origin');
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const origin = request.headers.get('origin');
 
