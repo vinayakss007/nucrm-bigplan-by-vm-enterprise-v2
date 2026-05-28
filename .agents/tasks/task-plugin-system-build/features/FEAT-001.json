@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "feat",
   "description": "Create the complete plugin system: separate database schema, plugin engine with HTTP execution, full CRUD API, webhook receiver, execution logging, and updated UI. This replaces the existing half-built plugin-engine that just wraps the integrations table.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Step 1 - Create drizzle/schema/plugins.ts with two tables: (a) 'custom_plugins' table with columns: id (pk), tenantId, userId (creator), name, description, icon, baseUrl, authType (enum: 'bearer'|'basic'|'api_key_header'|'api_key_query'|'oauth2_client_credentials'|'none'), authConfig (jsonb - stores token/username/password/client_id/etc encrypted references), customHeaders (jsonb), actions (jsonb array - each action has: id, name, method, path, bodyTemplate, responseMapping), webhookSecret (text, for inbound webhook verification), status ('active'|'disabled'|'error'), lastUsedAt, lastError, metadata, lifecycle columns. (b) 'plugin_execution_logs' table with: id (pk), tenantId, pluginId (references custom_plugins), actionName, method, url, requestHeaders (jsonb), requestBody (jsonb), responseStatus (integer), responseBody (text), durationMs (integer), success (boolean), errorMessage, metadata, createdAt. Use the utils.ts helpers (pk(), tenantId(), lifecycle(), metadata(), tenantIdx, metadataIdx, activeIdx). Add proper indexes.",
     "Step 2 - Export the new tables from drizzle/schema/index.ts by adding 'export * from ./plugins' line.",
@@ -33,5 +33,5 @@
     "npx tsc --noEmit must pass with exit code 0"
   ],
   "blocked_reason": null,
-  "findings": "All code compiles cleanly with npx tsc --noEmit (0 errors). Docker-compose files already existed from previous commit (lean dev with just Redis, full production in deploy/). The existing plugin-engine routes were left untouched for backward compatibility."
+  "findings": "All 7 review issues addressed: (1) AES-256-GCM encryption for authConfig via lib/plugins/crypto.ts, credentials redacted in GET responses; (2) timingSafeEqual for webhook HMAC; (3) optional timestamp-based replay protection; (4) removed status='error' on transient failure, only sets lastError; (5) PATCH validates authType against VALID_AUTH_TYPES and status against VALID_STATUSES; (6) in-memory sliding-window rate limiter at 60 req/min per plugin on webhook route; (7) template data passed to CreatePluginForm via initialTemplate prop. npx tsc --noEmit passes with 0 errors."
 }
