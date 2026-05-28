@@ -65,7 +65,7 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 overflow-x-hidden scroll-smooth">
+    <div className="dark min-h-screen bg-slate-950 text-slate-100 overflow-x-hidden scroll-smooth">
       {/* NAV */}
       <nav className="fixed top-0 w-full z-50 bg-slate-950/80 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -153,7 +153,7 @@ export default function LandingPage() {
             <div className="relative rounded-2xl border border-white/10 shadow-2xl shadow-violet-500/20 overflow-hidden">
               <Image
                 src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&h=700&fit=crop"
-                alt="NuCRM Dashboard"
+                alt="Analytics dashboard showing revenue metrics and sales pipeline visualization"
                 width={1200}
                 height={700}
                 className="w-full h-auto"
@@ -243,7 +243,7 @@ export default function LandingPage() {
             <div className="rounded-2xl border border-white/10 overflow-hidden shadow-2xl shadow-violet-500/10">
               <Image
                 src="https://images.unsplash.com/photo-1535378917042-10a22c95931a?w=800&h=600&fit=crop"
-                alt="AI Technology"
+                alt="Abstract visualization of machine learning algorithms analyzing data patterns"
                 width={800}
                 height={600}
                 className="w-full h-auto"
@@ -295,7 +295,7 @@ export default function LandingPage() {
             <div className="rounded-2xl border border-white/10 overflow-hidden shadow-2xl shadow-violet-500/10">
               <Image
                 src="https://images.unsplash.com/photo-1553877522-43269d4ea984?w=800&h=600&fit=crop"
-                alt="Integration Technology"
+                alt="Modern workspace with connected technology tools and integrations"
                 width={800}
                 height={600}
                 className="w-full h-auto"
