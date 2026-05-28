@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { customPlugins } from '@/drizzle/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import type { PluginAuthType, PluginAction, PluginAuthConfig } from '@/lib/plugins/types';
+import { encryptAuthConfig } from '@/lib/plugins/crypto';
 
 const VALID_AUTH_TYPES: PluginAuthType[] = ['bearer', 'basic', 'api_key_header', 'api_key_query', 'oauth2_client_credentials', 'none'];
 
@@ -71,6 +72,9 @@ export async function POST(request: NextRequest) {
     const authConfig = (body['authConfig'] as PluginAuthConfig | undefined) ?? { type: 'none' };
     const customHeaders = (body['customHeaders'] as Record<string, string> | undefined) ?? {};
 
+    // Encrypt authConfig before persisting
+    const encryptedAuthConfig = encryptAuthConfig(authConfig);
+
     const [row] = await db.insert(customPlugins).values({
       tenantId: ctx.tenantId,
       userId: ctx.userId,
@@ -79,7 +83,7 @@ export async function POST(request: NextRequest) {
       icon: (body['icon'] as string) ?? null,
       baseUrl,
       authType: authType ?? 'none',
-      authConfig,
+      authConfig: encryptedAuthConfig,
       customHeaders,
       actions,
       webhookSecret: (body['webhookSecret'] as string) ?? null,
