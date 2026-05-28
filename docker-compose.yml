@@ -8,10 +8,16 @@ services:
       POSTGRES_USER: nucrm
       POSTGRES_PASSWORD: nucrm_secure_password
       POSTGRES_DB: nucrm
+      POSTGRES_CONFIG_FILE: /etc/postgresql/postgresql.conf
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    shm_size: 32M
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nucrm"]
       interval: 10s
@@ -22,9 +28,13 @@ services:
     image: redis:7-alpine
     container_name: nucrm-redis
     restart: unless-stopped
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -65,6 +75,7 @@ services:
       SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
       SENTRY_ENABLE: ${SENTRY_ENABLE:-false}
       SENTRY_TRACES_SAMPLE_RATE: "0.1"
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
     ports:
       - "3000:3000"
 

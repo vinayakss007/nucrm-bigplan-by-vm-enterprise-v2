@@ -242,11 +242,10 @@ export async function POST(request: NextRequest) {
     await executeBatch();
 
     // Log activity
-    await db.insert(activities).values({} as any); // @ts-expect-error Schema mismatch - activity insert requires partial object
-    db.insert().values({
+    await db.insert(activities).values({
       tenantId: ctx.tenantId,
       userId: ctx.userId,
-      type: 'lead_created',
+      eventType: 'lead_created',
       description: `Imported ${results.imported} leads (${results.updated} updated, ${results.skipped} skipped)`,
       entityType: 'bulk_import',
       entityId: sql`gen_random_uuid()`,
