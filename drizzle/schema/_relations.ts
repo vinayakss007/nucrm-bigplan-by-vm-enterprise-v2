@@ -11,6 +11,10 @@ import { tenants, users } from './core';
 import { contacts, companies, deals, leads } from './crm';
 import { tasks } from './infra';
 
+// Note: createdBy/updatedBy/deletedBy audit columns are intentionally not mapped
+// as relations here. They exist on most tables via the audit() factory but are
+// never queried via Drizzle's relational API. Add them per-table if needed.
+
 // ── Tenants Relations ─────────────────────────────────
 export const tenantsRelations = relations(tenants, ({ many }) => ({
   contacts: many(contacts),
@@ -54,6 +58,18 @@ export const dealsRelations = relations(deals, ({ one }) => ({
   tenant: one(tenants, {
     fields: [deals.tenantId],
     references: [tenants.id],
+  }),
+  contact: one(contacts, {
+    fields: [deals.contactId],
+    references: [contacts.id],
+  }),
+  company: one(companies, {
+    fields: [deals.companyId],
+    references: [companies.id],
+  }),
+  assignedUser: one(users, {
+    fields: [deals.assignedTo],
+    references: [users.id],
   }),
 }));
 
