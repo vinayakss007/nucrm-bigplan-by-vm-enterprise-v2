@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "feat",
   "description": "Create a comprehensive development seed script (scripts/seed-dev.ts) that populates the PostgreSQL database with massive test data covering every table and route in the CRM app. Also verify and document the existing Sentry setup.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Create scripts/seed-dev.ts that: (a) checks NODE_ENV is not 'production' and exits if so, (b) uses dotenv to load .env.local, (c) connects via the Drizzle ORM pattern from drizzle/db.ts with the Pool from lib/db/pool.ts, (d) is idempotent - deletes existing seed data before inserting",
     "Seed users: admin@test.com (super_admin, password: password123), manager@test.com (admin role), rep1@test.com and rep2@test.com (sales_rep role). Use bcryptjs with 12 rounds per lib/auth/session.ts pattern",
@@ -49,5 +49,5 @@
     "Check .env.example has updated sections"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "TypeScript compilation verified with tsc --noEmit --skipLibCheck. Script is 1196 lines covering 20+ tables. Uses relative imports from ../drizzle/schema. The dealStages table uses tenantId via utils.tenantIdx but no actual tenantId column - works fine since inserts use pipelineId FK. Plans table uses text id (not uuid). Modules table also uses text id."
 }

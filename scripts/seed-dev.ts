@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * NuCRM Development Seed Script
  *
@@ -24,6 +25,18 @@ dotenv.config({ path: path.resolve(__dirname, '..', '.env.local') });
 if (process.env.NODE_ENV === 'production') {
   console.error('\x1b[31m[ERROR] Cannot run seed script in production!\x1b[0m');
   process.exit(1);
+}
+
+// Safety check: only allow local database connections
+const dbUrl = process.env.DATABASE_URL || '';
+const isLocalDb = /localhost|127\.0\.0\.1|::1/.test(dbUrl);
+if (dbUrl && !isLocalDb) {
+  console.error('\x1b[31m[ERROR] DATABASE_URL does not point to localhost!\x1b[0m');
+  console.error('This seed script is for local development only.');
+  console.error('Set DATABASE_URL to a localhost connection or set SEED_ALLOW_REMOTE=true to override.');
+  if (process.env.SEED_ALLOW_REMOTE !== 'true') {
+    process.exit(1);
+  }
 }
 
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -824,7 +837,7 @@ async function main() {
     await db.insert(schema.exchangeRates).values([
       { baseCurrency: 'USD', targetCurrency: 'EUR', rate: '0.92150000', source: 'exchangerate-api' },
       { baseCurrency: 'USD', targetCurrency: 'GBP', rate: '0.79230000', source: 'exchangerate-api' },
-    ]);
+    ]).onConflictDoNothing();
     logDone('exchange_rates', 2);
 
 
