@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { deals, contacts, companies, users, tenants, plans, activities, pipelines, dealStages } from '@/drizzle/schema';
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { fireWebhooks } from '@/lib/webhooks';
 
 export async function GET(request: NextRequest) {
   try {
@@ -166,6 +167,8 @@ export async function POST(request: NextRequest) {
         description: `Created deal "${deal.title}" with amount ${amount}`,
       })
       .catch(err => console.error('[deals POST] activity log failed:', err));
+
+    fireWebhooks(ctx.tenantId, 'deal.created', { id: deal.id, title: deal.title, amount }).catch(() => {});
 
     return NextResponse.json({ data: deal }, { status: 201 });
   } catch (err: any) {

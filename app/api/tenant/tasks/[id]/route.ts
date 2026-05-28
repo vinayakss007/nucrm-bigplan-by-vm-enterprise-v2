@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { tasks } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
+import { fireWebhooks } from '@/lib/webhooks';
 
 export async function PATCH(req: NextRequest, { params }: any) {
   try {
@@ -91,6 +92,8 @@ export async function DELETE(req: NextRequest, { params }: any) {
       .returning({ id: tasks.id });
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    fireWebhooks(ctx.tenantId, 'task.deleted', { id }).catch(() => {});
 
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
   } catch (err: any) { 

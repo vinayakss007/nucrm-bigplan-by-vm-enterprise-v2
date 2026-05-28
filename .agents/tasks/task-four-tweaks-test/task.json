@@ -1,0 +1,7 @@
+{
+  "task_id": "task-four-tweaks-test",
+  "task_description": "Four small tweaks: hide Integrations from sidebar, add fireWebhooks to CRUD routes, delete v1 API folder and deprecation.ts, clean v1 references. Then verify 0 TypeScript errors.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001"],
+  "blocked_reason": null
+}
