@@ -1,0 +1,37 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Create the complete plugin system: separate database schema, plugin engine with HTTP execution, full CRUD API, webhook receiver, execution logging, and updated UI. This replaces the existing half-built plugin-engine that just wraps the integrations table.",
+  "status": "in_progress",
+  "steps": [
+    "Step 1 - Create drizzle/schema/plugins.ts with two tables: (a) 'custom_plugins' table with columns: id (pk), tenantId, userId (creator), name, description, icon, baseUrl, authType (enum: 'bearer'|'basic'|'api_key_header'|'api_key_query'|'oauth2_client_credentials'|'none'), authConfig (jsonb - stores token/username/password/client_id/etc encrypted references), customHeaders (jsonb), actions (jsonb array - each action has: id, name, method, path, bodyTemplate, responseMapping), webhookSecret (text, for inbound webhook verification), status ('active'|'disabled'|'error'), lastUsedAt, lastError, metadata, lifecycle columns. (b) 'plugin_execution_logs' table with: id (pk), tenantId, pluginId (references custom_plugins), actionName, method, url, requestHeaders (jsonb), requestBody (jsonb), responseStatus (integer), responseBody (text), durationMs (integer), success (boolean), errorMessage, metadata, createdAt. Use the utils.ts helpers (pk(), tenantId(), lifecycle(), metadata(), tenantIdx, metadataIdx, activeIdx). Add proper indexes.",
+    "Step 2 - Export the new tables from drizzle/schema/index.ts by adding 'export * from ./plugins' line.",
+    "Step 3 - Create lib/plugins/types.ts with TypeScript interfaces: PluginDefinition, PluginAction, PluginAuthConfig (discriminated union by authType), PluginExecutionResult, PluginTestResult, WebhookPayload.",
+    "Step 4 - Create lib/plugins/engine.ts - the core execution engine that: (a) takes a plugin record + action name + params, (b) resolves auth (builds Authorization header or query param based on authType), (c) interpolates variables in action path/body templates using {{variable}} syntax (simple regex replace from params), (d) makes the HTTP call with timeout (10s default), (e) logs execution to plugin_execution_logs table, (f) returns structured result. Support all auth types: bearer (Authorization: Bearer <token>), basic (Authorization: Basic base64(user:pass)), api_key_header (custom header name from config), api_key_query (appends to URL), oauth2_client_credentials (fetch token from tokenUrl first), none.",
+    "Step 5 - Create lib/plugins/webhook-handler.ts - handles inbound webhook calls: verifies webhook secret (HMAC-SHA256 if secret configured, or just accepts), logs the payload, returns acknowledgment. This is a utility function used by the API route.",
+    "Step 6 - Create the plugin CRUD API routes: (a) app/api/tenant/plugins/route.ts with GET (list all tenant plugins) and POST (create new plugin with validation). (b) app/api/tenant/plugins/[id]/route.ts with GET (single plugin detail), PATCH (update), DELETE (soft delete). (c) app/api/tenant/plugins/[id]/test/route.ts with POST (test connection - executes a simple GET to baseUrl with auth, returns success/failure). (d) app/api/tenant/plugins/[id]/execute/route.ts with POST (execute a specific action with params). (e) app/api/tenant/plugins/[id]/logs/route.ts with GET (paginated execution logs). (f) app/api/tenant/plugins/webhook/[id]/route.ts with POST (inbound webhook receiver).",
+    "Step 7 - Update app/api/tenant/plugin-engine/route.ts to ONLY serve the built-in integrations (rename concept clearly - this is the integrations engine, not plugins). Remove any confusion - plugin-engine routes stay as they are for integrations, new /api/tenant/plugins/ routes serve the custom plugin system.",
+    "Step 8 - Move the AI connector logic: copy lib/integrations/ai-connector.ts concept into the plugin engine as the fallback behavior is now native to plugins (user defines their own endpoints). Keep ai-connector.ts in integrations as a legacy fallback for unknown built-in providers but add a comment that the plugin system is the proper way to do custom APIs now.",
+    "Step 9 - Rewrite app/tenant/plugins/page.tsx as a proper plugin management UI with tabs: (a) 'My Plugins' tab - lists user-created custom plugins with status, last used, action count, enable/disable toggle, edit/delete buttons. (b) 'Create Plugin' tab/modal - wizard with steps: Basic Info (name, description, base URL), Authentication (auth type selector + relevant fields), Actions (add multiple actions each with name, method, path template, body template, response mapping), Review & Save. (c) Plugin detail view (inline or expanded) showing: configured actions with Test button per action, execution log table (last 50), webhook URL display with copy button. (d) 'Templates' tab showing pre-built plugin templates users can clone (e.g., 'Generic REST API', 'Stripe-style API', 'GitHub API').",
+    "Step 10 - Add the custom_plugins and plugin_execution_logs tables to drizzle/schema/_registry.ts following the existing pattern (add entries with proper TableMetadata including schemaGroup: 'modules', dependencies, indexes, etc).",
+    "Step 11 - Create the docker-compose files: (a) docker-compose.yml - lean dev environment with just Redis (PostgreSQL is expected to be external or cloud-hosted in dev). (b) deploy/docker-compose.production.yml - full production stack with PostgreSQL, Redis, the NuCRM app, and nginx reverse proxy. Both must be valid YAML with no syntax errors.",
+    "Step 12 - Verify: run npx tsc --noEmit and fix any TypeScript errors. All new code must compile cleanly with the strict tsconfig.json settings (noUncheckedIndexedAccess, noImplicitOverride, noPropertyAccessFromIndexSignature)."
+  ],
+  "acceptance_criteria": [
+    "drizzle/schema/plugins.ts exists with custom_plugins and plugin_execution_logs tables using proper Drizzle schema patterns",
+    "drizzle/schema/index.ts exports the new plugins schema",
+    "lib/plugins/ directory contains types.ts, engine.ts, and webhook-handler.ts",
+    "Plugin engine supports all 6 auth types and variable interpolation in templates",
+    "Full CRUD API at /api/tenant/plugins/ with all specified endpoints",
+    "Webhook receiver at /api/tenant/plugins/webhook/[id]/ that verifies secrets and logs payloads",
+    "/api/tenant/plugin-engine/ routes remain working for integrations (no regression)",
+    "Plugin UI page shows proper tabbed interface for managing custom plugins",
+    "docker-compose.yml is lean (dev) and deploy/docker-compose.production.yml is full (production)",
+    "npx tsc --noEmit passes with 0 errors"
+  ],
+  "verification": [
+    "npx tsc --noEmit must pass with exit code 0"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

@@ -220,6 +220,11 @@ import {
 } from './modules';
 
 import {
+  customPlugins,
+  pluginExecutionLogs,
+} from './plugins';
+
+import {
   segments,
   segmentMembers,
 } from './segments';
@@ -2323,6 +2328,36 @@ export const TABLE_REGISTRY = {
       description: 'Tenant module installations',
       isCore: false,
       indexes: ['idx_tenant_modules_unique', 'idx_tenant_modules_tenant'],
+    },
+  },
+  customPlugins: {
+    table: customPlugins,
+    metadata: {
+      name: 'custom_plugins',
+      schemaGroup: 'modules',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants', 'users'],
+      description: 'Custom user-defined API plugins',
+      isCore: false,
+      indexes: ['idx_custom_plugins_tenant', 'idx_custom_plugins_user', 'idx_custom_plugins_status', 'idx_custom_plugins_metadata_g', 'idx_custom_plugins_active'],
+    },
+  },
+  pluginExecutionLogs: {
+    table: pluginExecutionLogs,
+    metadata: {
+      name: 'plugin_execution_logs',
+      schemaGroup: 'modules',
+      hasTenantId: true,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants', 'customPlugins'],
+      description: 'Plugin action execution logs',
+      isCore: false,
+      indexes: ['idx_plugin_execution_logs_tenant', 'idx_plugin_execution_logs_plugin', 'idx_plugin_execution_logs_success'],
     },
   },
 
