@@ -28,6 +28,7 @@ let nextConfig = {
       { protocol: 'https', hostname: '*.public.blob.vercel-storage.com' },
       { protocol: 'https', hostname: '*.r2.cloudflarestorage.com' },
       { protocol: 'https', hostname: '*.s3.amazonaws.com' },
+      { protocol: 'https', hostname: 'images.unsplash.com' },
     ],
     formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 60,
