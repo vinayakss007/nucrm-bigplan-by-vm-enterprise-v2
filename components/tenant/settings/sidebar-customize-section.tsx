@@ -67,7 +67,6 @@ const CATALOG = [
     ['/tenant/trash',                  'Trash'],
   ]},
   { section: 'Developer', items: [
-    ['/tenant/integrations',          'Integrations'],
     ['/tenant/modules',               'Modules'],
     ['/tenant/plugins',               'Plugins'],
     ['/tenant/settings/webhooks',     'Webhooks'],
