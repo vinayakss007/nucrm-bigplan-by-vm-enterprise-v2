@@ -6,29 +6,29 @@
 #    - app x2       (Next.js 16 frontend)
 #    - worker x1    (BullMQ background jobs)
 #    - cron         (scheduled job trigger)
-#    - postgres     (PostgreSQL 16)
 #    - redis        (Redis 7 — cache + queues)
 #    - minio        (S3-compatible object storage)
 #    - prometheus   (metrics collection)
 #    - grafana      (dashboards + alerting)
 #    - node-exporter       (host system metrics)
-#    - postgres-exporter   (database metrics)
 #    - redis-exporter      (cache metrics)
+#
+#  PostgreSQL runs directly on the host (not in Docker).
+#  Set DATABASE_URL in .env to point to the host Postgres instance.
 #
 #  Memory budget (8GB total, ~7.5GB usable):
 #    nginx:             64MB
 #    app x2:           1.5GB (768MB each)
 #    worker:            512MB
 #    cron:              128MB
-#    postgres:          1.5GB
 #    redis:             512MB
 #    minio:             512MB
 #    prometheus:        256MB
 #    grafana:           256MB
-#    exporters:         128MB (combined)
-#    OS + overhead:    ~1.1GB
+#    exporters:          80MB (combined)
+#    OS + Postgres:    ~3.2GB
 #                     ──────
-#    Total:           ~7.0GB
+#    Total:           ~7.3GB
 #
 #  Usage:
 #    docker compose -f deploy/docker-compose.production.yml up -d
@@ -82,6 +82,8 @@ services:
         SENTRY_ORG: "${SENTRY_ORG:-}"
         SENTRY_PROJECT: "${SENTRY_PROJECT:-}"
         SENTRY_AUTH_TOKEN: "${SENTRY_AUTH_TOKEN:-}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -137,8 +139,6 @@ services:
       retries: 3
       start_period: 45s
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       minio:
@@ -157,6 +157,8 @@ services:
       target: runner
     container_name: nucrm-worker
     command: ["node", "--import", "tsx", "worker.ts"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
@@ -178,8 +180,6 @@ services:
         reservations:
           memory: 256M
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -207,40 +207,6 @@ services:
     depends_on:
       app:
         condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - nucrm-net
-
-  # ═══════════════════════════════════════════════════════════════════════════
-  #  POSTGRESQL 16
-  # ═══════════════════════════════════════════════════════════════════════════
-  postgres:
-    image: postgres:16-alpine
-    container_name: nucrm-postgres
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB:-nucrm}
-      - POSTGRES_USER=${POSTGRES_USER:-nucrm}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=en_US.UTF-8 --lc-ctype=en_US.UTF-8
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-      - ./postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-    command: postgres -c config_file=/etc/postgresql/postgresql.conf
-    ports:
-      - "127.0.0.1:5432:5432"
-    deploy:
-      resources:
-        limits:
-          memory: 1536M
-          cpus: '2.0'
-        reservations:
-          memory: 512M
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nucrm} -d ${POSTGRES_DB:-nucrm}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     restart: unless-stopped
     networks:
       - nucrm-net
@@ -401,23 +367,6 @@ services:
     networks:
       - nucrm-net
 
-  postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:v0.15.0
-    container_name: nucrm-postgres-exporter
-    environment:
-      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER:-nucrm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nucrm}?sslmode=disable
-    deploy:
-      resources:
-        limits:
-          memory: 48M
-          cpus: '0.1'
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - nucrm-net
-
   redis-exporter:
     image: oliver006/redis_exporter:v1.61.0
     container_name: nucrm-redis-exporter
@@ -439,8 +388,6 @@ services:
 #  VOLUMES
 # ═══════════════════════════════════════════════════════════════════════════
 volumes:
-  pgdata:
-    driver: local
   redisdata:
     driver: local
   miniodata:
