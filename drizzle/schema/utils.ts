@@ -20,19 +20,13 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
-// Forward references to avoid circular dep with core.ts
-const tenants = {} as any;
-const users = {} as any;
-
 // =============================================================================
 // CORE COLUMN FACTORIES
 // =============================================================================
 
 export const pk = () => uuid('id').primaryKey().defaultRandom();
 
-export const tenantId = () => uuid('tenant_id')
-  .notNull()
-  .references(() => tenants.id, { onDelete: 'cascade' });
+export const tenantId = () => uuid('tenant_id').notNull();
 
 export const createdAt = () => timestamp('created_at', { withTimezone: true }).defaultNow().notNull();
 export const updatedAt = () => timestamp('updated_at', { withTimezone: true }).defaultNow();
@@ -40,9 +34,9 @@ export const deletedAt = () => timestamp('deleted_at', { withTimezone: true });
 
 export const metadata = () => jsonb('metadata').default({});
 
-export const createdBy = () => uuid('created_by').references(() => users.id, { onDelete: 'set null' });
-export const updatedBy = () => uuid('updated_by').references(() => users.id, { onDelete: 'set null' });
-export const deletedBy = () => uuid('deleted_by').references(() => users.id, { onDelete: 'set null' });
+export const createdBy = () => uuid('created_by');
+export const updatedBy = () => uuid('updated_by');
+export const deletedBy = () => uuid('deleted_by');
 
 // =============================================================================
 // HELPERS
