@@ -2,7 +2,7 @@
   "id": "FEAT-003",
   "type": "fix",
   "description": "Fix the drizzle schema circular FK issue by converting the most problematic inline .references() calls in drizzle/schema/utils.ts to plain column definitions (removing the forward reference to unresolved tenants/users objects). The utils.ts file uses empty objects ({} as any) as forward references for tenants and users, which is the root cause of drizzle-kit failures. Fix this by making tenantId() and createdBy()/updatedBy()/deletedBy() not use .references() at all - just define the columns without FK constraints (the DB already has them from the initial push). Then create a separate relations file.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Edit drizzle/schema/utils.ts: Remove the forward reference hack (const tenants = {} as any; const users = {} as any). Change tenantId() to return uuid('tenant_id').notNull() without .references(). Change createdBy(), updatedBy(), deletedBy() to return plain uuid columns without .references(). This eliminates the circular dependency root cause since utils.ts is imported by ALL 29 schema files.",
     "Create drizzle/schema/_relations.ts: Add drizzle relations() definitions for the core tenant/user relationships. Import { relations } from 'drizzle-orm'. Import actual table references. Define relations for the most critical tables (contacts, deals, leads, tasks, companies). This file provides the ORM relation metadata without creating circular import issues.",
@@ -23,5 +23,5 @@
     "Run: grep -c 'relations(' drizzle/schema/_relations.ts (should be 5+)"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "Successfully removed the forward reference hack from utils.ts. Build passes with 0 errors. drizzle-kit generate now runs successfully with only 1 warning about a duplicated index name on subscriptions table (not a FK error). The 257 broken FK errors from the utils.ts circular refs are gone. The users table does NOT have a tenantId field (users are multi-tenant via membership table), so usersRelations was left empty. The leads route used with: { company: true } which required adding company relation to leadsRelations. Remaining 'as any' in utils.ts (3 occurrences) are from the index helper functions (tenantIdx, metadataIdx, activeIdx) which use table: any parameter typing - these are unrelated to the FK issue."
 }
