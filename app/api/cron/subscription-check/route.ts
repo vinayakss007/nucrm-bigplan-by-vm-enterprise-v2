@@ -85,9 +85,9 @@ export async function POST(request: Request) {
         // Audit trail
         await db.insert(billingEvents).values({
           tenantId: sub.tenantId,
-          event: 'subscription_downgraded',
-          reason: 'fallback_cron',
+          eventType: 'subscription_downgraded',
           metadata: {
+            reason: 'fallback_cron',
             previous_status: sub.stripeStatus,
             period_end: sub.currentPeriodEnd?.toISOString(),
             detected_at: new Date().toISOString(),
