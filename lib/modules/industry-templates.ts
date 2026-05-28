@@ -392,4 +392,230 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
       }
     ]
   },
+  construction: {
+    id: 'construction',
+    name: 'Construction & Contracting',
+    description: 'Manage bids, projects, subcontractors, and job sites.',
+    icon: '🏗️',
+    modules: ['core-crm', 'automation-pro', 'sales-quotes', 'calculated-fields', 'forms-builder'],
+    custom_fields: [
+      { entity: 'deal', label: 'Job Site Address', key: 'job_site_address', type: 'text' },
+      { entity: 'deal', label: 'Bid Amount', key: 'bid_amount', type: 'number' },
+      { entity: 'deal', label: 'Project Type', key: 'project_type', type: 'select' },
+      { entity: 'contact', label: 'License Number', key: 'license_number', type: 'text' },
+      { entity: 'contact', label: 'Trade Specialty', key: 'trade_specialty', type: 'select' },
+      { entity: 'company', label: 'Bonding Capacity', key: 'bonding_capacity', type: 'number' },
+    ],
+    pipelines: [
+      { name: 'Bid Pipeline', stages: ['Estimating', 'Bid Submitted', 'Bid Review', 'Awarded', 'Lost'] },
+      { name: 'Project Execution', stages: ['Permitting', 'Site Prep', 'Foundation', 'Framing', 'MEP', 'Finishing', 'Punch List', 'Complete'] },
+    ],
+    automations: [
+      {
+        name: 'New bid notification',
+        trigger: 'deal.created',
+        action: 'send_notification',
+        config: { title: 'New Bid Created', body: 'A new bid has been submitted for {{deal_name}}' }
+      },
+      {
+        name: 'Inspection task on stage change',
+        trigger: 'deal.stage_changed',
+        action: 'create_task',
+        config: { title: 'Schedule inspection for current phase', priority: 'high' }
+      }
+    ]
+  },
+  restaurant_hospitality: {
+    id: 'restaurant_hospitality',
+    name: 'Restaurant & Hospitality',
+    description: 'Manage reservations, events, suppliers, and guest experiences.',
+    icon: '🍽️',
+    modules: ['core-crm', 'automation-basic', 'forms-builder', 'whatsapp-bot'],
+    custom_fields: [
+      { entity: 'company', label: 'Venue Capacity', key: 'venue_capacity', type: 'number' },
+      { entity: 'company', label: 'Cuisine Type', key: 'cuisine_type', type: 'select' },
+      { entity: 'deal', label: 'Reservation Date', key: 'reservation_date', type: 'date' },
+      { entity: 'deal', label: 'Party Size', key: 'party_size', type: 'number' },
+      { entity: 'contact', label: 'Dietary Restrictions', key: 'dietary_restrictions', type: 'text' },
+    ],
+    pipelines: [
+      { name: 'Event Booking', stages: ['Inquiry', 'Site Visit', 'Proposal', 'Deposit Paid', 'Confirmed', 'Completed'] },
+      { name: 'Supplier Management', stages: ['Lead', 'Sample Received', 'Negotiation', 'Contract Signed', 'Active'] },
+    ],
+    automations: [
+      {
+        name: 'Reservation confirmation',
+        trigger: 'deal.created',
+        action: 'send_email',
+        config: { subject: 'Reservation Confirmed', template: 'reservation_confirmation' }
+      },
+      {
+        name: 'Post-event feedback task',
+        trigger: 'deal.stage_changed',
+        action: 'create_task',
+        config: { title: 'Send post-event feedback survey', priority: 'medium' }
+      }
+    ]
+  },
+  manufacturing: {
+    id: 'manufacturing',
+    name: 'Manufacturing & Industrial',
+    description: 'Track production orders, suppliers, quality, and inventory.',
+    icon: '🏭',
+    modules: ['core-crm', 'automation-pro', 'calculated-fields', 'analytics-pro', 'sales-quotes'],
+    custom_fields: [
+      { entity: 'deal', label: 'Part Number', key: 'part_number', type: 'text' },
+      { entity: 'deal', label: 'Order Quantity', key: 'order_quantity', type: 'number' },
+      { entity: 'deal', label: 'Lead Time (Days)', key: 'lead_time_days', type: 'number' },
+      { entity: 'company', label: 'Quality Grade', key: 'quality_grade', type: 'select' },
+      { entity: 'company', label: 'Supplier Rating', key: 'supplier_rating', type: 'number' },
+    ],
+    pipelines: [
+      { name: 'Production Orders', stages: ['Quote Requested', 'Quoted', 'PO Received', 'In Production', 'QC Check', 'Shipped', 'Delivered'] },
+      { name: 'Supplier Qualification', stages: ['Identified', 'Audit Scheduled', 'Audit Complete', 'Approved', 'Active'] },
+    ],
+    automations: [
+      {
+        name: 'Quality check task on production stage',
+        trigger: 'deal.stage_changed',
+        action: 'create_task',
+        config: { title: 'Perform quality inspection', priority: 'high' }
+      },
+      {
+        name: 'Low inventory alert',
+        trigger: 'deal.updated',
+        action: 'send_notification',
+        config: { title: 'Low Inventory Alert', body: 'Inventory levels need attention for {{deal_name}}' }
+      }
+    ]
+  },
+  nonprofit: {
+    id: 'nonprofit',
+    name: 'Nonprofit & Fundraising',
+    description: 'Manage donors, campaigns, grants, and volunteer coordination.',
+    icon: '🤲',
+    modules: ['core-crm', 'automation-basic', 'forms-builder', 'marketing-segments', 'email-sync'],
+    custom_fields: [
+      { entity: 'contact', label: 'Donor Level', key: 'donor_level', type: 'select' },
+      { entity: 'contact', label: 'Total Donated', key: 'total_donated', type: 'number' },
+      { entity: 'deal', label: 'Campaign Name', key: 'campaign_name', type: 'text' },
+      { entity: 'deal', label: 'Grant Deadline', key: 'grant_deadline', type: 'date' },
+      { entity: 'contact', label: 'Volunteer Hours', key: 'volunteer_hours', type: 'number' },
+    ],
+    pipelines: [
+      { name: 'Fundraising Campaign', stages: ['Planning', 'Outreach', 'Pledged', 'Received', 'Acknowledged'] },
+      { name: 'Grant Application', stages: ['Research', 'Writing', 'Submitted', 'Under Review', 'Awarded', 'Reporting'] },
+    ],
+    automations: [
+      {
+        name: 'Thank you email on donation',
+        trigger: 'deal.stage_changed',
+        action: 'send_email',
+        config: { subject: 'Thank You for Your Donation', template: 'donation_thank_you' }
+      },
+      {
+        name: 'Grant deadline reminder task',
+        trigger: 'deal.updated',
+        action: 'create_task',
+        config: { title: 'Grant deadline approaching - review submission', priority: 'high' }
+      }
+    ]
+  },
+  media_entertainment: {
+    id: 'media_entertainment',
+    name: 'Media & Entertainment',
+    description: 'Manage talent, content production, contracts, and royalties.',
+    icon: '🎬',
+    modules: ['core-crm', 'automation-pro', 'sales-quotes', 'service-helpdesk'],
+    custom_fields: [
+      { entity: 'contact', label: 'Talent Type', key: 'talent_type', type: 'select' },
+      { entity: 'deal', label: 'Project Budget', key: 'project_budget', type: 'number' },
+      { entity: 'deal', label: 'Release Date', key: 'release_date', type: 'date' },
+      { entity: 'deal', label: 'Royalty Rate', key: 'royalty_rate', type: 'number' },
+      { entity: 'deal', label: 'Content Format', key: 'content_format', type: 'select' },
+    ],
+    pipelines: [
+      { name: 'Content Production', stages: ['Concept', 'Pre-Production', 'Production', 'Post-Production', 'Review', 'Released'] },
+      { name: 'Talent Acquisition', stages: ['Scouting', 'Outreach', 'Negotiation', 'Contract', 'Active'] },
+    ],
+    automations: [
+      {
+        name: 'Production milestone notification',
+        trigger: 'deal.stage_changed',
+        action: 'send_notification',
+        config: { title: 'Production Milestone Reached', body: '{{deal_name}} has moved to a new stage' }
+      },
+      {
+        name: 'Contract renewal reminder',
+        trigger: 'deal.updated',
+        action: 'create_task',
+        config: { title: 'Review contract renewal terms', priority: 'medium' }
+      }
+    ]
+  },
+  logistics_shipping: {
+    id: 'logistics_shipping',
+    name: 'Logistics & Shipping',
+    description: 'Track shipments, routes, fleet management, and client onboarding.',
+    icon: '🚚',
+    modules: ['core-crm', 'automation-pro', 'calculated-fields', 'analytics-pro'],
+    custom_fields: [
+      { entity: 'deal', label: 'Shipment Type', key: 'shipment_type', type: 'select' },
+      { entity: 'deal', label: 'Origin City', key: 'origin_city', type: 'text' },
+      { entity: 'deal', label: 'Destination City', key: 'destination_city', type: 'text' },
+      { entity: 'deal', label: 'Weight (kg)', key: 'weight_kg', type: 'number' },
+      { entity: 'company', label: 'Fleet Size', key: 'fleet_size', type: 'number' },
+      { entity: 'deal', label: 'Route Code', key: 'route_code', type: 'text' },
+    ],
+    pipelines: [
+      { name: 'Shipment Tracking', stages: ['Booked', 'Picked Up', 'In Transit', 'Customs', 'Out for Delivery', 'Delivered'] },
+      { name: 'Client Onboarding', stages: ['Lead', 'Rate Quote', 'Contract Negotiation', 'Signed', 'Active'] },
+    ],
+    automations: [
+      {
+        name: 'Delivery status notification',
+        trigger: 'deal.stage_changed',
+        action: 'send_notification',
+        config: { title: 'Shipment Status Update', body: 'Shipment {{deal_name}} status has changed' }
+      },
+      {
+        name: 'Delay alert task',
+        trigger: 'deal.updated',
+        action: 'create_task',
+        config: { title: 'Investigate shipment delay', priority: 'high' }
+      }
+    ]
+  },
+  professional_services: {
+    id: 'professional_services',
+    name: 'Professional Services',
+    description: 'Manage engagements, retainers, billing, and client relationships.',
+    icon: '💼',
+    modules: ['core-crm', 'automation-pro', 'sales-quotes', 'calculated-fields', 'analytics-pro'],
+    custom_fields: [
+      { entity: 'deal', label: 'Hourly Rate', key: 'hourly_rate', type: 'number' },
+      { entity: 'deal', label: 'Estimated Hours', key: 'estimated_hours', type: 'number' },
+      { entity: 'deal', label: 'Retainer Amount', key: 'retainer_amount', type: 'number' },
+      { entity: 'contact', label: 'Specialization', key: 'specialization', type: 'select' },
+      { entity: 'deal', label: 'Engagement Type', key: 'engagement_type', type: 'select' },
+    ],
+    pipelines: [
+      { name: 'Engagement Pipeline', stages: ['Discovery', 'Proposal', 'SOW Review', 'Signed', 'Kickoff', 'Active', 'Completed'] },
+      { name: 'Retainer Management', stages: ['Prospect', 'Proposal', 'Agreed', 'Active', 'Renewal Due'] },
+    ],
+    automations: [
+      {
+        name: 'New engagement kickoff task',
+        trigger: 'deal.stage_changed',
+        action: 'create_task',
+        config: { title: 'Schedule kickoff meeting with client', priority: 'high' }
+      },
+      {
+        name: 'Retainer renewal reminder',
+        trigger: 'deal.updated',
+        action: 'send_notification',
+        config: { title: 'Retainer Renewal Due', body: 'Retainer for {{deal_name}} needs renewal review' }
+      }
+    ]
+  },
 };
