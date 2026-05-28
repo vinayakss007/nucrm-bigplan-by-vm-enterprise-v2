@@ -60,6 +60,7 @@ export async function PATCH(req: NextRequest, { params }: any) {
         entityType: 'task', 
         entityId: id 
       });
+      fireWebhooks(ctx.tenantId, 'task.completed', { id }).catch(() => {});
     }
 
     return NextResponse.json({ data: row });

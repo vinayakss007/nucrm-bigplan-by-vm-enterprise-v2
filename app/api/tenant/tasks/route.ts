@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
         contactId: v.contact_id || null,
         dealId: v.deal_id || null,
         entityType: 'task',
-        entityId: (newTask as any)[0].id,
+        entityId: (newTask as any).id,
         eventType: 'task_created',
         action: 'create',
         description: `Created task: ${v.title}`,
