@@ -1,40 +1,16 @@
 
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: nucrm-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: nucrm
-      POSTGRES_PASSWORD: nucrm_secure_password
-      POSTGRES_DB: nucrm
-      POSTGRES_CONFIG_FILE: /etc/postgresql/postgresql.conf
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-    shm_size: 32M
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nucrm"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   redis:
     image: redis:7-alpine
     container_name: nucrm-redis
     restart: unless-stopped
-    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
     deploy:
       resources:
         limits:
-          memory: 64M
+          memory: 256M
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -45,7 +21,7 @@ services:
     build:
       context: .
       args:
-        DATABASE_URL: postgresql://nucrm:nucrm_secure_password@db:5432/nucrm?sslmode=disable
+        DATABASE_URL: postgresql://nucrm:nucrm_secure_password@host.docker.internal:5432/nucrm?sslmode=disable
         JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-prod}
         SENTRY_DSN: ${SENTRY_DSN:-}
         NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
@@ -54,11 +30,12 @@ services:
         SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
     container_name: nucrm-app
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      db: { condition: service_healthy }
       redis: { condition: service_healthy }
     environment:
-      DATABASE_URL: postgresql://nucrm:nucrm_secure_password@db:5432/nucrm?sslmode=disable
+      DATABASE_URL: postgresql://nucrm:nucrm_secure_password@host.docker.internal:5432/nucrm?sslmode=disable
       REDIS_URL: redis://redis:6379
       NODE_ENV: production
       JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-prod-long-enough-for-hmac}
@@ -83,19 +60,17 @@ services:
     build:
       context: .
       args:
-        DATABASE_URL: postgresql://nucrm:nucrm_secure_password@db:5432/nucrm?sslmode=disable
+        DATABASE_URL: postgresql://nucrm:nucrm_secure_password@host.docker.internal:5432/nucrm?sslmode=disable
         JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-prod}
     container_name: nucrm-worker
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      db: { condition: service_healthy }
       redis: { condition: service_healthy }
     environment:
-      DATABASE_URL: postgresql://nucrm:nucrm_secure_password@db:5432/nucrm?sslmode=disable
+      DATABASE_URL: postgresql://nucrm:nucrm_secure_password@host.docker.internal:5432/nucrm?sslmode=disable
       REDIS_URL: redis://redis:6379
       NODE_ENV: production
       JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-prod-long-enough-for-hmac}
     command: ["npm", "run", "worker"]
-
-volumes:
-  postgres_data:
