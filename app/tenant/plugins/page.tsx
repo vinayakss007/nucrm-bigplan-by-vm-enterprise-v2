@@ -187,13 +187,13 @@ export default function PluginsPage() {
                       plugin.status === 'active' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' :
                       plugin.status === 'error' ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400' :
                       'bg-muted text-muted-foreground')}>{plugin.status}</span>
-                    <button onClick={() => togglePlugin(plugin)} className="text-muted-foreground hover:text-foreground">
+                    <button onClick={() => togglePlugin(plugin)} className="text-muted-foreground hover:text-foreground" role="switch" aria-checked={plugin.status === 'active'} aria-label={plugin.status === 'active' ? 'Disable plugin' : 'Enable plugin'}>
                       {plugin.status === 'active' ? <ToggleRight className="w-5 h-5 text-emerald-500" /> : <ToggleLeft className="w-5 h-5" />}
                     </button>
-                    <button onClick={() => expandPlugin(plugin.id)} className="text-muted-foreground hover:text-foreground">
+                    <button onClick={() => expandPlugin(plugin.id)} className="text-muted-foreground hover:text-foreground" aria-label={expandedPlugin === plugin.id ? 'Collapse details' : 'Expand details'}>
                       {expandedPlugin === plugin.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </button>
-                    <button onClick={() => deletePlugin(plugin.id)} className="text-muted-foreground hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                    <button onClick={() => deletePlugin(plugin.id)} className="text-muted-foreground hover:text-red-500" aria-label="Delete plugin"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
 
