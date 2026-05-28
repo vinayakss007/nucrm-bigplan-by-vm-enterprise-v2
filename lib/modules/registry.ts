@@ -97,7 +97,7 @@ export const BUILTIN_MODULES: ModuleManifest[] = [
     description: 'One-click niche CRM setup — pre-configured pipelines, fields, and automations',
     author: 'NuCRM', category: 'utility', icon: '🪄', minCrmVersion: '1.0.0',
     pricing: { free:{enabled:false},starter:{enabled:false},pro:{enabled:true,price:20},enterprise:{enabled:true,price:0} },
-    features: ['One-click setup','Real Estate','SaaS / Software','Consulting & Services','Recruitment & HR','Insurance','Healthcare & Clinics','Education & Training','E-Commerce & Retail','Legal & Law Firms','Fitness & Wellness','Travel & Tourism','Automotive & Dealerships','Financial Services'],
+    features: ['One-click setup','Real Estate','SaaS / Software','Consulting & Services','Recruitment & HR','Insurance','Healthcare & Clinics','Education & Training','E-Commerce & Retail','Legal & Law Firms','Fitness & Wellness','Travel & Tourism','Automotive & Dealerships','Financial Services','Construction & Contracting','Restaurant & Hospitality','Manufacturing & Industrial','Nonprofit & Fundraising','Media & Entertainment','Logistics & Shipping','Professional Services'],
     permissions: [],
     pages: ['/tenant/settings/industry-templates'],
   },
