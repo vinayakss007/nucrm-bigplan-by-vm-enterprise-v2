@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, Building2, TrendingUp, CheckSquare,
   BarChart3, Settings, Bell, Calendar, FileBarChart,
   Crown, ChevronDown, UserCheck, Trash2, Search, X, Menu, Zap, Book,
-  LifeBuoy, Package, FileText, ShoppingCart, FileSignature, RefreshCw, Library, Plug,
+  LifeBuoy, Package, FileText, ShoppingCart, FileSignature, RefreshCw, Library,
   Command, Star, StarOff, Database, Upload, Workflow, Mail, MessageSquare,
   Trophy, Wrench, Boxes, Sparkles, ListChecks, ArrowRightLeft, Tag, Globe, Filter,
   BrainCircuit, EyeOff, Send, ShieldCheck,
@@ -108,7 +108,6 @@ const NAV_SECTIONS: NavSection[] = [
   {
     id: 'developer', label: 'Developer',
     items: [
-      { href:'/tenant/integrations',         label:'Integrations',    icon:Plug,  keywords:'apps connectors' },
       { href:'/tenant/modules',              label:'Modules',         icon:Boxes, keywords:'features toggles' },
       { href:'/tenant/plugins',              label:'Plugins',         icon:Sparkles, keywords:'extensions' },
       { href:'/tenant/settings/webhooks',    label:'Webhooks',        icon:Zap,   keywords:'events callbacks', adminOnly:true },

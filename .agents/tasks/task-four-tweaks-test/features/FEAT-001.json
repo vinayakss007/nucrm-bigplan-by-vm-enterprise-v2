@@ -1,0 +1,38 @@
+{
+  "id": "FEAT-001",
+  "type": "chore",
+  "description": "Four targeted tweaks: hide Integrations from sidebar, add fireWebhooks to missing CRUD routes, delete v1 API folder and deprecation.ts, clean up v1 references in proxy.ts and csrf.ts. API key auth is already implemented in requireAuth via tryApiKeyAuth - no changes needed there.",
+  "status": "in_progress",
+  "steps": [
+    "1. In components/tenant/layout/sidebar.tsx, remove the Integrations nav item from the NAV_SECTIONS 'developer' section (the item with href '/tenant/integrations' and label 'Integrations'). Keep 'Plugins' and everything else.",
+    "2. In app/api/tenant/leads/route.ts POST handler: add `import { fireWebhooks } from '@/lib/webhooks';` at the top, then after the successful insert (after logAudit call), add: `fireWebhooks(ctx.tenantId, 'lead.created' as any, { id: newLead.id, email: v.email }).catch(() => {});` -- Note: 'lead.created' is not in the WebhookEvent type yet but using 'as any' or better yet adding it to the type.",
+    "3. In app/api/tenant/deals/route.ts POST handler: add `import { fireWebhooks } from '@/lib/webhooks';` at the top, then after the activity log insert, add: `fireWebhooks(ctx.tenantId, 'deal.created', { id: deal.id, title: deal.title, amount }).catch(() => {});`",
+    "4. In app/api/tenant/tasks/route.ts POST handler: add `import { fireWebhooks } from '@/lib/webhooks';` at the top, then after the activity log, add: `fireWebhooks(ctx.tenantId, 'task.created', { id: (newTask as any).id, title: v.title }).catch(() => {});`",
+    "5. In app/api/tenant/companies/route.ts POST handler: add `import { fireWebhooks } from '@/lib/webhooks';` at the top, then after the successful insert (after returning line), add before the return: `fireWebhooks(ctx.tenantId, 'company.created', { id: row.id, name: v.name }).catch(() => {});`",
+    "6. In app/api/tenant/contacts/[id]/route.ts PATCH handler: add `import { fireWebhooks } from '@/lib/webhooks';` at the top, then after the logAudit call at the end of PATCH, add: `fireWebhooks(ctx.tenantId, 'contact.updated', { id: contactId }).catch(() => {});` And in DELETE handler add: `fireWebhooks(ctx.tenantId, 'contact.deleted', { id: contactId }).catch(() => {});`",
+    "7. In app/api/tenant/deals/[id]/route.ts DELETE handler: after the logAudit call, add: `fireWebhooks(ctx.tenantId, 'deal.deleted', { id: dealId }).catch(() => {});` (fireWebhooks is already imported in this file)",
+    "8. In app/api/tenant/leads/[id]/route.ts: add `import { fireWebhooks } from '@/lib/webhooks';` at the top. In PATCH handler after the activity log insert, add: `fireWebhooks(ctx.tenantId, 'lead.updated' as any, { id }).catch(() => {});`. In DELETE handler after logAudit, add: `fireWebhooks(ctx.tenantId, 'lead.deleted' as any, { id }).catch(() => {});`",
+    "9. In app/api/tenant/tasks/[id]/route.ts: add `import { fireWebhooks } from '@/lib/webhooks';` at the top. In PATCH handler after returning row, add before return: `fireWebhooks(ctx.tenantId, 'task.completed' as any, { id }).catch(() => {});` only when task completed. In DELETE handler after returning, add before return: `fireWebhooks(ctx.tenantId, 'task.deleted' as any, { id }).catch(() => {});`",
+    "10. In app/api/tenant/companies/[id]/route.ts: add `import { fireWebhooks } from '@/lib/webhooks';` at the top. In PATCH handler after logAudit, add: `fireWebhooks(ctx.tenantId, 'company.updated', { id }).catch(() => {});`. In DELETE handler after logAudit, add: `fireWebhooks(ctx.tenantId, 'company.deleted' as any, { id }).catch(() => {});`",
+    "11. In lib/webhooks.ts: add 'lead.created', 'lead.updated', 'lead.deleted', 'task.deleted', 'company.deleted' to the WebhookEvent union type so we don't need 'as any' casts.",
+    "12. Delete the entire app/api/v1/ directory (rm -rf app/api/v1/)",
+    "13. Delete lib/api/deprecation.ts",
+    "14. In lib/auth/csrf.ts, remove the line: `if (path.startsWith('/api/v1/')) return false;`",
+    "15. In proxy.ts, there is no direct /api/v1/ entry in PUBLIC_PATHS or PUBLIC_PREFIXES to remove (confirmed by reading the file). No change needed.",
+    "16. Run npx tsc --noEmit and fix any TypeScript errors that arise from these changes."
+  ],
+  "acceptance_criteria": [
+    "npx tsc --noEmit passes with 0 errors",
+    "The 'Integrations' item is removed from the sidebar NAV_SECTIONS",
+    "The app/api/v1/ directory no longer exists",
+    "The lib/api/deprecation.ts file no longer exists",
+    "fireWebhooks is called in POST handlers for leads, deals, tasks, companies",
+    "fireWebhooks is called in PATCH and DELETE handlers for contacts, deals, leads, tasks, companies",
+    "The /api/v1/ CSRF bypass line is removed from lib/auth/csrf.ts"
+  ],
+  "verification": [
+    "npx tsc --noEmit"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
