@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-003",
+  "type": "fix",
+  "description": "Fix the drizzle schema circular FK issue by converting the most problematic inline .references() calls in drizzle/schema/utils.ts to plain column definitions (removing the forward reference to unresolved tenants/users objects). The utils.ts file uses empty objects ({} as any) as forward references for tenants and users, which is the root cause of drizzle-kit failures. Fix this by making tenantId() and createdBy()/updatedBy()/deletedBy() not use .references() at all - just define the columns without FK constraints (the DB already has them from the initial push). Then create a separate relations file.",
+  "status": "in_progress",
+  "steps": [
+    "Edit drizzle/schema/utils.ts: Remove the forward reference hack (const tenants = {} as any; const users = {} as any). Change tenantId() to return uuid('tenant_id').notNull() without .references(). Change createdBy(), updatedBy(), deletedBy() to return plain uuid columns without .references(). This eliminates the circular dependency root cause since utils.ts is imported by ALL 29 schema files.",
+    "Create drizzle/schema/_relations.ts: Add drizzle relations() definitions for the core tenant/user relationships. Import { relations } from 'drizzle-orm'. Import actual table references. Define relations for the most critical tables (contacts, deals, leads, tasks, companies). This file provides the ORM relation metadata without creating circular import issues.",
+    "Register _relations.ts in drizzle/schema/index.ts by adding export * from './_relations'.",
+    "Run npm run build to verify no TypeScript errors. This is the critical test.",
+    "Verify the fix addresses the drizzle-kit issue by running: npx drizzle-kit generate --config=./drizzle.config.ts 2>&1 | head -30 (if it still has issues, document which remaining .references() calls in individual schema files still cause problems, but do NOT try to fix all 257 - that is out of scope)."
+  ],
+  "acceptance_criteria": [
+    "drizzle/schema/utils.ts no longer contains {} as any forward references",
+    "drizzle/schema/utils.ts tenantId() returns a plain uuid column without .references()",
+    "drizzle/schema/_relations.ts exists with at least 5 relation definitions",
+    "npm run build passes with 0 errors",
+    "The runtime behavior is unchanged (FK constraints already exist in the database)"
+  ],
+  "verification": [
+    "Run: npm run build",
+    "Run: grep -c 'as any' drizzle/schema/utils.ts (should be 0 or minimal)",
+    "Run: grep -c 'relations(' drizzle/schema/_relations.ts (should be 5+)"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
