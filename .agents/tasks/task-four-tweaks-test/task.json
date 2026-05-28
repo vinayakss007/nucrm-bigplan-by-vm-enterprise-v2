@@ -1,7 +1,14 @@
 {
   "task_id": "task-four-tweaks-test",
   "task_description": "Four small tweaks: hide Integrations from sidebar, add fireWebhooks to CRUD routes, delete v1 API folder and deprecation.ts, clean v1 references. Then verify 0 TypeScript errors.",
-  "status": "in_progress",
+  "status": "completed",
   "feature_order": ["FEAT-001"],
-  "blocked_reason": null
+  "blocked_reason": null,
+  "verification": {
+    "build": "pass",
+    "tests": "pass",
+    "test_quality": "pass",
+    "docker_build": "skipped",
+    "summary": "npx tsc --noEmit passes with 0 errors. All 4 tweaks implemented: Integrations hidden from sidebar, fireWebhooks added to all CRUD routes, v1 API deleted, deprecation.ts deleted, csrf.ts v1 bypass removed."
+  }
 }
