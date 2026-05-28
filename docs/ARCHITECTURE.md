@@ -54,6 +54,8 @@ Supported providers:
 
 ### Key files
 
+> **Note:** Integrations has been removed from the main sidebar navigation. The page remains accessible at `/tenant/integrations` for admin users who need it. For user-created custom connectors, see Plugins below.
+
 - `lib/integrations/types.ts` - `ProviderDefinition` interface and related types
 - `lib/integrations/registry.ts` - Provider registry with all available integrations
 - `lib/integrations/providers/` - Individual provider implementations (e.g., `sendgrid.ts`)

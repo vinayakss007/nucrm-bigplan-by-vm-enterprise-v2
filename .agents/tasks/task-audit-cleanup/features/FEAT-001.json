@@ -1,0 +1,24 @@
+{
+  "id": "FEAT-001",
+  "type": "docs",
+  "description": "Fix documentation files that are outdated after v1 API deletion, integrations hidden from sidebar, plugin system added, and fireWebhooks added to CRUD routes",
+  "status": "in_progress",
+  "steps": [
+    "Update docs/API_MIGRATION_v1_to_v2.md: Change the overview section to state that v1 has been REMOVED (not just deprecated). Update the timeline table to show the removal happened in May 2026. Add a note at the top that this doc is for historical reference only since v1 no longer exists.",
+    "Update WORLD_CLASS_GAP_ANALYSIS.txt item #8: Change from 'routes exist but are marked deprecated with no versioning strategy or client migration guide' to 'RESOLVED - v1 routes have been removed. Migration guide exists at docs/API_MIGRATION_v1_to_v2.md.'",
+    "Update docs/CHANGELOG.md to add missing entries under [Unreleased]: (1) 'v1 API Removal' section noting that all /api/v1/* routes were deleted since the migration period is complete; (2) 'Sidebar Changes' section noting Integrations was removed from the main sidebar navigation (the page still exists at /tenant/integrations for direct access); (3) 'Webhook Enhancements' section noting fireWebhooks() was added to all CRUD routes for contacts, deals, leads, tasks, tickets, invoices, companies, documents, quotes, orders, contracts, subscriptions",
+    "Update docs/ARCHITECTURE.md: In the Integrations section, add a note that Integrations is no longer shown in the main sidebar but the page is still accessible at /tenant/integrations for legacy users. The primary user-facing extensibility surface is now Plugins."
+  ],
+  "acceptance_criteria": [
+    "docs/API_MIGRATION_v1_to_v2.md clearly states v1 has been removed, not just deprecated",
+    "WORLD_CLASS_GAP_ANALYSIS.txt item #8 is marked as resolved",
+    "docs/CHANGELOG.md includes entries for v1 removal, sidebar changes, and webhook enhancements",
+    "docs/ARCHITECTURE.md notes that Integrations is hidden from sidebar"
+  ],
+  "verification": [
+    "Run npx tsc --noEmit and confirm zero errors (docs changes should not break types)",
+    "Grep for outdated claims about v1 being 'deprecated and will be removed' - should now say 'removed'"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

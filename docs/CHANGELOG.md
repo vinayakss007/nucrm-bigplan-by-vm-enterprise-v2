@@ -75,3 +75,15 @@ Changed text colors for better readability:
 - **Light mode**: Foreground color changed from dull dark (`hsl(222, 24%, 10%)`) to pure black (`hsl(0, 0%, 0%)`)
 - **Dark mode**: Foreground color changed from muted light (`hsl(210, 20%, 92%)`) to pure white (`hsl(0, 0%, 100%)`)
 - Updated `--foreground`, `--card-foreground`, `--popover-foreground`, and `--secondary-foreground` in both modes
+
+### v1 API Removal
+
+All `/api/v1/*` routes deleted. Migration guide retained at `docs/API_MIGRATION_v1_to_v2.md` for reference.
+
+### Sidebar Navigation Changes
+
+Integrations removed from main sidebar navigation. The page remains accessible at `/tenant/integrations` for direct access. Plugins (`/tenant/plugins`) is now the primary user-facing extensibility surface in the Developer section.
+
+### Webhook Enhancements
+
+`fireWebhooks()` call added to all major CRUD routes (contacts, deals, leads, tasks, tickets, invoices, companies, documents, quotes, orders, contracts, subscriptions) enabling real-time event notifications for plugins and external systems.
