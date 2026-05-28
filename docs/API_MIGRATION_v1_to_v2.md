@@ -13,7 +13,7 @@ All clients must use the v2 API (`/api/tenant/*` and `/api/auth/*`).
 
 | Date | Event |
 |------|-------|
-| May 2026 | v1 API marked as deprecated, deprecation headers added |
+| Early 2026 | v1 API marked as deprecated, deprecation headers added |
 | May 2026 | **v1 API fully removed** - all `/api/v1/*` routes deleted |
 
 ## Breaking Changes
@@ -125,9 +125,9 @@ POST /api/tenant/tasks
 - [ ] Test all API integrations against v2 endpoints
 - [ ] Remove v1 fallback code from your application
 
-## Deprecation Headers
+## Deprecation Headers (Historical)
 
-All v1 responses now include deprecation headers:
+During the deprecation window, all v1 responses included these headers:
 
 ```
 Deprecation: true
@@ -137,7 +137,8 @@ X-API-Version: v1-deprecated
 X-API-V2-Path: /api/tenant/contacts
 ```
 
-Use these headers to detect v1 usage in your application and log warnings.
+These headers were useful for detecting v1 usage in your application and logging warnings.
+Since v1 has been fully removed, these headers are no longer sent.
 
 ## Support
 
