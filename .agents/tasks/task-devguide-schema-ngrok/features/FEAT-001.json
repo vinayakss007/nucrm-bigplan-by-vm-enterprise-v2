@@ -1,0 +1,37 @@
+{
+  "id": "FEAT-001",
+  "type": "docs",
+  "description": "Create a comprehensive DEVELOPER_GUIDE.md that serves as a complete walkthrough for building new SaaS products and extending NuCRM. This is the primary deliverable. It must cover: adding new SaaS modules, creating industry templates, extending schema, adding API routes, adding UI pages, using the SDK, and a full AI-assisted development workflow.",
+  "status": "in_progress",
+  "steps": [
+    "Create DEVELOPER_GUIDE.md at the project root with the following major sections:",
+    "Section 1 - Platform Architecture Overview: Explain NuCRM as a modular CRM backend that powers multiple SaaS products. Each tenant gets only the modules relevant to their business type. Cover the module system (defineModule in lib/modules/sdk/types.ts), the registry (lib/modules/registry.ts), industry templates (lib/modules/industry-templates.ts), plan gating, and auto-install.",
+    "Section 2 - Adding a New SaaS Module (Step-by-Step): Walk through creating a brand new module from scratch. Reference the existing examples at lib/modules/examples/property-management/index.ts and lib/modules/examples/whatsapp-automation/index.ts. Show the exact defineModule() structure with all fields. Explain how to: (1) Create the module manifest, (2) Register it in BUILTIN_MODULES array in lib/modules/registry.ts, (3) Add database tables (following drizzle/schema/utils.ts patterns), (4) Create API routes (following app/api/tenant/contacts/route.ts pattern with requireAuth), (5) Create UI pages (following app/tenant/contacts/page.tsx pattern with server components), (6) Add permissions to the RBAC system, (7) Connect to plan gating (pricing field in manifest), (8) Test the module.",
+    "Section 3 - Creating a New Industry Template: Show exactly how to add a new template to INDUSTRY_TEMPLATES in lib/modules/industry-templates.ts. Explain the IndustryTemplate interface (id, name, description, icon, modules, custom_fields, pipelines, automations). Give a complete example for a new industry like 'construction' or 'restaurant'. Explain how templates connect to auto-install (lib/modules/auto-install.ts).",
+    "Section 4 - Extending the Database Schema: Show how to add new tables using drizzle/schema/utils.ts factory functions (pk(), tenantId(), lifecycle(), audit(), metadata()). Explain the schema file organization (29 files in drizzle/schema/). Show how to register new schema in drizzle/schema/index.ts. Document the known limitation: inline .references() causes circular import issues in drizzle-kit (257 broken FKs) - recommend using relations() pattern or just raw SQL for migrations. Show how to run db:push.",
+    "Section 5 - Adding New API Routes: Walk through creating a new API endpoint following the pattern in app/api/tenant/contacts/route.ts. Cover: requireAuth middleware, validateBody/validateQuery with zod schemas, tenant isolation (ctx.tenantId filter), RBAC permission checks, error handling with apiError, webhook firing, audit logging.",
+    "Section 6 - Adding New UI Pages: Walk through creating a new page following the app/tenant/contacts/page.tsx pattern. Cover: server components for data fetching (requireTenantCtx), client components for interactivity ('use client'), Suspense and loading states, sidebar navigation registration, module gating on the frontend (lib/modules/client-gate.tsx).",
+    "Section 7 - SDK Development Guide: Document the full SDK at lib/sdk/ with all available resources (contacts, deals, leads, companies, tasks, tickets, invoices, documents, quotes, orders, contracts, subscriptions, services, meetings, activities, forms, sequences, automations, reports). Show NuCRMClient initialization, each resource's CRUD methods, bulk operations, search, file management, webhooks (verification + routing), realtime events (SSE), and billing SDK. Reference lib/sdk/README.md content.",
+    "Section 8 - AI-Assisted Development Walkthrough: Write a complete step-by-step guide for using AI tools (like Kiro, Claude, Cursor, etc.) to build on this platform. Include: (1) What to tell the AI about the project structure, (2) Prompt templates for common tasks (add module, add template, add API route, add page), (3) How to verify AI-generated code works (npm run build, check patterns), (4) Common mistakes AI makes and how to fix them, (5) Copy-paste ready prompt that gives AI full context about NuCRM.",
+    "Section 9 - Existing Modules & Templates Reference: List all 15 built-in modules with their IDs, pricing, and features. List all 13+ industry templates with their configurations. Show the module marketplace flow.",
+    "Section 10 - Deployment & Operations: Brief section on deployment (Docker, Vercel, self-hosted), environment variables needed, database setup (Neon PostgreSQL), and the ngrok testing workflow.",
+    "Section 11 - Known Issues & Workarounds: Document the drizzle-kit FK circular reference issue (257 broken refs across 29 schema files). Explain it does NOT affect runtime - only drizzle-kit snapshot generation. Provide the workaround (use raw SQL migrations via scripts/migrate.ts instead of drizzle-kit generate).",
+    "Ensure the guide is written for a developer who has never seen the codebase. Use code examples copied from actual files (not generic). Use simple language. Include file paths for everything. Make it so someone can read this guide and immediately start building a new SaaS product on top of NuCRM."
+  ],
+  "acceptance_criteria": [
+    "DEVELOPER_GUIDE.md exists at the project root and is at least 500 lines long",
+    "Contains working code examples copied/adapted from actual project files (not invented)",
+    "Every section references actual file paths in the project",
+    "The 'Adding a New SaaS Module' section includes a complete copy-paste ready example",
+    "The 'Creating a New Industry Template' section includes a complete new template example",
+    "The AI-assisted development section includes actual prompt templates",
+    "npm run build still passes after adding the guide (no code changes break anything)"
+  ],
+  "verification": [
+    "Run: npm run build (must pass - no code was modified, only docs added)",
+    "Check file exists: ls -la DEVELOPER_GUIDE.md",
+    "Check file length: wc -l DEVELOPER_GUIDE.md (should be 500+ lines)"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
