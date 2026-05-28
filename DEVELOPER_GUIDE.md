@@ -78,7 +78,7 @@ NuCRM is a **Next.js 16 multi-tenant SaaS CRM** that serves as a modular backend
 |---------|------|---------|
 | Module System | `lib/modules/sdk/types.ts` | `defineModule()` creates self-contained SaaS apps |
 | Module Registry | `lib/modules/registry.ts` | Central hub for all 15 built-in modules |
-| Industry Templates | `lib/modules/industry-templates.ts` | Pre-configured setups for 13 industries |
+| Industry Templates | `lib/modules/industry-templates.ts` | Pre-configured setups for 20 industries |
 | Plan Gating | `lib/modules/gate.ts` | Runtime enforcement of module access |
 | Auto-Install | `lib/modules/auto-install.ts` | Connects templates/plans to module installation |
 | SDK | `lib/sdk/client.ts` | TypeScript client with 20 resource classes |
@@ -354,7 +354,7 @@ All database tables live in `drizzle/schema/` and use factory functions from `dr
 | Function | What It Creates |
 |----------|----------------|
 | `pk()` | UUID primary key with `defaultRandom()` |
-| `tenantId()` | UUID foreign key to tenants table with cascade delete |
+| `tenantId()` | Non-null UUID column (`tenant_id`). FK constraints exist at the PostgreSQL level (created during initial `db:push`). For new tables, add `.references(() => tenants.id, { onDelete: 'cascade' })` explicitly if you need drizzle-kit to manage the FK. |
 | `lifecycle()` | `createdAt`, `updatedAt`, `deletedAt` timestamps |
 | `audit()` | lifecycle + `createdBy`, `updatedBy`, `deletedBy` user refs |
 | `metadata()` | JSONB column defaulting to `{}` |
@@ -863,7 +863,7 @@ I am working on NuCRM, a Next.js 16 multi-tenant SaaS CRM platform. Key facts:
 - TypeScript strict mode, Drizzle ORM, Neon PostgreSQL
 - Module system: defineModule() in lib/modules/sdk/types.ts
 - 15 built-in modules registered in lib/modules/registry.ts (BUILTIN_MODULES array)
-- 13 industry templates in lib/modules/industry-templates.ts (INDUSTRY_TEMPLATES object)
+- 20 industry templates in lib/modules/industry-templates.ts (INDUSTRY_TEMPLATES object)
 - Schema uses factory functions from drizzle/schema/utils.ts: pk(), tenantId(), audit(), metadata()
 - Every tenant-scoped table needs tenantId + utils.audit()
 - API routes in app/api/tenant/ use requireAuth pattern
@@ -1007,7 +1007,7 @@ These are registered in `lib/modules/registry.ts`:
 | 13 | `compliance` | Compliance Suite | utility | No | No | $29 | Free |
 | 14 | `marketing-segments` | Smart Segments | messaging | No | $19 | $19 | Free |
 
-### All 13 Industry Templates
+### All 20 Industry Templates
 
 These are defined in `lib/modules/industry-templates.ts`:
 
@@ -1026,6 +1026,13 @@ These are defined in `lib/modules/industry-templates.ts`:
 | 11 | `travel` | Travel and Tourism | ✈️ | core-crm, automation-pro, email-sync, whatsapp-bot |
 | 12 | `automotive` | Automotive and Dealerships | 🚗 | core-crm, automation-basic, forms-builder, marketing-segments |
 | 13 | `financial_services` | Financial Services | 💰 | core-crm, automation-pro, calculated-fields, analytics-pro, ai-assistant |
+| 14 | `construction` | Construction & Contracting | 🏗️ | core-crm, automation-pro, sales-quotes, calculated-fields, forms-builder |
+| 15 | `restaurant_hospitality` | Restaurant & Hospitality | 🍽️ | core-crm, automation-basic, forms-builder, whatsapp-bot |
+| 16 | `manufacturing` | Manufacturing & Industrial | 🏭 | core-crm, automation-pro, calculated-fields, analytics-pro, sales-quotes |
+| 17 | `nonprofit` | Nonprofit & Fundraising | 🤲 | core-crm, automation-basic, forms-builder, marketing-segments, email-sync |
+| 18 | `media_entertainment` | Media & Entertainment | 🎬 | core-crm, automation-pro, sales-quotes, service-helpdesk |
+| 19 | `logistics_shipping` | Logistics & Shipping | 🚚 | core-crm, automation-pro, calculated-fields, analytics-pro |
+| 20 | `professional_services` | Professional Services | 💼 | core-crm, automation-pro, sales-quotes, calculated-fields, analytics-pro |
 
 ### Module Marketplace Flow
 
