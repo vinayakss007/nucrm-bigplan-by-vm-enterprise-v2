@@ -5,6 +5,10 @@ import { db } from '@/drizzle/db';
 import { customPlugins } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import type { PluginAuthType, PluginAction, PluginAuthConfig } from '@/lib/plugins/types';
+import { encryptAuthConfig, decryptAuthConfig, redactAuthConfig } from '@/lib/plugins/crypto';
+
+const VALID_AUTH_TYPES: PluginAuthType[] = ['bearer', 'basic', 'api_key_header', 'api_key_query', 'oauth2_client_credentials', 'none'];
+const VALID_STATUSES = ['active', 'disabled'] as const;
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -30,6 +34,19 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return notFound('Plugin');
     }
 
+    // Decrypt authConfig and redact sensitive values for the response
+    let safeAuthConfig: unknown = plugin.authConfig;
+    if (typeof plugin.authConfig === 'string') {
+      try {
+        const decrypted = decryptAuthConfig(plugin.authConfig);
+        safeAuthConfig = redactAuthConfig(decrypted);
+      } catch {
+        safeAuthConfig = { type: 'none' };
+      }
+    } else {
+      safeAuthConfig = redactAuthConfig(plugin.authConfig);
+    }
+
     return NextResponse.json({
       data: {
         id: plugin.id,
@@ -40,10 +57,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
         icon: plugin.icon,
         baseUrl: plugin.baseUrl,
         authType: plugin.authType,
-        authConfig: plugin.authConfig,
+        authConfig: safeAuthConfig,
         customHeaders: plugin.customHeaders,
         actions: plugin.actions as PluginAction[],
-        webhookSecret: plugin.webhookSecret,
+        webhookSecret: plugin.webhookSecret ? '****' : null,
         status: plugin.status,
         lastUsedAt: plugin.lastUsedAt?.toISOString() ?? null,
         lastError: plugin.lastError,
@@ -77,12 +94,27 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       }
       updates['baseUrl'] = body['baseUrl'];
     }
-    if (body['authType'] !== undefined) updates['authType'] = body['authType'] as PluginAuthType;
-    if (body['authConfig'] !== undefined) updates['authConfig'] = body['authConfig'] as PluginAuthConfig;
+    if (body['authType'] !== undefined) {
+      const authType = body['authType'] as string;
+      if (!VALID_AUTH_TYPES.includes(authType as PluginAuthType)) {
+        return badRequest(`Invalid authType. Must be one of: ${VALID_AUTH_TYPES.join(', ')}`);
+      }
+      updates['authType'] = authType as PluginAuthType;
+    }
+    if (body['authConfig'] !== undefined) {
+      // Encrypt authConfig before storing
+      updates['authConfig'] = encryptAuthConfig(body['authConfig'] as PluginAuthConfig);
+    }
     if (body['customHeaders'] !== undefined) updates['customHeaders'] = body['customHeaders'];
     if (body['actions'] !== undefined) updates['actions'] = body['actions'] as PluginAction[];
     if (body['webhookSecret'] !== undefined) updates['webhookSecret'] = body['webhookSecret'];
-    if (body['status'] !== undefined) updates['status'] = body['status'];
+    if (body['status'] !== undefined) {
+      const status = body['status'] as string;
+      if (!(VALID_STATUSES as readonly string[]).includes(status)) {
+        return badRequest(`Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`);
+      }
+      updates['status'] = status;
+    }
 
     updates['updatedAt'] = new Date();
 

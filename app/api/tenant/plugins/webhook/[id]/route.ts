@@ -3,10 +3,39 @@ import { apiError, notFound } from '@/lib/api-error';
 import { db } from '@/drizzle/db';
 import { customPlugins } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
-import { verifyWebhookSignature, handleInboundWebhook } from '@/lib/plugins/webhook-handler';
+import { verifyWebhookSignature, isWebhookTimestampValid, handleInboundWebhook } from '@/lib/plugins/webhook-handler';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
+}
+
+/**
+ * Simple in-memory rate limiter (sliding window, 60 requests per minute per plugin ID).
+ */
+const rateLimitMap = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 60;
+
+function isRateLimited(pluginId: string): boolean {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+
+  let timestamps = rateLimitMap.get(pluginId);
+  if (!timestamps) {
+    timestamps = [];
+    rateLimitMap.set(pluginId, timestamps);
+  }
+
+  // Remove entries outside the window
+  const filtered = timestamps.filter((t) => t > windowStart);
+  rateLimitMap.set(pluginId, filtered);
+
+  if (filtered.length >= RATE_LIMIT_MAX) {
+    return true;
+  }
+
+  filtered.push(now);
+  return false;
 }
 
 /**
@@ -17,6 +46,11 @@ interface RouteContext {
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
+
+    // Rate limit check
+    if (isRateLimited(id)) {
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
+    }
 
     // Fetch the plugin (no tenant auth needed - webhook URL acts as authentication)
     const [plugin] = await db.select()
@@ -33,6 +67,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (plugin.status === 'disabled') {
       return NextResponse.json({ error: 'Plugin is disabled' }, { status: 400 });
+    }
+
+    // Replay protection: check webhook timestamp if provided
+    const timestampHeader = request.headers.get('x-webhook-timestamp');
+    if (!isWebhookTimestampValid(timestampHeader)) {
+      return NextResponse.json({ error: 'Webhook timestamp too old' }, { status: 400 });
     }
 
     // Read the raw body for signature verification

@@ -228,9 +228,9 @@ export async function executePluginAction(
       errorMessage,
     });
 
-    // Update plugin error state
+    // Update plugin error state (keep status active - transient failures should not disable)
     await db.update(customPlugins)
-      .set({ lastError: errorMessage, status: 'error' })
+      .set({ lastError: errorMessage })
       .where(eq(customPlugins.id, plugin.id));
 
     return { success: false, error: errorMessage, durationMs };

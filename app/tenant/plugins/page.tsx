@@ -56,6 +56,7 @@ export default function PluginsPage() {
   const [loading, setLoading] = useState(true);
   const [expandedPlugin, setExpandedPlugin] = useState<string | null>(null);
   const [logs, setLogs] = useState<Record<string, LogEntry[]>>({});
+  const [selectedTemplate, setSelectedTemplate] = useState<(typeof TEMPLATES)[number] | null>(null);
 
   const loadPlugins = useCallback(async () => {
     setLoading(true);
@@ -267,7 +268,7 @@ export default function PluginsPage() {
         )
       )}
 
-      {tab === 'create' && <CreatePluginForm onCreated={() => { void loadPlugins(); setTab('my_plugins'); }} />}
+      {tab === 'create' && <CreatePluginForm onCreated={() => { void loadPlugins(); setTab('my_plugins'); }} initialTemplate={selectedTemplate} key={selectedTemplate?.id ?? 'empty'} />}
 
       {tab === 'templates' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -282,7 +283,7 @@ export default function PluginsPage() {
               </div>
               <div className="mt-3 flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">{tmpl.actions.length} actions</span>
-                <button onClick={() => { setTab('create'); }} className="text-xs font-semibold text-violet-600 hover:text-violet-700 flex items-center gap-1">
+                <button onClick={() => { setSelectedTemplate(tmpl); setTab('create'); }} className="text-xs font-semibold text-violet-600 hover:text-violet-700 flex items-center gap-1">
                   <Plus className="w-3 h-3" />Use Template
                 </button>
               </div>
@@ -294,12 +295,24 @@ export default function PluginsPage() {
   );
 }
 
-function CreatePluginForm({ onCreated }: { onCreated: () => void }) {
+interface TemplateData {
+  id: string;
+  name: string;
+  description: string;
+  baseUrl: string;
+  authType: AuthType;
+  actions: PluginAction[];
+}
+
+function CreatePluginForm({ onCreated, initialTemplate }: { onCreated: () => void; initialTemplate?: TemplateData | null }) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    name: '', description: '', baseUrl: '', authType: 'none' as AuthType,
+    name: initialTemplate?.name ?? '',
+    description: initialTemplate?.description ?? '',
+    baseUrl: initialTemplate?.baseUrl ?? '',
+    authType: (initialTemplate?.authType ?? 'none') as AuthType,
     authConfig: {} as Record<string, string>,
-    actions: [] as PluginAction[],
+    actions: (initialTemplate?.actions ?? []) as PluginAction[],
     webhookSecret: '',
   });
   const [newAction, setNewAction] = useState({ id: '', name: '', method: 'GET' as PluginAction['method'], path: '', bodyTemplate: '' });
