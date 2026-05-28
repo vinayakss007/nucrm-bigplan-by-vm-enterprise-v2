@@ -1,0 +1,53 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Create a comprehensive development seed script (scripts/seed-dev.ts) that populates the PostgreSQL database with massive test data covering every table and route in the CRM app. Also verify and document the existing Sentry setup.",
+  "status": "in_progress",
+  "steps": [
+    "Create scripts/seed-dev.ts that: (a) checks NODE_ENV is not 'production' and exits if so, (b) uses dotenv to load .env.local, (c) connects via the Drizzle ORM pattern from drizzle/db.ts with the Pool from lib/db/pool.ts, (d) is idempotent - deletes existing seed data before inserting",
+    "Seed users: admin@test.com (super_admin, password: password123), manager@test.com (admin role), rep1@test.com and rep2@test.com (sales_rep role). Use bcryptjs with 12 rounds per lib/auth/session.ts pattern",
+    "Seed 1 tenant (NuCRM Demo Workspace, slug: demo, status: active, planId: starter) and create tenant_members linking all 4 users",
+    "Seed roles: super_admin, admin, sales_rep, member with appropriate permissions JSON",
+    "Seed 25+ companies with varied industries (Technology, Healthcare, Finance, Manufacturing, Retail, etc), company sizes, annual revenues, domains, and addresses",
+    "Seed 50+ contacts spread across companies with varied names, emails, phone numbers, lead_status (new/contacted/qualified/customer), lifecycle stages, scores, tags, and assigned_to referencing the 4 users",
+    "Seed 20+ leads with varied statuses (new/contacted/qualified/proposal/won/lost), sources (website/referral/linkedin/cold_call/trade_show), scores, and assigned users",
+    "Seed 2 pipelines (Sales Pipeline with stages: Lead/Qualified/Proposal/Negotiation/Closed Won/Closed Lost, and Enterprise Pipeline with stages: Discovery/Evaluation/POC/Contract/Won/Lost) using both pipelines + dealStages tables",
+    "Seed 30+ deals across the pipeline stages with varied amounts ($5k-$500k), close dates (past and future), assigned users, linked contacts and companies",
+    "Seed 15+ tasks with varied priorities (low/medium/high/urgent), statuses (pending/completed/cancelled), due dates, assigned users, and linked contacts/deals",
+    "Seed 10+ support tickets (open/in_progress/resolved/closed) with priorities, categories, and ticket replies",
+    "Seed 20+ activities in the activities table (entity_type: contact/deal/company, event_type: email_sent/call_made/meeting_scheduled/note_added/deal_updated)",
+    "Seed 5+ email logs (sent/failed), 3 email templates",
+    "Seed 3 forms (Contact Us, Demo Request, Newsletter) with field definitions in the fields JSONB, plus 5+ form submissions",
+    "Seed 2 sequences (Onboarding Drip, Re-engagement) with 3-4 steps each, and 5+ sequence enrollments",
+    "Seed 5 quotes with 2-3 line items each (products: CRM License, Support Plan, Custom Dev, Training), linked to deals",
+    "Seed 5+ products with varied SKUs and base prices",
+    "Seed financial data: 3 tax rates, 2 exchange rates",
+    "Seed 5+ AI activity entries (action: draft/lead_scoring/predict_deal, provider: anthropic/openai, with token counts)",
+    "Seed module installations: install core-crm, ai-assistant, forms-builder, automation-engine as active tenantModules. Also seed 4+ module entries in the modules table",
+    "Seed 2 custom plugins (Slack Notifier, Zapier Integration) with actions JSON, plus 3+ plugin execution logs",
+    "Seed 5+ custom field definitions (for contacts and deals entity types, varied field types: text/number/select/date/checkbox)",
+    "Seed 1 API key (prefix: nucrm_dev_, hashed), 2 webhooks with delivery logs",
+    "Seed 10+ notifications (info/success/warning types, some read, some unread)",
+    "Seed 10+ audit log entries covering various actions (create/update/delete on different entity types)",
+    "Seed 2 automations (Lead Auto-Assignment, Deal Stage Notification) with automation runs",
+    "Print progress for each table seeded, print final summary with login credentials",
+    "Add npm script to package.json: 'seed:dev': 'tsx scripts/seed-dev.ts'",
+    "Update .env.example to add a clear DEV SETUP section at the top with DATABASE_URL example for local Postgres and SENTRY_DSN documentation"
+  ],
+  "acceptance_criteria": [
+    "scripts/seed-dev.ts exists and compiles without TypeScript errors",
+    "The script has a production guard that prevents running in NODE_ENV=production",
+    "The script is idempotent (safe to run multiple times, deletes existing seed data first)",
+    "Running 'npx tsx scripts/seed-dev.ts' with a valid DATABASE_URL seeds all tables listed",
+    "package.json has a 'seed:dev' script entry",
+    ".env.example has clear documentation for dev setup including SENTRY_DSN and DATABASE_URL"
+  ],
+  "verification": [
+    "Run npx tsc --noEmit --skipLibCheck scripts/seed-dev.ts to verify TypeScript compilation (or verify with a direct parse check)",
+    "Grep the file for NODE_ENV production guard",
+    "Verify package.json contains seed:dev script",
+    "Check .env.example has updated sections"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
