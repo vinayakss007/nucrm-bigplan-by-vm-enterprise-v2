@@ -218,6 +218,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       entityId: dealId
     });
 
+    fireWebhooks(ctx.tenantId, 'deal.deleted', { id: dealId }).catch(() => {});
+
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
   } catch (err: any) {
     console.error('[deals [id] DELETE]', err);
