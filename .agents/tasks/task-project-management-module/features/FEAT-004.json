@@ -2,7 +2,7 @@
   "id": "FEAT-004",
   "type": "fix",
   "description": "Fix review issues: uniqueIndex for project_tasks, UUID validation on path params, remove as any casts at server-client boundary.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "In drizzle/schema/projects.ts, import uniqueIndex from drizzle-orm/pg-core and change index('idx_project_tasks_unique') to uniqueIndex('idx_project_tasks_unique')",
     "In app/api/tenant/projects/[id]/tasks/route.ts, add .onConflictDoNothing() to the insert and handle empty result (already linked)",
@@ -20,5 +20,5 @@
     "Run npx tsc --noEmit to verify no type errors"
   ],
   "blocked_reason": null,
-  "findings": null
+  "findings": "All 3 review issues fixed. TypeScript compiles with 0 errors. All 430 tests pass (2 skipped DB-dependent suites as before). No new issues introduced."
 }
