@@ -145,6 +145,43 @@ export const BUILTIN_MODULES: ModuleManifest[] = [
     permissions: ['segments.view','segments.manage'],
     pages: ['/tenant/contacts'],
   },
+  {
+    id: 'lead-warming', name: 'Lead Warming (Premium)', version: '1.0.0',
+    description: 'Auto-send personalized emails + WhatsApp on festivals, birthdays, and events. AI understands reply intent.',
+    author: 'NuCRM', category: 'messaging', icon: '🔥', minCrmVersion: '1.0.0',
+    pricing: { free:{enabled:false},starter:{enabled:false},pro:{enabled:true,price:35},enterprise:{enabled:true,price:0} },
+    features: [
+      'Auto festival greetings (Diwali, Christmas, Holi, New Year, 20+ events)',
+      'Birthday & anniversary auto-messages',
+      'AI-generated personalized messages',
+      'Multi-channel: Email + WhatsApp + SMS',
+      'AI reply intent analysis (interested/not interested/ask later)',
+      'Auto-create follow-up tasks from positive replies',
+      'Contact cooldown & rate limiting',
+      'Custom event calendar',
+      'Reply sentiment scoring',
+      'Campaign analytics dashboard',
+    ],
+    permissions: ['automations.view','automations.manage'],
+    settings_schema: [
+      { key:'ai_tone', label:'Default AI Tone', type:'select', required:false,
+        options:[
+          {value:'warm_professional',label:'Warm Professional'},
+          {value:'casual_friendly',label:'Casual Friendly'},
+          {value:'formal',label:'Formal'},
+          {value:'festive',label:'Festive'},
+        ] },
+      { key:'default_language', label:'Default Language', type:'select', required:false,
+        options:[
+          {value:'en',label:'English'},
+          {value:'hi',label:'Hindi'},
+          {value:'es',label:'Spanish'},
+          {value:'fr',label:'French'},
+        ] },
+    ],
+    pages: ['/tenant/lead-warming'],
+    webhooks: ['lead_warming.message_sent','lead_warming.reply_received','lead_warming.positive_intent'],
+  },
 ];
 
 export class ModuleRegistry {
