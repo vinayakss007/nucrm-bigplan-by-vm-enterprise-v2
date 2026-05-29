@@ -1,10 +1,12 @@
 # ── Multi-stage build for speed & size ────────────────────
+# syntax=docker/dockerfile:1
 
 # Stage 1: Dependencies
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm install --legacy-peer-deps --no-audit --no-fund 2>&1 | tail -5
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --legacy-peer-deps --no-audit --no-fund 2>&1 | tail -5
 
 # Stage 2: Builder
 FROM node:22-alpine AS builder
@@ -13,6 +15,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV CI=true
 ARG DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 ARG JWT_SECRET="build-jwt-secret"
 ARG SENTRY_DSN=""
@@ -28,24 +31,30 @@ RUN DATABASE_URL=$DATABASE_URL \
     SENTRY_PROJECT=$SENTRY_PROJECT \
     SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN \
     NEXT_PUBLIC_APP_URL=http://localhost:3000 \
-    npm run build && \
-    echo "build-$(date +%s)" > /app/.next/BUILD_ID
+    npm run build
 
-# Stage 3: Runner (minimal)
+# Stage 3: Runner (minimal standalone)
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/next.config.mjs ./
 COPY --from=builder /app/drizzle ./drizzle
 COPY --from=builder /app/drizzle.config.ts ./
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/worker.ts ./worker.ts
+COPY --from=builder /app/package.json ./
 
+# Standalone output - only the files needed to run
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["node", "server.js"]
