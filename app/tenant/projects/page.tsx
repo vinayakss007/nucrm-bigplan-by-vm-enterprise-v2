@@ -23,15 +23,8 @@ export default async function ProjectsPage() {
       ownerId: projects.ownerId,
       createdAt: projects.createdAt,
       ownerName: users.fullName,
-      taskCount: sql<number>`(
-        SELECT count(*)::int FROM project_tasks pt
-        WHERE pt.project_id = ${projects.id}
-      )`,
-      completedCount: sql<number>`(
-        SELECT count(*)::int FROM project_tasks pt
-        INNER JOIN tasks t ON t.id = pt.task_id
-        WHERE pt.project_id = ${projects.id} AND t.status = 'completed'
-      )`,
+      taskCount: sql<number>`0`,
+      completedCount: sql<number>`0`,
     })
     .from(projects)
     .leftJoin(users, eq(users.id, projects.ownerId))
