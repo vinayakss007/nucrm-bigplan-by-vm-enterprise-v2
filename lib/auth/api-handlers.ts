@@ -6,7 +6,6 @@ import { onboardingProgress } from '@/drizzle/schema';
 import { isNull } from 'drizzle-orm';
 import { eq, and, sql } from 'drizzle-orm';
 import { hashPassword, verifyPassword, createToken, hashToken, setSessionCookie, clearSessionCookie, validatePassword } from '@/lib/auth/session';
-import { generateCsrfToken, setCsrfCookie } from '@/lib/auth/csrf';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendEmail, sendWebhookNotification, sendTelegram } from '@/lib/email/service';
 import { devLogger } from '@/lib/dev-logger';
@@ -124,14 +123,11 @@ export async function POST_login(request: NextRequest) {
     });
 
     await setSessionCookie(token);
-    const csrfToken = generateCsrfToken();
-    const response = NextResponse.json({ 
+    return NextResponse.json({ 
       ok:true, 
       token,
       user:{ id:user.id, email:user.email, full_name:user.fullName, is_super_admin:user.isSuperAdmin } 
     });
-    response.headers.set('Set-Cookie', setCsrfCookie(csrfToken, process.env.NODE_ENV === 'production'));
-    return response;
   } catch (err:any) {
     devLogger.error(err as Error, '[auth/login]');
     return NextResponse.json({ error:'Login failed. Please try again.' }, { status:500 });
@@ -305,9 +301,6 @@ export async function POST_signup(request: NextRequest) {
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     });
     await setSessionCookie(token);
-    const signupCsrfToken = generateCsrfToken();
-    const signupResponse = NextResponse.json({ ok:true, user:{ id:user.id, email:user.email, full_name:user.fullName }, tenant:{ id:tenant.id, name:tenant.name, slug:tenant.slug } }, { status:201 });
-    signupResponse.headers.set('Set-Cookie', setCsrfCookie(signupCsrfToken, process.env.NODE_ENV === 'production'));
 
     // Send Discord/Slack webhook notification (fire-and-forget)
     sendWebhookNotification({
@@ -348,7 +341,7 @@ export async function POST_signup(request: NextRequest) {
       }).catch((err) => devLogger.error(err as Error, '[auth/signup] Failed to create verification token'));
     }
 
-    return signupResponse;
+    return NextResponse.json({ ok:true, user:{ id:user.id, email:user.email, full_name:user.fullName }, tenant:{ id:tenant.id, name:tenant.name, slug:tenant.slug } }, { status:201 });
   } catch (err:any) {
     devLogger.error(err as Error, '[auth/signup]');
     return NextResponse.json({ error: err.message ?? 'Signup failed.' }, { status:500 });
@@ -364,13 +357,6 @@ export async function POST_logout(request: NextRequest) {
       await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash)).catch(()=>{});
     }
     await clearSessionCookie();
-    const logoutResponse = NextResponse.json({ ok:true });
-    logoutResponse.headers.set('Set-Cookie', 'nucrm_csrf_token=; Path=/; SameSite=Strict; Max-Age=0');
-    return logoutResponse;
-  } catch {
-    await clearSessionCookie();
-    const logoutResponse = NextResponse.json({ ok:true });
-    logoutResponse.headers.set('Set-Cookie', 'nucrm_csrf_token=; Path=/; SameSite=Strict; Max-Age=0');
-    return logoutResponse;
-  }
+    return NextResponse.json({ ok:true });
+  } catch { await clearSessionCookie(); return NextResponse.json({ ok:true }); }
 }

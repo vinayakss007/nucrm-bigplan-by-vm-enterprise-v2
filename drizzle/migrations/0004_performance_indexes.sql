@@ -7,27 +7,27 @@
 -- =============================================================================
 
 -- Composite index for tenant-filtered lead queries
-CREATE INDEX  IF NOT EXISTS idx_leads_tenant_created 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_leads_tenant_created 
   ON leads(tenant_id, created_at DESC) 
   WHERE deleted_at IS NULL;
 
 -- Email lookup (case-insensitive search)
-CREATE INDEX  IF NOT EXISTS idx_leads_email_lower 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_leads_email_lower 
   ON leads(lower(email)) 
   WHERE deleted_at IS NULL AND email IS NOT NULL;
 
 -- Status filtering by tenant
-CREATE INDEX  IF NOT EXISTS idx_leads_tenant_status 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_leads_tenant_status 
   ON leads(tenant_id, lead_status) 
   WHERE deleted_at IS NULL;
 
 -- Assigned leads by user
-CREATE INDEX  IF NOT EXISTS idx_leads_assigned 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_leads_assigned 
   ON leads(assigned_to, tenant_id) 
   WHERE deleted_at IS NULL;
 
 -- Lead source analysis
-CREATE INDEX  IF NOT EXISTS idx_leads_source 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_leads_source 
   ON leads(tenant_id, lead_source) 
   WHERE deleted_at IS NULL;
 
@@ -38,32 +38,32 @@ CREATE INDEX  IF NOT EXISTS idx_leads_source
 -- =============================================================================
 
 -- Tenant-filtered contact queries
-CREATE INDEX  IF NOT EXISTS idx_contacts_tenant_created 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_contacts_tenant_created 
   ON contacts(tenant_id, created_at DESC) 
   WHERE deleted_at IS NULL;
 
 -- Email lookup (case-insensitive)
-CREATE INDEX  IF NOT EXISTS idx_contacts_email_lower 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_contacts_email_lower 
   ON contacts(lower(email)) 
   WHERE deleted_at IS NULL AND email IS NOT NULL;
 
 -- Company-based contact grouping
-CREATE INDEX  IF NOT EXISTS idx_contacts_company 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_contacts_company 
   ON contacts(company_id, tenant_id) 
   WHERE deleted_at IS NULL;
 
 -- Assigned contacts by user
-CREATE INDEX  IF NOT EXISTS idx_contacts_assigned 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_contacts_assigned 
   ON contacts(assigned_to, tenant_id) 
   WHERE deleted_at IS NULL;
 
 -- Contact status filtering
-CREATE INDEX  IF NOT EXISTS idx_contacts_status 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_contacts_status 
   ON contacts(tenant_id, lead_status) 
   WHERE deleted_at IS NULL;
 
 -- Lifecycle stage analysis
-CREATE INDEX  IF NOT EXISTS idx_contacts_lifecycle 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_contacts_lifecycle 
   ON contacts(tenant_id, lifecycle_stage) 
   WHERE deleted_at IS NULL;
 
@@ -72,32 +72,32 @@ CREATE INDEX  IF NOT EXISTS idx_contacts_lifecycle
 -- =============================================================================
 
 -- Tenant-filtered deal queries
-CREATE INDEX  IF NOT EXISTS idx_deals_tenant_created 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_deals_tenant_created 
   ON deals(tenant_id, created_at DESC) 
   WHERE deleted_at IS NULL;
 
 -- Pipeline stage filtering
-CREATE INDEX  IF NOT EXISTS idx_deals_stage 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_deals_stage 
   ON deals(tenant_id, stage_id) 
   WHERE deleted_at IS NULL;
 
 -- Assigned deals by user
-CREATE INDEX  IF NOT EXISTS idx_deals_assigned 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_deals_assigned 
   ON deals(assigned_to, tenant_id) 
   WHERE deleted_at IS NULL;
 
 -- Pipeline-based deals
-CREATE INDEX  IF NOT EXISTS idx_deals_pipeline 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_deals_pipeline 
   ON deals(tenant_id, pipeline_id) 
   WHERE deleted_at IS NULL;
 
 -- Contact-linked deals
-CREATE INDEX  IF NOT EXISTS idx_deals_contact 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_deals_contact 
   ON deals(contact_id, tenant_id) 
   WHERE deleted_at IS NULL;
 
 -- Amount-based sorting (for pipeline value)
-CREATE INDEX  IF NOT EXISTS idx_deals_amount 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_deals_amount 
   ON deals(tenant_id, (amount::numeric)) 
   WHERE deleted_at IS NULL AND amount IS NOT NULL;
 
@@ -106,17 +106,17 @@ CREATE INDEX  IF NOT EXISTS idx_deals_amount
 -- =============================================================================
 
 -- Tenant-filtered company queries
-CREATE INDEX  IF NOT EXISTS idx_companies_tenant_created 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_companies_tenant_created 
   ON companies(tenant_id, created_at DESC) 
   WHERE deleted_at IS NULL;
 
 -- Domain-based company lookup
-CREATE INDEX  IF NOT EXISTS idx_companies_domain 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_companies_domain 
   ON companies(tenant_id, lower(domain)) 
   WHERE deleted_at IS NULL AND domain IS NOT NULL;
 
 -- Industry segmentation
-CREATE INDEX  IF NOT EXISTS idx_companies_industry 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_companies_industry 
   ON companies(tenant_id, industry) 
   WHERE deleted_at IS NULL;
 
@@ -125,32 +125,32 @@ CREATE INDEX  IF NOT EXISTS idx_companies_industry
 -- =============================================================================
 
 -- Tenant-filtered task queries
-CREATE INDEX  IF NOT EXISTS idx_tasks_tenant_created 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tasks_tenant_created 
   ON tasks(tenant_id, created_at DESC) 
   WHERE deleted_at IS NULL;
 
 -- Due date sorting (for overdue task queries)
-CREATE INDEX  IF NOT EXISTS idx_tasks_due_date 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tasks_due_date 
   ON tasks(tenant_id, due_date) 
   WHERE deleted_at IS NULL AND due_date IS NOT NULL;
 
 -- Task assignment
-CREATE INDEX  IF NOT EXISTS idx_tasks_assigned 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tasks_assigned 
   ON tasks(assigned_to, tenant_id) 
   WHERE deleted_at IS NULL;
 
 -- Contact-linked tasks
-CREATE INDEX  IF NOT EXISTS idx_tasks_contact 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tasks_contact 
   ON tasks(contact_id, tenant_id) 
   WHERE deleted_at IS NULL;
 
 -- Deal-linked tasks
-CREATE INDEX  IF NOT EXISTS idx_tasks_deal 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tasks_deal 
   ON tasks(deal_id, tenant_id) 
   WHERE deleted_at IS NULL;
 
 -- Task status filtering (open tasks)
-CREATE INDEX  IF NOT EXISTS idx_tasks_open 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tasks_open 
   ON tasks(tenant_id, completed) 
   WHERE deleted_at IS NULL AND completed = false;
 
@@ -159,23 +159,23 @@ CREATE INDEX  IF NOT EXISTS idx_tasks_open
 -- =============================================================================
 
 -- Tenant-filtered activity queries
-CREATE INDEX  IF NOT EXISTS idx_activities_tenant_created 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_activities_tenant_created 
   ON activities(tenant_id, created_at DESC);
 
 -- Entity-based activity queries (for timelines)
-CREATE INDEX  IF NOT EXISTS idx_activities_entity 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_activities_entity 
   ON activities(tenant_id, entity_type, entity_id, created_at DESC);
 
 -- Contact activity timeline
-CREATE INDEX  IF NOT EXISTS idx_activities_contact 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_activities_contact 
   ON activities(tenant_id, contact_id, created_at DESC);
 
 -- Deal activity timeline
-CREATE INDEX  IF NOT EXISTS idx_activities_deal 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_activities_deal 
   ON activities(tenant_id, deal_id, created_at DESC);
 
 -- User activity tracking
-CREATE INDEX  IF NOT EXISTS idx_activities_user 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_activities_user 
   ON activities(tenant_id, user_id, created_at DESC);
 
 -- =============================================================================
@@ -183,19 +183,19 @@ CREATE INDEX  IF NOT EXISTS idx_activities_user
 -- =============================================================================
 
 -- Tenant-filtered audit queries
-CREATE INDEX  IF NOT EXISTS idx_audit_logs_tenant_created 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_logs_tenant_created 
   ON audit_logs(tenant_id, created_at DESC);
 
 -- User action tracking
-CREATE INDEX  IF NOT EXISTS idx_audit_logs_user 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_logs_user 
   ON audit_logs(tenant_id, user_id, created_at DESC);
 
 -- Resource-based audit queries
-CREATE INDEX  IF NOT EXISTS idx_audit_logs_resource 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_logs_resource 
   ON audit_logs(tenant_id, entity_type, entity_id, created_at DESC);
 
 -- Action type filtering
-CREATE INDEX  IF NOT EXISTS idx_audit_logs_action 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_logs_action 
   ON audit_logs(tenant_id, action, created_at DESC);
 
 -- =============================================================================
@@ -203,15 +203,15 @@ CREATE INDEX  IF NOT EXISTS idx_audit_logs_action
 -- =============================================================================
 
 -- Tenant-filtered lead activity queries
-CREATE INDEX  IF NOT EXISTS idx_lead_activities_tenant_created 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_activities_tenant_created 
   ON lead_activities(tenant_id, created_at DESC);
 
 -- Lead activity timeline
-CREATE INDEX  IF NOT EXISTS idx_lead_activities_lead 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_activities_lead 
   ON lead_activities(tenant_id, lead_id, created_at DESC);
 
 -- Activity type filtering
-CREATE INDEX  IF NOT EXISTS idx_lead_activities_type 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_activities_type 
   ON lead_activities(tenant_id, activity_type, created_at DESC);
 
 -- =============================================================================
@@ -219,17 +219,17 @@ CREATE INDEX  IF NOT EXISTS idx_lead_activities_type
 -- =============================================================================
 
 -- Active enrollments
-CREATE INDEX  IF NOT EXISTS idx_sequence_enrollments_active 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sequence_enrollments_active 
   ON sequence_enrollments(tenant_id, status) 
   WHERE status = 'active';
 
 -- Contact enrollment lookup
-CREATE INDEX  IF NOT EXISTS idx_sequence_enrollments_contact 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sequence_enrollments_contact 
   ON sequence_enrollments(tenant_id, contact_id) 
   WHERE status = 'active';
 
 -- Next step scheduling
-CREATE INDEX  IF NOT EXISTS idx_sequence_enrollments_next 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sequence_enrollments_next 
   ON sequence_enrollments(tenant_id, next_step_at) 
   WHERE status = 'active' AND next_step_at IS NOT NULL;
 
@@ -238,12 +238,12 @@ CREATE INDEX  IF NOT EXISTS idx_sequence_enrollments_next
 -- =============================================================================
 
 -- User unread notifications
-CREATE INDEX  IF NOT EXISTS idx_notifications_unread 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_notifications_unread 
   ON notifications(user_id, tenant_id) 
   WHERE read_at IS NULL;
 
 -- Recent notifications
-CREATE INDEX  IF NOT EXISTS idx_notifications_recent 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_notifications_recent 
   ON notifications(user_id, created_at DESC) 
   WHERE read_at IS NULL;
 
@@ -259,11 +259,11 @@ CREATE INDEX  IF NOT EXISTS idx_notifications_recent
 -- =============================================================================
 
 -- API key usage tracking
-CREATE INDEX  IF NOT EXISTS idx_api_key_usage_key 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_api_key_usage_key 
   ON api_key_usage(api_key_id, created_at DESC);
 
 -- Tenant API usage
-CREATE INDEX  IF NOT EXISTS idx_api_key_usage_tenant 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_api_key_usage_tenant 
   ON api_key_usage(tenant_id, created_at DESC);
 
 -- =============================================================================

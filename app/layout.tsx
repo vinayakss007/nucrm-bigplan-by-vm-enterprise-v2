@@ -5,7 +5,6 @@ import { ErrorWrapper } from '@/components/shared/error-wrapper';
 import { Toaster } from 'react-hot-toast';
 import OfflineDetector from '@/components/shared/offline-detector';
 import PWAInstallPrompt from '@/components/shared/pwa-install-prompt';
-import CsrfProvider from '@/components/shared/csrf-provider';
 import { ServiceWorkerRegistration } from '@/components/shared/service-worker-registration';
 import { SkipLink } from '@/components/ui/skip-link';
 import { I18nProvider } from '@/lib/i18n/provider';
@@ -46,10 +45,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <I18nProvider>
           <SkipLink />
           <ThemeProvider>
-            <ErrorWrapper>
-              <CsrfProvider />
-              {children}
-            </ErrorWrapper>
+            <ErrorWrapper>{children}</ErrorWrapper>
             <Toaster position="bottom-right" toastOptions={{
               style: { background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', border: '1px solid hsl(var(--border))', borderRadius: '10px', fontSize: '13px' },
             }} />

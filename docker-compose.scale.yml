@@ -52,13 +52,6 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET=${JWT_SECRET}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - SETUP_KEY=${SETUP_KEY}
-      - CRON_SECRET=${CRON_SECRET}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
-      - DATABASE_SSL=${DATABASE_SSL:-false}
-      - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-10}
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost}
       - SENTRY_DSN=${SENTRY_DSN:-}
     expose:
@@ -104,11 +97,6 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET=${JWT_SECRET}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - SETUP_KEY=${SETUP_KEY}
-      - CRON_SECRET=${CRON_SECRET}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - DATABASE_SSL=${DATABASE_SSL:-false}
     deploy:
       replicas: ${NUCRM_WORKER_REPLICAS:-2}
       resources:

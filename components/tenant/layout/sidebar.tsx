@@ -306,7 +306,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
           <Icon className={cn('w-4 h-4 shrink-0', active && 'text-violet-600 dark:text-violet-400')} />
           <span className="flex-1 truncate">{label}</span>
           {shortcut && !isPinned && (
-            <span className="text-[10px] text-muted-foreground/40 group-hover:text-muted-foreground/60 transition-colors">
+            <span className="text-[9px] text-muted-foreground/40 group-hover:text-muted-foreground/60 transition-colors">
               {shortcut}
             </span>
           )}
@@ -354,7 +354,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
             onChange={e => setQuery(e.target.value)}
             placeholder="Filter nav…"
             aria-label="Filter sidebar navigation"
-              className="w-full pl-8 pr-7 py-1.5 text-sm bg-muted/40 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:bg-background transition-colors"
+            className="w-full pl-8 pr-7 py-1.5 text-xs bg-muted/40 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:bg-background transition-colors"
           />
           {query && (
             <button onClick={() => setQuery('')} aria-label="Clear filter"
@@ -370,7 +370,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
         {/* Pinned shortcuts */}
         {pinnedItems.length > 0 && (
           <div className="mb-2">
-            <p className="px-2.5 py-1 text-[10px] font-semibold text-amber-600/70 dark:text-amber-400/70 uppercase tracking-wider flex items-center gap-1.5">
+            <p className="px-2.5 py-1 text-[9px] font-semibold text-amber-600/70 dark:text-amber-400/70 uppercase tracking-wider flex items-center gap-1.5">
               <Star className="w-2.5 h-2.5 fill-current" /> Pinned
             </p>
             {pinnedItems.map(navItem)}
@@ -393,12 +393,12 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
             <div key={section.id} className="mb-1">
               <button onClick={() => !q && toggleSection(section.id)}
                 className={cn(
-                  'flex items-center gap-1.5 w-full px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider transition-colors',
+                  'flex items-center gap-1.5 w-full px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition-colors',
                   q ? 'text-violet-600 dark:text-violet-400' : 'text-muted-foreground/60 hover:text-foreground'
                 )}>
                 {!q && <ChevronDown className={cn('w-3 h-3 transition-transform', isOpen ? 'rotate-0' : '-rotate-90')} />}
                 <span className="flex-1 text-left">{section.label}</span>
-                <span className="text-[10px] text-muted-foreground/40 font-normal normal-case">{section.items.length}</span>
+                <span className="text-[9px] text-muted-foreground/40 font-normal normal-case">{section.items.length}</span>
               </button>
               {isOpen && (
                 <div className="space-y-0.5 mt-0.5">
@@ -415,7 +415,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
             <div className="h-px bg-border my-2" />
             <div>
               <button onClick={() => setSettingsOpen(o => !o)}
-                className={cn('flex items-center gap-1.5 w-full px-2.5 py-1.5 rounded-lg text-sm font-semibold transition-colors',
+                className={cn('flex items-center gap-1.5 w-full px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors',
                   pathname.startsWith('/tenant/settings')
                     ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300'
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground')}>
@@ -429,7 +429,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
                     const active = pathname === item.href;
                     return (
                       <Link key={item.href} href={item.href} onClick={onMobileClose}
-                        className={cn('block px-2.5 py-1 rounded-md text-sm font-medium transition-colors',
+                        className={cn('block px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
                           active
                             ? 'text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/30 font-semibold'
                             : 'text-muted-foreground hover:text-foreground hover:bg-accent')}>
@@ -438,7 +438,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
                     );
                   })}
                   <Link href="/tenant/settings" onClick={onMobileClose}
-                    className="block px-2.5 py-1 rounded-md text-sm font-semibold text-violet-600 hover:underline">
+                    className="block px-2.5 py-1 rounded-md text-[11px] font-semibold text-violet-600 hover:underline">
                     All settings →
                   </Link>
                 </div>
@@ -452,11 +452,11 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
       <div className="p-2 border-t border-border space-y-0.5 shrink-0">
         {isSuperAdmin && (
           <Link href="/superadmin/dashboard"
-            className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors">
+            className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors">
             <Crown className="w-3.5 h-3.5" />Super Admin
           </Link>
         )}
-        <div className="flex items-center gap-2 px-2.5 py-1 text-xs text-muted-foreground/40">
+        <div className="flex items-center gap-2 px-2.5 py-1 text-[10px] text-muted-foreground/40">
           <Command className="w-3 h-3" />K  Quick search
         </div>
       </div>
