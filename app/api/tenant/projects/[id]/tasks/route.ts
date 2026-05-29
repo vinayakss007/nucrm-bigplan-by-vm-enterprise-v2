@@ -7,6 +7,8 @@ import { db } from '@/drizzle/db';
 import { projects, projectTasks, tasks, users } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -16,6 +18,10 @@ export async function GET(
     if (ctx instanceof NextResponse) return ctx;
 
     const { id } = await params;
+
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
+    }
 
     // Verify project belongs to tenant
     const [project] = await db.select({ id: projects.id })
@@ -68,6 +74,10 @@ export async function POST(
 
     const { id } = await params;
 
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
+    }
+
     // Verify project belongs to tenant
     const [project] = await db.select({ id: projects.id })
       .from(projects)
@@ -106,7 +116,12 @@ export async function POST(
         taskId: v.task_id,
         addedBy: ctx.userId,
       })
+      .onConflictDoNothing({ target: [projectTasks.projectId, projectTasks.taskId] })
       .returning();
+
+    if (!link) {
+      return NextResponse.json({ error: 'Task is already linked to this project' }, { status: 409 });
+    }
 
     return NextResponse.json({ data: link }, { status: 201 });
   } catch (err: any) {
@@ -127,6 +142,10 @@ export async function DELETE(
     if (deny) return deny;
 
     const { id } = await params;
+
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
+    }
 
     // Get task_id from query params or body
     const { searchParams } = new URL(request.url);
