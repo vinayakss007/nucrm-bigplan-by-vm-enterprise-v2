@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (err: any) {
     console.error('[superadmin/join-tenant POST]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -118,6 +119,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (err: any) {
     console.error('[superadmin/join-tenant GET]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }

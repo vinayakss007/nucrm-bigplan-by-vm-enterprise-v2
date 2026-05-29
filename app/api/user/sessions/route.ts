@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json({ data });
   } catch (err: any) { 
-    return NextResponse.json({ error: err.message }, { status: 500 }); 
+    return apiError(err); 
   }
 }
 
@@ -63,6 +64,6 @@ export async function DELETE(request: NextRequest) {
     }
     return NextResponse.json({ ok: true });
   } catch (err: any) { 
-    return NextResponse.json({ error: err.message }, { status: 500 }); 
+    return apiError(err); 
   }
 }

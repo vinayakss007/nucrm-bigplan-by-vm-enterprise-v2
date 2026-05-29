@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
 import { createSequenceSchema } from '@/lib/api/schemas';
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data });
   } catch (error: any) {
     console.error('[sequences GET]', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -101,6 +102,6 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
   } catch (error: any) {
     console.error('[sequences POST]', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }

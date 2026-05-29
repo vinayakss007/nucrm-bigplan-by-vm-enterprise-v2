@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 /**
  * POST /api/tenant/leads/[id]/convert
  *
@@ -319,6 +320,6 @@ export async function POST(
 
   } catch (error: any) {
     console.error('[lead convert] error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
