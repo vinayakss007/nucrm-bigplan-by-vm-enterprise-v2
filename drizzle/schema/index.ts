@@ -29,3 +29,4 @@ export * from './templates';
 export * from './ai';
 export * from './lead-warming';
 export * from './plugins';
+export * from './projects';
