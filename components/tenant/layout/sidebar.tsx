@@ -8,7 +8,7 @@ import {
   LifeBuoy, Package, FileText, ShoppingCart, FileSignature, RefreshCw, Library,
   Command, Star, StarOff, Database, Upload, Workflow, Mail, MessageSquare,
   Trophy, Wrench, Boxes, Sparkles, ListChecks, ArrowRightLeft, Tag, Globe, Filter,
-  BrainCircuit, EyeOff, Send, ShieldCheck,
+  BrainCircuit, EyeOff, Send, ShieldCheck, FolderKanban,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -44,6 +44,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href:'/tenant/companies', label:'Companies',  icon:Building2,       shortcut:'⌘4', keywords:'accounts orgs' },
       { href:'/tenant/deals',     label:'Deals',      icon:TrendingUp,      shortcut:'⌘5', keywords:'opportunities pipeline' },
       { href:'/tenant/tasks',     label:'Tasks',      icon:CheckSquare,     shortcut:'⌘6', keywords:'todo activities' },
+      { href:'/tenant/projects',  label:'Projects',   icon:FolderKanban,    keywords:'project milestone tracking' },
       { href:'/tenant/calendar',  label:'Calendar',   icon:Calendar,        keywords:'meetings events' },
     ],
   },
