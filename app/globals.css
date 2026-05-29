@@ -49,7 +49,7 @@
 }
 
 @layer base {
-  html { font-size: 15px; }
+  html { font-size: 16px; }
   * { @apply border-border; box-sizing: border-box; }
   body { @apply bg-background text-foreground; font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
   code, pre, kbd { font-family: var(--font-jetbrains-mono), 'DM Mono', monospace; }
@@ -69,12 +69,12 @@
     @apply hover:-translate-y-[1px];
   }
   .admin-sidebar { background: hsl(222, 32%, 5%); border-right: 1px solid rgba(255,255,255,0.05); }
-  .admin-nav-item { @apply flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-medium transition-all duration-150; color: rgba(255,255,255,0.55); }
+  .admin-nav-item { @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150; color: rgba(255,255,255,0.55); }
   .admin-nav-item:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.85); }
   .admin-nav-item.active { background: rgba(124,58,237,0.18); color: hsl(252,87%,74%); }
   .tenant-sidebar { @apply bg-card border-r border-border; }
   .tenant-nav-item {
-    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-semibold;
+    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold;
     @apply text-muted-foreground;
     @apply transition-all duration-200 ease-out;
     @apply relative;
@@ -171,7 +171,7 @@
 }
 
 /* ── Font rendering fix ───────────────────────────────────────── */
-html { font-size: 15px; text-rendering: optimizeLegibility; }
+html { font-size: 16px; text-rendering: optimizeLegibility; }
 body { font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "ss01" 1, "ss02" 1; }
 p, span, div, li, td, th { font-weight: 400; -webkit-font-smoothing: antialiased; }
 h1,h2,h3,h4,h5,h6 { letter-spacing: -0.02em; }
@@ -236,11 +236,11 @@ th { white-space: nowrap; }
    Falls back to workspace defaults if no per-user override exists.
    ──────────────────────────────────────────────────────────────── */
 
-/* Font size scale — overrides the base 15px set above */
-html[data-font-size="small"]  { font-size: 13px; }
-html[data-font-size="normal"] { font-size: 15px; }
-html[data-font-size="large"]  { font-size: 17px; }
-html[data-font-size="xl"]     { font-size: 19px; }
+/* Font size scale — overrides the base 16px set above */
+html[data-font-size="small"]  { font-size: 14px; }
+html[data-font-size="normal"] { font-size: 16px; }
+html[data-font-size="large"]  { font-size: 18px; }
+html[data-font-size="xl"]     { font-size: 20px; }
 
 /* UI density — surfaces a custom property components can opt into */
 html                              { --ui-density: 1;     }
