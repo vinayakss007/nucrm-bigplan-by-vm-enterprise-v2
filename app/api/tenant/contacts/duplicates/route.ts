@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
 import { createContactSchema } from '@/lib/api/schemas';
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('[Duplicates] POST error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -100,7 +101,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('[Duplicates] GET error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
 

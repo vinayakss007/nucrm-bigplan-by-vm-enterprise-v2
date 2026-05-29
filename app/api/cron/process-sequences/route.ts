@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
 import { createEmailTracking, addTracking } from '@/lib/email/service';
 import { logError } from '@/lib/errors';
@@ -198,6 +199,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, processed });
   } catch (err: any) {
     console.error('[Sequence Processor] Fatal error:', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }

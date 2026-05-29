@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
@@ -43,6 +44,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, cleaned: r });
   } catch (err: any) { 
     console.error('[Cleanup] Error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 }); 
+    return apiError(err); 
   }
 }
