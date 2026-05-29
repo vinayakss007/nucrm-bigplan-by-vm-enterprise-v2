@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 /**
  * WhatsApp Business API Webhook
  */
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err: any) {
     console.error('[WhatsApp Webhook] Error:', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 

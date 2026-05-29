@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { users, tenants, tenantMembers, plans, roles, onboardingProgress, sessions, pipelines, dealStages } from '@/drizzle/schema';
@@ -178,6 +179,6 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
   } catch (err: any) {
     console.error('[setup/create-admin]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
