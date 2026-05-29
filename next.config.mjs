@@ -39,6 +39,9 @@ let nextConfig = {
   // Compression
   compress: true,
 
+  // Standalone output for Docker
+  output: 'standalone',
+
   // Production optimizations
   productionBrowserSourceMaps: false,
 
