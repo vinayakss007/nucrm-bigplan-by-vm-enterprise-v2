@@ -2,7 +2,7 @@
   "id": "FEAT-003",
   "type": "feat",
   "description": "Add the Project Management frontend pages: projects list page with data table, project detail page with linked tasks/milestones/progress bar, and create/edit modals. Match the exact UI/UX patterns used in the tasks and deals modules.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Create app/tenant/projects/page.tsx as a server component following app/tenant/tasks/page.tsx pattern: use requireTenantCtx(), check permissions (projects.view, projects.create, projects.edit, projects.delete), query projects with owner name join, pass to a client component.",
     "Create components/tenant/projects-data-table.tsx as a client component following the pattern in components/tenant/tasks-data-table.tsx. Show columns: Name (link to detail), Status (badge with colors: active=green, on-hold=amber, completed=blue), Owner, Start Date, End Date, Progress (progress bar showing % of linked tasks completed), Actions dropdown (edit/delete). Include a 'New Project' button that opens a create modal/dialog. Include inline status editing. Use the same DataTable, Button, Badge, DropdownMenu components.",
@@ -24,5 +24,5 @@
     "Run `npx tsc --noEmit` for final type verification"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 6 files created and pass `npx tsc --noEmit` with 0 errors. Test suite results: 435 passed, 2 pre-existing failures (same ECONNREFUSED and missing tmp dir issues from FEAT-001/002). Required using explicit literal fallbacks for Record index signature access to satisfy TypeScript noUncheckedIndexedAccess. Date fields from DB needed String() conversion for string-typed client props."
 }
