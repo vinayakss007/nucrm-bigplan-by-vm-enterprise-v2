@@ -59,7 +59,7 @@ export default function SequencesPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   return (
-    <div className="max-w-5xl space-y-6 animate-fade-in">
+    <div className="max-w-[1600px] mx-auto space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold">Sequences</h1>

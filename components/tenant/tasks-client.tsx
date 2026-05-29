@@ -93,7 +93,7 @@ export default function TenantTasksClient({ initialTasks, contacts, deals, teamM
   ];
 
   return (
-    <div className="space-y-4 animate-fade-in max-w-5xl">
+    <div className="space-y-4 animate-fade-in max-w-[1600px] mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>

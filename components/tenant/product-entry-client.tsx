@@ -39,7 +39,7 @@ export default function ProductEntryClient({ product, tenantId, userId }: Produc
   const HeroIcon = getIcon(product.icon);
 
   return (
-    <div className="space-y-6 animate-fade-in max-w-7xl">
+    <div className="space-y-6 animate-fade-in max-w-[1600px] mx-auto">
       {/* Hero section */}
       <div className="flex items-start gap-4">
         <div className="w-14 h-14 rounded-2xl bg-violet-100 dark:bg-violet-950/30 flex items-center justify-center shrink-0">
