@@ -251,10 +251,10 @@ async function getEligibleContacts(campaign: any): Promise<ContactToWarm[]> {
     lastName: contacts.lastName,
     email: contacts.email,
     phone: contacts.phone,
-    companyName: contacts.company,
+    companyName: contacts.companyId,
     leadStatus: contacts.leadStatus,
     tags: contacts.tags,
-    birthday: contacts.dateOfBirth,
+    birthday: contacts.birthday,
     assignedTo: contacts.assignedTo,
     doNotContact: contacts.doNotContact,
   })
@@ -432,10 +432,10 @@ async function processBirthdayCampaigns(
         lastName: contacts.lastName,
         email: contacts.email,
         phone: contacts.phone,
-        companyName: contacts.company,
+        companyName: contacts.companyId,
         leadStatus: contacts.leadStatus,
         tags: contacts.tags,
-        birthday: contacts.dateOfBirth,
+        birthday: contacts.birthday,
         assignedTo: contacts.assignedTo,
         doNotContact: contacts.doNotContact,
       })
@@ -443,8 +443,8 @@ async function processBirthdayCampaigns(
       .where(and(
         eq(contacts.tenantId, campaign.tenantId),
         or(eq(contacts.doNotContact, false), isNull(contacts.doNotContact)),
-        sql`EXTRACT(MONTH FROM ${contacts.dateOfBirth}) = ${todayMonth}`,
-        sql`EXTRACT(DAY FROM ${contacts.dateOfBirth}) = ${todayDay}`,
+        sql`EXTRACT(MONTH FROM ${contacts.birthday}) = ${todayMonth}`,
+        sql`EXTRACT(DAY FROM ${contacts.birthday}) = ${todayDay}`,
       ))
       .limit(200);
 
