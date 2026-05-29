@@ -132,13 +132,16 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       eq(tenantMembersTable.status, 'active')
     )),
 
-    Promise.all([
-      db.select().from(invoices).where(eq(invoices.contactId, contactId)).orderBy(desc(invoices.createdAt)).limit(50),
-      db.select().from(orders).where(eq(orders.contactId, contactId)).orderBy(desc(orders.createdAt)).limit(50),
-      db.select().from(contracts).where(eq(contracts.contactId, contactId)).orderBy(desc(contracts.createdAt)).limit(50),
-      db.select().from(serviceSubscriptions).where(eq(serviceSubscriptions.contactId, contactId)).orderBy(desc(serviceSubscriptions.createdAt)).limit(50),
-      db.select().from(quotes).where(eq(quotes.contactId, contactId)).orderBy(desc(quotes.createdAt)).limit(50),
-    ]),
+    (async () => {
+      const safe = async <T>(p: Promise<T>, fallback: T): Promise<T> => p.catch(() => fallback);
+      return Promise.all([
+        safe(db.select().from(invoices).where(eq(invoices.contactId, contactId)).orderBy(desc(invoices.createdAt)).limit(50), []),
+        safe(db.select().from(orders).where(eq(orders.contactId, contactId)).orderBy(desc(orders.createdAt)).limit(50), []),
+        safe(db.select().from(contracts).where(eq(contracts.contactId, contactId)).orderBy(desc(contracts.createdAt)).limit(50), []),
+        safe(db.select().from(serviceSubscriptions).where(eq(serviceSubscriptions.contactId, contactId)).orderBy(desc(serviceSubscriptions.createdAt)).limit(50), []),
+        safe(db.select().from(quotes).where(eq(quotes.contactId, contactId)).orderBy(desc(quotes.createdAt)).limit(50), []),
+      ]);
+    })(),
   ]);
 
   if (!contactResult.length) notFound();
@@ -151,7 +154,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     created_by_name: contactRow.created_by_name
   };
 
-  const [invoicesList, ordersList, contractsList, subscriptionsList, quotesList] = billingData;
+  const [invoicesList, ordersList, contractsList, subscriptionsList, quotesList] = billingData ?? [[], [], [], [], []];
 
   const permissions = {
     canEdit:   can(ctx, 'contacts.edit'),
