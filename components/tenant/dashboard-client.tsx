@@ -103,7 +103,7 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
   };
 
   return (
-    <div className="space-y-5 animate-fade-in max-w-7xl">
+    <div className="space-y-5 animate-fade-in max-w-[1600px] mx-auto">
       <div>
         <h1 className="text-xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground capitalize">{planName} plan</p>
@@ -116,7 +116,7 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
       )}
 
       {/* KPI row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-6 gap-4">
         <StatCard loading={loading} icon={Users}      label="Total Contacts"  value={data?.contactCount?.toLocaleString()} sub={`${data?.companyCount ?? '—'} companies`} color="bg-violet-50 dark:bg-violet-950/30 text-violet-600" href="/tenant/contacts"/>
         <StatCard loading={loading} icon={TrendingUp} label="Open Pipeline"   value={formatCurrency(data?.pipeline ?? 0)} sub={`${data?.openDealsCount ?? '—'} active deals`} color="bg-amber-50 dark:bg-amber-950/30 text-amber-600" href="/tenant/deals"/>
         <StatCard loading={loading} icon={DollarSign} label="Won This Month"  value={formatCurrency(data?.wonThisMonth ?? 0)} sub="Revenue closed" color="bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600" href="/tenant/deals"/>
