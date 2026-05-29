@@ -39,6 +39,7 @@
     "db:status": "npx tsx scripts/migration-status.ts",
     "db:auto": "npx tsx scripts/migrate.ts",
     "db:sync": "npx tsx scripts/sync-database.ts",
+    "seed:dev": "tsx scripts/seed-dev.ts",
     "db:seed": "npx tsx scripts/seed-advanced.ts",
     "db:demo": "npx tsx scripts/seed-massive-data.ts",
     "db:studio": "node -e \"console.log('Use DBeaver or pgAdmin to connect: ' + process.env.DATABASE_URL)\"",
