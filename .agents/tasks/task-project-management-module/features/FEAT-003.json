@@ -1,0 +1,28 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Add the Project Management frontend pages: projects list page with data table, project detail page with linked tasks/milestones/progress bar, and create/edit modals. Match the exact UI/UX patterns used in the tasks and deals modules.",
+  "status": "in_progress",
+  "steps": [
+    "Create app/tenant/projects/page.tsx as a server component following app/tenant/tasks/page.tsx pattern: use requireTenantCtx(), check permissions (projects.view, projects.create, projects.edit, projects.delete), query projects with owner name join, pass to a client component.",
+    "Create components/tenant/projects-data-table.tsx as a client component following the pattern in components/tenant/tasks-data-table.tsx. Show columns: Name (link to detail), Status (badge with colors: active=green, on-hold=amber, completed=blue), Owner, Start Date, End Date, Progress (progress bar showing % of linked tasks completed), Actions dropdown (edit/delete). Include a 'New Project' button that opens a create modal/dialog. Include inline status editing. Use the same DataTable, Button, Badge, DropdownMenu components.",
+    "Create app/tenant/projects/[id]/page.tsx as a server component following app/tenant/tasks/[id]/page.tsx pattern: fetch the project with milestones and linked tasks, pass to a client detail component.",
+    "Create components/tenant/project-detail-client.tsx with: (1) Header section showing project name, status badge, date range, owner. (2) Progress bar (tasks completed / total tasks percentage, styled with violet/green gradient). (3) Milestones section - simple list with title, due date, completed checkbox, ability to add new milestone inline. (4) Linked Tasks section - data table of tasks linked to this project showing title, status, priority, assignee, with ability to link/unlink tasks via a search-and-add UI. (5) Description section. Use the same card/section styling as task-detail-client or deals page.",
+    "Add app/tenant/projects/loading.tsx and app/tenant/projects/error.tsx following the same patterns as app/tenant/tasks/loading.tsx and app/tenant/tasks/error.tsx."
+  ],
+  "acceptance_criteria": [
+    "app/tenant/projects/page.tsx renders a data table of projects with status badges and progress bars",
+    "Users can create a new project via a modal dialog from the list page",
+    "app/tenant/projects/[id]/page.tsx shows project detail with milestones, linked tasks, and progress bar",
+    "Users can add/remove milestones and link/unlink tasks from the detail page",
+    "All UI matches the existing CRM style: violet accents, same card borders, same button styles, same data table patterns",
+    "Plan gating is enforced - the module must be active for the tenant",
+    "`npm run build` passes without errors"
+  ],
+  "verification": [
+    "Run `npm run build` to confirm no TypeScript or build errors across all new page and component files",
+    "Run `npx tsc --noEmit` for final type verification"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
