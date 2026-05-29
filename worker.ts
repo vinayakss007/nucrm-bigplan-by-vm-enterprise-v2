@@ -178,6 +178,107 @@ const automationWorker = new Worker(
   { connection, concurrency: 5 }
 );
 
+// Lead warming worker (premium feature: auto-send festival/birthday greetings)
+const leadWarmingWorker = new Worker(
+  'send-lead-warming',
+  async (job) => {
+    const { type, tenantId, campaignId, contactId, phone, message, templateName, eventName } = job.data;
+    console.log(`[Lead Warming Worker] Processing job: ${job.id} - ${type} for ${contactId}`);
+
+    try {
+      if (type === 'whatsapp') {
+        // Send WhatsApp via Meta Cloud API
+        const { db: database } = await import('@/drizzle/db');
+        const { integrations, leadWarmingMessages } = await import('@/drizzle/schema');
+        const { eq: eqOp, and: andOp, desc: descOp } = await import('drizzle-orm');
+
+        const [integration] = await database.select()
+          .from(integrations)
+          .where(andOp(
+            eqOp(integrations.tenantId, tenantId),
+            eqOp(integrations.type, 'whatsapp'),
+            eqOp(integrations.isActive, true)
+          ))
+          .orderBy(descOp(integrations.createdAt))
+          .limit(1);
+
+        if (!integration) {
+          console.warn(`[Lead Warming] No WhatsApp integration for tenant ${tenantId}`);
+          // Update message status
+          await database.update(leadWarmingMessages)
+            .set({ status: 'failed', errorMessage: 'WhatsApp not configured' })
+            .where(andOp(
+              eqOp(leadWarmingMessages.campaignId, campaignId),
+              eqOp(leadWarmingMessages.contactId, contactId),
+              eqOp(leadWarmingMessages.status, 'queued')
+            ));
+          return { sent: false, error: 'WhatsApp not configured' };
+        }
+
+        const config = integration.config as any;
+        const phoneNumberId = config?.phone_number_id;
+        const accessToken = config?.access_token;
+
+        if (!phoneNumberId || !accessToken) {
+          throw new Error('WhatsApp credentials incomplete');
+        }
+
+        const requestBody = templateName
+          ? {
+              messaging_product: 'whatsapp',
+              to: phone.replace(/[^0-9]/g, ''),
+              type: 'template',
+              template: { name: templateName, language: { code: 'en' } },
+            }
+          : {
+              messaging_product: 'whatsapp',
+              to: phone.replace(/[^0-9]/g, ''),
+              type: 'text',
+              text: { body: message },
+            };
+
+        const response = await fetch(
+          `https://graph.facebook.com/v17.0/${phoneNumberId}/messages`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+            signal: AbortSignal.timeout(15_000),
+          }
+        );
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error?.message || `HTTP ${response.status}`);
+        }
+
+        // Update message status to sent
+        await database.update(leadWarmingMessages)
+          .set({ status: 'sent', sentAt: new Date() })
+          .where(andOp(
+            eqOp(leadWarmingMessages.campaignId, campaignId),
+            eqOp(leadWarmingMessages.contactId, contactId),
+            eqOp(leadWarmingMessages.status, 'queued'),
+            eqOp(leadWarmingMessages.channel, 'whatsapp')
+          ));
+
+        console.log(`[Lead Warming] WhatsApp sent to ${phone} for ${eventName}`);
+        return { sent: true, phone, event: eventName };
+      }
+
+      // For email type, it's already handled by send-email queue
+      return { sent: true };
+    } catch (error: any) {
+      console.error(`[Lead Warming Worker] Failed:`, error.message);
+      throw error;
+    }
+  },
+  { connection, concurrency: 3 }
+);
+
 // Webhook delivery worker
 const webhookWorker = new Worker(
   'webhooks',
@@ -226,6 +327,7 @@ process.on('SIGTERM', async () => {
     notificationWorker.close(),
     bulkEmailWorker.close(),
     automationWorker.close(),
+    leadWarmingWorker.close(),
     webhookWorker.close(),
   ]);
   await connection.quit();
@@ -240,6 +342,7 @@ process.on('SIGINT', async () => {
     notificationWorker.close(),
     bulkEmailWorker.close(),
     automationWorker.close(),
+    leadWarmingWorker.close(),
     webhookWorker.close(),
   ]);
   await connection.quit();

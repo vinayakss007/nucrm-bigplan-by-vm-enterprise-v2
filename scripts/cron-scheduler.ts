@@ -42,6 +42,7 @@ const JOBS: CronJob[] = [
   { name: 'cleanup',             path: '/api/cron/cleanup',             schedule: '0 4 * * 0',         intervalMs: 7 * 24 * 60 * 60_000 },
   { name: 'warmup-emails',       path: '/api/cron/warmup-emails',       schedule: '0 9,13,17 * * *',   intervalMs: 4 * 60 * 60_000 },
   { name: 'subscription-check',  path: '/api/cron/subscription-check',  schedule: '0 5 * * *',         intervalMs: 24 * 60 * 60_000 },
+  { name: 'lead-warming',        path: '/api/cron/lead-warming',        schedule: '0 9 * * *',         intervalMs: 24 * 60 * 60_000 },
 ];
 
 async function runJob(job: CronJob): Promise<void> {
