@@ -71,6 +71,13 @@
       "when": 1746989400000,
       "tag": "0009_audit_hash_chain",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1746989500000,
+      "tag": "0010_rename_invitations_role",
+      "breakpoints": true
     }
   ]
 }
