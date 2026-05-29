@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
@@ -82,7 +83,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: backups });
   } catch (err: any) {
     console.error('[superadmin/restore GET]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -167,7 +168,7 @@ export async function POST(request: NextRequest) {
       message: err.message,
       stack: err.stack?.slice(0, 2000),
     }).catch(() => {});
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 

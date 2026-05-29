@@ -9,6 +9,7 @@ export type NotificationType =
   | 'contact_assigned' | 'mention'
   | 'invite_accepted'  | 'team_joined'
   | 'limit_warning'    | 'trial_expiring'
+  | 'lead_warming'
   | 'system';
 
 export async function createNotification(opts: {

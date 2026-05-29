@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 /**
  * 2FA Setup — generates a TOTP secret and QR code URI.
  * User scans QR in Google Authenticator, then calls /verify to confirm.
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
       note: 'Scan QR or enter secret in authenticator app, then POST to /api/auth/2fa/verify with a token to activate.' 
     });
   } catch (err: any) { 
-    return NextResponse.json({ error: err.message }, { status: 500 }); 
+    return apiError(err); 
   }
 }
 

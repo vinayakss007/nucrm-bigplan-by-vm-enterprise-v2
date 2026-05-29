@@ -1,22 +1,40 @@
-import { Parser } from 'expr-eval';
-
 /**
  * Formula Engine — NuCRM No-Code Logic
- * 
+ *
  * Safely evaluates user-defined formulas using CRM entity data.
  * Supports standard math, logic, and string concatenation.
+ *
+ * SECURITY: Uses mathjs with sandboxed evaluation (no access to global scope,
+ * no prototype pollution, no arbitrary code execution). Previously used expr-eval
+ * which had critical prototype pollution + code execution vulnerabilities
+ * (GHSA-8gw3-rxh4-v6jx, GHSA-jc85-fpwf-qm7x) with NO fix available.
  */
 
-export class FormulaEngine {
-  private parser: Parser;
+import { create, all, type ConfigOptions } from 'mathjs';
 
-  constructor() {
-    this.parser = new Parser();
+// Create a restricted mathjs instance — no dangerous functions
+const config: ConfigOptions = { matrix: 'Array' as const };
+const math = create(all as any, config) as any;
+
+// Remove dangerous functions that could be abused
+const BLOCKED_FUNCTIONS = [
+  'import', 'createUnit', 'evaluate', 'parse', 'simplify',
+  'derivative', 'resolve', 'compile', 'chain',
+];
+
+for (const fn of BLOCKED_FUNCTIONS) {
+  try {
+    // @ts-ignore — intentionally removing functions from scope
+    delete (math as any)[fn];
+  } catch {
+    // Some may not exist, that's fine
   }
+}
 
+export class FormulaEngine {
   /**
    * Evaluate a formula against a data record.
-   * 
+   *
    * @param formula The user-defined string (e.g. "{{value}} * 0.1")
    * @param data The entity record (Contact, Deal, etc.)
    * @returns The computed value (number or string) or null on error
@@ -26,7 +44,6 @@ export class FormulaEngine {
 
     try {
       // 1. Pre-process: replace {{field}} with clean variable names
-      // We also track which variables we've extracted to pass to the parser
       const variables: Record<string, any> = {};
       let cleanFormula = formula;
 
@@ -35,18 +52,43 @@ export class FormulaEngine {
         for (const match of matches) {
           const rawKey = match.slice(2, -2); // Remove {{ and }}
           const safeKey = rawKey.replace(/\./g, '_'); // Flatten nested paths
-          
+
           cleanFormula = cleanFormula.replace(match, safeKey);
-          variables[safeKey] = this.getNestedValue(data, rawKey) ?? 0;
+          const value = this.getNestedValue(data, rawKey);
+          variables[safeKey] = typeof value === 'number' ? value : (parseFloat(value) || 0);
         }
       }
 
-      // 2. Parse and evaluate
-      // expr-eval is safe as it doesn't allow arbitrary JS execution
-      const expression = this.parser.parse(cleanFormula);
-      const result = expression.evaluate(variables);
+      // 2. Validate formula length (prevent DoS via extremely long formulas)
+      if (cleanFormula.length > 1000) {
+        console.error('[FormulaEngine] Formula too long (>1000 chars)');
+        return null;
+      }
 
-      // 3. Round numbers to avoid floating point weirdness
+      // 3. Block dangerous patterns
+      const dangerousPatterns = [
+        /import\s*\(/i,
+        /require\s*\(/i,
+        /process\./i,
+        /global\./i,
+        /__proto__/i,
+        /constructor/i,
+        /prototype/i,
+        /eval\s*\(/i,
+        /Function\s*\(/i,
+      ];
+
+      for (const pattern of dangerousPatterns) {
+        if (pattern.test(cleanFormula)) {
+          console.error(`[FormulaEngine] Blocked dangerous pattern in formula: "${cleanFormula}"`);
+          return null;
+        }
+      }
+
+      // 4. Evaluate safely with mathjs (sandboxed, no global access)
+      const result = math.evaluate(cleanFormula, variables);
+
+      // 5. Round numbers to avoid floating point weirdness
       if (typeof result === 'number') {
         return Math.round(result * 100) / 100;
       }
