@@ -25,17 +25,17 @@ export async function POST(req: NextRequest) {
   try {
     // 1. Process lead warming (send messages for today's events)
     const warmingResult = await processLeadWarming();
-    results.warming = warmingResult;
+    results['warming'] = warmingResult;
 
     // 2. Analyze any unprocessed replies
     const replyResult = await analyzeUnprocessedReplies(50);
-    results.replies = replyResult;
+    results['replies'] = replyResult;
 
     // 3. Reset monthly counters on the 1st of each month
     const today = new Date();
     if (today.getDate() === 1) {
       await resetMonthlyCounters();
-      results.monthlyReset = true;
+      results['monthlyReset'] = true;
     }
 
     console.log('[cron/lead-warming] Completed:', JSON.stringify(results));

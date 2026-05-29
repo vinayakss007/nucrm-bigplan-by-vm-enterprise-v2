@@ -10,13 +10,10 @@
  * (GHSA-8gw3-rxh4-v6jx, GHSA-jc85-fpwf-qm7x) with NO fix available.
  */
 
-import { create, all, type MathJsInstance } from 'mathjs';
+import { create, all } from 'mathjs';
 
 // Create a restricted mathjs instance — no dangerous functions
-const math: MathJsInstance = create(all, {
-  // Limit matrix size to prevent DoS
-  matrix: 'Array',
-});
+const math = create(all as any) as any;
 
 // Remove dangerous functions that could be abused
 const BLOCKED_FUNCTIONS = [
