@@ -182,6 +182,15 @@ export const BUILTIN_MODULES: ModuleManifest[] = [
     pages: ['/tenant/lead-warming'],
     webhooks: ['lead_warming.message_sent','lead_warming.reply_received','lead_warming.positive_intent'],
   },
+  {
+    id: 'project-management', name: 'Project Management', version: '1.0.0',
+    description: 'Lightweight project tracking with milestones and linked tasks',
+    author: 'NuCRM', category: 'utility', icon: '📁', minCrmVersion: '1.0.0',
+    pricing: { free:{enabled:false},starter:{enabled:false},pro:{enabled:true,price:0},enterprise:{enabled:true,price:0} },
+    features: ['Projects list','Link tasks to projects','Progress tracking','Milestones','Project detail view'],
+    permissions: ['projects.view','projects.create','projects.edit','projects.delete'],
+    pages: ['/tenant/projects','/tenant/projects/[id]'],
+  },
 ];
 
 export class ModuleRegistry {

@@ -862,6 +862,28 @@ export const platformSettingsSchema = z.record(
   z.union([z.string(), z.number(), z.boolean()])
 );
 
+// ── Project schemas ──
+export const createProjectSchema = z.object({
+  name: requiredString.max(200, 'Name too long'),
+  description: z.string().trim().max(2000).nullable().optional(),
+  status: z.enum(['active', 'on-hold', 'completed']).optional().default('active'),
+  start_date: z.string().date().optional().nullable(),
+  end_date: z.string().date().optional().nullable(),
+  owner_id: uuid,
+});
+
+export const updateProjectSchema = createProjectSchema.partial();
+
+export const createMilestoneSchema = z.object({
+  title: requiredString.max(200, 'Title too long'),
+  due_date: z.string().date().optional().nullable(),
+  project_id: z.string().uuid(),
+});
+
+export const linkTaskSchema = z.object({
+  task_id: z.string().uuid(),
+});
+
 
 // ── Type exports ──
 export type CreateContactInput = z.infer<typeof createContactSchema>;
@@ -933,3 +955,7 @@ export type CreatePlanInput = z.infer<typeof createPlanSchema>;
 export type UpdatePlanInput = z.infer<typeof updatePlanSchema>;
 export type CreateTenantInput = z.infer<typeof createTenantSchema>;
 export type UpdateTenantInput = z.infer<typeof updateTenantSchema>;
+export type CreateProjectInput = z.infer<typeof createProjectSchema>;
+export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
+export type CreateMilestoneInput = z.infer<typeof createMilestoneSchema>;
+export type LinkTaskInput = z.infer<typeof linkTaskSchema>;
