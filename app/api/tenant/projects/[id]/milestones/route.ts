@@ -8,6 +8,8 @@ import { milestones, projects } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -17,6 +19,10 @@ export async function GET(
     if (ctx instanceof NextResponse) return ctx;
 
     const { id } = await params;
+
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
+    }
 
     // Verify project belongs to tenant
     const [project] = await db.select({ id: projects.id })
@@ -57,6 +63,10 @@ export async function POST(
     if (deny) return deny;
 
     const { id } = await params;
+
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
+    }
 
     // Verify project belongs to tenant
     const [project] = await db.select({ id: projects.id })
@@ -112,6 +122,10 @@ export async function PATCH(
 
     const { id } = await params;
 
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
+    }
+
     const body = await request.json();
     const validated = validateBody(updateMilestoneSchema, body);
     if (validated instanceof NextResponse) return validated;
@@ -160,6 +174,10 @@ export async function DELETE(
     if (deny) return deny;
 
     const { id } = await params;
+
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
+    }
 
     const body = await request.json();
     const validated = validateBody(deleteMilestoneSchema, body);

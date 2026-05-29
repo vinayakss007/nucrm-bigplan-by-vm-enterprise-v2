@@ -65,13 +65,16 @@ export default async function ProjectsPage() {
     owner_name: p.ownerName,
     task_count: p.taskCount ?? 0,
     completed_count: p.completedCount ?? 0,
-    created_at: p.createdAt,
+    created_at: p.createdAt.toISOString(),
   }));
 
   return (
     <ProjectsDataTable
-      initialProjects={projectsList as any}
-      teamMembers={teamMembers as any}
+      initialProjects={projectsList}
+      teamMembers={teamMembers.map((m) => ({
+        user_id: m.user_id,
+        full_name: m.full_name ?? '',
+      }))}
       permissions={permissions}
     />
   );

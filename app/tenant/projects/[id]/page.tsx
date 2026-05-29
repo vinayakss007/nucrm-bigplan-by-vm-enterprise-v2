@@ -133,7 +133,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         title: t.title,
         status: t.status,
       }))}
-      teamMembers={teamMembers as any}
+      teamMembers={teamMembers.map((m) => ({
+        user_id: m.user_id,
+        full_name: m.full_name ?? '',
+      }))}
       permissions={permissions}
     />
   );

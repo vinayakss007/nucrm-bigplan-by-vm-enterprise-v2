@@ -7,6 +7,8 @@ import { db } from '@/drizzle/db';
 import { projects, milestones, projectTasks, tasks, users } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -16,6 +18,10 @@ export async function GET(
     if (ctx instanceof NextResponse) return ctx;
 
     const { id } = await params;
+
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
+    }
 
     const [project] = await db.select()
       .from(projects)
@@ -78,6 +84,10 @@ export async function PATCH(
 
     const { id } = await params;
 
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
+    }
+
     const body = await request.json();
     const validated = validateBody(updateProjectSchema, body);
     if (validated instanceof NextResponse) return validated;
@@ -124,6 +134,10 @@ export async function DELETE(
     if (deny) return deny;
 
     const { id } = await params;
+
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
+    }
 
     const [deleted] = await db.update(projects)
       .set({

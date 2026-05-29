@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, boolean, index, date } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, boolean, index, uniqueIndex, date } from 'drizzle-orm/pg-core';
 import { users } from './core';
 import { tasks } from './infra';
 import * as utils from './utils';
@@ -59,7 +59,7 @@ export const projectTasks = pgTable('project_tasks', {
   addedBy: uuid('added_by').references(() => users.id, { onDelete: 'set null' }),
 }, (table) => {
   return {
-    uniqueProjectTask: index('idx_project_tasks_unique').on(table.projectId, table.taskId),
+    uniqueProjectTask: uniqueIndex('idx_project_tasks_unique').on(table.projectId, table.taskId),
     tenantIdx: utils.tenantIdx(table),
   };
 });
