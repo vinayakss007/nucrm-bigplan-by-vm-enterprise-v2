@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "feat",
   "description": "Add Project Management database schema (projects, milestones, project_tasks linking table), register the module in the registry with Pro/Enterprise plan gating, add Zod validation schemas, and export from the schema index.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Create drizzle/schema/projects.ts with three tables: (1) `projects` table with columns: id (pk), tenant_id, name (text, not null), description (text), status (text: active/on-hold/completed, default active), start_date (date), end_date (date), owner_id (uuid ref users), metadata (jsonb), plus audit() columns. Indexes: tenantIdx, status index, owner index. (2) `milestones` table: id (pk), tenant_id, project_id (uuid ref projects, cascade delete), title (text not null), due_date (date), completed (boolean default false), completed_at (timestamp), metadata, lifecycle() columns. Indexes: tenantIdx, project_id index. (3) `project_tasks` linking table: id (pk), tenant_id, project_id (uuid ref projects, cascade), task_id (uuid ref tasks from infra.ts), added_at (timestamp defaultNow), added_by (uuid ref users). Unique index on (project_id, task_id). Follow the exact patterns from drizzle/schema/infra.ts and utils.ts.",
     "Add `export * from './projects';` to drizzle/schema/index.ts",
@@ -21,5 +21,5 @@
     "Run `npm run build` to confirm the full build passes"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "TypeScript compiles cleanly (0 errors). Build passes TypeScript check but fails at page data collection due to missing JWT_SECRET env var (pre-existing). Test suite has 4 pre-existing failures in tenant-isolation and backup-integrity tests unrelated to this change. npm install was needed for type checking."
 }
