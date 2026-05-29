@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth/session';
@@ -55,6 +56,6 @@ export async function GET(request: NextRequest) {
       isLoggedIn,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }

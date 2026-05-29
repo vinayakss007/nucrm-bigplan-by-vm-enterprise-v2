@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
@@ -148,7 +149,7 @@ export async function POST(request: NextRequest) {
 
   } catch (err: any) {
     console.error('[selective-restore/scope POST]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 

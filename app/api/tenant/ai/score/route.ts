@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('[AI Score] POST error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -104,6 +105,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: topScoredResults.rows });
   } catch (error: any) {
     console.error('[AI Score] GET error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
