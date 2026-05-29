@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { validateBody } from '@/lib/api/validate';
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('[API Keys] GET error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -88,6 +89,6 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
   } catch (error: any) {
     console.error('[API Keys] POST error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }

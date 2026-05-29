@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
 import { platformSettingsSchema } from '@/lib/api/schemas';
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: defaults });
   } catch (err: any) {
     console.error('[superadmin/settings GET]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error('[superadmin/settings POST]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 

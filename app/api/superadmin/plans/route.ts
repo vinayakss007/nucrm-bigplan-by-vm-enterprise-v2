@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
 import { createPlanSchema, updatePlanSchema } from '@/lib/api/schemas';
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data });
   } catch (err: any) {
     console.error('[superadmin/plans GET]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'A plan with this identifier already exists' }, { status: 409 });
     }
     console.error('[superadmin/plans POST]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -122,7 +123,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'A plan with this name already exists' }, { status: 409 });
     }
     console.error('[superadmin/plans PATCH]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -149,7 +150,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error('[superadmin/plans DELETE]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 

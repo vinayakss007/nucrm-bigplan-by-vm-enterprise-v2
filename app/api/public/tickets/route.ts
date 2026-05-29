@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { supportTickets, contacts } from '@/drizzle/schema';
@@ -58,6 +59,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: ticket }, { status: 201 });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
