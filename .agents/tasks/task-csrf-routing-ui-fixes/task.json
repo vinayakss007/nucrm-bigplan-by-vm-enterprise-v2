@@ -1,0 +1,7 @@
+{
+  "task_id": "task-csrf-routing-ui-fixes",
+  "task_description": "Fix multiple issues: 1) CSRF token not being properly set/validated causing 403 errors on state-changing requests, 2) Sidebar font sizes too small making navigation hard to read, 3) Font/text visibility problems in dark mode due to low-contrast muted-foreground color, 4) Page heading sizes need to be larger for better readability.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}
