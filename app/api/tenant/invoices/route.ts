@@ -74,6 +74,22 @@ export async function POST(request: NextRequest) {
     const countResult = await db.select({ count: sql<number>`count(*)` }).from(invoices).where(eq(invoices.tenantId, tenantId));
     const invoiceNumber = `INV-${String((countResult[0]?.count ?? 0) + 1).padStart(5, '0')}`;
 
+    // Verify invoice number uniqueness (retry if collision)
+    let finalInvoiceNumber = invoiceNumber;
+    let retries = 0;
+    while (retries < 3) {
+      const [existing] = await db.select({ id: invoices.id })
+        .from(invoices)
+        .where(and(eq(invoices.tenantId, tenantId), eq(invoices.invoiceNumber, finalInvoiceNumber)))
+        .limit(1);
+      if (!existing) break;
+      retries++;
+      finalInvoiceNumber = `INV-${String((countResult[0]?.count ?? 0) + 1 + retries).padStart(5, '0')}`;
+    }
+    if (retries >= 3) {
+      return NextResponse.json({ error: 'Failed to generate unique invoice number' }, { status: 409 });
+    }
+
     // Calculate totals
     let subtotal = 0;
     if (items?.length) {
@@ -93,8 +109,8 @@ export async function POST(request: NextRequest) {
       tenantId,
       contactId: contactId ?? null,
       companyId: companyId ?? null,
-      invoiceNumber,
-      title: title ?? `Invoice ${invoiceNumber}`,
+      invoiceNumber: finalInvoiceNumber,
+      title: title ?? `Invoice ${finalInvoiceNumber}`,
       status: status ?? 'draft',
       issueDate: new Date(issueDate).toISOString().split('T')[0],
       dueDate: dueDate ? new Date(dueDate).toISOString().split('T')[0] : null,
