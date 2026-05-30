@@ -2,7 +2,7 @@
   "id": "FEAT-003",
   "type": "docs",
   "description": "Update the FULL_ARCHITECTURE_MAP.md document section 6 (Gaps & Issues) to reflect all the fixes that have been implemented. Mark resolved issues as FIXED with a note about what was done.",
-  "status": "pending",
+  "status": "in_progress",
   "steps": [
     "Step 1: Read the current Section 6 of FULL_ARCHITECTURE_MAP.md (lines 3648-3798).",
     "Step 2: Update section 6.1 (Duplicate Route Paths) to mark as RESOLVED: super-admin routes now redirect to canonical superadmin routes, audit-logs added to superadmin namespace.",
