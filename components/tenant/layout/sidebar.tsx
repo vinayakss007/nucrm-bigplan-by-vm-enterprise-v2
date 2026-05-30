@@ -276,8 +276,8 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
           const active = isActive(href, exact);
           return (
             <Link key={href} href={href} title={label}
-              className={cn('w-8 h-8 flex items-center justify-center rounded-lg transition-all',
-                active ? 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400' : 'text-muted-foreground hover:bg-accent')}>
+              className={cn('w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200',
+                active ? 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400 shadow-sm shadow-violet-500/20' : 'text-foreground/80 hover:scale-110 hover:bg-accent hover:text-foreground')}>
               <Icon className="w-[1.125rem] h-[1.125rem]" />
             </Link>
           );
@@ -299,10 +299,10 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
     return (
       <div key={href} className="group relative flex items-stretch">
         <Link href={href} onClick={onMobileClose}
-          className={cn('flex-1 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[0.9375rem] font-semibold transition-all',
+          className={cn('flex-1 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-bold transition-all duration-200',
             active
-              ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300'
-              : 'text-muted-foreground hover:bg-accent hover:text-foreground')}>
+              ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 shadow-sm shadow-violet-500/20'
+              : 'text-foreground hover:scale-[1.02] hover:bg-accent hover:shadow-sm hover:shadow-violet-500/10')}>
           <Icon className={cn('w-[1.125rem] h-[1.125rem] shrink-0', active && 'text-violet-600 dark:text-violet-400')} />
           <span className="flex-1 truncate">{label}</span>
           {shortcut && !isPinned && (
@@ -348,7 +348,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
       {/* Inline filter */}
       <div className="px-2 pt-2 shrink-0">
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/60" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground/60" />
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
@@ -358,7 +358,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
           />
           {query && (
             <button onClick={() => setQuery('')} aria-label="Clear filter"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-foreground">
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-foreground/60 hover:text-foreground">
               <X className="w-3 h-3" />
             </button>
           )}
@@ -393,12 +393,12 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
             <div key={section.id} className="mb-1">
               <button onClick={() => !q && toggleSection(section.id)}
                 className={cn(
-                  'flex items-center gap-1.5 w-full px-2.5 py-1 rounded-md text-[0.8125rem] font-bold uppercase tracking-wider transition-colors',
-                  q ? 'text-violet-600 dark:text-violet-400' : 'text-muted-foreground/60 hover:text-foreground'
+                  'flex items-center gap-1.5 w-full px-2.5 py-1.5 rounded-md text-sm font-extrabold uppercase tracking-wider transition-all duration-200',
+                  q ? 'text-violet-600 dark:text-violet-400' : 'text-foreground/80 hover:text-foreground hover:scale-[1.01]'
                 )}>
                 {!q && <ChevronDown className={cn('w-3 h-3 transition-transform', isOpen ? 'rotate-0' : '-rotate-90')} />}
                 <span className="flex-1 text-left">{section.label}</span>
-                <span className="text-[0.625rem] text-muted-foreground/40 font-normal normal-case">{section.items.length}</span>
+                <span className="text-xs text-foreground/60 font-semibold normal-case">{section.items.length}</span>
               </button>
               {isOpen && (
                 <div className="space-y-0.5 mt-0.5">
@@ -415,10 +415,10 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
             <div className="h-px bg-border my-2" />
             <div>
               <button onClick={() => setSettingsOpen(o => !o)}
-                className={cn('flex items-center gap-1.5 w-full px-2.5 py-1.5 rounded-lg text-sm font-semibold transition-colors',
+                className={cn('flex items-center gap-1.5 w-full px-2.5 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200',
                   pathname.startsWith('/tenant/settings')
                     ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground')}>
+                    : 'text-foreground/90 hover:scale-[1.02] hover:bg-accent hover:text-foreground')}>
                 <Settings className="w-4 h-4 shrink-0" />
                 <span className="flex-1 text-left">Settings</span>
                 <ChevronDown className={cn('w-3 h-3 transition-transform', settingsOpen && 'rotate-180')} />
@@ -429,16 +429,16 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
                     const active = pathname === item.href;
                     return (
                       <Link key={item.href} href={item.href} onClick={onMobileClose}
-                        className={cn('block px-2.5 py-1 rounded-md text-sm font-medium transition-colors',
+                        className={cn('block px-2.5 py-1.5 rounded-md text-sm font-bold transition-all duration-200',
                           active
-                            ? 'text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/30 font-semibold'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-accent')}>
+                            ? 'text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/30'
+                            : 'text-foreground hover:scale-[1.02] hover:text-foreground hover:bg-accent')}>
                         {item.label}
                       </Link>
                     );
                   })}
                   <Link href="/tenant/settings" onClick={onMobileClose}
-                    className="block px-2.5 py-1 rounded-md text-sm font-semibold text-violet-600 hover:underline">
+                    className="block px-2.5 py-1.5 rounded-md text-sm font-bold text-violet-600 hover:underline">
                     All settings →
                   </Link>
                 </div>
@@ -456,7 +456,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
             <Crown className="w-3.5 h-3.5" />Super Admin
           </Link>
         )}
-        <div className="flex items-center gap-2 px-2.5 py-1 text-xs text-muted-foreground/70">
+        <div className="flex items-center gap-2 px-2.5 py-1 text-xs text-foreground/70">
           <Command className="w-3 h-3" />K  Quick search
         </div>
       </div>

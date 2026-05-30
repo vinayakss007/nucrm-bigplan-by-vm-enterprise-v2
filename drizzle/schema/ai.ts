@@ -124,3 +124,27 @@ export const aiDraftTemplates = pgTable('ai_draft_templates', {
     .where(sql`deleted_at IS NULL`),
   kindIdx: index('idx_ai_draft_templates_kind').on(table.tenantId, table.kind, table.active),
 }));
+
+// ── 4. LEAD SCORING RULES ───────────────────────────
+// Per-tenant rules that drive the AI lead scoring engine.
+// Each rule has a factor (e.g. 'Company Size'), a weight (-100 to 100),
+// and a condition (e.g. 'revenue > 1M').
+export const leadScoringRules = pgTable('lead_scoring_rules', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  /** Human-readable factor name, e.g. 'Role matches persona' */
+  factor: text('factor').notNull(),
+  /** Importance: positive = bonus, negative = penalty. Typically -100 to 100. */
+  weight: integer('weight').notNull().default(10),
+  /** Optional machine-readable condition or prompt hint */
+  condition: text('condition'),
+  /** Order in the settings UI */
+  sortOrder: integer('sort_order').notNull().default(0),
+  active: boolean('active').notNull().default(true),
+  ...utils.lifecycle(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+}, (table) => ({
+  tenantIdx: utils.tenantIdx(table),
+  activeIdx: index('idx_lead_scoring_rules_active').on(table.tenantId, table.active),
+}));

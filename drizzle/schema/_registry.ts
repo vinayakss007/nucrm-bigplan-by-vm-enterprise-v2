@@ -106,7 +106,6 @@ import {
   pipelineStages,
   meetings,
   churnPredictions,
-  leadScoringRules,
   callNotes,
   callRecordings,
   conversationMetrics,
@@ -266,6 +265,7 @@ import {
   aiProviderSecrets,
   aiActivity,
   aiDraftTemplates,
+  leadScoringRules,
 } from './ai';
 
 // =============================================================================
@@ -979,21 +979,6 @@ export const TABLE_REGISTRY = {
       description: 'AI churn risk analysis',
       isCore: false,
       indexes: ['idx_churn_predictions_tenant', 'idx_churn_predictions_contact'],
-    },
-  },
-  leadScoringRules: {
-    table: leadScoringRules,
-    metadata: {
-      name: 'lead_scoring_rules',
-      schemaGroup: 'crm',
-      hasTenantId: true,
-      hasSoftDelete: true,
-      hasAudit: true,
-      hasMetadata: false,
-      dependencies: ['tenants'],
-      description: 'Rules for lead scoring',
-      isCore: false,
-      indexes: ['idx_lead_scoring_rules_tenant', 'idx_lead_scoring_rules_active'],
     },
   },
   callNotes: {
@@ -2595,6 +2580,7 @@ export const TABLE_REGISTRY = {
     table: serviceSubscriptions,
     metadata: {
       name: 'service_subscriptions',
+
       schemaGroup: 'billing',
       hasTenantId: true,
       hasSoftDelete: true,
@@ -2711,6 +2697,22 @@ export const TABLE_REGISTRY = {
       description: 'Per-tenant Auto-Draft prompt templates (email / note / reply / call_prep)',
       isCore: false,
       indexes: ['idx_ai_draft_templates_slug', 'idx_ai_draft_templates_kind'],
+    },
+  },
+
+  leadScoringRules: {
+    table: leadScoringRules,
+    metadata: {
+      name: 'lead_scoring_rules',
+      schemaGroup: 'tokens',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: true,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Per-tenant rules for the AI lead scoring engine',
+      isCore: false,
+      indexes: ['idx_lead_scoring_rules_active'],
     },
   },
 };

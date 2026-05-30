@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Zap, Loader2, Eye, EyeOff, Mail, Lock, User, Building2,
   Cpu, CheckCircle, ArrowRight, Shield, Rocket, Target
@@ -36,6 +37,7 @@ const strengthLabels = {
 
 
 export default function SignupPage() {
+  const router = useRouter();
   const [workspaceName, setWorkspaceName] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -77,7 +79,7 @@ export default function SignupPage() {
         return;
       }
       toast.success('Workspace created! Welcome to NuCRM.');
-      window.location.replace('/tenant/onboarding');
+      setTimeout(() => router.push('/auth/login?signup=1'), 1500);
     } catch {
       setError('Connection error. Please try again.');
       setLoading(false);

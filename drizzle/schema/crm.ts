@@ -757,23 +757,6 @@ export const churnPredictions = pgTable('churn_predictions', {
 });
 
 // ── 21. LEAD SCORING RULES ───────────────────────────
-export const leadScoringRules = pgTable('lead_scoring_rules', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  name: text('name').notNull(),
-  field: text('field').notNull(),
-  operator: text('operator').notNull(), // 'equals', 'contains', etc.
-  value: text('value'),
-  score: integer('score').notNull().default(0),
-  isActive: boolean('is_active').notNull().default(true),
-  ...utils.audit(),
-}, (table) => {
-  return {
-    tenantIdx: utils.tenantIdx(table).where(sql`is_active = true`),
-    activeIdx: utils.activeIdx(table),
-  };
-});
-
 // ── 22. CONVERSATION INTELLIGENCE ─────────────────────
 export const callNotes = pgTable('call_notes', {
   id: utils.pk(),
