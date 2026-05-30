@@ -25,6 +25,7 @@ const SECTIONS: NavSection[] = [
     id: 'business', label: 'Business', defaultOpen: true, items: [
       { href: '/superadmin/tenants',    label: 'Tenants',         icon: Building2,    keywords: 'orgs workspaces' },
       { href: '/superadmin/users',      label: 'All Users',       icon: Users,        keywords: 'people accounts' },
+      { href: '/superadmin/user-directory', label: 'User Directory', icon: Users, keywords: 'contacts emails phone directory export' },
       { href: '/superadmin/revenue',    label: 'Revenue',         icon: TrendingUp,   keywords: 'mrr arr money' },
       { href: '/superadmin/billing',    label: 'Plans & Billing', icon: CreditCard,   keywords: 'plans subscription' },
       { href: '/superadmin/usage',      label: 'Usage',           icon: Gauge,        keywords: 'metrics usage' },
@@ -44,6 +45,7 @@ const SECTIONS: NavSection[] = [
     id: 'config', label: 'Configure', defaultOpen: false, items: [
       { href: '/superadmin/analytics',       label: 'Analytics',       icon: BarChart3,    keywords: 'analytics charts' },
       { href: '/superadmin/modules',         label: 'Modules',         icon: Zap,          keywords: 'modules features' },
+      { href: '/superadmin/feature-control', label: 'Feature Control', icon: Shield, keywords: 'features toggle telegram gate access override' },
       { href: '/superadmin/access-control',  label: 'Access Control',  icon: Shield,       keywords: 'permissions roles admin' },
       { href: '/superadmin/settings',        label: 'Settings',        icon: Settings,     keywords: 'platform settings' },
     ],

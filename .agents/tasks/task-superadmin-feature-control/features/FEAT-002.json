@@ -2,7 +2,7 @@
   "id": "FEAT-002",
   "type": "feat",
   "description": "Build the super admin UI pages: user-directory page with full contact details/search/export, feature-control page with per-tenant toggle matrix, and add new sidebar navigation entries. Also update FULL_ARCHITECTURE_MAP.md.",
-  "status": "pending",
+  "status": "in_progress",
   "steps": [
     "1. Create `app/superadmin/user-directory/page.tsx` - a 'use client' page that: fetches from /api/superadmin/user-directory, shows a table with columns: Avatar+Name, Email, Phone, Tenant(s), Plan, Last Login, Status. Include a search bar (debounced), tenant filter dropdown, and an 'Export CSV' button that downloads all visible users as CSV. Follow the UI pattern from app/superadmin/users/page.tsx (dark theme with border-white/10 styling, Lucide icons).",
     "2. Create `app/superadmin/feature-control/page.tsx` - a 'use client' page that: fetches tenants and their feature overrides from /api/superadmin/feature-control. Display as a matrix/grid: rows are tenants, columns are features from CONTROLLABLE_FEATURES. Each cell is a toggle switch. Toggling calls PATCH /api/superadmin/feature-control. Include a prominent section for 'Telegram Access' with a lock icon showing it's gated. Show tenant plan badge next to each tenant name. Add a filter to show only specific plans.",
