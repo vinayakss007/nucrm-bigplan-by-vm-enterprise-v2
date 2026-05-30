@@ -10,7 +10,15 @@ export interface PlanDefinition {
   name: string;
   slug: string;
   description: string;
+  /** Pricing model: 'per_user' means price is multiplied by number of users */
+  pricingModel: 'per_user' | 'flat';
+  /** Per-user monthly price (the actual billing unit) */
+  pricePerUserMonthly: number;
+  /** Per-user yearly price (the actual billing unit) */
+  pricePerUserYearly: number;
+  /** Kept for backward compat - set to 0 since actual billing is per-user */
   priceMonthly: number;
+  /** Kept for backward compat - set to 0 since actual billing is per-user */
   priceYearly: number;
   maxUsers: number;
   maxContacts: number;
@@ -30,7 +38,10 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     id: 'free',
     name: 'Free',
     slug: 'free',
-    description: 'For individuals getting started',
+    description: 'For individuals getting started - $0/user/mo',
+    pricingModel: 'per_user',
+    pricePerUserMonthly: 0,
+    pricePerUserYearly: 0,
     priceMonthly: 0,
     priceYearly: 0,
     maxUsers: 2,
@@ -47,9 +58,12 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     id: 'basic',
     name: 'Basic',
     slug: 'basic',
-    description: 'For small teams',
-    priceMonthly: 29,
-    priceYearly: 290,
+    description: 'For small teams - $12/user/mo',
+    pricingModel: 'per_user',
+    pricePerUserMonthly: 12,
+    pricePerUserYearly: 120,
+    priceMonthly: 0,
+    priceYearly: 0,
     maxUsers: 10,
     maxContacts: 5000,
     maxDeals: 1000,
@@ -67,9 +81,12 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     id: 'pro',
     name: 'Pro',
     slug: 'pro',
-    description: 'For growing businesses',
-    priceMonthly: 79,
-    priceYearly: 790,
+    description: 'For growing businesses - $29/user/mo',
+    pricingModel: 'per_user',
+    pricePerUserMonthly: 29,
+    pricePerUserYearly: 290,
+    priceMonthly: 0,
+    priceYearly: 0,
     maxUsers: 25,
     maxContacts: 25000,
     maxDeals: 5000,
@@ -88,9 +105,12 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     id: 'enterprise',
     name: 'Enterprise',
     slug: 'enterprise',
-    description: 'For large organizations with advanced needs',
-    priceMonthly: 199,
-    priceYearly: 1990,
+    description: 'For large organizations with advanced needs - $49/user/mo',
+    pricingModel: 'per_user',
+    pricePerUserMonthly: 49,
+    pricePerUserYearly: 490,
+    priceMonthly: 0,
+    priceYearly: 0,
     maxUsers: -1,
     maxContacts: -1,
     maxDeals: -1,

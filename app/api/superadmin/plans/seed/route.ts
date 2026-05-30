@@ -25,6 +25,10 @@ export async function POST(request: NextRequest) {
     const results = [];
 
     for (const plan of PLAN_DEFINITIONS) {
+      // Store per-user prices in DB price columns since billing is per-user
+      const effectiveMonthly = plan.pricePerUserMonthly;
+      const effectiveYearly = plan.pricePerUserYearly;
+
       const [row] = await db
         .insert(plans)
         .values({
@@ -32,10 +36,10 @@ export async function POST(request: NextRequest) {
           name: plan.name,
           slug: plan.slug,
           description: plan.description,
-          priceMonthly: plan.priceMonthly.toString(),
-          priceYearly: plan.priceYearly.toString(),
-          priceCents: plan.priceMonthly * 100,
-          price: plan.priceMonthly.toString(),
+          priceMonthly: effectiveMonthly.toString(),
+          priceYearly: effectiveYearly.toString(),
+          priceCents: effectiveMonthly * 100,
+          price: effectiveMonthly.toString(),
           maxUsers: plan.maxUsers,
           maxContacts: plan.maxContacts,
           maxDeals: plan.maxDeals,
