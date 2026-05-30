@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "fix",
   "description": "Fix CSRF token handling so that the CSRF cookie is properly set during login/signup, the middleware properly validates tokens, and the client-side provider can read and attach them correctly.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Step 1: Fix lib/auth/api-handlers.ts - Change response.headers.set('Set-Cookie', ...) to response.headers.append('Set-Cookie', ...) in both POST_login (around line 133) and POST_signup (around line 310). The .set() method OVERWRITES any existing Set-Cookie headers (including the session cookie from setSessionCookie()), while .append() adds an additional header. This is the root cause of the CSRF cookie never being set.",
     "Step 2: Create a proper middleware.ts file at the project root (/projects/sandbox/nucrm-bigplan-by-vm-enterprise-v2/middleware.ts) that exports a middleware function and config. This should import and call the proxy function from proxy.ts. The proxy.ts file already has the correct CSRF validation logic but was never wired as Next.js middleware. The middleware.ts should: export { proxy as middleware } from './proxy'; export { config } from './proxy';",
@@ -21,5 +21,5 @@
     "Run: npx vitest run tests/unit/security-fixes.test.ts tests/unit/auth-modules.test.ts to confirm CSRF tests pass"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All CSRF-related tests pass (tests/unit/security-fixes.test.ts: 12 passed). auth-modules.test.ts is excluded in vitest config. TypeScript compiles cleanly for all modified files. Pre-existing TS errors in app/tenant/contacts/[id]/page.tsx are unrelated."
 }
