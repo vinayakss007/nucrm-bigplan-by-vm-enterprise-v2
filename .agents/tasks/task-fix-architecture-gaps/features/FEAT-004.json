@@ -2,7 +2,7 @@
   "id": "FEAT-004",
   "type": "fix",
   "description": "Fix 5 issues from code review: (1) broken param binding in audit-logs route, (2) add rate limiting to CRUD POST endpoints, (3) add pagination to list endpoints, (4) create missing service-categories [id] route, (5) verify architecture map accuracy.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Step 1: Rewrite superadmin/audit-logs route to use Drizzle sql interpolation instead of broken raw param binding",
     "Step 2: Add checkRateLimit to POST handlers in products, segments, service-categories, price-books routes",
@@ -21,5 +21,5 @@
     "Run: npx tsc --noEmit"
   ],
   "blocked_reason": null,
-  "findings": null
+  "findings": "All 5 review issues fixed. TypeScript compilation passes cleanly. Audit-logs now uses sql.join for dynamic WHERE conditions. Rate limiting added with 100/hour caps. Pagination defaults to limit=50, max=200. service-categories [id] route follows price-books pattern exactly. Architecture map was already accurate after the [id] route creation."
 }
