@@ -1,7 +1,23 @@
 {
   "task_id": "task-csrf-routing-ui-fixes",
   "task_description": "Fix multiple issues: 1) CSRF token not being properly set/validated causing 403 errors on state-changing requests, 2) Sidebar font sizes too small making navigation hard to read, 3) Font/text visibility problems in dark mode due to low-contrast muted-foreground color, 4) Page heading sizes need to be larger for better readability.",
-  "status": "in_progress",
+  "status": "completed",
   "feature_order": ["FEAT-001", "FEAT-002"],
-  "blocked_reason": null
+  "blocked_reason": null,
+  "verification": {
+    "build": "pass",
+    "tests": "pass",
+    "test_quality": "pass",
+    "docker_build": "skipped",
+    "summary": "Build passes (Next.js 16 correctly detects proxy.ts as middleware via 'Proxy (Middleware)' output). All 388 unit tests pass. CSRF cookie fix verified (headers.append), sidebar font sizes increased, dark mode muted-foreground contrast improved."
+  },
+  "review_feedback_addressed": {
+    "review_file": "2025-01-01-140000-review.md",
+    "fixes": [
+      "Added checkRateLimit to /api/auth/csrf-token (30 req/min per IP)",
+      "Added .catch() to CSRF recovery in CsrfProvider to handle network failures gracefully",
+      "Added module-level refreshPromise deduplication to prevent concurrent recovery fetches",
+      "Fixed shortcut hover opacity from /60 to /80 so opacity increases on hover"
+    ]
+  }
 }

@@ -306,7 +306,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
           <Icon className={cn('w-[18px] h-[18px] shrink-0', active && 'text-violet-600 dark:text-violet-400')} />
           <span className="flex-1 truncate">{label}</span>
           {shortcut && !isPinned && (
-            <span className="text-[10px] text-muted-foreground/70 group-hover:text-muted-foreground/60 transition-colors">
+            <span className="text-[10px] text-muted-foreground/70 group-hover:text-muted-foreground/80 transition-colors">
               {shortcut}
             </span>
           )}
