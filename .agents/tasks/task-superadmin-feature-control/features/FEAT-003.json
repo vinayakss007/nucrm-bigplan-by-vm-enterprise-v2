@@ -2,7 +2,7 @@
   "id": "FEAT-003",
   "type": "fix",
   "description": "Address all 7 issues from 2025-05-30-090000 review: gate fail-open, email blast cap/audit, wildcard escaping, feature-key validation, deletedAt filtering, and override DELETE handler with UI reset button.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "1. Fix gate.ts: return { found: false, error: true } on DB error, update callers to return 500 when error is true.",
     "2. Fix email-blast: add 500 recipient cap, add audit log entry after send, filter out soft-deleted users.",
@@ -27,5 +27,5 @@
     "Run `npm test` and confirm existing tests still pass"
   ],
   "blocked_reason": null,
-  "findings": null
+  "findings": "All 7 review issues fixed. Build passes, all 435 tests pass. Used logSuperAdminAction from lib/audit/super-admin.ts for audit trail since the auditLogs table requires a non-null tenantId. The super_admin_audit_logs table is the correct destination for platform-level actions."
 }
