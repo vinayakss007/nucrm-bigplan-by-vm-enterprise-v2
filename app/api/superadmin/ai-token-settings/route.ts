@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema/core';
 import { aiTokenUsage } from '@/drizzle/schema/ai-token-usage';
 import { PLAN_MAP } from '@/lib/plans/plan-definitions';
+import { getCurrentBillingPeriod } from '@/lib/billing/period';
 import { eq, and, sql } from 'drizzle-orm';
 
 /**
@@ -13,13 +14,6 @@ import { eq, and, sql } from 'drizzle-orm';
  * GET  - List all tenants with their AI token usage for the current billing period
  * PATCH - Set a custom token limit override or reset usage for a tenant
  */
-
-function getCurrentBillingPeriod(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  return `${year}-${month}`;
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -104,6 +98,15 @@ export async function PATCH(request: NextRequest) {
 
     if (!tenant_id) {
       return NextResponse.json({ error: 'tenant_id is required' }, { status: 400 });
+    }
+
+    // Validate that the tenant actually exists before modifying usage rows
+    const tenantExists = await db.query.tenants.findFirst({
+      where: eq(tenants.id, tenant_id),
+      columns: { id: true },
+    });
+    if (!tenantExists) {
+      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
 
     const billingPeriod = getCurrentBillingPeriod();

@@ -28,5 +28,5 @@
     "Run npx vitest run to confirm existing tests still pass"
   ],
   "blocked_reason": null,
-  "findings": "All 7 steps implemented successfully. TypeScript compiles cleanly (tsc --noEmit passes). All 435 tests pass (38 test files). The aiTokenUsage schema uses the same utils patterns as other schema files. The checkAiTokenBudget helper resolves limits in order: override > plan default. The AI route returns 429 with clear message when budget exceeded."
+  "findings": "All 7 steps implemented successfully. Review fixes applied: (1) TOCTOU race condition fixed - recordAiTokenUsage now uses atomic CASE expression in ON CONFLICT UPDATE to prevent concurrent requests from exceeding the limit. (2) Tenant existence validation added to PATCH endpoint - returns 404 for non-existent tenant_id. (3) getCurrentBillingPeriod extracted to lib/billing/period.ts shared utility, imported in both check-budget.ts and the route. (4) Unit tests added in tests/unit/ai-token-budget.test.ts - 13 tests covering checkAiTokenBudget (all plans, overrides, boundaries, unlimited) and recordAiTokenUsage. (5) Bigint mode:number precision documented with code comments. All 448 tests pass (39 test files). TypeScript compiles cleanly."
 }
