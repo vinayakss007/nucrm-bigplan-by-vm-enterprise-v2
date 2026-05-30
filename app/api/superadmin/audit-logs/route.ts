@@ -29,42 +29,24 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, parseInt(searchParams.get('limit') ?? '50'));
     const offset = parseInt(searchParams.get('offset') ?? '0');
 
-    // Build query conditions
-    const conditions: string[] = [];
-    const params: any[] = [];
-    let paramIndex = 1;
+    // Build query conditions using Drizzle sql interpolation
+    const conditions: ReturnType<typeof sql>[] = [];
 
-    if (adminId) {
-      conditions.push(`admin_id = $${paramIndex++}`);
-      params.push(adminId);
-    }
-    if (action) {
-      conditions.push(`action = $${paramIndex++}`);
-      params.push(action);
-    }
-    if (targetType) {
-      conditions.push(`target_type = $${paramIndex++}`);
-      params.push(targetType);
-    }
-    if (tenantId) {
-      conditions.push(`tenant_id = $${paramIndex++}`);
-      params.push(tenantId);
-    }
-    if (startDate) {
-      conditions.push(`created_at >= $${paramIndex++}`);
-      params.push(new Date(startDate));
-    }
-    if (endDate) {
-      conditions.push(`created_at <= $${paramIndex++}`);
-      params.push(new Date(endDate));
-    }
+    if (adminId) conditions.push(sql`admin_id = ${adminId}`);
+    if (action) conditions.push(sql`action = ${action}`);
+    if (targetType) conditions.push(sql`target_type = ${targetType}`);
+    if (tenantId) conditions.push(sql`tenant_id = ${tenantId}`);
+    if (startDate) conditions.push(sql`created_at >= ${new Date(startDate)}`);
+    if (endDate) conditions.push(sql`created_at <= ${new Date(endDate)}`);
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const whereClause = conditions.length > 0
+      ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
+      : sql``;
 
     // Query audit logs
     const logsResult = await db.execute(sql`
       SELECT * FROM super_admin_audit_logs
-      ${sql.raw(whereClause)}
+      ${whereClause}
       ORDER BY created_at DESC
       LIMIT ${limit}
       OFFSET ${offset}
@@ -73,7 +55,7 @@ export async function GET(request: NextRequest) {
     // Get total count
     const countResult = await db.execute(sql`
       SELECT COUNT(*) as total FROM super_admin_audit_logs
-      ${sql.raw(whereClause)}
+      ${whereClause}
     `);
 
     return NextResponse.json({

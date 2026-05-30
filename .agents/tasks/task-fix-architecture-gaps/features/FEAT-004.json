@@ -1,0 +1,25 @@
+{
+  "id": "FEAT-004",
+  "type": "fix",
+  "description": "Fix 5 issues from code review: (1) broken param binding in audit-logs route, (2) add rate limiting to CRUD POST endpoints, (3) add pagination to list endpoints, (4) create missing service-categories [id] route, (5) verify architecture map accuracy.",
+  "status": "in_progress",
+  "steps": [
+    "Step 1: Rewrite superadmin/audit-logs route to use Drizzle sql interpolation instead of broken raw param binding",
+    "Step 2: Add checkRateLimit to POST handlers in products, segments, service-categories, price-books routes",
+    "Step 3: Add limit/offset pagination support to GET handlers in products, segments, service-categories, price-books routes",
+    "Step 4: Create app/api/tenant/service-categories/[id]/route.ts with GET, PATCH, DELETE following price-books pattern",
+    "Step 5: Verify FULL_ARCHITECTURE_MAP.md accuracy for service_categories status"
+  ],
+  "acceptance_criteria": [
+    "superadmin/audit-logs route uses sql template interpolation for dynamic WHERE conditions",
+    "All four new CRUD POST endpoints have checkRateLimit calls",
+    "All four new GET list endpoints support limit/offset query params with max 200",
+    "service-categories/[id]/route.ts exists with GET, PATCH, DELETE handlers",
+    "TypeScript compilation passes (npx tsc --noEmit)"
+  ],
+  "verification": [
+    "Run: npx tsc --noEmit"
+  ],
+  "blocked_reason": null,
+  "findings": null
+}

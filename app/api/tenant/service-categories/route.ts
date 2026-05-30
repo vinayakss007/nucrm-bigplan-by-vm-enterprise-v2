@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { serviceCategories } from '@/drizzle/schema';
 import { eq, and, desc, like, isNull } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,11 +15,13 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') ?? '50')));
+    const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
 
     const conditions: any[] = [eq(serviceCategories.tenantId, tenantId), isNull(serviceCategories.deletedAt)];
     if (search) conditions.push(like(serviceCategories.name, `%${search}%`));
 
-    const results = await db.select().from(serviceCategories).where(and(...conditions)).orderBy(desc(serviceCategories.createdAt));
+    const results = await db.select().from(serviceCategories).where(and(...conditions)).orderBy(desc(serviceCategories.createdAt)).limit(limit).offset(offset);
     return NextResponse.json({ data: results });
   } catch (error: any) {
     console.error('[service-categories/GET]', error);
@@ -28,6 +31,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await checkRateLimit(request, { action: 'service_categories_create', max: 100, windowMinutes: 60 });
+    if (limited) return limited;
+
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const { tenantId, userId } = ctx;
