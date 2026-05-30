@@ -236,7 +236,7 @@ th { white-space: nowrap; }
    Falls back to workspace defaults if no per-user override exists.
    ──────────────────────────────────────────────────────────────── */
 
-/* Font size scale — overrides the base 16px set above */
+/* Font size scale — overrides the base 100% set above */
 html[data-font-size="small"]  { font-size: 87.5%; }
 html[data-font-size="normal"] { font-size: 100%; }
 html[data-font-size="large"]  { font-size: 112.5%; }
