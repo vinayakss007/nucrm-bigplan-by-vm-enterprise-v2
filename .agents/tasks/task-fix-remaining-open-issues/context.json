@@ -1,0 +1,30 @@
+{
+  "project_type": "Next.js 16 Multi-Tenant SaaS CRM with TypeScript + Drizzle ORM + PostgreSQL",
+  "language": "TypeScript",
+  "build_system": "npm with Next.js build, Drizzle ORM for database schema",
+  "test_framework": "vitest for unit/integration tests, playwright for e2e",
+  "build_command": "npm run build",
+  "test_command": "npx vitest run",
+  "verification_instructions": "1. Run npx vitest run to ensure all tests pass. 2. Run npx tsc --noEmit to verify TypeScript type-checking passes.",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "npm install (already done - node_modules exists)",
+  "environment_constraints": "OPEN_INTERNET network mode. Node.js 22 available. No running database so tests must not require live DB connections.",
+  "contribution_requirements": "See CONTRIBUTING.md. Follow existing patterns. Use Drizzle ORM for schema definitions.",
+  "key_patterns": "Schema definitions in drizzle/schema/*.ts using pgTable() with utils helpers. API routes in app/api/tenant/*/route.ts. Cache layer at lib/cache/ with Redis + in-memory fallback using withCache/getOrSet pattern. Barrel exports from drizzle/schema/index.ts. infra.ts exports before billing.ts in index.ts so 'subscriptions' from infra shadows any billing export.",
+  "relevant_files": [
+    "drizzle/schema/billing.ts",
+    "drizzle/schema/infra.ts",
+    "drizzle/schema/crm.ts",
+    "drizzle/schema/index.ts",
+    "drizzle/schema/_registry.ts",
+    "app/api/tenant/leaderboards/route.ts",
+    "app/api/tenant/subscriptions/route.ts",
+    "app/api/tenant/subscriptions/[id]/route.ts",
+    "app/api/cron/subscription-check/route.ts",
+    "app/tenant/contacts/[id]/page.tsx",
+    "lib/cache/index.ts",
+    "lib/cache/redis.ts",
+    "FULL_ARCHITECTURE_MAP.md"
+  ],
+  "directory_structure": "drizzle/schema/ - all DB table definitions; app/api/ - API route handlers; app/tenant/ - tenant frontend pages; lib/ - shared utilities; tests/ - vitest unit/integration tests"
+}

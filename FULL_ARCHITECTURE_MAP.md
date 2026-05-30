@@ -3659,9 +3659,9 @@ After thoroughly mapping the schema, API routes, and frontend pages, here are th
 |-------|-------|--------|
 | `/api/super-admin/tenants` duplicates `/api/superadmin/tenants` | `app/api/super-admin/tenants/route.ts` vs `app/api/superadmin/tenants/route.ts` | **[RESOLVED]** `/api/super-admin/tenants` now redirects to canonical `/api/superadmin/tenants` |
 | `/api/super-admin/audit-logs` has no counterpart at `/api/superadmin/audit-logs` | `app/api/super-admin/audit-logs/route.ts` | **[RESOLVED]** New canonical route at `/api/superadmin/audit-logs`; legacy path redirects |
-| Two different subscriptions tables in schema - `billing.ts` exports `serviceSubscriptions` mapped to DB table `subscriptions`, while `infra.ts` also exports `subscriptions` mapped to a different purpose | `drizzle/schema/billing.ts` vs `drizzle/schema/infra.ts` | **[OPEN]** Requires broader migration planning to rename one table |
+| Two different subscriptions tables in schema - `billing.ts` exports `serviceSubscriptions` mapped to DB table `subscriptions`, while `infra.ts` also exports `subscriptions` mapped to a different purpose | `drizzle/schema/billing.ts` vs `drizzle/schema/infra.ts` | **[RESOLVED]** billing.ts table renamed to `service_subscriptions` |
 
-**Impact:** ~~Frontend code may import from the wrong path.~~ The `super-admin` routes now redirect to canonical `superadmin` paths. The subscriptions table naming collision remains a design-level concern for future migration.
+**Impact:** ~~Frontend code may import from the wrong path.~~ The `super-admin` routes now redirect to canonical `superadmin` paths. The subscriptions table naming collision has been resolved by renaming billing.ts table to `service_subscriptions`.
 
 ---
 
@@ -3754,8 +3754,8 @@ Note: Most remaining open items are internal/system tables that do not require p
 
 | Issue | Location | Description | Status |
 |-------|----------|-------------|--------|
-| Duplicate table name collision | `billing.ts` and `infra.ts` both define `subscriptions` | `billing.ts` uses `serviceSubscriptions` export name with table `subscriptions`, while `infra.ts` exports `subscriptions` for platform billing. Potential runtime confusion. | **[OPEN]** Requires migration planning |
-| Legacy vs systematic tagging | `crm.ts` has both `entity_tags` (polymorphic) and `contact_tags`/`lead_tags` (legacy) | Dual systems maintained for backward compatibility | **[OPEN]** Architectural decision needed |
+| Duplicate table name collision | `billing.ts` and `infra.ts` both define `subscriptions` | `billing.ts` uses `serviceSubscriptions` export name with table `subscriptions`, while `infra.ts` exports `subscriptions` for platform billing. Potential runtime confusion. | **[RESOLVED]** billing.ts pgTable renamed from `subscriptions` to `service_subscriptions` |
+| Legacy vs systematic tagging | `crm.ts` has both `entity_tags` (polymorphic) and `contact_tags`/`lead_tags` (legacy) | Dual systems maintained for backward compatibility | **[RESOLVED]** Legacy tables deprecated with JSDoc; new code uses entity_tags |
 | Duplicate pipeline stages | `deal_stages` and `pipeline_stages` both exist in crm.ts | Two tables for the same concept - likely one is deprecated | **[OPEN]** Requires deprecation decision |
 | No FK on `invoice_line_items.invoice_id` | `billing.ts` | invoice_id is NOT NULL but has no FK constraint defined | **[RESOLVED]** FK added referencing `invoices.id` |
 | No FK on `order_line_items.order_id` | `billing.ts` | order_id is NOT NULL but has no FK constraint defined | **[RESOLVED]** FK added referencing `orders.id` |
@@ -3782,7 +3782,7 @@ Note: Most remaining open items are internal/system tables that do not require p
 | Settings/audit page calls super-admin path | `app/tenant/settings/audit/page.tsx` likely calls `/api/super-admin/audit-logs` which uses the dash-separated naming | **[RESOLVED]** Page uses server-side DB query directly, not an API call |
 | Superadmin tenants duplicate | Both `/api/super-admin/tenants` and `/api/superadmin/tenants` exist, creating confusion about which to use | **[RESOLVED]** `/api/super-admin/tenants` now redirects to canonical `/api/superadmin/tenants` |
 | Products page with no products API | `/tenant/products` page exists but there is no `/api/tenant/products` route.ts | **[RESOLVED]** `/api/tenant/products` route now exists with full CRUD |
-| Leaderboards page calculation | `/tenant/leaderboards` page exists and calls `/api/tenant/leaderboards` - but the response is computed on-the-fly with no caching table | **[OPEN]** No caching table implemented |
+| Leaderboards page calculation | `/tenant/leaderboards` page exists and calls `/api/tenant/leaderboards` - but the response is computed on-the-fly with no caching table | **[RESOLVED]** 5-minute TTL cache added via withCache |
 | Email analytics page | `/tenant/analytics/email` exists but the primary tracking data is split across `email_tracking`, `email_opens`, and `email_clicks` tables with no unified analytics API | **[OPEN]** No unified analytics API |
 
 ---
@@ -3792,10 +3792,11 @@ Note: Most remaining open items are internal/system tables that do not require p
 1. **~~Duplicate routing namespace:~~** ~~`super-admin` vs `superadmin` creates maintenance burden and potential bugs~~ **[RESOLVED]** Legacy `super-admin` routes now redirect to canonical `superadmin` paths
 2. **~~Missing Products API:~~** ~~Frontend page exists (`/tenant/products`) but no CRUD route~~ **[RESOLVED]** Full CRUD at `/api/tenant/products`
 3. **Schema-only features:** ~~Price books, segments,~~ content generation, and revenue opportunities have schemas but zero API/UI **[PARTIALLY RESOLVED]** Price books and segments now have full APIs
-4. **Subscriptions table collision:** Two different `subscriptions` concepts mapped to potentially the same DB table name **[OPEN]**
+4. **~~Subscriptions table collision:~~** ~~Two different `subscriptions` concepts mapped to potentially the same DB table name~~ **[RESOLVED]** billing.ts table renamed to `service_subscriptions`
 5. **~~Missing FK constraints:~~** ~~Several critical foreign keys (invoice_line_items, signing_requests, hierarchy_permissions) lack database-level enforcement~~ **[RESOLVED]** All five missing FK constraints have been added
 6. **Duplicate pipeline stages:** Both `deal_stages` and `pipeline_stages` tables exist with overlapping purpose **[OPEN]**
-7. **Legacy tag duplication:** Both polymorphic `entity_tags` and specific `contact_tags`/`lead_tags` tables co-exist **[OPEN]**
+7. **~~Legacy tag duplication:~~** ~~Both polymorphic `entity_tags` and specific `contact_tags`/`lead_tags` tables co-exist~~ **[RESOLVED]** Legacy tables deprecated with JSDoc; new code uses entity_tags
+8. **~~Leaderboard caching:~~** ~~On-the-fly computation with no caching~~ **[RESOLVED]** 5-minute TTL cache added via withCache
 
 ---
 

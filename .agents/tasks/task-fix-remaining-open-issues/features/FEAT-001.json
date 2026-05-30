@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Fix the 3 remaining OPEN issues from FULL_ARCHITECTURE_MAP.md section 6: (1) Rename billing.ts subscriptions DB table from 'subscriptions' to 'service_subscriptions' to avoid collision with infra.ts subscriptions table, (2) Consolidate legacy tag tables (contact_tags, lead_tags) by marking them deprecated and having code comments point to entity_tags, (3) Add caching to the leaderboards API using the existing withCache pattern from lib/cache/redis.ts. Finally update FULL_ARCHITECTURE_MAP.md section 6 to mark these three items as RESOLVED.",
+  "status": "in_progress",
+  "steps": [
+    "Step 1 - Fix subscriptions table name collision: In drizzle/schema/billing.ts, change pgTable('subscriptions', ...) to pgTable('service_subscriptions', ...) on the serviceSubscriptions export (line 279). This renames the actual DB table to 'service_subscriptions' so it no longer collides with the infra.ts subscriptions table (which remains as 'subscriptions' for platform billing). Update drizzle/schema/_registry.ts metadata if it references the old table name (around line 2594, the name field already says 'service_subscriptions' so it may already be correct).",
+    "Step 2 - Fix subscriptions index names: In drizzle/schema/billing.ts, the serviceSubscriptions table has indexes like 'idx_subscriptions_contact', 'idx_subscriptions_company', 'idx_subscriptions_status'. Rename these to 'idx_service_subscriptions_contact', 'idx_service_subscriptions_company', 'idx_service_subscriptions_status' to avoid index name collisions with infra.ts subscriptions indexes.",
+    "Step 3 - Consolidate legacy tag tables: In drizzle/schema/crm.ts, add deprecation JSDoc comments to the contactTags and leadTags table definitions (around lines 465-479) explaining that these are legacy tables maintained for backward compatibility and that new code should use entity_tags with entityType='contact' or entityType='lead'. Do NOT remove them (backward compat).",
+    "Step 4 - Add caching to leaderboards API: In app/api/tenant/leaderboards/route.ts, import withCache from '@/lib/cache/redis' and wrap the database query execution in a withCache call. The cache key should include the tenantId, metric, period, and any custom start/end dates. Use a TTL of 300 seconds (5 minutes). The cache key pattern should be: `leaderboard:${ctx.tenantId}:${metric}:${period}:${startDate.toISOString()}:${endDate.toISOString()}`.",
+    "Step 5 - Update FULL_ARCHITECTURE_MAP.md: In section 6.1, change the subscriptions table collision row status from '**[OPEN]** Requires broader migration planning to rename one table' to '**[RESOLVED]** billing.ts table renamed to service_subscriptions'. In section 6.6, change the 'Duplicate table name collision' row status to '**[RESOLVED]** billing.ts pgTable renamed from subscriptions to service_subscriptions'. Change the 'Legacy vs systematic tagging' row status to '**[RESOLVED]** Legacy tables deprecated with JSDoc; new code uses entity_tags'. In section 6.8, change the 'Leaderboards page calculation' row status to '**[RESOLVED]** 5-minute TTL cache added via withCache'. In section 6.9, update items 4 and 7 to mark them RESOLVED. Also add a note about the leaderboard caching being resolved.",
+    "Step 6 - Add a unit test: Create tests/unit/leaderboard-cache.test.ts that verifies the caching logic is properly integrated (mocking the cache module and DB). Follow the vitest patterns from other test files in the project."
+  ],
+  "acceptance_criteria": [
+    "drizzle/schema/billing.ts serviceSubscriptions uses pgTable('service_subscriptions', ...) instead of pgTable('subscriptions', ...)",
+    "No index name collisions between billing.ts and infra.ts subscription tables",
+    "drizzle/schema/crm.ts contactTags and leadTags have @deprecated JSDoc comments directing to entity_tags",
+    "app/api/tenant/leaderboards/route.ts uses withCache with a 5-minute TTL",
+    "FULL_ARCHITECTURE_MAP.md section 6 marks all three issues as RESOLVED",
+    "npx tsc --noEmit passes without errors",
+    "npx vitest run passes"
+  ],
+  "verification": [
+    "npx tsc --noEmit",
+    "npx vitest run"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

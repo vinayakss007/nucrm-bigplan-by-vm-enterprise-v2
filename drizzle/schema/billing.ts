@@ -276,7 +276,7 @@ export const contracts = pgTable('contracts', {
 // ── SUBSCRIPTIONS MODULE ───────────────────────────────
 // Renamed: Was conflicting with infra.subscriptions
 // This table tracks service/product subscriptions (e.g., monthly hosting)
-export const serviceSubscriptions = pgTable('subscriptions', {
+export const serviceSubscriptions = pgTable('service_subscriptions', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
   
@@ -305,8 +305,8 @@ export const serviceSubscriptions = pgTable('subscriptions', {
   ...utils.audit(),
 }, (table) => ({
   tenantIdx: utils.tenantIdx(table),
-  contactIdx: index('idx_subscriptions_contact').on(table.contactId),
-  companyIdx: index('idx_subscriptions_company').on(table.companyId),
-  statusIdx: index('idx_subscriptions_status').on(table.tenantId, table.status),
+  contactIdx: index('idx_service_subscriptions_contact').on(table.contactId),
+  companyIdx: index('idx_service_subscriptions_company').on(table.companyId),
+  statusIdx: index('idx_service_subscriptions_status').on(table.tenantId, table.status),
   activeIdx: utils.activeIdx(table),
 }));

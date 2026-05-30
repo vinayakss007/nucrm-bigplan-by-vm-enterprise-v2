@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
+import { withCache } from '@/lib/cache/redis';
 
 type Metric = 'deals_won' | 'revenue' | 'activities' | 'conversion';
 type Period = 'week' | 'month' | 'quarter' | 'custom';
@@ -55,97 +56,101 @@ export async function GET(req: NextRequest) {
 
     const { startDate, endDate } = getDateRange(period, start, end);
 
-    // Build aggregation query based on metric
-    let data: Array<{ userId: string; name: string; value: number; rank: number }> = [];
+    const cacheKey = `leaderboard:${ctx.tenantId}:${metric}:${period}:${startDate.toISOString()}:${endDate.toISOString()}`;
 
-    try {
-      switch (metric) {
-        case 'deals_won':
-          data = await db.execute(sql`
-            SELECT 
-              u.id as "userId",
-              COALESCE(u.full_name, u.email) as name,
-              COUNT(d.id)::int as value
-            FROM users u
-            LEFT JOIN deals d ON d.owner_id = u.id 
-              AND d.stage = 'won'
-              AND d.closed_at >= ${startDate}
-              AND d.closed_at <= ${endDate}
-              AND d.tenant_id = ${ctx.tenantId}
-            WHERE u.id IN (SELECT user_id FROM tenant_members WHERE tenant_id = ${ctx.tenantId})
-            GROUP BY u.id, u.full_name, u.email
-            ORDER BY value DESC
-            LIMIT 50
-          `) as any;
-          break;
-        case 'revenue':
-          data = await db.execute(sql`
-            SELECT 
-              u.id as "userId",
-              COALESCE(u.full_name, u.email) as name,
-              COALESCE(SUM(d.value), 0)::int as value
-            FROM users u
-            LEFT JOIN deals d ON d.owner_id = u.id 
-              AND d.stage = 'won'
-              AND d.closed_at >= ${startDate}
-              AND d.closed_at <= ${endDate}
-              AND d.tenant_id = ${ctx.tenantId}
-            WHERE u.id IN (SELECT user_id FROM tenant_members WHERE tenant_id = ${ctx.tenantId})
-            GROUP BY u.id, u.full_name, u.email
-            ORDER BY value DESC
-            LIMIT 50
-          `) as any;
-          break;
-        case 'activities':
-          data = await db.execute(sql`
-            SELECT 
-              u.id as "userId",
-              COALESCE(u.full_name, u.email) as name,
-              COUNT(a.id)::int as value
-            FROM users u
-            LEFT JOIN activities a ON a.user_id = u.id
-              AND a.created_at >= ${startDate}
-              AND a.created_at <= ${endDate}
-              AND a.tenant_id = ${ctx.tenantId}
-            WHERE u.id IN (SELECT user_id FROM tenant_members WHERE tenant_id = ${ctx.tenantId})
-            GROUP BY u.id, u.full_name, u.email
-            ORDER BY value DESC
-            LIMIT 50
-          `) as any;
-          break;
-        case 'conversion':
-          data = await db.execute(sql`
-            SELECT 
-              u.id as "userId",
-              COALESCE(u.full_name, u.email) as name,
-              CASE 
-                WHEN COUNT(d.id) = 0 THEN 0
-                ELSE (COUNT(CASE WHEN d.stage = 'won' THEN 1 END) * 100 / COUNT(d.id))::int
-              END as value
-            FROM users u
-            LEFT JOIN deals d ON d.owner_id = u.id
-              AND d.created_at >= ${startDate}
-              AND d.created_at <= ${endDate}
-              AND d.tenant_id = ${ctx.tenantId}
-            WHERE u.id IN (SELECT user_id FROM tenant_members WHERE tenant_id = ${ctx.tenantId})
-            GROUP BY u.id, u.full_name, u.email
-            ORDER BY value DESC
-            LIMIT 50
-          `) as any;
-          break;
+    const ranked = await withCache(cacheKey, async () => {
+      // Build aggregation query based on metric
+      let data: Array<{ userId: string; name: string; value: number; rank: number }> = [];
+
+      try {
+        switch (metric) {
+          case 'deals_won':
+            data = await db.execute(sql`
+              SELECT 
+                u.id as "userId",
+                COALESCE(u.full_name, u.email) as name,
+                COUNT(d.id)::int as value
+              FROM users u
+              LEFT JOIN deals d ON d.owner_id = u.id 
+                AND d.stage = 'won'
+                AND d.closed_at >= ${startDate}
+                AND d.closed_at <= ${endDate}
+                AND d.tenant_id = ${ctx.tenantId}
+              WHERE u.id IN (SELECT user_id FROM tenant_members WHERE tenant_id = ${ctx.tenantId})
+              GROUP BY u.id, u.full_name, u.email
+              ORDER BY value DESC
+              LIMIT 50
+            `) as any;
+            break;
+          case 'revenue':
+            data = await db.execute(sql`
+              SELECT 
+                u.id as "userId",
+                COALESCE(u.full_name, u.email) as name,
+                COALESCE(SUM(d.value), 0)::int as value
+              FROM users u
+              LEFT JOIN deals d ON d.owner_id = u.id 
+                AND d.stage = 'won'
+                AND d.closed_at >= ${startDate}
+                AND d.closed_at <= ${endDate}
+                AND d.tenant_id = ${ctx.tenantId}
+              WHERE u.id IN (SELECT user_id FROM tenant_members WHERE tenant_id = ${ctx.tenantId})
+              GROUP BY u.id, u.full_name, u.email
+              ORDER BY value DESC
+              LIMIT 50
+            `) as any;
+            break;
+          case 'activities':
+            data = await db.execute(sql`
+              SELECT 
+                u.id as "userId",
+                COALESCE(u.full_name, u.email) as name,
+                COUNT(a.id)::int as value
+              FROM users u
+              LEFT JOIN activities a ON a.user_id = u.id
+                AND a.created_at >= ${startDate}
+                AND a.created_at <= ${endDate}
+                AND a.tenant_id = ${ctx.tenantId}
+              WHERE u.id IN (SELECT user_id FROM tenant_members WHERE tenant_id = ${ctx.tenantId})
+              GROUP BY u.id, u.full_name, u.email
+              ORDER BY value DESC
+              LIMIT 50
+            `) as any;
+            break;
+          case 'conversion':
+            data = await db.execute(sql`
+              SELECT 
+                u.id as "userId",
+                COALESCE(u.full_name, u.email) as name,
+                CASE 
+                  WHEN COUNT(d.id) = 0 THEN 0
+                  ELSE (COUNT(CASE WHEN d.stage = 'won' THEN 1 END) * 100 / COUNT(d.id))::int
+                END as value
+              FROM users u
+              LEFT JOIN deals d ON d.owner_id = u.id
+                AND d.created_at >= ${startDate}
+                AND d.created_at <= ${endDate}
+                AND d.tenant_id = ${ctx.tenantId}
+              WHERE u.id IN (SELECT user_id FROM tenant_members WHERE tenant_id = ${ctx.tenantId})
+              GROUP BY u.id, u.full_name, u.email
+              ORDER BY value DESC
+              LIMIT 50
+            `) as any;
+            break;
+        }
+      } catch {
+        // DB may not have these tables in dev/test - return empty
+        data = [];
       }
-    } catch {
-      // DB may not have these tables in dev/test - return empty
-      data = [];
-    }
 
-    // Add rank
-    const ranked = (Array.isArray(data) ? data : []).map((item: any, idx: number) => ({
-      userId: item.userId,
-      name: item.name,
-      value: Number(item.value) || 0,
-      rank: idx + 1,
-    }));
+      // Add rank
+      return (Array.isArray(data) ? data : []).map((item: any, idx: number) => ({
+        userId: item.userId,
+        name: item.name,
+        value: Number(item.value) || 0,
+        rank: idx + 1,
+      }));
+    }, 300);
 
     return NextResponse.json({
       data: ranked,
