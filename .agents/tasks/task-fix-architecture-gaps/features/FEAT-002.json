@@ -1,0 +1,32 @@
+{
+  "id": "FEAT-002",
+  "type": "fix",
+  "description": "Fix schema design issues (6.6) by adding missing FK constraints, fix API validation (6.7) by adding invoice_number uniqueness check, and wire up churn prediction actioning (6.5). Also add rate limiting to public offer accept route (already done - verify) and forms/submit (already done - verify).",
+  "status": "pending",
+  "steps": [
+    "Step 1: In drizzle/schema/billing.ts, add FK constraint on invoiceLineItems.invoiceId referencing invoices.id with onDelete cascade. Change from: invoiceId: uuid('invoice_id').notNull() to: invoiceId: uuid('invoice_id').notNull().references(() => invoices.id, { onDelete: 'cascade' })",
+    "Step 2: In drizzle/schema/billing.ts, add FK constraint on orderLineItems.orderId referencing orders.id with onDelete cascade. Change from: orderId: uuid('order_id').notNull() to: orderId: uuid('order_id').notNull().references(() => orders.id, { onDelete: 'cascade' })",
+    "Step 3: In drizzle/schema/esignature.ts, add FK constraint on signingRequests.documentId referencing documents.id. Import documents from ./documents. Change from: documentId: uuid('document_id').notNull() to: documentId: uuid('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' })",
+    "Step 4: In drizzle/schema/hierarchy.ts, add FK constraint on hierarchyPermissions.hierarchyId referencing tenantHierarchy.id. Change from: hierarchyId: uuid('hierarchy_id').notNull() to: hierarchyId: uuid('hierarchy_id').notNull().references(() => tenantHierarchy.id, { onDelete: 'cascade' })",
+    "Step 5: In drizzle/schema/territories.ts, add FK constraint on territories.assignedTo referencing users.id. Import users from ./core. Change from: assignedTo: uuid('assigned_to') to: assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' })",
+    "Step 6: In app/api/tenant/invoices/route.ts POST handler, add invoice_number uniqueness validation. Before generating the invoice number, after generating it check if it already exists for the tenant. The current code auto-generates sequential numbers which should be unique, but add a uniqueness check before insert (check if an invoice with that number exists for the tenant, if so increment and retry).",
+    "Step 7: Verify that app/api/tenant/analytics/churn/route.ts already has PATCH method for marking predictions as actioned (it does - confirmed). No changes needed for 6.5 churn predictions item.",
+    "Step 8: Verify that app/api/public/offers/[publicToken]/accept/route.ts already has rate limiting via checkRateLimit (it does - confirmed with action 'public_offer_accept', max: 5, windowMinutes: 60). No changes needed for 6.7 rate limiting item.",
+    "Step 9: Verify that app/api/forms/submit/route.ts already has rate limiting via checkRateLimit (it does - confirmed with action 'form_submit', max: 10, windowMinutes: 60). No changes needed for 6.7 forms rate limiting item."
+  ],
+  "acceptance_criteria": [
+    "invoiceLineItems.invoiceId has .references(() => invoices.id, { onDelete: 'cascade' }) in drizzle/schema/billing.ts",
+    "orderLineItems.orderId has .references(() => orders.id, { onDelete: 'cascade' }) in drizzle/schema/billing.ts",
+    "signingRequests.documentId has .references(() => documents.id, { onDelete: 'cascade' }) in drizzle/schema/esignature.ts",
+    "hierarchyPermissions.hierarchyId has .references(() => tenantHierarchy.id, { onDelete: 'cascade' }) in drizzle/schema/hierarchy.ts",
+    "territories.assignedTo has .references(() => users.id, { onDelete: 'set null' }) in drizzle/schema/territories.ts",
+    "Invoice POST route validates uniqueness of invoice_number before insert",
+    "TypeScript compilation passes (npx tsc --noEmit)"
+  ],
+  "verification": [
+    "Run: cd /projects/sandbox/nucrm-bigplan-by-vm-enterprise-v2 && npx tsc --noEmit 2>&1 | tail -30",
+    "Grep for FK references: grep -n 'references.*invoices.id\\|references.*orders.id\\|references.*documents.id\\|references.*tenantHierarchy.id\\|references.*users.id' drizzle/schema/billing.ts drizzle/schema/esignature.ts drizzle/schema/hierarchy.ts drizzle/schema/territories.ts"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

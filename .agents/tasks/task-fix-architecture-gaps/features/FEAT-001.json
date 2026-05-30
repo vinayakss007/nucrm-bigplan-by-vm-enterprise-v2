@@ -1,0 +1,37 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Fix route naming inconsistency (6.1) and frontend-backend disconnections (6.8): Replace /api/super-admin/ routes with redirects to canonical /api/superadmin/ path, add audit-logs route to superadmin, fix settings/audit page to use tenant audit logs directly (which it already does via server-side query - no API call needed), create /api/tenant/products route for the products page, and create /api/tenant/segments route for dynamic segments.",
+  "status": "in_progress",
+  "steps": [
+    "Step 1: Replace app/api/super-admin/tenants/route.ts content with a redirect/proxy that forwards all methods (GET, POST, PATCH, DELETE) to /api/superadmin/tenants. Use NextResponse.redirect or import and re-export the handlers from the canonical route.",
+    "Step 2: Replace app/api/super-admin/audit-logs/route.ts with a proper superadmin audit-logs endpoint under the canonical path. Create app/api/superadmin/audit-logs/route.ts with the same logic currently in app/api/super-admin/audit-logs/route.ts. Then replace app/api/super-admin/audit-logs/route.ts with a redirect to the canonical path.",
+    "Step 3: Create app/api/tenant/products/route.ts with GET (list products for tenant with search/filter), POST (create product using createProductSchema from lib/api/schemas.ts). Follow the pattern in app/api/tenant/services/route.ts. The products table is already defined in drizzle/schema/crm.ts.",
+    "Step 4: Create app/api/tenant/products/[id]/route.ts with GET (single product), PATCH (update product using updateProductSchema), DELETE (soft delete by setting deletedAt). Follow pattern from app/api/tenant/services/[id]/route.ts.",
+    "Step 5: Create app/api/tenant/segments/route.ts with GET (list segments for tenant) and POST (create segment). Use the segments and segmentMembers tables from drizzle/schema/segments.ts. Add createSegmentSchema and updateSegmentSchema to lib/api/schemas.ts.",
+    "Step 6: Create app/api/tenant/segments/[id]/route.ts with GET, PATCH, DELETE for individual segment management.",
+    "Step 7: Create app/api/tenant/service-categories/route.ts with GET and POST for managing service categories. Use serviceCategories table from drizzle/schema/billing.ts. Add createServiceCategorySchema to lib/api/schemas.ts.",
+    "Step 8: Create app/api/tenant/price-books/route.ts with GET and POST for managing price books. Use priceBooks and priceBookEntries tables from drizzle/schema/crm.ts. Add createPriceBookSchema to lib/api/schemas.ts.",
+    "Step 9: Create app/api/tenant/price-books/[id]/route.ts with GET, PATCH, DELETE for individual price book management."
+  ],
+  "acceptance_criteria": [
+    "app/api/super-admin/tenants/route.ts redirects to /api/superadmin/tenants",
+    "app/api/superadmin/audit-logs/route.ts exists with proper GET handler",
+    "app/api/super-admin/audit-logs/route.ts redirects to canonical path",
+    "app/api/tenant/products/route.ts exists with GET and POST handlers using products table",
+    "app/api/tenant/products/[id]/route.ts exists with GET, PATCH, DELETE",
+    "app/api/tenant/segments/route.ts exists with GET and POST handlers using segments table",
+    "app/api/tenant/segments/[id]/route.ts exists with GET, PATCH, DELETE",
+    "app/api/tenant/service-categories/route.ts exists with GET and POST",
+    "app/api/tenant/price-books/route.ts exists with GET and POST",
+    "app/api/tenant/price-books/[id]/route.ts exists with GET, PATCH, DELETE",
+    "New zod schemas (createSegmentSchema, createServiceCategorySchema, createPriceBookSchema) added to lib/api/schemas.ts",
+    "TypeScript compilation passes (npx tsc --noEmit)"
+  ],
+  "verification": [
+    "Run: cd /projects/sandbox/nucrm-bigplan-by-vm-enterprise-v2 && npx tsc --noEmit 2>&1 | tail -30",
+    "Verify files exist: ls app/api/superadmin/audit-logs/route.ts app/api/tenant/products/route.ts app/api/tenant/segments/route.ts app/api/tenant/service-categories/route.ts app/api/tenant/price-books/route.ts"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
