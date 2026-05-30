@@ -131,7 +131,7 @@ export const invoices = pgTable('invoices', {
 
 export const invoiceLineItems = pgTable('invoice_line_items', {
   id: utils.pk(),
-  invoiceId: uuid('invoice_id').notNull(),
+  invoiceId: uuid('invoice_id').notNull().references(() => invoices.id, { onDelete: 'cascade' }),
   productId: uuid('product_id'),
   serviceId: uuid('service_id'),
   description: text('description').notNull(),
@@ -222,7 +222,7 @@ export const orders = pgTable('orders', {
 
 export const orderLineItems = pgTable('order_line_items', {
   id: utils.pk(),
-  orderId: uuid('order_id').notNull(),
+  orderId: uuid('order_id').notNull().references(() => orders.id, { onDelete: 'cascade' }),
   productId: uuid('product_id'),
   serviceId: uuid('service_id'),
   description: text('description').notNull(),

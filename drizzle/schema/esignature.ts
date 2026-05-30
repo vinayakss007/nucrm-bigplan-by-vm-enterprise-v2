@@ -1,11 +1,12 @@
 import { pgTable, uuid, text, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
 import * as utils from './utils';
+import { documents } from './documents';
 
 // ── Signing Requests ──────────────────────────────────
 export const signingRequests = pgTable('signing_requests', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
-  documentId: uuid('document_id').notNull(),
+  documentId: uuid('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
   provider: text('provider').notNull().default('internal'), // 'docusign' | 'hellosign' | 'internal'
   status: text('status').notNull().default('pending'), // 'pending','sent','viewed','signed','declined','expired'
   externalId: text('external_id'),
