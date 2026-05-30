@@ -44,6 +44,8 @@ COPY --from=builder /app/package.json ./
 COPY --from=builder /app/next.config.mjs ./
 COPY --from=builder /app/drizzle ./drizzle
 COPY --from=builder /app/drizzle.config.ts ./
+COPY --from=builder /app/tsconfig.json ./
+COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/worker.ts ./worker.ts
 

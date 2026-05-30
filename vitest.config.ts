@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['tests/**/*.test.ts'],
+    include: ['tests/**/*.test.{ts,tsx}'],
     exclude: ['node_modules', '.next', 'tests/unit/push-coverage.test.ts', 'tests/unit/massive-push.test.ts',
       'tests/unit/massive-coverage.test.ts', 'tests/unit/comprehensive-backend.test.ts', 'tests/unit/complete-backend.test.ts',
       'tests/unit/workflows.test.ts', 'tests/unit/modules.test.ts', 'tests/unit/validate-extended.test.ts',

@@ -9,12 +9,6 @@ import { eq, and, isNull, sql } from 'drizzle-orm';
 
 const REDIS_URL = process.env['REDIS_URL'] || 'redis://localhost:6379';
 
-if (!process.env['REDIS_URL']) {
-  console.error('[Worker] FATAL: REDIS_URL is not set. Worker requires Redis to function.');
-  console.error('[Worker] Set REDIS_URL=redis://host:6379 in your environment.');
-  process.exit(1);
-}
-
 const connection = new IORedis(REDIS_URL, {
   maxRetriesPerRequest: null,
   retryStrategy: (times) => {

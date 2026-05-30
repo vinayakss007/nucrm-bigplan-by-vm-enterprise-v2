@@ -51,7 +51,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               {children}
             </ErrorWrapper>
             <Toaster position="bottom-right" toastOptions={{
-              style: { background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', border: '1px solid hsl(var(--border))', borderRadius: '10px', fontSize: '13px' },
+              style: { background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', border: '1px solid hsl(var(--border))', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', minWidth: '280px' },
+              success: { iconTheme: { primary: '#10b981', secondary: 'hsl(var(--card))' } },
+              error: { iconTheme: { primary: '#ef4444', secondary: 'hsl(var(--card))' } },
             }} />
             <OfflineDetector />
             <PWAInstallPrompt />

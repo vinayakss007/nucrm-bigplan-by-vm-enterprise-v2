@@ -10,6 +10,7 @@ import {
   CircleDot,
 } from 'lucide-react';
 import { cn, formatDate, getInitials, toSnakeCase } from '@/lib/utils';
+import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
 import ImportModal from './import-modal';
 import Pagination from './pagination';
 import toast from 'react-hot-toast';
@@ -418,7 +419,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                     onCheckedChange={() => toggleAllOnPage()}
                   />
                 </th>
-                {['Contact','Company','Email & Phone','Status','Lifecycle','Added',''].map(h=>(
+                {['Contact','Company','Email & Phone','Status','Lifecycle','Score','Added',''].map(h=>(
                   <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -502,6 +503,21 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                         :<span className="text-xs text-muted-foreground">—</span>
                       }
                     </td>
+                    {/* Score */}
+                    <td className="px-4 py-3">
+                      {c['score'] > 0 ? (() => {
+                        const tier = getScoreTier(c['score']);
+                        const cfg = getScoreTierConfig(tier);
+                        return (
+                          <div className="flex items-center gap-2">
+                            <span className={cn('text-[11px] font-bold w-6', cfg.color)}>{c['score']}</span>
+                            <div className="flex-1 h-1.5 w-12 bg-muted rounded-full overflow-hidden hidden xl:block">
+                              <div className={cn('h-full', cfg.bar)} style={{ width: `${c['score']}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })() : <span className="text-xs text-muted-foreground">—</span>}
+                    </td>
                     {/* Added */}
                     <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDate(c['created_at'])}</td>
                     {/* Actions */}
@@ -574,6 +590,11 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                     <div className="flex items-center gap-3 mt-1">
                       {c['company_name']&&<div className="flex items-center gap-1 text-[10px] text-muted-foreground"><Building2 className="w-3 h-3 shrink-0"/><span className="truncate">{c['company_name']}</span></div>}
                       {c['lifecycle_stage']&&<span className={cn('inline-flex px-1.5 py-0.5 rounded-full text-[9px] font-semibold capitalize',LIFECYCLE_COLORS[c['lifecycle_stage']]||'bg-slate-100 text-slate-600')}>{c['lifecycle_stage']?.replace(/_/g,' ')}</span>}
+                      {c['score'] > 0 && (() => {
+                        const tier = getScoreTier(c['score']);
+                        const cfg = getScoreTierConfig(tier);
+                        return <span className={cn('inline-flex px-1.5 py-0.5 rounded-full text-[9px] font-bold', cfg.bg, cfg.color)}>{c['score']} Score</span>;
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -607,6 +628,11 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                     <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold',status!.color)}>
                       <div className={cn('w-1.5 h-1.5 rounded-full',status!.dot)}/>{status!.label}
                     </span>
+                    {c['score'] > 0 && (() => {
+                      const tier = getScoreTier(c['score']);
+                      const cfg = getScoreTierConfig(tier);
+                      return <span className={cn('absolute -top-1 -right-1 w-6 h-6 flex items-center justify-center rounded-full text-[10px] font-bold border-2 border-background shadow-sm', cfg.bg, cfg.color)} title={`Score: ${c['score']}`}>{c['score']}</span>;
+                    })()}
                   </div>
                   <p className="text-sm font-semibold truncate group-hover:text-violet-600 transition-colors">{c['first_name']} {c['last_name']}</p>
                   {c['title']&&<p className="text-[10px] text-muted-foreground truncate mt-0.5">{c['title']}</p>}
