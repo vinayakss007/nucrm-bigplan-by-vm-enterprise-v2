@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "feat",
   "description": "Add tenant_feature_overrides schema table + updated module gate system + user-directory API + feature-control API + announcements/email-blast API. This is the backend foundation for all super admin granular control features.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "1. Create new schema file `drizzle/schema/feature-overrides.ts` with a `tenantFeatureOverrides` table: id (pk), tenantId (uuid FK tenants), featureKey (text, e.g. 'telegram', 'email-sequences', 'ai-assistant'), enabled (boolean), grantedBy (uuid FK users), grantedAt (timestamp), reason (text nullable), metadata (jsonb). Add unique index on (tenantId, featureKey). Use utils.pk(), utils.lifecycle().",
     "2. Export the new table from `drizzle/schema/index.ts` by adding `export * from './feature-overrides';`.",
@@ -29,5 +29,5 @@
     "Run `npm test` and confirm existing tests still pass"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "Build and all 435 tests pass. The gate.ts now uses isNull for deletedAt filtering following the codebase pattern. The drizzle query builder schema is properly registered with relational query support (db.query.tenantFeatureOverrides)."
 }
