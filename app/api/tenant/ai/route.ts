@@ -26,6 +26,7 @@ import { tenantModules } from '@/drizzle/schema/modules';
 import { eq, and } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { checkTokenAndLimits, recordUsage } from '@/lib/ai/common';
+import { checkAiTokenBudget, recordAiTokenUsage } from '@/lib/ai/check-budget';
 import { logError } from '@/lib/errors';
 import { chat, GatewayError, type GatewayRequest } from '@/lib/ai/gateway';
 
@@ -134,6 +135,16 @@ export async function POST(req: NextRequest) {
       }, { status: 429 });
     }
 
+    // AI token budget check (plan-based monthly limit)
+    const budgetCheck = await checkAiTokenBudget(ctx.tenantId);
+    if (!budgetCheck.allowed) {
+      return NextResponse.json({
+        error: 'AI token limit exceeded for this billing period. Contact your admin.',
+        used: budgetCheck.used,
+        limit: budgetCheck.limit,
+      }, { status: 429 });
+    }
+
     // Build the prompt for the requested action
     let system: string;
     let user: string;
@@ -234,6 +245,13 @@ Score: ${sanitizedContact?.score ?? 0}/100`;
     } catch (err) {
       // Bookkeeping failure must not break the user response
       logError({ error: err, context: 'ai-assistant-recordUsage' }).catch(() => {});
+    }
+
+    // Record tokens against the monthly AI token budget
+    try {
+      await recordAiTokenUsage(ctx.tenantId, tokensUsed);
+    } catch (err) {
+      logError({ error: err, context: 'ai-assistant-recordAiTokenUsage' }).catch(() => {});
     }
 
     const envelope = {
