@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { Shield, Lock, Search, ToggleLeft, ToggleRight, Loader2 } from 'lucide-react';
+import { Shield, Lock, Search, ToggleLeft, ToggleRight, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CONTROLLABLE_FEATURES } from '@/lib/modules/feature-keys';
 import toast from 'react-hot-toast';
@@ -101,6 +101,37 @@ export default function SuperAdminFeatureControlPage() {
       } else {
         const d = await res.json();
         toast.error(d.error || 'Failed to update');
+      }
+    } catch {
+      toast.error('Network error');
+    }
+    setToggling(null);
+  };
+
+  const resetOverride = async (tenantId: string, featureKey: string) => {
+    const key = `${tenantId}:${featureKey}`;
+    setToggling(key);
+
+    try {
+      const res = await fetch('/api/superadmin/feature-control', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          feature_key: featureKey,
+        }),
+      });
+
+      if (res.ok) {
+        // Remove the override from local state
+        setTenants(prev => prev.map(t => {
+          if (t.tenant_id !== tenantId) return t;
+          return { ...t, overrides: t.overrides.filter(o => o.feature_key !== featureKey) };
+        }));
+        toast.success(`${featureKey} reset to plan default`);
+      } else {
+        const d = await res.json();
+        toast.error(d.error || 'Failed to reset');
       }
     } catch {
       toast.error('Network error');
@@ -220,25 +251,36 @@ export default function SuperAdminFeatureControlPage() {
 
                     return (
                       <td key={feature.key} className="px-2 py-3 text-center">
-                        <button
-                          onClick={() => toggleFeature(tenant.tenant_id, feature.key, isEnabled || false)}
-                          disabled={isLoading}
-                          className={cn(
-                            'inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all',
-                            isEnabled && 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30',
-                            isDisabled && 'bg-red-500/15 text-red-400 hover:bg-red-500/25',
-                            isDefault && 'bg-white/5 text-white/20 hover:bg-white/10 hover:text-white/40',
+                        <div className="inline-flex items-center gap-0.5">
+                          <button
+                            onClick={() => toggleFeature(tenant.tenant_id, feature.key, isEnabled || false)}
+                            disabled={isLoading}
+                            className={cn(
+                              'inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all',
+                              isEnabled && 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30',
+                              isDisabled && 'bg-red-500/15 text-red-400 hover:bg-red-500/25',
+                              isDefault && 'bg-white/5 text-white/20 hover:bg-white/10 hover:text-white/40',
+                            )}
+                            title={isEnabled ? 'Enabled (click to disable)' : isDisabled ? 'Disabled (click to enable)' : 'No override (click to enable)'}
+                          >
+                            {isLoading ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : isEnabled ? (
+                              <ToggleRight className="w-4 h-4" />
+                            ) : (
+                              <ToggleLeft className="w-4 h-4" />
+                            )}
+                          </button>
+                          {!isDefault && !isLoading && (
+                            <button
+                              onClick={() => resetOverride(tenant.tenant_id, feature.key)}
+                              className="inline-flex items-center justify-center w-4 h-4 rounded text-white/30 hover:text-white/60 hover:bg-white/10 transition-all"
+                              title="Reset to plan default"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
                           )}
-                          title={isEnabled ? 'Enabled (click to disable)' : isDisabled ? 'Disabled (click to enable)' : 'No override (click to enable)'}
-                        >
-                          {isLoading ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : isEnabled ? (
-                            <ToggleRight className="w-4 h-4" />
-                          ) : (
-                            <ToggleLeft className="w-4 h-4" />
-                          )}
-                        </button>
+                        </div>
                       </td>
                     );
                   })}

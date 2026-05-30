@@ -1,0 +1,31 @@
+{
+  "id": "FEAT-003",
+  "type": "fix",
+  "description": "Address all 7 issues from 2025-05-30-090000 review: gate fail-open, email blast cap/audit, wildcard escaping, feature-key validation, deletedAt filtering, and override DELETE handler with UI reset button.",
+  "status": "in_progress",
+  "steps": [
+    "1. Fix gate.ts: return { found: false, error: true } on DB error, update callers to return 500 when error is true.",
+    "2. Fix email-blast: add 500 recipient cap, add audit log entry after send, filter out soft-deleted users.",
+    "3. Fix user-directory: escape SQL LIKE wildcards in search parameter, add isNull(users.deletedAt) filter.",
+    "4. Fix feature-control PATCH: validate feature_key against CONTROLLABLE_FEATURES keys.",
+    "5. Fix feature-control: add DELETE handler to remove override row.",
+    "6. Fix feature-control page.tsx: add reset button to remove override and return to plan-default."
+  ],
+  "acceptance_criteria": [
+    "checkFeatureOverride returns error flag on DB failure, callers return 500",
+    "Email blast rejects requests with more than 500 recipients",
+    "Email blast writes to auditLogs after sending",
+    "SQL LIKE wildcards are escaped in user-directory search",
+    "PATCH feature-control validates feature_key against CONTROLLABLE_FEATURES",
+    "Soft-deleted users are excluded from user-directory and email-blast queries",
+    "DELETE /api/superadmin/feature-control removes override row",
+    "Feature-control UI has a reset button to remove overrides",
+    "npm run build passes without TypeScript errors"
+  ],
+  "verification": [
+    "Run `npm run build` and confirm zero TypeScript errors",
+    "Run `npm test` and confirm existing tests still pass"
+  ],
+  "blocked_reason": null,
+  "findings": null
+}
