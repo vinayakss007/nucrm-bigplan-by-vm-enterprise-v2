@@ -1,0 +1,33 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Fix browser zoom and system scaling compatibility by converting the html font-size from fixed px to percentage-based, converting sidebar widths from fixed px to rem units, and ensuring the entire app scales uniformly with browser zoom (Ctrl+/Ctrl-) and OS display scaling changes.",
+  "status": "in_progress",
+  "steps": [
+    "In app/globals.css, find both occurrences of `html { font-size: 16px; ... }` (one inside @layer base and one outside at the 'Font rendering fix' section) and change `font-size: 16px` to `font-size: 100%` so the browser zoom multiplier applies correctly to rem-based sizing throughout the app.",
+    "In app/globals.css, update the user preference font-size overrides (html[data-font-size='small'], html[data-font-size='normal'], html[data-font-size='large'], html[data-font-size='xl']) to use percentage values instead of px: small=87.5%, normal=100%, large=112.5%, xl=125%. This ensures user font preferences AND browser zoom stack correctly.",
+    "In components/tenant/layout/sidebar.tsx, convert the full sidebar width from `w-[230px]` to `w-[14.375rem]` (230/16=14.375rem). Convert the collapsed sidebar width from `w-[52px]` to `w-[3.25rem]` (52/16=3.25rem). This ensures the sidebar scales with browser zoom.",
+    "In components/superadmin/sidebar.tsx, convert the full sidebar width from `w-[240px]` to `w-[15rem]` (240/16=15rem). Convert the collapsed sidebar width from `w-[56px]` to `w-[3.5rem]` (56/16=3.5rem).",
+    "In components/tenant/layout/header.tsx, convert the header height from `h-14` (already rem-based via Tailwind, this is fine) - verify the notification panel width `w-80` and search dropdown max-width are already rem-friendly (Tailwind classes like w-80, max-w-md are rem-based, so they should be fine). No changes needed here if all classes are standard Tailwind.",
+    "In components/tenant/layout/sidebar.tsx, convert the brand header height from `h-12` (already rem-based, good). Check icon sizes: `w-[18px] h-[18px]` should become `w-[1.125rem] h-[1.125rem]`. The `w-7 h-7` classes are already rem-based. Font sizes using `text-[15px]` should become `text-[0.9375rem]`, `text-[10px]` should become `text-[0.625rem]`, `text-[13px]` should become `text-[0.8125rem]`, `text-[9px]` should stay (it is a decorative badge size) or become `text-[0.5625rem]`.",
+    "In components/superadmin/sidebar.tsx, convert arbitrary px values: `text-[13px]` to `text-[0.8125rem]`, `text-[9px]` to `text-[0.5625rem]`, `text-[10px]` to `text-[0.625rem]`.",
+    "In the superadmin shell.tsx header height `h-14` is already rem-based via Tailwind, no change needed.",
+    "Verify that the tenant shell.tsx main content area padding `p-4 sm:p-6` is already rem-based (Tailwind p-4 = 1rem, p-6 = 1.5rem). No change needed."
+  ],
+  "acceptance_criteria": [
+    "The html element no longer has a fixed px font-size - it uses 100% (or the percentage-based user preference override).",
+    "Both sidebar components (tenant and superadmin) use rem-based widths instead of fixed px values.",
+    "All arbitrary pixel values in sidebar components (font sizes, icon sizes) are converted to rem equivalents.",
+    "The user preference font-size data attributes use percentage values instead of px.",
+    "npm run build completes without errors.",
+    "npx vitest run passes existing tests."
+  ],
+  "verification": [
+    "Run `npm run build` to confirm no build/compile errors with the CSS and component changes.",
+    "Run `npx vitest run` to confirm existing tests still pass.",
+    "Run `grep -rn 'font-size: [0-9]*px' app/globals.css` to confirm no px-based font-size remains on html.",
+    "Run `grep -n 'w-\\[.*px\\]' components/tenant/layout/sidebar.tsx components/superadmin/sidebar.tsx` to confirm no px-based widths remain in sidebars."
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

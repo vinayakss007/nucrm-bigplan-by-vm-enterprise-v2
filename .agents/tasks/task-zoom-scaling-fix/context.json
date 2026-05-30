@@ -1,0 +1,25 @@
+{
+  "project_type": "Next.js 16 multi-tenant SaaS CRM with TypeScript and Tailwind CSS",
+  "language": "TypeScript/TSX",
+  "build_system": "Next.js with npm scripts, Tailwind CSS 3.4, PostCSS",
+  "test_framework": "vitest with node environment (tests/unit, tests/integration)",
+  "build_command": "npm run build",
+  "test_command": "npx vitest run",
+  "verification_instructions": "1. Run npm run build to verify no build errors. 2. Run npx vitest run to ensure tests pass. 3. Verify CSS changes compile correctly.",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "npm install (node_modules already present)",
+  "environment_constraints": "OPEN_INTERNET network mode. Node.js 22 available. node_modules already installed.",
+  "contribution_requirements": "No specific CONTRIBUTING.md restrictions found for CSS changes.",
+  "key_patterns": "Uses Tailwind utility classes extensively. CSS variables defined in globals.css for theming. User preferences (font-size, density) applied via data-* attributes on <html> element by UserPreferencesApplier component. Sidebar width uses arbitrary Tailwind values like w-[230px]. Components use cn() utility from lib/utils for conditional classNames.",
+  "relevant_files": [
+    "app/globals.css",
+    "components/tenant/layout/sidebar.tsx",
+    "components/tenant/layout/shell.tsx",
+    "components/tenant/layout/header.tsx",
+    "components/superadmin/sidebar.tsx",
+    "components/superadmin/shell.tsx",
+    "tailwind.config.ts",
+    "app/layout.tsx"
+  ],
+  "directory_structure": "app/ - Next.js app router pages. components/ - React components organized by domain (tenant/, superadmin/, shared/, ui/). lib/ - Utilities, services. tests/ - vitest tests (unit/, integration/). globals.css defines CSS variables, base styles, and component classes."
+}
