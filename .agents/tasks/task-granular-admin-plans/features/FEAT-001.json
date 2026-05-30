@@ -1,0 +1,39 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Create granular super admin permission system with role-based access levels, enforce super admin deletion protection, force super admin tenant to enterprise plan, and define 4 proper plan tiers (Free, Basic, Pro, Enterprise) with feature matrices",
+  "status": "in_progress",
+  "steps": [
+    "1. Create lib/permissions/super-admin-permissions.ts - Define granular super admin permission categories: tenants.view, tenants.manage, tenants.delete, users.view, users.manage, plans.view, plans.manage, modules.view, modules.manage, settings.view, settings.manage, audit.view, billing.view, billing.manage, monitoring.view, backups.view, backups.manage. Include a SUPER_ADMIN_ROLES map with predefined roles: 'super_admin_full' (all permissions), 'super_admin_readonly' (view-only), 'super_admin_tenant_manager' (tenants + users manage), 'super_admin_billing' (billing + plans manage). Each role has a permissions Record<string, boolean>.",
+    "2. Add superAdminRoleSlug field to the users table in drizzle/schema/core.ts - Add a text column 'super_admin_role' that defaults to 'super_admin_full' for backward compat. This column is only meaningful when isSuperAdmin is true.",
+    "3. Create lib/permissions/super-admin-gate.ts - Export function requireSuperAdminPerm(ctx: AuthContext, permission: string) that returns NextResponse|null. If ctx.isSuperAdmin is false, return 403. Otherwise check the user's super_admin_role against the SUPER_ADMIN_ROLES map from step 1. If the role grants the permission, return null. Otherwise return 403 with descriptive error.",
+    "4. Update app/api/superadmin/users/route.ts DELETE handler - Currently it returns 403 'User deletion is disabled'. Enhance it to explicitly check: if the target user has isSuperAdmin=true, return 403 'Super admin users cannot be deleted'. For regular users, also keep deletion disabled (existing behavior). This makes the protection explicit.",
+    "5. Update app/api/superadmin/tenants/route.ts - In the DELETE handler, add a check: look up the tenant's ownerId, and if that owner is a super admin user, return 403 'Cannot delete a tenant owned by a super admin'. Also add logic in the GET and PATCH handlers: if the tenant is the super admin's own tenant (matching the requesting user's membership), force planId to 'enterprise' in the response and reject any attempt to change planId away from 'enterprise'.",
+    "6. Create lib/plans/plan-definitions.ts - Define the 4 canonical plan tiers with complete feature matrices: FREE (id:'free', $0/mo, 2 users, 500 contacts, 100 deals, 1GB storage, 500 API/day, features: contacts, deals, tasks, calendar, reports), BASIC (id:'basic', $29/mo/$290/yr, 10 users, 5000 contacts, 1000 deals, 5GB storage, 5000 API/day, features: free + automations, forms, quotes, invoices, orders, products, custom_roles), PRO (id:'pro', $79/mo/$790/yr, 25 users, 25000 contacts, 5000 deals, 25GB storage, 25000 API/day, features: basic + sequences, ai, api_access, contracts, subscriptions, audit_logs, dedicated_support), ENTERPRISE (id:'enterprise', $199/mo/$1990/yr, -1 (unlimited) users/contacts/deals, 100GB storage, -1 API/day, features: pro + sso, custom_domain, advanced_security, white_label, priority_support, compliance, data_export). Export as PLAN_DEFINITIONS array and as a lookup map PLAN_MAP.",
+    "7. Create app/api/superadmin/plans/seed/route.ts - A POST endpoint (super admin only) that upserts the 4 canonical plans from PLAN_DEFINITIONS into the plans table. This allows initializing or resetting the plan database to the standard 4-tier structure.",
+    "8. Update app/superadmin/billing/page.tsx - Replace the hardcoded FEATURE_OPTIONS with imports from the plan definitions. Add a visual indicator showing which plan is the 'enforced' plan for super admin. Show a 'Seed Default Plans' button that calls the seed endpoint.",
+    "9. Create app/superadmin/access-control/page.tsx - A new super admin page for managing granular admin permissions. Show a table of all super admin users with their current role. Allow changing roles via a dropdown (super_admin_full, super_admin_readonly, super_admin_tenant_manager, super_admin_billing). Include a permissions matrix view showing what each role can access.",
+    "10. Create app/api/superadmin/access-control/route.ts - GET returns all super admin users with their roles. PATCH allows updating a super admin user's role (only the 'super_admin_full' role holder can change other admins' roles).",
+    "11. Update app/superadmin/layout.tsx - Add the 'Access Control' link to the super admin navigation. Import the nav items and add the new page.",
+    "12. Update FULL_ARCHITECTURE_MAP.md - Add a new section documenting: the 4-plan structure with feature matrix, the granular super admin permission system with role definitions, the super admin deletion protection, and the enterprise plan enforcement for super admin tenants."
+  ],
+  "acceptance_criteria": [
+    "lib/permissions/super-admin-permissions.ts exports SUPER_ADMIN_PERMISSIONS array and SUPER_ADMIN_ROLES map with 4 predefined roles",
+    "lib/permissions/super-admin-gate.ts exports requireSuperAdminPerm function that enforces granular permissions",
+    "lib/plans/plan-definitions.ts exports PLAN_DEFINITIONS with 4 plans (free, basic, pro, enterprise) each with limits and features",
+    "app/api/superadmin/users/route.ts DELETE explicitly rejects deletion of super admin users with specific error message",
+    "app/api/superadmin/tenants/route.ts DELETE rejects deletion of tenants owned by super admin users",
+    "app/api/superadmin/plans/seed/route.ts can upsert the 4 canonical plans into the database",
+    "app/superadmin/access-control/page.tsx renders the granular admin permissions UI",
+    "app/api/superadmin/access-control/route.ts handles GET and PATCH for admin role management",
+    "FULL_ARCHITECTURE_MAP.md is updated with new sections for plans and permissions",
+    "TypeScript compiles without errors (npx tsc --noEmit)"
+  ],
+  "verification": [
+    "Run npx tsc --noEmit from the project root and confirm no type errors in new/modified files",
+    "Run npx vitest run to confirm existing tests still pass",
+    "Grep for the new exports to confirm they exist: SUPER_ADMIN_PERMISSIONS, SUPER_ADMIN_ROLES, PLAN_DEFINITIONS, requireSuperAdminPerm"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

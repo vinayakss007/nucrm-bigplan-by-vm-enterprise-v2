@@ -217,6 +217,29 @@ export async function PATCH(request: NextRequest) {
 
     if (!Object.keys(mappedUpdates).length) return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
 
+    // Enforce enterprise plan for super admin tenants
+    if (mappedUpdates.planId && mappedUpdates.planId !== 'enterprise') {
+      const [targetTenant] = await db
+        .select({ ownerId: tenants.ownerId })
+        .from(tenants)
+        .where(eq(tenants.id, id))
+        .limit(1);
+
+      if (targetTenant?.ownerId) {
+        const [owner] = await db
+          .select({ isSuperAdmin: users.isSuperAdmin })
+          .from(users)
+          .where(eq(users.id, targetTenant.ownerId))
+          .limit(1);
+
+        if (owner?.isSuperAdmin) {
+          return NextResponse.json({
+            error: 'Cannot change plan for a super admin tenant. Enterprise plan is enforced.'
+          }, { status: 403 });
+        }
+      }
+    }
+
     const [row] = await db
       .update(tenants)
       .set({ ...mappedUpdates, updatedAt: new Date() })
@@ -239,6 +262,29 @@ export async function DELETE(request: NextRequest) {
 
     const { id, hard_delete } = await request.json();
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+
+    // Check if the tenant is owned by a super admin
+    const [tenant] = await db
+      .select({ id: tenants.id, ownerId: tenants.ownerId })
+      .from(tenants)
+      .where(eq(tenants.id, id))
+      .limit(1);
+
+    if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+
+    if (tenant.ownerId) {
+      const [owner] = await db
+        .select({ isSuperAdmin: users.isSuperAdmin })
+        .from(users)
+        .where(eq(users.id, tenant.ownerId))
+        .limit(1);
+
+      if (owner?.isSuperAdmin) {
+        return NextResponse.json({
+          error: 'Cannot delete a tenant owned by a super admin'
+        }, { status: 403 });
+      }
+    }
 
     if (hard_delete) {
       await db.delete(tenants).where(eq(tenants.id, id));

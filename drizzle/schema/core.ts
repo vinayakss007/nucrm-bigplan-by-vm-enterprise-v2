@@ -64,6 +64,7 @@ export const users = pgTable('users', {
   phone: text('phone'),
   timezone: text('timezone').default('UTC'),
   isSuperAdmin: boolean('is_super_admin').default(false),
+  superAdminRole: text('super_admin_role').default('super_admin_full'),
   lastTenantId: uuid('last_tenant_id'),
   defaultTenantId: uuid('default_tenant_id'),
   emailVerified: boolean('email_verified').default(false),

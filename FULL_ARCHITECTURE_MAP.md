@@ -3800,4 +3800,72 @@ Note: Most remaining open items are internal/system tables that do not require p
 
 ---
 
+## 19. Granular Super Admin Permissions & Plan Tiers
+
+### 19.1 Subscription Plan Structure (4-Tier)
+
+| Plan       | Monthly | Yearly | Users | Contacts | Deals   | Storage | API/day  |
+|------------|---------|--------|-------|----------|---------|---------|----------|
+| Free       | $0      | $0     | 2     | 500      | 100     | 1 GB    | 500      |
+| Basic      | $29     | $290   | 10    | 5,000    | 1,000   | 5 GB    | 5,000    |
+| Pro        | $79     | $790   | 25    | 25,000   | 5,000   | 25 GB   | 25,000   |
+| Enterprise | $199    | $1,990 | Unlimited | Unlimited | Unlimited | 100 GB | Unlimited |
+
+**Feature Matrix:**
+- **Free:** contacts, deals, tasks, calendar, reports
+- **Basic:** Free + automations, forms, quotes, invoices, orders, products, custom_roles
+- **Pro:** Basic + sequences, ai, api_access, contracts, subscriptions, audit_logs, dedicated_support
+- **Enterprise:** Pro + sso, custom_domain, advanced_security, white_label, priority_support, compliance, data_export
+
+Defined in `lib/plans/plan-definitions.ts` with `PLAN_DEFINITIONS` array and `PLAN_MAP` lookup.
+
+Seed endpoint: `POST /api/superadmin/plans/seed` upserts all 4 plans into the database.
+
+### 19.2 Granular Super Admin Permissions
+
+Defined in `lib/permissions/super-admin-permissions.ts`.
+
+**Permission Categories:**
+- Tenants (view, manage, delete)
+- Users (view, manage)
+- Plans (view, manage)
+- Modules (view, manage)
+- Settings (view, manage)
+- Audit (view)
+- Billing (view, manage)
+- Monitoring (view)
+- Backups (view, manage)
+
+**Predefined Roles:**
+| Role                      | Description              | Access Level                |
+|---------------------------|--------------------------|-----------------------------|
+| super_admin_full          | Full Access              | All permissions             |
+| super_admin_readonly      | Read Only                | View-only across all areas  |
+| super_admin_tenant_manager| Tenant Manager           | Tenants + Users (full) + view elsewhere |
+| super_admin_billing       | Billing Manager          | Billing + Plans (full) + view elsewhere |
+
+Gate function: `requireSuperAdminPerm(ctx, permission)` in `lib/permissions/super-admin-gate.ts`.
+
+Schema: `users.super_admin_role` column (defaults to `super_admin_full`).
+
+### 19.3 Super Admin Deletion Protection
+
+- **User deletion:** `DELETE /api/superadmin/users` explicitly checks if target user has `isSuperAdmin=true` and returns 403 with "Super admin users cannot be deleted". Regular user deletion remains disabled.
+- **Tenant deletion:** `DELETE /api/superadmin/tenants` checks if tenant owner is a super admin and returns 403 with "Cannot delete a tenant owned by a super admin".
+
+### 19.4 Enterprise Plan Enforcement
+
+- Super admin tenants are forced to the Enterprise plan.
+- `PATCH /api/superadmin/tenants` rejects any attempt to change planId away from 'enterprise' for tenants owned by super admins.
+
+### 19.5 Access Control UI
+
+- Page: `/superadmin/access-control`
+- API: `GET/PATCH /api/superadmin/access-control`
+- Shows all super admin users with role dropdowns
+- Displays full permissions matrix showing what each role grants
+- Only `super_admin_full` role holders can change other admins' roles
+
+---
+
 *End of Architecture Map*
