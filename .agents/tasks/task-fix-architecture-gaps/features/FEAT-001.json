@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "fix",
   "description": "Fix route naming inconsistency (6.1) and frontend-backend disconnections (6.8): Replace /api/super-admin/ routes with redirects to canonical /api/superadmin/ path, add audit-logs route to superadmin, fix settings/audit page to use tenant audit logs directly (which it already does via server-side query - no API call needed), create /api/tenant/products route for the products page, and create /api/tenant/segments route for dynamic segments.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Step 1: Replace app/api/super-admin/tenants/route.ts content with a redirect/proxy that forwards all methods (GET, POST, PATCH, DELETE) to /api/superadmin/tenants. Use NextResponse.redirect or import and re-export the handlers from the canonical route.",
     "Step 2: Replace app/api/super-admin/audit-logs/route.ts with a proper superadmin audit-logs endpoint under the canonical path. Create app/api/superadmin/audit-logs/route.ts with the same logic currently in app/api/super-admin/audit-logs/route.ts. Then replace app/api/super-admin/audit-logs/route.ts with a redirect to the canonical path.",
@@ -33,5 +33,5 @@
     "Verify files exist: ls app/api/superadmin/audit-logs/route.ts app/api/tenant/products/route.ts app/api/tenant/segments/route.ts app/api/tenant/service-categories/route.ts app/api/tenant/price-books/route.ts"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "TypeScript compilation passes cleanly (npx tsc --noEmit). The z.record() call in Zod requires two arguments (key and value schema) in this project's version - use z.record(z.string(), z.unknown()) pattern. The serviceCategories table uses utils.audit() which includes createdBy, updatedBy, createdAt, updatedAt, deletedAt, deletedBy fields. The priceBooks table also uses utils.audit(). The segments table uses utils.audit() as well."
 }
