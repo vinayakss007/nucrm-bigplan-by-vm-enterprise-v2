@@ -1,0 +1,7 @@
+{
+  "task_id": "task-zoom-scaling-fix",
+  "task_description": "Fix browser zoom and system display scaling compatibility. The app currently uses fixed px values for html font-size and sidebar widths, preventing proper scaling when users zoom in/out with Ctrl+/Ctrl- or change OS display scaling. Convert to rem/percentage units so all elements scale uniformly.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001"],
+  "blocked_reason": null
+}
