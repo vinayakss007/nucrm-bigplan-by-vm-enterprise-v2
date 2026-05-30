@@ -16,6 +16,17 @@ function shouldAttachCsrf(url: string, method: string): boolean {
   }
 }
 
+// Module-level deduplication: coalesce concurrent CSRF refresh calls
+let refreshPromise: Promise<void> | null = null;
+
+function refreshCsrfToken(originalFetch: typeof globalThis.fetch): Promise<void> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = originalFetch('/api/auth/csrf-token', { credentials: 'same-origin' })
+    .then(() => {})
+    .finally(() => { refreshPromise = null; });
+  return refreshPromise;
+}
+
 export default function CsrfProvider() {
   useEffect(() => {
     const originalFetch = globalThis.fetch;
@@ -32,12 +43,16 @@ export default function CsrfProvider() {
           return performFetchWithToken(originalFetch, input, init, token);
         }
         // Token is missing - fetch a fresh one, then retry
-        return originalFetch('/api/auth/csrf-token', { credentials: 'same-origin' }).then(() => {
+        return refreshCsrfToken(originalFetch).then(() => {
           const freshToken = getCsrfToken();
           if (freshToken) {
             return performFetchWithToken(originalFetch, input, init, freshToken);
           }
           // Still no token - proceed without it
+          return originalFetch(input, init);
+        }).catch(() => {
+          // Recovery fetch failed - proceed without CSRF header and let the
+          // request fail naturally at the proxy level if needed
           return originalFetch(input, init);
         });
       }

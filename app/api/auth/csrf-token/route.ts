@@ -1,7 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { generateCsrfToken, setCsrfCookie } from '@/lib/auth/csrf';
+import { checkRateLimit } from '@/lib/rate-limit';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const limited = await checkRateLimit(request, { action: 'csrf_token', max: 30, windowMinutes: 1 });
+  if (limited) return limited;
+
   const token = generateCsrfToken();
   const response = NextResponse.json({ ok: true });
   response.headers.append('Set-Cookie', setCsrfCookie(token, process.env.NODE_ENV === 'production'));
