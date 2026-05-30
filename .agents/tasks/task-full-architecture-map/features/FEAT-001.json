@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-001",
+  "type": "docs",
+  "description": "Create a comprehensive FULL_ARCHITECTURE_MAP.md file at the project root that documents the entire CRM system architecture. This single large markdown file must cover: (1) Database schema - every table name, key columns, relationships/foreign keys, (2) All API routes with HTTP methods, what tables they read/write, (3) All frontend pages listing what API routes they call, (4) UI elements/buttons on each page and what actions they trigger, (5) Connection maps showing the full data flow from button to route to table, (6) Missing/broken items - routes called but not existing, tables with no API, pages with dead buttons, disconnected features.",
+  "status": "in_progress",
+  "steps": [
+    "Read all schema files in drizzle/schema/ to catalog every table name, columns, and foreign key relationships. There are 34 schema files exporting approximately 120+ tables.",
+    "Scan all 314 API route files in app/api/ to catalog: route path, HTTP methods (GET/POST/PUT/PATCH/DELETE), which schema tables they import/use, what auth they require.",
+    "Scan all tenant pages in app/tenant/ (90+ pages) and superadmin pages in app/superadmin/ (24 pages) to catalog: page path, which client components they use, which API routes they call (via fetch or direct DB queries).",
+    "For the key tenant pages (leads, contacts, deals, companies, tasks, tickets, invoices, orders, contracts, subscriptions, products, quotes, forms, automation, workflows, reports, settings), document the buttons/actions available and what they trigger.",
+    "Create the FULL_ARCHITECTURE_MAP.md file with these sections: (a) Overview/Table of Contents, (b) Database Schema (grouped by domain: core, crm, automation, communication, billing, marketing, support, infrastructure, etc.), (c) API Routes (grouped by domain with method + path + tables used), (d) Frontend Pages (grouped by area with routes called), (e) UI Actions Map (key buttons/forms and their data flow), (f) Connection Diagram (text-based showing Button -> Route -> Table flows), (g) Gaps & Issues (missing connections, dead routes, orphan tables).",
+    "In the Gaps & Issues section, identify: routes that reference tables not in schema, pages that call routes that do not exist, tables that have no API CRUD routes, duplicate route paths (super-admin vs superadmin), and features that appear partially implemented."
+  ],
+  "acceptance_criteria": [
+    "FULL_ARCHITECTURE_MAP.md exists at the project root",
+    "The file contains a table of contents with links to all major sections",
+    "Every table from drizzle/schema/ is listed with its key columns and foreign keys",
+    "Every API route from app/api/ is listed with its HTTP methods and the tables it touches",
+    "Every frontend page is listed with what routes/APIs it connects to",
+    "A Gaps & Issues section identifies at least 5 concrete problems (missing routes, dead buttons, disconnected tables, etc.)",
+    "The file is properly formatted markdown that renders correctly"
+  ],
+  "verification": [
+    "Check that FULL_ARCHITECTURE_MAP.md exists and has more than 2000 lines (given the system's complexity)",
+    "Verify the markdown has proper headings, table formatting, and a table of contents"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
