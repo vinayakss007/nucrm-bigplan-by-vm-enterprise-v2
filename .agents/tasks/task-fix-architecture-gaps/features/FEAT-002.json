@@ -2,7 +2,7 @@
   "id": "FEAT-002",
   "type": "fix",
   "description": "Fix schema design issues (6.6) by adding missing FK constraints, fix API validation (6.7) by adding invoice_number uniqueness check, and wire up churn prediction actioning (6.5). Also add rate limiting to public offer accept route (already done - verify) and forms/submit (already done - verify).",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Step 1: In drizzle/schema/billing.ts, add FK constraint on invoiceLineItems.invoiceId referencing invoices.id with onDelete cascade. Change from: invoiceId: uuid('invoice_id').notNull() to: invoiceId: uuid('invoice_id').notNull().references(() => invoices.id, { onDelete: 'cascade' })",
     "Step 2: In drizzle/schema/billing.ts, add FK constraint on orderLineItems.orderId referencing orders.id with onDelete cascade. Change from: orderId: uuid('order_id').notNull() to: orderId: uuid('order_id').notNull().references(() => orders.id, { onDelete: 'cascade' })",
@@ -28,5 +28,5 @@
     "Grep for FK references: grep -n 'references.*invoices.id\\|references.*orders.id\\|references.*documents.id\\|references.*tenantHierarchy.id\\|references.*users.id' drizzle/schema/billing.ts drizzle/schema/esignature.ts drizzle/schema/hierarchy.ts drizzle/schema/territories.ts"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All FK constraints added successfully. TypeScript compilation passes cleanly (npx tsc --noEmit). The documents table is exported from ./documents.ts and users from ./core.ts. Invoice uniqueness check uses retry loop with max 3 attempts before returning 409 conflict."
 }
