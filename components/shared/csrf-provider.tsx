@@ -16,6 +16,17 @@ function shouldAttachCsrf(url: string, method: string): boolean {
   }
 }
 
+// Module-level deduplication: coalesce concurrent CSRF refresh calls
+let refreshPromise: Promise<void> | null = null;
+
+function refreshCsrfToken(originalFetch: typeof globalThis.fetch): Promise<void> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = originalFetch('/api/auth/csrf-token', { credentials: 'same-origin' })
+    .then(() => {})
+    .finally(() => { refreshPromise = null; });
+  return refreshPromise;
+}
+
 export default function CsrfProvider() {
   useEffect(() => {
     const originalFetch = globalThis.fetch;
@@ -29,25 +40,21 @@ export default function CsrfProvider() {
       if (shouldAttachCsrf(url, method ?? 'GET')) {
         const token = getCsrfToken();
         if (token) {
-          const existingHeaders = init?.headers;
-          const headers = new Headers();
-          if (existingHeaders instanceof Headers) {
-            existingHeaders.forEach((v, k) => headers.set(k, v));
-          } else if (Array.isArray(existingHeaders)) {
-            existingHeaders.forEach(([k, v]) => headers.set(k, v));
-          } else if (existingHeaders && typeof existingHeaders === 'object') {
-            Object.entries(existingHeaders).forEach(([k, v]) => headers.set(k, v as string));
-          }
-          if (input instanceof Request) {
-            input.headers.forEach((v, k) => {
-              if (!headers.has(k)) headers.set(k, v);
-            });
-          }
-          if (!headers.has('X-CSRF-Token')) {
-            headers.set('X-CSRF-Token', token);
-          }
-          return originalFetch(input, { ...init, headers });
+          return performFetchWithToken(originalFetch, input, init, token);
         }
+        // Token is missing - fetch a fresh one, then retry
+        return refreshCsrfToken(originalFetch).then(() => {
+          const freshToken = getCsrfToken();
+          if (freshToken) {
+            return performFetchWithToken(originalFetch, input, init, freshToken);
+          }
+          // Still no token - proceed without it
+          return originalFetch(input, init);
+        }).catch(() => {
+          // Recovery fetch failed - proceed without CSRF header and let the
+          // request fail naturally at the proxy level if needed
+          return originalFetch(input, init);
+        });
       }
       return originalFetch(input, init);
     };
@@ -57,4 +64,30 @@ export default function CsrfProvider() {
   }, []);
 
   return null;
+}
+
+function performFetchWithToken(
+  originalFetch: typeof globalThis.fetch,
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  token: string
+): Promise<Response> {
+  const existingHeaders = init?.headers;
+  const headers = new Headers();
+  if (existingHeaders instanceof Headers) {
+    existingHeaders.forEach((v, k) => headers.set(k, v));
+  } else if (Array.isArray(existingHeaders)) {
+    existingHeaders.forEach(([k, v]) => headers.set(k, v));
+  } else if (existingHeaders && typeof existingHeaders === 'object') {
+    Object.entries(existingHeaders).forEach(([k, v]) => headers.set(k, v as string));
+  }
+  if (input instanceof Request) {
+    input.headers.forEach((v, k) => {
+      if (!headers.has(k)) headers.set(k, v);
+    });
+  }
+  if (!headers.has('X-CSRF-Token')) {
+    headers.set('X-CSRF-Token', token);
+  }
+  return originalFetch(input, { ...init, headers });
 }

@@ -100,7 +100,7 @@ export async function proxy(request: NextRequest) {
       const cookieCsrf = getCsrfTokenFromCookie(request.headers.get('cookie') || null);
       const headerCsrf = getCsrfTokenFromHeader(request.headers);
       if (!validateCsrfToken(cookieCsrf, headerCsrf)) {
-        return NextResponse.json({ error: 'CSRF token missing or invalid' }, { status: 403 });
+        return NextResponse.json({ error: 'CSRF token missing or invalid. Please refresh the page and try again.' }, { status: 403 });
       }
     }
 
