@@ -133,7 +133,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     )),
 
     (async () => {
-      const safe = async <T>(p: Promise<T>, fallback: T): Promise<T> => p.catch(() => fallback);
+      const safe = async <T,>(p: Promise<T>, fallback: T): Promise<T> => p.catch(() => fallback);
       return Promise.all([
         safe(db.select().from(invoices).where(eq(invoices.contactId, contactId)).orderBy(desc(invoices.createdAt)).limit(50), []),
         safe(db.select().from(orders).where(eq(orders.contactId, contactId)).orderBy(desc(orders.createdAt)).limit(50), []),

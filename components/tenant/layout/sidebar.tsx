@@ -278,14 +278,14 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
             <Link key={href} href={href} title={label}
               className={cn('w-8 h-8 flex items-center justify-center rounded-lg transition-all',
                 active ? 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400' : 'text-muted-foreground hover:bg-accent')}>
-              <Icon className="w-4 h-4" />
+              <Icon className="w-[18px] h-[18px]" />
             </Link>
           );
         })}
         <div className="flex-1" />
         {isSuperAdmin && (
           <Link href="/superadmin/dashboard" title="Super Admin" className="w-8 h-8 flex items-center justify-center rounded-lg text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors">
-            <Crown className="w-4 h-4" />
+            <Crown className="w-[18px] h-[18px]" />
           </Link>
         )}
       </aside>
@@ -299,14 +299,14 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
     return (
       <div key={href} className="group relative flex items-stretch">
         <Link href={href} onClick={onMobileClose}
-          className={cn('flex-1 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all',
+          className={cn('flex-1 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[15px] font-semibold transition-all',
             active
               ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300'
               : 'text-muted-foreground hover:bg-accent hover:text-foreground')}>
-          <Icon className={cn('w-4 h-4 shrink-0', active && 'text-violet-600 dark:text-violet-400')} />
+          <Icon className={cn('w-[18px] h-[18px] shrink-0', active && 'text-violet-600 dark:text-violet-400')} />
           <span className="flex-1 truncate">{label}</span>
           {shortcut && !isPinned && (
-            <span className="text-[10px] text-muted-foreground/40 group-hover:text-muted-foreground/60 transition-colors">
+            <span className="text-[10px] text-muted-foreground/70 group-hover:text-muted-foreground/60 transition-colors">
               {shortcut}
             </span>
           )}
@@ -336,7 +336,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
           {tenant?.name?.charAt(0)?.toUpperCase() ?? 'W'}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold truncate leading-tight">{tenant?.name ?? 'Workspace'}</p>
+          <p className="text-base font-bold truncate leading-tight">{tenant?.name ?? 'Workspace'}</p>
         </div>
         {onToggle && (
           <button onClick={onToggle} className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md hover:bg-accent text-muted-foreground transition-colors" aria-label="Collapse sidebar">
@@ -393,7 +393,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
             <div key={section.id} className="mb-1">
               <button onClick={() => !q && toggleSection(section.id)}
                 className={cn(
-                  'flex items-center gap-1.5 w-full px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider transition-colors',
+                  'flex items-center gap-1.5 w-full px-2.5 py-1 rounded-md text-[13px] font-bold uppercase tracking-wider transition-colors',
                   q ? 'text-violet-600 dark:text-violet-400' : 'text-muted-foreground/60 hover:text-foreground'
                 )}>
                 {!q && <ChevronDown className={cn('w-3 h-3 transition-transform', isOpen ? 'rotate-0' : '-rotate-90')} />}
@@ -456,7 +456,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
             <Crown className="w-3.5 h-3.5" />Super Admin
           </Link>
         )}
-        <div className="flex items-center gap-2 px-2.5 py-1 text-xs text-muted-foreground/40">
+        <div className="flex items-center gap-2 px-2.5 py-1 text-xs text-muted-foreground/70">
           <Command className="w-3 h-3" />K  Quick search
         </div>
       </div>
