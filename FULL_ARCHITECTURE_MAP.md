@@ -3868,4 +3868,36 @@ Schema: `users.super_admin_role` column (defaults to `super_admin_full`).
 
 ---
 
+## 2.31 Super Admin Feature Control & User Directory
+
+### New Tables
+| Table | Description |
+|-------|-------------|
+| `tenant_feature_overrides` | Per-tenant feature access overrides set by super admin. Columns: tenant_id, feature_key, enabled, granted_by, reason |
+
+### New API Routes
+| Route | Method | Description |
+|-------|--------|-------------|
+| `/api/superadmin/user-directory` | GET | All platform users with contact details, memberships, search/filter/pagination |
+| `/api/superadmin/feature-control` | GET | All tenants with their feature override status |
+| `/api/superadmin/feature-control` | PATCH | Enable/disable a feature for a specific tenant |
+| `/api/superadmin/email-blast` | POST | Send bulk emails to all users or filtered groups |
+
+### New Pages
+| Page | Description |
+|------|-------------|
+| `/superadmin/user-directory` | View all platform users with email, phone, tenant, export CSV |
+| `/superadmin/feature-control` | Per-tenant feature toggle matrix (Telegram, AI, WhatsApp, etc.) |
+
+### Module Gate Enhancement
+The module gate system (`lib/modules/gate.ts`) now checks `tenant_feature_overrides` before plan-level access. Super admin can:
+- **Grant access** to features regardless of plan (e.g., give a free-plan tenant Telegram)
+- **Revoke access** to features regardless of plan (e.g., disable AI for a specific enterprise tenant)
+- **Control Telegram** - disabled by default, must be explicitly enabled per tenant
+
+### Controllable Features
+Telegram, Email Sequences, AI Assistant, WhatsApp, Lead Warming, Analytics Pro, Automation Pro, Forms Builder, Compliance Suite
+
+---
+
 *End of Architecture Map*
