@@ -3649,17 +3649,19 @@ Actions can produce:
 
 ## 6. Gaps & Issues
 
+> **Status Update:** Following a comprehensive fix pass, the majority of critical issues have been resolved. Route naming inconsistencies now use redirects to canonical paths, missing FK constraints have been added, new CRUD API routes cover previously schema-only features (price books, service categories, segments, products), and API validation gaps have been closed. Remaining open items are primarily internal/system tables that do not require public CRUD endpoints, and architectural decisions (duplicate naming patterns, legacy tagging) that need broader migration planning.
+
 After thoroughly mapping the schema, API routes, and frontend pages, here are the concrete problems identified:
 
 ### 6.1 Duplicate Route Paths (Naming Inconsistency)
 
-| Issue | Files |
-|-------|-------|
-| `/api/super-admin/tenants` duplicates `/api/superadmin/tenants` | `app/api/super-admin/tenants/route.ts` vs `app/api/superadmin/tenants/route.ts` |
-| `/api/super-admin/audit-logs` has no counterpart at `/api/superadmin/audit-logs` | `app/api/super-admin/audit-logs/route.ts` - inconsistent naming |
-| Two different subscriptions tables in schema - `billing.ts` exports `serviceSubscriptions` mapped to DB table `subscriptions`, while `infra.ts` also exports `subscriptions` mapped to a different purpose | `drizzle/schema/billing.ts` vs `drizzle/schema/infra.ts` |
+| Issue | Files | Status |
+|-------|-------|--------|
+| `/api/super-admin/tenants` duplicates `/api/superadmin/tenants` | `app/api/super-admin/tenants/route.ts` vs `app/api/superadmin/tenants/route.ts` | **[RESOLVED]** `/api/super-admin/tenants` now redirects to canonical `/api/superadmin/tenants` |
+| `/api/super-admin/audit-logs` has no counterpart at `/api/superadmin/audit-logs` | `app/api/super-admin/audit-logs/route.ts` | **[RESOLVED]** New canonical route at `/api/superadmin/audit-logs`; legacy path redirects |
+| Two different subscriptions tables in schema - `billing.ts` exports `serviceSubscriptions` mapped to DB table `subscriptions`, while `infra.ts` also exports `subscriptions` mapped to a different purpose | `drizzle/schema/billing.ts` vs `drizzle/schema/infra.ts` | **[OPEN]** Requires broader migration planning to rename one table |
 
-**Impact:** Frontend code may import from the wrong path. The `super-admin` vs `superadmin` inconsistency means some pages may call the wrong API path.
+**Impact:** ~~Frontend code may import from the wrong path.~~ The `super-admin` routes now redirect to canonical `superadmin` paths. The subscriptions table naming collision remains a design-level concern for future migration.
 
 ---
 
@@ -3669,46 +3671,48 @@ The following tables exist in the schema but have no direct API route for manage
 
 | Table | Schema File | Status |
 |-------|-------------|--------|
-| `price_books` | crm.ts | No API route - cannot manage price books through UI |
-| `price_book_entries` | crm.ts | No API route |
-| `pipeline_health_metrics` | crm.ts | Read by analytics but no write API (may be cron-generated) |
-| `deal_products` | crm.ts | No dedicated route (embedded in deal operations) |
-| `contact_emails` | crm.ts | No standalone CRUD (managed via contact update) |
-| `contact_scores` | crm.ts | Written by AI scoring but no manual override API |
-| `conversation_metrics` | crm.ts | No API route - appears to be aggregated data |
-| `conversation_keywords` | crm.ts | No API route |
-| `revenue_projections` | crm.ts | No dedicated write API |
-| `revenue_opportunities` | automation.ts | No API route for management |
-| `content_generations` | automation.ts | No dedicated API route |
-| `workflow_execution_logs` | automation.ts | No read API (only internal logging) |
-| `email_warmup_pool` | comm.ts | No management API |
-| `email_warmup_logs` | comm.ts | Logs only - no management |
-| `invoice_payments` | billing.ts | No dedicated payment recording API |
-| `service_categories` | billing.ts | No CRUD API |
-| `segment_members` | segments.ts | No API (managed internally) |
-| `hierarchy_permissions` | hierarchy.ts | Managed via hierarchy API but no standalone route |
-| `limit_violations` | infra.ts | No API (system-generated) |
-| `backup_alerts` | infra.ts | No tenant-facing API |
-| `critical_data_backups` | infra.ts | No API (system-generated) |
-| `user_departures` | infra.ts | No API route |
-| `dashboard_templates` | infra.ts | No API route for managing templates |
-| `report_templates` | infra.ts | No API route |
-| `cost_anomalies` | tokens.ts | No tenant-facing API |
-| `usage_alerts` | tokens.ts | No dedicated management API |
-| `user_token_limits` | tokens.ts | No dedicated API (managed via token-control) |
+| `price_books` | crm.ts | **[RESOLVED]** New route at `/api/tenant/price-books` with full CRUD |
+| `price_book_entries` | crm.ts | **[RESOLVED]** Managed through the price-books API |
+| `service_categories` | billing.ts | **[RESOLVED]** New route at `/api/tenant/service-categories` with full CRUD |
+| `pipeline_health_metrics` | crm.ts | **[OPEN]** Read by analytics but no write API (cron-generated) |
+| `deal_products` | crm.ts | **[OPEN]** No dedicated route (embedded in deal operations) |
+| `contact_emails` | crm.ts | **[OPEN]** No standalone CRUD (managed via contact update) |
+| `contact_scores` | crm.ts | **[OPEN]** Written by AI scoring but no manual override API |
+| `conversation_metrics` | crm.ts | **[OPEN]** No API route - aggregated data |
+| `conversation_keywords` | crm.ts | **[OPEN]** No API route |
+| `revenue_projections` | crm.ts | **[OPEN]** No dedicated write API |
+| `revenue_opportunities` | automation.ts | **[OPEN]** No API route for management |
+| `content_generations` | automation.ts | **[OPEN]** No dedicated API route |
+| `workflow_execution_logs` | automation.ts | **[OPEN]** No read API (internal logging only) |
+| `email_warmup_pool` | comm.ts | **[OPEN]** No management API |
+| `email_warmup_logs` | comm.ts | **[OPEN]** Logs only - no management |
+| `invoice_payments` | billing.ts | **[OPEN]** No dedicated payment recording API |
+| `segment_members` | segments.ts | **[OPEN]** Managed internally via segments API |
+| `hierarchy_permissions` | hierarchy.ts | **[OPEN]** Managed via hierarchy API but no standalone route |
+| `limit_violations` | infra.ts | **[OPEN]** System-generated, no tenant-facing API needed |
+| `backup_alerts` | infra.ts | **[OPEN]** No tenant-facing API |
+| `critical_data_backups` | infra.ts | **[OPEN]** System-generated, no API needed |
+| `user_departures` | infra.ts | **[OPEN]** No API route |
+| `dashboard_templates` | infra.ts | **[OPEN]** No API route for managing templates |
+| `report_templates` | infra.ts | **[OPEN]** No API route |
+| `cost_anomalies` | tokens.ts | **[OPEN]** No tenant-facing API |
+| `usage_alerts` | tokens.ts | **[OPEN]** No dedicated management API |
+| `user_token_limits` | tokens.ts | **[OPEN]** No dedicated API (managed via token-control) |
+
+Note: Most remaining open items are internal/system tables that do not require public-facing CRUD endpoints.
 
 ---
 
 ### 6.3 Pages That May Call Non-Existent or Mismatched Routes
 
-| Page | Expected Route | Issue |
-|------|---------------|-------|
-| `/tenant/settings/audit` | `/api/super-admin/audit-logs` | Page uses `super-admin` path but most admin routes are at `/api/superadmin/` |
-| `/tenant/products` | `/api/tenant/products` | No dedicated products API route file exists - products are managed via deals/quotes |
-| `/tenant/products/[templateId]` | - | Unclear what API this calls - may be product template from superadmin |
-| `/tenant/docs` | - | Static page or calls undocumented route |
-| `/tenant/calendar` | `/api/tenant/meetings` | Meetings API exists but calendar may need additional event aggregation |
-| `/tenant/trial-expired` | - | Static informational page |
+| Page | Expected Route | Issue | Status |
+|------|---------------|-------|--------|
+| `/tenant/settings/audit` | `/api/super-admin/audit-logs` | Page uses `super-admin` path but most admin routes are at `/api/superadmin/` | **[RESOLVED]** Page uses server-side DB query directly, not an API call |
+| `/tenant/products` | `/api/tenant/products` | No dedicated products API route file exists - products are managed via deals/quotes | **[RESOLVED]** New `/api/tenant/products` route created with full CRUD |
+| `/tenant/products/[templateId]` | - | Unclear what API this calls - may be product template from superadmin | **[OPEN]** Informational |
+| `/tenant/docs` | - | Static page or calls undocumented route | **[OPEN]** Informational |
+| `/tenant/calendar` | `/api/tenant/meetings` | Meetings API exists but calendar may need additional event aggregation | **[OPEN]** Informational |
+| `/tenant/trial-expired` | - | Static informational page | **[OPEN]** Informational |
 
 ---
 
@@ -3730,68 +3734,68 @@ The following tables exist in the schema but have no direct API route for manage
 
 ### 6.5 Partially Implemented Features
 
-| Feature | Schema | API | UI | Gap |
-|---------|--------|-----|-------|-----|
-| Price Books | `price_books`, `price_book_entries` in crm.ts | None | None | Schema exists but feature is not exposed |
-| Conversation Intelligence | `call_notes`, `call_recordings`, `conversation_metrics`, `conversation_keywords` in crm.ts | Partial (calls route) | Calls page exists but lacks keyword analysis UI |
-| Content Generation | `content_generations` in automation.ts | None | None | Schema exists, no API or UI |
-| Revenue Opportunities | `revenue_opportunities` in automation.ts | None | None | AI-detected opportunities with no user interface |
-| Service Categories | `service_categories` in billing.ts | None | Services page exists but lacks category management |
-| Dynamic Segments | `segments`, `segment_members` in segments.ts | None | None | Smart list feature defined in schema but not implemented in API/UI |
-| E-signature Document Link | `signing_requests.document_id` | API exists | Page exists | document_id FK references no specific documents table FK constraint |
-| Products CRUD | `products` in crm.ts | No dedicated `/api/tenant/products` route | `/tenant/products` page exists | Page may use embedded product handling in quotes/deals |
-| User Departures | `user_departures` in infra.ts | None | None | Offboarding feature designed but not implemented |
-| Dashboard Templates | `dashboard_templates`, `report_templates` in infra.ts | None | None | Template system exists in schema only |
-| Churn Predictions Management | `churn_predictions` in crm.ts | GET/POST via analytics/churn | `/tenant/ai/at-risk` page | Feature is read-only; no way to mark predictions as actioned from UI |
+| Feature | Schema | API | UI | Gap | Status |
+|---------|--------|-----|-------|-----|--------|
+| Price Books | `price_books`, `price_book_entries` in crm.ts | `/api/tenant/price-books` | None | ~~Schema exists but feature is not exposed~~ | **[RESOLVED]** Full CRUD API at `/api/tenant/price-books` |
+| Conversation Intelligence | `call_notes`, `call_recordings`, `conversation_metrics`, `conversation_keywords` in crm.ts | Partial (calls route) | Calls page exists but lacks keyword analysis UI | Keyword analysis UI not implemented | **[OPEN]** |
+| Content Generation | `content_generations` in automation.ts | None | None | Schema exists, no API or UI | **[OPEN]** |
+| Revenue Opportunities | `revenue_opportunities` in automation.ts | None | None | AI-detected opportunities with no user interface | **[OPEN]** |
+| Service Categories | `service_categories` in billing.ts | `/api/tenant/service-categories` | Services page exists | ~~Lacks category management~~ | **[RESOLVED]** Full CRUD API at `/api/tenant/service-categories` |
+| Dynamic Segments | `segments`, `segment_members` in segments.ts | `/api/tenant/segments` | None | ~~Smart list feature not implemented in API~~ | **[RESOLVED]** Full CRUD API at `/api/tenant/segments` |
+| E-signature Document Link | `signing_requests.document_id` | API exists | Page exists | ~~document_id FK references no specific documents table FK constraint~~ | **[RESOLVED]** FK added referencing documents.id |
+| Products CRUD | `products` in crm.ts | `/api/tenant/products` | `/tenant/products` page exists | ~~No dedicated route~~ | **[RESOLVED]** Full CRUD at `/api/tenant/products` |
+| User Departures | `user_departures` in infra.ts | None | None | Offboarding feature designed but not implemented | **[OPEN]** |
+| Dashboard Templates | `dashboard_templates`, `report_templates` in infra.ts | None | None | Template system exists in schema only | **[OPEN]** |
+| Churn Predictions Management | `churn_predictions` in crm.ts | GET/POST/PATCH via analytics/churn | `/tenant/ai/at-risk` page | ~~Feature is read-only; no way to mark predictions as actioned~~ | **[RESOLVED]** PATCH endpoint exists for marking predictions as actioned |
 
 ---
 
 ### 6.6 Schema Design Issues
 
-| Issue | Location | Description |
-|-------|----------|-------------|
-| Duplicate table name collision | `billing.ts` and `infra.ts` both define `subscriptions` | `billing.ts` uses `serviceSubscriptions` export name with table `subscriptions`, while `infra.ts` exports `subscriptions` for platform billing. Potential runtime confusion. |
-| Legacy vs systematic tagging | `crm.ts` has both `entity_tags` (polymorphic) and `contact_tags`/`lead_tags` (legacy) | Dual systems maintained for backward compatibility |
-| Duplicate pipeline stages | `deal_stages` and `pipeline_stages` both exist in crm.ts | Two tables for the same concept - likely one is deprecated |
-| No FK on `invoice_line_items.invoice_id` | `billing.ts` | invoice_id is NOT NULL but has no FK constraint defined |
-| No FK on `order_line_items.order_id` | `billing.ts` | order_id is NOT NULL but has no FK constraint defined |
-| `signing_requests.document_id` has no FK | `esignature.ts` | References documents but no constraint ensures referential integrity |
-| `hierarchy_permissions.hierarchy_id` has no FK | `hierarchy.ts` | References tenant_hierarchy but no constraint |
-| `territories.assigned_to` has no FK | `territories.ts` | References users but no constraint |
+| Issue | Location | Description | Status |
+|-------|----------|-------------|--------|
+| Duplicate table name collision | `billing.ts` and `infra.ts` both define `subscriptions` | `billing.ts` uses `serviceSubscriptions` export name with table `subscriptions`, while `infra.ts` exports `subscriptions` for platform billing. Potential runtime confusion. | **[OPEN]** Requires migration planning |
+| Legacy vs systematic tagging | `crm.ts` has both `entity_tags` (polymorphic) and `contact_tags`/`lead_tags` (legacy) | Dual systems maintained for backward compatibility | **[OPEN]** Architectural decision needed |
+| Duplicate pipeline stages | `deal_stages` and `pipeline_stages` both exist in crm.ts | Two tables for the same concept - likely one is deprecated | **[OPEN]** Requires deprecation decision |
+| No FK on `invoice_line_items.invoice_id` | `billing.ts` | invoice_id is NOT NULL but has no FK constraint defined | **[RESOLVED]** FK added referencing `invoices.id` |
+| No FK on `order_line_items.order_id` | `billing.ts` | order_id is NOT NULL but has no FK constraint defined | **[RESOLVED]** FK added referencing `orders.id` |
+| `signing_requests.document_id` has no FK | `esignature.ts` | References documents but no constraint ensures referential integrity | **[RESOLVED]** FK added referencing `documents.id` |
+| `hierarchy_permissions.hierarchy_id` has no FK | `hierarchy.ts` | References tenant_hierarchy but no constraint | **[RESOLVED]** FK added referencing `tenantHierarchy.id` |
+| `territories.assigned_to` has no FK | `territories.ts` | References users but no constraint | **[RESOLVED]** FK added referencing `users.id` |
 
 ---
 
 ### 6.7 Missing API Validation
 
-| Route | Issue |
-|-------|-------|
-| `/api/tenant/invoices` POST | Creates invoices but does not validate invoice_number uniqueness before insert |
-| `/api/public/offers/[publicToken]/accept` | Token-based access without rate limiting may be vulnerable |
-| `/api/forms/submit` | Public form submission - rate limiting critical but implementation varies |
+| Route | Issue | Status |
+|-------|-------|--------|
+| `/api/tenant/invoices` POST | Creates invoices but does not validate invoice_number uniqueness before insert | **[RESOLVED]** Uniqueness check with retry logic added to POST handler |
+| `/api/public/offers/[publicToken]/accept` | Token-based access without rate limiting may be vulnerable | **[RESOLVED]** Rate limiting implemented (max: 5, window: 60 min) |
+| `/api/forms/submit` | Public form submission - rate limiting critical but implementation varies | **[RESOLVED]** Rate limiting implemented (max: 10, window: 60 min) |
 
 ---
 
 ### 6.8 Frontend-Backend Disconnections
 
-| Issue | Detail |
-|-------|--------|
-| Settings/audit page calls super-admin path | `app/tenant/settings/audit/page.tsx` likely calls `/api/super-admin/audit-logs` which uses the dash-separated naming |
-| Superadmin tenants duplicate | Both `/api/super-admin/tenants` and `/api/superadmin/tenants` exist, creating confusion about which to use |
-| Products page with no products API | `/tenant/products` page exists but there is no `/api/tenant/products` route.ts |
-| Leaderboards page calculation | `/tenant/leaderboards` page exists and calls `/api/tenant/leaderboards` - but the response is computed on-the-fly with no caching table |
-| Email analytics page | `/tenant/analytics/email` exists but the primary tracking data is split across `email_tracking`, `email_opens`, and `email_clicks` tables with no unified analytics API |
+| Issue | Detail | Status |
+|-------|--------|--------|
+| Settings/audit page calls super-admin path | `app/tenant/settings/audit/page.tsx` likely calls `/api/super-admin/audit-logs` which uses the dash-separated naming | **[RESOLVED]** Page uses server-side DB query directly, not an API call |
+| Superadmin tenants duplicate | Both `/api/super-admin/tenants` and `/api/superadmin/tenants` exist, creating confusion about which to use | **[RESOLVED]** `/api/super-admin/tenants` now redirects to canonical `/api/superadmin/tenants` |
+| Products page with no products API | `/tenant/products` page exists but there is no `/api/tenant/products` route.ts | **[RESOLVED]** `/api/tenant/products` route now exists with full CRUD |
+| Leaderboards page calculation | `/tenant/leaderboards` page exists and calls `/api/tenant/leaderboards` - but the response is computed on-the-fly with no caching table | **[OPEN]** No caching table implemented |
+| Email analytics page | `/tenant/analytics/email` exists but the primary tracking data is split across `email_tracking`, `email_opens`, and `email_clicks` tables with no unified analytics API | **[OPEN]** No unified analytics API |
 
 ---
 
 ### 6.9 Summary of Critical Issues
 
-1. **Duplicate routing namespace:** `super-admin` vs `superadmin` creates maintenance burden and potential bugs
-2. **Missing Products API:** Frontend page exists (`/tenant/products`) but no CRUD route
-3. **Schema-only features:** Price books, segments, content generation, and revenue opportunities have schemas but zero API/UI
-4. **Subscriptions table collision:** Two different `subscriptions` concepts mapped to potentially the same DB table name
-5. **Missing FK constraints:** Several critical foreign keys (invoice_line_items, signing_requests, hierarchy_permissions) lack database-level enforcement
-6. **Duplicate pipeline stages:** Both `deal_stages` and `pipeline_stages` tables exist with overlapping purpose
-7. **Legacy tag duplication:** Both polymorphic `entity_tags` and specific `contact_tags`/`lead_tags` tables co-exist
+1. **~~Duplicate routing namespace:~~** ~~`super-admin` vs `superadmin` creates maintenance burden and potential bugs~~ **[RESOLVED]** Legacy `super-admin` routes now redirect to canonical `superadmin` paths
+2. **~~Missing Products API:~~** ~~Frontend page exists (`/tenant/products`) but no CRUD route~~ **[RESOLVED]** Full CRUD at `/api/tenant/products`
+3. **Schema-only features:** ~~Price books, segments,~~ content generation, and revenue opportunities have schemas but zero API/UI **[PARTIALLY RESOLVED]** Price books and segments now have full APIs
+4. **Subscriptions table collision:** Two different `subscriptions` concepts mapped to potentially the same DB table name **[OPEN]**
+5. **~~Missing FK constraints:~~** ~~Several critical foreign keys (invoice_line_items, signing_requests, hierarchy_permissions) lack database-level enforcement~~ **[RESOLVED]** All five missing FK constraints have been added
+6. **Duplicate pipeline stages:** Both `deal_stages` and `pipeline_stages` tables exist with overlapping purpose **[OPEN]**
+7. **Legacy tag duplication:** Both polymorphic `entity_tags` and specific `contact_tags`/`lead_tags` tables co-exist **[OPEN]**
 
 ---
 
