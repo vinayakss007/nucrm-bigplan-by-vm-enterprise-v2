@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { SUPER_ADMIN_ROLES } from '@/lib/permissions/super-admin-permissions';
+import { requireSuperAdminPerm } from '@/lib/permissions/super-admin-gate';
 
 /**
  * GET /api/superadmin/access-control
@@ -44,6 +45,22 @@ export async function PATCH(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
+    // Enforce granular permission: users.manage required
+    const permCheck = requireSuperAdminPerm(ctx, 'users.manage');
+    if (permCheck) return permCheck;
+
+    // Self-demotion check: cannot change your own role
+    const { userId, role } = await request.json();
+    if (!userId || !role) {
+      return NextResponse.json({ error: 'userId and role are required' }, { status: 400 });
+    }
+
+    if (userId === ctx.userId) {
+      return NextResponse.json({
+        error: 'Cannot change your own super admin role. Another full-access admin must do this.'
+      }, { status: 403 });
+    }
+
     // Check that the requesting user has full access
     const [requestingUser] = await db
       .select({ superAdminRole: users.superAdminRole })
@@ -56,11 +73,6 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({
         error: 'Only users with Full Access role can modify admin roles'
       }, { status: 403 });
-    }
-
-    const { userId, role } = await request.json();
-    if (!userId || !role) {
-      return NextResponse.json({ error: 'userId and role are required' }, { status: 400 });
     }
 
     if (!SUPER_ADMIN_ROLES[role]) {

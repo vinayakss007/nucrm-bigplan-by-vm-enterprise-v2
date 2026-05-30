@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { plans } from '@/drizzle/schema';
 import { sql } from 'drizzle-orm';
 import { PLAN_DEFINITIONS } from '@/lib/plans/plan-definitions';
+import { requireSuperAdminPerm } from '@/lib/permissions/super-admin-gate';
 
 /**
  * POST /api/superadmin/plans/seed
@@ -16,6 +17,10 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
+
+    // Enforce granular permission: plans.manage required
+    const permCheck = requireSuperAdminPerm(ctx, 'plans.manage');
+    if (permCheck) return permCheck;
 
     const results = [];
 

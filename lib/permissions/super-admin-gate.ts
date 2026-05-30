@@ -28,7 +28,7 @@ export function requireSuperAdminPerm(
   }
 
   // Get the user's super admin role - default to full access for backward compat
-  const roleSlug = (ctx as any).superAdminRole || 'super_admin_full';
+  const roleSlug = ctx.superAdminRole || 'super_admin_full';
   const role = SUPER_ADMIN_ROLES[roleSlug];
 
   if (!role) {

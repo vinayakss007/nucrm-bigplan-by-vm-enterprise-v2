@@ -1,0 +1,31 @@
+{
+  "id": "FEAT-002",
+  "type": "fix",
+  "description": "Address review feedback: wire gate into auth system, create migration, protect seed route, prevent self-demotion, add type comment",
+  "status": "completed",
+  "steps": [
+    "1. Add superAdminRole to AuthContext interface and populate it in requireAuth from DB query",
+    "2. Remove (ctx as any) cast in super-admin-gate.ts now that type is properly defined",
+    "3. Wire requireSuperAdminPerm into access-control PATCH route with users.manage permission",
+    "4. Wire requireSuperAdminPerm into plans/seed POST route with plans.manage permission",
+    "5. Create migration 0012_add_super_admin_role.sql for the super_admin_role column",
+    "6. Add self-demotion check in access-control PATCH handler",
+    "7. Add type comment in plan-definitions.ts for maxStorageGb numeric conversion"
+  ],
+  "acceptance_criteria": [
+    "AuthContext interface includes superAdminRole?: string",
+    "requireAuth populates superAdminRole from DB for super admin users",
+    "super-admin-gate.ts uses ctx.superAdminRole instead of (ctx as any).superAdminRole",
+    "access-control PATCH requires users.manage permission via requireSuperAdminPerm",
+    "plans/seed POST requires plans.manage permission via requireSuperAdminPerm",
+    "Migration file exists at drizzle/migrations/0012_add_super_admin_role.sql",
+    "Self-demotion returns 403 with descriptive error message",
+    "TypeScript compiles without errors"
+  ],
+  "verification": [
+    "npx tsc --noEmit passes",
+    "npx vitest run passes all tests"
+  ],
+  "blocked_reason": null,
+  "findings": "All 5 review issues addressed. TypeScript compiles cleanly. All 435 tests pass."
+}
