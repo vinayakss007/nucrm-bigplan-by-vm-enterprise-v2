@@ -130,7 +130,7 @@ export async function POST_login(request: NextRequest) {
       token,
       user:{ id:user.id, email:user.email, full_name:user.fullName, is_super_admin:user.isSuperAdmin } 
     });
-    response.headers.set('Set-Cookie', setCsrfCookie(csrfToken, process.env.NODE_ENV === 'production'));
+    response.headers.append('Set-Cookie', setCsrfCookie(csrfToken, process.env.NODE_ENV === 'production'));
     return response;
   } catch (err:any) {
     devLogger.error(err as Error, '[auth/login]');
@@ -307,7 +307,7 @@ export async function POST_signup(request: NextRequest) {
     await setSessionCookie(token);
     const signupCsrfToken = generateCsrfToken();
     const signupResponse = NextResponse.json({ ok:true, user:{ id:user.id, email:user.email, full_name:user.fullName }, tenant:{ id:tenant.id, name:tenant.name, slug:tenant.slug } }, { status:201 });
-    signupResponse.headers.set('Set-Cookie', setCsrfCookie(signupCsrfToken, process.env.NODE_ENV === 'production'));
+    signupResponse.headers.append('Set-Cookie', setCsrfCookie(signupCsrfToken, process.env.NODE_ENV === 'production'));
 
     // Send Discord/Slack webhook notification (fire-and-forget)
     sendWebhookNotification({
