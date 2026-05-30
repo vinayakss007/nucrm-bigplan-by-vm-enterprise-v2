@@ -268,7 +268,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
   if (collapsed) {
     const flatTop = NAV_SECTIONS[0]?.items.filter(i => hasPerm(i)) ?? [];
     return (
-      <aside className="tenant-sidebar w-[52px] shrink-0 h-full flex flex-col items-center py-3 gap-1 transition-all duration-300 overflow-hidden border-r border-border">
+      <aside className="tenant-sidebar w-[3.25rem] shrink-0 h-full flex flex-col items-center py-3 gap-1 transition-all duration-300 overflow-hidden border-r border-border">
         <button onClick={onToggle} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground transition-colors mb-1">
           <Menu className="w-4 h-4" />
         </button>
@@ -278,14 +278,14 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
             <Link key={href} href={href} title={label}
               className={cn('w-8 h-8 flex items-center justify-center rounded-lg transition-all',
                 active ? 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400' : 'text-muted-foreground hover:bg-accent')}>
-              <Icon className="w-4 h-4" />
+              <Icon className="w-[1.125rem] h-[1.125rem]" />
             </Link>
           );
         })}
         <div className="flex-1" />
         {isSuperAdmin && (
           <Link href="/superadmin/dashboard" title="Super Admin" className="w-8 h-8 flex items-center justify-center rounded-lg text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors">
-            <Crown className="w-4 h-4" />
+            <Crown className="w-[1.125rem] h-[1.125rem]" />
           </Link>
         )}
       </aside>
@@ -299,14 +299,14 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
     return (
       <div key={href} className="group relative flex items-stretch">
         <Link href={href} onClick={onMobileClose}
-          className={cn('flex-1 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all',
+          className={cn('flex-1 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[0.9375rem] font-semibold transition-all',
             active
               ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300'
               : 'text-muted-foreground hover:bg-accent hover:text-foreground')}>
-          <Icon className={cn('w-4 h-4 shrink-0', active && 'text-violet-600 dark:text-violet-400')} />
+          <Icon className={cn('w-[1.125rem] h-[1.125rem] shrink-0', active && 'text-violet-600 dark:text-violet-400')} />
           <span className="flex-1 truncate">{label}</span>
           {shortcut && !isPinned && (
-            <span className="text-[10px] text-muted-foreground/40 group-hover:text-muted-foreground/60 transition-colors">
+            <span className="text-[0.625rem] text-muted-foreground/70 group-hover:text-muted-foreground/80 transition-colors">
               {shortcut}
             </span>
           )}
@@ -329,14 +329,14 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
 
   // ── Full sidebar ────────────────────────────────────────────
   return (
-    <aside className="tenant-sidebar w-[230px] shrink-0 h-full flex flex-col transition-all duration-300 border-r border-border">
+    <aside className="tenant-sidebar w-[14.375rem] shrink-0 h-full flex flex-col transition-all duration-300 border-r border-border">
       {/* Brand */}
       <div className="h-12 flex items-center gap-2.5 px-3 border-b border-border shrink-0">
         <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm" style={{ background: color }}>
           {tenant?.name?.charAt(0)?.toUpperCase() ?? 'W'}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold truncate leading-tight">{tenant?.name ?? 'Workspace'}</p>
+          <p className="text-base font-bold truncate leading-tight">{tenant?.name ?? 'Workspace'}</p>
         </div>
         {onToggle && (
           <button onClick={onToggle} className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md hover:bg-accent text-muted-foreground transition-colors" aria-label="Collapse sidebar">
@@ -370,7 +370,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
         {/* Pinned shortcuts */}
         {pinnedItems.length > 0 && (
           <div className="mb-2">
-            <p className="px-2.5 py-1 text-[10px] font-semibold text-amber-600/70 dark:text-amber-400/70 uppercase tracking-wider flex items-center gap-1.5">
+            <p className="px-2.5 py-1 text-[0.625rem] font-semibold text-amber-600/70 dark:text-amber-400/70 uppercase tracking-wider flex items-center gap-1.5">
               <Star className="w-2.5 h-2.5 fill-current" /> Pinned
             </p>
             {pinnedItems.map(navItem)}
@@ -393,12 +393,12 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
             <div key={section.id} className="mb-1">
               <button onClick={() => !q && toggleSection(section.id)}
                 className={cn(
-                  'flex items-center gap-1.5 w-full px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider transition-colors',
+                  'flex items-center gap-1.5 w-full px-2.5 py-1 rounded-md text-[0.8125rem] font-bold uppercase tracking-wider transition-colors',
                   q ? 'text-violet-600 dark:text-violet-400' : 'text-muted-foreground/60 hover:text-foreground'
                 )}>
                 {!q && <ChevronDown className={cn('w-3 h-3 transition-transform', isOpen ? 'rotate-0' : '-rotate-90')} />}
                 <span className="flex-1 text-left">{section.label}</span>
-                <span className="text-[10px] text-muted-foreground/40 font-normal normal-case">{section.items.length}</span>
+                <span className="text-[0.625rem] text-muted-foreground/40 font-normal normal-case">{section.items.length}</span>
               </button>
               {isOpen && (
                 <div className="space-y-0.5 mt-0.5">
@@ -456,7 +456,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
             <Crown className="w-3.5 h-3.5" />Super Admin
           </Link>
         )}
-        <div className="flex items-center gap-2 px-2.5 py-1 text-xs text-muted-foreground/40">
+        <div className="flex items-center gap-2 px-2.5 py-1 text-xs text-muted-foreground/70">
           <Command className="w-3 h-3" />K  Quick search
         </div>
       </div>
