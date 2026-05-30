@@ -25,5 +25,5 @@
     "npx vitest run"
   ],
   "blocked_reason": null,
-  "findings": "All changes verified: tsc --noEmit passes, vitest run passes (435 tests, 38 files). The withCache import and usage in leaderboards compiles correctly. The billing.ts table rename does not affect any other imports since the export name (serviceSubscriptions) is unchanged."
+  "findings": "All changes verified: tsc --noEmit passes, vitest run passes (435 tests, 38 files). The withCache import and usage in leaderboards compiles correctly. The billing.ts table rename does not affect any other imports since the export name (serviceSubscriptions) is unchanged. Post-review fixes applied: (1) Cache key for non-custom periods no longer includes dynamic endDate to ensure cache hits, (2) Added migration file 0011_rename_service_subscriptions.sql with IF EXISTS guards, (3) Updated test to verify key ends with empty segment for non-custom periods."
 }

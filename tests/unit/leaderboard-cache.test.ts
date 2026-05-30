@@ -31,7 +31,7 @@ describe('Leaderboard Cache Integration', () => {
     vi.clearAllMocks();
   });
 
-  it('calls withCache with correct cache key pattern', async () => {
+  it('calls withCache with correct cache key pattern and no dynamic endDate for non-custom periods', async () => {
     const req = new Request('http://localhost/api/tenant/leaderboards?metric=deals_won&period=month');
 
     await GET(req as any);
@@ -39,6 +39,8 @@ describe('Leaderboard Cache Integration', () => {
     expect(withCache).toHaveBeenCalledTimes(1);
     const [key, , ttl] = (withCache as any).mock.calls[0];
     expect(key).toMatch(/^leaderboard:tenant-123:deals_won:month:/);
+    // For non-custom periods, the key should end with an empty string segment (no endDate)
+    expect(key).toMatch(/:$/);
     expect(ttl).toBe(300);
   });
 

@@ -56,7 +56,8 @@ export async function GET(req: NextRequest) {
 
     const { startDate, endDate } = getDateRange(period, start, end);
 
-    const cacheKey = `leaderboard:${ctx.tenantId}:${metric}:${period}:${startDate.toISOString()}:${endDate.toISOString()}`;
+    const keyEnd = period === 'custom' ? endDate.toISOString() : '';
+    const cacheKey = `leaderboard:${ctx.tenantId}:${metric}:${period}:${startDate.toISOString()}:${keyEnd}`;
 
     const ranked = await withCache(cacheKey, async () => {
       // Build aggregation query based on metric

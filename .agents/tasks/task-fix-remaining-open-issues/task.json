@@ -1,7 +1,14 @@
 {
   "task_id": "task-fix-remaining-open-issues",
   "task_description": "Fix 3 remaining OPEN issues from FULL_ARCHITECTURE_MAP.md: subscriptions table name collision, legacy tag duplication, and leaderboard caching. Update the architecture map to mark them RESOLVED.",
-  "status": "in_progress",
+  "status": "completed",
   "feature_order": ["FEAT-001"],
-  "blocked_reason": null
+  "blocked_reason": null,
+  "verification": {
+    "build": "pass",
+    "tests": "pass",
+    "test_quality": "pass",
+    "docker_build": "skipped",
+    "summary": "npx tsc --noEmit passes. npx vitest run passes (435 tests, 38 files). New leaderboard-cache.test.ts validates cache key pattern, TTL, and integration with 5 meaningful tests."
+  }
 }
