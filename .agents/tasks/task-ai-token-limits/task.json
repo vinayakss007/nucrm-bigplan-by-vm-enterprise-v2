@@ -1,0 +1,7 @@
+{
+  "task_id": "task-ai-token-limits",
+  "task_description": "Add monthly AI token limits per plan tier, create enforcement logic, build a super admin AI Token Settings page for managing per-tenant limits/usage, and integrate budget checking into the AI gateway.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001"],
+  "blocked_reason": null
+}

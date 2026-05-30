@@ -29,6 +29,8 @@ export interface PlanDefinition {
   maxAutomations: number;
   maxForms: number;
   maxApiCallsDay: number;
+  /** Monthly AI token budget. -1 means unlimited. */
+  maxAiTokensMonthly: number;
   features: string[];
   sortOrder: number;
 }
@@ -51,6 +53,7 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     maxAutomations: 0,
     maxForms: 1,
     maxApiCallsDay: 500,
+    maxAiTokensMonthly: 10000,
     features: ['contacts', 'deals', 'tasks', 'calendar', 'reports'],
     sortOrder: 0,
   },
@@ -71,6 +74,7 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     maxAutomations: 10,
     maxForms: 5,
     maxApiCallsDay: 5000,
+    maxAiTokensMonthly: 100000,
     features: [
       'contacts', 'deals', 'tasks', 'calendar', 'reports',
       'automations', 'forms', 'quotes', 'invoices', 'orders', 'products', 'custom_roles',
@@ -94,6 +98,7 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     maxAutomations: 50,
     maxForms: 20,
     maxApiCallsDay: 25000,
+    maxAiTokensMonthly: 500000,
     features: [
       'contacts', 'deals', 'tasks', 'calendar', 'reports',
       'automations', 'forms', 'quotes', 'invoices', 'orders', 'products', 'custom_roles',
@@ -118,6 +123,7 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     maxAutomations: -1,
     maxForms: -1,
     maxApiCallsDay: -1,
+    maxAiTokensMonthly: -1,
     features: [
       'contacts', 'deals', 'tasks', 'calendar', 'reports',
       'automations', 'forms', 'quotes', 'invoices', 'orders', 'products', 'custom_roles',

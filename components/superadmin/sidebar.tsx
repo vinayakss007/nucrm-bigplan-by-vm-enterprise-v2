@@ -44,6 +44,7 @@ const SECTIONS: NavSection[] = [
   {
     id: 'config', label: 'Configure', defaultOpen: false, items: [
       { href: '/superadmin/analytics',       label: 'Analytics',       icon: BarChart3,    keywords: 'analytics charts' },
+      { href: '/superadmin/ai-tokens',       label: 'AI Token Limits', icon: Zap,          keywords: 'ai tokens budget limits usage monthly' },
       { href: '/superadmin/modules',         label: 'Modules',         icon: Zap,          keywords: 'modules features' },
       { href: '/superadmin/feature-control', label: 'Feature Control', icon: Shield, keywords: 'features toggle telegram gate access override' },
       { href: '/superadmin/access-control',  label: 'Access Control',  icon: Shield,       keywords: 'permissions roles admin' },

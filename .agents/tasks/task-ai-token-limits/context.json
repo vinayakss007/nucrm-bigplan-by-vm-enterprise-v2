@@ -1,0 +1,30 @@
+{
+  "project_type": "Next.js 16 multi-tenant SaaS CRM with Drizzle ORM and PostgreSQL",
+  "language": "TypeScript",
+  "build_system": "npm with Next.js build",
+  "test_framework": "vitest with tests/ directory, environment: node, pattern: tests/**/*.test.ts",
+  "build_command": "npx next build",
+  "test_command": "npx vitest run",
+  "verification_instructions": "1. Run npx vitest run to execute unit tests 2. Run TypeScript compilation check with npx tsc --noEmit",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "npm install (already done, node_modules exists)",
+  "environment_constraints": "OPEN_INTERNET mode, Node 22. No running database available so tests must mock DB calls.",
+  "contribution_requirements": "Follow existing patterns, use Drizzle ORM for DB, Zod for validation, Next.js App Router for routes",
+  "key_patterns": "Plan definitions in lib/plans/plan-definitions.ts (PlanDefinition interface). AI token gating in lib/ai/common.ts via checkTokenAndLimits(). Usage tracking per-tenant via lib/usage/tracker.ts. Monthly aggregates in aiUsageAggregated table. Tenant token limits in tenant_token_limits table. Super admin pages in app/superadmin/. API routes in app/api/superadmin/. Drizzle schema files in drizzle/schema/. Schema index exports all from drizzle/schema/index.ts.",
+  "relevant_files": [
+    "lib/plans/plan-definitions.ts",
+    "lib/ai/common.ts",
+    "lib/ai/gateway.ts",
+    "lib/usage/tracker.ts",
+    "drizzle/schema/tokens.ts",
+    "drizzle/schema/usage.ts",
+    "drizzle/schema/automation.ts",
+    "drizzle/schema/ai.ts",
+    "drizzle/schema/index.ts",
+    "app/api/superadmin/token-control/route.ts",
+    "app/superadmin/token-control/page.tsx",
+    "app/api/tenant/ai/route.ts",
+    "drizzle/schema/feature-overrides.ts"
+  ],
+  "directory_structure": "app/ - Next.js pages and API routes | lib/ - shared logic (ai/, plans/, usage/, auth/) | drizzle/schema/ - DB schema definitions | components/ - React components | tests/ - vitest test files"
+}

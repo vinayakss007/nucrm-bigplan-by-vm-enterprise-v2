@@ -1,0 +1,32 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Add monthly AI token limits to plan definitions and create a checkAiTokenBudget helper that enforces monthly token quotas per tenant based on their plan (with super admin override support). Also add the ai_token_usage schema table for monthly tracking and create the super admin AI Token Settings page with API.",
+  "status": "in_progress",
+  "steps": [
+    "Step 1 - Update lib/plans/plan-definitions.ts: Add `maxAiTokensMonthly` field to the PlanDefinition interface and set values: free=10000, basic=100000, pro=500000, enterprise=-1 (unlimited).",
+    "Step 2 - Create drizzle/schema/ai-token-usage.ts: Define an `aiTokenUsage` table with columns: id (pk), tenant_id (FK to tenants), billing_period (text 'YYYY-MM'), tokens_used (bigint default 0), tokens_limit (bigint, nullable - for super admin override), reset_at (timestamp), created_at, updated_at. Add unique index on (tenant_id, billing_period). Export it and add the export to drizzle/schema/index.ts.",
+    "Step 3 - Create lib/ai/check-budget.ts: Create a `checkAiTokenBudget(tenantId: string)` function that: (a) looks up the tenant's plan from the tenants table, (b) gets the plan's maxAiTokensMonthly from PLAN_MAP, (c) checks if there is a custom override in aiTokenUsage.tokens_limit for this billing period, (d) uses the override if set otherwise uses plan default, (e) queries the current month's tokens_used from aiTokenUsage (or aiUsageAggregated as fallback), (f) returns { allowed: boolean, used: number, limit: number, remaining: number }. If limit is -1 return allowed=true always. Also create a `recordAiTokenUsage(tenantId: string, tokensUsed: number)` function that upserts the aiTokenUsage row for the current billing period.",
+    "Step 4 - Integrate into app/api/tenant/ai/route.ts: After the existing checkTokenAndLimits call succeeds, call checkAiTokenBudget(tenantId). If not allowed, return 429 with message 'AI token limit exceeded for this billing period. Contact your admin.' After a successful AI call, call recordAiTokenUsage(tenantId, tokensUsed) with the actual total tokens from the gateway response.",
+    "Step 5 - Create app/api/superadmin/ai-token-settings/route.ts: GET handler returns all tenants with their current AI token usage for the current billing period (join tenants with aiTokenUsage), including plan name and limit. PATCH handler accepts { tenant_id, tokens_limit } to set a custom override for a tenant's current period. Also support { tenant_id, action: 'reset' } to reset a tenant's usage counter to 0.",
+    "Step 6 - Create app/superadmin/ai-tokens/page.tsx: A 'use client' page that: (a) shows a summary with total tokens used across all tenants, (b) lists all tenants with columns: name, plan, monthly limit, used this month, percentage, status (OK/Warning/Exceeded), (c) allows clicking a tenant to set a custom token limit (modal/inline edit), (d) has a Reset Usage button per tenant, (e) color-codes rows by usage percentage (green <60%, yellow 60-80%, red >80%). Follow the pattern used in app/superadmin/token-control/page.tsx for styling (dark theme with gray-900 backgrounds, tables).",
+    "Step 7 - Add a navigation link in the superadmin sidebar to the new /superadmin/ai-tokens page (look at components/superadmin/shell.tsx or similar for the nav structure)."
+  ],
+  "acceptance_criteria": [
+    "PlanDefinition interface includes maxAiTokensMonthly: number field",
+    "All 4 plans have appropriate maxAiTokensMonthly values (free=10000, basic=100000, pro=500000, enterprise=-1)",
+    "aiTokenUsage table schema is defined and exported from drizzle/schema/index.ts",
+    "checkAiTokenBudget function exists and returns { allowed, used, limit, remaining }",
+    "recordAiTokenUsage function exists and increments tokens_used for current billing period",
+    "AI route (app/api/tenant/ai/route.ts) calls checkAiTokenBudget before processing and recordAiTokenUsage after",
+    "Super admin API at /api/superadmin/ai-token-settings handles GET (list usage), PATCH (set limit), and reset actions",
+    "Super admin page at /superadmin/ai-tokens displays tenant token usage with override capability",
+    "When token limit is exceeded, AI requests are blocked with a clear 429 error message"
+  ],
+  "verification": [
+    "Run npx tsc --noEmit to verify TypeScript compilation passes with no errors",
+    "Run npx vitest run to confirm existing tests still pass"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
