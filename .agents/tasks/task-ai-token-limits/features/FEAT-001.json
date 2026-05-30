@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "feat",
   "description": "Add monthly AI token limits to plan definitions and create a checkAiTokenBudget helper that enforces monthly token quotas per tenant based on their plan (with super admin override support). Also add the ai_token_usage schema table for monthly tracking and create the super admin AI Token Settings page with API.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Step 1 - Update lib/plans/plan-definitions.ts: Add `maxAiTokensMonthly` field to the PlanDefinition interface and set values: free=10000, basic=100000, pro=500000, enterprise=-1 (unlimited).",
     "Step 2 - Create drizzle/schema/ai-token-usage.ts: Define an `aiTokenUsage` table with columns: id (pk), tenant_id (FK to tenants), billing_period (text 'YYYY-MM'), tokens_used (bigint default 0), tokens_limit (bigint, nullable - for super admin override), reset_at (timestamp), created_at, updated_at. Add unique index on (tenant_id, billing_period). Export it and add the export to drizzle/schema/index.ts.",
@@ -28,5 +28,5 @@
     "Run npx vitest run to confirm existing tests still pass"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 7 steps implemented successfully. TypeScript compiles cleanly (tsc --noEmit passes). All 435 tests pass (38 test files). The aiTokenUsage schema uses the same utils patterns as other schema files. The checkAiTokenBudget helper resolves limits in order: override > plan default. The AI route returns 429 with clear message when budget exceeded."
 }
