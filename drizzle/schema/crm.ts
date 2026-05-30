@@ -462,6 +462,10 @@ export const entityTags = pgTable('entity_tags', {
 });
 
 // Legacy Aliases (Legacy/Ad-hoc compatibility)
+/**
+ * @deprecated Legacy table maintained for backward compatibility.
+ * New code should use `entityTags` with entityType='contact' instead.
+ */
 export const contactTags = pgTable('contact_tags', {
   contactId: uuid('contact_id').notNull().references(() => contacts.id, { onDelete: 'cascade' }),
   tagId: uuid('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }),
@@ -471,6 +475,10 @@ export const contactTags = pgTable('contact_tags', {
   };
 });
 
+/**
+ * @deprecated Legacy table maintained for backward compatibility.
+ * New code should use `entityTags` with entityType='lead' instead.
+ */
 export const leadTags = pgTable('lead_tags', {
   leadId: uuid('lead_id').notNull().references(() => leads.id, { onDelete: 'cascade' }),
   tagId: uuid('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }),
