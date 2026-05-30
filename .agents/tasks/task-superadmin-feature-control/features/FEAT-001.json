@@ -1,0 +1,33 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Add tenant_feature_overrides schema table + updated module gate system + user-directory API + feature-control API + announcements/email-blast API. This is the backend foundation for all super admin granular control features.",
+  "status": "in_progress",
+  "steps": [
+    "1. Create new schema file `drizzle/schema/feature-overrides.ts` with a `tenantFeatureOverrides` table: id (pk), tenantId (uuid FK tenants), featureKey (text, e.g. 'telegram', 'email-sequences', 'ai-assistant'), enabled (boolean), grantedBy (uuid FK users), grantedAt (timestamp), reason (text nullable), metadata (jsonb). Add unique index on (tenantId, featureKey). Use utils.pk(), utils.lifecycle().",
+    "2. Export the new table from `drizzle/schema/index.ts` by adding `export * from './feature-overrides';`.",
+    "3. Register the new table in `drizzle/schema/_registry.ts` - add import and registry entry following existing patterns.",
+    "4. Update `lib/modules/gate.ts` - add a new function `checkFeatureOverride(tenantId: string, featureKey: string)` that queries `tenantFeatureOverrides` to check if super admin has explicitly enabled/disabled a feature for a tenant. Modify `requireModule()` to also check this table before the plan-gate. If an override with enabled=false exists, block access even if plan allows it. If enabled=true, allow access even if plan blocks it.",
+    "5. Create API route `app/api/superadmin/user-directory/route.ts` with GET handler that returns ALL users across ALL tenants with: id, email, fullName, phone, lastTenantId, emailVerified, isSuperAdmin, createdAt, and their tenant memberships with tenant name/plan/status. Support query params: ?q (search email/name/phone), ?tenant_id (filter by tenant), ?page and ?limit for pagination. Follow the existing auth pattern from app/api/superadmin/users/route.ts.",
+    "6. Create API route `app/api/superadmin/feature-control/route.ts` with: GET - list all tenants with their feature overrides (join tenants + tenantFeatureOverrides), PATCH - create/update a feature override for a tenant (body: { tenant_id, feature_key, enabled, reason? }). Use zod validation.",
+    "7. Create API route `app/api/superadmin/email-blast/route.ts` with POST handler that accepts { subject, html_body, text_body?, target: 'all' | 'tenant' | 'plan', target_value?: string (tenant_id or plan slug), filter_verified_only?: boolean }. It should query the target users, then call sendEmail from lib/email/service.ts for each (batch with Promise.allSettled in chunks of 10). Return { sent: number, failed: number }. Require super admin auth.",
+    "8. Add a predefined list of controllable features as a constant in a new file `lib/modules/feature-keys.ts`: CONTROLLABLE_FEATURES array with objects { key: string, label: string, description: string, category: string }. Include: 'telegram', 'email-sequences', 'ai-assistant', 'whatsapp', 'lead-warming', 'analytics-pro', 'automation-pro', 'forms-builder', 'compliance-suite'. The feature-control API should reference this list."
+  ],
+  "acceptance_criteria": [
+    "New schema file drizzle/schema/feature-overrides.ts exports tenantFeatureOverrides table",
+    "drizzle/schema/index.ts re-exports the new table",
+    "lib/modules/gate.ts requireModule() checks tenantFeatureOverrides before plan-gate",
+    "GET /api/superadmin/user-directory returns users with memberships, supports ?q search and ?tenant_id filter",
+    "GET /api/superadmin/feature-control returns tenants with their overrides",
+    "PATCH /api/superadmin/feature-control creates/updates feature overrides",
+    "POST /api/superadmin/email-blast sends emails to filtered user groups",
+    "All new API routes require super admin authentication",
+    "npm run build passes without TypeScript errors"
+  ],
+  "verification": [
+    "Run `npm run build` and confirm zero TypeScript errors",
+    "Run `npm test` and confirm existing tests still pass"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

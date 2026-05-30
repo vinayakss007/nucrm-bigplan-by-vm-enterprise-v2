@@ -1,0 +1,7 @@
+{
+  "task_id": "task-superadmin-feature-control",
+  "task_description": "Build super admin granular feature control system: user directory with contact details, per-tenant feature toggle matrix, Telegram access gating, email blast capability, and module gate integration",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}

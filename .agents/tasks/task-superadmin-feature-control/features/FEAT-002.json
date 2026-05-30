@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Build the super admin UI pages: user-directory page with full contact details/search/export, feature-control page with per-tenant toggle matrix, and add new sidebar navigation entries. Also update FULL_ARCHITECTURE_MAP.md.",
+  "status": "pending",
+  "steps": [
+    "1. Create `app/superadmin/user-directory/page.tsx` - a 'use client' page that: fetches from /api/superadmin/user-directory, shows a table with columns: Avatar+Name, Email, Phone, Tenant(s), Plan, Last Login, Status. Include a search bar (debounced), tenant filter dropdown, and an 'Export CSV' button that downloads all visible users as CSV. Follow the UI pattern from app/superadmin/users/page.tsx (dark theme with border-white/10 styling, Lucide icons).",
+    "2. Create `app/superadmin/feature-control/page.tsx` - a 'use client' page that: fetches tenants and their feature overrides from /api/superadmin/feature-control. Display as a matrix/grid: rows are tenants, columns are features from CONTROLLABLE_FEATURES. Each cell is a toggle switch. Toggling calls PATCH /api/superadmin/feature-control. Include a prominent section for 'Telegram Access' with a lock icon showing it's gated. Show tenant plan badge next to each tenant name. Add a filter to show only specific plans.",
+    "3. Update `components/superadmin/sidebar.tsx` - add two new nav items: { href: '/superadmin/user-directory', label: 'User Directory', icon: Users, keywords: 'contacts emails phone directory' } in the 'business' section, and { href: '/superadmin/feature-control', label: 'Feature Control', icon: Zap, keywords: 'features toggle telegram gate access' } in the 'config' section. Import Zap from lucide-react if not already.",
+    "4. Create loading states: `app/superadmin/user-directory/loading.tsx` and `app/superadmin/feature-control/loading.tsx` - simple skeleton loading components following the pattern of other superadmin pages.",
+    "5. Update `FULL_ARCHITECTURE_MAP.md` - add a new section '## 2.X Super Admin Feature Control' documenting: the tenant_feature_overrides table, the user-directory API, the feature-control API, the email-blast API, and how the module gate system now checks overrides. Add the new pages to the Superadmin Pages section."
+  ],
+  "acceptance_criteria": [
+    "app/superadmin/user-directory/page.tsx renders a searchable, filterable user table with email, phone, tenant info",
+    "app/superadmin/feature-control/page.tsx renders a tenant-feature toggle matrix",
+    "Sidebar includes links to both new pages",
+    "Loading states exist for both new pages",
+    "FULL_ARCHITECTURE_MAP.md is updated with new super admin capabilities",
+    "npm run build passes without TypeScript errors"
+  ],
+  "verification": [
+    "Run `npm run build` and confirm zero TypeScript errors",
+    "Run `npm test` and confirm existing tests still pass"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

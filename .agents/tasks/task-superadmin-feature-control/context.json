@@ -1,0 +1,40 @@
+{
+  "project_type": "Next.js 16 multi-tenant SaaS CRM with TypeScript, Drizzle ORM, PostgreSQL",
+  "language": "TypeScript",
+  "build_system": "npm with Next.js build, drizzle-kit for schema/migrations",
+  "test_framework": "Vitest for unit/integration, Playwright for E2E",
+  "build_command": "npm run build",
+  "test_command": "npm test",
+  "verification_instructions": "1. Run `npm run build` to verify TypeScript compiles. 2. Run `npm test` to run vitest suite.",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "npm install, then npm run build to verify",
+  "environment_constraints": "OPEN_INTERNET - full network access. Node.js 22 available.",
+  "contribution_requirements": "Strict TypeScript. Every API route uses requireAuth + isSuperAdmin check. Tables use utils.pk(), utils.lifecycle(). Schemas export from drizzle/schema/index.ts. New pages need loading.tsx/error.tsx. Use zod for validation.",
+  "key_patterns": {
+    "api_auth_pattern": "const ctx = await requireAuth(request); if (ctx instanceof NextResponse) return ctx; if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });",
+    "schema_pattern": "pgTable with utils.pk(), utils.lifecycle(), utils.tenantId() for tenant-scoped, plus index helpers",
+    "module_gate": "lib/modules/gate.ts has requireModule() and requireFeature() that check forceEnabled (super admin override) before checking plan access",
+    "sidebar_nav": "components/superadmin/sidebar.tsx SECTIONS array defines nav items",
+    "email_service": "lib/email/service.ts exports sendEmail() that uses Resend API or SMTP",
+    "existing_users_api": "app/api/superadmin/users/route.ts already lists users with memberships but limited fields",
+    "existing_modules_api": "app/api/superadmin/modules/ and /tenants/[id]/modules/ handle module force-enable per tenant"
+  },
+  "relevant_files": [
+    "lib/modules/gate.ts",
+    "lib/modules/registry.ts",
+    "drizzle/schema/modules.ts",
+    "drizzle/schema/core.ts",
+    "drizzle/schema/infra.ts",
+    "drizzle/schema/index.ts",
+    "drizzle/schema/_registry.ts",
+    "app/api/superadmin/users/route.ts",
+    "app/api/superadmin/announcements/route.ts",
+    "app/superadmin/users/page.tsx",
+    "app/superadmin/modules/page.tsx",
+    "app/superadmin/access-control/page.tsx",
+    "components/superadmin/sidebar.tsx",
+    "lib/email/service.ts",
+    "FULL_ARCHITECTURE_MAP.md"
+  ],
+  "directory_structure": "app/ = Next.js App Router (api/, superadmin/, tenant/, portal/), lib/ = core logic, drizzle/schema/ = DB tables, components/ = UI, tests/ = vitest/playwright"
+}
