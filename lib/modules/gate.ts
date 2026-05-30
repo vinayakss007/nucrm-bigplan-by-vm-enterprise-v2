@@ -17,12 +17,13 @@ import { eq, and, isNull } from 'drizzle-orm';
 
 /**
  * Check if a super admin has set an explicit feature override for a tenant.
- * Returns { found: true, enabled: boolean } if an override exists, or { found: false } if not.
+ * Returns { found: true, enabled: boolean } if an override exists,
+ * { found: false } if no override, or { found: false, error: true } on DB failure.
  */
 export async function checkFeatureOverride(
   tenantId: string,
   featureKey: string
-): Promise<{ found: boolean; enabled?: boolean }> {
+): Promise<{ found: boolean; enabled?: boolean; error?: boolean }> {
   try {
     const override = await db.query.tenantFeatureOverrides.findFirst({
       where: and(
@@ -40,7 +41,7 @@ export async function checkFeatureOverride(
     return { found: true, enabled: override.enabled };
   } catch (error) {
     console.error('[gate.checkFeatureOverride] Error:', error);
-    return { found: false };
+    return { found: false, error: true };
   }
 }
 
@@ -55,6 +56,12 @@ export async function requireModule(
   try {
     // Check if super admin has set a feature override for this module
     const override = await checkFeatureOverride(tenantId, moduleId);
+    if (override.error) {
+      return NextResponse.json(
+        { error: 'Failed to verify feature override status' },
+        { status: 500 }
+      );
+    }
     if (override.found) {
       if (override.enabled) {
         return null; // Explicitly allowed by platform admin
@@ -124,6 +131,12 @@ export async function requireFeature(
   try {
     // Check super admin feature override first
     const override = await checkFeatureOverride(tenantId, featureKey);
+    if (override.error) {
+      return NextResponse.json(
+        { error: 'Failed to verify feature override status' },
+        { status: 500 }
+      );
+    }
     if (override.found) {
       if (override.enabled) {
         return null; // Explicitly allowed by platform admin

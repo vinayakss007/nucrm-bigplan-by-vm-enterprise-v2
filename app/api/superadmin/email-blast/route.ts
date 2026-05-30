@@ -3,10 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users, tenantMembers, tenants } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { sendEmail } from '@/lib/email/service';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
+
+const MAX_RECIPIENTS = 500;
 
 const emailBlastSchema = z.object({
   subject: z.string().min(1, 'Subject is required'),
@@ -58,9 +61,12 @@ export async function POST(request: NextRequest) {
         })
         .from(users)
         .where(
-          filter_verified_only
-            ? eq(users.emailVerified, true)
-            : undefined
+          and(
+            isNull(users.deletedAt),
+            filter_verified_only
+              ? eq(users.emailVerified, true)
+              : undefined
+          )
         );
 
       targetUsers = await query;
@@ -74,6 +80,7 @@ export async function POST(request: NextRequest) {
         .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
         .where(
           and(
+            isNull(users.deletedAt),
             eq(tenantMembers.tenantId, target_value!),
             eq(tenantMembers.status, 'active'),
             filter_verified_only ? eq(users.emailVerified, true) : undefined
@@ -90,6 +97,7 @@ export async function POST(request: NextRequest) {
         .innerJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
         .where(
           and(
+            isNull(users.deletedAt),
             eq(tenants.planId, target_value!),
             eq(tenantMembers.status, 'active'),
             filter_verified_only ? eq(users.emailVerified, true) : undefined
@@ -103,6 +111,16 @@ export async function POST(request: NextRequest) {
         failed: 0,
         total: 0,
       });
+    }
+
+    // Enforce recipient cap
+    if (targetUsers.length > MAX_RECIPIENTS) {
+      return NextResponse.json(
+        {
+          error: `Recipient count (${targetUsers.length}) exceeds the maximum of ${MAX_RECIPIENTS} per request. Please use a more specific filter to narrow the audience.`,
+        },
+        { status: 400 }
+      );
     }
 
     // Send emails in batches of 10
@@ -131,6 +149,23 @@ export async function POST(request: NextRequest) {
         }
       }
     }
+
+    // Write audit trail
+    await logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email ?? 'unknown',
+      action: 'data.exported',
+      targetType: 'email_blast',
+      metadata: {
+        subject,
+        target,
+        target_value: target_value ?? null,
+        filter_verified_only: filter_verified_only ?? false,
+        recipient_count: targetUsers.length,
+        sent,
+        failed,
+      },
+    });
 
     return NextResponse.json({
       sent,

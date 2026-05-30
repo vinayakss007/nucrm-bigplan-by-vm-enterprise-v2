@@ -3,7 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users, tenantMembers, tenants } from '@/drizzle/schema';
-import { eq, and, sql, ilike, desc, or } from 'drizzle-orm';
+import { eq, and, sql, ilike, desc, or, isNull } from 'drizzle-orm';
+
+/** Escape SQL LIKE wildcards so user input is treated as literal text */
+const escapeLike = (s: string) => s.replace(/%/g, '\\%').replace(/_/g, '\\_');
 
 /**
  * Super Admin User Directory API
@@ -25,12 +28,17 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
 
     const filters = [];
+
+    // Always exclude soft-deleted users
+    filters.push(isNull(users.deletedAt));
+
     if (q) {
+      const escaped = escapeLike(q);
       filters.push(
         or(
-          ilike(users.email, `%${q}%`),
-          ilike(users.fullName, `%${q}%`),
-          ilike(users.phone, `%${q}%`)
+          ilike(users.email, `%${escaped}%`),
+          ilike(users.fullName, `%${escaped}%`),
+          ilike(users.phone, `%${escaped}%`)
         )
       );
     }
@@ -44,7 +52,7 @@ export async function GET(request: NextRequest) {
       .select({ count: sql<number>`count(DISTINCT ${users.id})` })
       .from(users)
       .leftJoin(tenantMembers, and(eq(tenantMembers.userId, users.id), eq(tenantMembers.status, 'active')))
-      .where(filters.length > 0 ? and(...filters) : undefined);
+      .where(and(...filters));
 
     const total = Number(countResult[0]?.count ?? 0);
 
@@ -73,7 +81,7 @@ export async function GET(request: NextRequest) {
       .from(users)
       .leftJoin(tenantMembers, and(eq(tenantMembers.userId, users.id), eq(tenantMembers.status, 'active')))
       .leftJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
-      .where(filters.length > 0 ? and(...filters) : undefined)
+      .where(and(...filters))
       .groupBy(users.id)
       .orderBy(desc(users.createdAt))
       .limit(limit)

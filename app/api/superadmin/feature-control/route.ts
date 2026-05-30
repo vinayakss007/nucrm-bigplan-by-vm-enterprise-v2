@@ -3,16 +3,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, tenantFeatureOverrides } from '@/drizzle/schema';
-import { eq, sql, desc, isNull } from 'drizzle-orm';
+import { eq, sql, desc, isNull, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { CONTROLLABLE_FEATURES } from '@/lib/modules/feature-keys';
 
+const VALID_FEATURE_KEYS = CONTROLLABLE_FEATURES.map(f => f.key);
+
 const featureOverrideSchema = z.object({
   tenant_id: z.string().uuid(),
-  feature_key: z.string().min(1),
+  feature_key: z.string().min(1).refine(
+    (key) => VALID_FEATURE_KEYS.includes(key as typeof VALID_FEATURE_KEYS[number]),
+    { message: 'Invalid feature key. Must be one of the controllable features.' }
+  ),
   enabled: z.boolean(),
   reason: z.string().optional(),
+});
+
+const deleteOverrideSchema = z.object({
+  tenant_id: z.string().uuid(),
+  feature_key: z.string().min(1),
 });
 
 /**
@@ -96,6 +106,38 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ ok: true, data: row });
   } catch (err: unknown) {
     console.error('[superadmin/feature-control PATCH]', err);
+    return apiError(err);
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const ctx = await requireAuth(request);
+    if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    const rawBody = await request.json();
+    const validated = validateBody(deleteOverrideSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const { tenant_id, feature_key } = validated.data;
+
+    const deleted = await db
+      .delete(tenantFeatureOverrides)
+      .where(
+        and(
+          eq(tenantFeatureOverrides.tenantId, tenant_id),
+          eq(tenantFeatureOverrides.featureKey, feature_key)
+        )
+      )
+      .returning();
+
+    if (deleted.length === 0) {
+      return NextResponse.json({ error: 'Override not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true, deleted: deleted[0] });
+  } catch (err: unknown) {
+    console.error('[superadmin/feature-control DELETE]', err);
     return apiError(err);
   }
 }
