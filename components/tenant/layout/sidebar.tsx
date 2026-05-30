@@ -276,16 +276,16 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
           const active = isActive(href, exact);
           return (
             <Link key={href} href={href} title={label}
-              className={cn('w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200',
-                active ? 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400 shadow-sm shadow-violet-500/20' : 'text-foreground/80 hover:scale-110 hover:bg-accent hover:text-foreground')}>
-              <Icon className="w-[1.125rem] h-[1.125rem]" />
+          className={cn('w-9 h-9 flex items-center justify-center rounded-lg transition-all duration-200',
+                 active ? 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400 shadow-sm shadow-violet-500/20' : 'text-foreground/80 hover:scale-110 hover:bg-accent hover:text-foreground')}>
+              <Icon className="w-5 h-5" />
             </Link>
           );
         })}
         <div className="flex-1" />
         {isSuperAdmin && (
-          <Link href="/superadmin/dashboard" title="Super Admin" className="w-8 h-8 flex items-center justify-center rounded-lg text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors">
-            <Crown className="w-[1.125rem] h-[1.125rem]" />
+          <Link href="/superadmin/dashboard" title="Super Admin" className="w-9 h-9 flex items-center justify-center rounded-lg text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors">
+            <Crown className="w-5 h-5" />
           </Link>
         )}
       </aside>
@@ -299,14 +299,14 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
     return (
       <div key={href} className="group relative flex items-stretch">
         <Link href={href} onClick={onMobileClose}
-          className={cn('flex-1 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-bold transition-all duration-200',
+          className={cn('flex-1 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[15px] font-extrabold transition-all duration-200',
             active
               ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 shadow-sm shadow-violet-500/20'
               : 'text-foreground hover:scale-[1.02] hover:bg-accent hover:shadow-sm hover:shadow-violet-500/10')}>
-          <Icon className={cn('w-[1.125rem] h-[1.125rem] shrink-0', active && 'text-violet-600 dark:text-violet-400')} />
+          <Icon className={cn('w-5 h-5 shrink-0', active && 'text-violet-600 dark:text-violet-400')} />
           <span className="flex-1 truncate">{label}</span>
           {shortcut && !isPinned && (
-            <span className="text-[0.625rem] text-muted-foreground/70 group-hover:text-muted-foreground/80 transition-colors">
+            <span className="text-xs font-bold text-foreground/60 group-hover:text-foreground/80 transition-colors">
               {shortcut}
             </span>
           )}
@@ -332,11 +332,11 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
     <aside className="tenant-sidebar w-[14.375rem] shrink-0 h-full flex flex-col transition-all duration-300 border-r border-border">
       {/* Brand */}
       <div className="h-12 flex items-center gap-2.5 px-3 border-b border-border shrink-0">
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm" style={{ background: color }}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm" style={{ background: color }}>
           {tenant?.name?.charAt(0)?.toUpperCase() ?? 'W'}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-base font-bold truncate leading-tight">{tenant?.name ?? 'Workspace'}</p>
+          <p className="text-lg font-extrabold truncate leading-tight">{tenant?.name ?? 'Workspace'}</p>
         </div>
         {onToggle && (
           <button onClick={onToggle} className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md hover:bg-accent text-muted-foreground transition-colors" aria-label="Collapse sidebar">
@@ -348,13 +348,13 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
       {/* Inline filter */}
       <div className="px-2 pt-2 shrink-0">
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground/60" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/60" />
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Filter nav…"
             aria-label="Filter sidebar navigation"
-              className="w-full pl-8 pr-7 py-1.5 text-sm bg-muted/40 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:bg-background transition-colors"
+              className="w-full pl-8 pr-7 py-2 text-sm bg-muted/40 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:bg-background transition-colors"
           />
           {query && (
             <button onClick={() => setQuery('')} aria-label="Clear filter"
@@ -370,8 +370,8 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
         {/* Pinned shortcuts */}
         {pinnedItems.length > 0 && (
           <div className="mb-2">
-            <p className="px-2.5 py-1 text-[0.625rem] font-semibold text-amber-600/70 dark:text-amber-400/70 uppercase tracking-wider flex items-center gap-1.5">
-              <Star className="w-2.5 h-2.5 fill-current" /> Pinned
+            <p className="px-2.5 py-1 text-xs font-bold text-amber-600/80 dark:text-amber-400/80 uppercase tracking-wider flex items-center gap-1.5">
+              <Star className="w-3 h-3 fill-current" /> Pinned
             </p>
             {pinnedItems.map(navItem)}
             <div className="h-px bg-border my-2" />
@@ -398,7 +398,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
                 )}>
                 {!q && <ChevronDown className={cn('w-3 h-3 transition-transform', isOpen ? 'rotate-0' : '-rotate-90')} />}
                 <span className="flex-1 text-left">{section.label}</span>
-                <span className="text-xs text-foreground/60 font-semibold normal-case">{section.items.length}</span>
+                <span className="text-sm text-foreground/80 font-bold normal-case">{section.items.length}</span>
               </button>
               {isOpen && (
                 <div className="space-y-0.5 mt-0.5">
@@ -452,12 +452,12 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
       <div className="p-2 border-t border-border space-y-0.5 shrink-0">
         {isSuperAdmin && (
           <Link href="/superadmin/dashboard"
-            className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors">
-            <Crown className="w-3.5 h-3.5" />Super Admin
+            className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors">
+            <Crown className="w-4 h-4" />Super Admin
           </Link>
         )}
-        <div className="flex items-center gap-2 px-2.5 py-1 text-xs text-foreground/70">
-          <Command className="w-3 h-3" />K  Quick search
+        <div className="flex items-center gap-2 px-2.5 py-1 text-xs text-foreground/80 font-semibold">
+          <Command className="w-3.5 h-3.5" />K  Quick search
         </div>
       </div>
     </aside>

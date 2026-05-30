@@ -28,13 +28,13 @@ function StatCard({ icon: Icon, label, value, sub, color, href, loading }: any) 
     <div className="admin-card hover:bg-accent/20 transition-all group cursor-pointer">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-bold text-foreground/90 truncate">{label}</p>
-        <div className={cn('w-7 h-7 rounded-md flex items-center justify-center shrink-0', color)}>
-          <Icon className="w-3.5 h-3.5" />
+        <div className={cn('w-8 h-8 rounded-md flex items-center justify-center shrink-0', color)}>
+          <Icon className="w-4 h-4" />
         </div>
       </div>
       {loading
         ? <div className="h-8 w-28 rounded skeleton-shimmer mt-1" />
-        : <p className="text-3xl font-extrabold tracking-tight tabular-nums mt-1">{value}</p>}
+        : <p className="text-4xl font-black tracking-tight tabular-nums mt-1">{value}</p>}
       {sub && <p className="text-sm font-medium text-foreground/70 mt-0.5">{sub}</p>}
     </div>
   );

@@ -374,7 +374,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
           <h3 className="font-semibold">New Deal</h3>
           <form onSubmit={addDeal} className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Title *</label>
+              <label className="block text-sm font-bold text-foreground/80 mb-1">Title *</label>
               <input
                 value={form.title}
                 onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))}
@@ -384,7 +384,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Value *</label>
+              <label className="block text-sm font-bold text-foreground/80 mb-1">Value *</label>
               <input
                 type="number"
                 value={form.amount}
@@ -395,7 +395,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Stage</label>
+              <label className="block text-sm font-bold text-foreground/80 mb-1">Stage</label>
               <select
                 value={form.stage_name}
                 onChange={(e) => setForm(f => ({ ...f, stage_name: e.target.value }))}
@@ -405,7 +405,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Close Date</label>
+              <label className="block text-sm font-bold text-foreground/80 mb-1">Close Date</label>
               <input
                 type="date"
                 value={form.close_date}
@@ -414,7 +414,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Contact</label>
+              <label className="block text-sm font-bold text-foreground/80 mb-1">Contact</label>
               <select
                 value={form.contact_id}
                 onChange={(e) => setForm(f => ({ ...f, contact_id: e.target.value }))}
@@ -427,7 +427,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Company</label>
+              <label className="block text-sm font-bold text-foreground/80 mb-1">Company</label>
               <select
                 value={form.company_id}
                 onChange={(e) => setForm(f => ({ ...f, company_id: e.target.value }))}
@@ -440,7 +440,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Assigned To</label>
+              <label className="block text-sm font-bold text-foreground/80 mb-1">Assigned To</label>
               <select
                 value={form.assigned_to}
                 onChange={(e) => setForm(f => ({ ...f, assigned_to: e.target.value }))}
@@ -453,7 +453,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
               </select>
             </div>
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Description</label>
+              <label className="block text-sm font-bold text-foreground/80 mb-1">Description</label>
               <textarea
                 value={form.description}
                 onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}

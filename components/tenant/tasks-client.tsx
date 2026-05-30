@@ -135,19 +135,19 @@ export default function TenantTasksClient({ initialTasks, contacts, deals, teamM
           <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">New Task</h3><button type="button" onClick={()=>setShowAdd(false)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button></div>
           <input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} required placeholder="Task title..." className={inp} autoFocus />
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div><label className="block text-[10px] font-medium text-muted-foreground mb-1">Priority</label>
+            <div><label className="block text-sm font-bold text-foreground/80 mb-1">Priority</label>
               <select value={form.priority} onChange={e=>setForm(f=>({...f,priority:e.target.value}))} className={inp}>
                 {Object.entries(PRIORITY_CFG).map(([id,{label}])=><option key={id} value={id}>{label}</option>)}
               </select>
             </div>
-            <div><label className="block text-[10px] font-medium text-muted-foreground mb-1">Due Date</label><input type="date" value={form.due_date} onChange={e=>setForm(f=>({...f,due_date:e.target.value}))} className={inp} /></div>
-            <div><label className="block text-[10px] font-medium text-muted-foreground mb-1">Contact</label>
+            <div><label className="block text-sm font-bold text-foreground/80 mb-1">Due Date</label><input type="date" value={form.due_date} onChange={e=>setForm(f=>({...f,due_date:e.target.value}))} className={inp} /></div>
+            <div><label className="block text-sm font-bold text-foreground/80 mb-1">Contact</label>
               <select value={form.contact_id} onChange={e=>setForm(f=>({...f,contact_id:e.target.value}))} className={inp}>
                 <option value="">None</option>
                 {contacts.map((c:any)=><option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>)}
               </select>
             </div>
-            <div><label className="block text-[10px] font-medium text-muted-foreground mb-1">Assigned To</label>
+            <div><label className="block text-sm font-bold text-foreground/80 mb-1">Assigned To</label>
               <select value={form.assigned_to} onChange={e=>setForm(f=>({...f,assigned_to:e.target.value}))} className={inp}>
                 <option value="">Unassigned</option>
                 {teamMembers.map((m:any)=><option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
@@ -200,7 +200,7 @@ export default function TenantTasksClient({ initialTasks, contacts, deals, teamM
                 <p className={cn('text-sm font-medium', t.completed && 'line-through text-muted-foreground')}>{t.title}</p>
                 {t.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{t.description}</p>}
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full', p.badge)}>{p.label}</span>
+                  <span className={cn('text-xs font-bold px-1.5 py-0.5 rounded-full', p.badge)}>{p.label}</span>
                   {t.assignee_name && <span className="text-xs text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" />{t.assignee_name}</span>}
                   {(t.first_name||t.last_name) && <span className="text-xs text-muted-foreground">{t.first_name} {t.last_name}</span>}
                   {t.deal_title && <span className="text-xs text-muted-foreground">{t.deal_title}</span>}
