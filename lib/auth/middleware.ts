@@ -22,6 +22,7 @@ export interface AuthContext {
   permissions: Record<string, boolean>;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  superAdminRole?: string;
   noWorkspace?: boolean; // FIX CRITICAL-07: Flag for superadmin without workspace
   user?: {
     id: string;
@@ -172,6 +173,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
       email: users.email,
       fullName: users.fullName,
       isSuperAdmin: users.isSuperAdmin,
+      superAdminRole: users.superAdminRole,
       lastTenantId: users.lastTenantId,
       tenantId: tenantMembers.tenantId,
       roleSlug: tenantMembers.roleSlug,
@@ -205,6 +207,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
           permissions: { all: true }, 
           isAdmin: true, 
           isSuperAdmin: true,
+          superAdminRole: userWithMember.superAdminRole || 'super_admin_full',
           noWorkspace: true,
         };
         await setTenantContext(ctx.tenantId, ctx.userId, tx);
@@ -226,6 +229,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
       roleSlug: userWithMember.roleSlug || '', permissions: perms,
       isAdmin: userWithMember.roleSlug === 'admin' || userWithMember.isSuperAdmin === true,
       isSuperAdmin: userWithMember.isSuperAdmin || false,
+      ...(userWithMember.isSuperAdmin ? { superAdminRole: userWithMember.superAdminRole || 'super_admin_full' } : {}),
     };
 
     await requestContext.cache(tokenHash, { ...ctx, cachedAt: Date.now() });

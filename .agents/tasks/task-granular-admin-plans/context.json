@@ -1,0 +1,33 @@
+{
+  "project_type": "Next.js 16 multi-tenant SaaS CRM with TypeScript",
+  "language": "TypeScript",
+  "build_system": "npm with next build; Drizzle ORM for database schema",
+  "test_framework": "vitest for unit tests, playwright for e2e; many tests excluded in vitest.config.ts",
+  "build_command": "npm run build",
+  "test_command": "npx vitest run",
+  "verification_instructions": "Run npx vitest run to verify unit tests pass. Run npx tsc --noEmit for type checking.",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "npm install && copy .env.example to .env.local",
+  "environment_constraints": "OPEN_INTERNET network mode. Node 22 available. No running PostgreSQL database for integration tests - unit tests mock db calls.",
+  "contribution_requirements": "Follow existing code patterns. Use Drizzle ORM for schema. Use radix-ui and lucide-react for UI. API routes use requireAuth middleware with isSuperAdmin check.",
+  "key_patterns": "Super admin auth: requireAuth(request) + ctx.isSuperAdmin check. Plans stored in drizzle/schema/infra.ts as 'plans' table. Permissions defined in lib/permissions/definitions.ts. Module gating via lib/modules/gate.ts and registry.ts with pricing per plan. UI pages are client components using fetch to internal APIs. FULL_ARCHITECTURE_MAP.md documents everything.",
+  "relevant_files": [
+    "lib/permissions/definitions.ts",
+    "lib/auth/middleware.ts",
+    "lib/modules/gate.ts",
+    "lib/modules/registry.ts",
+    "lib/usage/middleware.ts",
+    "drizzle/schema/core.ts",
+    "drizzle/schema/infra.ts",
+    "drizzle/schema/usage.ts",
+    "app/api/superadmin/users/route.ts",
+    "app/api/superadmin/plans/route.ts",
+    "app/api/superadmin/tenants/route.ts",
+    "app/superadmin/users/page.tsx",
+    "app/superadmin/billing/page.tsx",
+    "app/superadmin/settings/page.tsx",
+    "app/superadmin/layout.tsx",
+    "FULL_ARCHITECTURE_MAP.md"
+  ],
+  "directory_structure": "app/ - Next.js app router (api/, superadmin/, tenant/, auth/); lib/ - shared logic (auth/, modules/, permissions/, usage/); drizzle/ - DB schema and migrations; components/ - React components; tests/ - vitest unit tests"
+}

@@ -15,6 +15,8 @@ export interface PlanDefinition {
   maxUsers: number;
   maxContacts: number;
   maxDeals: number;
+  // Note: maxStorageGb is declared as number here for convenience, but the DB column
+  // is numeric(6,2). The seed endpoint converts this to string via .toString() before insert.
   maxStorageGb: number;
   maxAutomations: number;
   maxForms: number;
