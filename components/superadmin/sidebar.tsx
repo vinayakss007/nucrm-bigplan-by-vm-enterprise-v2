@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Building2, Users, CreditCard, BarChart3,
   Settings, LogOut, Crown, Activity, Heart,
   Database, AlertTriangle, MessageSquare, Megaphone, TrendingUp, Gauge, Zap,
-  X, Menu, RotateCcw, ChevronDown, Search,
+  X, Menu, RotateCcw, ChevronDown, Search, Shield,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -42,9 +42,10 @@ const SECTIONS: NavSection[] = [
   },
   {
     id: 'config', label: 'Configure', defaultOpen: false, items: [
-      { href: '/superadmin/analytics',  label: 'Analytics',  icon: BarChart3,    keywords: 'analytics charts' },
-      { href: '/superadmin/modules',    label: 'Modules',    icon: Zap,          keywords: 'modules features' },
-      { href: '/superadmin/settings',   label: 'Settings',   icon: Settings,     keywords: 'platform settings' },
+      { href: '/superadmin/analytics',       label: 'Analytics',       icon: BarChart3,    keywords: 'analytics charts' },
+      { href: '/superadmin/modules',         label: 'Modules',         icon: Zap,          keywords: 'modules features' },
+      { href: '/superadmin/access-control',  label: 'Access Control',  icon: Shield,       keywords: 'permissions roles admin' },
+      { href: '/superadmin/settings',        label: 'Settings',        icon: Settings,     keywords: 'platform settings' },
     ],
   },
 ];

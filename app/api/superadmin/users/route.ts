@@ -119,9 +119,39 @@ export async function PATCH(_request: NextRequest) {
 }
 
 // DELETE is permanently blocked
-export async function DELETE(_request: NextRequest) {
-  return NextResponse.json({
-    error: 'User deletion is disabled. Contact platform support if needed.'
-  }, { status: 403 });
+export async function DELETE(request: NextRequest) {
+  try {
+    const ctx = await requireAuth(request);
+    if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    const { id } = await request.json();
+    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+
+    // Check if the target user is a super admin
+    const [targetUser] = await db
+      .select({ id: users.id, isSuperAdmin: users.isSuperAdmin })
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
+
+    if (!targetUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    if (targetUser.isSuperAdmin) {
+      return NextResponse.json({
+        error: 'Super admin users cannot be deleted'
+      }, { status: 403 });
+    }
+
+    // For regular users, deletion remains disabled
+    return NextResponse.json({
+      error: 'User deletion is disabled. Contact platform support if needed.'
+    }, { status: 403 });
+  } catch (err: any) {
+    console.error('[superadmin/users DELETE]', err);
+    return apiError(err);
+  }
 }
 

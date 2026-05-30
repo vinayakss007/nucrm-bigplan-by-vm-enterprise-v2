@@ -1,10 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { CreditCard, Plus, Edit, Trash2, CheckCircle, X, Save, Loader2, Users, Database, Zap, Crown } from 'lucide-react';
+import { CreditCard, Plus, Edit, Trash2, CheckCircle, X, Save, Loader2, Users, Database, Zap, Crown, RefreshCw } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { ALL_PLAN_FEATURES } from '@/lib/plans/plan-definitions';
 
-const FEATURE_OPTIONS = ['contacts','deals','tasks','automations','forms','reports','sequences','products','quotes','ai','api_access','custom_roles','custom_domain','sso','audit_logs','dedicated_support'];
+const FEATURE_OPTIONS = ALL_PLAN_FEATURES;
 
 function PlanForm({ plan, onSave, onClose }: { plan?: any; onSave: () => void; onClose: () => void }) {
   const [f, setF] = useState({
@@ -119,9 +120,19 @@ export default function BillingPage() {
           <h1 className="text-lg font-bold text-white flex items-center gap-2"><CreditCard className="w-5 h-5 text-violet-400"/>Plans & Billing</h1>
           <p className="text-xs text-white/30">Manage subscription plans and features</p>
         </div>
-        <button onClick={()=>setCreating(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-colors">
-          <Plus className="w-4 h-4"/>New Plan
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={async () => {
+            const res = await fetch('/api/superadmin/plans/seed', { method: 'POST' });
+            const d = await res.json();
+            if (res.ok) { toast.success(d.message || 'Plans seeded'); load(); }
+            else toast.error(d.error || 'Failed to seed plans');
+          }} className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 hover:bg-white/5 text-white/50 hover:text-white text-sm font-semibold transition-colors">
+            <RefreshCw className="w-4 h-4"/>Seed Default Plans
+          </button>
+          <button onClick={()=>setCreating(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-colors">
+            <Plus className="w-4 h-4"/>New Plan
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -140,6 +151,9 @@ export default function BillingPage() {
                     <div className="flex items-center gap-2 mb-1">
                       <Icon className={cn('w-4 h-4', PLAN_COLORS[plan.id]||'text-white/40')}/>
                       <p className="font-bold text-white capitalize">{plan.name}</p>
+                      {plan.id === 'enterprise' && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">ENFORCED</span>
+                      )}
                     </div>
                     <p className={cn('text-xl font-bold', PLAN_COLORS[plan.id]||'text-white/40')}>
                       {plan.price_monthly>0?`$${plan.price_monthly}/mo`:'Free'}
