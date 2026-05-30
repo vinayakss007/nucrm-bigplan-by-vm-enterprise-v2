@@ -12,8 +12,37 @@
  */
 import { NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
-import { modules, tenantModules } from '@/drizzle/schema/modules';
-import { eq, and } from 'drizzle-orm';
+import { modules, tenantModules, tenantFeatureOverrides } from '@/drizzle/schema';
+import { eq, and, isNull } from 'drizzle-orm';
+
+/**
+ * Check if a super admin has set an explicit feature override for a tenant.
+ * Returns { found: true, enabled: boolean } if an override exists, or { found: false } if not.
+ */
+export async function checkFeatureOverride(
+  tenantId: string,
+  featureKey: string
+): Promise<{ found: boolean; enabled?: boolean }> {
+  try {
+    const override = await db.query.tenantFeatureOverrides.findFirst({
+      where: and(
+        eq(tenantFeatureOverrides.tenantId, tenantId),
+        eq(tenantFeatureOverrides.featureKey, featureKey),
+        isNull(tenantFeatureOverrides.deletedAt)
+      ),
+      columns: { enabled: true },
+    });
+
+    if (!override) {
+      return { found: false };
+    }
+
+    return { found: true, enabled: override.enabled };
+  } catch (error) {
+    console.error('[gate.checkFeatureOverride] Error:', error);
+    return { found: false };
+  }
+}
 
 /**
  * Check if a tenant has access to a module.
@@ -24,6 +53,18 @@ export async function requireModule(
   moduleId: string
 ): Promise<NextResponse | null> {
   try {
+    // Check if super admin has set a feature override for this module
+    const override = await checkFeatureOverride(tenantId, moduleId);
+    if (override.found) {
+      if (override.enabled) {
+        return null; // Explicitly allowed by platform admin
+      }
+      return NextResponse.json(
+        { error: 'Feature disabled by platform administrator' },
+        { status: 403 }
+      );
+    }
+
     // Check if the module exists and is available in the registry
     const moduleRow = await db.query.modules.findFirst({
       where: eq(modules.id, moduleId),
@@ -81,6 +122,18 @@ export async function requireFeature(
   featureKey: string
 ): Promise<NextResponse | null> {
   try {
+    // Check super admin feature override first
+    const override = await checkFeatureOverride(tenantId, featureKey);
+    if (override.found) {
+      if (override.enabled) {
+        return null; // Explicitly allowed by platform admin
+      }
+      return NextResponse.json(
+        { error: 'Feature disabled by platform administrator' },
+        { status: 403 }
+      );
+    }
+
     const installation = await db.query.tenantModules.findFirst({
       where: and(
         eq(tenantModules.tenantId, tenantId),

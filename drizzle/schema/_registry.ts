@@ -268,6 +268,10 @@ import {
   aiDraftTemplates,
 } from './ai';
 
+import {
+  tenantFeatureOverrides,
+} from './feature-overrides';
+
 // =============================================================================
 // TABLE REGISTRY DEFINITION
 // =============================================================================
@@ -2711,6 +2715,21 @@ export const TABLE_REGISTRY = {
       description: 'Per-tenant Auto-Draft prompt templates (email / note / reply / call_prep)',
       isCore: false,
       indexes: ['idx_ai_draft_templates_slug', 'idx_ai_draft_templates_kind'],
+    },
+  },
+  tenantFeatureOverrides: {
+    table: tenantFeatureOverrides,
+    metadata: {
+      name: 'tenant_feature_overrides',
+      schemaGroup: 'core',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants', 'users'],
+      description: 'Super admin granular feature overrides per tenant',
+      isCore: true,
+      indexes: ['idx_tenant_feature_overrides_unique'],
     },
   },
 };
