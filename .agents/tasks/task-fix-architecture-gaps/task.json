@@ -1,0 +1,7 @@
+{
+  "task_id": "task-fix-architecture-gaps",
+  "task_description": "Fix all identified architecture gaps and issues from FULL_ARCHITECTURE_MAP.md section 6, then update the document to reflect resolved items. This includes: fixing duplicate route naming (super-admin vs superadmin), creating missing CRUD APIs (products, segments, price-books, service-categories), adding missing FK constraints in schema files, adding invoice uniqueness validation, and updating the architecture document.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003"],
+  "blocked_reason": null
+}

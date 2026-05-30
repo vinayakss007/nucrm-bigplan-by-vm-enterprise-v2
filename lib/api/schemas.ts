@@ -885,6 +885,39 @@ export const linkTaskSchema = z.object({
 });
 
 
+// ── Segment schemas ──
+export const createSegmentSchema = z.object({
+  name: requiredString.max(200),
+  description: z.string().trim().max(2000).nullable().optional(),
+  entity_type: z.enum(['contact', 'deal', 'company', 'lead']),
+  config: z.record(z.string(), z.unknown()).optional().default({}),
+});
+
+export const updateSegmentSchema = createSegmentSchema.partial();
+
+// ── Service Category schemas ──
+export const createServiceCategorySchema = z.object({
+  name: requiredString.max(200),
+  description: z.string().trim().max(2000).nullable().optional(),
+  color: z.string().trim().max(20).optional().default('#6366f1'),
+  icon: z.string().trim().max(50).nullable().optional(),
+  sort_order: z.coerce.number().int().min(0).optional().default(0),
+});
+
+export const updateServiceCategorySchema = createServiceCategorySchema.partial();
+
+// ── Price Book schemas ──
+export const createPriceBookSchema = z.object({
+  name: requiredString.max(200),
+  description: z.string().trim().max(2000).nullable().optional(),
+  currency: z.string().trim().max(3).optional().default('USD'),
+  is_active: z.boolean().optional().default(true),
+  valid_from: z.string().nullable().optional(),
+  valid_until: z.string().nullable().optional(),
+});
+
+export const updatePriceBookSchema = createPriceBookSchema.partial();
+
 // ── Type exports ──
 export type CreateContactInput = z.infer<typeof createContactSchema>;
 export type UpdateContactInput = z.infer<typeof updateContactSchema>;
@@ -959,3 +992,9 @@ export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export type CreateMilestoneInput = z.infer<typeof createMilestoneSchema>;
 export type LinkTaskInput = z.infer<typeof linkTaskSchema>;
+export type CreateSegmentInput = z.infer<typeof createSegmentSchema>;
+export type UpdateSegmentInput = z.infer<typeof updateSegmentSchema>;
+export type CreateServiceCategoryInput = z.infer<typeof createServiceCategorySchema>;
+export type UpdateServiceCategoryInput = z.infer<typeof updateServiceCategorySchema>;
+export type CreatePriceBookInput = z.infer<typeof createPriceBookSchema>;
+export type UpdatePriceBookInput = z.infer<typeof updatePriceBookSchema>;
