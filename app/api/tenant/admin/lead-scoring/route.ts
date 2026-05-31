@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       .select()
       .from(leadScoringRules)
       .where(and(eq(leadScoringRules.tenantId, ctx.tenantId), isNull(leadScoringRules.deletedAt)))
-      .orderBy(asc(leadScoringRules.sortOrder), desc(leadScoringRules.createdAt));
+      .orderBy(desc(leadScoringRules.weight), asc(leadScoringRules.sortOrder), desc(leadScoringRules.createdAt));
 
     return NextResponse.json({ rules: rows });
   } catch (err) {
@@ -41,15 +41,19 @@ export async function POST(req: NextRequest) {
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
-    if (!body.factor) return NextResponse.json({ error: 'factor required' }, { status: 400 });
+    const { factor, weight, condition, active, sortOrder } = body;
+
+    if (typeof factor !== 'string' || !factor.trim()) {
+      return NextResponse.json({ error: 'factor required' }, { status: 400 });
+    }
 
     const [row] = await db.insert(leadScoringRules).values({
       tenantId: ctx.tenantId,
-      factor: String(body.factor).trim().slice(0, 200),
-      weight: Number(body.weight) || 10,
-      condition: body.condition ? String(body.condition).slice(0, 1000) : null,
-      sortOrder: Number(body.sortOrder) || 0,
-      active: body.active !== false,
+      factor: factor.trim().slice(0, 500),
+      weight: typeof weight === 'number' ? weight : 10,
+      condition: typeof condition === 'string' ? condition.trim().slice(0, 1000) : null,
+      sortOrder: typeof sortOrder === 'number' ? sortOrder : 0,
+      active: active !== false,
       createdBy: ctx.userId,
       updatedBy: ctx.userId,
     }).returning();
@@ -57,7 +61,7 @@ export async function POST(req: NextRequest) {
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
       action: 'create_lead_scoring_rule', entityType: 'lead_scoring_rule',
-      entityId: row?.id, newData: { factor: row?.factor, weight: row?.weight },
+      entityId: row?.id, newData: { factor, weight },
     });
 
     return NextResponse.json({ rule: row });
@@ -82,7 +86,7 @@ export async function PATCH(req: NextRequest) {
 
     if (body.factor !== undefined) updateData.factor = String(body.factor).trim().slice(0, 200);
     if (body.weight !== undefined) updateData.weight = Number(body.weight);
-    if (body.condition !== undefined) updateData.condition = body.condition ? String(body.condition).slice(0, 1000) : null;
+    if (body.condition !== undefined) updateData.condition = body.condition ? String(body.condition).trim().slice(0, 1000) : null;
     if (body.sortOrder !== undefined) updateData.sortOrder = Number(body.sortOrder);
     if (body.active !== undefined) updateData.active = Boolean(body.active);
 

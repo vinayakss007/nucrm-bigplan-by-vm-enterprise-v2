@@ -121,12 +121,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     if (!prev) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+    const updateData: any = {
+      ...body,
+      updatedAt: new Date(),
+    };
+
+    if (body.stageId && prev.stageId !== body.stageId) {
+      updateData.stageEnteredAt = new Date();
+    }
+
     const [row] = await db
       .update(deals)
-      .set({
-        ...body,
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId)))
       .returning();
 

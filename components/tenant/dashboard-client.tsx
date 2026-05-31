@@ -25,17 +25,17 @@ function Skeleton({ className }: { className?: string }) {
 
 function StatCard({ icon: Icon, label, value, sub, color, href, loading }: any) {
   const content = (
-    <div className="admin-card hover:bg-accent/20 transition-all group cursor-pointer">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-bold text-foreground/90 truncate">{label}</p>
-        <div className={cn('w-8 h-8 rounded-md flex items-center justify-center shrink-0', color)}>
-          <Icon className="w-4 h-4" />
+    <div className="admin-card p-6 border-2 border-border/60 shadow-sm hover:shadow-md hover:border-primary/40 transition-all group cursor-pointer">
+      <div className="flex items-start justify-between mb-4">
+        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/80">{label}</p>
+        <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shadow-inner', color)}>
+          <Icon className="w-5 h-5" />
         </div>
       </div>
       {loading
-        ? <div className="h-8 w-28 rounded skeleton-shimmer mt-1" />
-        : <p className="text-4xl font-black tracking-tight tabular-nums mt-1">{value}</p>}
-      {sub && <p className="text-sm font-medium text-foreground/70 mt-0.5">{sub}</p>}
+        ? <div className="h-10 w-32 rounded-lg skeleton-shimmer mb-1" />
+        : <p className="text-4xl font-black tracking-tighter tabular-nums text-black dark:text-white">{value}</p>}
+      {sub && <p className="text-xs font-medium text-muted-foreground/70 mt-2">{sub}</p>}
     </div>
   );
   return href ? <Link href={href}>{content}</Link> : content;
@@ -49,7 +49,6 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Cache in sessionStorage — re-fetch every 3 minutes
     const CACHE_KEY = `dashboard_${tenantId}`;
     const CACHE_TTL = 3 * 60 * 1000;
     
@@ -115,17 +114,14 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
         </div>
       )}
 
-      {/* KPI row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-6 gap-3">
         <StatCard loading={loading} icon={Users}      label="Total Contacts"  value={data?.contactCount?.toLocaleString()} sub={`${data?.companyCount ?? '—'} companies`} color="bg-violet-50 dark:bg-violet-950/30 text-violet-600" href="/tenant/contacts"/>
         <StatCard loading={loading} icon={TrendingUp} label="Open Pipeline"   value={formatCurrency(data?.pipeline ?? 0)} sub={`${data?.openDealsCount ?? '—'} active deals`} color="bg-amber-50 dark:bg-amber-950/30 text-amber-600" href="/tenant/deals"/>
         <StatCard loading={loading} icon={DollarSign} label="Won This Month"  value={formatCurrency(data?.wonThisMonth ?? 0)} sub="Revenue closed" color="bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600" href="/tenant/deals"/>
         <StatCard loading={loading} icon={CheckSquare} label="Tasks Due Today" value={data?.tasksDueToday ?? '—'} sub={data?.overdueTasks ? `${data.overdueTasks} overdue` : 'None overdue'} color={`${(data?.overdueTasks ?? 0) > 0 ? 'bg-red-50 dark:bg-red-950/30 text-red-600' : 'bg-blue-50 dark:bg-blue-950/30 text-blue-600'}`} href="/tenant/tasks"/>
       </div>
 
-      {/* Main content: 2 col */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        {/* Activity feed */}
         <div className="lg:col-span-2 admin-card overflow-hidden no-pad">
           <div className="flex items-center justify-between px-3 py-2 border-b border-border">
             <p className="text-sm font-bold">Recent Activity</p>
@@ -155,9 +151,7 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
                 </div>}
         </div>
 
-        {/* Right column */}
         <div className="space-y-3">
-          {/* Tasks */}
           <div className="admin-card overflow-hidden no-pad">
             <div className="flex items-center justify-between px-3 py-2 border-b border-border">
               <p className="text-sm font-bold">Tasks</p>
@@ -184,7 +178,6 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
                   </div>}
           </div>
 
-          {/* Upcoming deals */}
           <div className="admin-card overflow-hidden no-pad">
             <div className="flex items-center justify-between px-3 py-2 border-b border-border">
               <p className="text-sm font-bold">Closing Soon</p>
@@ -209,7 +202,6 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
         </div>
       </div>
 
-      {/* Recent contacts */}
       <div className="admin-card overflow-hidden no-pad">
         <div className="flex items-center justify-between px-3 py-2 border-b border-border">
           <p className="text-sm font-bold">Recent Contacts</p>

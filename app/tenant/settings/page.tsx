@@ -218,13 +218,13 @@ function ItemRow({ item, status }: { item: SettingsItem; status?: StatusEntry })
 function HealthChip({ n, label, tone }: { n: number; label: string; tone: 'emerald' | 'amber' | 'slate' }) {
   if (n === 0 && tone === 'slate') return null;
   const colors = {
-    emerald: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border-emerald-200/60 dark:border-emerald-800/40',
-    amber:   'bg-amber-50   text-amber-700   dark:bg-amber-950/30   dark:text-amber-400   border-amber-200/60   dark:border-amber-800/40',
-    slate:   'bg-slate-50   text-slate-600   dark:bg-slate-900/30   dark:text-slate-400   border-slate-200/60   dark:border-slate-700/40',
+    emerald: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+    amber:   'bg-amber-50   text-amber-700   dark:bg-amber-950/30   dark:text-amber-400   border-amber-200   dark:border-amber-800',
+    slate:   'bg-slate-50   text-slate-600   dark:bg-slate-900/30   dark:text-slate-400   border-slate-200   dark:border-slate-700',
   };
   return (
-    <span className={cn('flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border', colors[tone])}>
-      <span className="font-bold tabular-nums">{n}</span> {label}
+    <span className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border-2 shadow-sm', colors[tone])}>
+      <span className="font-black tabular-nums text-black dark:text-white">{n}</span> {label}
     </span>
   );
 }

@@ -239,6 +239,7 @@ export const deals = pgTable('deals', {
   companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
   pipelineId: uuid('pipeline_id').references(() => pipelines.id, { onDelete: 'set null' }),
   stageId: uuid('stage_id').notNull().references(() => dealStages.id),
+  stageEnteredAt: timestamp('stage_entered_at', { withTimezone: true }).defaultNow(),
   
   title: text('title').notNull(),
   amount: decimal('amount', { precision: 15, scale: 2 }).default('0'),
