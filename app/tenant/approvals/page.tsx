@@ -314,13 +314,13 @@ export default function ApprovalsPage() {
 
 function Stat({ label, value, tone }: { label: string; value: number; tone: 'amber' | 'emerald' | 'red' }) {
   const toneClass =
-    tone === 'amber'   ? 'text-amber-600 dark:text-amber-400' :
-    tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' :
-                         'text-red-600 dark:text-red-400';
+    tone === 'amber'   ? 'text-amber-700 dark:text-amber-400' :
+    tone === 'emerald' ? 'text-emerald-700 dark:text-emerald-400' :
+                         'text-red-700 dark:text-red-400';
   return (
-    <div className="rounded-xl border border-border bg-card p-3">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
-      <p className={cn('text-2xl font-semibold mt-0.5 tabular-nums', toneClass)}>{value}</p>
+    <div className="rounded-xl border-2 border-border/80 bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">{label}</p>
+      <p className={cn('text-3xl font-black mt-1 tabular-nums', toneClass)}>{value}</p>
     </div>
   );
 }

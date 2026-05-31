@@ -959,3 +959,16 @@ export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export type CreateMilestoneInput = z.infer<typeof createMilestoneSchema>;
 export type LinkTaskInput = z.infer<typeof linkTaskSchema>;
+
+// ── At-Risk Rules schemas ──
+export const atRiskRuleSchema = z.object({
+  stage_id: uuid,
+  max_days_idle: z.coerce.number().int().min(1).max(365).default(14),
+  max_days_in_stage: z.coerce.number().int().min(1).max(365).optional().nullable(),
+  sentiment_threshold: z.coerce.number().int().min(0).max(100).default(30),
+  description: z.string().trim().max(500).optional().nullable(),
+  active: z.boolean().default(true),
+  metadata: z.record(z.string(), z.unknown()).optional().default({}),
+});
+
+export const updateAtRiskRuleSchema = atRiskRuleSchema.partial();

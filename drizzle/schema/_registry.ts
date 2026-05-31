@@ -39,6 +39,7 @@ export type SchemaGroup =
   | 'tokens'    // API keys, sessions
   | 'modules'   // custom modules, extensions
   | 'segments'  // contact segments, lists
+  | 'ai'        // ai provider secrets, activity, templates
 ;
 
 /** Complete table registry entry */
@@ -266,6 +267,7 @@ import {
   aiActivity,
   aiDraftTemplates,
   leadScoringRules,
+  atRiskRules,
 } from './ai';
 
 // =============================================================================
@@ -2658,7 +2660,7 @@ export const TABLE_REGISTRY = {
     table: aiProviderSecrets,
     metadata: {
       name: 'ai_provider_secrets',
-      schemaGroup: 'tokens',
+      schemaGroup: 'ai',
       hasTenantId: true,
       hasSoftDelete: true,
       hasAudit: false,
@@ -2673,7 +2675,7 @@ export const TABLE_REGISTRY = {
     table: aiActivity,
     metadata: {
       name: 'ai_activity',
-      schemaGroup: 'tokens',
+      schemaGroup: 'ai',
       hasTenantId: true,
       hasSoftDelete: false,
       hasAudit: false,
@@ -2688,7 +2690,7 @@ export const TABLE_REGISTRY = {
     table: aiDraftTemplates,
     metadata: {
       name: 'ai_draft_templates',
-      schemaGroup: 'tokens',
+      schemaGroup: 'ai',
       hasTenantId: true,
       hasSoftDelete: true,
       hasAudit: true,
@@ -2699,20 +2701,34 @@ export const TABLE_REGISTRY = {
       indexes: ['idx_ai_draft_templates_slug', 'idx_ai_draft_templates_kind'],
     },
   },
-
   leadScoringRules: {
     table: leadScoringRules,
     metadata: {
       name: 'lead_scoring_rules',
-      schemaGroup: 'tokens',
+      schemaGroup: 'ai',
       hasTenantId: true,
       hasSoftDelete: true,
       hasAudit: true,
       hasMetadata: false,
       dependencies: ['tenants', 'users'],
-      description: 'Per-tenant rules for the AI lead scoring engine',
+      description: 'Factors for AI lead scoring',
       isCore: false,
-      indexes: ['idx_lead_scoring_rules_active'],
+      indexes: ['idx_lead_scoring_rules_tenant', 'idx_lead_scoring_rules_active'],
+    },
+  },
+  atRiskRules: {
+    table: atRiskRules,
+    metadata: {
+      name: 'at_risk_rules',
+      schemaGroup: 'ai',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: true,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Rules for flagging deals as at-risk',
+      isCore: false,
+      indexes: ['idx_at_risk_rules_tenant', 'idx_at_risk_rules_active'],
     },
   },
 };

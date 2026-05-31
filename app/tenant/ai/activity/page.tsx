@@ -303,10 +303,10 @@ export default function AIActivityPage() {
 
 function Stat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-3">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
-      <p className="text-lg font-semibold mt-0.5 tabular-nums">{value}</p>
-      {hint && <p className="text-[10px] text-muted-foreground mt-0.5">{hint}</p>}
+    <div className="rounded-xl border-2 border-border/80 bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">{label}</p>
+      <p className="text-3xl font-black mt-1 tabular-nums text-black dark:text-white">{value}</p>
+      {hint && <p className="text-[10px] font-medium text-muted-foreground/60 mt-1">{hint}</p>}
     </div>
   );
 }
