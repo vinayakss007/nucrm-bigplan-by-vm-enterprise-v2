@@ -52,7 +52,7 @@ type ComponentImport = () => Promise<{ default: React.ComponentType<any> }>;
  * @param importFn - Dynamic import function: () => import('./MyComponent')
  * @param options  - Optional configuration
  */
-export function lazyModule<P extends Record<string, any> = {}>(
+export function lazyModule<P extends Record<string, any> = Record<string, never>>(
   moduleId: string,
   importFn: ComponentImport,
   options?: {
