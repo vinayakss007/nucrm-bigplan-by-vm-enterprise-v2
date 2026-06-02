@@ -17,6 +17,7 @@ export default defineConfig({
         'lib/errors.ts',
         'lib/security/brute-force.ts',
         'lib/rate-limit.ts',
+        'lib/rate-limit-edge.ts',
         'lib/utils.ts',
         'lib/crypto.ts',
         'lib/logger.ts',
