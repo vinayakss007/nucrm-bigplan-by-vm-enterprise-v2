@@ -108,22 +108,26 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  // Apply rate limiting to API routes (skip webhooks, health, metrics)
-  if (isApiRequest(pathname) && !shouldBypassRateLimit(pathname)) {
-    if (isPublic(pathname)) {
-      // Public API routes: IP-based rate limiting
-      const ip = getClientIp(request);
-      const result = edgeLimiter.check(`rl:pub:${ip}`, RATE_LIMIT_UNAUTH, RATE_LIMIT_WINDOW_MS);
-      if (!result.allowed) {
-        return buildRateLimitResponse(requestId, result, origin);
-      }
-      // Allow with rate limit headers
+  // Public API routes: apply rate limiting or pass through
+  if (isApiRequest(pathname) && isPublic(pathname)) {
+    if (shouldBypassRateLimit(pathname)) {
+      // Bypass rate limiting (webhooks, health, metrics)
       const response = NextResponse.next();
       response.headers.set('x-request-id', requestId);
       setCORS(response, origin, pathname);
-      applyRateLimitHeaders(response, result);
       return response;
     }
+    // IP-based rate limiting for public API routes
+    const ip = getClientIp(request);
+    const result = edgeLimiter.check(`rl:pub:${ip}`, RATE_LIMIT_UNAUTH, RATE_LIMIT_WINDOW_MS);
+    if (!result.allowed) {
+      return buildRateLimitResponse(requestId, result, origin);
+    }
+    const response = NextResponse.next();
+    response.headers.set('x-request-id', requestId);
+    setCORS(response, origin, pathname);
+    applyRateLimitHeaders(response, result);
+    return response;
   }
 
   // Non-API public paths pass through with CORS
