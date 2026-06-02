@@ -29,6 +29,12 @@ export interface IndustryTemplate {
     action: string;
     config: any;
   }>;
+  defaultDashboardLayout?: Array<{
+    widget: string;
+    position: number;
+    size: '1x1' | '2x1' | '1x2' | '2x2';
+    config?: Record<string, any>;
+  }>;
 }
 
 export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
@@ -53,6 +59,16 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
         action: 'create_task',
         config: { title: 'Call client after viewing', priority: 'high' }
       }
+    ],
+    defaultDashboardLayout: [
+      { widget: 'stats-contacts', position: 0, size: '1x1' },
+      { widget: 'stats-pipeline', position: 1, size: '1x1' },
+      { widget: 'stats-revenue', position: 2, size: '1x1' },
+      { widget: 'stats-tasks', position: 3, size: '1x1' },
+      { widget: 'activity-feed', position: 4, size: '2x1' },
+      { widget: 'deals-closing', position: 5, size: '1x1' },
+      { widget: 'contacts-recent', position: 6, size: '1x1' },
+      { widget: 'tasks-list', position: 7, size: '1x1' },
     ]
   },
   saas: {
@@ -75,6 +91,16 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
         action: 'send_notification',
         config: { title: 'New SaaS Trial', body: '{{first_name}} has started a trial.' }
       }
+    ],
+    defaultDashboardLayout: [
+      { widget: 'stats-contacts', position: 0, size: '1x1' },
+      { widget: 'stats-pipeline', position: 1, size: '1x1' },
+      { widget: 'stats-revenue', position: 2, size: '1x1' },
+      { widget: 'stats-tasks', position: 3, size: '1x1' },
+      { widget: 'activity-feed', position: 4, size: '2x1' },
+      { widget: 'deals-closing', position: 5, size: '1x1' },
+      { widget: 'contacts-recent', position: 6, size: '1x1' },
+      { widget: 'tasks-list', position: 7, size: '1x1' },
     ]
   },
   consulting: {
@@ -97,6 +123,16 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
         action: 'create_task',
         config: { title: 'Draft proposal for client', priority: 'medium' }
       }
+    ],
+    defaultDashboardLayout: [
+      { widget: 'stats-contacts', position: 0, size: '1x1' },
+      { widget: 'stats-pipeline', position: 1, size: '1x1' },
+      { widget: 'stats-revenue', position: 2, size: '1x1' },
+      { widget: 'stats-tasks', position: 3, size: '1x1' },
+      { widget: 'activity-feed', position: 4, size: '2x1' },
+      { widget: 'deals-closing', position: 5, size: '1x1' },
+      { widget: 'contacts-recent', position: 6, size: '1x1' },
+      { widget: 'tasks-list', position: 7, size: '1x1' },
     ]
   },
   recruitment_hr: {
@@ -128,6 +164,16 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
         action: 'create_task',
         config: { title: 'Review new application', priority: 'high' }
       }
+    ],
+    defaultDashboardLayout: [
+      { widget: 'stats-contacts', position: 0, size: '1x1' },
+      { widget: 'stats-pipeline', position: 1, size: '1x1' },
+      { widget: 'stats-revenue', position: 2, size: '1x1' },
+      { widget: 'stats-tasks', position: 3, size: '1x1' },
+      { widget: 'activity-feed', position: 4, size: '2x1' },
+      { widget: 'deals-closing', position: 5, size: '1x1' },
+      { widget: 'contacts-recent', position: 6, size: '1x1' },
+      { widget: 'tasks-list', position: 7, size: '1x1' },
     ]
   },
   insurance: {
@@ -159,6 +205,16 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
         action: 'create_task',
         config: { title: 'Review new claim', priority: 'high' }
       }
+    ],
+    defaultDashboardLayout: [
+      { widget: 'stats-contacts', position: 0, size: '1x1' },
+      { widget: 'stats-pipeline', position: 1, size: '1x1' },
+      { widget: 'stats-revenue', position: 2, size: '1x1' },
+      { widget: 'stats-tasks', position: 3, size: '1x1' },
+      { widget: 'activity-feed', position: 4, size: '2x1' },
+      { widget: 'deals-closing', position: 5, size: '1x1' },
+      { widget: 'contacts-recent', position: 6, size: '1x1' },
+      { widget: 'tasks-list', position: 7, size: '1x1' },
     ]
   },
   healthcare: {
@@ -188,6 +244,16 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
         action: 'send_email',
         config: { subject: 'Welcome to our clinic', template: 'patient_welcome' }
       }
+    ],
+    defaultDashboardLayout: [
+      { widget: 'stats-contacts', position: 0, size: '1x1' },
+      { widget: 'stats-pipeline', position: 1, size: '1x1' },
+      { widget: 'stats-revenue', position: 2, size: '1x1' },
+      { widget: 'stats-tasks', position: 3, size: '1x1' },
+      { widget: 'activity-feed', position: 4, size: '2x1' },
+      { widget: 'deals-closing', position: 5, size: '1x1' },
+      { widget: 'contacts-recent', position: 6, size: '1x1' },
+      { widget: 'tasks-list', position: 7, size: '1x1' },
     ]
   },
   education: {
@@ -213,6 +279,16 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
         action: 'send_email',
         config: { subject: 'Welcome to our program', template: 'student_welcome' }
       }
+    ],
+    defaultDashboardLayout: [
+      { widget: 'stats-contacts', position: 0, size: '1x1' },
+      { widget: 'stats-pipeline', position: 1, size: '1x1' },
+      { widget: 'stats-revenue', position: 2, size: '1x1' },
+      { widget: 'stats-tasks', position: 3, size: '1x1' },
+      { widget: 'activity-feed', position: 4, size: '2x1' },
+      { widget: 'deals-closing', position: 5, size: '1x1' },
+      { widget: 'contacts-recent', position: 6, size: '1x1' },
+      { widget: 'tasks-list', position: 7, size: '1x1' },
     ]
   },
   ecommerce: {
@@ -243,6 +319,16 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
         action: 'send_email',
         config: { subject: 'We miss you!', template: 'reengagement' }
       }
+    ],
+    defaultDashboardLayout: [
+      { widget: 'stats-contacts', position: 0, size: '1x1' },
+      { widget: 'stats-pipeline', position: 1, size: '1x1' },
+      { widget: 'stats-revenue', position: 2, size: '1x1' },
+      { widget: 'stats-tasks', position: 3, size: '1x1' },
+      { widget: 'activity-feed', position: 4, size: '2x1' },
+      { widget: 'deals-closing', position: 5, size: '1x1' },
+      { widget: 'contacts-recent', position: 6, size: '1x1' },
+      { widget: 'tasks-list', position: 7, size: '1x1' },
     ]
   },
   legal: {
@@ -268,6 +354,16 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
         action: 'create_task',
         config: { title: 'Open case file and run conflict check', priority: 'high' }
       }
+    ],
+    defaultDashboardLayout: [
+      { widget: 'stats-contacts', position: 0, size: '1x1' },
+      { widget: 'stats-pipeline', position: 1, size: '1x1' },
+      { widget: 'stats-revenue', position: 2, size: '1x1' },
+      { widget: 'stats-tasks', position: 3, size: '1x1' },
+      { widget: 'activity-feed', position: 4, size: '2x1' },
+      { widget: 'deals-closing', position: 5, size: '1x1' },
+      { widget: 'contacts-recent', position: 6, size: '1x1' },
+      { widget: 'tasks-list', position: 7, size: '1x1' },
     ]
   },
   fitness_wellness: {
@@ -298,6 +394,16 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
         action: 'send_email',
         config: { subject: 'Welcome to the family!', template: 'member_welcome' }
       }
+    ],
+    defaultDashboardLayout: [
+      { widget: 'stats-contacts', position: 0, size: '1x1' },
+      { widget: 'stats-pipeline', position: 1, size: '1x1' },
+      { widget: 'stats-revenue', position: 2, size: '1x1' },
+      { widget: 'stats-tasks', position: 3, size: '1x1' },
+      { widget: 'activity-feed', position: 4, size: '2x1' },
+      { widget: 'deals-closing', position: 5, size: '1x1' },
+      { widget: 'contacts-recent', position: 6, size: '1x1' },
+      { widget: 'tasks-list', position: 7, size: '1x1' },
     ]
   },
   travel: {
@@ -328,6 +434,16 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
         action: 'create_task',
         config: { title: 'Send feedback survey', priority: 'medium' }
       }
+    ],
+    defaultDashboardLayout: [
+      { widget: 'stats-contacts', position: 0, size: '1x1' },
+      { widget: 'stats-pipeline', position: 1, size: '1x1' },
+      { widget: 'stats-revenue', position: 2, size: '1x1' },
+      { widget: 'stats-tasks', position: 3, size: '1x1' },
+      { widget: 'activity-feed', position: 4, size: '2x1' },
+      { widget: 'deals-closing', position: 5, size: '1x1' },
+      { widget: 'contacts-recent', position: 6, size: '1x1' },
+      { widget: 'tasks-list', position: 7, size: '1x1' },
     ]
   },
   automotive: {
@@ -359,6 +475,16 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
         action: 'send_notification',
         config: { title: 'Service Due', body: '{{first_name}} is due for scheduled service' }
       }
+    ],
+    defaultDashboardLayout: [
+      { widget: 'stats-contacts', position: 0, size: '1x1' },
+      { widget: 'stats-pipeline', position: 1, size: '1x1' },
+      { widget: 'stats-revenue', position: 2, size: '1x1' },
+      { widget: 'stats-tasks', position: 3, size: '1x1' },
+      { widget: 'activity-feed', position: 4, size: '2x1' },
+      { widget: 'deals-closing', position: 5, size: '1x1' },
+      { widget: 'contacts-recent', position: 6, size: '1x1' },
+      { widget: 'tasks-list', position: 7, size: '1x1' },
     ]
   },
   financial_services: {
@@ -390,6 +516,16 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
         action: 'send_notification',
         config: { title: 'Quarterly Review Due', body: 'Schedule portfolio review for {{contact_name}}' }
       }
+    ],
+    defaultDashboardLayout: [
+      { widget: 'stats-contacts', position: 0, size: '1x1' },
+      { widget: 'stats-pipeline', position: 1, size: '1x1' },
+      { widget: 'stats-revenue', position: 2, size: '1x1' },
+      { widget: 'stats-tasks', position: 3, size: '1x1' },
+      { widget: 'activity-feed', position: 4, size: '2x1' },
+      { widget: 'deals-closing', position: 5, size: '1x1' },
+      { widget: 'contacts-recent', position: 6, size: '1x1' },
+      { widget: 'tasks-list', position: 7, size: '1x1' },
     ]
   },
 };
