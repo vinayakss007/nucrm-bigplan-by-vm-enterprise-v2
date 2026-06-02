@@ -32,7 +32,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "db:push": "npx drizzle-kit push --config=./drizzle.config.ts",
+    "db:push": "echo '❌ db:push is disabled — use db:migrate for production-safe migrations. See scripts/migrate.ts'; exit 1",
     "db:generate": "npx tsx scripts/generate-migration.ts",
     "db:migrate": "npx tsx scripts/migrate.ts",
     "db:rollback": "npx tsx scripts/rollback-migration.ts",
