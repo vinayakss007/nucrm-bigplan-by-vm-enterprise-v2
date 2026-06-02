@@ -51,6 +51,24 @@ const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     category: 'core', defaultSize: '1x1', minPlan: 'free',
     refreshInterval: 300, apiEndpoint: '/api/tenant/dashboard/widgets/contacts/recent',
   },
+  'leads-pipeline': {
+    id: 'leads-pipeline', name: 'Leads Pipeline',
+    description: 'Lead status breakdown and totals',
+    category: 'leads', defaultSize: '1x1', minPlan: 'starter',
+    refreshInterval: 300, apiEndpoint: '/api/tenant/dashboard/widgets/leads',
+  },
+  'tickets-widget': {
+    id: 'tickets-widget', name: 'Support Tickets',
+    description: 'Open, in-progress, and resolved tickets',
+    category: 'support', defaultSize: '1x1', minPlan: 'starter',
+    refreshInterval: 120, apiEndpoint: '/api/tenant/dashboard/widgets/tickets',
+  },
+  'invoices-widget': {
+    id: 'invoices-widget', name: 'Invoices',
+    description: 'Invoice status and outstanding totals',
+    category: 'revenue', defaultSize: '1x1', minPlan: 'starter',
+    refreshInterval: 300, apiEndpoint: '/api/tenant/dashboard/widgets/invoices',
+  },
 }
 
 export function getWidget(id: string): WidgetConfig | undefined {

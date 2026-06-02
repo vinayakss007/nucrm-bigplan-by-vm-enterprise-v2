@@ -11,6 +11,9 @@ import ActivityFeedWidget from './widgets/activity-feed-widget';
 import TasksWidget from './widgets/tasks-widget';
 import DealsClosingWidget from './widgets/deals-closing-widget';
 import ContactsRecentWidget from './widgets/contacts-recent-widget';
+import LeadsPipelineWidget from './widgets/leads-pipeline-widget';
+import TicketsWidget from './widgets/tickets-widget';
+import InvoicesWidget from './widgets/invoices-widget';
 
 const WIDGET_MAP: Record<string, FC<WidgetProps>> = {
   'stats-contacts': StatsContactsWidget,
@@ -21,6 +24,9 @@ const WIDGET_MAP: Record<string, FC<WidgetProps>> = {
   'tasks-list': TasksWidget,
   'deals-closing': DealsClosingWidget,
   'contacts-recent': ContactsRecentWidget,
+  'leads-pipeline': LeadsPipelineWidget,
+  'tickets-widget': TicketsWidget,
+  'invoices-widget': InvoicesWidget,
 };
 
 const SIZE_CLASSES: Record<string, string> = {
