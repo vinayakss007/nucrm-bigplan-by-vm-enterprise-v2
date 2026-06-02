@@ -1,14 +1,31 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { contacts, leads, deals, companies, tasks, activities, tenants, users, dealStages, pipelines } from '@/drizzle/schema';
 import { eq, and, isNull, gte, sql, count, sum, ilike } from 'drizzle-orm';
+import { exportPrometheusMetrics as exportAppMetrics } from '@/lib/metrics';
 
 export const dynamic = 'force-dynamic';
 
+const METRICS_SECRET = process.env['METRICS_SECRET'] || '';
+
 /**
  * Prometheus-compatible metrics endpoint
+ * Protected by METRICS_SECRET env var when set.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Secure with shared secret if configured
+  if (METRICS_SECRET) {
+    const auth = request.headers.get('authorization');
+    const headerSecret = request.headers.get('x-metrics-secret');
+    const provided = auth?.startsWith('Bearer ') ? auth.slice(7) : headerSecret;
+    if (provided !== METRICS_SECRET) {
+      return new Response('# Unauthorized\n', {
+        status: 401,
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    }
+  }
+
   const metrics: string[] = [];
   const push = (name: string, help: string, type: string, value: number, labels = '') => {
     if (help) metrics.push(`# HELP ${name} ${help}`);
@@ -108,6 +125,10 @@ export async function GET() {
     push('nucrm_memory_heap_used_bytes', 'Node.js heap memory used', 'gauge', process.memoryUsage().heapUsed);
     push('nucrm_memory_heap_total_bytes', 'Node.js heap memory total', 'gauge', process.memoryUsage().heapTotal);
     push('nucrm_memory_rss_bytes', 'Node.js RSS memory', 'gauge', process.memoryUsage().rss);
+
+    // ── App-level metrics from in-memory collector ─────────────
+    metrics.push('\n# App Metrics (in-memory collector)\n');
+    metrics.push(exportAppMetrics());
 
     return new Response(metrics.join('\n') + '\n', {
       headers: { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' },
