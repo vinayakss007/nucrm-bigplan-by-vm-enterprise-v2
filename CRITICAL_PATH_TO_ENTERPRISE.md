@@ -7,9 +7,9 @@ can reliably serve thousands of tenants at enterprise scale. Ordered by priority
 
 | Phase | Status | Items Done |
 |-------|--------|------------|
-| Quick Wins | 5/10 ✅ | `db:push` removal, requestId, vitest exclusions, coverage thresholds, slow query logging |
-| Phase 0: Observability | 0/4 ⬜ | — |
-| Phase 1: Resilience | 0/4 ⬜ | — |
+| Quick Wins | 6/10 ✅ | `db:push` removal, requestId, vitest exclusions, coverage thresholds, slow query logging, rate limiting middleware |
+| Phase 0: Observability | 1/4 ⬜ | Prometheus metrics |
+| Phase 1: Resilience | 1/4 ⬜ | Global rate limiting middleware |
 | Phase 2: Data Scale | 0/5 ⬜ | — |
 | Phase 3: Architecture | 0/4 ⬜ | — |
 | Phase 4: DevX | 0/3 ⬜ | — |
@@ -78,13 +78,15 @@ Alert on:
 - **Table partitioning**: partition by `tenant_id` hash for large tables (contacts, deals, activities, audit_logs)
 - **Failover**: configure Patroni or RDS Multi-AZ for automatic failover. Test it quarterly.
 
-### 1.3 Rate Limiting Middleware
-Convert the existing `lib/rate-limit.ts` into a global Next.js middleware:
-- Wrap ALL `/api/*` routes
-- Apply per-tenant + per-user + per-IP limits simultaneously
-- Tiered limits based on plan (free=60/min, pro=300/min, enterprise=unlimited)
-- Return standardized `X-RateLimit-*` headers on every response
-- Bypass for internal health checks and webhooks
+### 1.3 ✅ Rate Limiting Middleware (PR #66)
+Edge middleware (`proxy.ts`) now applies rate limiting to all `/api/*` routes:
+- **Per-IP limits** for public API routes (30 req/min)
+- **Per-user limits** for authenticated requests (120 req/min)
+- **Per-key limits** for API key auth (300 req/min)
+- Standardized `X-RateLimit-*` headers on every API response
+- 429 with `Retry-After` when exceeded
+- Bypass for webhooks, health, metrics, keepalive, and cron endpoints
+- Existing per-route `checkRateLimit()` retained as second layer (defense in depth)
 
 ### 1.4 Feature Flags (Runtime)
 Build a lightweight flag system (or use Unleash/LaunchDarkly):
@@ -191,8 +193,8 @@ All current bulk endpoints are synchronous (risk: timeout).
 3. ✅ Add requestId to logger — auto-enriches all log entries via AsyncLocalStorage (PR #56)
 4. ✅ Raise vitest coverage thresholds from 50% → 70% (PR #58)
 5. ✅ Remove test exclusions from vitest config — all 20+ excluded files now run (PR #58)
-6. Add global rate limiting middleware — [issue to create]
-7. Add Prometheus metrics exporter endpoint — [issue to create]
+6. ✅ Add global rate limiting middleware — PR #66
+7. ✅ Add Prometheus metrics exporter endpoint — PR #62
 8. Configure Loki + Promtail for log shipping — [issue to create]
 9. Add PgBouncer to docker-compose — [issue to create]
 10. Add health check for worker process — [issue to create]
