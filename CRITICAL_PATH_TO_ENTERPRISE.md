@@ -3,6 +3,19 @@
 This doc captures every infrastructure gap that must be addressed before NuCRM
 can reliably serve thousands of tenants at enterprise scale. Ordered by priority.
 
+## Progress
+
+| Phase | Status | Items Done |
+|-------|--------|------------|
+| Quick Wins | 5/10 ✅ | `db:push` removal, requestId, vitest exclusions, coverage thresholds, slow query logging |
+| Phase 0: Observability | 0/4 ⬜ | — |
+| Phase 1: Resilience | 0/4 ⬜ | — |
+| Phase 2: Data Scale | 0/5 ⬜ | — |
+| Phase 3: Architecture | 0/4 ⬜ | — |
+| Phase 4: DevX | 0/3 ⬜ | — |
+
+All work tracked on branch `feat/enterprise-infrastructure` against [epic #52](https://github.com/vinayakss007/nucrm-bigplan-by-vm-enterprise-v2/issues/52).
+
 ---
 
 ## PHASE 0: OBSERVABILITY FOUNDATION (prerequisite for everything else)
@@ -173,16 +186,16 @@ All current bulk endpoints are synchronous (risk: timeout).
 
 ## QUICK WINS (do this week)
 
-1. Remove `db:push` npm script
-2. Add slow query logging to postgresql.conf
-3. Add requestId to logger (use `crypto.randomUUID()`)
-4. Raise vitest coverage thresholds from 50% → 70%
-5. Remove test exclusions from vitest config
-6. Add global rate limiting middleware
-7. Add Prometheus metrics exporter endpoint
-8. Configure Loki + Promtail for log shipping
-9. Add PgBouncer to docker-compose
-10. Add health check for worker process
+1. ✅ Remove `db:push` npm script (PR #54)
+2. ✅ Add slow query logging to postgresql.conf — lowered threshold 500ms→200ms (PR #60)
+3. ✅ Add requestId to logger — auto-enriches all log entries via AsyncLocalStorage (PR #56)
+4. ✅ Raise vitest coverage thresholds from 50% → 70% (PR #58)
+5. ✅ Remove test exclusions from vitest config — all 20+ excluded files now run (PR #58)
+6. Add global rate limiting middleware — [issue to create]
+7. Add Prometheus metrics exporter endpoint — [issue to create]
+8. Configure Loki + Promtail for log shipping — [issue to create]
+9. Add PgBouncer to docker-compose — [issue to create]
+10. Add health check for worker process — [issue to create]
 
 ---
 
