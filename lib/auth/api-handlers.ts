@@ -297,12 +297,16 @@ export async function POST_signup(request: NextRequest) {
     });
 
     // Session
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
+    const userAgent = request.headers.get('user-agent') ?? undefined;
     const token = await createToken(user.id);
     const tokenHash = await hashToken(token);
     await db.insert(sessions).values({
       userId: user.id,
       tokenHash,
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      ipAddress: ip,
+      userAgent: userAgent?.slice(0, 255),
     });
     await setSessionCookie(token);
     const signupCsrfToken = generateCsrfToken();
