@@ -5,6 +5,13 @@ import { getCsrfTokenFromCookie, getCsrfTokenFromHeader, needsCsrfValidation, va
 const JWT_SECRET_ENV = process.env['JWT_SECRET'];
 const JWT_SECRET = JWT_SECRET_ENV ? new TextEncoder().encode(JWT_SECRET_ENV) : null;
 
+function generateRequestId(): string {
+  const chars = 'abcdef0123456789';
+  let id = '';
+  for (let i = 0; i < 32; i++) id += chars[Math.floor(Math.random() * chars.length)];
+  return id;
+}
+
 const PUBLIC_PATHS = [
   '/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/reset-password',
   '/auth/verify-email', '/auth/callback', '/auth/invite', '/health', '/docs',
@@ -52,9 +59,14 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const origin = request.headers.get('origin');
 
+  // Generate or propagate requestId for distributed tracing
+  let requestId = request.headers.get('x-request-id');
+  if (!requestId) requestId = generateRequestId();
+
   // CORS preflight
   if (request.method === 'OPTIONS') {
     const response = new NextResponse(null, { status: 204 });
+    response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     if (origin && ALLOWED_ORIGINS.some(ao => ao === '*' || ao === origin)) {
       response.headers.set('Access-Control-Max-Age', '86400');
@@ -65,6 +77,7 @@ export async function proxy(request: NextRequest) {
   // Public paths pass through with CORS
   if (isPublic(pathname)) {
     const response = NextResponse.next();
+    response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     return response;
   }
@@ -72,6 +85,7 @@ export async function proxy(request: NextRequest) {
   // Auth check for protected paths
   if (!JWT_SECRET) {
     const response = NextResponse.next();
+    response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     return response;
   }
@@ -83,11 +97,13 @@ export async function proxy(request: NextRequest) {
 
   if (!token) {
     if (pathname.startsWith('/api/')) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401, headers: { 'x-request-id': requestId } });
     }
     const url = new URL('/auth/login', request.url);
     url.searchParams.set('callbackUrl', pathname);
-    return NextResponse.redirect(url);
+    const redirect = NextResponse.redirect(url);
+    redirect.headers.set('x-request-id', requestId);
+    return redirect;
   }
 
   try {
@@ -100,18 +116,21 @@ export async function proxy(request: NextRequest) {
       const cookieCsrf = getCsrfTokenFromCookie(request.headers.get('cookie') || null);
       const headerCsrf = getCsrfTokenFromHeader(request.headers);
       if (!validateCsrfToken(cookieCsrf, headerCsrf)) {
-        return NextResponse.json({ error: 'CSRF token missing or invalid. Please refresh the page and try again.' }, { status: 403 });
+        return NextResponse.json({ error: 'CSRF token missing or invalid. Please refresh the page and try again.' }, { status: 403, headers: { 'x-request-id': requestId } });
       }
     }
 
     const response = NextResponse.next();
+    response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     return response;
   } catch {
     if (pathname.startsWith('/api/')) {
-      return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
+      return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401, headers: { 'x-request-id': requestId } });
     }
-    return NextResponse.redirect(new URL('/auth/login', request.url));
+    const redirect = NextResponse.redirect(new URL('/auth/login', request.url));
+    redirect.headers.set('x-request-id', requestId);
+    return redirect;
   }
 }
 

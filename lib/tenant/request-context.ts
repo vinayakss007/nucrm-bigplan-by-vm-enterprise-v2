@@ -34,6 +34,9 @@ export interface RequestContext {
 // Request-scoped storage using AsyncLocalStorage
 const asyncLocalStorage = new AsyncLocalStorage<Map<string, RequestContext>>();
 
+// Stores just the current requestId for logger enrichment
+const requestIdStorage = new AsyncLocalStorage<string>();
+
 // Global cache for cross-request caching (5 minute TTL)
 const CACHE_TTL = 300; // 5 minutes
 const CACHE_PREFIX = 'auth:context:';
@@ -85,11 +88,25 @@ export async function invalidateContext(tokenHash: string): Promise<void> {
 }
 
 /**
- * Run function with request-scoped context
+ * Get the current requestId from the AsyncLocalStorage context
  */
-export function withRequestContext<T>(fn: () => T): T {
+export function getCurrentRequestId(): string | undefined {
+  return requestIdStorage.getStore();
+}
+
+/**
+ * Run function with a requestId in context (for logger enrichment)
+ */
+export function withRequestId<T>(requestId: string, fn: () => T): T {
+  return requestIdStorage.run(requestId, fn);
+}
+
+/**
+ * Run function with request-scoped context + requestId
+ */
+export function withRequestContext<T>(requestId: string, fn: () => T): T {
   const store = new Map<string, RequestContext>();
-  return asyncLocalStorage.run(store, fn);
+  return asyncLocalStorage.run(store, () => requestIdStorage.run(requestId, fn));
 }
 
 /**
