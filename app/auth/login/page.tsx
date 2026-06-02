@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   Zap, Loader2, Eye, EyeOff, Mail, Lock, Shield, BarChart3,
   Users, Cpu, CheckCircle, ArrowRight, X
@@ -11,7 +10,6 @@ import toast from 'react-hot-toast';
 
 
 export default function LoginPage() {
-  const router = useRouter();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -37,7 +35,10 @@ export default function LoginPage() {
       const data = await res.json();
       if (res.ok) {
         toast.success('Welcome back!');
-        setTimeout(() => router.push('/tenant/dashboard'), 800);
+        setLoading(false);
+        setTimeout(() => {
+          window.location.href = '/tenant/dashboard';
+        }, 800);
       } else {
         setError(data.error || 'Invalid email or password');
         setLoading(false);
