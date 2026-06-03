@@ -296,6 +296,30 @@ services:
       - nucrm-net
 
   # ═══════════════════════════════════════════════════════════════════════════
+  #  ALERTING — Alertmanager
+  # ═══════════════════════════════════════════════════════════════════════════
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: nucrm-alertmanager
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanagerdata:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.listen-address=:9093'
+    ports:
+      - "127.0.0.1:9093:9093"
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ═══════════════════════════════════════════════════════════════════════════
   #  MONITORING — Prometheus + Grafana
   # ═══════════════════════════════════════════════════════════════════════════
   prometheus:
