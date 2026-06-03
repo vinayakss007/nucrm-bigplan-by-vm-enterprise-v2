@@ -296,7 +296,45 @@ services:
       - nucrm-net
 
   # ═══════════════════════════════════════════════════════════════════════════
-  #  MONITORING — Prometheus + Grafana
+  #  DATABASE PROXY — PgBouncer (connection pooling)
+  # ═══════════════════════════════════════════════════════════════════════════
+  pgbouncer:
+    image: edoburu/pgbouncer:1.23
+    container_name: nucrm-pgbouncer
+    environment:
+      - DB_USER=${POSTGRES_USER:-nucrm}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-nucrm}
+      - POOL_MODE=transaction
+      - DEFAULT_POOL_SIZE=50
+      - MAX_CLIENT_CONN=200
+      - MAX_DB_CONNECTIONS=50
+      - SERVER_IDLE_TIMEOUT=600
+      - AUTH_TYPE=scram-sha-256
+      - IGNORE_STARTUP_PARAMETERS=extra_float_digits
+    ports:
+      - "127.0.0.1:6432:6432"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U ${POSTGRES_USER:-nucrm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  LOGGING — Loki + Promtail
   # ═══════════════════════════════════════════════════════════════════════════
   prometheus:
     image: prom/prometheus:v2.53.0
