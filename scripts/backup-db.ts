@@ -7,7 +7,7 @@
  */
 
 import { execSync } from 'child_process';
-import { writeFileSync, existsSync, mkdirSync } from 'fs';
+import { writeFileSync, existsSync, mkdirSync, readFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 
 const BUCKET = process.env['S3_BUCKET'] || 'nucrm-backups';
@@ -32,7 +32,7 @@ async function createBackup() {
 
   // Read backup file
   const backupData = existsSync(tempPath) 
-    ? require('fs').readFileSync(tempPath)
+    ? readFileSync(tempPath)
     : Buffer.from('');
 
   const fileSize = (backupData.length / 1024 / 1024).toFixed(2);
@@ -52,7 +52,7 @@ async function createBackup() {
   }
 
   // Cleanup temp file
-  require('fs').unlinkSync(tempPath);
+  unlinkSync(tempPath);
   
   console.log('[Backup] Complete!');
 }

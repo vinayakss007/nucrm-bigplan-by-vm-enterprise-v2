@@ -151,7 +151,7 @@ if (process.env.SENTRY_ORG && process.env.SENTRY_PROJECT && process.env.SENTRY_A
     };
     nextConfig = withSentryConfig(nextConfig, sentryWebpackPluginOptions);
     console.log('[next.config] Sentry enabled');
-  } catch (e) {
+  } catch {
     console.log('[next.config] Sentry not available');
   }
 }
