@@ -74,6 +74,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Run migrations
+        run: npm run db:migrate
+
       - name: Unit tests
         run: npm run test:unit
 
