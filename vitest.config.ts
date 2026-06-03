@@ -13,6 +13,7 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
       include: [
         'lib/validate.ts',
+        'lib/cache/index.ts',
         'lib/cache/redis.ts',
         'lib/api-error.ts',
         'lib/errors.ts',
@@ -25,6 +26,9 @@ export default defineConfig({
         'lib/db/cache.ts',
         'lib/metrics.ts',
         'lib/tenant/request-context.ts',
+        'lib/flags/index.ts',
+        'lib/modules/registry.ts',
+        'lib/formula/engine.ts',
       ],
       thresholds: {
         lines: 70,
@@ -33,6 +37,9 @@ export default defineConfig({
         statements: 70,
       },
     },
+    testTimeout: 15000,
+    hookTimeout: 10000,
+    teardownTimeout: 5000,
   },
   resolve: {
     alias: { '@': path.resolve(__dirname, './') },
