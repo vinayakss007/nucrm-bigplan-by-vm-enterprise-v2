@@ -4,9 +4,15 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   NODE_ENV: production
   DOCKER_IMAGE: ghcr.io/${{ github.repository }}
+  HEALTH_CHECK_RETRIES: 12
+  HEALTH_CHECK_INTERVAL: 10
 
 jobs:
   deploy:
@@ -24,7 +30,7 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - run: npm ci
+      - run: npm ci --legacy-peer-deps
 
       - name: Run tests
         run: npm test
@@ -58,7 +64,42 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
+            set -e
             cd /opt/nucrm
+
+            echo "Pulling new image..."
             docker compose pull app
-            docker compose up -d --no-deps app
+
+            echo "Starting rolling update..."
+            docker compose up -d --no-deps --scale app=2 --no-recreate app
+
+            echo "Waiting for new container health check..."
+            NEW_CONTAINER=""
+            for i in $(seq 1 ${{ env.HEALTH_CHECK_RETRIES }}); do
+              NEW_CONTAINER=$(docker compose ps -q app | tail -1)
+              if [ -n "$NEW_CONTAINER" ]; then
+                STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$NEW_CONTAINER" 2>/dev/null || echo "starting")
+                if [ "$STATUS" = "healthy" ]; then
+                  echo "New container healthy after ${i}x${{ env.HEALTH_CHECK_INTERVAL }}s"
+                  break
+                fi
+              fi
+              sleep ${{ env.HEALTH_CHECK_INTERVAL }}
+            done
+
+            if [ -z "$NEW_CONTAINER" ]; then
+              echo "ERROR: Health check failed. Rolling back."
+              docker compose up -d --no-deps --scale app=1 app
+              exit 1
+            fi
+
+            echo "Stopping old container..."
+            OLD_CONTAINER=$(docker compose ps -q app | head -1)
+            docker stop "$OLD_CONTAINER" 2>/dev/null || true
+            docker compose up -d --no-deps --scale app=1 app
+
+            echo "Cleaning up..."
+            docker container prune -f
             docker image prune -f
+
+            echo "Deploy complete: ${{ github.sha }}"
