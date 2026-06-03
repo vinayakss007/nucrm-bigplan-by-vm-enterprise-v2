@@ -26,6 +26,79 @@ groups:
         annotations:
           summary: "Redis is DOWN"
 
+      - alert: WorkerDown
+        expr: nucrm_worker_running == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Background worker is DOWN"
+          description: "No worker heartbeat for 1 minute. Queues will not be processed."
+
+      - alert: PgBouncerDown
+        expr: up{job="pgbouncer"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "PgBouncer is DOWN"
+
+      - alert: HighErrorRate
+        expr: rate(nucrm_http_errors_total[5m]) / rate(nucrm_http_requests_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Error rate > 1% over 5min"
+          description: "Current error rate: {{ $value | humanizePercentage }}"
+
+      - alert: HighP95Latency
+        expr: histogram_quantile(0.95, rate(nucrm_http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P95 response time > 2s"
+          description: "P95 latency is {{ $value }}s. Investigate slow endpoints."
+
+      - alert: DBPoolExhaustion
+        expr: nucrm_db_pool_available < 2
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DB pool exhaustion"
+          description: "Only {{ $value }} connections available in the pool."
+
+      - alert: QueueBackpressure
+        expr: nucrm_queue_jobs_total{status="waiting"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queue backlog > 1000 jobs"
+          description: "Queue {{ $labels.queue }} has {{ $value }} waiting jobs."
+
+      - alert: CacheHitRateLow
+        expr: nucrm_cache_hit_rate < 70
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cache hit rate < 70%"
+          description: "Hit rate is {{ $value }}%. Review cache strategy."
+
+      - alert: RedisUnreachable
+        expr: nucrm_cache_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is unreachable"
+          description: "The metrics endpoint cannot connect to Redis."
+
+  - name: nucrm-high-memory
+    rules:
       - alert: HighMemoryUsage
         expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.9
         for: 5m
@@ -51,18 +124,37 @@ groups:
         annotations:
           summary: "Disk usage > 85%"
 
-      - alert: PostgresConnectionsHigh
-        expr: pg_stat_activity_count > 50
+      - alert: WorkerMemoryHigh
+        expr: nucrm_worker_memory_heap_bytes > 400 * 1024 * 1024
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "PostgreSQL connections > 50 (max 60)"
+          summary: "Worker memory > 400MB"
+          description: "Worker heap is {{ $value | humanize1024 }}. Consider increasing limits."
+
+  - name: nucrm-connections
+    rules:
+      - alert: PostgresConnectionsHigh
+        expr: nucrm_db_active_connections > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connections > 50"
 
       - alert: RedisMemoryHigh
-        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        expr: nucrm_redis_used_memory_bytes > 450 * 1024 * 1024
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "Redis memory > 85% of maxmemory"
+          summary: "Redis memory > 450MB (max 512MB)"
+
+      - alert: SSLExpiringSoon
+        expr: nucrm_ssl_days_until_expiry < 14
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "SSL certificate expires in {{ $value }} days"
