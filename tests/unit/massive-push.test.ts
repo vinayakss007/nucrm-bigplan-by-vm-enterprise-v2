@@ -10,9 +10,23 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 describe('webhooks - fireWebhooks', () => {
   beforeEach(() => {
     vi.resetModules();
-    vi.doMock('@/lib/db/client', () => ({
-      query: vi.fn().mockResolvedValue({ rows: [] }),
-      queryMany: vi.fn().mockResolvedValue([]),
+    vi.doMock('@/drizzle/db', () => ({
+      db: {
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        execute: vi.fn().mockResolvedValue({ rows: [] }),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockResolvedValue(undefined),
+      },
+    }));
+    vi.doMock('@/drizzle/schema', () => ({
+      integrations: { id: 'id', tenantId: 'tenant_id', name: 'name', config: 'config' },
+    }));
+    vi.doMock('@/drizzle/schema/support', () => ({
+      webhookQueue: { id: 'id', integrationId: 'integration_id', event: 'event', payload: 'payload', status: 'status' },
     }));
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
