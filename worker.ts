@@ -41,10 +41,8 @@ connection.on('reconnecting', () => {
 console.log('[Worker] Background worker starting...');
 console.log('[Worker] Redis URL:', REDIS_URL.replace(/\/\/.*:.*@/, '//*****@'));
 
-// Heartbeat MUST be declared before signal handlers to avoid ReferenceError on shutdown
-const heartbeatInterval = setInterval(() => {
-  console.log('[Worker] Heartbeat - workers are running');
-}, 60000);
+const startTime = Date.now();
+var heartbeatInterval: ReturnType<typeof setInterval>;
 
 // Email queue worker
 const emailWorker = new Worker(
@@ -311,6 +309,31 @@ const webhookWorker = new Worker(
   },
   { connection, concurrency: 5 }
 );
+
+// Health check heartbeat — writes worker status to Redis every 30s
+heartbeatInterval = setInterval(async () => {
+  try {
+    const info = {
+      pid: process.pid,
+      uptime: Math.floor((Date.now() - startTime) / 1000),
+      memory: process.memoryUsage(),
+      node: process.version,
+      status: 'running',
+      workers: {
+        email: emailWorker.isRunning(),
+        notification: notificationWorker.isRunning(),
+        bulkEmail: bulkEmailWorker.isRunning(),
+        automation: automationWorker.isRunning(),
+        leadWarming: leadWarmingWorker.isRunning(),
+        webhook: webhookWorker.isRunning(),
+      },
+      timestamp: new Date().toISOString(),
+    };
+    await connection.set('worker:heartbeat', JSON.stringify(info), 'EX', 60);
+  } catch {
+    // heartbeat write failure is non-fatal
+  }
+}, 30_000);
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
