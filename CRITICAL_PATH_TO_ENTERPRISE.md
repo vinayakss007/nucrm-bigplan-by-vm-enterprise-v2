@@ -7,8 +7,8 @@ can reliably serve thousands of tenants at enterprise scale. Ordered by priority
 
 | Phase | Status | Items Done |
 |-------|--------|------------|
-| Quick Wins | 5/10 ✅ | `db:push` removal, requestId, vitest exclusions, coverage thresholds, slow query logging |
-| Phase 0: Observability | 0/4 ⬜ | — |
+| Quick Wins | 10/10 ✅ | `db:push` removal, requestId, vitest exclusions, coverage thresholds, slow query logging, rate limiting middleware, prometheus metrics, loki+promtail, pgbouncer, worker health check |
+| Phase 0: Observability | 3/5 🟡 | Loki+Promtail, Prometheus metrics, alertmanager |
 | Phase 1: Resilience | 0/4 ⬜ | — |
 | Phase 2: Data Scale | 0/5 ⬜ | — |
 | Phase 3: Architecture | 0/4 ⬜ | — |

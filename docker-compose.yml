@@ -135,6 +135,22 @@ services:
     networks:
       - nucrm-net
 
+  # ── Alertmanager ─────────────────────────────────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: nucrm-alertmanager
+    volumes:
+      - ./deploy/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanagerdata:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    ports:
+      - "9093:9093"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
   # ── Promtail (Log Shipper) ───────────────────────────────────────────────
   promtail:
     image: grafana/promtail:3.0.0
@@ -177,7 +193,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-
   # ── Redis ────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
@@ -207,6 +222,8 @@ volumes:
   redisdata:
     driver: local
   lokidata:
+    driver: local
+  alertmanagerdata:
     driver: local
 
 networks:
