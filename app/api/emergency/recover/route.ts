@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
 /**
@@ -105,7 +106,7 @@ export async function POST(request: NextRequest) {
   const keyBuffer = Buffer.from(emergency_key);
   const expectedBuffer = Buffer.from(emergencyKey);
   const keyValid = keyBuffer.length === expectedBuffer.length &&
-    require('crypto').timingSafeEqual(keyBuffer, expectedBuffer);
+    crypto.timingSafeEqual(keyBuffer, expectedBuffer);
 
   if (!keyValid) {
     console.error(`[EMERGENCY RECOVERY] INVALID KEY — IP: ${ip}, email: ${email}`);
