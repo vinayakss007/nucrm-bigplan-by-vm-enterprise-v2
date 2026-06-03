@@ -31,7 +31,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --max-warnings 100",
     "db:push": "echo '❌ db:push is disabled — use db:migrate for production-safe migrations. See scripts/migrate.ts'; exit 1",
     "db:generate": "npx tsx scripts/generate-migration.ts",
     "db:migrate": "npx tsx scripts/migrate.ts",
