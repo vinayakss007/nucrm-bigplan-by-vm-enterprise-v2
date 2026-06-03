@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useState, useEffect } from 'react';
 import { WidgetGrid } from '@/components/tenant/dashboard/widget-grid';
-import { getPlanDefaultLayout } from '@/lib/dashboard/layout-resolver';
+import { getPlanDefaultLayout } from '@/lib/dashboard/layout-defaults';
 import type { DashboardLayout } from '@/types/dashboard';
 
 export default function DashboardClient({ tenantId, userId, planName, isAdmin }: {
