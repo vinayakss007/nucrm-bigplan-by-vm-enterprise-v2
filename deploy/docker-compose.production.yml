@@ -348,6 +348,48 @@ services:
       - nucrm-net
 
   # ═══════════════════════════════════════════════════════════════════════════
+  #  LOGGING — Loki + Promtail
+  # ═══════════════════════════════════════════════════════════════════════════
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: nucrm-loki
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - lokidata:/loki
+    command:
+      - '--config.file=/etc/loki/loki-config.yml'
+    ports:
+      - "127.0.0.1:3100:3100"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: nucrm-promtail
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/log:/var/log:ro
+      - nginx-logs:/var/log/nginx:ro
+    command:
+      - '--config.file=/etc/promtail/promtail-config.yml'
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ═══════════════════════════════════════════════════════════════════════════
   #  EXPORTERS — System & Service Metrics
   # ═══════════════════════════════════════════════════════════════════════════
   node-exporter:
@@ -397,6 +439,8 @@ volumes:
   grafanadata:
     driver: local
   nginx-logs:
+    driver: local
+  lokidata:
     driver: local
 
 # ═══════════════════════════════════════════════════════════════════════════

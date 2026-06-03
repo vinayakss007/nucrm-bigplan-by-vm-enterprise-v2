@@ -120,6 +120,36 @@ services:
     networks:
       - nucrm-net
 
+  # ── Loki (Log Aggregation) ──────────────────────────────────────────────
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: nucrm-loki
+    volumes:
+      - ./deploy/monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - lokidata:/loki
+    command:
+      - '--config.file=/etc/loki/loki-config.yml'
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── Promtail (Log Shipper) ───────────────────────────────────────────────
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: nucrm-promtail
+    volumes:
+      - ./deploy/monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/log:/var/log:ro
+    command:
+      - '--config.file=/etc/promtail/promtail-config.yml'
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
   # ── Redis ────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
@@ -147,6 +177,8 @@ volumes:
   pgdata:
     driver: local
   redisdata:
+    driver: local
+  lokidata:
     driver: local
 
 networks:
