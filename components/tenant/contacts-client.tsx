@@ -443,17 +443,10 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                 const StatusIcon=status!.icon;
                 const lifecycleColor=LIFECYCLE_COLORS[c['lifecycle_stage']]||'bg-slate-100 text-slate-600';
                 return (
-                  <Swipeable
-                    key={c['id']}
-                    rightActions={[
-                      { label:'Edit', icon:<Edit className="w-5 h-5"/>, color:'text-white', bg:'bg-violet-500', onClick:()=>router.push(`/tenant/contacts/${c['id']}`) },
-                      ...(permissions.canDelete ? [{ label:'Delete', icon:<Trash2 className="w-5 h-5"/>, color:'text-white', bg:'bg-red-500', onClick:async()=>deleteContact(c['id'],`${c['first_name']} ${c['last_name']}`) }] : []),
-                    ]}
-                  >
-                    <tr className={cn(
-                      "border-b border-border last:border-0 hover:bg-accent/30 transition-colors cursor-pointer group",
-                      selectedIds.has(c['id']) && "bg-violet-50/50 dark:bg-violet-900/10"
-                    )} onClick={()=>router.push(`/tenant/contacts/${c['id']}`)}>
+                  <tr key={c['id']} className={cn(
+                    "border-b border-border last:border-0 hover:bg-accent/30 transition-colors cursor-pointer group",
+                    selectedIds.has(c['id']) && "bg-violet-50/50 dark:bg-violet-900/10"
+                  )} onClick={()=>router.push(`/tenant/contacts/${c['id']}`)}>
                     {/* Selection */}
                     <td className="w-10 px-4 py-3" onClick={e=>e.stopPropagation()}>
                       <Checkbox
@@ -532,7 +525,6 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                       </div>
                     </td>
                   </tr>
-                  </Swipeable>
                 );
               })}
             </tbody>
