@@ -166,7 +166,42 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
       );
     }
 
-    // Fetch user and membership
+    // First check if user is a super admin
+    const [userRecord] = await tx.select({
+      id: users.id,
+      email: users.email,
+      fullName: users.fullName,
+      isSuperAdmin: users.isSuperAdmin,
+      lastTenantId: users.lastTenantId,
+    })
+    .from(users)
+    .where(eq(users.id, payload.userId))
+    .limit(1);
+
+    if (!userRecord) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 401 }
+      );
+    }
+
+    // Super admin context — bypass tenant membership lookup
+    if (userRecord.isSuperAdmin) {
+      const ctx: AuthContext = {
+        userId: userRecord.id,
+        tenantId: userRecord.lastTenantId || '__superadmin_no_tenant__',
+        roleSlug: 'superadmin',
+        permissions: { all: true },
+        isAdmin: true,
+        isSuperAdmin: true,
+        noWorkspace: !userRecord.lastTenantId,
+      };
+      await setTenantContext(ctx.tenantId, ctx.userId, tx);
+      await requestContext.cache(tokenHash, { ...ctx, cachedAt: Date.now() });
+      return ctx;
+    }
+
+    // Fetch tenant membership for non-super-admin users
     const results = await tx.select({
       id: users.id,
       email: users.email,
@@ -178,7 +213,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
       permissions: sql`COALESCE(${roles.permissions}, '{}'::jsonb)`
     })
     .from(users)
-    .leftJoin(tenantMembers, and(eq(tenantMembers.userId, users.id), eq(tenantMembers.status, 'active')))
+    .innerJoin(tenantMembers, and(eq(tenantMembers.userId, users.id), eq(tenantMembers.status, 'active')))
     .leftJoin(roles, eq(roles.id, tenantMembers.roleId))
     .where(eq(users.id, payload.userId))
     .orderBy(
@@ -190,27 +225,6 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     const userWithMember = results[0];
 
     if (!userWithMember) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 401 }
-      );
-    }
-
-    if (!userWithMember.tenantId) {
-      if (userWithMember.isSuperAdmin) {
-        const ctx: AuthContext = {
-          userId: userWithMember.id, 
-          tenantId: '__superadmin_no_tenant__', 
-          roleSlug: 'superadmin',
-          permissions: { all: true }, 
-          isAdmin: true, 
-          isSuperAdmin: true,
-          noWorkspace: true,
-        };
-        await setTenantContext(ctx.tenantId, ctx.userId, tx);
-        await requestContext.cache(tokenHash, { ...ctx, cachedAt: Date.now() });
-        return ctx;
-      }
       return NextResponse.json(
         { error: 'No active workspace' },
         { status: 403 }
