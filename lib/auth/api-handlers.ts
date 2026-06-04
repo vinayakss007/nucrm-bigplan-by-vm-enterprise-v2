@@ -126,8 +126,7 @@ export async function POST_login(request: NextRequest) {
     await setSessionCookie(token);
     const csrfToken = generateCsrfToken();
     const response = NextResponse.json({ 
-      ok:true, 
-      token,
+      ok:true,
       user:{ id:user.id, email:user.email, full_name:user.fullName, is_super_admin:user.isSuperAdmin } 
     });
     response.headers.append('Set-Cookie', setCsrfCookie(csrfToken, process.env.NODE_ENV === 'production'));
