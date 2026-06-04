@@ -35,7 +35,7 @@ export async function computeLeadScore(
   });
   if (!lead) throw new Error('Lead not found');
 
-  const rules = await db.query.leadScoringRules.findAll({
+  const rules = await db.query.leadScoringRules.findMany({
     where: and(
       eq(leadScoringRules.tenantId, tenantId), 
       eq(leadScoringRules.active, true),

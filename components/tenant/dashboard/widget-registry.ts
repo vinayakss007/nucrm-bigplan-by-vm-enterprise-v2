@@ -89,7 +89,7 @@ export function getAllWidgets(): WidgetConfig[] {
 }
 
 export function getWidgetsForLayout(layout: Array<{ widget: string }>): WidgetConfig[] {
-  return layout.map(item => WIDGET_REGISTRY[item.widget]).filter(Boolean)
+  return layout.map(item => WIDGET_REGISTRY[item.widget]).filter((w): w is WidgetConfig => w !== undefined)
 }
 
 export { WIDGET_REGISTRY }

@@ -149,7 +149,7 @@ async function acquireLock(key: string): Promise<boolean> {
   const redis = getRedisClient();
   if (!redis) return true;
   try {
-    const result = await redis.set(`nucrm:lock:${key}`, '1', 'NX', 'EX', LOCK_TTL);
+    const result = await (redis.set as any)(`nucrm:lock:${key}`, '1', 'EX', LOCK_TTL, 'NX');
     return result === 'OK';
   } catch {
     return false;
@@ -210,8 +210,9 @@ export async function getOrSetStale<T = any>(
   if (stale) return stale.data;
 
   const lockAcquired = await acquireLock(key);
-  if (!lockAcquired && stale) {
-    return stale.data;
+  if (!lockAcquired) {
+    const retry = await get<{ data: T; expires: number }>(`stale:${key}`);
+    if (retry) return retry.data;
   }
 
   try {
