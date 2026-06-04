@@ -16,44 +16,31 @@ import { updateAtRiskRuleSchema } from '@/lib/api/schemas';
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+    const { id } = await params;
 
     const body = await req.json();
     const validated = validateBody(updateAtRiskRuleSchema, body);
     if (validated instanceof NextResponse) return validated;
-    const v = validated.data;
 
     const [row] = await db.update(atRiskRules)
-      .set({
-        stageId: v.stage_id !== undefined ? (v.stage_id || null) : undefined,
-        maxDaysIdle: v.max_days_idle,
-        maxDaysInStage: v.max_days_in_stage,
-        sentimentThreshold: v.sentiment_threshold,
-        description: v.description,
-        active: v.active,
-        metadata: v.metadata,
-        updatedAt: new Date(),
-        updatedBy: ctx.userId,
-      })
-      .where(and(
-        eq(atRiskRules.id, params.id),
-        eq(atRiskRules.tenantId, ctx.tenantId),
-        isNull(atRiskRules.deletedAt)
-      ))
+      .set({ ...body, updatedAt: new Date() })
+      .where(eq(atRiskRules.id, id))
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Rule not found' }, { status: 404 });
 
-    await logAudit(ctx, {
+    await logAudit({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
       action: 'update_at_risk_rule',
       entityType: 'at_risk_rule',
       entityId: row.id,
-      description: `Updated at-risk rule ${row.id}`,
       metadata: { rule: row },
     });
 
@@ -65,20 +52,20 @@ export async function PATCH(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+    const { id } = await params;
 
     const [row] = await db.update(atRiskRules)
       .set({
         deletedAt: new Date(),
-        deletedBy: ctx.userId,
       })
       .where(and(
-        eq(atRiskRules.id, params.id),
+        eq(atRiskRules.id, id),
         eq(atRiskRules.tenantId, ctx.tenantId),
         isNull(atRiskRules.deletedAt)
       ))
@@ -86,11 +73,12 @@ export async function DELETE(
 
     if (!row) return NextResponse.json({ error: 'Rule not found' }, { status: 404 });
 
-    await logAudit(ctx, {
+    await logAudit({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
       action: 'delete_at_risk_rule',
       entityType: 'at_risk_rule',
       entityId: row.id,
-      description: `Deleted at-risk rule ${row.id}`,
     });
 
     return NextResponse.json({ success: true });
