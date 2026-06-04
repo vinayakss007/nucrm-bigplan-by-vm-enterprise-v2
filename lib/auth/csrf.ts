@@ -62,6 +62,7 @@ export function setCsrfCookie(token: string, isProduction: boolean = false): str
     `${CSRF_COOKIE_NAME}=${token}`,
     'Path=/',
     'SameSite=Strict',
+    'Max-Age=2592000',
     isProduction ? 'Secure' : null,
   ].filter(Boolean).join('; ');
   
