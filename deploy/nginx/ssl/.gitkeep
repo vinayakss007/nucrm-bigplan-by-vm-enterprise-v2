@@ -1,0 +1,11 @@
+# Place your SSL certificates here:
+#   fullchain.pem  (certificate + intermediates)
+#   privkey.pem    (private key)
+#
+# Generate with Let's Encrypt:
+#   certbot certonly --webroot -w /var/www/certbot -d crm.yourdomain.com
+#
+# For development/testing, generate self-signed:
+#   openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+#     -keyout privkey.pem -out fullchain.pem \
+#     -subj "/CN=localhost"

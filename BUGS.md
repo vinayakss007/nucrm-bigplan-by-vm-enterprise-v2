@@ -18,6 +18,10 @@
 - [x] Compact sizing, better spacing
 - [x] Keyboard shortcut badges
 
+## Bulk Actions on Contacts ✅
+- [x] Bulk action bar now reflects selection in real time (per-row + select-all checkboxes added to `contacts-client.tsx` list view)
+- [x] Bulk actions wired to real `/api/tenant/contacts/bulk` endpoint (Tag, Untag, Assign, Status, Export, Delete) — replaced N+1 individual DELETE loop
+- [x] Selected rows highlighted; selection cleared after a successful bulk operation
+
 ## Not Yet Fixed
-- [ ] Bulk action bar on contacts lags behind selection
-- [ ] Data table bulk actions need real API integration
+_None tracked at the moment._

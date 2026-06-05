@@ -55,7 +55,7 @@ export default function TrashPage() {
   const filtered = filter === 'all' ? items : items.filter(i => i.resource_type === filter);
 
   return (
-    <div className="max-w-5xl space-y-5 animate-fade-in">
+    <div className="max-w-[1600px] mx-auto space-y-5 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-lg font-bold flex items-center gap-2"><Trash2 className="w-5 h-5" />Trash</h1>

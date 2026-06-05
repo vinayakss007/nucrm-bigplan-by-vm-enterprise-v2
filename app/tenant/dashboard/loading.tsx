@@ -1,7 +1,7 @@
 export default function Loading() {
   return (
-    <div className="animate-pulse space-y-5 max-w-7xl">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="animate-pulse space-y-5 max-w-[1600px] mx-auto">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-6 gap-4">
         {[...Array(4)].map((_,i) => (
           <div key={i} className="admin-card p-5 space-y-2">
             <div className="h-4 w-20 bg-muted rounded" />

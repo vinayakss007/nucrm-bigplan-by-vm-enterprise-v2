@@ -1,25 +1,34 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('NuCRM Smoke Tests', () => {
-  test('should load the landing page', async ({ page }) => {
-    await page.goto('/');
+  test('auth pages are accessible', async ({ page }) => {
+    // Login page
+    await page.goto('/auth/login');
+    await expect(page.locator('input[name="email"]')).toBeVisible();
+    await expect(page.locator('input[name="password"]')).toBeVisible();
+
+    // Signup page
+    await page.goto('/auth/signup');
+    await expect(page.locator('input[placeholder="Acme Corp"]')).toBeVisible();
     
-    // Check for the brand name (first occurrence)
-    await expect(page.locator('text=NuCRM').first()).toBeVisible();
-    
-    // Check for the main CTA
-    const getStarted = page.locator('text=Get Started').first();
-    await expect(getStarted).toBeVisible();
+    // Forgot password page
+    await page.goto('/auth/forgot-password');
+    await expect(page.locator('input[type="email"]').first()).toBeVisible();
   });
 
-  test('should navigate to signup page', async ({ page }) => {
-    await page.goto('/');
+  test('navigates between auth pages', async ({ page }) => {
+    await page.goto('/auth/login');
     
-    const getStarted = page.locator('text=Get Started').first();
-    await getStarted.click();
-    
-    // Check if we are on the signup page
+    // Login → Signup
+    await page.click('a:has-text("Sign up free")');
     await expect(page).toHaveURL(/\/auth\/signup/);
-    await expect(page.locator('h1')).toContainText(/Create/i);
+    
+    // Signup → Login
+    await page.click('a:has-text("Sign in")');
+    await expect(page).toHaveURL(/\/auth\/login/);
+    
+    // Login → Forgot password
+    await page.click('text=Forgot password');
+    await expect(page).toHaveURL(/\/auth\/forgot-password/);
   });
 });

@@ -27,9 +27,9 @@ const MAX_RETRIES = 5;
 export type WebhookEvent =
   | 'contact.created' | 'contact.updated' | 'contact.deleted' | 'contact.restored'
   | 'deal.created'    | 'deal.updated'    | 'deal.stage_changed' | 'deal.won' | 'deal.lost' | 'deal.deleted'
-  | 'task.created'    | 'task.completed'
-  | 'company.created' | 'company.updated'
-  | 'lead.created'    | 'lead.converted'
+  | 'task.created'    | 'task.completed'   | 'task.deleted'
+  | 'company.created' | 'company.updated'  | 'company.deleted'
+  | 'lead.created'    | 'lead.updated'     | 'lead.deleted' | 'lead.converted'
   | 'ticket.created'  | 'ticket.resolved'
   | 'invoice.created' | 'invoice.paid'
   | 'form.submitted'

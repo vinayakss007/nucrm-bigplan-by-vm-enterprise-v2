@@ -82,7 +82,7 @@ export interface BulkAction {
   id: string
   label: string
   icon?: React.ReactNode
-  onClick: (selectedRowIds: string[], input?: string) => void | Promise<void>
+  onClick: (selectedRowIds: string[], input?: string) => void | string | Promise<void | string | undefined> | undefined
   requiresConfirmation?: boolean
   confirmationMessage?: string
   disabled?: boolean
