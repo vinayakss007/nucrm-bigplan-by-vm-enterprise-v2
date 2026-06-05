@@ -62,6 +62,7 @@ export function setCsrfCookie(token: string, isProduction: boolean = false): str
     `${CSRF_COOKIE_NAME}=${token}`,
     'Path=/',
     'SameSite=Strict',
+    'Max-Age=2592000',
     isProduction ? 'Secure' : null,
   ].filter(Boolean).join('; ');
   
@@ -142,7 +143,6 @@ export function needsCsrfValidation(method: string, path: string, authMethod?: s
   if (authMethod === 'api_key') return false;
   if (path.startsWith('/api/webhooks/')) return false;
   if (path.startsWith('/api/cron/')) return false;
-  if (path.startsWith('/api/auth/')) return false;
   if (path.startsWith('/api/forms/')) return false;
   if (path.startsWith('/api/leads/public/')) return false;
   if (path.startsWith('/api/setup/')) return false;

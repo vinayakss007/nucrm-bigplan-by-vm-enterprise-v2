@@ -182,6 +182,47 @@ export const BUILTIN_MODULES: ModuleManifest[] = [
     pages: ['/tenant/lead-warming'],
     webhooks: ['lead_warming.message_sent','lead_warming.reply_received','lead_warming.positive_intent'],
   },
+  {
+    id: 'project-management', name: 'Project Management', version: '1.0.0',
+    description: 'Lightweight project tracking with milestones and linked tasks',
+    author: 'NuCRM', category: 'utility', icon: '📁', minCrmVersion: '1.0.0',
+    pricing: { free:{enabled:false},starter:{enabled:false},pro:{enabled:true,price:0},enterprise:{enabled:true,price:0} },
+    features: ['Projects list','Link tasks to projects','Progress tracking','Milestones','Project detail view'],
+    permissions: ['projects.view','projects.create','projects.edit','projects.delete'],
+    pages: ['/tenant/projects','/tenant/projects/[id]'],
+  },
+  {
+    id: 'dashboard-core', name: 'Dashboard Core', version: '1.0.0',
+    description: 'Core dashboard widgets — contacts, pipeline, revenue, tasks, activity',
+    author: 'NuCRM', category: 'utility', icon: '📊', minCrmVersion: '1.0.0',
+    pricing: { free:{enabled:true},starter:{enabled:true},pro:{enabled:true},enterprise:{enabled:true} },
+    features: ['Contacts overview','Pipeline value','Revenue MTD','Tasks due','Recent activity','My tasks','Closing deals','Recent contacts'],
+    permissions: [],
+  },
+  {
+    id: 'dashboard-leads', name: 'Dashboard Leads', version: '1.0.0',
+    description: 'Lead pipeline tracking widget for the dashboard',
+    author: 'NuCRM', category: 'utility', icon: '🎯', minCrmVersion: '1.0.0',
+    pricing: { free:{enabled:false},starter:{enabled:true},pro:{enabled:true},enterprise:{enabled:true} },
+    features: ['Lead pipeline view','Lead source breakdown','New leads this month'],
+    permissions: [],
+  },
+  {
+    id: 'dashboard-tickets', name: 'Dashboard Tickets', version: '1.0.0',
+    description: 'Support ticket overview widget for the dashboard',
+    author: 'NuCRM', category: 'utility', icon: '🎫', minCrmVersion: '1.0.0',
+    pricing: { free:{enabled:false},starter:{enabled:true},pro:{enabled:true},enterprise:{enabled:true} },
+    features: ['Open tickets count','New tickets today','Tickets by status'],
+    permissions: [],
+  },
+  {
+    id: 'dashboard-invoices', name: 'Dashboard Invoices', version: '1.0.0',
+    description: 'Invoice status widget for the dashboard',
+    author: 'NuCRM', category: 'utility', icon: '🧾', minCrmVersion: '1.0.0',
+    pricing: { free:{enabled:false},starter:{enabled:true},pro:{enabled:true},enterprise:{enabled:true} },
+    features: ['Outstanding invoices','Overdue invoices','Invoice totals'],
+    permissions: [],
+  },
 ];
 
 export class ModuleRegistry {

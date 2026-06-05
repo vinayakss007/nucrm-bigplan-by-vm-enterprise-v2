@@ -78,6 +78,20 @@
       "when": 1746989500000,
       "tag": "0010_rename_invitations_role",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1778500000000,
+      "tag": "0011_approval_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1746990000000,
+      "tag": "0012_rls_policies",
+      "breakpoints": true
     }
   ]
 }

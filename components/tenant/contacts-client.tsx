@@ -10,6 +10,7 @@ import {
   CircleDot,
 } from 'lucide-react';
 import { cn, formatDate, getInitials, toSnakeCase } from '@/lib/utils';
+import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
 import ImportModal from './import-modal';
 import Pagination from './pagination';
 import toast from 'react-hot-toast';
@@ -79,7 +80,7 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: any) {
   };
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-shadow";
-  const lbl = "block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide";
+  const lbl = "block text-sm font-bold text-foreground/80 mb-1.5 uppercase tracking-wide";
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -106,7 +107,7 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: any) {
 
         <form onSubmit={handle} className="mt-1 space-y-5">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><User className="w-3 h-3"/>Identity</p>
+            <p className="text-xs font-extrabold uppercase tracking-widest text-foreground/70 mb-3 flex items-center gap-2"><User className="w-3.5 h-3.5"/>Identity</p>
             <div className="grid grid-cols-2 gap-3">
               <div><label className={lbl}>First Name *</label><input required className={inp} value={form.first_name} onChange={e=>setForm(p=>({...p,first_name:e.target.value}))}/></div>
               <div><label className={lbl}>Last Name</label><input className={inp} value={form.last_name} onChange={e=>setForm(p=>({...p,last_name:e.target.value}))}/></div>
@@ -122,7 +123,7 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: any) {
             </div>
           </div>
           <div className="border-t border-border/50 pt-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><Tag className="w-3 h-3"/>Classification</p>
+            <p className="text-xs font-extrabold uppercase tracking-widest text-foreground/70 mb-3 flex items-center gap-2"><Tag className="w-3.5 h-3.5"/>Classification</p>
             <div className="grid grid-cols-2 gap-3">
               <div><label className={lbl}>Status</label>
                 <select className={inp} value={form.lead_status} onChange={e=>setForm(p=>({...p,lead_status:e.target.value}))}>
@@ -143,7 +144,7 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: any) {
           </div>
           {teamMembers.length>0&&(
             <div className="border-t border-border/50 pt-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><Users className="w-3 h-3"/>Assignment</p>
+              <p className="text-xs font-extrabold uppercase tracking-widest text-foreground/70 mb-3 flex items-center gap-2"><Users className="w-3.5 h-3.5"/>Assignment</p>
               <select className={inp} value={form.assigned_to} onChange={e=>setForm(p=>({...p,assigned_to:e.target.value}))}>
                 <option value="">Unassigned</option>
                 {teamMembers.map((m:any)=><option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
@@ -353,7 +354,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold tracking-tight">Contacts</h1>
-              <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/30 px-2 py-0.5 rounded-full uppercase tracking-wider">{total.toLocaleString()}</span>
+              <span className="text-xs font-extrabold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/30 px-2 py-0.5 rounded-full uppercase tracking-wider">{total.toLocaleString()}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">Your contact database</p>
           </div>
@@ -418,8 +419,8 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                     onCheckedChange={() => toggleAllOnPage()}
                   />
                 </th>
-                {['Contact','Company','Email & Phone','Status','Lifecycle','Added',''].map(h=>(
-                  <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">{h}</th>
+                {['Contact','Company','Email & Phone','Status','Lifecycle','Score','Added',''].map(h=>(
+                  <th key={h} className="px-4 py-3 text-left text-xs font-extrabold text-foreground/80 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -442,17 +443,10 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                 const StatusIcon=status!.icon;
                 const lifecycleColor=LIFECYCLE_COLORS[c['lifecycle_stage']]||'bg-slate-100 text-slate-600';
                 return (
-                  <Swipeable
-                    key={c['id']}
-                    rightActions={[
-                      { label:'Edit', icon:<Edit className="w-5 h-5"/>, color:'text-white', bg:'bg-violet-500', onClick:()=>router.push(`/tenant/contacts/${c['id']}`) },
-                      ...(permissions.canDelete ? [{ label:'Delete', icon:<Trash2 className="w-5 h-5"/>, color:'text-white', bg:'bg-red-500', onClick:async()=>deleteContact(c['id'],`${c['first_name']} ${c['last_name']}`) }] : []),
-                    ]}
-                  >
-                    <tr className={cn(
-                      "border-b border-border last:border-0 hover:bg-accent/30 transition-colors cursor-pointer group",
-                      selectedIds.has(c['id']) && "bg-violet-50/50 dark:bg-violet-900/10"
-                    )} onClick={()=>router.push(`/tenant/contacts/${c['id']}`)}>
+                  <tr key={c['id']} className={cn(
+                    "border-b border-border last:border-0 hover:bg-accent/30 transition-colors cursor-pointer group",
+                    selectedIds.has(c['id']) && "bg-violet-50/50 dark:bg-violet-900/10"
+                  )} onClick={()=>router.push(`/tenant/contacts/${c['id']}`)}>
                     {/* Selection */}
                     <td className="w-10 px-4 py-3" onClick={e=>e.stopPropagation()}>
                       <Checkbox
@@ -469,8 +463,8 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold hover:text-violet-600 transition-colors truncate">{c['first_name']} {c['last_name']}</p>
-                          {c['title']&&<p className="text-[10px] text-muted-foreground truncate">{c['title']}</p>}
-                          {c['assigned_name']&&!c['title']&&<p className="text-[10px] text-muted-foreground">→ {c['assigned_name']}</p>}
+                          {c['title']&&<p className="text-xs text-muted-foreground/80 truncate">{c['title']}</p>}
+                          {c['assigned_name']&&!c['title']&&<p className="text-xs text-muted-foreground/80">→ {c['assigned_name']}</p>}
                         </div>
                       </div>
                     </td>
@@ -480,7 +474,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                         ?<div className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0"/><span className="text-sm truncate max-w-[140px]">{c['company_name']}</span></div>
                         :<span className="text-sm text-muted-foreground">—</span>
                       }
-                      {c['lead_source']&&<div className="flex items-center gap-1 mt-0.5 text-[10px] text-muted-foreground"><Globe className="w-2.5 h-2.5"/>{SOURCE_LABELS[c['lead_source']]||c['lead_source']}</div>}
+                      {c['lead_source']&&<div className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground/80"><Globe className="w-3 h-3"/>{SOURCE_LABELS[c['lead_source']]||c['lead_source']}</div>}
                     </td>
                     {/* Contact info */}
                     <td className="px-4 py-3">
@@ -491,16 +485,31 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                     </td>
                     {/* Status */}
                     <td className="px-4 py-3">
-                      <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold',status!.color)}>
+                      <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold',status!.color)}>
                         <StatusIcon className="w-3 h-3"/>{status!.label}
                       </span>
                     </td>
                     {/* Lifecycle */}
                     <td className="px-4 py-3">
                       {c['lifecycle_stage']
-                        ?<span className={cn('inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize',lifecycleColor)}>{c['lifecycle_stage']?.replace(/_/g,' ')}</span>
+                        ?<span className={cn('inline-flex px-2 py-0.5 rounded-full text-xs font-bold capitalize',lifecycleColor)}>{c['lifecycle_stage']?.replace(/_/g,' ')}</span>
                         :<span className="text-xs text-muted-foreground">—</span>
                       }
+                    </td>
+                    {/* Score */}
+                    <td className="px-4 py-3">
+                      {c['score'] > 0 ? (() => {
+                        const tier = getScoreTier(c['score']);
+                        const cfg = getScoreTierConfig(tier);
+                        return (
+                          <div className="flex items-center gap-2">
+                            <span className={cn('text-sm font-extrabold w-6', cfg.color)}>{c['score']}</span>
+                            <div className="flex-1 h-1.5 w-12 bg-muted rounded-full overflow-hidden hidden xl:block">
+                              <div className={cn('h-full', cfg.bar)} style={{ width: `${c['score']}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })() : <span className="text-xs text-muted-foreground">—</span>}
                     </td>
                     {/* Added */}
                     <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDate(c['created_at'])}</td>
@@ -516,7 +525,6 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                       </div>
                     </td>
                   </tr>
-                  </Swipeable>
                 );
               })}
             </tbody>
@@ -562,18 +570,23 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold truncate">{c['first_name']} {c['last_name']}</p>
-                      <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold',status!.color)}>
+                      <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-bold',status!.color)}>
                         <div className={cn('w-1.5 h-1.5 rounded-full',status!.dot)}/>{status!.label}
                       </span>
                     </div>
-                    {c['title']&&<p className="text-[10px] text-muted-foreground truncate mt-0.5">{c['title']}</p>}
+                    {c['title']&&<p className="text-xs text-muted-foreground/80 truncate mt-0.5">{c['title']}</p>}
                     <div className="flex items-center gap-3 mt-2">
-                      {c['email']&&<div className="flex items-center gap-1 text-[10px] text-muted-foreground"><Mail className="w-3 h-3 shrink-0"/><span className="truncate">{c['email']}</span></div>}
-                      {c['phone']&&<div className="flex items-center gap-1 text-[10px] text-muted-foreground"><Phone className="w-3 h-3 shrink-0"/><span>{c['phone']}</span></div>}
+                      {c['email']&&<div className="flex items-center gap-1 text-xs text-muted-foreground/80"><Mail className="w-3.5 h-3.5 shrink-0"/><span className="truncate">{c['email']}</span></div>}
+                      {c['phone']&&<div className="flex items-center gap-1 text-xs text-muted-foreground/80"><Phone className="w-3.5 h-3.5 shrink-0"/><span>{c['phone']}</span></div>}
                     </div>
                     <div className="flex items-center gap-3 mt-1">
-                      {c['company_name']&&<div className="flex items-center gap-1 text-[10px] text-muted-foreground"><Building2 className="w-3 h-3 shrink-0"/><span className="truncate">{c['company_name']}</span></div>}
-                      {c['lifecycle_stage']&&<span className={cn('inline-flex px-1.5 py-0.5 rounded-full text-[9px] font-semibold capitalize',LIFECYCLE_COLORS[c['lifecycle_stage']]||'bg-slate-100 text-slate-600')}>{c['lifecycle_stage']?.replace(/_/g,' ')}</span>}
+                      {c['company_name']&&<div className="flex items-center gap-1 text-xs text-muted-foreground/80"><Building2 className="w-3.5 h-3.5 shrink-0"/><span className="truncate">{c['company_name']}</span></div>}
+                      {c['lifecycle_stage']&&<span className={cn('inline-flex px-1.5 py-0.5 rounded-full text-xs font-bold capitalize',LIFECYCLE_COLORS[c['lifecycle_stage']]||'bg-slate-100 text-slate-600')}>{c['lifecycle_stage']?.replace(/_/g,' ')}</span>}
+                      {c['score'] > 0 && (() => {
+                        const tier = getScoreTier(c['score']);
+                        const cfg = getScoreTierConfig(tier);
+                        return <span className={cn('inline-flex px-1.5 py-0.5 rounded-full text-xs font-bold', cfg.bg, cfg.color)}>{c['score']} Score</span>;
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -604,25 +617,30 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                     <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-sm">
                       {getInitials(`${c['first_name'] ?? ''} ${c['last_name'] ?? ''}`)}
                     </div>
-                    <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold',status!.color)}>
+                    <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-bold',status!.color)}>
                       <div className={cn('w-1.5 h-1.5 rounded-full',status!.dot)}/>{status!.label}
                     </span>
+                    {c['score'] > 0 && (() => {
+                      const tier = getScoreTier(c['score']);
+                      const cfg = getScoreTierConfig(tier);
+                      return <span className={cn('absolute -top-1 -right-1 w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold border-2 border-background shadow-sm', cfg.bg, cfg.color)} title={`Score: ${c['score']}`}>{c['score']}</span>;
+                    })()}
                   </div>
                   <p className="text-sm font-semibold truncate group-hover:text-violet-600 transition-colors">{c['first_name']} {c['last_name']}</p>
-                  {c['title']&&<p className="text-[10px] text-muted-foreground truncate mt-0.5">{c['title']}</p>}
+                  {c['title']&&<p className="text-xs text-muted-foreground/80 truncate mt-0.5">{c['title']}</p>}
                   {c['company_name']&&(
-                    <div className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground">
-                      <Building2 className="w-2.5 h-2.5 shrink-0"/><span className="truncate">{c['company_name']}</span>
+                    <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground/80">
+                      <Building2 className="w-3 h-3 shrink-0"/><span className="truncate">{c['company_name']}</span>
                     </div>
                   )}
                   {c['email']&&(
-                    <div className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
-                      <Mail className="w-2.5 h-2.5 shrink-0"/><span className="truncate">{c['email']}</span>
+                    <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground/80">
+                      <Mail className="w-3 h-3 shrink-0"/><span className="truncate">{c['email']}</span>
                     </div>
                   )}
                   {c['last_activity_at']&&(
-                    <div className="flex items-center gap-1 mt-2 text-[10px] text-muted-foreground border-t border-border/50 pt-2">
-                      <Activity className="w-2.5 h-2.5"/>{formatDate(c['last_activity_at'])}
+                    <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground/80 border-t border-border/50 pt-2">
+                      <Activity className="w-3 h-3"/>{formatDate(c['last_activity_at'])}
                     </div>
                   )}
                 </Link>
@@ -719,7 +737,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void submitBulkPrompt(); } }}
                 />
               )}
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground/80">
                 Affects {selectedIds.size} selected contact{selectedIds.size === 1 ? '' : 's'}.
               </p>
               <div className="flex gap-2 justify-end pt-1">

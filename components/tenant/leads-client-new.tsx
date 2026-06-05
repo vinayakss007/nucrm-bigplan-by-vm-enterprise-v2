@@ -75,7 +75,7 @@ function KanbanColumn({ status, leads, onNavigate }: any) {
     <div className="flex-1 min-w-[220px] max-w-[280px]">
       <div className="flex items-center gap-2 mb-3 px-1">
         <div className={cn('w-2 h-2 rounded-full',cfg.dot)}/>
-        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{cfg.label}</span>
+        <span className="text-xs font-extrabold uppercase tracking-widest text-foreground/80">{cfg.label}</span>
         <span className="ml-auto text-xs font-bold text-muted-foreground bg-muted rounded-full px-2 py-0.5">{leads.length}</span>
       </div>
       <div className="space-y-2 min-h-[200px]">
@@ -83,15 +83,15 @@ function KanbanColumn({ status, leads, onNavigate }: any) {
           <div key={lead.id} onClick={()=>onNavigate(lead.id)}
             className="bg-card border border-border rounded-xl p-3 cursor-pointer hover:border-violet-400/50 hover:shadow-sm transition-all">
             <div className="flex items-start gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
                 {getInitials(`${lead.first_name} ${lead.last_name}`)}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold truncate">{lead.first_name} {lead.last_name}</p>
-                {lead.company_name&&<p className="text-[10px] text-muted-foreground truncate">{lead.company_name}</p>}
+                {lead.company_name&&<p className="text-xs text-muted-foreground/80 truncate">{lead.company_name}</p>}
               </div>
             </div>
-            {lead.budget&&<div className="mt-2 flex items-center gap-1 text-[10px] text-emerald-600 font-semibold"><DollarSign className="w-3 h-3"/>{formatCurrency(lead.budget)}</div>}
+            {lead.budget&&<div className="mt-2 flex items-center gap-1 text-xs text-emerald-600 font-bold"><DollarSign className="w-3.5 h-3.5"/>{formatCurrency(lead.budget)}</div>}
             {lead.score>0&&<div className="mt-1.5"><ScoreBadge score={lead.score}/></div>}
           </div>
         ))}
@@ -128,7 +128,7 @@ function QuickAddModal({ companies, teamMembers, onClose, onSuccess }: any) {
         </DialogHeader>
         <form onSubmit={handle} className="mt-2 space-y-5">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><User className="w-3 h-3"/>Identity</p>
+            <p className="text-xs font-extrabold uppercase tracking-widest text-foreground/70 mb-3 flex items-center gap-2"><User className="w-3.5 h-3.5"/>Identity</p>
             <div className="grid grid-cols-2 gap-3">
               <div><label className={lbl}>First Name *</label><input className={inp} value={data.first_name} onChange={e=>setData(p=>({...p,first_name:e.target.value}))} required/></div>
               <div><label className={lbl}>Last Name</label><input className={inp} value={data.last_name} onChange={e=>setData(p=>({...p,last_name:e.target.value}))}/></div>
@@ -144,7 +144,7 @@ function QuickAddModal({ companies, teamMembers, onClose, onSuccess }: any) {
             </div>
           </div>
           <div className="border-t border-border/50 pt-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><BarChart3 className="w-3 h-3"/>Qualification (BANT)</p>
+            <p className="text-xs font-extrabold uppercase tracking-widest text-foreground/70 mb-3 flex items-center gap-2"><BarChart3 className="w-3.5 h-3.5"/>Qualification (BANT)</p>
             <div className="grid grid-cols-2 gap-3">
               <div><label className={lbl}>Budget (USD)</label><input className={inp} type="number" placeholder="e.g. 50000" value={data.budget} onChange={e=>setData(p=>({...p,budget:e.target.value}))}/></div>
               <div><label className={lbl}>Authority Level</label>
@@ -170,7 +170,7 @@ function QuickAddModal({ companies, teamMembers, onClose, onSuccess }: any) {
           </div>
           {teamMembers.length>0&&(
             <div className="border-t border-border/50 pt-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><Users className="w-3 h-3"/>Assignment</p>
+              <p className="text-xs font-extrabold uppercase tracking-widest text-foreground/70 mb-3 flex items-center gap-2"><Users className="w-3.5 h-3.5"/>Assignment</p>
               <select className={inp} value={data.assigned_to} onChange={e=>setData(p=>({...p,assigned_to:e.target.value}))}>
                 <option value="">Unassigned</option>
                 {teamMembers.map((m:any)=><option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
@@ -309,7 +309,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold tracking-tight">Leads</h1>
-              <span className="text-[10px] font-bold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-2 py-0.5 rounded-full uppercase tracking-wider">{total.toLocaleString()}</span>
+              <span className="text-xs font-extrabold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-2 py-0.5 rounded-full uppercase tracking-wider">{total.toLocaleString()}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">Sales pipeline management</p>
           </div>
@@ -335,15 +335,15 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
       {/* KPI Strip */}
       <div className="flex sm:grid sm:grid-cols-4 lg:grid-cols-8 gap-2 overflow-x-auto sm:overflow-x-hidden pb-2 sm:pb-0 scrollbar-thin">
         <button onClick={()=>handleStatus('all')} className={cn('rounded-xl border p-3 text-left transition-all hover:shadow-sm shrink-0 min-w-[130px] sm:min-w-0',activeStatus==='all'?'border-violet-500/50 bg-violet-50 dark:bg-violet-900/10':'border-border bg-card')}>
-          <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">All Leads</p>
+          <p className="text-xs font-extrabold uppercase tracking-wider text-foreground/70">All Leads</p>
           <p className="text-xl font-bold mt-0.5">{totalLeads.toLocaleString()}</p>
-          <div className="mt-1 flex items-center gap-1 text-[9px] text-emerald-600 font-bold"><Flame className="w-2.5 h-2.5"/>{conversionRate}% Rate</div>
+          <div className="mt-1 flex items-center gap-1 text-xs text-emerald-600 font-bold"><Flame className="w-3 h-3"/>{conversionRate}% Rate</div>
         </button>
         {Object.entries(PIPELINE_CONFIG).map(([status,cfg])=>{
           const cnt=statsMap[status]||0;
           return (
             <button key={status} onClick={()=>handleStatus(status)} className={cn('rounded-xl border p-3 text-left transition-all hover:shadow-sm shrink-0 min-w-[130px] sm:min-w-0',activeStatus===status?`${cfg.ring} ring-1 bg-accent/50`:'border-border bg-card')}>
-              <div className="flex items-center justify-between"><p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground truncate">{cfg.label}</p><div className={cn('w-1.5 h-1.5 rounded-full shrink-0',cfg.dot)}/></div>
+              <div className="flex items-center justify-between"><p className="text-xs font-extrabold uppercase tracking-wider text-foreground/70 truncate">{cfg.label}</p><div className={cn('w-1.5 h-1.5 rounded-full shrink-0',cfg.dot)}/></div>
               <p className="text-xl font-bold mt-0.5">{cnt.toLocaleString()}</p>
               <div className="mt-1 h-1 bg-muted rounded-full overflow-hidden"><div className={cn('h-full rounded-full',cfg.dot)} style={{width:totalLeads>0?`${(cnt/totalLeads)*100}%`:'0%'}}/></div>
             </button>
@@ -420,7 +420,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
               <tr className="border-b border-border bg-muted/30">
                 <th className="px-4 py-3 w-10"><input type="checkbox" className="rounded border-border" onChange={e=>{if(e.target.checked){setSelectedLeads(new Set(leads.map(l=>l.id)));}else{setSelectedLeads(new Set());}}} checked={selectedLeads.size===leads.length&&leads.length>0}/></th>
                 {['Lead','Company','Contact','Status','Score','BANT','Activity',''].map(h=>(
-                  <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-4 py-3 text-left text-xs font-extrabold text-foreground/80 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -461,15 +461,15 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
                         <div className="min-w-0">
                           <p className="text-sm font-semibold hover:text-violet-600 transition-colors truncate">{lead.first_name} {lead.last_name}</p>
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            {lead.title&&<span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{lead.title}</span>}
-                            {lifecycle&&<Badge variant="secondary" className="text-[9px] h-3.5 px-1.5 gap-0.5"><lifecycle.icon className="w-2 h-2"/>{lifecycle.label}</Badge>}
+                            {lead.title&&<span className="text-xs text-muted-foreground/80 truncate max-w-[120px]">{lead.title}</span>}
+                            {lifecycle&&<Badge variant="secondary" className="text-xs h-5 px-1.5 gap-0.5"><lifecycle.icon className="w-2.5 h-2.5"/>{lifecycle.label}</Badge>}
                             {Array.isArray(lead.tags) && lead.tags.slice(0, 2).map((tag: string) => (
-                              <span key={tag} className="text-[9px] bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-1.5 py-0 rounded font-medium border border-blue-100 dark:border-blue-800">
+                              <span key={tag} className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-1.5 py-0 rounded font-medium border border-blue-100 dark:border-blue-800">
                                 {tag}
                               </span>
                             ))}
                             {Array.isArray(lead.tags) && lead.tags.length > 2 && (
-                              <span className="text-[9px] text-muted-foreground">+{lead.tags.length - 2}</span>
+                              <span className="text-xs text-muted-foreground/80">+{lead.tags.length - 2}</span>
                             )}
                           </div>
                         </div>
@@ -477,7 +477,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
                     </td>
                     <td className="px-4 py-3">
                       {lead.company_name?<div className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0"/><span className="text-sm truncate max-w-[140px]">{lead.company_name}</span></div>:<span className="text-sm text-muted-foreground">—</span>}
-                      {lead.assigned_name&&<div className="flex items-center gap-1 mt-0.5"><User className="w-2.5 h-2.5 text-muted-foreground"/><span className="text-[10px] text-muted-foreground">{lead.assigned_name}</span></div>}
+                      {lead.assigned_name&&<div className="flex items-center gap-1 mt-0.5"><User className="w-3 h-3 text-muted-foreground"/><span className="text-xs text-muted-foreground/80">{lead.assigned_name}</span></div>}
                     </td>
                     <td className="px-4 py-3">
                       <div className="space-y-0.5">
@@ -488,12 +488,12 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
                     <td className="px-4 py-3">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all hover:opacity-80',cfg.color)}>
+                          <button className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all hover:opacity-80',cfg.color)}>
                             <StatusIcon className="w-3 h-3"/>{cfg.label}<ChevronDown className="w-2.5 h-2.5 opacity-60"/>
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
-                          <DropdownMenuLabel className="text-[10px] uppercase tracking-wider">Change Status</DropdownMenuLabel>
+                          <DropdownMenuLabel className="text-xs font-bold uppercase tracking-wider">Change Status</DropdownMenuLabel>
                           <DropdownMenuSeparator/>
                           {Object.entries(PIPELINE_CONFIG).map(([id,c])=>(
                             <DropdownMenuItem key={id} onClick={()=>updateLeadStatus(lead.id,id)} className="gap-2">
@@ -507,13 +507,13 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
                     <td className="px-4 py-3">
                       <div className="space-y-1">
                         {lead.budget&&<div className="flex items-center gap-1 text-xs font-semibold text-emerald-600"><DollarSign className="w-3 h-3"/>{formatCurrency(lead.budget)}</div>}
-                        {authority&&lead.authority_level!=='unknown'&&<span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded',authority.bg,authority.color)}>{authority.label}</span>}
-                        {lead.timeline&&<div className="flex items-center gap-1 text-[10px] text-muted-foreground"><Clock className="w-2.5 h-2.5"/>{lead.timeline}</div>}
+                        {authority&&lead.authority_level!=='unknown'&&<span className={cn('text-xs font-bold px-1.5 py-0.5 rounded',authority.bg,authority.color)}>{authority.label}</span>}
+                        {lead.timeline&&<div className="flex items-center gap-1 text-xs text-muted-foreground/80"><Clock className="w-3 h-3"/>{lead.timeline}</div>}
                       </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Activity className="w-3 h-3 shrink-0"/>{lead.last_activity_at?<span>{formatDate(lead.last_activity_at)}</span>:<span className="italic">No activity</span>}</div>
-                      {lead.lead_source&&<div className="flex items-center gap-1 mt-0.5 text-[10px] text-muted-foreground"><Globe className="w-2.5 h-2.5"/>{SOURCE_LABELS[lead.lead_source]||lead.lead_source}</div>}
+                      {lead.lead_source&&<div className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground/80"><Globe className="w-3 h-3"/>{SOURCE_LABELS[lead.lead_source]||lead.lead_source}</div>}
                     </td>
                     <td className="px-4 py-3">
                       <DropdownMenu>

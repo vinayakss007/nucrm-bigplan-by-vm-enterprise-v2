@@ -1,0 +1,25 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Add Project Management database schema (projects, milestones, project_tasks linking table), register the module in the registry with Pro/Enterprise plan gating, add Zod validation schemas, and export from the schema index.",
+  "status": "completed",
+  "steps": [
+    "Create drizzle/schema/projects.ts with three tables: (1) `projects` table with columns: id (pk), tenant_id, name (text, not null), description (text), status (text: active/on-hold/completed, default active), start_date (date), end_date (date), owner_id (uuid ref users), metadata (jsonb), plus audit() columns. Indexes: tenantIdx, status index, owner index. (2) `milestones` table: id (pk), tenant_id, project_id (uuid ref projects, cascade delete), title (text not null), due_date (date), completed (boolean default false), completed_at (timestamp), metadata, lifecycle() columns. Indexes: tenantIdx, project_id index. (3) `project_tasks` linking table: id (pk), tenant_id, project_id (uuid ref projects, cascade), task_id (uuid ref tasks from infra.ts), added_at (timestamp defaultNow), added_by (uuid ref users). Unique index on (project_id, task_id). Follow the exact patterns from drizzle/schema/infra.ts and utils.ts.",
+    "Add `export * from './projects';` to drizzle/schema/index.ts",
+    "Add the 'project-management' module entry to BUILTIN_MODULES array in lib/modules/registry.ts. Use: id='project-management', name='Project Management', version='1.0.0', description='Lightweight project tracking with milestones and linked tasks', author='NuCRM', category='utility', icon='📁', minCrmVersion='1.0.0', pricing: { free:{enabled:false}, starter:{enabled:false}, pro:{enabled:true,price:0}, enterprise:{enabled:true,price:0} }, features:['Projects list','Link tasks to projects','Progress tracking','Milestones','Project detail view'], permissions:['projects.view','projects.create','projects.edit','projects.delete'], pages:['/tenant/projects','/tenant/projects/[id]']",
+    "Add Zod validation schemas in lib/api/schemas.ts: createProjectSchema (name: requiredString.max(200), description: optional string max 2000, status: enum ['active','on-hold','completed'] default 'active', start_date: optional date string, end_date: optional date string, owner_id: uuid), updateProjectSchema (partial of create), createMilestoneSchema (title: requiredString.max(200), due_date: optional date string, project_id: uuid required), linkTaskSchema (task_id: uuid required). Export types."
+  ],
+  "acceptance_criteria": [
+    "drizzle/schema/projects.ts exports projects, milestones, and projectTasks tables with proper tenant isolation",
+    "drizzle/schema/index.ts re-exports the new schema file",
+    "BUILTIN_MODULES in lib/modules/registry.ts includes 'project-management' entry gated to pro/enterprise plans",
+    "lib/api/schemas.ts exports createProjectSchema, updateProjectSchema, createMilestoneSchema, linkTaskSchema",
+    "`npm run build` completes without TypeScript errors"
+  ],
+  "verification": [
+    "Run `npx tsc --noEmit` to verify no type errors in the new schema and registry files",
+    "Run `npm run build` to confirm the full build passes"
+  ],
+  "blocked_reason": null,
+  "findings": "TypeScript compiles cleanly (0 errors). Build passes TypeScript check but fails at page data collection due to missing JWT_SECRET env var (pre-existing). Test suite has 4 pre-existing failures in tenant-isolation and backup-integrity tests unrelated to this change. npm install was needed for type checking."
+}

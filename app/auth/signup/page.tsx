@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Zap, Loader2, Eye, EyeOff, Mail, Lock, User, Building2,
   Cpu, CheckCircle, ArrowRight, Shield, Rocket, Target
@@ -11,8 +12,8 @@ import toast from 'react-hot-toast';
 
 function getPasswordStrength(password: string): { level: 'weak' | 'medium' | 'strong'; score: number } {
   let score = 0;
-  if (password.length >= 8) score++;
   if (password.length >= 12) score++;
+  if (password.length >= 14) score++;
   if (/[A-Z]/.test(password)) score++;
   if (/[0-9]/.test(password)) score++;
   if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) score++;
@@ -36,6 +37,7 @@ const strengthLabels = {
 
 
 export default function SignupPage() {
+  const router = useRouter();
   const [workspaceName, setWorkspaceName] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -77,7 +79,7 @@ export default function SignupPage() {
         return;
       }
       toast.success('Workspace created! Welcome to NuCRM.');
-      window.location.replace('/tenant/onboarding');
+      setTimeout(() => router.push('/tenant/dashboard'), 1500);
     } catch {
       setError('Connection error. Please try again.');
       setLoading(false);
@@ -244,7 +246,7 @@ export default function SignupPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
-                      minLength={8}
+                      minLength={12}
                       placeholder="Create a strong password"
                       onFocus={() => setFocusedField('password')}
                       onBlur={() => setFocusedField(null)}

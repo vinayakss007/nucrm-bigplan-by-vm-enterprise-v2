@@ -7,11 +7,17 @@ const TEST_USER = {
 
 test.describe('Multi-Tenant Isolation', () => {
   test('tenant data is isolated', async ({ page, context }) => {
-    await page.goto('/login');
-    await page.fill('input[type="email"]', TEST_USER.email);
-    await page.fill('input[type="password"]', TEST_USER.password);
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/tenant/, { timeout: 10000 });
+    // Login via API
+    const api = await page.request.post('/api/auth/login', {
+      data: { email: TEST_USER.email, password: TEST_USER.password },
+    });
+    const setCookie = api.headers()['set-cookie'] || '';
+    const csrf = setCookie.match(/nucrm_csrf_token=([^;]+)/)?.[1] || '';
+    const session = setCookie.match(/nucrm_session=([^;]+)/)?.[1] || '';
+    await context.addCookies([
+      { name: 'nucrm_csrf_token', value: csrf, domain: 'localhost', path: '/' },
+      { name: 'nucrm_session', value: session, domain: 'localhost', path: '/' },
+    ]);
 
     await page.goto('/tenant/contacts');
     const initialContactCount = await page.locator('[class*="contact"]').count();
