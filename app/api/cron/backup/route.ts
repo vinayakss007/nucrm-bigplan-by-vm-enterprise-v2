@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
@@ -235,6 +236,6 @@ export async function POST(request: NextRequest) {
       `Time: ${new Date().toISOString()}\nError: ${err.message}\n\nManual backup required immediately:\n1. Check database connection\n2. Check disk space\n3. Run backup manually from superadmin console`
     ).catch(() => {});
 
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
