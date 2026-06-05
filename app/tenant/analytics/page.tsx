@@ -113,7 +113,7 @@ export default function TenantAnalyticsPage() {
   });
 
   if (loading) return (
-    <div className="space-y-5 max-w-7xl animate-pulse">
+    <div className="space-y-5 max-w-[1600px] mx-auto animate-pulse">
       <div className="h-8 w-48 bg-muted rounded"/>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">{[...Array(4)].map((_,i)=><div key={i} className="admin-card h-24"/>)}</div>
       <div className="grid grid-cols-2 gap-5">{[...Array(2)].map((_,i)=><div key={i} className="admin-card h-64"/>)}</div>
@@ -121,7 +121,7 @@ export default function TenantAnalyticsPage() {
   );
 
   return (
-    <div className="space-y-5 max-w-7xl animate-fade-in">
+    <div className="space-y-5 max-w-[1600px] mx-auto animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-lg font-bold flex items-center gap-2"><BarChart3 className="w-5 h-5"/>Analytics</h1>
         <div className="flex rounded-xl border border-border overflow-hidden">

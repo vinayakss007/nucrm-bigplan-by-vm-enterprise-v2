@@ -142,8 +142,31 @@ export async function get<T = any>(key: string): Promise<T | null> {
   }
 }
 
+const LOCK_TTL = 5;
+const STALE_TTL_MULTIPLIER = 2;
+
+async function acquireLock(key: string): Promise<boolean> {
+  const redis = getRedisClient();
+  if (!redis) return true;
+  try {
+    const result = await (redis.set as any)(`nucrm:lock:${key}`, '1', 'EX', LOCK_TTL, 'NX');
+    return result === 'OK';
+  } catch {
+    return false;
+  }
+}
+
+async function releaseLock(key: string): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    await redis.del(`nucrm:lock:${key}`);
+  } catch { /* best effort */ }
+}
+
 /**
  * Get a value or set it with a fallback function
+ * Includes distributed mutex to prevent cache stampede.
  */
 export async function getOrSet<T = any>(
   key: string,
@@ -153,9 +176,75 @@ export async function getOrSet<T = any>(
   const cached = await get<T>(key);
   if (cached !== null) return cached;
 
-  const value = await fallback();
-  await set(key, value, ttlSeconds);
-  return value;
+  const lockAcquired = await acquireLock(key);
+  if (!lockAcquired) {
+    const stale = await get<{ data: T; expires: number }>(`stale:${key}`);
+    if (stale && stale.expires > Date.now()) {
+      return stale.data;
+    }
+  }
+
+  try {
+    const value = await fallback();
+    await set(key, value, ttlSeconds);
+    await set(`stale:${key}`, { data: value, expires: Date.now() + ttlSeconds * STALE_TTL_MULTIPLIER * 1000 }, ttlSeconds * STALE_TTL_MULTIPLIER);
+    return value;
+  } finally {
+    if (lockAcquired) await releaseLock(key);
+  }
+}
+
+/**
+ * Get or set with stale-while-revalidate:
+ * Returns stale data immediately while refreshing in background.
+ */
+export async function getOrSetStale<T = any>(
+  key: string,
+  fallback: () => Promise<T>,
+  ttlSeconds: number = 300
+): Promise<T> {
+  const cached = await get<T>(key);
+  if (cached !== null) return cached;
+
+  const stale = await get<{ data: T; expires: number }>(`stale:${key}`);
+  if (stale) return stale.data;
+
+  const lockAcquired = await acquireLock(key);
+  if (!lockAcquired) {
+    const retry = await get<{ data: T; expires: number }>(`stale:${key}`);
+    if (retry) return retry.data;
+  }
+
+  try {
+    const value = await fallback();
+    await set(key, value, ttlSeconds);
+    await set(`stale:${key}`, { data: value, expires: Date.now() + ttlSeconds * STALE_TTL_MULTIPLIER * 1000 }, ttlSeconds * STALE_TTL_MULTIPLIER);
+    return value;
+  } finally {
+    if (lockAcquired) await releaseLock(key);
+  }
+}
+
+/**
+ * Warm cache by pre-loading a key
+ */
+export async function warm<T = any>(
+  key: string,
+  fallback: () => Promise<T>,
+  ttlSeconds: number = 300
+): Promise<void> {
+  const exists = await get(key);
+  if (exists !== null) return;
+  const lockAcquired = await acquireLock(`warm:${key}`);
+  if (!lockAcquired) return;
+  try {
+    const recheck = await get(key);
+    if (recheck !== null) return;
+    const value = await fallback();
+    await set(key, value, ttlSeconds);
+  } finally {
+    if (lockAcquired) await releaseLock(`warm:${key}`);
+  }
 }
 
 /**
@@ -363,6 +452,8 @@ export const cache = {
   set,
   get,
   getOrSet,
+  getOrSetStale,
+  warm,
   del,
   delByPattern,
   exists,

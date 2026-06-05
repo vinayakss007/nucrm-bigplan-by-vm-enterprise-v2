@@ -6,6 +6,7 @@ import { logAudit } from '@/lib/audit';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
 import { updateLeadSchema } from '@/lib/api/schemas';
+import { fireWebhooks } from '@/lib/webhooks';
 
 /**
  * GET /api/tenant/leads/[id]
@@ -175,6 +176,8 @@ export async function PATCH(
         activityData: { new_status: rawBody.lead_status },
       });
     }
+
+    fireWebhooks(ctx.tenantId, 'lead.updated', { id }).catch(() => {});
     
     return NextResponse.json(updatedLead);
   } catch (error: any) {
@@ -224,6 +227,8 @@ export async function DELETE(
       tenantId: ctx.tenantId, userId: ctx.userId,
       action: 'delete', entityType: 'lead', entityId: id,
     });
+
+    fireWebhooks(ctx.tenantId, 'lead.deleted', { id }).catch(() => {});
 
     return NextResponse.json({ success: true, message: 'Moved to trash. Restore within 30 days.' });
   } catch (error: any) {

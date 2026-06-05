@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { markOnboardingComplete, recordOnboardingStep } from '@/lib/onboarding/check';
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (err: any) {
     console.error('[Onboarding Complete] Error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 

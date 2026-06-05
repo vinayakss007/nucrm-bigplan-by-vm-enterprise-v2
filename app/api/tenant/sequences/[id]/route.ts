@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
 import { updateSequenceSchema } from '@/lib/api/schemas';
@@ -45,7 +46,7 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('[Sequence] GET error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -123,7 +124,7 @@ export async function PATCH(
     });
   } catch (error: any) {
     console.error('[Sequence] PATCH error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -161,7 +162,7 @@ export async function DELETE(
     });
   } catch (error: any) {
     console.error('[Sequence] DELETE error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -240,6 +241,6 @@ export async function POST(
     });
   } catch (error: any) {
     console.error('[Enroll] POST error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }

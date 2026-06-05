@@ -1,0 +1,5 @@
+# Grafana dashboards will be auto-provisioned here.
+# Import community dashboards:
+#   - Node Exporter Full: ID 1860
+#   - PostgreSQL Database: ID 9628
+#   - Redis Dashboard: ID 763

@@ -147,17 +147,17 @@ export default function AdoptionMonitoringPage() {
 
 function Stat({ icon: Icon, label, value, sub, accent }: { icon: any; label: string; value: number | string; sub?: string; accent?: 'amber' | 'red' | 'emerald' }) {
   const accentBg =
-    accent === 'amber'   ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300/60 dark:border-amber-800/60' :
-    accent === 'red'     ? 'bg-red-50 dark:bg-red-950/30 border-red-300/60 dark:border-red-800/60' :
-    accent === 'emerald' ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300/60 dark:border-emerald-800/60' :
-                           'bg-card border-border';
+    accent === 'amber'   ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300/80 dark:border-amber-800/80 shadow-sm' :
+    accent === 'red'     ? 'bg-red-50 dark:bg-red-950/30 border-red-300/80 dark:border-red-800/80 shadow-sm' :
+    accent === 'emerald' ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300/80 dark:border-emerald-800/80 shadow-sm' :
+                           'bg-card border-border/80 shadow-sm';
   return (
-    <div className={cn('rounded-xl border p-3', accentBg)}>
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+    <div className={cn('rounded-xl border-2 p-3 hover:shadow-md transition-shadow', accentBg)}>
+      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
         <Icon className="w-3 h-3" /> <span className="truncate">{label}</span>
       </div>
-      <p className="text-xl font-bold tabular-nums mt-1">{value}</p>
-      {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+      <p className="text-3xl font-black tabular-nums mt-1 text-black dark:text-white">{value}</p>
+      {sub && <p className="text-[10px] font-medium text-muted-foreground/60 mt-1">{sub}</p>}
     </div>
   );
 }

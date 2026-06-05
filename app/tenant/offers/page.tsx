@@ -266,14 +266,14 @@ export default function OffersListPage() {
 
 function Stat({ label, value, hint, tone }: { label: string; value: number; hint?: string; tone?: 'emerald' | 'red' }) {
   const toneClass =
-    tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' :
-    tone === 'red'     ? 'text-red-600 dark:text-red-400' :
-                         'text-foreground';
+    tone === 'emerald' ? 'text-emerald-700 dark:text-emerald-400' :
+    tone === 'red'     ? 'text-red-700 dark:text-red-400' :
+                         'text-black dark:text-white';
   return (
-    <div className="rounded-xl border border-border bg-card p-3">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
-      <p className={cn('text-lg font-semibold mt-0.5 tabular-nums', toneClass)}>{value}</p>
-      {hint && <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">{hint}</p>}
+    <div className="rounded-xl border-2 border-border/80 bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">{label}</p>
+      <p className={cn('text-3xl font-black mt-1 tabular-nums', toneClass)}>{value}</p>
+      {hint && <p className="text-[10px] font-medium text-muted-foreground/60 mt-1 tabular-nums">{hint}</p>}
     </div>
   );
 }

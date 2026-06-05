@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 /**
  * Super Admin Tenants API
  * GET /api/super-admin/tenants - List all tenants
@@ -81,6 +82,6 @@ export async function GET(request: NextRequest) {
 
   } catch (err: any) {
     console.error('[super-admin tenants GET]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
