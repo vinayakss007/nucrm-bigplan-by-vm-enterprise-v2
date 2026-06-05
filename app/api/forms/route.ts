@@ -65,13 +65,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    await db.insert(formSubmissions).values({} as any); // @ts-expect-error Schema mismatch - activity insert requires partial object
-    db.insert().values({
+    await db.insert(formSubmissions).values({
       tenantId: form.tenantId,
       formId: form_id,
       contactId: contact_id,
       data: formData,
-      ipAddress: req.headers.get('x-forwarded-for')?.split(',')[0] ?? null,
+      sourceUrl: req.headers.get('referer') ?? null,
+      submittedBy: req.headers.get('x-forwarded-for')?.split(',')[0] ?? null,
     });
 
     await db.update(forms)

@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 /**
  * Super Admin Audit Logs API
  * GET /api/super-admin/audit-logs - List audit logs
@@ -84,6 +85,6 @@ export async function GET(request: NextRequest) {
 
   } catch (err: any) {
     console.error('[super-admin audit-logs GET]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }

@@ -189,7 +189,7 @@ export default function ContactsDataTable({
                 {contact.first_name} {contact.last_name}
               </p>
               {contact.assigned_name && (
-                <p className="text-[10px] text-muted-foreground">→ {contact.assigned_name}</p>
+                <p className="text-xs text-muted-foreground/80">→ {contact.assigned_name}</p>
               )}
             </div>
           </div>
@@ -238,7 +238,7 @@ export default function ContactsDataTable({
         <Badge
           variant="default"
           className={cn(
-            'text-xs font-semibold capitalize',
+              'text-sm font-bold capitalize',
             STATUS_COLORS[row.original.lead_status] ?? STATUS_COLORS["new"]
           )}
         >
@@ -571,7 +571,7 @@ export default function ContactsDataTable({
 
           <form onSubmit={handleAddContact} className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">
+              <label className="block text-sm font-bold text-foreground/80 mb-1">
                 First Name *
               </label>
               <input
@@ -582,7 +582,7 @@ export default function ContactsDataTable({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">
+              <label className="block text-sm font-bold text-foreground/80 mb-1">
                 Last Name
               </label>
               <input
@@ -592,7 +592,7 @@ export default function ContactsDataTable({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">
+              <label className="block text-sm font-bold text-foreground/80 mb-1">
                 Email
               </label>
               <input
@@ -603,7 +603,7 @@ export default function ContactsDataTable({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">
+              <label className="block text-sm font-bold text-foreground/80 mb-1">
                 Phone
               </label>
               <input
@@ -613,7 +613,7 @@ export default function ContactsDataTable({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">
+              <label className="block text-sm font-bold text-foreground/80 mb-1">
                 Company
               </label>
               <select
@@ -628,7 +628,7 @@ export default function ContactsDataTable({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">
+              <label className="block text-sm font-bold text-foreground/80 mb-1">
                 Lead Source
               </label>
               <select

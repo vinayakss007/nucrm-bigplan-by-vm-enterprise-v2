@@ -9,6 +9,7 @@ export type NotificationType =
   | 'contact_assigned' | 'mention'
   | 'invite_accepted'  | 'team_joined'
   | 'limit_warning'    | 'trial_expiring'
+  | 'lead_warming'
   | 'system';
 
 export async function createNotification(opts: {
@@ -53,10 +54,15 @@ export async function createNotification(opts: {
       metadata: meta,
     });
   } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    const errorStack = err instanceof Error ? err.stack : undefined;
     logger.error('[notifications] Failed to create notification', {
       type: opts.type,
       userId: opts.userId,
-      error: err instanceof Error ? err.message : String(err),
+      tenantId: opts.tenantId,
+      title: opts.title?.slice(0, 100),
+      error: errorMsg,
+      stack: errorStack,
     });
   }
 }
