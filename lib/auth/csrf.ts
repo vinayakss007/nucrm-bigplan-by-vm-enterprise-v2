@@ -143,7 +143,6 @@ export function needsCsrfValidation(method: string, path: string, authMethod?: s
   if (authMethod === 'api_key') return false;
   if (path.startsWith('/api/webhooks/')) return false;
   if (path.startsWith('/api/cron/')) return false;
-  if (path.startsWith('/api/auth/')) return false;
   if (path.startsWith('/api/forms/')) return false;
   if (path.startsWith('/api/leads/public/')) return false;
   if (path.startsWith('/api/setup/')) return false;
