@@ -1,3 +1,12 @@
+/**
+ * Next.js 16 Proxy (formerly middleware.ts).
+ *
+ * Renamed per the Next.js 16 deprecation: the file convention `middleware.ts`
+ * has been renamed to `proxy.ts` and the exported function from `middleware`
+ * to `proxy`. Behavior is unchanged.
+ *
+ * https://nextjs.org/docs/messages/middleware-to-proxy
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { getCsrfTokenFromCookie, getCsrfTokenFromHeader, needsCsrfValidation, validateCsrfToken } from '@/lib/auth/csrf';
