@@ -39,6 +39,7 @@ export type SchemaGroup =
   | 'tokens'    // API keys, sessions
   | 'modules'   // custom modules, extensions
   | 'segments'  // contact segments, lists
+  | 'ai'        // ai provider secrets, activity, templates
 ;
 
 /** Complete table registry entry */
@@ -65,6 +66,7 @@ import {
   impersonationSessions,
   fieldPermissions,
   recordPermissions,
+  approvalRequests,
   apiKeys,
   apiKeyUsage,
   auditLogs,
@@ -105,12 +107,12 @@ import {
   pipelineStages,
   meetings,
   churnPredictions,
-  leadScoringRules,
   callNotes,
   callRecordings,
   conversationMetrics,
   conversationKeywords,
   revenueProjections,
+  savedViews,
 } from './crm';
 
 import {
@@ -218,6 +220,11 @@ import {
 } from './modules';
 
 import {
+  customPlugins,
+  pluginExecutionLogs,
+} from './plugins';
+
+import {
   segments,
   segmentMembers,
 } from './segments';
@@ -249,6 +256,19 @@ import {
   editHistory,
   fieldSnapshots,
 } from './history';
+
+import {
+  productTemplates,
+  tenantTemplates,
+} from './templates';
+
+import {
+  aiProviderSecrets,
+  aiActivity,
+  aiDraftTemplates,
+  leadScoringRules,
+  atRiskRules,
+} from './ai';
 
 // =============================================================================
 // TABLE REGISTRY DEFINITION
@@ -404,6 +424,21 @@ export const TABLE_REGISTRY = {
       description: 'Record-level security',
       isCore: true,
       indexes: ['idx_record_permissions_entity', 'idx_record_permissions_role'],
+    },
+  },
+  approvalRequests: {
+    table: approvalRequests,
+    metadata: {
+      name: 'approval_requests',
+      schemaGroup: 'core',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Approval workflow requests',
+      isCore: true,
+      indexes: ['idx_approval_requests_entity', 'idx_approval_requests_status'],
     },
   },
   apiKeys: {
@@ -948,21 +983,6 @@ export const TABLE_REGISTRY = {
       indexes: ['idx_churn_predictions_tenant', 'idx_churn_predictions_contact'],
     },
   },
-  leadScoringRules: {
-    table: leadScoringRules,
-    metadata: {
-      name: 'lead_scoring_rules',
-      schemaGroup: 'crm',
-      hasTenantId: true,
-      hasSoftDelete: true,
-      hasAudit: true,
-      hasMetadata: false,
-      dependencies: ['tenants'],
-      description: 'Rules for lead scoring',
-      isCore: false,
-      indexes: ['idx_lead_scoring_rules_tenant', 'idx_lead_scoring_rules_active'],
-    },
-  },
   callNotes: {
     table: callNotes,
     metadata: {
@@ -1036,6 +1056,21 @@ export const TABLE_REGISTRY = {
       description: 'Sales revenue forecasts',
       isCore: false,
       indexes: ['idx_rev_projections_tenant', 'idx_revenue_projections_tenant', 'idx_revenue_projections_metadata_g'],
+    },
+  },
+  savedViews: {
+    table: savedViews,
+    metadata: {
+      name: 'saved_views',
+      schemaGroup: 'crm',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants', 'users'],
+      description: 'User-saved list views with custom filters and columns',
+      isCore: false,
+      indexes: ['idx_saved_views_tenant', 'idx_saved_views_entity_tenant'],
     },
   },
 
@@ -2282,6 +2317,36 @@ export const TABLE_REGISTRY = {
       indexes: ['idx_tenant_modules_unique', 'idx_tenant_modules_tenant'],
     },
   },
+  customPlugins: {
+    table: customPlugins,
+    metadata: {
+      name: 'custom_plugins',
+      schemaGroup: 'modules',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants', 'users'],
+      description: 'Custom user-defined API plugins',
+      isCore: false,
+      indexes: ['idx_custom_plugins_tenant', 'idx_custom_plugins_user', 'idx_custom_plugins_status', 'idx_custom_plugins_metadata_g', 'idx_custom_plugins_active'],
+    },
+  },
+  pluginExecutionLogs: {
+    table: pluginExecutionLogs,
+    metadata: {
+      name: 'plugin_execution_logs',
+      schemaGroup: 'modules',
+      hasTenantId: true,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants', 'customPlugins'],
+      description: 'Plugin action execution logs',
+      isCore: false,
+      indexes: ['idx_plugin_execution_logs_tenant', 'idx_plugin_execution_logs_plugin', 'idx_plugin_execution_logs_success'],
+    },
+  },
 
   // Segments tables
   segments: {
@@ -2517,6 +2582,7 @@ export const TABLE_REGISTRY = {
     table: serviceSubscriptions,
     metadata: {
       name: 'service_subscriptions',
+
       schemaGroup: 'billing',
       hasTenantId: true,
       hasSoftDelete: true,
@@ -2557,6 +2623,112 @@ export const TABLE_REGISTRY = {
       description: 'Field-level snapshots for edit history',
       isCore: false,
       indexes: [],
+    },
+  },
+  // Product template tables
+  productTemplates: {
+    table: productTemplates,
+    metadata: {
+      name: 'product_templates',
+      schemaGroup: 'modules',
+      hasTenantId: false,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['users'],
+      description: 'Product template definitions for onboarding',
+      isCore: false,
+      indexes: ['idx_product_templates_slug', 'idx_product_templates_status'],
+    },
+  },
+  tenantTemplates: {
+    table: tenantTemplates,
+    metadata: {
+      name: 'tenant_templates',
+      schemaGroup: 'modules',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'productTemplates', 'users'],
+      description: 'Template assignments to tenants',
+      isCore: false,
+      indexes: ['idx_tenant_templates_unique'],
+    },
+  },
+  aiProviderSecrets: {
+    table: aiProviderSecrets,
+    metadata: {
+      name: 'ai_provider_secrets',
+      schemaGroup: 'ai',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Encrypted per-tenant per-provider API keys for the AI gateway',
+      isCore: false,
+      indexes: ['idx_ai_provider_secrets_tenant', 'idx_ai_provider_secrets_unique', 'idx_ai_provider_secrets_active'],
+    },
+  },
+  aiActivity: {
+    table: aiActivity,
+    metadata: {
+      name: 'ai_activity',
+      schemaGroup: 'ai',
+      hasTenantId: true,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants', 'users'],
+      description: 'Per-call AI gateway invocation log',
+      isCore: false,
+      indexes: ['idx_ai_activity_tenant_time', 'idx_ai_activity_action', 'idx_ai_activity_user', 'idx_ai_activity_status'],
+    },
+  },
+  aiDraftTemplates: {
+    table: aiDraftTemplates,
+    metadata: {
+      name: 'ai_draft_templates',
+      schemaGroup: 'ai',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: true,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Per-tenant Auto-Draft prompt templates (email / note / reply / call_prep)',
+      isCore: false,
+      indexes: ['idx_ai_draft_templates_slug', 'idx_ai_draft_templates_kind'],
+    },
+  },
+  leadScoringRules: {
+    table: leadScoringRules,
+    metadata: {
+      name: 'lead_scoring_rules',
+      schemaGroup: 'ai',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: true,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Factors for AI lead scoring',
+      isCore: false,
+      indexes: ['idx_lead_scoring_rules_tenant', 'idx_lead_scoring_rules_active'],
+    },
+  },
+  atRiskRules: {
+    table: atRiskRules,
+    metadata: {
+      name: 'at_risk_rules',
+      schemaGroup: 'ai',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: true,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Rules for flagging deals as at-risk',
+      isCore: false,
+      indexes: ['idx_at_risk_rules_tenant', 'idx_at_risk_rules_active'],
     },
   },
 };

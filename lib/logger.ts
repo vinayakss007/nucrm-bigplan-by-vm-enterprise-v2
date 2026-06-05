@@ -1,9 +1,11 @@
 import fs from 'fs';
 import path from 'path';
+import { getCurrentRequestId } from '@/lib/tenant/request-context';
 
 /**
  * Structured Logger (replaces console.log/error)
  * Fixes: MON-004 (structured JSON logging), REL-001 (no silent failures)
+ * MON-010: requestId is auto-injected from AsyncLocalStorage context
  *
  * Usage:
  *   logger.info('User logged in', { userId, ip })
@@ -20,19 +22,25 @@ function writeToFile(logEntry: any) {
   }
 }
 
+function enrich(meta?: Record<string, unknown>): Record<string, unknown> {
+  const requestId = getCurrentRequestId();
+  if (!requestId) return meta ?? {};
+  return { requestId, ...meta };
+}
+
 export const logger = {
   info: (message: string, meta?: Record<string, unknown>) => {
-    const logEntry = { level: 'info', ts: new Date().toISOString(), msg: message, ...meta };
+    const logEntry = { level: 'info', ts: new Date().toISOString(), msg: message, ...enrich(meta) };
     console.log(JSON.stringify(logEntry));
     writeToFile(logEntry);
   },
   warn: (message: string, meta?: Record<string, unknown>) => {
-    const logEntry = { level: 'warn', ts: new Date().toISOString(), msg: message, ...meta };
+    const logEntry = { level: 'warn', ts: new Date().toISOString(), msg: message, ...enrich(meta) };
     console.warn(JSON.stringify(logEntry));
     writeToFile(logEntry);
   },
   error: (message: string, meta?: Record<string, unknown>) => {
-    const logEntry = { level: 'error', ts: new Date().toISOString(), msg: message, ...meta };
+    const logEntry = { level: 'error', ts: new Date().toISOString(), msg: message, ...enrich(meta) };
     console.error(JSON.stringify(logEntry));
     writeToFile(logEntry);
   },

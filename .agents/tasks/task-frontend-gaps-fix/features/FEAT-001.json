@@ -1,0 +1,25 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Create settings pages for SLA, Assignment Rules, Territories, and Hierarchy - 4 settings UIs that expose existing backend CRUD APIs. Each page follows the settings pattern from app/tenant/settings/webhooks/page.tsx and app/tenant/settings/compliance/page.tsx.",
+  "status": "in_progress",
+  "steps": [
+    "Create app/tenant/settings/sla/page.tsx - 'use client' page with table of SLA policies (name, priority, response time, resolution time, breach count), create/edit modal, toggle active status. Fetches from /api/tenant/sla. Include loading.tsx and error.tsx.",
+    "Create app/tenant/settings/assignment-rules/page.tsx - 'use client' page listing assignment rules (name, type badge for round_robin/territory/skill_based/weighted, entity type, priority). Create/edit modal with JSON config editor. Fetches from /api/tenant/assignment-rules. Include loading.tsx and error.tsx.",
+    "Create app/tenant/settings/territories/page.tsx - 'use client' page with tree/list view of territories (name, type, parent, geo config). Create/edit modal, delete button. Fetches from /api/tenant/territories. Include loading.tsx and error.tsx.",
+    "Create app/tenant/settings/hierarchy/page.tsx - 'use client' page showing parent-child org hierarchy. Shows children array and parents array. Add child relationship modal. Fetches from /api/tenant/hierarchy. Include loading.tsx and error.tsx."
+  ],
+  "acceptance_criteria": [
+    "All 4 pages render without TypeScript errors (npx tsc --noEmit passes)",
+    "Each page has corresponding loading.tsx and error.tsx",
+    "Each page uses 'use client' and fetches from the correct backend API endpoint",
+    "Create/edit modals allow full CRUD operations matching the backend API signatures",
+    "Pages follow the admin-card styling pattern and use lucide-react icons"
+  ],
+  "verification": [
+    "npx tsc --noEmit - 0 errors",
+    "npm run build - succeeds with all 4 new pages compiled"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

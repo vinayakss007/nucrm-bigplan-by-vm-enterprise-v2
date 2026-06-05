@@ -15,7 +15,7 @@ WHAT IS STOPPING NUCRM FROM BEING WORLD-CLASS
 
 7. Fragile error handling — Server components throw "Something went wrong" with no recovery path, no retry logic, and no user-friendly fallback states.
 
-8. Deprecated v1 API with no migration — `/api/v1/*` routes exist but are marked deprecated with no versioning strategy or client migration guide.
+8. ~~Deprecated v1 API with no migration~~ **RESOLVED** -- v1 API routes have been fully removed. Migration guide available at `docs/API_MIGRATION_v1_to_v2.md`.
 
 9. No caching layer — Every request hits PostgreSQL directly. No Redis caching for dashboard stats, contact lists, or settings — will choke at 100+ concurrent users.
 

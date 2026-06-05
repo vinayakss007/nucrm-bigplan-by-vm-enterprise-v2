@@ -25,6 +25,7 @@ declare namespace NodeJS {
     BACKUP_RETENTION_DAYS?: string;
     SETUP_KEY?: string;
     SUPER_ADMIN_EMAIL?: string;
+    /** @deprecated Use AI provider secrets vault (ai_provider_secrets table) instead */
     ANTHROPIC_API_KEY?: string;
     STRIPE_SECRET_KEY?: string;
     STRIPE_WEBHOOK_SECRET?: string;

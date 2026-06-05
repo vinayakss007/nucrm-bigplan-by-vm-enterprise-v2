@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
 
     let subtotal = 0;
     for (const item of items) {
-      subtotal += (parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0);
+      subtotal += (parseFloat(String(item.quantity)) || 1) * (parseFloat(String(item.unit_price)) || 0);
     }
     const totalAmount = subtotal;
 
