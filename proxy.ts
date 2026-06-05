@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { getCsrfTokenFromCookie, getCsrfTokenFromHeader, needsCsrfValidation, validateCsrfToken } from '@/lib/auth/csrf';
+import { edgeLimiter, getRateLimitHeaders, shouldBypassRateLimit } from '@/lib/rate-limit-edge';
 
 const JWT_SECRET_ENV = process.env['JWT_SECRET'];
 const JWT_SECRET = JWT_SECRET_ENV ? new TextEncoder().encode(JWT_SECRET_ENV) : null;
+
+const RATE_LIMIT_UNAUTH = 30;
+const RATE_LIMIT_AUTH = 120;
+const RATE_LIMIT_API_KEY = 300;
+const RATE_LIMIT_WINDOW_MS = 60_000;
 
 function generateRequestId(): string {
   const chars = 'abcdef0123456789';
@@ -34,6 +40,9 @@ const PUBLIC_PATHS = [
 const PUBLIC_PREFIXES = ['/_next', '/favicon', '/images', '/static', '/icons', '/api/v2'];
 
 const ALLOWED_ORIGINS = (process.env['ALLOWED_ORIGINS'] || 'http://localhost:3000').split(',').map(s => s.trim());
+if (ALLOWED_ORIGINS.includes('*') && process.env['NODE_ENV'] === 'production') {
+  console.warn('WARNING: ALLOWED_ORIGINS=* in production! Restrict to specific origins.');
+}
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) return true;
@@ -44,7 +53,7 @@ function isPublic(pathname: string): boolean {
 function setCORS(response: NextResponse, origin: string | null, pathname: string): void {
   if (!pathname.startsWith('/api/')) return;
   const allowed = origin && ALLOWED_ORIGINS.some(ao => {
-    if (ao === '*') return true;
+    if (ao === '*' && process.env['NODE_ENV'] !== 'production') return true;
     if (ao.startsWith('*.')) return origin.endsWith(ao.slice(1));
     return ao === origin;
   });
@@ -55,11 +64,39 @@ function setCORS(response: NextResponse, origin: string | null, pathname: string
   response.headers.set('Vary', 'Origin');
 }
 
+function applyRateLimitHeaders(response: NextResponse, result: { allowed: boolean; remaining: number; reset: number; limit: number }): void {
+  const headers = getRateLimitHeaders(result);
+  for (const [k, v] of Object.entries(headers)) {
+    response.headers.set(k, v);
+  }
+}
+
+function getClientIp(request: NextRequest): string {
+  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+}
+
+function buildRateLimitResponse(requestId: string, result: { allowed: boolean; remaining: number; reset: number; limit: number }, origin: string | null): NextResponse {
+  const headers: Record<string, string> = {
+    'x-request-id': requestId,
+    ...getRateLimitHeaders(result),
+  };
+  if (origin) {
+    headers['Access-Control-Allow-Origin'] = origin;
+  }
+  return NextResponse.json(
+    { error: 'Too many requests. Please try again later.' },
+    { status: 429, headers }
+  );
+}
+
+function isApiRequest(pathname: string): boolean {
+  return pathname.startsWith('/api/');
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const origin = request.headers.get('origin');
 
-  // Generate or propagate requestId for distributed tracing
   let requestId = request.headers.get('x-request-id');
   if (!requestId) requestId = generateRequestId();
 
@@ -74,13 +111,38 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  // Public paths pass through with CORS
-  if (isPublic(pathname)) {
+  // Public API routes: apply rate limiting or pass through
+  if (isApiRequest(pathname) && isPublic(pathname)) {
+    if (shouldBypassRateLimit(pathname)) {
+      // Bypass rate limiting (webhooks, health, metrics)
+      const response = NextResponse.next();
+      response.headers.set('x-request-id', requestId);
+      setCORS(response, origin, pathname);
+      return response;
+    }
+    // IP-based rate limiting for public API routes
+    const ip = getClientIp(request);
+    const result = edgeLimiter.check(`rl:pub:${ip}`, RATE_LIMIT_UNAUTH, RATE_LIMIT_WINDOW_MS);
+    if (!result.allowed) {
+      return buildRateLimitResponse(requestId, result, origin);
+    }
+    const response = NextResponse.next();
+    response.headers.set('x-request-id', requestId);
+    setCORS(response, origin, pathname);
+    applyRateLimitHeaders(response, result);
+    return response;
+  }
+
+  // Non-API public paths pass through with CORS
+  if (!isApiRequest(pathname) && isPublic(pathname)) {
     const response = NextResponse.next();
     response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     return response;
   }
+
+  // Non-API protected pages require auth redirect (handled below)
+  // API protected routes need auth + rate limiting (handled below)
 
   // Auth check for protected paths
   if (!JWT_SECRET) {
@@ -96,7 +158,7 @@ export async function proxy(request: NextRequest) {
   const token = cookieToken || bearerToken;
 
   if (!token) {
-    if (pathname.startsWith('/api/')) {
+    if (isApiRequest(pathname)) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401, headers: { 'x-request-id': requestId } });
     }
     const url = new URL('/auth/login', request.url);
@@ -111,12 +173,31 @@ export async function proxy(request: NextRequest) {
     if (!payload.sub) throw new Error('Invalid token');
 
     // CSRF protection for state-changing API requests
-    const authMethod = request.headers.get('x-auth-method') || undefined;
-    if (pathname.startsWith('/api/') && needsCsrfValidation(request.method, pathname, authMethod)) {
-      const cookieCsrf = getCsrfTokenFromCookie(request.headers.get('cookie') || null);
-      const headerCsrf = getCsrfTokenFromHeader(request.headers);
-      if (!validateCsrfToken(cookieCsrf, headerCsrf)) {
-        return NextResponse.json({ error: 'CSRF token missing or invalid. Please refresh the page and try again.' }, { status: 403, headers: { 'x-request-id': requestId } });
+    if (isApiRequest(pathname)) {
+      const authMethod = request.headers.get('x-auth-method') || undefined;
+      if (needsCsrfValidation(request.method, pathname, authMethod)) {
+        const cookieCsrf = getCsrfTokenFromCookie(request.headers.get('cookie') || null);
+        const headerCsrf = getCsrfTokenFromHeader(request.headers);
+        if (!validateCsrfToken(cookieCsrf, headerCsrf)) {
+          return NextResponse.json({ error: 'CSRF token missing or invalid. Please refresh the page and try again.' }, { status: 403, headers: { 'x-request-id': requestId } });
+        }
+      }
+
+      // Authenticated API rate limiting (by user)
+      if (!shouldBypassRateLimit(pathname)) {
+        const userId = payload.sub;
+        const isApiKey = authHeader?.startsWith('Bearer ') && token !== cookieToken && !cookieToken;
+        const max = isApiKey ? RATE_LIMIT_API_KEY : RATE_LIMIT_AUTH;
+        const key = isApiKey ? `rl:apikey:${userId}` : `rl:user:${userId}`;
+        const result = edgeLimiter.check(key, max, RATE_LIMIT_WINDOW_MS);
+        if (!result.allowed) {
+          return buildRateLimitResponse(requestId, result, origin);
+        }
+        const response = NextResponse.next();
+        response.headers.set('x-request-id', requestId);
+        setCORS(response, origin, pathname);
+        applyRateLimitHeaders(response, result);
+        return response;
       }
     }
 
@@ -125,7 +206,7 @@ export async function proxy(request: NextRequest) {
     setCORS(response, origin, pathname);
     return response;
   } catch {
-    if (pathname.startsWith('/api/')) {
+    if (isApiRequest(pathname)) {
       return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401, headers: { 'x-request-id': requestId } });
     }
     const redirect = NextResponse.redirect(new URL('/auth/login', request.url));
