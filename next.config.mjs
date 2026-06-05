@@ -5,7 +5,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 let nextConfig = {
-  allowedDevOrigins: ['136.119.162.223', 'localhost:3000'],
+  allowedDevOrigins: ['136.119.162.223', 'localhost:3000', '4bc0-34-58-30-100.ngrok-free.app', '34.170.154.229', '34.30.91.246'],
   turbopack: {
     root: __dirname,
   },
@@ -28,6 +28,7 @@ let nextConfig = {
       { protocol: 'https', hostname: '*.public.blob.vercel-storage.com' },
       { protocol: 'https', hostname: '*.r2.cloudflarestorage.com' },
       { protocol: 'https', hostname: '*.s3.amazonaws.com' },
+      { protocol: 'https', hostname: 'images.unsplash.com' },
     ],
     formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 60,
@@ -52,9 +53,20 @@ let nextConfig = {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-*', '@dnd-kit/core', '@dnd-kit/sortable'],
   },
 
-  // Headers for caching
+  // Security + Caching headers
   async headers() {
     return [
+      // Security headers on ALL routes (defense-in-depth even without nginx)
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          { key: 'X-DNS-Prefetch-Control', value: 'on' },
+        ],
+      },
       {
         source: '/api/:path*',
         headers: [
@@ -139,7 +151,7 @@ if (process.env.SENTRY_ORG && process.env.SENTRY_PROJECT && process.env.SENTRY_A
     };
     nextConfig = withSentryConfig(nextConfig, sentryWebpackPluginOptions);
     console.log('[next.config] Sentry enabled');
-  } catch (e) {
+  } catch {
     console.log('[next.config] Sentry not available');
   }
 }

@@ -21,7 +21,7 @@ const locales: Record<Locale, string> = {
 const defaultLocale: Locale = 'en';
 const localeFiles: Record<Locale, () => Promise<TranslationDict>> = {
   en: async () => en as TranslationDict,
-  es: async () => ({}),
+  es: async () => (await import('./locales/es.json')).default as TranslationDict,
   fr: async () => ({}),
   de: async () => ({}),
   pt: async () => ({}),

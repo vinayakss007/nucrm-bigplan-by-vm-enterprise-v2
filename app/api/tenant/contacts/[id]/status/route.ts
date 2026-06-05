@@ -53,12 +53,11 @@ export async function PATCH(
 
     const description = `Status: ${prev.leadStatus} → ${lead_status}${reason ? ` — ${reason}` : ''}`;
     
-    await db.insert(activities).values({} as any); // @ts-expect-error Schema mismatch - activity insert requires partial object
-    db.insert().values({
+    await db.insert(activities).values({
       tenantId: ctx.tenantId,
       userId: ctx.userId,
       contactId: id,
-      type: 'note',
+      eventType: 'note',
       description,
       metadata: { 
         status_change: true, 

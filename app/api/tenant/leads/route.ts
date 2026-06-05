@@ -7,6 +7,7 @@ import { leads, users, companies, leadActivities } from '@/drizzle/schema';
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { fireWebhooks } from '@/lib/webhooks';
 
 // Whitelist for sort columns to prevent SQL injection
 const ALLOWED_SORT_COLUMNS: Record<string, any> = {
@@ -228,6 +229,8 @@ export async function POST(request: NextRequest) {
       action: 'create', entityType: 'lead', entityId: newLead.id,
       newData: { email: v.email, name: `${v.first_name} ${v.last_name ?? ''}`.trim() },
     });
+
+    fireWebhooks(ctx.tenantId, 'lead.created', { id: newLead.id, email: v.email }).catch(() => {});
 
     return NextResponse.json(newLead, { status: 201 });
   } catch (error: any) {

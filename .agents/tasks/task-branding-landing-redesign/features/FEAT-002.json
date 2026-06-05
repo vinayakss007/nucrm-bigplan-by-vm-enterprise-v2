@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Completely redesign the landing page (app/page.tsx) to be visually dynamic with AI images, CSS animations, floating elements, and a modern SaaS look (Linear/Vercel/Raycast style). Replace the current text-heavy generic design with a visual-first, animated, dark-themed page.",
+  "status": "completed",
+  "steps": [
+    "Add new keyframe animations to app/globals.css for the landing page: float (gentle up-down), orbit (circular rotation), gradient-shift (background color animation), slide-in-left, slide-in-right, fade-in-up with stagger delays, typing cursor blink, pulse-ring, and particle-float. These should be added in a clearly-marked landing page section.",
+    "Completely rewrite app/page.tsx with a modern dynamic design. The page must include: (1) HERO section - dark gradient background (slate-950 to violet-950), animated gradient text heading that's short and punchy (not walls of text), a single line of subtext, CTA buttons, floating geometric shapes (circles/squares with blur and animation), and a typing animation effect on the headline. (2) SOCIAL PROOF bar - 'Trusted by 500+ teams' with animated logo/company placeholders sliding in. (3) FEATURES section - 3-4 key features max as glass-morphism cards with icons, hover scale animations, and background glow effects. Much less text than current version. (4) AI-POWERED section - highlight AI capabilities with a gradient card, floating sparkle elements, and an Unsplash image (https://images.unsplash.com/photo-1535378917042-10a22c95931a?w=800&h=600&fit=crop). (5) VISUAL SHOWCASE - use Unsplash images (https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&h=600&fit=crop for dashboard, https://images.unsplash.com/photo-1551434678-e076c223a692?w=800&h=600&fit=crop for team). (6) PLUGIN/INTEGRATION section - show connectivity with animated dots/connection lines and floating tech icons. (7) PRICING teaser - 3 clean tier cards (Free/Pro/Enterprise) with glassmorphism and hover effects. (8) CTA FOOTER - gradient background with a strong call-to-action. Keep the existing nav structure but make it glass-morphism style.",
+    "Ensure all animations use CSS only (no framer-motion or external libraries). Use Intersection Observer via the existing AnimatedCounter pattern for scroll-triggered animations. Add floating background shapes throughout with CSS keyframe animations (float, orbit). Use the existing Tailwind animate classes where possible and extend in globals.css for new ones.",
+    "Ensure the page is mobile responsive, uses dark-first design (dark mode as default visual), uses the violet/indigo accent colors, has glass-morphism effects (backdrop-blur with semi-transparent backgrounds), and includes all Unsplash placeholder images: https://images.unsplash.com/photo-1551434678-e076c223a692?w=800&h=600&fit=crop (team), https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&h=600&fit=crop (dashboard), https://images.unsplash.com/photo-1553877522-43269d4ea984?w=800&h=600&fit=crop (tech), https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800&h=600&fit=crop (team working), https://images.unsplash.com/photo-1535378917042-10a22c95931a?w=800&h=600&fit=crop (AI abstract)",
+    "The page must pass npx tsc --noEmit. Keep 'use client' directive. Import from lucide-react for icons and next/link for navigation. Reduce text content significantly compared to current page - focus on visuals and whitespace."
+  ],
+  "acceptance_criteria": [
+    "app/page.tsx is completely rewritten with a visual-first dynamic design",
+    "Page has animated gradient background with floating geometric shapes",
+    "Page includes at least 3 Unsplash placeholder images",
+    "Page has CSS-only animations (float, fade-in, gradient-shift, hover effects)",
+    "Page has glass-morphism cards (backdrop-blur + semi-transparent bg)",
+    "Page has significantly less text than before - short punchy headings only",
+    "Page has hero, social proof, features (3-4 max), AI section, integrations, pricing (3 tiers), and CTA footer",
+    "Page passes npx tsc --noEmit without errors",
+    "Page is mobile responsive using Tailwind responsive classes"
+  ],
+  "verification": [
+    "Run npx tsc --noEmit in the project root to verify TypeScript compilation passes"
+  ],
+  "blocked_reason": null,
+  "findings": "Completely rewrote landing page with dark-first design (bg-slate-950), animated gradient text headline, floating shapes with CSS animations, 3 Unsplash images via next/image (added images.unsplash.com to remotePatterns in next.config.mjs), 4 glass-morphism feature cards, AI section with floating sparkles, integrations grid with pulse-ring animation, 3-tier pricing with Popular badge, and gradient CTA footer. Added 8 keyframe animations to globals.css. TypeScript compiles clean."
+}

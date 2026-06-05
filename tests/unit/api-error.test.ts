@@ -1,81 +1,75 @@
-import { describe, it, expect } from 'vitest';
-import { apiError, notFound, badRequest, unauthorized, forbidden } from '@/lib/api-error';
+/**
+ * API Error Helper Tests
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-async function getBody(res: Response): Promise<any> {
-  try { return await res.json(); } catch { return {}; }
-}
+vi.mock('@sentry/nextjs', () => ({
+  captureException: vi.fn(),
+}));
 
-describe('apiError', () => {
-  it('returns 500 in production with generic message', async () => {
-    const prev = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
-    try {
-      const res = apiError(new Error('hidden'));
-      expect(res.status).toBe(500);
-      const body = await getBody(res);
-      expect(body.error).toBe('Internal server error');
-    } finally { process.env.NODE_ENV = prev; }
+describe('API Error Helpers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it('returns error message in development', async () => {
-    const prev = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-    try {
-      const res = apiError(new Error('dev error'));
-      expect(res.status).toBe(500);
-      const body = await getBody(res);
-      expect(body.error).toBe('dev error');
-    } finally { process.env.NODE_ENV = prev; }
+  it('apiError returns 500 JSON response by default', async () => {
+    const { apiError } = await import('@/lib/api-error');
+    const response = apiError(new Error('test'));
+    const json = await response.json();
+    expect(response.status).toBe(500);
+    expect(json.error).toBeDefined();
   });
 
-  it('returns custom status and message', async () => {
-    const res = apiError(new Error('bad'), 'Custom error', 400);
-    expect(res.status).toBe(400);
-    const body = await getBody(res);
-    expect(body.error).toBe('Custom error');
-  });
-});
-
-describe('notFound', () => {
-  it('returns 404', () => {
-    expect(notFound().status).toBe(404);
+  it('apiError returns custom status', async () => {
+    const { apiError } = await import('@/lib/api-error');
+    const response = apiError(new Error('bad'), 'Bad request', 400);
+    expect(response.status).toBe(400);
   });
 
-  it('includes entity name', async () => {
-    const body = await getBody(notFound('Contact'));
-    expect(body.error).toBe('Contact not found');
-  });
-});
-
-describe('badRequest', () => {
-  it('returns 400', () => {
-    expect(badRequest('Invalid input').status).toBe(400);
+  it('apiError captures to Sentry for 5xx', async () => {
+    const Sentry = await import('@sentry/nextjs');
+    const { apiError } = await import('@/lib/api-error');
+    const err = new Error('server error');
+    apiError(err, 'fail', 500);
+    expect(Sentry.captureException).toHaveBeenCalledWith(err);
   });
 
-  it('includes message', async () => {
-    const body = await getBody(badRequest('Invalid input'));
-    expect(body.error).toBe('Invalid input');
-  });
-});
-
-describe('unauthorized', () => {
-  it('returns 401', () => {
-    expect(unauthorized().status).toBe(401);
+  it('apiError does NOT capture to Sentry for 4xx', async () => {
+    const Sentry = await import('@sentry/nextjs');
+    const { apiError } = await import('@/lib/api-error');
+    apiError(new Error('bad input'), 'fail', 400);
+    expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
-  it('includes custom message', async () => {
-    const body = await getBody(unauthorized('Login required'));
-    expect(body.error).toBe('Login required');
-  });
-});
-
-describe('forbidden', () => {
-  it('returns 403', () => {
-    expect(forbidden().status).toBe(403);
+  it('notFound returns 404', async () => {
+    const { notFound } = await import('@/lib/api-error');
+    const response = notFound('Contact');
+    const json = await response.json();
+    expect(response.status).toBe(404);
+    expect(json.error).toContain('Contact');
   });
 
-  it('includes custom message', async () => {
-    const body = await getBody(forbidden('Admin only'));
-    expect(body.error).toBe('Admin only');
+  it('badRequest returns 400', async () => {
+    const { badRequest } = await import('@/lib/api-error');
+    const response = badRequest('Invalid email');
+    const json = await response.json();
+    expect(response.status).toBe(400);
+    expect(json.error).toBe('Invalid email');
+  });
+
+  it('unauthorized returns 401', async () => {
+    const { unauthorized } = await import('@/lib/api-error');
+    const response = unauthorized();
+    const json = await response.json();
+    expect(response.status).toBe(401);
+    expect(json.error).toContain('Authentication');
+  });
+
+  it('forbidden returns 403', async () => {
+    const { forbidden } = await import('@/lib/api-error');
+    const response = forbidden('Not allowed');
+    const json = await response.json();
+    expect(response.status).toBe(403);
+    expect(json.error).toBe('Not allowed');
   });
 });

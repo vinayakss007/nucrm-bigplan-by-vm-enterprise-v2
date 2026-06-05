@@ -1,5 +1,10 @@
 /**
- * AI Connector — Universal API Adapter
+ * AI Connector — Universal API Adapter (Legacy)
+ *
+ * NOTE: The plugin system (lib/plugins/) is now the proper way to connect
+ * custom APIs. Users should create plugins with explicit endpoint definitions
+ * rather than relying on this AI-based auto-discovery. This connector remains
+ * as a fallback for unknown built-in providers in the integrations system.
  *
  * When no built-in handler exists for a provider, this connector:
  * 1. Reads the provider's API docs (if available)

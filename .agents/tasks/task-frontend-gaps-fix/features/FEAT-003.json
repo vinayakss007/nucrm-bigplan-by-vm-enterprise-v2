@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Create Tax settings, Currency settings, Webhook delivery logs, Email analytics, Plugin marketplace, and Compliance export status UI pages - 6 remaining settings/admin pages for existing backend APIs.",
+  "status": "completed",
+  "steps": [
+    "Create app/tenant/settings/tax/page.tsx - 'use client' page listing tax rates (name, rate, type, country, state, isDefault). Create/edit modal. Delete with soft-delete. Fetches from /api/tenant/tax. Include loading.tsx and error.tsx.",
+    "Create app/tenant/settings/currency/page.tsx - 'use client' page showing supported currencies with exchange rates, let admin set tenant default currency. Fetches from /api/tenant/currency. Include loading.tsx and error.tsx.",
+    "Create app/tenant/settings/webhooks/logs/page.tsx - 'use client' page showing paginated webhook delivery logs (URL, event type, status, attempt count, response status, error message, delivered timestamp). Filter by status. Fetches from /api/tenant/webhooks/logs. Include loading.tsx and error.tsx.",
+    "Create app/tenant/analytics/email/page.tsx - 'use client' page showing email tracking analytics (open rates, click events, per-contact stats). Fetches from /api/tenant/email/track. Include loading.tsx and error.tsx.",
+    "Create app/tenant/plugins/page.tsx - 'use client' marketplace page showing available providers and installed plugins. Install/uninstall actions, config modal. Fetches from /api/tenant/plugin-engine (type=providers for available, default for installed). Include loading.tsx and error.tsx.",
+    "Update app/tenant/settings/compliance/page.tsx - Add an 'Export History' tab or section that shows GDPR export request status and history (existing page already has some compliance data but needs export status visibility). The compliance page already exists - just verify it fully covers export history from /api/tenant/compliance/gdpr."
+  ],
+  "acceptance_criteria": [
+    "All new pages render without TypeScript errors",
+    "Tax settings supports full CRUD matching backend API (POST with name/rate/type/country/state, PUT with id, DELETE with ?id=)",
+    "Currency settings displays currencies and allows setting tenant default",
+    "Webhook logs shows paginated delivery history with status filtering",
+    "Email analytics shows tracking data",
+    "Plugin marketplace shows providers list and installed integrations, supports install/uninstall",
+    "Compliance page covers export history"
+  ],
+  "verification": [
+    "npx tsc --noEmit - 0 errors",
+    "npm run build - succeeds with all new pages compiled"
+  ],
+  "blocked_reason": null,
+  "findings": "All 5 new pages + 15 files total (page.tsx, loading.tsx, error.tsx each) created successfully. tsc --noEmit passes with 0 errors. npm run build succeeds with all 5 new routes compiled (/tenant/settings/tax, /tenant/settings/currency, /tenant/settings/webhooks/logs, /tenant/analytics/email, /tenant/plugins). Had to fix .gitignore logs/ pattern to /logs/ (rooted) so the webhooks/logs directory was not ignored. Used typed spread object instead of Record<string,unknown> in tax page to avoid TS4111 index signature errors. Compliance page already fully covers GDPR export status with past requests table - no changes needed."
+}
