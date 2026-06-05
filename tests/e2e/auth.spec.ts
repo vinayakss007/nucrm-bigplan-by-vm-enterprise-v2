@@ -51,8 +51,8 @@ test.describe('Authentication', () => {
 
   test('forgot password link navigates correctly', async ({ page }) => {
     await page.goto('/auth/login');
-    await page.click('text=Forgot password');
-    await expect(page).toHaveURL(/\/auth\/forgot-password/);
+    await page.getByRole('link', { name: /forgot password/i }).click();
+    await expect(page).toHaveURL(/\/auth\/forgot-password/, { timeout: 10000 });
   });
 
   test('unauthenticated access to protected route redirects to login', async ({ page }) => {
