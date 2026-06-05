@@ -16,13 +16,14 @@ import { updateAtRiskRuleSchema } from '@/lib/api/schemas';
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
+    const { id } = await params;
     const body = await req.json();
     const validated = validateBody(updateAtRiskRuleSchema, body);
     if (validated instanceof NextResponse) return validated;
@@ -41,7 +42,7 @@ export async function PATCH(
         updatedBy: ctx.userId,
       })
       .where(and(
-        eq(atRiskRules.id, params.id),
+        eq(atRiskRules.id, id),
         eq(atRiskRules.tenantId, ctx.tenantId),
         isNull(atRiskRules.deletedAt)
       ))
@@ -49,12 +50,13 @@ export async function PATCH(
 
     if (!row) return NextResponse.json({ error: 'Rule not found' }, { status: 404 });
 
-    await logAudit(ctx, {
+    await logAudit({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
       action: 'update_at_risk_rule',
       entityType: 'at_risk_rule',
       entityId: row.id,
-      description: `Updated at-risk rule ${row.id}`,
-      metadata: { rule: row },
+      newData: row,
     });
 
     return NextResponse.json(row);
@@ -65,20 +67,21 @@ export async function PATCH(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
+    const { id } = await params;
     const [row] = await db.update(atRiskRules)
       .set({
         deletedAt: new Date(),
-        deletedBy: ctx.userId,
+        updatedBy: ctx.userId,
       })
       .where(and(
-        eq(atRiskRules.id, params.id),
+        eq(atRiskRules.id, id),
         eq(atRiskRules.tenantId, ctx.tenantId),
         isNull(atRiskRules.deletedAt)
       ))
@@ -86,11 +89,12 @@ export async function DELETE(
 
     if (!row) return NextResponse.json({ error: 'Rule not found' }, { status: 404 });
 
-    await logAudit(ctx, {
+    await logAudit({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
       action: 'delete_at_risk_rule',
       entityType: 'at_risk_rule',
       entityId: row.id,
-      description: `Deleted at-risk rule ${row.id}`,
     });
 
     return NextResponse.json({ success: true });

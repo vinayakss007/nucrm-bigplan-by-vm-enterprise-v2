@@ -452,7 +452,7 @@ describe('Drizzle Schema - Foreign Key Relationships', () => {
   });
 
   it('emailCampaigns references emailTemplates', () => {
-    const table =.schema.emailCampaigns;
+    const table = schema.emailCampaigns;
     expect(table.templateId).toBeDefined();
   });
 
@@ -1433,9 +1433,9 @@ describe('Drizzle Schema - Default Values', () => {
   });
 
   it('array columns have default empty array', () => {
-    expect(schema.companies.tags.default).toEqual(\'{}\');
-    expect(schema.contacts.tags.default).toEqual(\'{}\');
-    expect(schema.leads.tags.default).toEqual(\'{}\');
+    expect(schema.companies.tags.default).toEqual('{}');
+    expect(schema.contacts.tags.default).toEqual('{}');
+    expect(schema.leads.tags.default).toEqual('{}');
   });
 });
 
