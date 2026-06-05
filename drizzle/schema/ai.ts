@@ -124,3 +124,66 @@ export const aiDraftTemplates = pgTable('ai_draft_templates', {
     .where(sql`deleted_at IS NULL`),
   kindIdx: index('idx_ai_draft_templates_kind').on(table.tenantId, table.kind, table.active),
 }));
+
+// ── 4. LEAD SCORING RULES ───────────────────────────
+// Per-tenant rules that drive the AI lead scoring engine.
+// Each rule has a factor (e.g. 'Company Size'), a weight (-100 to 100),
+// and a condition (e.g. 'revenue > 1M').
+export const leadScoringRules = pgTable('lead_scoring_rules', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  /** Human-readable factor name, e.g. 'Role matches persona' */
+  factor: text('factor').notNull(),
+  /** Importance: positive = bonus, negative = penalty. Typically -100 to 100. */
+  weight: integer('weight').notNull().default(10),
+  /** Optional machine-readable condition or prompt hint */
+  condition: text('condition'),
+  /** Order in the settings UI */
+  sortOrder: integer('sort_order').notNull().default(0),
+  active: boolean('active').notNull().default(true),
+  ...utils.lifecycle(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+}, (table) => ({
+  tenantIdx: utils.tenantIdx(table),
+  activeIdx: utils.activeIdx(table),
+}));
+
+// ── 5. AT-RISK RULES ────────────────────────────────
+// Per-tenant rules for flagging deals as 'at risk'.
+// Flagged deals are shown in /tenant/ai/at-risk.
+export const atRiskRules = pgTable('at_risk_rules', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  /** 
+   * Deal stage this rule applies to. 
+   * If null, it's a global rule (fallback).
+   */
+  stageId: uuid('stage_id'),
+  /** 
+   * Flag if no activity for X days. 
+   * Activity = notes, emails, calls, meetings, or field updates.
+   */
+  maxDaysIdle: integer('max_days_idle').notNull().default(14),
+  /** 
+   * Flag if deal has been in this stage for longer than X days,
+   * regardless of activity. Useful for 'Negotiation' or 'Contract' stages.
+   */
+  maxDaysInStage: integer('max_days_in_stage'),
+  /** 
+   * Flag if sentiment score falls below X (0-100).
+   * Sentiment is extracted from the latest email reply using AI.
+   */
+  sentimentThreshold: integer('sentiment_threshold').default(30),
+  /** Optional custom notes for why this stage has these rules */
+  description: text('description'),
+  active: boolean('active').notNull().default(true),
+  metadata: utils.metadata(),
+  ...utils.lifecycle(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+}, (table) => ({
+  tenantIdx: utils.tenantIdx(table),
+  stageIdx: index('idx_at_risk_rules_stage').on(table.tenantId, table.stageId),
+  activeIdx: utils.activeIdx(table),
+}));

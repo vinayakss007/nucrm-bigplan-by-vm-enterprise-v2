@@ -11,11 +11,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { tenants } from '@/drizzle/schema';
+import { tenants, atRiskRules, deals } from '@/drizzle/schema';
 import { aiActivity } from '@/drizzle/schema/ai';
-import { eq, sql, and, gte } from 'drizzle-orm';
+import { eq, sql, and, gte, isNull } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { listProviderKeyMeta, type AIProviderId } from '@/lib/ai/secrets';
+import { getAtRiskDeals } from '@/lib/ai/at-risk';
 
 const PROVIDER_IDS: AIProviderId[] = ['openai', 'anthropic', 'groq', 'ollama'];
 
@@ -85,22 +86,13 @@ export async function GET(req: NextRequest) {
       if (row.action === 'lead_scoring') scoring_runs_today += Number(row.calls) || 0;
     }
 
-    // At-risk: deals not closed and untouched for 14d. Tolerate the schema not
-    // matching exactly across deployments by wrapping in a try/catch.
+    // At-risk: dynamic calculation based on tenant rules
     let at_risk_count = 0;
     try {
-      const result = await db.execute(sql`
-        SELECT count(*)::int AS at_risk
-        FROM deals
-        WHERE tenant_id = ${ctx.tenantId}
-          AND deleted_at IS NULL
-          AND COALESCE(metadata->>'outcome','') NOT IN ('won','lost')
-          AND updated_at < NOW() - INTERVAL '14 days'
-      `);
-      const row = (result as { rows?: Array<{ at_risk?: number }> }).rows?.[0];
-      at_risk_count = Number(row?.at_risk) || 0;
-    } catch {
-      // Schema mismatch — ignore
+      const atRiskDeals = await getAtRiskDeals(ctx.tenantId);
+      at_risk_count = atRiskDeals.length;
+    } catch (e) {
+      // Fallback if rules table missing or other error
     }
 
     return NextResponse.json({

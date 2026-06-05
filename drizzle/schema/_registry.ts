@@ -39,6 +39,7 @@ export type SchemaGroup =
   | 'tokens'    // API keys, sessions
   | 'modules'   // custom modules, extensions
   | 'segments'  // contact segments, lists
+  | 'ai'        // ai provider secrets, activity, templates
 ;
 
 /** Complete table registry entry */
@@ -106,7 +107,6 @@ import {
   pipelineStages,
   meetings,
   churnPredictions,
-  leadScoringRules,
   callNotes,
   callRecordings,
   conversationMetrics,
@@ -266,6 +266,8 @@ import {
   aiProviderSecrets,
   aiActivity,
   aiDraftTemplates,
+  leadScoringRules,
+  atRiskRules,
 } from './ai';
 
 // =============================================================================
@@ -979,21 +981,6 @@ export const TABLE_REGISTRY = {
       description: 'AI churn risk analysis',
       isCore: false,
       indexes: ['idx_churn_predictions_tenant', 'idx_churn_predictions_contact'],
-    },
-  },
-  leadScoringRules: {
-    table: leadScoringRules,
-    metadata: {
-      name: 'lead_scoring_rules',
-      schemaGroup: 'crm',
-      hasTenantId: true,
-      hasSoftDelete: true,
-      hasAudit: true,
-      hasMetadata: false,
-      dependencies: ['tenants'],
-      description: 'Rules for lead scoring',
-      isCore: false,
-      indexes: ['idx_lead_scoring_rules_tenant', 'idx_lead_scoring_rules_active'],
     },
   },
   callNotes: {
@@ -2595,6 +2582,7 @@ export const TABLE_REGISTRY = {
     table: serviceSubscriptions,
     metadata: {
       name: 'service_subscriptions',
+
       schemaGroup: 'billing',
       hasTenantId: true,
       hasSoftDelete: true,
@@ -2672,7 +2660,7 @@ export const TABLE_REGISTRY = {
     table: aiProviderSecrets,
     metadata: {
       name: 'ai_provider_secrets',
-      schemaGroup: 'tokens',
+      schemaGroup: 'ai',
       hasTenantId: true,
       hasSoftDelete: true,
       hasAudit: false,
@@ -2687,7 +2675,7 @@ export const TABLE_REGISTRY = {
     table: aiActivity,
     metadata: {
       name: 'ai_activity',
-      schemaGroup: 'tokens',
+      schemaGroup: 'ai',
       hasTenantId: true,
       hasSoftDelete: false,
       hasAudit: false,
@@ -2702,7 +2690,7 @@ export const TABLE_REGISTRY = {
     table: aiDraftTemplates,
     metadata: {
       name: 'ai_draft_templates',
-      schemaGroup: 'tokens',
+      schemaGroup: 'ai',
       hasTenantId: true,
       hasSoftDelete: true,
       hasAudit: true,
@@ -2711,6 +2699,36 @@ export const TABLE_REGISTRY = {
       description: 'Per-tenant Auto-Draft prompt templates (email / note / reply / call_prep)',
       isCore: false,
       indexes: ['idx_ai_draft_templates_slug', 'idx_ai_draft_templates_kind'],
+    },
+  },
+  leadScoringRules: {
+    table: leadScoringRules,
+    metadata: {
+      name: 'lead_scoring_rules',
+      schemaGroup: 'ai',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: true,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Factors for AI lead scoring',
+      isCore: false,
+      indexes: ['idx_lead_scoring_rules_tenant', 'idx_lead_scoring_rules_active'],
+    },
+  },
+  atRiskRules: {
+    table: atRiskRules,
+    metadata: {
+      name: 'at_risk_rules',
+      schemaGroup: 'ai',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: true,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Rules for flagging deals as at-risk',
+      isCore: false,
+      indexes: ['idx_at_risk_rules_tenant', 'idx_at_risk_rules_active'],
     },
   },
 };

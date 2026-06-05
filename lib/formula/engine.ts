@@ -10,21 +10,20 @@
  * (GHSA-8gw3-rxh4-v6jx, GHSA-jc85-fpwf-qm7x) with NO fix available.
  */
 
-import { create, all, type ConfigOptions } from 'mathjs';
+import { create, all } from 'mathjs';
 
 // Create a restricted mathjs instance — no dangerous functions
-const config: ConfigOptions = { matrix: 'Array' as const };
-const math = create(all as any, config) as any;
+const math = create(all as any) as any;
 
 // Remove dangerous functions that could be abused
 const BLOCKED_FUNCTIONS = [
-  'import', 'createUnit', 'evaluate', 'parse', 'simplify',
+  'import', 'createUnit',
+  'simplify',
   'derivative', 'resolve', 'compile', 'chain',
 ];
 
 for (const fn of BLOCKED_FUNCTIONS) {
   try {
-    // @ts-ignore — intentionally removing functions from scope
     delete (math as any)[fn];
   } catch {
     // Some may not exist, that's fine

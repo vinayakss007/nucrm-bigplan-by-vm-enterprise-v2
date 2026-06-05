@@ -5,7 +5,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 let nextConfig = {
-  allowedDevOrigins: ['136.119.162.223', 'localhost:3000'],
+  allowedDevOrigins: ['136.119.162.223', 'localhost:3000', '4bc0-34-58-30-100.ngrok-free.app', '34.170.154.229', '34.30.91.246'],
   turbopack: {
     root: __dirname,
   },
@@ -151,7 +151,7 @@ if (process.env.SENTRY_ORG && process.env.SENTRY_PROJECT && process.env.SENTRY_A
     };
     nextConfig = withSentryConfig(nextConfig, sentryWebpackPluginOptions);
     console.log('[next.config] Sentry enabled');
-  } catch (e) {
+  } catch {
     console.log('[next.config] Sentry not available');
   }
 }

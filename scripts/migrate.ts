@@ -26,9 +26,11 @@ async function main() {
     process.exit(1);
   }
 
+  const useSsl = process.env.DATABASE_SSL === 'true';
+
   const pool = new Pool({
     connectionString: databaseUrl,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    ssl: useSsl ? { rejectUnauthorized: false } : false,
     connectionTimeoutMillis: 10_000,
   });
 
@@ -41,12 +43,11 @@ async function main() {
     await migrate(db, {
       migrationsFolder: './drizzle/migrations',
       migrationsTable: '__drizzle_migrations',
-      migrationsSchema: 'public',
     });
 
     console.log('[migrate] All migrations applied successfully');
   } catch (error: any) {
-    console.error('[migrate] Migration failed:', error.message);
+    console.error('[migrate] Migration failed:', error);
     process.exit(1);
   } finally {
     await pool.end();
