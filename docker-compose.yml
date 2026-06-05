@@ -121,6 +121,79 @@ services:
     networks:
       - nucrm-net
 
+  # ── Loki (Log Aggregation) ──────────────────────────────────────────────
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: nucrm-loki
+    volumes:
+      - ./deploy/monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - lokidata:/loki
+    command:
+      - '--config.file=/etc/loki/loki-config.yml'
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── Alertmanager ─────────────────────────────────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: nucrm-alertmanager
+    volumes:
+      - ./deploy/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanagerdata:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    ports:
+      - "9093:9093"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── Promtail (Log Shipper) ───────────────────────────────────────────────
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: nucrm-promtail
+    volumes:
+      - ./deploy/monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/log:/var/log:ro
+    command:
+      - '--config.file=/etc/promtail/promtail-config.yml'
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── PgBouncer (Connection Pooling) ──────────────────────────────────────
+  pgbouncer:
+    image: edoburu/pgbouncer:1.23
+    container_name: nucrm-pgbouncer
+    environment:
+      - DB_USER=${POSTGRES_USER:-nucrm}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-nucrm}
+      - POOL_MODE=transaction
+      - DEFAULT_POOL_SIZE=50
+      - MAX_CLIENT_CONN=200
+    ports:
+      - "6432:6432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U ${POSTGRES_USER:-nucrm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
   # ── Redis ────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
@@ -148,6 +221,10 @@ volumes:
   pgdata:
     driver: local
   redisdata:
+    driver: local
+  lokidata:
+    driver: local
+  alertmanagerdata:
     driver: local
 
 networks:

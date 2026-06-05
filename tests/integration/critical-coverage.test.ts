@@ -460,7 +460,7 @@ describe('env - 100% coverage', () => {
       process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
       process.env.SETUP_KEY = 'a'.repeat(24);
       process.env.ALLOWED_ORIGINS = '*';
-      process.env.CRON_SECRET = 'b'.repeat(24);
+      process.env.CRON_SECRET = 'b'.repeat(32);
       process.env.DATABASE_POOL_SIZE = '5';
       process.env.NODE_ENV = 'development';
       delete process.env.REDIS_URL;

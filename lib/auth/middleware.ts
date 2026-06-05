@@ -6,7 +6,7 @@ import { eq, and, gt, or, sql, desc, asc } from 'drizzle-orm';
 import { verifyToken, hashToken } from '@/lib/auth/session';
 import { setTenantContext } from '@/lib/db/rls';
 import { tryApiKeyAuth } from '@/lib/auth/api-key';
-import { requestContext } from '@/lib/tenant/request-context';
+import { requestContext, withRequestId } from '@/lib/tenant/request-context';
 import { ModuleRegistry } from '@/lib/modules/registry';
 import {
   validateCsrfToken,
@@ -96,9 +96,8 @@ async function getDemoContext(): Promise<AuthContext | null> {
  * is wrapped in a transaction to ensure RLS session variables persist.
  */
 export async function requireAuth(request: NextRequest): Promise<AuthContext | NextResponse> {
-  return db.transaction(async (tx) => {
-    // Generate request ID for request-scoped caching
-    const requestId = requestContext.generateId();
+  const requestId = request.headers.get('x-request-id') || requestContext.generateId();
+  return withRequestId(requestId, () => db.transaction(async (tx) => {
 
     // Try API key auth first
     const apiKeyCtx = await tryApiKeyAuth(request);
@@ -246,7 +245,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     requestContext.set(requestId, { ...ctx, cachedAt: Date.now() });
 
     return ctx;
-  });
+  }));
 }
 
 export function can(ctx: AuthContext, perm: string): boolean {
