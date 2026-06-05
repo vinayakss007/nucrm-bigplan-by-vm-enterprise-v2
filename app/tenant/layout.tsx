@@ -3,6 +3,8 @@ import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import TenantShell from '@/components/tenant/layout/shell';
+import BrandingProvider from '@/components/branding/branding-provider';
+import { tenantToBranding } from '@/lib/branding';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +23,8 @@ export default async function TenantLayout({ children }: { children: React.React
   .limit(1);
 
   const tenant = { ...ctx.tenant, plan: ctx.plan };
-  
+  const branding = tenantToBranding(ctx.tenant);
+
   // Profile object mapped for compatibility with legacy components
   const profile = { 
     id: user?.id,
@@ -33,17 +36,19 @@ export default async function TenantLayout({ children }: { children: React.React
   };
 
   return (
-    <TenantShell
-      tenant={tenant} 
-      profile={profile as any} 
-      roleSlug={ctx.roleSlug}
-      permissions={ctx.permissions} 
-      isAdmin={ctx.isAdmin} 
-      isSuperAdmin={ctx.isSuperAdmin}
-      emailVerified={user?.emailVerified ?? false} 
-      email={user?.email ?? ''}
-    >
-      {children}
-    </TenantShell>
+    <BrandingProvider branding={branding}>
+      <TenantShell
+        tenant={tenant} 
+        profile={profile as any} 
+        roleSlug={ctx.roleSlug}
+        permissions={ctx.permissions} 
+        isAdmin={ctx.isAdmin} 
+        isSuperAdmin={ctx.isSuperAdmin}
+        emailVerified={user?.emailVerified ?? false} 
+        email={user?.email ?? ''}
+      >
+        {children}
+      </TenantShell>
+    </BrandingProvider>
   );
 }
