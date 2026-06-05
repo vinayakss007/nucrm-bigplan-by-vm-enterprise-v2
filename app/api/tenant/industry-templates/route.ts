@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { customFieldDefs, dealStages, automations } from '@/drizzle/schema';
+import { customFieldDefs, pipelines, dealStages, automations } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 
@@ -31,18 +31,22 @@ export async function POST(req: NextRequest) {
         }).onConflictDoNothing();
       }
 
-      // 2. Insert Deal Stages
+      // 2. Insert Pipelines & Stages
       for (const pipe of template.pipelines) {
-        for (let i = 0; i < pipe.stages.length; i++) {
-          const stageName = pipe.stages[i];
-          
-          await tx.insert(dealStages).values({} as any); // @ts-expect-error Schema mismatch - activity insert requires partial object
-    db.insert().values({
-            tenantId: ctx.tenantId,
+        const pipelineRows = await tx.insert(pipelines).values({
+          tenantId: ctx.tenantId,
+          name: pipe.name,
+        }).returning({ id: pipelines.id });
+        const firstRow = pipelineRows[0];
+        if (!firstRow) continue;
+        const pipelineId: string = firstRow.id;
+
+        for (const [i, stageName] of pipe.stages.entries()) {
+          await tx.insert(dealStages).values({
+            pipelineId: pipelineId,
             name: stageName,
-            stageOrder: i,
-            probability: 10 + (i * 10)
-          }).onConflictDoNothing();
+            order: i,
+          });
         }
       }
 

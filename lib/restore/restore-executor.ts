@@ -115,6 +115,8 @@ export interface RestoreOptions {
   tables: string[];
   restoreMode: 'insert_only' | 'upsert' | 'replace';
   performedBy: string;
+  /** Optional: filter restored rows to only those belonging to this user */
+  userId?: string;
 }
 
 export interface RestoreProgress {
@@ -222,7 +224,8 @@ export async function executeSelectiveRestore(
     const tenantSQL = await extractTenantSQL(
       options.backupFilePath,
       options.tenantId,
-      options.tables
+      options.tables,
+      options.userId
     );
     
     let totalStatements = 0;

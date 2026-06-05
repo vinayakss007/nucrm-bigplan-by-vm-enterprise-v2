@@ -8,7 +8,7 @@ import {
   ChevronDown, CheckCircle, XCircle, Clock, ArrowRight, Zap, Target, Eye, Activity
 } from 'lucide-react';
 import { cn, formatDate, getInitials } from '@/lib/utils';
-import { Swipeable } from '@/components/ui/swipeable';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -236,7 +236,7 @@ export default function LeadsClient({
   };
 
   return (
-    <div className="max-w-7xl space-y-6 animate-fade-in">
+    <div className="max-w-[1600px] mx-auto space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -506,14 +506,7 @@ export default function LeadsClient({
               const StatusIcon = statusConfig.icon;
 
               return (
-                <Swipeable
-                  key={lead.id}
-                  rightActions={[
-                    { label:'View', icon:<Eye className="w-5 h-5"/>, color:'text-white', bg:'bg-violet-500', onClick:()=>router.push(`/tenant/contacts/${lead.id}`) },
-                    { label:'Delete', icon:<Trash2 className="w-5 h-5"/>, color:'text-white', bg:'bg-red-500', onClick:()=>deleteLead(lead.id,`${lead.first_name} ${lead.last_name}`) },
-                  ]}
-                >
-                  <tr className="border-b border-border last:border-0 hover:bg-accent/30 transition-colors">
+                  <tr key={lead.id} className="border-b border-border last:border-0 hover:bg-accent/30 transition-colors">
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
@@ -626,7 +619,6 @@ export default function LeadsClient({
                     </DropdownMenu>
                   </td>
                 </tr>
-                </Swipeable>
               );
             })}
           </tbody>

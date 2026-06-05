@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
@@ -45,13 +46,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data });
   } catch (err: any) {
     console.error('[superadmin/modules GET]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 
 const updateModuleSchema = z.object({
   module_id: z.string().min(1),
-  pricing: z.record(z.any()).optional(),
+  pricing: z.record(z.string(), z.any()).optional(),
   is_available: z.boolean().optional(),
 });
 
@@ -86,6 +87,6 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'No valid update fields' }, { status: 400 });
   } catch (err: any) {
     console.error('[superadmin/modules PATCH]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }

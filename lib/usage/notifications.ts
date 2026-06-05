@@ -1,106 +1,163 @@
 /**
- * Usage notifications — fire alerts when a tenant trips a plan limit.
+ * Usage Threshold Notifications
  *
- * Runs fire-and-forget. Throttled by the `notified` flag on `limit_violations`
- * so a single hot loop does not spam the same channel.
+ * Checks tenant usage against plan limits and creates notifications
+ * when reaching 80%, 90%, and 100% thresholds. Helps tenants proactively
+ * manage their usage and upgrade before hitting hard limits.
  */
 import { db } from '@/drizzle/db';
-import { tenants, users, limitViolations } from '@/drizzle/schema';
+import { tenants } from '@/drizzle/schema/core';
+import { notifications } from '@/drizzle/schema/core';
+import { tenantMembers } from '@/drizzle/schema/core';
+import { planLimits } from '@/drizzle/schema/usage';
 import { eq, and } from 'drizzle-orm';
-import { sendEmail, sendWebhookNotification, sendTelegram } from '@/lib/email/service';
-import type { LimitKind } from './tracker';
 
-export interface LimitHit {
-  tenantId: string;
-  kind: LimitKind;
+interface ThresholdCheck {
+  resource: string;
+  label: string;
+  current: number;
   limit: number;
-  actual: number;
+  percentage: number;
 }
+
+const THRESHOLDS = [100, 90, 80] as const;
 
 /**
- * Notify operators that `tenant` hit a limit. Looks up the violation row for
- * today, marks it `notified=true`, and dispatches one email + webhook +
- * Telegram message. Every channel is best-effort — failure is logged, never
- * thrown.
+ * Check usage thresholds for a tenant and create notifications
+ * for any resources that have crossed 80%, 90%, or 100%.
  */
-export async function notifyLimitHit(hit: LimitHit): Promise<void> {
-  const violationType = `${hit.kind}_exceeded`;
+export async function checkThresholds(tenantId: string): Promise<void> {
+  try {
+    // Get tenant info
+    const tenant = await db.query.tenants.findFirst({
+      where: eq(tenants.id, tenantId),
+      columns: {
+        planId: true,
+        currentUsers: true,
+        currentContacts: true,
+        currentDeals: true,
+        storageUsedBytes: true,
+        ownerId: true,
+      },
+    });
 
-  const tenantRow = await db
-    .select({ id: tenants.id, name: tenants.name, slug: tenants.slug, ownerId: tenants.ownerId })
-    .from(tenants)
-    .where(eq(tenants.id, hit.tenantId))
-    .limit(1);
-  const tenant = tenantRow[0];
-  if (!tenant) return;
+    if (!tenant) return;
 
-  // Only mark + send once per 24h window per (tenant, type).
-  const updated = await db
-    .update(limitViolations)
-    .set({ notified: true, notifiedAt: new Date() })
-    .where(
-      and(
-        eq(limitViolations.tenantId, hit.tenantId),
-        eq(limitViolations.violationType, violationType),
-        eq(limitViolations.notified, false),
-        eq(limitViolations.resolved, false),
-      ),
-    )
-    .returning({ id: limitViolations.id });
-  if (updated.length === 0) return;
+    // Get plan limits
+    const limits = await db.query.planLimits.findFirst({
+      where: eq(planLimits.planId, tenant.planId),
+    });
 
-  const subject = `[NuCRM] ${labelFor(hit.kind)} limit reached for ${tenant.name}`;
-  const message = `Workspace **${tenant.name}** (\`${tenant.slug}\`) hit its ${labelFor(hit.kind)} limit: ${hit.actual}/${hit.limit}. The owner has been notified to upgrade.`;
+    if (!limits) return; // No limits configured
 
-  // Email the workspace owner
-  if (tenant.ownerId) {
-    const ownerRow = await db
-      .select({ email: users.email, fullName: users.fullName })
-      .from(users)
-      .where(eq(users.id, tenant.ownerId))
-      .limit(1);
-    const owner = ownerRow[0];
-    if (owner?.email) {
-      sendEmail({
-        to: owner.email,
-        subject,
-        html: `
-          <p>Hi ${owner.fullName ?? 'there'},</p>
-          <p>Your workspace <strong>${tenant.name}</strong> just hit its <strong>${labelFor(hit.kind)}</strong> limit (${hit.actual}/${hit.limit}).</p>
-          <p>To keep adding records, upgrade your plan from the billing page:</p>
-          <p><a href="${process.env['NEXT_PUBLIC_APP_URL'] ?? ''}/tenant/settings/billing">Upgrade plan</a></p>
-        `,
-      }).catch(() => {});
+    // Build list of resources to check
+    const checks: ThresholdCheck[] = [];
+
+    if (limits.maxUsers && tenant.currentUsers) {
+      const pct = Math.round((tenant.currentUsers / limits.maxUsers) * 100);
+      checks.push({
+        resource: 'users',
+        label: 'Users',
+        current: tenant.currentUsers,
+        limit: limits.maxUsers,
+        percentage: pct,
+      });
     }
-  }
 
-  // Operator notifications (Discord/Slack + Telegram). Both are no-ops without env config.
-  sendWebhookNotification({
-    title: subject,
-    message,
-    color: '#ef4444',
-    url: `${process.env['NEXT_PUBLIC_APP_URL'] ?? ''}/superadmin/tenants/${tenant.id}`,
-  }).catch(() => {});
+    if (limits.maxContacts && tenant.currentContacts) {
+      const pct = Math.round((tenant.currentContacts / limits.maxContacts) * 100);
+      checks.push({
+        resource: 'contacts',
+        label: 'Contacts',
+        current: tenant.currentContacts,
+        limit: limits.maxContacts,
+        percentage: pct,
+      });
+    }
 
-  sendTelegram({
-    botToken: process.env['TELEGRAM_BOT_TOKEN'] ?? '',
-    chatId: process.env['TELEGRAM_CHAT_ID'] ?? '',
-    title: subject,
-    message,
-    icon: '🛑',
-    url: `${process.env['NEXT_PUBLIC_APP_URL'] ?? ''}/superadmin/tenants/${tenant.id}`,
-  }).catch(() => {});
-}
+    if (limits.maxDeals && tenant.currentDeals) {
+      const pct = Math.round((tenant.currentDeals / limits.maxDeals) * 100);
+      checks.push({
+        resource: 'deals',
+        label: 'Deals',
+        current: tenant.currentDeals,
+        limit: limits.maxDeals,
+        percentage: pct,
+      });
+    }
 
-function labelFor(kind: LimitKind): string {
-  switch (kind) {
-    case 'contacts': return 'contacts';
-    case 'leads': return 'leads';
-    case 'deals': return 'deals';
-    case 'users': return 'users';
-    case 'automations': return 'automations';
-    case 'forms': return 'forms';
-    case 'apiCallsDay': return 'daily API calls';
-    case 'storageGb': return 'storage';
+    if (limits.maxStorageBytes && tenant.storageUsedBytes) {
+      const pct = Math.round((tenant.storageUsedBytes / limits.maxStorageBytes) * 100);
+      checks.push({
+        resource: 'storage',
+        label: 'Storage',
+        current: tenant.storageUsedBytes,
+        limit: limits.maxStorageBytes,
+        percentage: pct,
+      });
+    }
+
+    // Find admin users to notify
+    const adminMembers = await db
+      .select({ userId: tenantMembers.userId })
+      .from(tenantMembers)
+      .where(
+        and(
+          eq(tenantMembers.tenantId, tenantId),
+          eq(tenantMembers.roleSlug, 'admin')
+        )
+      );
+
+    if (adminMembers.length === 0 && tenant.ownerId) {
+      adminMembers.push({ userId: tenant.ownerId });
+    }
+
+    // Create notifications for crossed thresholds
+    for (const check of checks) {
+      for (const threshold of THRESHOLDS) {
+        if (check.percentage >= threshold) {
+          const title =
+            threshold === 100
+              ? `${check.label} limit reached (${check.current}/${check.limit})`
+              : `${check.label} usage at ${threshold}% (${check.current}/${check.limit})`;
+
+          const body =
+            threshold === 100
+              ? `You have reached your ${check.label.toLowerCase()} limit. Upgrade your plan to continue adding more.`
+              : `You are approaching your ${check.label.toLowerCase()} limit. Consider upgrading your plan.`;
+
+          const type = threshold === 100 ? 'limit_warning' : 'system';
+
+          for (const member of adminMembers) {
+            await db
+              .insert(notifications)
+              .values({
+                userId: member.userId,
+                tenantId,
+                type,
+                title,
+                body,
+                link: '/tenant/settings/billing',
+                metadata: {
+                  resource: check.resource,
+                  threshold,
+                  current: check.current,
+                  limit: check.limit,
+                  percentage: check.percentage,
+                },
+              })
+              .onConflictDoNothing()
+              .catch(() => {
+                // Notification creation is non-fatal
+              });
+          }
+
+          // Only notify for the highest crossed threshold
+          break;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[usage/notifications] checkThresholds error:', error);
   }
 }

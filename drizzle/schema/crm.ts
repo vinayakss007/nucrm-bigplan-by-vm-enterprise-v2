@@ -185,6 +185,16 @@ export const leads = pgTable('leads', {
   isConverted: boolean('is_converted').notNull().default(false),
   convertedAt: timestamp('converted_at', { withTimezone: true }),
   convertedContactId: uuid('converted_contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+
+  // ── Workflow: lead is always linked to a contact (one contact, many leads) ──
+  // contactId is set at intake; convertedContactId is kept for backward compat
+  contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+
+  // Human-readable lead identifier per tenant, e.g. "LD-2025-001"
+  leadOid: text('lead_oid'),
+
+  // Which product entry the lead came in through (lib/products/registry.ts key)
+  productId: text('product_id'),
   
   metadata: utils.metadata(),
   
@@ -196,6 +206,9 @@ export const leads = pgTable('leads', {
     tenantStatusIdx: index('idx_leads_tenant_status').on(table.tenantId, table.leadStatus),
     assignedIdx: index('idx_leads_assigned').on(table.assignedTo),
     tenantCreatedIdx: index('idx_leads_tenant_created').on(table.tenantId, table.createdAt),
+    contactIdx: index('idx_leads_contact').on(table.contactId),
+    leadOidIdx: index('idx_leads_tenant_oid').on(table.tenantId, table.leadOid),
+    productIdx: index('idx_leads_tenant_product').on(table.tenantId, table.productId),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
   };
@@ -239,6 +252,7 @@ export const deals = pgTable('deals', {
   companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
   pipelineId: uuid('pipeline_id').references(() => pipelines.id, { onDelete: 'set null' }),
   stageId: uuid('stage_id').notNull().references(() => dealStages.id),
+  stageEnteredAt: timestamp('stage_entered_at', { withTimezone: true }).defaultNow(),
   
   title: text('title').notNull(),
   amount: decimal('amount', { precision: 15, scale: 2 }).default('0'),
@@ -694,6 +708,33 @@ export const leadAssignments = pgTable('lead_assignments', {
   };
 });
 
+// ── 17b. LEAD OFFERS (what was offered to the client per lead) ──
+export const leadOffers = pgTable('lead_offers', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  leadId: uuid('lead_id').notNull().references(() => leads.id, { onDelete: 'cascade' }),
+  // Either a catalog service or freeform — at least one of serviceId/description must be set
+  serviceId: uuid('service_id'), // FK enforced at app level (services live in billing.ts)
+  productId: text('product_id'), // optional pointer to lib/products/registry.ts key
+  description: text('description'),
+  quantity: decimal('quantity', { precision: 12, scale: 2 }).notNull().default('1'),
+  unitPrice: decimal('unit_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  currency: text('currency').notNull().default('USD'),
+  // proposed | accepted | rejected | withdrawn
+  status: text('status').notNull().default('proposed'),
+  notes: text('notes'),
+  metadata: utils.metadata(),
+  ...utils.audit(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    leadIdx: index('idx_lead_offers_lead').on(table.leadId),
+    statusIdx: index('idx_lead_offers_tenant_status').on(table.tenantId, table.status),
+    metadataGinIdx: utils.metadataIdx(table),
+    activeIdx: utils.activeIdx(table),
+  };
+});
+
 // ── 18. PIPELINE STAGES ──────────────────────────────
 export const pipelineStages = pgTable('pipeline_stages', {
   id: utils.pk(),
@@ -757,23 +798,6 @@ export const churnPredictions = pgTable('churn_predictions', {
 });
 
 // ── 21. LEAD SCORING RULES ───────────────────────────
-export const leadScoringRules = pgTable('lead_scoring_rules', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  name: text('name').notNull(),
-  field: text('field').notNull(),
-  operator: text('operator').notNull(), // 'equals', 'contains', etc.
-  value: text('value'),
-  score: integer('score').notNull().default(0),
-  isActive: boolean('is_active').notNull().default(true),
-  ...utils.audit(),
-}, (table) => {
-  return {
-    tenantIdx: utils.tenantIdx(table).where(sql`is_active = true`),
-    activeIdx: utils.activeIdx(table),
-  };
-});
-
 // ── 22. CONVERSATION INTELLIGENCE ─────────────────────
 export const callNotes = pgTable('call_notes', {
   id: utils.pk(),
@@ -859,5 +883,25 @@ export const revenueProjections = pgTable('revenue_projections', {
     tenantPeriodIdx: index('idx_rev_projections_tenant').on(table.tenantId, table.periodStart),
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
+  };
+});
+
+// ── 24. SAVED VIEWS ──────────────────────────────────
+export const savedViews = pgTable('saved_views', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  name: text('name').notNull(),
+  entityType: text('entity_type').notNull(),
+  filters: jsonb('filters').notNull().default({}),
+  columns: jsonb('columns'),
+  isShared: boolean('is_shared').default(false),
+  isDefault: boolean('is_default').default(false),
+  metadata: utils.metadata(),
+  ...utils.lifecycle(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    entityTypeTenantIdx: index('idx_saved_views_entity_tenant').on(table.entityType, table.tenantId),
   };
 });

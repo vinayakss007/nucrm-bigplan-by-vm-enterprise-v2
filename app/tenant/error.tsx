@@ -1,8 +1,9 @@
 'use client';
 import { useEffect } from 'react';
+import * as Sentry from '@sentry/nextjs';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 export default function TenantError({ error, reset }: { error: Error; reset: () => void }) {
-  useEffect(() => { console.error('[tenant error]', error); }, [error]);
+  useEffect(() => { Sentry.captureException(error); console.error('[tenant error]', error); }, [error]);
   return (
     <div className="flex items-center justify-center h-64 p-8">
       <div className="text-center max-w-sm">

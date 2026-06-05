@@ -22,14 +22,12 @@ export async function POST(req: NextRequest) {
     await db.transaction(async (tx) => {
       // 1. Create Custom Fields
       for (const field of template.custom_fields) {
-        await tx.insert(customFieldDefs).values({} as any); // @ts-expect-error Schema mismatch - activity insert requires partial object
-    db.insert().values({
+        await tx.insert(customFieldDefs).values({
           tenantId: ctx.tenantId,
           entityType: field.entity,
           fieldKey: field.key,
           fieldLabel: field.label,
           fieldType: field.type,
-          createdBy: ctx.userId,
         }).onConflictDoNothing();
       }
 
@@ -42,10 +40,9 @@ export async function POST(req: NextRequest) {
         
         if (p) {
           const stageValues = pipe.stages.map((stageName: string, i: number) => ({
-            tenantId: ctx.tenantId,
             pipelineId: p.id,
             name: stageName,
-            displayOrder: i,
+            order: i,
           }));
           
           if (stageValues.length > 0) {

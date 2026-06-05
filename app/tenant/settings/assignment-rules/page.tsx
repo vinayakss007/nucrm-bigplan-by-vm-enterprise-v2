@@ -1,0 +1,232 @@
+'use client';
+import { useState, useEffect } from 'react';
+import { Plus, Zap, X, Loader2, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import toast from 'react-hot-toast';
+
+const RULE_TYPES = ['round_robin', 'territory', 'skill_based', 'weighted'] as const;
+const ENTITY_TYPES = ['lead', 'deal', 'ticket', 'task'] as const;
+
+const typeColors: Record<string, string> = {
+  round_robin: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400',
+  territory: 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400',
+  skill_based: 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400',
+  weighted: 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400',
+};
+
+interface AssignmentRule {
+  id: string;
+  name: string;
+  type: string;
+  config: Record<string, unknown>;
+  isActive: boolean;
+  priority: number;
+  entityType: string;
+  createdAt: string;
+}
+
+export default function AssignmentRulesPage() {
+  const [rules, setRules] = useState<AssignmentRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState<AssignmentRule | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: '',
+    type: 'round_robin' as string,
+    config: '{}',
+    priority: 0,
+    entityType: 'lead' as string,
+  });
+
+  const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/tenant/assignment-rules');
+      if (res.ok) {
+        const d = await res.json();
+        setRules(d.data ?? []);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm({ name: '', type: 'round_robin', config: '{}', priority: 0, entityType: 'lead' });
+    setShowModal(true);
+  };
+
+  const openEdit = (r: AssignmentRule) => {
+    setEditing(r);
+    setForm({
+      name: r.name,
+      type: r.type,
+      config: JSON.stringify(r.config ?? {}, null, 2),
+      priority: r.priority,
+      entityType: r.entityType,
+    });
+    setShowModal(true);
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      let config: Record<string, unknown>;
+      try {
+        config = JSON.parse(form.config);
+      } catch {
+        toast.error('Invalid JSON in config');
+        setSaving(false);
+        return;
+      }
+
+      const payload = {
+        ...(editing ? { id: editing.id } : {}),
+        name: form.name,
+        type: form.type,
+        config,
+        priority: form.priority,
+        entityType: form.entityType,
+      };
+
+      const res = await fetch('/api/tenant/assignment-rules', {
+        method: editing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        toast.success(editing ? 'Rule updated' : 'Rule created');
+        setShowModal(false);
+        load();
+      } else {
+        toast.error(d.error || 'Failed to save');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const del = async (id: string) => {
+    const res = await fetch(`/api/tenant/assignment-rules?id=${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setRules(prev => prev.filter(x => x.id !== id));
+      toast.success('Rule deleted');
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold">Assignment Rules</h1>
+          <p className="text-sm text-muted-foreground">Configure how leads, deals, and tickets are automatically assigned to team members</p>
+        </div>
+        <button onClick={openCreate}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold">
+          <Plus className="w-4 h-4" />Add Rule
+        </button>
+      </div>
+
+      {loading ? (
+        [...Array(3)].map((_, i) => <div key={i} className="h-16 bg-muted rounded-2xl animate-pulse" />)
+      ) : rules.length === 0 ? (
+        <div className="text-center py-12 border border-dashed border-border rounded-2xl">
+          <Zap className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+          <p className="font-medium">No assignment rules</p>
+          <p className="text-sm text-muted-foreground mt-1">Create rules to automatically assign records to team members</p>
+          <button onClick={openCreate} className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold mx-auto">
+            <Plus className="w-4 h-4" />Add Rule
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {rules.map(r => (
+            <div key={r.id} className="admin-card p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-violet-100 dark:bg-violet-950/40 flex items-center justify-center shrink-0">
+                  <Zap className="w-4 h-4 text-violet-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-sm">{r.name}</p>
+                    <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full', typeColors[r.type] || 'bg-muted text-muted-foreground')}>
+                      {r.type.replace('_', ' ')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                    <span>Entity: <strong>{r.entityType}</strong></span>
+                    <span>Priority: <strong>{r.priority}</strong></span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => openEdit(r)} className="text-xs font-medium text-muted-foreground hover:text-violet-600 border border-border rounded-lg px-2.5 py-1 hover:border-violet-300 transition-colors">
+                    Edit
+                  </button>
+                  <button onClick={() => del(r.id)} className="text-muted-foreground hover:text-red-500">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Create/Edit Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-lg mx-4 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-lg">{editing ? 'Edit Rule' : 'New Assignment Rule'}</h3>
+              <button onClick={() => setShowModal(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+            </div>
+            <form onSubmit={submit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Name *</label>
+                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required className={inp} placeholder="e.g. Round Robin for Leads" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Type *</label>
+                  <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className={inp}>
+                    {RULE_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Entity Type</label>
+                  <select value={form.entityType} onChange={e => setForm(f => ({ ...f, entityType: e.target.value }))} className={inp}>
+                    {ENTITY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Priority</label>
+                <input type="number" min={0} value={form.priority} onChange={e => setForm(f => ({ ...f, priority: Number(e.target.value) }))} className={inp} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Config (JSON)</label>
+                <textarea rows={5} value={form.config} onChange={e => setForm(f => ({ ...f, config: e.target.value }))} className={cn(inp, 'font-mono text-xs')} placeholder="{}" />
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-accent">Cancel</button>
+                <button type="submit" disabled={saving || !form.name}
+                  className="flex items-center gap-2 px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50">
+                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {editing ? 'Update' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

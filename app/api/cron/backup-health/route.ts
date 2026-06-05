@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { alertSuperAdmin } from '@/lib/email/service';
@@ -72,6 +73,6 @@ export async function POST(request: NextRequest) {
       hours_since: Math.round(hoursSinceBackup * 10) / 10,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }

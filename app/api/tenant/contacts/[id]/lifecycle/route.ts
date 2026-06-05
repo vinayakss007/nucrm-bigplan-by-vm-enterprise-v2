@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
 import { updateContactSchema } from '@/lib/api/schemas';
@@ -71,7 +72,7 @@ export async function POST(
     });
   } catch (error: any) {
     console.error('[Lifecycle] POST error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -115,6 +116,6 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('[Lifecycle] GET error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }

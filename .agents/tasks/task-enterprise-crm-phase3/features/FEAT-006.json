@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-006",
+  "type": "fix",
+  "description": "Address all 8 security and validation issues from the phase 3 review",
+  "status": "completed",
+  "steps": [
+    "Fix chat widget module gate bypass",
+    "Fix visitor tracking raw API key as tenantId",
+    "Fix email tracking missing tenant validation",
+    "Fix assignment-rules PUT unvalidated field spread",
+    "Fix SLA PUT unvalidated field spread",
+    "Fix leaderboards missing module gate",
+    "Fix e-signature webhook HMAC validation",
+    "Add rate limiting to public endpoints"
+  ],
+  "acceptance_criteria": [
+    "npx tsc --noEmit passes with 0 errors",
+    "npm test passes (360 tests)",
+    "npm run build succeeds"
+  ],
+  "verification": [
+    "npx tsc --noEmit",
+    "npm test",
+    "JWT_SECRET=test npm run build"
+  ],
+  "blocked_reason": null
+}

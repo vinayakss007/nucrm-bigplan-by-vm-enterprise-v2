@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       case 'tag': {
         const deny = requirePerm(ctx, 'contacts.edit');
         if (deny) return deny;
-        const tag = payload.tag?.trim();
+        const tag = (payload['tag'] as string | undefined)?.trim();
         if (!tag) return NextResponse.json({ error: 'tag required' }, { status: 400 });
         
         const res = await db
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
       case 'untag': {
         const deny = requirePerm(ctx, 'contacts.edit');
         if (deny) return deny;
-        const tag = payload.tag?.trim();
+        const tag = (payload['tag'] as string | undefined)?.trim();
         if (!tag) return NextResponse.json({ error: 'tag required' }, { status: 400 });
         
         const res = await db
@@ -102,7 +102,8 @@ export async function POST(req: NextRequest) {
       case 'assign': {
         const deny = requirePerm(ctx, 'contacts.assign');
         if (deny) return deny;
-        if (!payload.assign_to) return NextResponse.json({ error: 'assign_to required' }, { status: 400 });
+        const assignTo = payload['assign_to'] as string | undefined;
+        if (!assignTo) return NextResponse.json({ error: 'assign_to required' }, { status: 400 });
         
         // Verify assignee is a member
         const [member] = await db
@@ -110,7 +111,7 @@ export async function POST(req: NextRequest) {
           .from(tenantMembers)
           .where(
             and(
-              eq(tenantMembers.userId, payload.assign_to),
+              eq(tenantMembers.userId, assignTo),
               eq(tenantMembers.tenantId, ctx.tenantId),
               eq(tenantMembers.status, 'active')
             )
@@ -122,7 +123,7 @@ export async function POST(req: NextRequest) {
         const res = await db
           .update(contacts)
           .set({
-            assignedTo: payload.assign_to,
+            assignedTo: assignTo,
             updatedAt: new Date(),
           })
           .where(
@@ -138,14 +139,15 @@ export async function POST(req: NextRequest) {
       case 'status': {
         const deny = requirePerm(ctx, 'contacts.edit');
         if (deny) return deny;
+        const leadStatus = payload['lead_status'] as string | undefined;
         const STATUSES = ['new','contacted','qualified','unqualified','converted','lost'];
-        if (!STATUSES.includes(payload.lead_status))
+        if (!leadStatus || !STATUSES.includes(leadStatus))
           return NextResponse.json({ error: `lead_status must be one of: ${STATUSES.join(', ')}` }, { status: 400 });
         
         const res = await db
           .update(contacts)
           .set({
-            leadStatus: payload.lead_status,
+            leadStatus: leadStatus,
             updatedAt: new Date(),
           })
           .where(
@@ -183,7 +185,7 @@ export async function POST(req: NextRequest) {
       case 'do_not_contact': {
         const deny = requirePerm(ctx, 'contacts.edit');
         if (deny) return deny;
-        const val = payload.value !== false;
+        const val = payload['value'] !== false;
         
         const res = await db
           .update(contacts)

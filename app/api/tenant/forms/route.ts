@@ -55,6 +55,8 @@ export async function POST(req: NextRequest) {
 
     const slug = name.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'').slice(0,40) + '-' + Date.now().toString(36);
     
+    const formSettings = { redirect_url: redirect_url || null, success_message: success_message || null };
+
     const [newForm] = await db.insert(forms)
       .values({
         tenantId: ctx.tenantId,
@@ -62,7 +64,7 @@ export async function POST(req: NextRequest) {
         slug,
         description: description?.trim() || null,
         fields: fields,
-        settings: settings,
+        settings: formSettings,
         createdBy: ctx.userId
       })
       .returning();

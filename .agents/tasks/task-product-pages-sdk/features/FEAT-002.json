@@ -1,0 +1,34 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Create dedicated product entry pages for 8 products, tenant onboarding flow, and super admin template builder UI. Each product page shows only that business type's relevant features.",
+  "status": "completed",
+  "steps": [
+    "Create app/tenant/products/[templateId]/page.tsx - Dynamic server component. Use requireTenantCtx(). Look up the product from PRODUCT_REGISTRY by templateId param. If not found, show 404. Render ProductEntryClient component passing product config, tenantId, userId.",
+    "Create app/tenant/products/[templateId]/loading.tsx - Skeleton loader following the pattern in app/tenant/dashboard/loading.tsx.",
+    "Create app/tenant/products/[templateId]/error.tsx - Error boundary following the pattern in app/tenant/dashboard/error.tsx.",
+    "Create components/tenant/product-entry-client.tsx - 'use client' component that renders: (1) Hero section with product name, icon, description. (2) Quick stats cards based on product's dashboardCards config (show placeholder stats: Total Contacts, Active Deals, Pipeline Value, Tasks Due). (3) Main pipeline view as a horizontal stage tracker showing the product's mainPipeline stages from its INDUSTRY_TEMPLATES config. (4) Quick actions grid based on product's quickActions. (5) Module status section showing which modules from the template are active vs available to add. Use Lucide icons, TailwindCSS styling consistent with existing tenant pages.",
+    "Create app/tenant/onboarding/page.tsx - 'use client' page. Step wizard with 4 steps: (1) Choose Your Product - show 8 product cards from PRODUCT_REGISTRY with icon, name, description, click to select. (2) Confirm Modules - show the selected product's template modules list with checkboxes (all pre-checked). (3) Quick Setup - company name input, first pipeline name input, import contacts placeholder. (4) Completion - show success message and 'Go to Dashboard' button that redirects to /tenant/products/[selectedTemplateId].",
+    "Create app/tenant/onboarding/loading.tsx and app/tenant/onboarding/error.tsx following existing patterns.",
+    "Create app/superadmin/templates/page.tsx - 'use client' page. Dark theme (following superadmin/modules/page.tsx pattern). Shows: (1) Header with title 'Template Builder' + Create New button. (2) Stats row: Total Templates, Active, Draft, Total Tenant Assignments. (3) Grid of template cards - each shows name, icon, module count, tenant_count, status badge, Edit/Clone/Assign buttons. Fetches from /api/superadmin/templates.",
+    "Create app/superadmin/templates/[id]/page.tsx - 'use client' template editor page. Dark theme. Sections: (1) Basic Info (name, description, icon, status dropdown). (2) Module Selector - checkboxes from BUILTIN_MODULES registry (fetched from /api/superadmin/modules). (3) Custom Fields builder - table with entity/label/key/type columns, add/remove rows. (4) Pipeline Stages editor - named pipeline with sortable stage list (add/remove/reorder stages). (5) Automation Rules - trigger selector + action selector + config JSON. (6) Preview panel showing how a tenant would see the template. (7) Save button calls PATCH /api/superadmin/templates/[id]. (8) Assign to Tenant button opens modal with tenant search/select, calls POST /api/superadmin/templates/[id]/assign.",
+    "Create app/superadmin/templates/loading.tsx and app/superadmin/templates/error.tsx following existing patterns (dark theme skeleton).",
+    "Create app/superadmin/templates/[id]/loading.tsx and app/superadmin/templates/[id]/error.tsx."
+  ],
+  "acceptance_criteria": [
+    "Visiting /tenant/products/ai-sales-crm renders the AI Sales CRM product page with correct pipeline stages from saas template",
+    "Visiting /tenant/products/proposal-generator renders consulting template data",
+    "Onboarding page shows 8 product cards and a multi-step wizard flow",
+    "Super admin templates page lists templates with CRUD operations",
+    "Super admin template editor shows module selector, fields builder, pipeline stages editor",
+    "All new pages have loading.tsx and error.tsx",
+    "npx tsc --noEmit passes with 0 errors",
+    "npm run build succeeds"
+  ],
+  "verification": [
+    "npx tsc --noEmit",
+    "npm run build"
+  ],
+  "blocked_reason": null,
+  "findings": "All 13 files created. TypeScript compiles cleanly (0 errors). Build succeeds with JWT_SECRET env var. All 369 unit tests pass (2 integration test failures are pre-existing due to missing PostgreSQL). The product page server component uses Next.js 16 async params pattern (params: Promise<{templateId: string}>). Super admin editor uses React 'use' hook to unwrap params promise. Dark theme styling follows modules page pattern with border-white/10, bg-white/5, text-white/40."
+}

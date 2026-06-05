@@ -1,225 +1,335 @@
 /**
- * Usage tracker — single source of truth for per-tenant resource counts and limits.
+ * Usage Tracker
  *
- * Reads plan limits from the `plans` table (already exists in drizzle/schema/infra.ts)
- * and live counts from real CRM tables (not the daily `usage_snapshots` aggregate,
- * which would be stale).
- *
- * Writes a `limit_violations` row when a tenant exceeds a hard limit so that
- * super-admin dashboards and alert pipelines can pick it up.
+ * Tracks per-tenant and per-user resource usage (API calls, AI tokens,
+ * storage, contacts, deals, etc.) and checks against plan limits.
+ * Part of the modular SaaS infrastructure that enables different
+ * tenants/use-cases to have different limits based on their plan.
  */
 import { db } from '@/drizzle/db';
-import {
-  tenants,
-  plans,
-  contacts,
-  leads,
-  deals,
-  forms,
-  automations,
-  tenantMembers,
-  usageSnapshots,
-  limitViolations,
-} from '@/drizzle/schema';
-import { and, eq, isNull, sql } from 'drizzle-orm';
-import type { AnyPgColumn } from 'drizzle-orm/pg-core';
-
-/** Resource categories that map to columns on the `plans` table. */
-export type LimitKind =
-  | 'contacts'
-  | 'leads'
-  | 'deals'
-  | 'users'
-  | 'automations'
-  | 'forms'
-  | 'apiCallsDay'
-  | 'storageGb';
-
-export interface PlanLimits {
-  maxContacts: number | null;
-  maxDeals: number | null;
-  maxUsers: number | null;
-  maxAutomations: number | null;
-  maxForms: number | null;
-  maxApiCallsDay: number | null;
-  maxStorageGb: number | null;
-}
-
-export interface UsageReport {
-  kind: LimitKind;
-  limit: number | null;
-  actual: number;
-  exceeded: boolean;
-  remaining: number | null;
-}
-
-const NULL_LIMITS: PlanLimits = {
-  maxContacts: null,
-  maxDeals: null,
-  maxUsers: null,
-  maxAutomations: null,
-  maxForms: null,
-  maxApiCallsDay: null,
-  maxStorageGb: null,
-};
+import { userUsage, planLimits } from '@/drizzle/schema/usage';
+import { tenants } from '@/drizzle/schema/core';
+import { eq, and, sql } from 'drizzle-orm';
 
 /**
- * Resolve the plan limits for a tenant. Returns `null`-filled limits if the
- * tenant has no plan or the plan row is missing — the caller should treat
- * that as "unlimited" (we never block on missing data).
+ * Allowlist of valid custom metric names for JSONB counter storage.
+ * Only these metrics can be used in the custom counter path to prevent
+ * SQL injection via sql.raw().
  */
-export async function getPlanLimits(tenantId: string): Promise<PlanLimits> {
-  const row = await db
-    .select({
-      maxContacts: plans.maxContacts,
-      maxDeals: plans.maxDeals,
-      maxUsers: plans.maxUsers,
-      maxAutomations: plans.maxAutomations,
-      maxForms: plans.maxForms,
-      maxApiCallsDay: plans.maxApiCallsDay,
-      maxStorageGb: plans.maxStorageGb,
-    })
-    .from(tenants)
-    .innerJoin(plans, eq(plans.id, tenants.planId))
-    .where(eq(tenants.id, tenantId))
-    .limit(1);
-  const r = row[0];
-  if (!r) return NULL_LIMITS;
-  return {
-    maxContacts: r.maxContacts ?? null,
-    maxDeals: r.maxDeals ?? null,
-    maxUsers: r.maxUsers ?? null,
-    maxAutomations: r.maxAutomations ?? null,
-    maxForms: r.maxForms ?? null,
-    maxApiCallsDay: r.maxApiCallsDay ?? null,
-    // numeric → string in pg; coerce to number
-    maxStorageGb: r.maxStorageGb == null ? null : Number(r.maxStorageGb),
-  };
+const VALID_CUSTOM_METRICS: readonly string[] = [
+  'emails_sent',
+  'sms_sent',
+  'whatsapp_sent',
+  'forms_submitted',
+  'automations_triggered',
+  'webhooks_sent',
+  'reports_generated',
+  'contacts_imported',
+  'files_uploaded',
+  'sequences_started',
+  'ai_requests',
+  'calls_made',
+  'meetings_scheduled',
+  'notes_created',
+  'tasks_completed',
+] as const;
+
+export interface LimitCheckResult {
+  allowed: boolean;
+  current: number;
+  limit: number | null;
 }
 
-/** Live count of a single resource for a tenant, respecting soft delete. */
-export async function getCount(tenantId: string, kind: LimitKind): Promise<number> {
-  switch (kind) {
-    case 'contacts':
-      return countWhere(contacts, contacts.tenantId, contacts.deletedAt, tenantId);
-    case 'leads':
-      return countWhere(leads, leads.tenantId, leads.deletedAt, tenantId);
-    case 'deals':
-      return countWhere(deals, deals.tenantId, deals.deletedAt, tenantId);
-    case 'forms':
-      return countWhere(forms, forms.tenantId, forms.deletedAt, tenantId);
-    case 'automations':
-      return countWhere(automations, automations.tenantId, automations.deletedAt, tenantId);
-    case 'users': {
-      const rows = await db
-        .select({ c: sql<number>`count(*)::int` })
-        .from(tenantMembers)
-        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.status, 'active')));
-      return rows[0]?.c ?? 0;
+export interface UsageSummary {
+  apiCallsToday: number;
+  aiTokensToday: number;
+  storageBytes: number;
+  counters: Record<string, unknown>;
+}
+
+/**
+ * Increment a usage metric for a user. If the user_usage row does not
+ * exist, it is created. Supports daily-resetting metrics (api_calls, ai_tokens)
+ * and cumulative metrics (storage_bytes, custom counters).
+ */
+export async function incrementUsage(
+  tenantId: string,
+  userId: string,
+  metric: string,
+  amount: number = 1
+): Promise<void> {
+  try {
+    // Ensure the user_usage row exists
+    await db
+      .insert(userUsage)
+      .values({
+        tenantId,
+        userId,
+        lastActivityAt: new Date(),
+      })
+      .onConflictDoNothing();
+
+    // Increment the appropriate metric
+    switch (metric) {
+      case 'api_calls':
+        await db
+          .update(userUsage)
+          .set({
+            apiCallsToday: sql`CASE WHEN api_calls_date = CURRENT_DATE THEN COALESCE(api_calls_today, 0) + ${amount} ELSE ${amount} END`,
+            apiCallsDate: sql`CURRENT_DATE`,
+            lastActivityAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(eq(userUsage.tenantId, tenantId), eq(userUsage.userId, userId))
+          );
+        break;
+
+      case 'ai_tokens':
+        await db
+          .update(userUsage)
+          .set({
+            aiTokensToday: sql`CASE WHEN ai_tokens_date = CURRENT_DATE THEN COALESCE(ai_tokens_today, 0) + ${amount} ELSE ${amount} END`,
+            aiTokensDate: sql`CURRENT_DATE`,
+            lastActivityAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(eq(userUsage.tenantId, tenantId), eq(userUsage.userId, userId))
+          );
+        break;
+
+      case 'storage_bytes':
+        await db
+          .update(userUsage)
+          .set({
+            storageBytes: sql`COALESCE(storage_bytes, 0) + ${amount}`,
+            lastActivityAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(eq(userUsage.tenantId, tenantId), eq(userUsage.userId, userId))
+          );
+        break;
+
+      default:
+        // Custom counter stored in the JSONB counters field.
+        // Validate metric name against allowlist to prevent SQL injection via sql.raw().
+        if (!VALID_CUSTOM_METRICS.includes(metric)) {
+          console.warn(`[usage/tracker] Rejected invalid metric name: ${metric}`);
+          return;
+        }
+        await db
+          .update(userUsage)
+          .set({
+            counters: sql`jsonb_set(COALESCE(counters, '{}'), ${sql.raw(`'{${metric}}'`)}, to_jsonb(COALESCE((counters->>'${sql.raw(metric)}')::int, 0) + ${amount}))`,
+            lastActivityAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(eq(userUsage.tenantId, tenantId), eq(userUsage.userId, userId))
+          );
+        break;
     }
-    case 'apiCallsDay': {
-      // Pull from today's snapshot if present; otherwise 0. Calls are aggregated
-      // by the cron writer, so live SUM would be heavy here.
-      const today = todayDateString();
-      const rows = await db
-        .select({ c: usageSnapshots.apiCallsCount })
-        .from(usageSnapshots)
-        .where(and(eq(usageSnapshots.tenantId, tenantId), eq(usageSnapshots.snapshotDate, today)))
-        .limit(1);
-      return rows[0]?.c ?? 0;
-    }
-    case 'storageGb': {
-      const today = todayDateString();
-      const rows = await db
-        .select({ mb: usageSnapshots.storageUsedMb })
-        .from(usageSnapshots)
-        .where(and(eq(usageSnapshots.tenantId, tenantId), eq(usageSnapshots.snapshotDate, today)))
-        .limit(1);
-      const mb = rows[0]?.mb;
-      return mb == null ? 0 : Number(mb) / 1024;
-    }
-    default: {
-      const _exhaustive: never = kind; void _exhaustive;
-      return 0;
-    }
+  } catch (error) {
+    console.error('[usage/tracker] incrementUsage error:', error);
+    // Non-fatal: usage tracking should not block operations
   }
 }
 
-/** Compose the limit + actual count for a single kind. */
-export async function getUsageReport(tenantId: string, kind: LimitKind): Promise<UsageReport> {
-  const [plan, actual] = await Promise.all([
-    getPlanLimits(tenantId),
-    getCount(tenantId, kind),
-  ]);
-  const limit = limitFor(plan, kind);
-  const exceeded = limit != null && actual >= limit;
-  const remaining = limit == null ? null : Math.max(0, limit - actual);
-  return { kind, limit, actual, exceeded, remaining };
-}
-
-/** Insert a `limit_violations` row. Idempotent-ish: skipped if an unresolved row already exists for today. */
-export async function recordViolation(
+/**
+ * Check whether a tenant has reached a resource limit.
+ * Returns whether the action is allowed, current usage, and the limit.
+ */
+export async function checkLimit(
   tenantId: string,
-  kind: LimitKind,
-  limit: number,
-  actual: number,
-): Promise<{ created: boolean }> {
-  const violationType = `${kind}_exceeded`;
-  // Look for an unresolved row created in the last 24 hours.
-  const existing = await db
-    .select({ id: limitViolations.id })
-    .from(limitViolations)
-    .where(
-      and(
-        eq(limitViolations.tenantId, tenantId),
-        eq(limitViolations.violationType, violationType),
-        eq(limitViolations.resolved, false),
-        sql`${limitViolations.exceededAt} > now() - interval '24 hours'`,
-      ),
-    )
-    .limit(1);
-  if (existing[0]) return { created: false };
+  resource: string
+): Promise<LimitCheckResult> {
+  try {
+    // Get the tenant's plan
+    const tenant = await db.query.tenants.findFirst({
+      where: eq(tenants.id, tenantId),
+      columns: { planId: true, currentUsers: true, currentContacts: true, currentDeals: true, storageUsedBytes: true },
+    });
 
-  await db.insert(limitViolations).values({
-    tenantId,
-    violationType,
-    limitValue: limit,
-    actualValue: actual,
-  });
-  return { created: true };
-}
+    if (!tenant) {
+      return { allowed: false, current: 0, limit: 0 };
+    }
 
-// ── helpers ─────────────────────────────────────────────────────────────────
+    // Get plan limits
+    const limits = await db.query.planLimits.findFirst({
+      where: eq(planLimits.planId, tenant.planId),
+    });
 
-function limitFor(plan: PlanLimits, kind: LimitKind): number | null {
-  switch (kind) {
-    case 'contacts': return plan.maxContacts;
-    case 'leads': return plan.maxContacts; // leads share the contact pool by default
-    case 'deals': return plan.maxDeals;
-    case 'users': return plan.maxUsers;
-    case 'automations': return plan.maxAutomations;
-    case 'forms': return plan.maxForms;
-    case 'apiCallsDay': return plan.maxApiCallsDay;
-    case 'storageGb': return plan.maxStorageGb;
+    // If no plan limits row exists, allow (unlimited)
+    if (!limits) {
+      return { allowed: true, current: 0, limit: null };
+    }
+
+    // Map resource to the correct limit and current value
+    const resourceMap: Record<string, { current: number; limit: number | null }> = {
+      users: {
+        current: tenant.currentUsers ?? 0,
+        limit: limits.maxUsers,
+      },
+      contacts: {
+        current: tenant.currentContacts ?? 0,
+        limit: limits.maxContacts,
+      },
+      deals: {
+        current: tenant.currentDeals ?? 0,
+        limit: limits.maxDeals,
+      },
+      storage_bytes: {
+        current: tenant.storageUsedBytes ?? 0,
+        limit: limits.maxStorageBytes,
+      },
+      api_calls_per_day: {
+        current: 0, // Will be computed from aggregate below
+        limit: limits.maxApiCallsPerDay,
+      },
+      ai_tokens_per_day: {
+        current: 0,
+        limit: limits.maxAiTokensPerDay,
+      },
+      emails_per_day: {
+        current: 0,
+        limit: limits.maxEmailsPerDay,
+      },
+      active_automations: {
+        current: 0,
+        limit: limits.maxActiveAutomations,
+      },
+      tickets: {
+        current: 0,
+        limit: limits.maxTickets,
+      },
+      forms: {
+        current: 0,
+        limit: limits.maxForms,
+      },
+      custom_fields_per_entity: {
+        current: 0,
+        limit: limits.maxCustomFieldsPerEntity,
+      },
+    };
+
+    const entry = resourceMap[resource];
+    if (!entry) {
+      // Unknown resource - allow by default
+      return { allowed: true, current: 0, limit: null };
+    }
+
+    // For daily metrics, aggregate from user_usage table
+    if (resource === 'api_calls_per_day') {
+      const [result] = await db
+        .select({ total: sql<number>`COALESCE(SUM(CASE WHEN api_calls_date = CURRENT_DATE THEN api_calls_today ELSE 0 END), 0)` })
+        .from(userUsage)
+        .where(eq(userUsage.tenantId, tenantId));
+      entry.current = Number(result?.total ?? 0);
+    } else if (resource === 'ai_tokens_per_day') {
+      const [result] = await db
+        .select({ total: sql<number>`COALESCE(SUM(CASE WHEN ai_tokens_date = CURRENT_DATE THEN ai_tokens_today ELSE 0 END), 0)` })
+        .from(userUsage)
+        .where(eq(userUsage.tenantId, tenantId));
+      entry.current = Number(result?.total ?? 0);
+    }
+
+    const limit = entry.limit;
+    if (limit === null || limit === undefined) {
+      return { allowed: true, current: entry.current, limit: null };
+    }
+
+    return {
+      allowed: entry.current < limit,
+      current: entry.current,
+      limit,
+    };
+  } catch (error) {
+    console.error('[usage/tracker] checkLimit error:', error);
+    // On error, default to allowing the action
+    return { allowed: true, current: 0, limit: null };
   }
 }
 
-function todayDateString(): string {
-  return new Date().toISOString().slice(0, 10);
+/**
+ * Get aggregated usage for an entire tenant.
+ */
+export async function getCurrentUsage(
+  tenantId: string
+): Promise<UsageSummary> {
+  try {
+    const [result] = await db
+      .select({
+        apiCallsToday: sql<number>`COALESCE(SUM(CASE WHEN api_calls_date = CURRENT_DATE THEN api_calls_today ELSE 0 END), 0)`,
+        aiTokensToday: sql<number>`COALESCE(SUM(CASE WHEN ai_tokens_date = CURRENT_DATE THEN ai_tokens_today ELSE 0 END), 0)`,
+        storageBytes: sql<number>`COALESCE(SUM(storage_bytes), 0)`,
+      })
+      .from(userUsage)
+      .where(eq(userUsage.tenantId, tenantId));
+
+    return {
+      apiCallsToday: Number(result?.apiCallsToday ?? 0),
+      aiTokensToday: Number(result?.aiTokensToday ?? 0),
+      storageBytes: Number(result?.storageBytes ?? 0),
+      counters: {},
+    };
+  } catch (error) {
+    console.error('[usage/tracker] getCurrentUsage error:', error);
+    return { apiCallsToday: 0, aiTokensToday: 0, storageBytes: 0, counters: {} };
+  }
 }
 
-async function countWhere(
-  table: unknown,
-  tenantCol: AnyPgColumn,
-  deletedCol: AnyPgColumn,
+/**
+ * Get usage for a specific user within a tenant.
+ */
+export async function getUserUsage(
   tenantId: string,
-): Promise<number> {
-  // drizzle's `.from()` is generic over the table type; the helper is reused
-  // for several tables so we cast through `any` to keep one implementation.
-  const rows = await db
-    .select({ c: sql<number>`count(*)::int` })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .from(table as any)
-    .where(and(eq(tenantCol, tenantId), isNull(deletedCol)));
-  return rows[0]?.c ?? 0;
+  userId: string
+): Promise<UsageSummary> {
+  try {
+    const row = await db.query.userUsage.findFirst({
+      where: and(eq(userUsage.tenantId, tenantId), eq(userUsage.userId, userId)),
+    });
+
+    if (!row) {
+      return { apiCallsToday: 0, aiTokensToday: 0, storageBytes: 0, counters: {} };
+    }
+
+    // If the date has rolled over, daily counters are effectively 0
+    const today = new Date().toISOString().split('T')[0];
+    const apiCallsDate = row.apiCallsDate ? String(row.apiCallsDate) : null;
+    const aiTokensDate = row.aiTokensDate ? String(row.aiTokensDate) : null;
+
+    return {
+      apiCallsToday: apiCallsDate === today ? (row.apiCallsToday ?? 0) : 0,
+      aiTokensToday: aiTokensDate === today ? (row.aiTokensToday ?? 0) : 0,
+      storageBytes: row.storageBytes ?? 0,
+      counters: (row.counters as Record<string, unknown>) ?? {},
+    };
+  } catch (error) {
+    console.error('[usage/tracker] getUserUsage error:', error);
+    return { apiCallsToday: 0, aiTokensToday: 0, storageBytes: 0, counters: {} };
+  }
+}
+
+/**
+ * Reset daily counters for all users where the date has rolled over.
+ * Called from a cron job at midnight.
+ */
+export async function resetDailyCounters(): Promise<void> {
+  try {
+    await db
+      .update(userUsage)
+      .set({
+        apiCallsToday: 0,
+        apiCallsDate: sql`CURRENT_DATE`,
+        aiTokensToday: 0,
+        aiTokensDate: sql`CURRENT_DATE`,
+        updatedAt: new Date(),
+      })
+      .where(sql`api_calls_date < CURRENT_DATE OR ai_tokens_date < CURRENT_DATE`);
+  } catch (error) {
+    console.error('[usage/tracker] resetDailyCounters error:', error);
+  }
 }

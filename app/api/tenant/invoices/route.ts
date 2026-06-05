@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
     const { issue_date: issueDate, due_date: dueDate, line_items: items, notes, terms, discount, tax_rate: taxRate, contact_id: contactId, company_id: companyId, status } = v;
+    const title = rawBody.title as string | undefined;
 
     if (!issueDate) {
       return NextResponse.json({ error: 'Issue date is required' }, { status: 400 });
@@ -77,8 +78,8 @@ export async function POST(request: NextRequest) {
     let subtotal = 0;
     if (items?.length) {
       for (const item of items) {
-        const qty = parseFloat(item.quantity) || 1;
-        const price = parseFloat(item.unit_price) || 0;
+        const qty = parseFloat(String(item.quantity)) || 1;
+        const price = parseFloat(String(item.unit_price)) || 0;
         subtotal += qty * price;
       }
     }

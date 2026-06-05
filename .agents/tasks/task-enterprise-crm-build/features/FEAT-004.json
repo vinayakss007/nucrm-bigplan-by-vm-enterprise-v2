@@ -1,0 +1,35 @@
+{
+  "id": "FEAT-004",
+  "type": "feat",
+  "description": "Build the NuCRM SDK package for external integrations. Create a well-structured SDK at lib/sdk/ that provides typed client classes for all CRM operations (contacts, deals, leads, tasks, tickets, companies, invoices, etc.), webhook event types, and module plugin interfaces. This SDK enables third-party developers to integrate with NuCRM programmatically.",
+  "status": "completed",
+  "steps": [
+    "Create lib/sdk/index.ts as the main entry point exporting all SDK classes and types",
+    "Create lib/sdk/client.ts with NuCRMClient class that takes apiKey + baseUrl config, handles auth headers, provides typed HTTP methods (get/post/put/patch/delete) with proper error handling",
+    "Create lib/sdk/resources/contacts.ts with ContactsResource class (list, get, create, update, delete, bulkUpdate, search, merge) with full TypeScript types for Contact input/output",
+    "Create lib/sdk/resources/deals.ts with DealsResource class (list, get, create, update, delete, moveStage) with pipeline/stage types",
+    "Create lib/sdk/resources/leads.ts with LeadsResource class (list, get, create, update, delete, convert, score)",
+    "Create lib/sdk/resources/companies.ts with CompaniesResource class (list, get, create, update, delete)",
+    "Create lib/sdk/resources/tasks.ts with TasksResource class (list, get, create, update, delete, complete)",
+    "Create lib/sdk/resources/tickets.ts with TicketsResource class (list, get, create, update, addReply)",
+    "Create lib/sdk/resources/invoices.ts with InvoicesResource class (list, get, create, update, markPaid, send)",
+    "Create lib/sdk/resources/index.ts barrel export",
+    "Create lib/sdk/types.ts with all shared types: PaginatedResponse<T>, ApiError, ListOptions (page, limit, sort, filter), WebhookEvent, WebhookPayload",
+    "Create lib/sdk/webhooks.ts with WebhookVerifier class that validates webhook signatures (HMAC-SHA256), and WebhookEventType enum covering all CRM events",
+    "Create lib/sdk/modules.ts re-exporting the module plugin interface from lib/modules/sdk/types.ts plus helpers for module registration",
+    "Ensure all SDK files compile without TypeScript errors and use proper generics/type safety"
+  ],
+  "acceptance_criteria": [
+    "lib/sdk/index.ts exports NuCRMClient class and all resource types",
+    "NuCRMClient has typed methods for contacts, deals, leads, companies, tasks, tickets, invoices",
+    "WebhookVerifier can validate HMAC-SHA256 signatures",
+    "All types are properly exported for consumer use",
+    "Zero TypeScript errors in SDK files"
+  ],
+  "verification": [
+    "npx tsc --noEmit 2>&1 | grep 'error TS' | wc -l should output 0",
+    "npm run build completes successfully"
+  ],
+  "blocked_reason": null,
+  "findings": "SDK compiles with 0 TypeScript errors. npm run build fails due to pre-existing JWT_SECRET env var issue (unrelated to SDK). Used RequestFn type alias to cleanly pass the private _request method from client to all resource classes. All resource classes follow same pattern with lazy initialization in client."
+}
