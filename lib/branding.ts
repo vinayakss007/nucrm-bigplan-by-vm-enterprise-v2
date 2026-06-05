@@ -1,102 +1,191 @@
 /**
- * Tenant branding helpers.
- *
- * Reads the small set of branding fields already on the `tenants` table
- * (primaryColor, logoUrl, customDomain) and turns them into a normalised
- * shape plus CSS variables that the rest of the app can consume.
- *
- * v1 keeps this deliberately minimal: just primary colour, logo URL,
- * custom domain. Future iterations can add secondaryColor, accentColor,
- * faviconUrl, and a hideBranding flag (the last is plan-gated).
+ * White-label branding engine
+ * Manages tenant branding configuration for multi-frontend SaaS
  */
 
-export interface TenantBranding {
-  /** Primary brand colour as a CSS-valid string, e.g. "#7c3aed". */
-  primaryColor: string;
-  /** Optional public URL of the workspace logo. */
+import { db } from '@/drizzle/db';
+import { tenants } from '@/drizzle/schema';
+import { eq } from 'drizzle-orm';
+
+export interface BrandingConfig {
   logoUrl: string | null;
-  /** Optional custom domain (e.g. crm.acme.com). */
+  faviconUrl: string | null;
+  primaryColor: string;
+  secondaryColor: string;
+  accentColor: string;
+  companyName: string | null;
   customDomain: string | null;
+  hidePoweredBy: boolean;
+  customCss: string | null;
+  headerLayout: 'default' | 'centered' | 'minimal';
 }
 
-const DEFAULT_PRIMARY = '#7c3aed';
-
-const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
-
-/** Validate a hex color and fall back to the default when malformed. */
-export function safeColor(value: string | null | undefined): string {
-  if (typeof value !== 'string') return DEFAULT_PRIMARY;
-  const trimmed = value.trim();
-  return HEX_COLOR.test(trimmed) ? trimmed : DEFAULT_PRIMARY;
-}
+const DEFAULT_BRANDING: BrandingConfig = {
+  logoUrl: null,
+  faviconUrl: null,
+  primaryColor: '#7c3aed',
+  secondaryColor: '#6366f1',
+  accentColor: '#f59e0b',
+  companyName: null,
+  customDomain: null,
+  hidePoweredBy: false,
+  customCss: null,
+  headerLayout: 'default',
+};
 
 /**
- * Normalise an arbitrary tenant-shaped object into the branding subset.
- * Accepts both the snake_case shape returned by /api/tenant/workspace
- * and the camelCase row shape from drizzle queries.
+ * Get branding configuration for a tenant.
+ * Reads from tenants table fields and settings JSONB 'branding' key.
  */
-export function tenantToBranding(tenant: {
-  primaryColor?: string | null;
-  primary_color?: string | null;
-  logoUrl?: string | null;
-  logo_url?: string | null;
-  customDomain?: string | null;
-  custom_domain?: string | null;
-}): TenantBranding {
+export async function getBrandingForTenant(tenantId: string): Promise<BrandingConfig> {
+  const result = await db.select({
+    logoUrl: tenants.logoUrl,
+    faviconUrl: tenants.faviconUrl,
+    primaryColor: tenants.primaryColor,
+    customDomain: tenants.customDomain,
+    name: tenants.name,
+    settings: tenants.settings,
+  })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1);
+
+  const tenant = result[0];
+  if (!tenant) return { ...DEFAULT_BRANDING };
+
+  const settings = (tenant.settings as Record<string, unknown>) ?? {};
+  const brandingOverrides = (settings['branding'] as Partial<BrandingConfig>) ?? {};
+
   return {
-    primaryColor: safeColor(tenant.primaryColor ?? tenant.primary_color),
-    logoUrl: tenant.logoUrl ?? tenant.logo_url ?? null,
-    customDomain: tenant.customDomain ?? tenant.custom_domain ?? null,
+    ...DEFAULT_BRANDING,
+    logoUrl: tenant.logoUrl ?? DEFAULT_BRANDING.logoUrl,
+    faviconUrl: tenant.faviconUrl ?? DEFAULT_BRANDING.faviconUrl,
+    primaryColor: tenant.primaryColor ?? DEFAULT_BRANDING.primaryColor,
+    customDomain: tenant.customDomain ?? DEFAULT_BRANDING.customDomain,
+    companyName: tenant.name ?? DEFAULT_BRANDING.companyName,
+    ...brandingOverrides,
   };
 }
 
 /**
- * Produce the CSS variable map that <BrandingProvider> injects into
- * the page so brand-aware styles (Tailwind arbitrary values, inline
- * `style={{ background: 'var(--brand-primary)' }}`) just work.
- *
- * Includes a derived "contrast" variable so buttons can pick text
- * colour without recomputing on the client.
+ * Get branding configuration by custom domain lookup.
  */
-export function brandingToCssVars(branding: TenantBranding): Record<string, string> {
-  const primary = branding.primaryColor;
-  const contrast = readableTextColor(primary);
+export async function getBrandingForDomain(domain: string): Promise<BrandingConfig | null> {
+  const result = await db.select({
+    id: tenants.id,
+    logoUrl: tenants.logoUrl,
+    faviconUrl: tenants.faviconUrl,
+    primaryColor: tenants.primaryColor,
+    customDomain: tenants.customDomain,
+    name: tenants.name,
+    settings: tenants.settings,
+  })
+    .from(tenants)
+    .where(eq(tenants.customDomain, domain))
+    .limit(1);
+
+  const tenant = result[0];
+  if (!tenant) return null;
+
+  const settings = (tenant.settings as Record<string, unknown>) ?? {};
+  const brandingOverrides = (settings['branding'] as Partial<BrandingConfig>) ?? {};
+
   return {
-    '--brand-primary': primary,
-    '--brand-primary-contrast': contrast,
+    ...DEFAULT_BRANDING,
+    logoUrl: tenant.logoUrl ?? DEFAULT_BRANDING.logoUrl,
+    faviconUrl: tenant.faviconUrl ?? DEFAULT_BRANDING.faviconUrl,
+    primaryColor: tenant.primaryColor ?? DEFAULT_BRANDING.primaryColor,
+    customDomain: tenant.customDomain ?? DEFAULT_BRANDING.customDomain,
+    companyName: tenant.name ?? DEFAULT_BRANDING.companyName,
+    ...brandingOverrides,
   };
 }
 
 /**
- * Pick black or white based on relative luminance of the supplied hex
- * colour. Used to keep button labels readable regardless of the brand
- * colour the workspace picks. Algorithm: WCAG 2.x luminance.
+ * Sanitize custom CSS to prevent XSS attacks.
+ * Strips any content that could break out of a <style> tag or inject scripts.
  */
-export function readableTextColor(hex: string): string {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return '#ffffff';
-  const [r, g, b] = rgb.map((c) => {
-    const v = c / 255;
-    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-  }) as [number, number, number];
-  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return luminance > 0.5 ? '#111827' : '#ffffff';
+export function sanitizeCustomCss(css: string): string {
+  // Remove any HTML tags (e.g., </style><script>)
+  let sanitized = css.replace(/<\/?[a-z][^>]*>/gi, '');
+  // Remove any remaining < or > that could form tags
+  sanitized = sanitized.replace(/</g, '').replace(/>/g, '');
+  // Remove javascript: URLs
+  sanitized = sanitized.replace(/javascript\s*:/gi, '');
+  // Remove expression() (IE CSS expression attack)
+  sanitized = sanitized.replace(/expression\s*\(/gi, '');
+  // Remove @import to prevent loading external stylesheets
+  sanitized = sanitized.replace(/@import\b/gi, '');
+  // Remove url() with data: or javascript: schemes
+  sanitized = sanitized.replace(/url\s*\(\s*['"]?\s*(data|javascript)\s*:/gi, 'url(blocked:');
+  return sanitized;
 }
 
-function hexToRgb(hex: string): [number, number, number] | null {
-  const m = hex.replace('#', '');
-  if (m.length === 3) {
-    const r = parseInt(m[0]! + m[0]!, 16);
-    const g = parseInt(m[1]! + m[1]!, 16);
-    const b = parseInt(m[2]! + m[2]!, 16);
-    return [r, g, b];
+/**
+ * Generate CSS custom properties from branding config.
+ */
+export function generateCSSVariables(config: BrandingConfig): string {
+  const vars: string[] = [];
+
+  vars.push(`--brand-primary: ${config.primaryColor};`);
+  vars.push(`--brand-secondary: ${config.secondaryColor};`);
+  vars.push(`--brand-accent: ${config.accentColor};`);
+
+  if (config.logoUrl) {
+    vars.push(`--brand-logo-url: url(${config.logoUrl});`);
   }
-  if (m.length === 6 || m.length === 8) {
-    const r = parseInt(m.slice(0, 2), 16);
-    const g = parseInt(m.slice(2, 4), 16);
-    const b = parseInt(m.slice(4, 6), 16);
-    if ([r, g, b].some(Number.isNaN)) return null;
-    return [r, g, b];
+
+  if (config.customCss) {
+    vars.push(sanitizeCustomCss(config.customCss));
   }
-  return null;
+
+  return `:root {\n  ${vars.join('\n  ')}\n}`;
 }
+
+/**
+ * Validate a custom domain format and optionally check DNS.
+ * Returns { valid, error? } with validation result.
+ */
+export function validateCustomDomain(domain: string): { valid: boolean; error?: string } {
+  if (!domain || typeof domain !== 'string') {
+    return { valid: false, error: 'Domain is required' };
+  }
+
+  const trimmed = domain.trim().toLowerCase();
+
+  // Reject empty after trim
+  if (trimmed.length === 0) {
+    return { valid: false, error: 'Domain is required' };
+  }
+
+  // Must not contain protocol
+  if (trimmed.includes('://')) {
+    return { valid: false, error: 'Domain must not include protocol (http:// or https://)' };
+  }
+
+  // Must not contain path
+  if (trimmed.includes('/')) {
+    return { valid: false, error: 'Domain must not include a path' };
+  }
+
+  // Must not contain spaces
+  if (trimmed.includes(' ')) {
+    return { valid: false, error: 'Domain must not contain spaces' };
+  }
+
+  // Basic domain format: at least one dot, valid characters
+  const domainRegex = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/;
+  if (!domainRegex.test(trimmed)) {
+    return { valid: false, error: 'Invalid domain format' };
+  }
+
+  // Must not be a reserved/common platform domain
+  const reserved = ['nucrm.io', 'nucrm.com', 'localhost', 'example.com'];
+  if (reserved.includes(trimmed)) {
+    return { valid: false, error: 'This domain is reserved' };
+  }
+
+  return { valid: true };
+}
+
+export { DEFAULT_BRANDING };

@@ -1,0 +1,24 @@
+{
+  "id": "FEAT-002",
+  "type": "fix",
+  "description": "Fix UI inconsistencies: sidebar-customize-section.tsx is out of sync with the main sidebar, and plugin page toggle buttons lack accessibility attributes",
+  "status": "completed",
+  "steps": [
+    "In components/tenant/settings/sidebar-customize-section.tsx: Remove the '/tenant/integrations' entry from the Developer section in the CATALOG array. The main sidebar (components/tenant/layout/sidebar.tsx) no longer lists Integrations, so the customize section must match. The comment in the file says 'Mirrors NAV_SECTIONS in components/tenant/layout/sidebar.tsx -- keep in sync.'",
+    "In app/tenant/plugins/page.tsx: Add proper accessibility attributes to the toggle button for enabling/disabling plugins. Currently the togglePlugin button has no role='switch' or aria-checked. Add role='switch' and aria-checked={plugin.status === 'active'} to match the pattern used in sidebar-customize-section.tsx. Also add aria-label attributes to the expand/collapse button (aria-label='Show details') and delete button (aria-label='Delete plugin').",
+    "In app/tenant/plugins/page.tsx: Add aria-label='Test connection' to the test connection button in the expanded view, and aria-label='Copy webhook URL' to the copy button."
+  ],
+  "acceptance_criteria": [
+    "CATALOG in sidebar-customize-section.tsx no longer has '/tenant/integrations' entry",
+    "Toggle buttons in plugin page have role='switch' and aria-checked attributes",
+    "All icon-only buttons in plugin page have aria-label attributes",
+    "npx tsc --noEmit still passes with zero errors"
+  ],
+  "verification": [
+    "Run npx tsc --noEmit and confirm zero errors",
+    "Grep for '/tenant/integrations' in sidebar-customize-section.tsx - should not appear",
+    "Grep for 'role=\"switch\"' in app/tenant/plugins/page.tsx - should appear"
+  ],
+  "blocked_reason": null,
+  "findings": "Removed /tenant/integrations from CATALOG Developer section. Added role=switch, aria-checked, and aria-label to toggle, expand/collapse, and delete buttons in plugin page. tsc --noEmit passes with zero errors."
+}

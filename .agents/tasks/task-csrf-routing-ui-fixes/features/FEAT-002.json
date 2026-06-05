@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-002",
+  "type": "fix",
+  "description": "Fix sidebar font sizes, heading sizes, font visibility in dark mode, and navigation clarity. The sidebar nav items use text-sm (14px) which is too small for primary navigation. Section headers use text-xs (12px). In dark mode, muted-foreground text (HSL 215 12% 62%) is barely visible against dark backgrounds. The page heading sizes inside the main content area also need to be slightly larger.",
+  "status": "completed",
+  "steps": [
+    "Step 1: In components/tenant/layout/sidebar.tsx, increase the main navigation item font size from 'text-sm font-medium' to 'text-[15px] font-semibold' in the navItem function (around line 302). This makes the primary nav links more readable and prominent.",
+    "Step 2: In components/tenant/layout/sidebar.tsx, increase the section header labels from 'text-xs font-bold uppercase' to 'text-[11px] font-bold uppercase' (the button around line 383). Also increase the workspace name from 'text-sm font-bold' to 'text-base font-bold' (line 339).",
+    "Step 3: In app/globals.css, improve the dark mode muted-foreground color for better readability. Change --muted-foreground from '215 12% 62%' to '215 14% 72%' in the .dark section. This increases lightness from 62% to 72%, making muted text much more readable against dark backgrounds without being too bright.",
+    "Step 4: In app/globals.css, increase the base heading scale. Change h1 from text-[1.75rem] to text-[2rem], h2 from text-[1.4rem] to text-[1.6rem], h3 from text-[1.15rem] to text-[1.3rem]. This makes page headings more prominent throughout the app.",
+    "Step 5: In the sidebar collapsed state (around line 279), increase the icon size from 'w-4 h-4' to 'w-[18px] h-[18px]' for better visibility when sidebar is collapsed.",
+    "Step 6: In the sidebar, the shortcuts text uses 'text-[10px] text-muted-foreground/40' which is extremely hard to read. Change opacity from /40 to /70 for the shortcut labels (line 309). Also in the footer area (around line 418), change 'text-xs text-muted-foreground/40' to 'text-xs text-muted-foreground/70'."
+  ],
+  "acceptance_criteria": [
+    "Sidebar nav items use text-[15px] font-semibold (larger than previous text-sm font-medium)",
+    "Dark mode --muted-foreground lightness is 72% (up from 62%)",
+    "Heading scale is larger: h1 at 2rem, h2 at 1.6rem, h3 at 1.3rem",
+    "Shortcut labels and footer text use /70 opacity instead of /40",
+    "The build passes with no errors"
+  ],
+  "verification": [
+    "Run: npx next build to confirm no style-related build errors",
+    "Visually inspect: grep for the new values in sidebar.tsx and globals.css to confirm changes are in place"
+  ],
+  "blocked_reason": null,
+  "findings": "All changes verified. Build passes with JWT_SECRET env var set (required by API routes during page data collection). Also fixed pre-existing build blockers: (1) removed middleware.ts that conflicted with Next.js 16 proxy.ts detection, (2) fixed TSX generic parse error in app/tenant/contacts/[id]/page.tsx by adding trailing comma to <T,>. All 388 unit tests pass."
+}

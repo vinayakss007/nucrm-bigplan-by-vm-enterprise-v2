@@ -1,323 +1,278 @@
 'use client';
 
-/**
- * Workspace branding settings page.
- *
- * Lets admins set the primary brand colour, logo URL, and (optionally)
- * a subdomain or custom domain. Reads/writes /api/tenant/branding.
- *
- * The live preview at the bottom of the form uses the same CSS var
- * trick that <BrandingProvider> injects into the tenant layout, so
- * what you see here is what the rest of the app will render.
- */
-import { useEffect, useState, useCallback } from 'react';
-import { Loader2, Palette, Image as ImageIcon, Globe, Save } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { useState, useEffect } from 'react';
 
-interface Branding {
+interface BrandingFormData {
+  logoUrl: string;
+  faviconUrl: string;
   primaryColor: string;
-  logoUrl: string | null;
-  customDomain: string | null;
-  subdomain: string | null;
+  secondaryColor: string;
+  accentColor: string;
+  companyName: string;
+  customDomain: string;
+  hidePoweredBy: boolean;
+  customCss: string;
+  headerLayout: 'default' | 'centered' | 'minimal';
 }
 
-const DEFAULT: Branding = {
-  primaryColor: '#7c3aed',
-  logoUrl: null,
-  customDomain: null,
-  subdomain: null,
-};
-
-const SWATCHES = [
-  '#7c3aed', '#4f46e5', '#0ea5e9', '#10b981',
-  '#f59e0b', '#ef4444', '#ec4899', '#111827',
-];
-
-const inp =
-  'w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500';
-const lbl = 'block text-sm font-medium text-foreground/80 mb-1.5';
-
 export default function BrandingSettingsPage() {
-  const [branding, setBranding] = useState<Branding>(DEFAULT);
+  const [form, setForm] = useState<BrandingFormData>({
+    logoUrl: '',
+    faviconUrl: '',
+    primaryColor: '#7c3aed',
+    secondaryColor: '#6366f1',
+    accentColor: '#f59e0b',
+    companyName: '',
+    customDomain: '',
+    hidePoweredBy: false,
+    customCss: '',
+    headerLayout: 'default',
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tenant/branding');
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to load');
-      const d = json.data ?? {};
-      setBranding({
-        primaryColor: d.primaryColor || '#7c3aed',
-        logoUrl: d.logoUrl ?? null,
-        customDomain: d.customDomain ?? null,
-        subdomain: d.subdomain ?? null,
-      });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    async function loadBranding() {
+      try {
+        const res = await fetch('/api/tenant/branding');
+        if (res.ok) {
+          const { data } = await res.json();
+          setForm({
+            logoUrl: data.logoUrl || '',
+            faviconUrl: data.faviconUrl || '',
+            primaryColor: data.primaryColor || '#7c3aed',
+            secondaryColor: data.secondaryColor || '#6366f1',
+            accentColor: data.accentColor || '#f59e0b',
+            companyName: data.companyName || '',
+            customDomain: data.customDomain || '',
+            hidePoweredBy: data.hidePoweredBy || false,
+            customCss: data.customCss || '',
+            headerLayout: data.headerLayout || 'default',
+          });
+        }
+      } catch {
+        // Use defaults on error
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadBranding();
+  }, []);
 
-  async function save() {
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
     setSaving(true);
+    setMessage(null);
+
     try {
+      const payload: Record<string, unknown> = { ...form };
+      // Convert empty strings to null for optional fields
+      if (!form.logoUrl) payload['logoUrl'] = null;
+      if (!form.faviconUrl) payload['faviconUrl'] = null;
+      if (!form.companyName) payload['companyName'] = null;
+      if (!form.customDomain) payload['customDomain'] = null;
+      if (!form.customCss) payload['customCss'] = null;
+
       const res = await fetch('/api/tenant/branding', {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          primary_color: branding.primaryColor,
-          logo_url: branding.logoUrl,
-          custom_domain: branding.customDomain,
-          subdomain: branding.subdomain,
-        }),
+        body: JSON.stringify(payload),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Save failed');
-      toast.success('Branding updated');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Save failed');
+
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Branding saved successfully!' });
+      } else {
+        const err = await res.json();
+        setMessage({ type: 'error', text: err.error || 'Failed to save branding' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Network error. Please try again.' });
     } finally {
       setSaving(false);
     }
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16 text-foreground/40">
-        <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading…
-      </div>
-    );
+    return <div className="p-6">Loading branding settings...</div>;
   }
 
-  // Live-preview CSS vars on the right column. We don't reach for the
-  // shared BrandingProvider here because we want admins to see the new
-  // colour before they save.
-  const previewStyle = {
-    '--brand-primary': branding.primaryColor,
-  } as React.CSSProperties;
-
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="max-w-2xl space-y-6 p-6">
       <div>
-        <h1 className="text-2xl font-semibold flex items-center gap-2">
-          <Palette className="w-6 h-6 text-violet-500" />
-          Branding
-        </h1>
-        <p className="text-sm text-foreground/60 mt-1">
-          Make NuCRM feel like part of your product. Colour, logo, and the
-          domain your team signs in at.
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Branding</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Customize the look and feel of your workspace. These settings apply to your branded portal and external-facing pages.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* form column */}
-        <div className="space-y-6">
-          <section className="border border-border rounded-xl p-5 space-y-4">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Palette className="w-4 h-4" /> Colour
-            </h2>
-            <div>
-              <label className={lbl}>Primary colour</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={branding.primaryColor}
-                  onChange={(e) =>
-                    setBranding({ ...branding, primaryColor: e.target.value })
-                  }
-                  className="h-10 w-12 rounded cursor-pointer border border-border"
-                />
-                <input
-                  className={inp}
-                  value={branding.primaryColor}
-                  onChange={(e) =>
-                    setBranding({ ...branding, primaryColor: e.target.value })
-                  }
-                  placeholder="#7c3aed"
-                />
-              </div>
-              <div className="flex flex-wrap gap-2 mt-3">
-                {SWATCHES.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setBranding({ ...branding, primaryColor: c })}
-                    className="w-7 h-7 rounded-full border-2 border-border hover:scale-110 transition-transform"
-                    style={{ background: c }}
-                    aria-label={`Set primary colour to ${c}`}
-                  />
-                ))}
-              </div>
-            </div>
-          </section>
+      {message && (
+        <div className={`rounded-md p-3 text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'}`}>
+          {message.text}
+        </div>
+      )}
 
-          <section className="border border-border rounded-xl p-5 space-y-4">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <ImageIcon className="w-4 h-4" /> Logo
-            </h2>
-            <div>
-              <label className={lbl}>Logo URL</label>
-              <input
-                className={inp}
-                value={branding.logoUrl ?? ''}
-                onChange={(e) =>
-                  setBranding({
-                    ...branding,
-                    logoUrl: e.target.value.trim() || null,
-                  })
-                }
-                placeholder="https://acme.com/logo.svg"
-              />
-              <p className="text-xs text-foreground/50 mt-1">
-                Square SVG or PNG works best. Shows up in the navbar and on
-                login.
-              </p>
-            </div>
-          </section>
-
-          <section className="border border-border rounded-xl p-5 space-y-4">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Globe className="w-4 h-4" /> Domain
-            </h2>
-            <div>
-              <label className={lbl}>Subdomain on nucrm.app</label>
-              <div className="flex items-center gap-2">
-                <input
-                  className={inp}
-                  value={branding.subdomain ?? ''}
-                  onChange={(e) =>
-                    setBranding({
-                      ...branding,
-                      subdomain: e.target.value.trim().toLowerCase() || null,
-                    })
-                  }
-                  placeholder="acme"
-                />
-                <span className="text-sm text-foreground/60 whitespace-nowrap">
-                  .nucrm.app
-                </span>
-              </div>
-            </div>
-            <div>
-              <label className={lbl}>Custom domain</label>
-              <input
-                className={inp}
-                value={branding.customDomain ?? ''}
-                onChange={(e) =>
-                  setBranding({
-                    ...branding,
-                    customDomain: e.target.value.trim().toLowerCase() || null,
-                  })
-                }
-                placeholder="crm.acme.com"
-              />
-              <p className="text-xs text-foreground/50 mt-1">
-                Add a CNAME pointing to <code>cname.nucrm.app</code> to claim
-                this domain. SSL is provisioned automatically.
-              </p>
-            </div>
-          </section>
-
-          <button
-            onClick={save}
-            disabled={saving}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Save branding
-          </button>
+      <form onSubmit={handleSave} className="space-y-6">
+        {/* Logo and Favicon */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Logo URL</label>
+            <input
+              type="url"
+              value={form.logoUrl}
+              onChange={e => setForm(f => ({ ...f, logoUrl: e.target.value }))}
+              placeholder="https://example.com/logo.png"
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Favicon URL</label>
+            <input
+              type="url"
+              value={form.faviconUrl}
+              onChange={e => setForm(f => ({ ...f, faviconUrl: e.target.value }))}
+              placeholder="https://example.com/favicon.ico"
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+            />
+          </div>
         </div>
 
-        {/* preview column */}
-        <div className="space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground/60">
-            Preview
-          </h2>
-          <div
-            style={previewStyle}
-            className="border border-border rounded-2xl p-6 bg-foreground/[0.02] space-y-5"
-          >
-            {/* navbar mock */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {branding.logoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={branding.logoUrl}
-                    alt="Logo"
-                    className="h-8 w-8 rounded-lg object-cover bg-white"
-                  />
-                ) : (
-                  <div
-                    className="h-8 w-8 rounded-lg flex items-center justify-center font-bold text-white"
-                    style={{ background: 'var(--brand-primary)' }}
-                  >
-                    A
-                  </div>
-                )}
-                <span className="font-semibold">Workspace</span>
-              </div>
-              <button
-                type="button"
-                className="px-3 py-1.5 rounded-lg text-white text-sm font-medium"
-                style={{ background: 'var(--brand-primary)' }}
-              >
-                + New deal
-              </button>
-            </div>
-
-            {/* card mock */}
-            <div className="rounded-xl bg-white dark:bg-slate-900 border border-border p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Acme Corp</span>
-                <span
-                  className="text-xs px-2 py-0.5 rounded-full"
-                  style={{
-                    background: 'var(--brand-primary)',
-                    color: 'white',
-                  }}
-                >
-                  Hot lead
-                </span>
-              </div>
-              <p className="text-xs text-foreground/60">
-                Pipeline stage: Proposal · Last touched 2 hours ago
-              </p>
-              <a
-                href="#"
-                className="text-xs font-medium underline-offset-2 hover:underline"
-                style={{ color: 'var(--brand-primary)' }}
-              >
-                View deal →
-              </a>
-            </div>
-
-            {/* domain mock */}
-            <div className="text-xs font-mono text-foreground/60">
-              {branding.customDomain ? (
-                <>https://{branding.customDomain}/tenant/dashboard</>
-              ) : branding.subdomain ? (
-                <>https://{branding.subdomain}.nucrm.app/tenant/dashboard</>
-              ) : (
-                <>https://nucrm.app/tenant/dashboard</>
-              )}
+        {/* Colors */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Primary Color</label>
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                type="color"
+                value={form.primaryColor}
+                onChange={e => setForm(f => ({ ...f, primaryColor: e.target.value }))}
+                className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+              />
+              <input
+                type="text"
+                value={form.primaryColor}
+                onChange={e => setForm(f => ({ ...f, primaryColor: e.target.value }))}
+                pattern="^#[0-9a-fA-F]{6}$"
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              />
             </div>
           </div>
-
-          <p className="text-xs text-foreground/50">
-            The live app picks up these changes on next page load. Custom-domain
-            DNS may take a few minutes to propagate after pointing the CNAME.
-          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Secondary Color</label>
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                type="color"
+                value={form.secondaryColor}
+                onChange={e => setForm(f => ({ ...f, secondaryColor: e.target.value }))}
+                className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+              />
+              <input
+                type="text"
+                value={form.secondaryColor}
+                onChange={e => setForm(f => ({ ...f, secondaryColor: e.target.value }))}
+                pattern="^#[0-9a-fA-F]{6}$"
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Accent Color</label>
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                type="color"
+                value={form.accentColor}
+                onChange={e => setForm(f => ({ ...f, accentColor: e.target.value }))}
+                className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+              />
+              <input
+                type="text"
+                value={form.accentColor}
+                onChange={e => setForm(f => ({ ...f, accentColor: e.target.value }))}
+                pattern="^#[0-9a-fA-F]{6}$"
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              />
+            </div>
+          </div>
         </div>
-      </div>
+
+        {/* Company Name */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Company Name</label>
+          <input
+            type="text"
+            value={form.companyName}
+            onChange={e => setForm(f => ({ ...f, companyName: e.target.value }))}
+            placeholder="Your Company Name"
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+          />
+        </div>
+
+        {/* Custom Domain */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Custom Domain</label>
+          <input
+            type="text"
+            value={form.customDomain}
+            onChange={e => setForm(f => ({ ...f, customDomain: e.target.value }))}
+            placeholder="crm.yourdomain.com"
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+          />
+          <p className="mt-1 text-xs text-gray-500">Point a CNAME record to app.nucrm.io to use a custom domain.</p>
+        </div>
+
+        {/* Header Layout */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Header Layout</label>
+          <select
+            value={form.headerLayout}
+            onChange={e => setForm(f => ({ ...f, headerLayout: e.target.value as BrandingFormData['headerLayout'] }))}
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+          >
+            <option value="default">Default</option>
+            <option value="centered">Centered</option>
+            <option value="minimal">Minimal</option>
+          </select>
+        </div>
+
+        {/* Hide Powered By */}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.hidePoweredBy}
+            onClick={() => setForm(f => ({ ...f, hidePoweredBy: !f.hidePoweredBy }))}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${form.hidePoweredBy ? 'bg-violet-600' : 'bg-gray-200 dark:bg-gray-600'}`}
+          >
+            <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${form.hidePoweredBy ? 'translate-x-5' : 'translate-x-0'}`} />
+          </button>
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Hide &quot;Powered by NuCRM&quot; badge
+          </label>
+        </div>
+
+        {/* Custom CSS */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Custom CSS</label>
+          <textarea
+            value={form.customCss}
+            onChange={e => setForm(f => ({ ...f, customCss: e.target.value }))}
+            rows={4}
+            placeholder="/* Add custom CSS rules here */"
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+          />
+        </div>
+
+        {/* Submit */}
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : 'Save Branding'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

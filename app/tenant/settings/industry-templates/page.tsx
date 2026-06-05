@@ -57,7 +57,7 @@ export default function IndustryTemplatesPage() {
           <Sparkles className="w-3 h-3" /> Industry Templates
         </div>
         <h1 className="text-4xl font-extrabold tracking-tight">Setup your CRM in seconds</h1>
-        <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+        <p className="text-xl text-muted-foreground mx-auto">
           Choose an industry template to pre-configure your fields, pipelines, and automations. 
           Eradicate "Blank Screen Syndrome" and start selling today.
         </p>

@@ -104,7 +104,7 @@ export async function PATCH(
     if (body.name !== undefined) updateData.name = body.name;
     if (body.description !== undefined) updateData.description = body.description;
     if (body.is_active !== undefined) updateData.isActive = body.is_active;
-    if (body.trigger_type !== undefined) updateData.triggerType = body.trigger_type;
+    if (rawBody.trigger_type !== undefined) updateData.triggerType = rawBody.trigger_type;
     if (rawBody.trigger_config !== undefined) updateData.triggerConfig = rawBody.trigger_config;
     if (body.actions !== undefined) updateData.actions = body.actions;
     if (body.conditions !== undefined) updateData.conditions = body.conditions;

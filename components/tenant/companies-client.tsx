@@ -29,7 +29,7 @@ export default function TenantCompaniesClient({ initialCompanies, permissions, t
   };
 
   return (
-    <div className="max-w-5xl space-y-4">
+    <div className="max-w-[1600px] mx-auto space-y-4">
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <div className="relative w-full sm:flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

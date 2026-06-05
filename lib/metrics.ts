@@ -9,6 +9,7 @@
  * - Response time tracking
  * - Error rate tracking
  * - Database query metrics
+ * - FIXED: Ring buffer prevents unbounded memory growth
  * 
  * Usage:
  * import { metrics } from '@/lib/metrics';
@@ -31,58 +32,70 @@ export interface MetricsCollector {
   reset(): void;
 }
 
+/**
+ * FIX: Ring buffer to prevent unbounded memory growth.
+ * Keeps only the most recent MAX_METRICS entries.
+ */
+const MAX_METRICS = 10_000;
+
 class ConsoleMetricsCollector implements MetricsCollector {
-  private metrics: MetricPoint[] = [];
+  private buffer: MetricPoint[] = [];
+  private writeIndex = 0;
+  private count = 0;
   private testMode = process.env['PROMETHEUS_ENABLED'] !== 'true';
+
+  private push(point: MetricPoint): void {
+    if (this.count < MAX_METRICS) {
+      this.buffer.push(point);
+      this.count++;
+    } else {
+      // Overwrite oldest entry (ring buffer)
+      this.buffer[this.writeIndex] = point;
+    }
+    this.writeIndex = (this.writeIndex + 1) % MAX_METRICS;
+  }
 
   increment(name: string, value: number = 1, labels?: Record<string, string>): void {
     if (this.testMode) {
-      console.log(`📊 [METRIC] ${name}: +${value}`, labels ? JSON.stringify(labels) : '');
+      // In dev/test mode, don't store metrics — just log
       return;
     }
 
-    this.metrics.push({
-      name,
-      value,
-      timestamp: Date.now(),
-      labels,
-    });
+    this.push({ name, value, timestamp: Date.now(), labels });
   }
 
   timing(name: string, duration: number, labels?: Record<string, string>): void {
     if (this.testMode) {
-      console.log(`⏱️ [TIMING] ${name}: ${duration}ms`, labels ? JSON.stringify(labels) : '');
       return;
     }
 
-    this.metrics.push({
-      name: `${name}_ms`,
-      value: duration,
-      timestamp: Date.now(),
-      labels,
-    });
+    this.push({ name: `${name}_ms`, value: duration, timestamp: Date.now(), labels });
   }
 
   gauge(name: string, value: number, labels?: Record<string, string>): void {
     if (this.testMode) {
-      console.log(`📈 [GAUGE] ${name}: ${value}`, labels ? JSON.stringify(labels) : '');
       return;
     }
 
-    this.metrics.push({
-      name,
-      value,
-      timestamp: Date.now(),
-      labels,
-    });
+    this.push({ name, value, timestamp: Date.now(), labels });
   }
 
   getMetrics(): MetricPoint[] {
-    return [...this.metrics];
+    // Return metrics in chronological order
+    if (this.count < MAX_METRICS) {
+      return [...this.buffer];
+    }
+    // Ring buffer is full — splice from write index for correct order
+    return [
+      ...this.buffer.slice(this.writeIndex),
+      ...this.buffer.slice(0, this.writeIndex),
+    ];
   }
 
   reset(): void {
-    this.metrics = [];
+    this.buffer = [];
+    this.writeIndex = 0;
+    this.count = 0;
   }
 }
 

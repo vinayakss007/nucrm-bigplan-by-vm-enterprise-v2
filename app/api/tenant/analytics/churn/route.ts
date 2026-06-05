@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('[Churn Analytics] GET error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('[Churn Calculate] POST error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -128,6 +129,6 @@ export async function PATCH(
     });
   } catch (error: any) {
     console.error('[Churn Action] PATCH error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }

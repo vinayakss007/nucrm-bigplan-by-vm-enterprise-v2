@@ -1,0 +1,44 @@
+Issues Found - nucrm-enterprise
+Date: June 2, 2026
+========================================
+
+1. SERVER HUNG / UNRESPONSIVE
+   - The next-server process (PID 476566) was accepting TCP connections on port 3000
+     but never sending HTTP responses (curl returned HTTP code 000 with timeout).
+   - Process was in "R" (running) state with 27.7% CPU but doing no useful work.
+   - Trace logs showed repeated compilation loops for /proxy and notifications API.
+   - Root cause not determined - possibly a compilation deadlock or infinite loop.
+
+2. STUCK CLIENT CONNECTION (EXTERNAL)
+   - A connection from IP 27.0.58.39 (vasaicable.co.in, India) had 23,568 bytes
+     stuck in the TCP receive buffer on port 3000 - data sent but never read.
+   - Multiple connections in CLOSE-WAIT state (server not closing sockets).
+   - Suggests the server is exposed to the internet without proper firewall/auth.
+
+3. HIGH MEMORY USAGE
+   - next-server RSS: ~1.4 GB (out of 3.8 GB total RAM)
+   - Heap growing over time (247MB -> 314MB in trace window)
+   - Swap in use: 391 MB
+   - System available memory: 1.2 GB
+   - Risk of OOM killer under load.
+
+4. SLOW FILESYSTEM
+   - Next.js detected slow filesystem: benchmark took 322-326ms.
+   - .next/dev appears to be on a network/slow drive.
+   - Impacts compilation and page render performance.
+
+5. NOTIFICATIONS API REPEATED FAILURES
+   - Trace shows /api/tenant/notifications and /api/tenant/notifications/unread
+     being called every ~60 seconds with "failed": true.
+   - Likely a client-side polling loop that keeps failing and retrying.
+   - Could be contributing to the server hang.
+
+6. MISSING SERVER ACTION "x"
+   - Log error: "Failed to find Server Action 'x'"
+   - Suggests stale client code or a deployment mismatch.
+   - The action reference "x" might be from a minified/obfuscated build.
+
+7. SERVER EXPOSED TO INTERNET
+   - Listening on 0.0.0.0:3000 (all interfaces) during development.
+   - External IP from India had an active connection.
+   - No visible auth/restriction on the dev server.

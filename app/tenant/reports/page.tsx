@@ -84,7 +84,7 @@ export default function ReportsPage() {
   const meta = REPORT_TYPES.find(r => r.id === selectedType)!;
 
   return (
-    <div className="max-w-7xl space-y-5 animate-fade-in">
+    <div className="max-w-[1600px] mx-auto space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold flex items-center gap-2"><BarChart3 className="w-5 h-5" />Reports & Export</h1>

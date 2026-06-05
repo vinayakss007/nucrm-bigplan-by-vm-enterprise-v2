@@ -1,0 +1,118 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { apiError } from '@/lib/api-error';
+import { requireAuth } from '@/lib/auth/middleware';
+import { requireModule } from '@/lib/modules/gate';
+import { db } from '@/drizzle/db';
+import { territories, territoryAssignments } from '@/drizzle/schema/territories';
+import { eq, and, isNull } from 'drizzle-orm';
+import { getTerritoryTree } from '@/lib/territories';
+
+export async function GET(req: NextRequest) {
+  try {
+    const ctx = await requireAuth(req);
+    if (ctx instanceof NextResponse) return ctx;
+    const gate = await requireModule(ctx.tenantId, 'core-crm');
+    if (gate) return gate;
+
+    const tree = await getTerritoryTree(ctx.tenantId);
+    return NextResponse.json({ data: tree });
+  } catch (err: any) {
+    return apiError(err);
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const ctx = await requireAuth(req);
+    if (ctx instanceof NextResponse) return ctx;
+    const gate = await requireModule(ctx.tenantId, 'core-crm');
+    if (gate) return gate;
+
+    const body = await req.json();
+    const { name, type, parentId, geoConfig } = body;
+
+    if (!name || !type) {
+      return NextResponse.json({ error: 'name and type are required' }, { status: 400 });
+    }
+
+    const [row] = await db.insert(territories).values({
+      tenantId: ctx.tenantId,
+      name,
+      type,
+      parentId: parentId || null,
+      geoConfig: geoConfig || {},
+    }).returning();
+
+    return NextResponse.json({ data: row }, { status: 201 });
+  } catch (err: any) {
+    return apiError(err);
+  }
+}
+
+export async function PUT(req: NextRequest) {
+  try {
+    const ctx = await requireAuth(req);
+    if (ctx instanceof NextResponse) return ctx;
+    const gate = await requireModule(ctx.tenantId, 'core-crm');
+    if (gate) return gate;
+
+    const body = await req.json();
+    const { id, name, type, parentId, geoConfig, assignedTo } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+
+    const updates: Record<string, any> = { updatedAt: new Date() };
+    if (name !== undefined) updates['name'] = name;
+    if (type !== undefined) updates['type'] = type;
+    if (parentId !== undefined) updates['parentId'] = parentId;
+    if (geoConfig !== undefined) updates['geoConfig'] = geoConfig;
+    if (assignedTo !== undefined) updates['assignedTo'] = assignedTo;
+
+    const [row] = await db
+      .update(territories)
+      .set(updates)
+      .where(and(eq(territories.id, id), eq(territories.tenantId, ctx.tenantId)))
+      .returning();
+
+    if (!row) {
+      return NextResponse.json({ error: 'Territory not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ data: row });
+  } catch (err: any) {
+    return apiError(err);
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const ctx = await requireAuth(req);
+    if (ctx instanceof NextResponse) return ctx;
+    const gate = await requireModule(ctx.tenantId, 'core-crm');
+    if (gate) return gate;
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'id query param is required' }, { status: 400 });
+    }
+
+    // Soft delete
+    const [row] = await db
+      .update(territories)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(territories.id, id), eq(territories.tenantId, ctx.tenantId)))
+      .returning();
+
+    if (!row) {
+      return NextResponse.json({ error: 'Territory not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ data: { id, deleted: true } });
+  } catch (err: any) {
+    return apiError(err);
+  }
+}
