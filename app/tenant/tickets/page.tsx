@@ -4,7 +4,7 @@ import {
   LifeBuoy, Plus, Search, Filter, 
   Clock, CheckCircle2, AlertCircle, 
   User, MessageSquare, ChevronRight,
-  MoreVertical, Inbox, X
+  MoreVertical, Inbox, X, Columns
 } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -85,13 +85,22 @@ export default function TicketsPage() {
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">Manage customer support requests and issues.</p>
         </div>
-        <button 
-          onClick={() => setShowCreate(true)}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-all shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          New Ticket
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/tenant/tickets/kanban"
+            className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-accent transition-all"
+          >
+            <Columns className="w-4 h-4" />
+            <span className="hidden sm:inline">Kanban</span>
+          </Link>
+          <button 
+            onClick={() => setShowCreate(true)}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-all shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            New Ticket
+          </button>
+        </div>
       </div>
 
       {/* Stats summary */}

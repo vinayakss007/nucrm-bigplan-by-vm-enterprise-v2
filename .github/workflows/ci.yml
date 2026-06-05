@@ -1,0 +1,154 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, feat/enterprise-infrastructure, fix/production-build-issues]
+  push:
+    branches: [main, feat/enterprise-infrastructure]
+
+env:
+  NODE_ENV: test
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_test
+  JWT_SECRET: ${{ secrets.JWT_SECRET }}
+  SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+  CRON_SECRET: ${{ secrets.CRON_SECRET }}
+  ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+  NEXT_PUBLIC_APP_URL: http://localhost:3000
+  METRICS_SECRET: ${{ secrets.METRICS_SECRET }}
+  SETUP_KEY: ${{ secrets.SETUP_KEY }}
+  ALLOWED_ORIGINS: http://localhost:3000
+  DATABASE_SSL: 'false'
+
+jobs:
+  lint-typecheck:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit --pretty
+
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nucrm_test
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Run migrations
+        run: npm run db:migrate
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Coverage report
+        run: npm run test:coverage
+
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nucrm_test
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Run migrations
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_test
+
+      - name: Integration tests
+        run: npm run test:integration
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_test
+          DATABASE_SSL: 'false'
+          REDIS_URL: redis://localhost:6379
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: .next/
+          retention-days: 3

@@ -16,7 +16,24 @@ import * as schema from '../../drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 
-describe('Tenant Isolation (Penetration Tests)', () => {
+// Skip entire suite if no database is available
+async function isDatabaseAvailable(): Promise<boolean> {
+  const databaseUrl = process.env.DATABASE_URL || 'postgresql://postgres:admin123@localhost:5432/nucrm_test';
+  const pool = new Pool({ connectionString: databaseUrl, connectionTimeoutMillis: 3000 });
+  try {
+    const client = await pool.connect();
+    client.release();
+    await pool.end();
+    return true;
+  } catch {
+    await pool.end().catch(() => {});
+    return false;
+  }
+}
+
+const dbAvailable = await isDatabaseAvailable();
+
+describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
   let pool: Pool;
   let db: any;
   let tenantAId: string;

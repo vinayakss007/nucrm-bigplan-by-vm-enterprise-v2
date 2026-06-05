@@ -1,0 +1,30 @@
+{
+  "id": "FEAT-004",
+  "type": "feat",
+  "description": "Create [id] detail routes for Contracts, Subscriptions, Orders, and Quotes - both API routes (app/api/tenant/*/[id]/route.ts) and frontend pages (app/tenant/*/[id]/page.tsx). Follow the pattern from app/api/tenant/deals/[id]/route.ts and app/tenant/deals/[id]/page.tsx.",
+  "status": "in_progress",
+  "steps": [
+    "Create app/api/tenant/contracts/[id]/route.ts - GET/PUT/DELETE single contract by ID. Follow deals/[id] pattern: requireAuth, requirePerm (if applicable), select by id+tenantId, return { data: contract }. PUT updates allowlisted fields. DELETE soft-deletes.",
+    "Create app/tenant/contracts/[id]/page.tsx - 'use client' detail page showing contract info (title, number, type, status, dates, value, terms, notes, contact). Edit inline or via modal. Status change buttons. Back link to /tenant/contracts. Include loading.tsx and error.tsx.",
+    "Create app/api/tenant/subscriptions/[id]/route.ts - GET/PUT/DELETE single subscription. Same pattern as contracts.",
+    "Create app/tenant/subscriptions/[id]/page.tsx - 'use client' detail page showing subscription details (plan, status, billing cycle, amount, start/end dates, auto-renew). Edit/cancel actions. Include loading.tsx and error.tsx.",
+    "Create app/api/tenant/orders/[id]/route.ts - GET/PUT/DELETE single order. Same pattern.",
+    "Create app/tenant/orders/[id]/page.tsx - 'use client' detail page showing order details (order number, status, items, total, shipping info, dates). Status update actions. Include loading.tsx and error.tsx.",
+    "Create app/api/tenant/quotes/[id]/route.ts - GET/PUT/DELETE single quote. Same pattern.",
+    "Create app/tenant/quotes/[id]/page.tsx - 'use client' detail page showing quote details (title, status, valid until, line items, subtotal, tax, total, terms). Accept/reject/edit actions. Include loading.tsx and error.tsx."
+  ],
+  "acceptance_criteria": [
+    "All 4 API [id] routes support GET (single record), PUT (update), DELETE (soft-delete)",
+    "All 4 frontend [id] pages display full record detail with edit/delete capabilities",
+    "API routes use requireAuth + apiError pattern from deals/[id]/route.ts",
+    "Frontend pages use 'use client' with fetch to the corresponding API",
+    "Each frontend page has loading.tsx and error.tsx",
+    "npx tsc --noEmit passes with 0 errors"
+  ],
+  "verification": [
+    "npx tsc --noEmit - 0 errors",
+    "npm run build - succeeds with all 8 new route files compiled"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

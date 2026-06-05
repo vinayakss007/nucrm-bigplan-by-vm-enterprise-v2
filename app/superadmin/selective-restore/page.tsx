@@ -83,7 +83,14 @@ interface RestoreLog {
   performed_by_name?: string;
 }
 
-type Step = 'upload' | 'preview' | 'select' | 'scope' | 'execute' | 'done';
+interface TenantUser {
+  id: string;
+  email: string;
+  fullName: string | null;
+  role: string;
+}
+
+type Step = 'upload' | 'preview' | 'user-select' | 'select' | 'scope' | 'execute' | 'done';
 
 // ── Main Page ────────────────────────────────────────────────────────────────
 
@@ -100,6 +107,9 @@ export default function SelectiveRestorePage() {
   const [restoreResult, setRestoreResult] = useState<any>(null);
   const [restoreLogs, setRestoreLogs] = useState<RestoreLog[]>([]);
   const [showLogs, setShowLogs] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [tenantUsers, setTenantUsers] = useState<TenantUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load data on mount
@@ -200,9 +210,31 @@ export default function SelectiveRestorePage() {
     }
   };
 
-  const handleSelectTenant = (tenant: TenantInfo) => {
+  const handleSelectTenant = async (tenant: TenantInfo) => {
     setSelectedTenant(tenant);
     setSelectedTables([]);
+    setSelectedUserId(null);
+    setLoadingUsers(true);
+    setStep('user-select');
+
+    try {
+      const res = await fetch(`/api/superadmin/selective-restore/users?tenant_id=${tenant.tenant_id}`);
+      const data = await res.json();
+      if (data.users) {
+        setTenantUsers(data.users);
+      } else {
+        setTenantUsers([]);
+      }
+    } catch (err) {
+      console.error('Failed to load tenant users:', err);
+      setTenantUsers([]);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleSelectUser = (userId: string | null) => {
+    setSelectedUserId(userId);
     setStep('select');
   };
 
@@ -231,6 +263,7 @@ export default function SelectiveRestorePage() {
           tenant_id: selectedTenant.tenant_id,
           tables: selectedTables,
           restore_mode: restoreMode,
+          ...(selectedUserId ? { user_id: selectedUserId } : {}),
         }),
       });
       const data = await res.json();
@@ -260,6 +293,7 @@ export default function SelectiveRestorePage() {
           tables: selectedTables,
           restore_mode: restoreMode,
           confirm_restore: restoreMode === 'replace',
+          ...(selectedUserId ? { user_id: selectedUserId } : {}),
         }),
       });
 
@@ -313,6 +347,8 @@ export default function SelectiveRestorePage() {
     setSelectedBackup(null);
     setSelectedTenant(null);
     setSelectedTables([]);
+    setSelectedUserId(null);
+    setTenantUsers([]);
     setScopePreview(null);
     setRestoreProgress(null);
     setRestoreResult(null);
@@ -341,9 +377,10 @@ export default function SelectiveRestorePage() {
   // ── Steps Navigation ──────────────────────────────────────────────────────
   const steps = [
     { id: 'upload' as Step, label: 'Upload', icon: Upload },
-    { id: 'preview' as Step, label: 'Preview', icon: Eye },
-    { id: 'select' as Step, label: 'Select', icon: Users },
-    { id: 'scope' as Step, label: 'Scope', icon: Table2 },
+    { id: 'preview' as Step, label: 'Tenants', icon: Eye },
+    { id: 'user-select' as Step, label: 'Users', icon: Users },
+    { id: 'select' as Step, label: 'Tables', icon: Table2 },
+    { id: 'scope' as Step, label: 'Scope', icon: Search },
     { id: 'execute' as Step, label: 'Execute', icon: Play },
   ];
 
@@ -580,6 +617,82 @@ export default function SelectiveRestorePage() {
         </div>
       )}
 
+      {/* ── Step 2b: User Selection ─────────────────────────────────────── */}
+      {step === 'user-select' && selectedTenant && (
+        <div className="space-y-6">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+            <h2 className="text-lg font-semibold text-white mb-2">
+              Select User Scope
+            </h2>
+            <p className="text-gray-400 mb-6">
+              Tenant: {selectedTenant.tenant_name || 'Unknown'} - Choose to restore all users or filter by a specific user
+            </p>
+
+            {loadingUsers ? (
+              <div className="flex items-center justify-center py-12 gap-3 text-blue-400">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>Loading users...</span>
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {/* All Users option */}
+                <button
+                  onClick={() => handleSelectUser(null)}
+                  className="bg-gray-800 hover:border-blue-500 border-2 border-gray-700 rounded-xl p-5 text-left transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 rounded-lg bg-blue-900/50">
+                        <Users className="w-5 h-5 text-blue-400" />
+                      </div>
+                      <div>
+                        <p className="text-white font-semibold text-base">All Users (Full Tenant Restore)</p>
+                        <p className="text-gray-400 text-sm mt-0.5">Restore data for all users in this tenant</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-500" />
+                  </div>
+                </button>
+
+                {/* Individual users */}
+                {tenantUsers.map(user => (
+                  <button
+                    key={user.id}
+                    onClick={() => handleSelectUser(user.id)}
+                    className="bg-gray-800 hover:border-gray-600 border border-gray-700 rounded-xl p-4 text-left transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="p-2.5 rounded-lg bg-gray-700">
+                          <Shield className="w-4 h-4 text-gray-300" />
+                        </div>
+                        <div>
+                          <p className="text-white font-medium">{user.fullName || 'Unnamed User'}</p>
+                          <p className="text-gray-400 text-sm">{user.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="px-2.5 py-1 bg-gray-700 rounded text-xs font-medium text-gray-300 capitalize">
+                          {user.role}
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-gray-500" />
+                      </div>
+                    </div>
+                  </button>
+                ))}
+
+                {tenantUsers.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>No active users found for this tenant.</p>
+                    <p className="text-sm mt-1">You can still proceed with a full tenant restore.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Step 3: Select Tables ────────────────────────────────────────── */}
       {step === 'select' && selectedTenant && (
         <div className="space-y-6">
@@ -589,6 +702,11 @@ export default function SelectiveRestorePage() {
             </h2>
             <p className="text-gray-400 mb-4">
               Tenant: {selectedTenant.tenant_name || 'Unknown'} ({selectedTenant.total_records.toLocaleString()} records available)
+              {selectedUserId && tenantUsers.length > 0 && (
+                <span className="text-blue-400 ml-2">
+                  | User: {tenantUsers.find(u => u.id === selectedUserId)?.fullName || tenantUsers.find(u => u.id === selectedUserId)?.email || 'Selected'}
+                </span>
+              )}
             </p>
 
             {/* Restore Mode */}

@@ -1,0 +1,33 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Build the module enforcement middleware and usage limits system. This implements the core gating infrastructure: lib/modules/gate.ts for module access control, lib/usage/ for per-user usage tracking and limit enforcement, the userUsage and planLimits Drizzle schema tables, and auto-install of default modules on tenant signup.",
+  "status": "completed",
+  "steps": [
+    "Create drizzle/schema/usage.ts with userUsage table (id, tenantId, userId, counters JSONB, storageBytes bigint, apiCallsToday int, apiCallsDate date, aiTokensToday int, aiTokensDate date, lastActivityAt timestamp, lifecycle) and planLimits table (id, planId text unique, maxUsers, maxContacts, maxDeals, maxStorageBytes bigint, maxApiCallsPerDay, maxAiTokensPerDay, maxEmailsPerDay, maxActiveAutomations, maxTickets, maxForms, maxCustomFieldsPerEntity, maxFileUploadBytes, isActive bool, lifecycle). Register in drizzle/schema/index.ts.",
+    "Create lib/modules/gate.ts with requireModule(tenantId, moduleId) function that checks: modules.isAvailable, tenantModules.status==='active' or forceEnabled, and plan gate. Returns 403 NextResponse if blocked. Also create requireFeature(tenantId, moduleId, featureKey) that checks enabledFeatures array.",
+    "Create lib/modules/auto-install.ts with getDefaultModulesForPlan(planId) function that returns the correct module list based on MASTER_PLAN plan tiers, and installDefaultModules(tenantId, planId) that inserts into tenantModules.",
+    "Create lib/usage/tracker.ts with incrementUsage(tenantId, userId, metric, amount), checkLimit(tenantId, resource), getCurrentUsage(tenantId), getUserUsage(tenantId, userId), resetDailyCounters() functions.",
+    "Create lib/usage/middleware.ts with checkUserLimit() middleware function that checks api_calls_today against plan limits, returns 429 if exceeded.",
+    "Create lib/usage/notifications.ts with checkThresholds(tenantId) that detects 80%/90%/100% usage and creates notifications in the notifications table.",
+    "Add usage schema export to drizzle/schema/index.ts",
+    "Update app/api/auth/signup/route.ts to call installDefaultModules after tenant creation",
+    "Update app/api/setup/create-admin/route.ts to call installDefaultModules after tenant creation",
+    "Ensure all new files pass TypeScript strict mode (npx tsc --noEmit)"
+  ],
+  "acceptance_criteria": [
+    "drizzle/schema/usage.ts exports userUsage and planLimits tables with proper types",
+    "lib/modules/gate.ts exports requireModule and requireFeature functions",
+    "lib/modules/auto-install.ts exports installDefaultModules function",
+    "lib/usage/tracker.ts exports incrementUsage, checkLimit, getCurrentUsage functions",
+    "lib/usage/middleware.ts exports checkUserLimit middleware",
+    "All files compile without TypeScript errors",
+    "Schema is registered in drizzle/schema/index.ts"
+  ],
+  "verification": [
+    "npx tsc --noEmit 2>&1 | grep 'error TS' | wc -l should output 0",
+    "npm run build completes successfully"
+  ],
+  "blocked_reason": null,
+  "findings": "All files pass TypeScript strict mode with 0 errors. The module auto-install system uses onConflictDoNothing to coexist with the existing ModuleRegistry.install calls in both signup and create-admin routes. The plan-default-modules mapping covers free/starter/pro/enterprise tiers. Pre-existing integration test failures (2) are due to missing PostgreSQL connection and missing tmp directory - unrelated to this feature."
+}

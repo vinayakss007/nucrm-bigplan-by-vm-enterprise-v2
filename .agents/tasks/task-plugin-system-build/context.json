@@ -1,0 +1,33 @@
+{
+  "project_type": "Next.js 16 App Router multi-tenant SaaS CRM",
+  "language": "TypeScript",
+  "build_system": "npm with Next.js build pipeline, Drizzle ORM for DB",
+  "test_framework": "Vitest with @testing-library/react, Playwright for e2e",
+  "build_command": "npx tsc --noEmit",
+  "test_command": "npx tsc --noEmit",
+  "verification_instructions": "Run npx tsc --noEmit in the project root and ensure 0 errors",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "npm install in project root",
+  "environment_constraints": "No database available (no Docker daemon, no PostgreSQL). Validation must use TypeScript compilation only. Cannot run next build (requires DB at build time).",
+  "contribution_requirements": "All code must pass tsc --noEmit with strict mode. Follow existing patterns for schema utilities, API route handlers, and UI components.",
+  "key_patterns": "Schema files in drizzle/schema/ use utils.ts helpers (pk(), tenantId(), lifecycle(), audit(), metadata(), tenantIdx, metadataIdx, activeIdx). API routes use requireAuth() middleware returning AuthContext. UI pages are client components using fetch() to API routes. Integrations have a registry pattern with ProviderDefinition types.",
+  "relevant_files": [
+    "drizzle/schema/comm.ts",
+    "drizzle/schema/modules.ts",
+    "drizzle/schema/index.ts",
+    "drizzle/schema/utils.ts",
+    "drizzle/schema/_registry.ts",
+    "lib/integrations/types.ts",
+    "lib/integrations/registry.ts",
+    "lib/integrations/ai-connector.ts",
+    "lib/integrations/providers/sendgrid.ts",
+    "app/api/tenant/plugin-engine/route.ts",
+    "app/api/tenant/plugin-engine/actions/route.ts",
+    "app/tenant/plugins/page.tsx",
+    "app/tenant/integrations/page.tsx",
+    "app/api/tenant/integrations/route.ts",
+    "lib/auth/middleware.ts",
+    "lib/api-error.ts"
+  ],
+  "directory_structure": "drizzle/schema/ = DB schemas, lib/ = business logic, app/api/tenant/ = API routes, app/tenant/ = UI pages, components/ = shared components"
+}

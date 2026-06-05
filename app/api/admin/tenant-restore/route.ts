@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
@@ -102,7 +103,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Missing tenantId or listBackups parameter' }, { status: 400 });
   } catch (err: any) {
     console.error('[Tenant Restore GET] Error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -155,7 +156,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     console.error('[Tenant Restore POST] Error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -248,7 +249,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   } catch (err: any) {
     console.error('[Tenant Restore PUT] Error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -278,7 +279,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ message: 'Backup deleted', backupId });
   } catch (err: any) {
     console.error('[Tenant Restore DELETE] Error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 

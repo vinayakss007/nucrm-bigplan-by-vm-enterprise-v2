@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
         template: {
           name: template_name,
           language: { code: language || 'en' },
-          components: content?.components || [],
+          components: content?.['components'] || [],
         },
       };
     } else {
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
         type: 'text',
         text: {
           // HIGH-01: Fix JS operator precedence: ?? binds tighter than ? :
-          body: content?.body ?? (message_type === 'text' ? content : 'Hello from NuCRM!'),
+          body: content?.['body'] ?? (message_type === 'text' ? content : 'Hello from NuCRM!'),
         },
       };
     }

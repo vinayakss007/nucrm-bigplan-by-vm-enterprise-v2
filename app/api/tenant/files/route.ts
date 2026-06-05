@@ -102,7 +102,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Storage limit (${maxGb} GB) reached. Upgrade your plan.` }, { status: 403 });
     }
 
-    let storagePath: string;
     const storageType = 'local';
 
     const ext = extname(file.name).toLowerCase() || '.bin';
@@ -113,7 +112,7 @@ export async function POST(req: NextRequest) {
     await mkdir(uploadDir, { recursive: true });
     const localPath = join(uploadDir, filename);
     await writeFile(localPath, buffer);
-    storagePath = `uploads/${ctx.tenantId}/${resource_type}/${resource_id}/${filename}`;
+    const storagePath = `uploads/${ctx.tenantId}/${resource_type}/${resource_id}/${filename}`;
 
     // Save to DB in transaction
     const attachment = await db.transaction(async (tx) => {

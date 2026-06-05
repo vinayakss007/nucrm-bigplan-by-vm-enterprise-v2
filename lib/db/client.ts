@@ -83,18 +83,34 @@ export async function withTransaction<T>(fn: (c: PoolClient) => Promise<T>): Pro
 }
 
 // ── In-process LRU cache for hot read-only data ──────────────
+// FIXED: O(1) eviction using insertion-order Map iteration
+// instead of O(n log n) sort on every eviction.
 interface CacheEntry { data: any; expires: number; }
 const _cache = new Map<string, CacheEntry>();
 const MAX_CACHE_ENTRIES = 500;
 
+function _evictCache(): void {
+  // Phase 1: Remove expired entries
+  const now = Date.now();
+  for (const [key, entry] of _cache) {
+    if (entry.expires <= now) {
+      _cache.delete(key);
+      if (_cache.size < MAX_CACHE_ENTRIES) return;
+    }
+  }
+  // Phase 2: Evict oldest by insertion order
+  if (_cache.size >= MAX_CACHE_ENTRIES) {
+    const firstKey = _cache.keys().next().value;
+    if (firstKey !== undefined) _cache.delete(firstKey);
+  }
+}
+
 export function dbCache<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
   const hit = _cache.get(key);
   if (hit && hit.expires > Date.now()) return Promise.resolve(hit.data as T);
+  if (hit) _cache.delete(key); // Remove stale
   return fetcher().then(data => {
-    if (_cache.size >= MAX_CACHE_ENTRIES) {
-      const oldest = [..._cache.entries()].sort((a,b) => a[1].expires - b[1].expires)[0];
-      if (oldest) _cache.delete(oldest[0]);
-    }
+    if (_cache.size >= MAX_CACHE_ENTRIES) _evictCache();
     _cache.set(key, { data, expires: Date.now() + ttlMs });
     return data;
   });

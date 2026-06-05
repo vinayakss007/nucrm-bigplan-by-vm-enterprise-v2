@@ -62,6 +62,80 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
   const [activeTab, setActiveTab] = useState<'overview' | 'activities' | 'notes'>('overview');
   const [showEdit, setShowEdit] = useState(false);
   const [editData, setEditData] = useState(lead);
+<<<<<<< HEAD
+  const [showHandoff, setShowHandoff] = useState(false);
+  const [handoffSaving, setHandoffSaving] = useState(false);
+  const [handoffDraft, setHandoffDraft] = useState({ assigned_to: '', reason: '' });
+
+  const submitHandoff = async () => {
+    if (!handoffDraft.assigned_to) {
+      toast.error('Pick a team member to hand off to');
+      return;
+    }
+    setHandoffSaving(true);
+    try {
+      const res = await fetch(`/api/tenant/leads/${lead.id}/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(handoffDraft),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || 'Handoff failed');
+        return;
+      }
+      if (data.no_op) {
+        toast('Already assigned to that user', { icon: 'ℹ️' });
+      } else {
+        toast.success('Lead handed off');
+      }
+      setShowHandoff(false);
+      setHandoffDraft({ assigned_to: '', reason: '' });
+      router.refresh();
+    } catch {
+      toast.error('Handoff failed');
+    } finally {
+      setHandoffSaving(false);
+    }
+=======
+  const [editingBant, setEditingBant] = useState(false);
+  const [bantSaving, setBantSaving] = useState(false);
+  const [bantDraft, setBantDraft] = useState({
+    budget: lead.budget ?? '',
+    budget_currency: lead.budget_currency ?? 'USD',
+    authority_level: lead.authority_level ?? 'unknown',
+    need_description: lead.need_description ?? '',
+    timeline: lead.timeline ?? '',
+    timeline_target_date: lead.timeline_target_date
+      ? String(lead.timeline_target_date).slice(0, 10)
+      : '',
+  });
+
+  const saveBant = async () => {
+    setBantSaving(true);
+    try {
+      const res = await fetch(`/api/tenant/leads/${lead.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          budget: bantDraft.budget === '' ? null : bantDraft.budget,
+          budget_currency: bantDraft.budget_currency || null,
+          authority_level: bantDraft.authority_level || null,
+          need_description: bantDraft.need_description || null,
+          timeline: bantDraft.timeline || null,
+          timeline_target_date: bantDraft.timeline_target_date || null,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Discovery updated');
+      setEditingBant(false);
+      router.refresh();
+    } catch {
+      toast.error('Failed to update');
+    }
+    setBantSaving(false);
+>>>>>>> main
+  };
 
   const statusConfig = PIPELINE_CONFIG[lead.lead_status as keyof typeof PIPELINE_CONFIG] || PIPELINE_CONFIG.new;
   const StatusIcon = statusConfig.icon;
@@ -109,7 +183,7 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
   };
 
   return (
-    <div className="max-w-7xl space-y-6 animate-fade-in">
+    <div className="max-w-[1600px] mx-auto space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-4">
@@ -166,6 +240,10 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
           <Button variant="outline" onClick={() => setShowEdit(true)}>
             <Edit className="w-4 h-4 mr-2" />
             Edit
+          </Button>
+          <Button variant="outline" onClick={() => setShowHandoff(true)} title="Hand this lead off to another team member">
+            <User className="w-4 h-4 mr-2" />
+            Hand off
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -376,36 +454,152 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
 
           {/* BANT Qualification */}
           <div className="admin-card p-6 space-y-4">
-            <h3 className="font-semibold flex items-center gap-2">
-              <BarChart3 className="w-4 h-4" />
-              BANT Qualification
-            </h3>
-            <div className="space-y-3">
-              {lead.budget && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Budget</p>
-                  <p className="text-sm font-medium">{formatCurrency(lead.budget)}</p>
-                </div>
-              )}
-              <div>
-                <p className="text-xs text-muted-foreground">Authority Level</p>
-                <p className={cn('text-sm font-semibold', AUTHORITY_LEVELS[lead.authority_level as keyof typeof AUTHORITY_LEVELS]?.color)}>
-                  {AUTHORITY_LEVELS[lead.authority_level as keyof typeof AUTHORITY_LEVELS]?.label}
-                </p>
-              </div>
-              {lead.need_description && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Need</p>
-                  <p className="text-sm">{lead.need_description}</p>
-                </div>
-              )}
-              {lead.timeline && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Timeline</p>
-                  <p className="text-sm">{lead.timeline}</p>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold flex items-center gap-2">
+                <BarChart3 className="w-4 h-4" />
+                BANT Qualification
+              </h3>
+              {!editingBant ? (
+                <Button size="sm" variant="outline" onClick={() => setEditingBant(true)}>
+                  <Edit className="w-3.5 h-3.5 mr-1.5" />Edit
+                </Button>
+              ) : (
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" disabled={bantSaving} onClick={() => {
+                    setEditingBant(false);
+                    setBantDraft({
+                      budget: lead.budget ?? '',
+                      budget_currency: lead.budget_currency ?? 'USD',
+                      authority_level: lead.authority_level ?? 'unknown',
+                      need_description: lead.need_description ?? '',
+                      timeline: lead.timeline ?? '',
+                      timeline_target_date: lead.timeline_target_date
+                        ? String(lead.timeline_target_date).slice(0, 10)
+                        : '',
+                    });
+                  }}>Cancel</Button>
+                  <Button size="sm" disabled={bantSaving} onClick={() => void saveBant()}>
+                    {bantSaving ? 'Saving…' : 'Save'}
+                  </Button>
                 </div>
               )}
             </div>
+            {!editingBant ? (
+              <div className="space-y-3">
+                {lead.budget && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Budget</p>
+                    <p className="text-sm font-medium">{formatCurrency(lead.budget)}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs text-muted-foreground">Authority Level</p>
+                  <p className={cn('text-sm font-semibold', AUTHORITY_LEVELS[lead.authority_level as keyof typeof AUTHORITY_LEVELS]?.color)}>
+                    {AUTHORITY_LEVELS[lead.authority_level as keyof typeof AUTHORITY_LEVELS]?.label}
+                  </p>
+                </div>
+                {lead.need_description && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Need</p>
+                    <p className="text-sm whitespace-pre-wrap">{lead.need_description}</p>
+                  </div>
+                )}
+                {lead.timeline && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Timeline</p>
+                    <p className="text-sm">{lead.timeline}</p>
+                  </div>
+                )}
+                {lead.timeline_target_date && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Target date</p>
+                    <p className="text-sm">{formatDate(lead.timeline_target_date)}</p>
+                  </div>
+                )}
+                {!lead.budget && !lead.authority_level && !lead.need_description && !lead.timeline && (
+                  <p className="text-xs text-muted-foreground">No qualification info yet — click Edit to capture budget, authority, need and timeline.</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3 text-sm">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2">
+                    <label className="text-xs text-muted-foreground block mb-1">Budget</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="e.g. 50000"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                      value={bantDraft.budget}
+                      onChange={(e) => setBantDraft((p) => ({ ...p, budget: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground block mb-1">Currency</label>
+                    <select
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                      value={bantDraft.budget_currency}
+                      onChange={(e) => setBantDraft((p) => ({ ...p, budget_currency: e.target.value }))}
+                    >
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                      <option value="INR">INR</option>
+                      <option value="AUD">AUD</option>
+                      <option value="CAD">CAD</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Authority Level</label>
+                  <select
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                    value={bantDraft.authority_level}
+                    onChange={(e) => setBantDraft((p) => ({ ...p, authority_level: e.target.value }))}
+                  >
+                    <option value="unknown">Unknown</option>
+                    <option value="user">User</option>
+                    <option value="influencer">Influencer</option>
+                    <option value="decision_maker">Decision Maker</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Need / Requirements</label>
+                  <textarea
+                    rows={3}
+                    placeholder="What does this client want? What problem are they solving?"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                    value={bantDraft.need_description}
+                    onChange={(e) => setBantDraft((p) => ({ ...p, need_description: e.target.value }))}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground block mb-1">Timeline</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Q3, Next month, ASAP"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                      value={bantDraft.timeline}
+                      onChange={(e) => setBantDraft((p) => ({ ...p, timeline: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground block mb-1">Target date</label>
+                    <input
+                      type="date"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                      value={bantDraft.timeline_target_date}
+                      onChange={(e) => setBantDraft((p) => ({ ...p, timeline_target_date: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  These fields are carried over to the contact + deal when this lead is converted, so the team always sees what the client wants.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Additional Information */}
@@ -534,6 +728,80 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
                 <ExternalLink className="w-4 h-4 text-muted-foreground" />
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Handoff dialog */}
+      {showHandoff && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => !handoffSaving && setShowHandoff(false)}
+        >
+          <div
+            className="admin-card p-6 w-full max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-semibold flex items-center gap-2 mb-4">
+              <User className="w-4 h-4" />
+              Hand off lead
+            </h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              Reassign this lead to another team member. The handoff is logged on the contact's
+              activity timeline so the next person sees the full history.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                  Hand off to
+                </label>
+                <select
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                  value={handoffDraft.assigned_to}
+                  onChange={(e) => setHandoffDraft((p) => ({ ...p, assigned_to: e.target.value }))}
+                  disabled={handoffSaving}
+                >
+                  <option value="">Select team member…</option>
+                  {teamMembers
+                    .filter((m: any) => m.user_id !== lead.assigned_to)
+                    .map((m: any) => (
+                      <option key={m.user_id} value={m.user_id}>
+                        {m.full_name || m.email}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                  Reason / handoff notes <span className="font-normal">(optional, but recommended)</span>
+                </label>
+                <textarea
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                  rows={3}
+                  placeholder="e.g. Handing over for the demo on Tuesday — they're keen on the Pro tier."
+                  value={handoffDraft.reason}
+                  onChange={(e) => setHandoffDraft((p) => ({ ...p, reason: e.target.value }))}
+                  disabled={handoffSaving}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={handoffSaving}
+                  onClick={() => setShowHandoff(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={handoffSaving || !handoffDraft.assigned_to}
+                  onClick={() => void submitHandoff()}
+                >
+                  {handoffSaving ? 'Handing off…' : 'Hand off'}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}

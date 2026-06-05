@@ -139,10 +139,9 @@ Each feature branch is tested in isolation. Only merged after confirmation.
 PRIORITY 1 — Quick Wins (Low Effort, High Impact)
 =====================================
 FEAT-01: Contact Scoring UI
-  Branch: feature/contact-scoring-ui
-  Impact: High | Effort: Low
+  Status: COMPLETE
   Description: Display lead score on contact cards, lists, and detail view. Color-coded badges (hot/warm/cold). Score progress bar.
-  Files to modify: components/tenant/contacts-client.tsx, components/tenant/contact-detail-client.tsx
+  Files modified: components/tenant/contacts-client.tsx, components/tenant/contact-detail-client.tsx, lib/ai/scoring.ts
 
 FEAT-02: Advanced Search with Multi-Field Filters
   Branch: feature/advanced-search
