@@ -1,12 +1,6 @@
-/**
- * Report Builder API Tests
- *
- * Tests the deterministic aggregation engine for custom reports.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createTestRequest } from '../helpers/auth-mock';
+import { NextResponse } from 'next/server';
 
-// Mock dependencies
 vi.mock('@/lib/auth/middleware', () => ({
   requireAuth: vi.fn(async () => ({
     userId: 'test-user-001',
@@ -21,6 +15,12 @@ vi.mock('@/lib/auth/middleware', () => ({
 
 vi.mock('@/lib/rate-limit', () => ({
   checkRateLimit: vi.fn(async () => null),
+}));
+
+vi.mock('@/lib/api-error', () => ({
+  apiError: vi.fn((err: any, _msg?: string, status = 500) =>
+    NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status })
+  ),
 }));
 
 vi.mock('@/drizzle/db', () => ({
@@ -43,6 +43,18 @@ vi.mock('@/drizzle/schema', () => ({
   activities: { tenantId: 'tenant_id' },
 }));
 
+function testRequest(path: string, options: { method?: string; body?: any } = {}) {
+  const url = new URL(path, 'http://localhost:3000');
+  const init: RequestInit & { headers: Record<string, string> } = {
+    method: options.method || 'GET',
+    headers: { 'content-type': 'application/json' },
+  };
+  if (options.body && options.method !== 'GET') {
+    init.body = JSON.stringify(options.body);
+  }
+  return new Request(url, init);
+}
+
 describe('POST /api/tenant/reports/builder', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -51,7 +63,7 @@ describe('POST /api/tenant/reports/builder', () => {
   it('returns report data with correct structure', async () => {
     const { POST } = await import('@/app/api/tenant/reports/builder/route');
 
-    const request = createTestRequest('/api/tenant/reports/builder', {
+    const request = testRequest('/api/tenant/reports/builder', {
       method: 'POST',
       body: {
         entity: 'contacts',
@@ -76,7 +88,7 @@ describe('POST /api/tenant/reports/builder', () => {
   it('calculates percentages correctly', async () => {
     const { POST } = await import('@/app/api/tenant/reports/builder/route');
 
-    const request = createTestRequest('/api/tenant/reports/builder', {
+    const request = testRequest('/api/tenant/reports/builder', {
       method: 'POST',
       body: {
         entity: 'contacts',
@@ -88,9 +100,7 @@ describe('POST /api/tenant/reports/builder', () => {
     const response = await POST(request);
     const json = await response.json();
 
-    // Total should be sum of all values
-    expect(json.total).toBe(28); // 15 + 8 + 5
-    // Percentages should sum to ~100
+    expect(json.total).toBe(28);
     const totalPct = json.data.reduce((s: number, d: any) => s + d.percentage, 0);
     expect(totalPct).toBeCloseTo(100, 0);
   });
@@ -98,10 +108,10 @@ describe('POST /api/tenant/reports/builder', () => {
   it('rejects invalid entity', async () => {
     const { POST } = await import('@/app/api/tenant/reports/builder/route');
 
-    const request = createTestRequest('/api/tenant/reports/builder', {
+    const request = testRequest('/api/tenant/reports/builder', {
       method: 'POST',
       body: {
-        entity: 'users', // not in whitelist
+        entity: 'users',
         metric: 'count',
         groupBy: 'status',
       },
@@ -116,11 +126,11 @@ describe('POST /api/tenant/reports/builder', () => {
   it('rejects invalid metric', async () => {
     const { POST } = await import('@/app/api/tenant/reports/builder/route');
 
-    const request = createTestRequest('/api/tenant/reports/builder', {
+    const request = testRequest('/api/tenant/reports/builder', {
       method: 'POST',
       body: {
         entity: 'contacts',
-        metric: 'median', // not supported
+        metric: 'median',
         groupBy: 'lead_status',
       },
     });
@@ -134,12 +144,11 @@ describe('POST /api/tenant/reports/builder', () => {
   it('requires groupBy field', async () => {
     const { POST } = await import('@/app/api/tenant/reports/builder/route');
 
-    const request = createTestRequest('/api/tenant/reports/builder', {
+    const request = testRequest('/api/tenant/reports/builder', {
       method: 'POST',
       body: {
         entity: 'contacts',
         metric: 'count',
-        // groupBy missing
       },
     });
 
@@ -152,13 +161,12 @@ describe('POST /api/tenant/reports/builder', () => {
   it('requires metricField for sum metric', async () => {
     const { POST } = await import('@/app/api/tenant/reports/builder/route');
 
-    const request = createTestRequest('/api/tenant/reports/builder', {
+    const request = testRequest('/api/tenant/reports/builder', {
       method: 'POST',
       body: {
         entity: 'deals',
         metric: 'sum',
         groupBy: 'stage',
-        // metricField missing
       },
     });
 
@@ -171,7 +179,7 @@ describe('POST /api/tenant/reports/builder', () => {
   it('rejects invalid groupBy field (SQL injection prevention)', async () => {
     const { POST } = await import('@/app/api/tenant/reports/builder/route');
 
-    const request = createTestRequest('/api/tenant/reports/builder', {
+    const request = testRequest('/api/tenant/reports/builder', {
       method: 'POST',
       body: {
         entity: 'contacts',
@@ -181,7 +189,7 @@ describe('POST /api/tenant/reports/builder', () => {
     });
 
     const response = await POST(request);
-    expect(response.status).toBe(500); // Error thrown by whitelist check
+    expect(response.status).toBe(500);
   });
 });
 
@@ -189,7 +197,7 @@ describe('GET /api/tenant/reports/builder', () => {
   it('returns available entities and dimensions', async () => {
     const { GET } = await import('@/app/api/tenant/reports/builder/route');
 
-    const request = createTestRequest('/api/tenant/reports/builder');
+    const request = testRequest('/api/tenant/reports/builder');
     const response = await GET(request);
     const json = await response.json();
 
@@ -198,7 +206,6 @@ describe('GET /api/tenant/reports/builder', () => {
     expect(json.entities).toBeInstanceOf(Array);
     expect(json.entities.length).toBeGreaterThan(0);
 
-    // Each entity should have required fields
     const contacts = json.entities.find((e: any) => e.id === 'contacts');
     expect(contacts).toBeDefined();
     expect(contacts.groupByOptions).toBeInstanceOf(Array);
