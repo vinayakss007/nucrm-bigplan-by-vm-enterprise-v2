@@ -191,6 +191,38 @@ export const BUILTIN_MODULES: ModuleManifest[] = [
     permissions: ['projects.view','projects.create','projects.edit','projects.delete'],
     pages: ['/tenant/projects','/tenant/projects/[id]'],
   },
+  {
+    id: 'dashboard-core', name: 'Dashboard Core', version: '1.0.0',
+    description: 'Core dashboard widgets — contacts, pipeline, revenue, tasks, activity',
+    author: 'NuCRM', category: 'utility', icon: '📊', minCrmVersion: '1.0.0',
+    pricing: { free:{enabled:true},starter:{enabled:true},pro:{enabled:true},enterprise:{enabled:true} },
+    features: ['Contacts overview','Pipeline value','Revenue MTD','Tasks due','Recent activity','My tasks','Closing deals','Recent contacts'],
+    permissions: [],
+  },
+  {
+    id: 'dashboard-leads', name: 'Dashboard Leads', version: '1.0.0',
+    description: 'Lead pipeline tracking widget for the dashboard',
+    author: 'NuCRM', category: 'utility', icon: '🎯', minCrmVersion: '1.0.0',
+    pricing: { free:{enabled:false},starter:{enabled:true},pro:{enabled:true},enterprise:{enabled:true} },
+    features: ['Lead pipeline view','Lead source breakdown','New leads this month'],
+    permissions: [],
+  },
+  {
+    id: 'dashboard-tickets', name: 'Dashboard Tickets', version: '1.0.0',
+    description: 'Support ticket overview widget for the dashboard',
+    author: 'NuCRM', category: 'utility', icon: '🎫', minCrmVersion: '1.0.0',
+    pricing: { free:{enabled:false},starter:{enabled:true},pro:{enabled:true},enterprise:{enabled:true} },
+    features: ['Open tickets count','New tickets today','Tickets by status'],
+    permissions: [],
+  },
+  {
+    id: 'dashboard-invoices', name: 'Dashboard Invoices', version: '1.0.0',
+    description: 'Invoice status widget for the dashboard',
+    author: 'NuCRM', category: 'utility', icon: '🧾', minCrmVersion: '1.0.0',
+    pricing: { free:{enabled:false},starter:{enabled:true},pro:{enabled:true},enterprise:{enabled:true} },
+    features: ['Outstanding invoices','Overdue invoices','Invoice totals'],
+    permissions: [],
+  },
 ];
 
 export class ModuleRegistry {

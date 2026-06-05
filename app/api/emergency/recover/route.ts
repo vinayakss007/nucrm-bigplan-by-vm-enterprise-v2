@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { timingSafeEqual } from 'crypto';
 

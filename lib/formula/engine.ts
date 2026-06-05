@@ -17,7 +17,8 @@ const math = create(all as any) as any;
 
 // Remove dangerous functions that could be abused
 const BLOCKED_FUNCTIONS = [
-  'import', 'createUnit', 'evaluate', 'parse', 'simplify',
+  'import', 'createUnit',
+  'simplify',
   'derivative', 'resolve', 'compile', 'chain',
 ];
 

@@ -155,7 +155,6 @@ export default function SidebarCustomizeSection({
   hiddenItems: string[];
   onChange: (next: string[]) => void;
 }) {
-  // All hooks must run unconditionally before any early return (Rules of Hooks).
   const hiddenSet = useMemo(() => new Set(hiddenItems), [hiddenItems]);
 
   if (hidden) return null;

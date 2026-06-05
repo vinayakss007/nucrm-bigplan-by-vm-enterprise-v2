@@ -1,6 +1,7 @@
 import nextPlugin from "@next/eslint-plugin-next";
 import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
+import reactHooks from "eslint-plugin-react-hooks";
 
 export default tseslint.config(
   // Global ignores — must be in a standalone object (with only `ignores`)
@@ -25,7 +26,6 @@ export default tseslint.config(
   },
   ...tseslint.configs.recommended,
   {
-    files: ["**/*.{js,jsx,ts,tsx}"],
     plugins: {
       "@next/next": nextPlugin,
       "react-hooks": reactHooks,
