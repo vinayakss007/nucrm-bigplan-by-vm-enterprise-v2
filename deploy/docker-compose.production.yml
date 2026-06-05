@@ -296,6 +296,72 @@ services:
       - nucrm-net
 
   # ═══════════════════════════════════════════════════════════════════════════
+  #  DATABASE PROXY — PgBouncer (connection pooling)
+  # ═══════════════════════════════════════════════════════════════════════════
+  pgbouncer:
+    image: edoburu/pgbouncer:1.23
+    container_name: nucrm-pgbouncer
+    environment:
+      - DB_USER=${POSTGRES_USER:-nucrm}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-nucrm}
+      - POOL_MODE=transaction
+      - DEFAULT_POOL_SIZE=50
+      - MAX_CLIENT_CONN=200
+      - MAX_DB_CONNECTIONS=50
+      - SERVER_IDLE_TIMEOUT=600
+      - AUTH_TYPE=scram-sha-256
+      - IGNORE_STARTUP_PARAMETERS=extra_float_digits
+    ports:
+      - "127.0.0.1:6432:6432"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U ${POSTGRES_USER:-nucrm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  LOGGING — Loki + Promtail
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  ALERTING — Alertmanager
+  # ═══════════════════════════════════════════════════════════════════════════
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: nucrm-alertmanager
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanagerdata:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.listen-address=:9093'
+    ports:
+      - "127.0.0.1:9093:9093"
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ═══════════════════════════════════════════════════════════════════════════
   #  MONITORING — Prometheus + Grafana
   # ═══════════════════════════════════════════════════════════════════════════
   prometheus:
@@ -343,6 +409,48 @@ services:
           cpus: '0.25'
     depends_on:
       - prometheus
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  LOGGING — Loki + Promtail
+  # ═══════════════════════════════════════════════════════════════════════════
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: nucrm-loki
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - lokidata:/loki
+    command:
+      - '--config.file=/etc/loki/loki-config.yml'
+    ports:
+      - "127.0.0.1:3100:3100"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: nucrm-promtail
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/log:/var/log:ro
+      - nginx-logs:/var/log/nginx:ro
+    command:
+      - '--config.file=/etc/promtail/promtail-config.yml'
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+    depends_on:
+      - loki
     restart: unless-stopped
     networks:
       - nucrm-net
@@ -397,6 +505,8 @@ volumes:
   grafanadata:
     driver: local
   nginx-logs:
+    driver: local
+  lokidata:
     driver: local
 
 # ═══════════════════════════════════════════════════════════════════════════

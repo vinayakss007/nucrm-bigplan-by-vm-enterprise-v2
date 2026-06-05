@@ -14,13 +14,14 @@ import { logAudit } from '@/lib/audit';
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
+    const { id } = await params;
     const body = await req.json().catch(() => ({}));
     const { factor, weight, condition, active } = body;
 
@@ -35,7 +36,7 @@ export async function PATCH(
         updatedBy: ctx.userId,
       })
       .where(and(
-        eq(leadScoringRules.id, params.id),
+        eq(leadScoringRules.id, id),
         eq(leadScoringRules.tenantId, ctx.tenantId),
         isNull(leadScoringRules.deletedAt)
       ))
@@ -46,7 +47,7 @@ export async function PATCH(
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
       action: 'update_lead_scoring_rule', entityType: 'lead_scoring_rule',
-      entityId: params.id, newData: body,
+      entityId: id, newData: body,
     });
 
     return NextResponse.json({ rule: row });
@@ -57,21 +58,22 @@ export async function PATCH(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
+    const { id } = await params;
     const [row] = await db
       .update(leadScoringRules)
       .set({
         deletedAt: new Date(),
-        deletedBy: ctx.userId,
+        updatedBy: ctx.userId,
       })
       .where(and(
-        eq(leadScoringRules.id, params.id),
+        eq(leadScoringRules.id, id),
         eq(leadScoringRules.tenantId, ctx.tenantId),
         isNull(leadScoringRules.deletedAt)
       ))
@@ -82,7 +84,7 @@ export async function DELETE(
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
       action: 'delete_lead_scoring_rule', entityType: 'lead_scoring_rule',
-      entityId: params.id,
+      entityId: id,
     });
 
     return NextResponse.json({ ok: true });
