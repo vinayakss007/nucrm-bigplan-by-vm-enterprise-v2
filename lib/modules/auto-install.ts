@@ -198,3 +198,4 @@ export async function installDefaultModules(
     console.error('[auto-install] Failed to install default modules:', error);
     // Non-fatal: tenant can still use the platform, modules can be installed later
   }
+}
