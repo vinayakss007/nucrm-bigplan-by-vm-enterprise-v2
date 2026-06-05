@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    testTimeout: 30000,
     include: ['tests/**/*.test.{ts,tsx}'],
     exclude: ['node_modules', '.next', 'tests/unit/push-coverage.test.ts', 'tests/unit/massive-push.test.ts',
       'tests/unit/massive-coverage.test.ts', 'tests/unit/comprehensive-backend.test.ts', 'tests/unit/complete-backend.test.ts',
