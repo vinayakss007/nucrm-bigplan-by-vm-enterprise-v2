@@ -4,6 +4,7 @@ import { users } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { timingSafeEqual } from 'crypto';
 
 /**
  * Emergency Admin Recovery Endpoint
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
   const keyBuffer = Buffer.from(emergency_key);
   const expectedBuffer = Buffer.from(emergencyKey);
   const keyValid = keyBuffer.length === expectedBuffer.length &&
-    crypto.timingSafeEqual(keyBuffer, expectedBuffer);
+    timingSafeEqual(keyBuffer, expectedBuffer);
 
   if (!keyValid) {
     console.error(`[EMERGENCY RECOVERY] INVALID KEY — IP: ${ip}, email: ${email}`);
