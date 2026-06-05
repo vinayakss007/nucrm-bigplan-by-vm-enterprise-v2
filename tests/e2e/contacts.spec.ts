@@ -6,17 +6,22 @@ const TEST_USER = {
 };
 
 test.describe('Contacts', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/login');
-    await page.fill('input[type="email"]', TEST_USER.email);
-    await page.fill('input[type="password"]', TEST_USER.password);
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/tenant/, { timeout: 10000 });
+  test.beforeEach(async ({ page, context }) => {
+    const api = await page.request.post('/api/auth/login', {
+      data: { email: TEST_USER.email, password: TEST_USER.password },
+    });
+    const setCookie = api.headers()['set-cookie'] || '';
+    const csrf = setCookie.match(/nucrm_csrf_token=([^;]+)/)?.[1] || '';
+    const session = setCookie.match(/nucrm_session=([^;]+)/)?.[1] || '';
+    await context.addCookies([
+      { name: 'nucrm_csrf_token', value: csrf, domain: 'localhost', path: '/' },
+      { name: 'nucrm_session', value: session, domain: 'localhost', path: '/' },
+    ]);
   });
 
   test('view contacts list', async ({ page }) => {
     await page.goto('/tenant/contacts');
-    await expect(page.locator('text=Contacts')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Contacts' })).toBeVisible({ timeout: 15000 });
   });
 
   test('search contacts', async ({ page }) => {
@@ -35,14 +40,14 @@ test.describe('Contacts', () => {
     if (await addButton.isVisible()) {
       await addButton.click();
       
-      await page.fill('input[name="first_name"]', 'Test');
-      await page.fill('input[name="last_name"]', 'User');
-      await page.fill('input[name="email"]', 'testuser@example.com');
+      await page.locator('form input').first().fill('Test');
+      await page.locator('form input').nth(1).fill('User');
+      await page.locator('form input').nth(2).fill('testuser@example.com');
       
-      const saveButton = page.locator('button:has-text("Save")').first();
-      if (await saveButton.isVisible()) {
-        await saveButton.click();
-        await page.waitForTimeout(1000);
+      const submitBtn = page.getByRole('dialog').getByRole('button', { name: 'Add Contact' });
+      if (await submitBtn.isVisible()) {
+        await submitBtn.click();
+        await page.waitForTimeout(2000);
       }
     }
   });
@@ -53,7 +58,7 @@ test.describe('Contacts', () => {
     const firstContact = page.locator('a[href*="/tenant/contacts/"]').first();
     if (await firstContact.isVisible()) {
       await firstContact.click();
-      await expect(page.locator('text=Contact Details')).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('heading', { name: 'Contact Details' })).toBeVisible({ timeout: 5000 });
     }
   });
 });

@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
       updatedBy: ctx.userId,
     }).returning();
 
-    if (!row) return NextResponse.json({ error: 'Failed to create' }, { status: 500 });
+    if (!row) return NextResponse.json({ error: 'Failed to create rule' }, { status: 500 });
 
     await logAudit({
       tenantId: ctx.tenantId,
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
       action: 'create_at_risk_rule',
       entityType: 'at_risk_rule',
       entityId: row.id,
-      metadata: { rule: row },
+      newData: row,
     });
 
     return NextResponse.json(row);

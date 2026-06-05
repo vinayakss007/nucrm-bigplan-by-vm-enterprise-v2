@@ -5,7 +5,7 @@ import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { errorLogs, tenants, users } from '@/drizzle/schema';
-import { eq, and, sql, desc, gt, inArray } from 'drizzle-orm';
+import { eq, and, sql, desc } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {
@@ -49,7 +49,10 @@ export async function GET(request: NextRequest) {
         .where(and(...filters))
         .orderBy(desc(errorLogs.createdAt))
         .limit(limit)
-        .catch(() => []),
+        .catch((e) => {
+          console.error('[superadmin/errors] DB query failed:', e);
+          return [];
+        }),
 
       db
         .select({
@@ -61,7 +64,10 @@ export async function GET(request: NextRequest) {
         })
         .from(errorLogs)
         .then(rows => rows[0])
-        .catch(() => ({ fatal_unresolved: 0, error_unresolved: 0, warn_unresolved: 0, last_hour: 0, last_day: 0 })),
+        .catch((e) => {
+          console.error('[superadmin/errors] summary query failed:', e);
+          return { fatal_unresolved: 0, error_unresolved: 0, warn_unresolved: 0, last_hour: 0, last_day: 0 };
+        }),
     ]);
 
     return NextResponse.json({ errors, summary });
@@ -99,10 +105,11 @@ export async function POST(request: NextRequest) {
       tenantId: tenant_id || null,
       stack: stack || null,
       context: context || null,
-    }).catch(() => {});
+    });
     return NextResponse.json({ ok: true }, { status: 201 });
-  } catch {
-    return NextResponse.json({ ok: true }, { status: 201 });
+  } catch (err) {
+    console.error('[superadmin/errors POST] failed:', err);
+    return NextResponse.json({ error: 'Failed to log error', details: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }
 

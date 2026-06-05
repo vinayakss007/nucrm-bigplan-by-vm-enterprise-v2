@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Building2, Users, CreditCard, BarChart3,
   Settings, LogOut, Crown, Activity, Heart,
   Database, AlertTriangle, MessageSquare, Megaphone, TrendingUp, Gauge, Zap,
-  X, Menu, RotateCcw, ChevronDown, Search,
+  X, Menu, RotateCcw, ChevronDown, Search, Book,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -45,6 +45,7 @@ const SECTIONS: NavSection[] = [
       { href: '/superadmin/analytics',  label: 'Analytics',  icon: BarChart3,    keywords: 'analytics charts' },
       { href: '/superadmin/modules',    label: 'Modules',    icon: Zap,          keywords: 'modules features' },
       { href: '/superadmin/settings',   label: 'Settings',   icon: Settings,     keywords: 'platform settings' },
+      { href: '/superadmin/docs',       label: 'DB Security',icon: Book,         keywords: 'docs documentation security database guide' },
     ],
   },
 ];

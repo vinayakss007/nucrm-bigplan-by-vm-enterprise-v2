@@ -156,9 +156,10 @@ export default function SidebarCustomizeSection({
   onChange: (next: string[]) => void;
 }) {
   const hiddenSet = useMemo(() => new Set(hiddenItems), [hiddenItems]);
-  const visibleCount = ALL_HREFS.length - hiddenSet.size;
 
   if (hidden) return null;
+
+  const visibleCount = ALL_HREFS.length - hiddenSet.size;
 
   const toggle = (href: string) => {
     const next = new Set(hiddenSet);

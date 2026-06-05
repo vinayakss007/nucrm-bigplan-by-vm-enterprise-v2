@@ -243,6 +243,21 @@ export class EmailError extends AppError {
   }
 }
 
+function getSourceLocation(): { file: string; line: number; function: string } | null {
+  const err = new Error();
+  const stack = err.stack?.split('\n');
+  if (!stack) return null;
+  // stack[0] = 'Error', stack[1] = logError itself, stack[2] = caller of logError, stack[3] = actual caller
+  const caller = stack[3] || stack[2] || '';
+  const match = caller.match(/at\s+(?:(.+?)\s+\()?(?:(.+?):(\d+):\d+)\)?/);
+  if (!match) return null;
+  return {
+    function: match[1] || '<anonymous>',
+    file: match[2] || '',
+    line: parseInt(match[3] || '0', 10),
+  };
+}
+
 export async function logError(opts: {
   error: any;
   context?: string;
@@ -250,17 +265,27 @@ export async function logError(opts: {
   userId?: string;
   level?: ErrorLevel;
   metadata?: Record<string, any>;
+  requestUrl?: string;
+  requestMethod?: string;
+  sourceFile?: string;
 }): Promise<void> {
   const msg = opts.error instanceof Error ? opts.error.message : String(opts.error ?? 'Unknown error');
-  const stack = opts.error instanceof Error ? opts.error.stack?.slice(0, 2000) : undefined;
+  const stack = opts.error instanceof Error ? opts.error.stack : undefined;
+  const source = opts.sourceFile ? null : getSourceLocation();
   try {
     await db.insert(errorLogs).values({
       tenantId: opts.tenantId ?? null,
       userId: opts.userId ?? null,
       level: opts.level ?? 'error',
-      message: msg.slice(0, 1000),
+      message: msg,
       stack: stack ?? null,
-      context: { context: opts.context, ...opts.metadata },
+      context: {
+        context: opts.context,
+        source: opts.sourceFile || (source ? `${source.file}:${source.line} (${source.function})` : null),
+        requestUrl: opts.requestUrl,
+        requestMethod: opts.requestMethod,
+        ...opts.metadata,
+      },
     });
   } catch (err: any) {
     // Never throw from error logging — log to console as fallback

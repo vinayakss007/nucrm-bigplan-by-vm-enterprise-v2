@@ -27,10 +27,25 @@ export async function PATCH(
     const body = await req.json();
     const validated = validateBody(updateAtRiskRuleSchema, body);
     if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
 
     const [row] = await db.update(atRiskRules)
-      .set({ ...body, updatedAt: new Date() })
-      .where(eq(atRiskRules.id, id))
+      .set({
+        stageId: v.stage_id !== undefined ? (v.stage_id || null) : undefined,
+        maxDaysIdle: v.max_days_idle,
+        maxDaysInStage: v.max_days_in_stage,
+        sentimentThreshold: v.sentiment_threshold,
+        description: v.description,
+        active: v.active,
+        metadata: v.metadata,
+        updatedAt: new Date(),
+        updatedBy: ctx.userId,
+      })
+      .where(and(
+        eq(atRiskRules.id, id),
+        eq(atRiskRules.tenantId, ctx.tenantId),
+        isNull(atRiskRules.deletedAt)
+      ))
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Rule not found' }, { status: 404 });
@@ -41,7 +56,7 @@ export async function PATCH(
       action: 'update_at_risk_rule',
       entityType: 'at_risk_rule',
       entityId: row.id,
-      metadata: { rule: row },
+      newData: row,
     });
 
     return NextResponse.json(row);
@@ -63,6 +78,7 @@ export async function DELETE(
     const [row] = await db.update(atRiskRules)
       .set({
         deletedAt: new Date(),
+        updatedBy: ctx.userId,
       })
       .where(and(
         eq(atRiskRules.id, id),
