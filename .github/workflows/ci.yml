@@ -9,13 +9,13 @@ on:
 env:
   NODE_ENV: test
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_test
-  JWT_SECRET: a0b1c2d3e4f5g6h7i8j9k0l1m2n3o4p5q6r7s8t9u0v1w2x3y4z5
-  SESSION_SECRET: a0b1c2d3e4f5g6h7i8j9k0l1m2n3o4p5q6r7s8t9u0v1w2x3y4z5
-  CRON_SECRET: a0b1c2d3e4f5g6h7i8j9k0l1m2n3o4p5q6r7s8t9u0v1w2x3y4z5
-  ENCRYPTION_KEY: a0b1c2d3e4f5g6h7i8j9k0l1m2n3o4p5q6r7s8t9u0v1w2x3y4z5
+  JWT_SECRET: ${{ secrets.JWT_SECRET }}
+  SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+  CRON_SECRET: ${{ secrets.CRON_SECRET }}
+  ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
   NEXT_PUBLIC_APP_URL: http://localhost:3000
-  METRICS_SECRET: test-metrics-secret
-  SETUP_KEY: a0b1c2d3e4f5g6h7i8j9k0l1m2n3o4p5
+  METRICS_SECRET: ${{ secrets.METRICS_SECRET }}
+  SETUP_KEY: ${{ secrets.SETUP_KEY }}
   ALLOWED_ORIGINS: http://localhost:3000
   DATABASE_SSL: 'false'
 

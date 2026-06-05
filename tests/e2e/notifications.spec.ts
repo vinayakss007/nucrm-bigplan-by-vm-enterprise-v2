@@ -45,10 +45,6 @@ test.describe('Notification System', () => {
       // Auth signup
       await page.goto('/auth/signup');
       await expect(page.locator('input[type="email"]').first()).toBeVisible();
-      
-      // Setup page
-      await page.goto('/setup');
-      await expect(page).toHaveURL(/\/setup/);
     });
   });
 

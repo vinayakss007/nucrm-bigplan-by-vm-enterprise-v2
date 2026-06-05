@@ -22,7 +22,6 @@ export async function PATCH(
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const { id } = await params;
-
     const body = await req.json().catch(() => ({}));
     const { factor, weight, condition, active } = body;
 
@@ -67,11 +66,11 @@ export async function DELETE(
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const { id } = await params;
-
     const [row] = await db
       .update(leadScoringRules)
       .set({
         deletedAt: new Date(),
+        updatedBy: ctx.userId,
       })
       .where(and(
         eq(leadScoringRules.id, id),

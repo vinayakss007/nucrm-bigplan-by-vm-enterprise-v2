@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import {
   Activity, AlertTriangle, CheckCircle, RefreshCw, Building2, Users,
-  DollarSign, Database, Clock, TrendingUp, Zap, Server,
+  DollarSign, Database, Clock, TrendingUp, Zap, Server, Book,
 } from 'lucide-react';
 import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -253,7 +253,10 @@ export default function MonitoringPage() {
       {/* Recent errors */}
       {(data?.recentErrors||[]).length>0 && (
         <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-5">
-          <p className="text-sm font-semibold text-red-400 flex items-center gap-2 mb-3"><AlertTriangle className="w-4 h-4"/>Unresolved Errors</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold text-red-400 flex items-center gap-2"><AlertTriangle className="w-4 h-4"/>Unresolved Errors</p>
+            <a href="/superadmin/docs" className="flex items-center gap-1 text-[10px] text-white/30 hover:text-white transition-colors"><Book className="w-3 h-3"/>DB Security</a>
+          </div>
           <div className="space-y-2">
             {(data.recentErrors||[]).slice(0,5).map((e:any)=>(
               <div key={e.id} className="flex items-start gap-3 text-xs">
