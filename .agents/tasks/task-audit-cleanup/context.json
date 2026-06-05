@@ -1,0 +1,26 @@
+{
+  "project_type": "Next.js 16 multi-tenant SaaS CRM with TypeScript, Drizzle ORM, PostgreSQL",
+  "language": "TypeScript",
+  "build_system": "npm with Next.js build system",
+  "test_framework": "vitest for unit/integration, playwright for e2e",
+  "build_command": "npx tsc --noEmit",
+  "test_command": "npx tsc --noEmit",
+  "verification_instructions": "Run npx tsc --noEmit to verify zero TypeScript errors. Check that documentation files are internally consistent.",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "npm install already done, node_modules present",
+  "environment_constraints": "No Docker daemon available. No database available. TypeScript checking via tsc --noEmit is the primary verification method.",
+  "contribution_requirements": "Keep TypeScript zero-error baseline. Documentation must reflect the actual state of the codebase.",
+  "key_patterns": "App router (app/ directory), components in components/, lib/ for business logic. Sidebar nav defined in components/tenant/layout/sidebar.tsx with NAV_SECTIONS array. Sidebar customize catalog in components/tenant/settings/sidebar-customize-section.tsx must mirror NAV_SECTIONS.",
+  "relevant_files": [
+    "docs/API_MIGRATION_v1_to_v2.md",
+    "docs/CHANGELOG.md",
+    "docs/ARCHITECTURE.md",
+    "WORLD_CLASS_GAP_ANALYSIS.txt",
+    "components/tenant/settings/sidebar-customize-section.tsx",
+    "components/tenant/docs-client.tsx",
+    "app/tenant/plugins/page.tsx",
+    "components/tenant/layout/sidebar.tsx",
+    "proxy.ts"
+  ],
+  "directory_structure": "app/ - Next.js app router pages and API routes; components/ - React components; lib/ - business logic; docs/ - documentation; deploy/ - production deployment configs; drizzle/ - database schema"
+}

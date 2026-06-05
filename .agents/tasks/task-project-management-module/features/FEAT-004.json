@@ -1,0 +1,24 @@
+{
+  "id": "FEAT-004",
+  "type": "fix",
+  "description": "Fix review issues: uniqueIndex for project_tasks, UUID validation on path params, remove as any casts at server-client boundary.",
+  "status": "completed",
+  "steps": [
+    "In drizzle/schema/projects.ts, import uniqueIndex from drizzle-orm/pg-core and change index('idx_project_tasks_unique') to uniqueIndex('idx_project_tasks_unique')",
+    "In app/api/tenant/projects/[id]/tasks/route.ts, add .onConflictDoNothing() to the insert and handle empty result (already linked)",
+    "Add UUID regex validation to path param id in all 3 sub-resource route files (projects/[id]/route.ts, milestones/route.ts, tasks/route.ts)",
+    "Remove as any casts in app/tenant/projects/page.tsx and app/tenant/projects/[id]/page.tsx"
+  ],
+  "acceptance_criteria": [
+    "projectTasks table uses uniqueIndex instead of index",
+    "POST /api/tenant/projects/[id]/tasks uses onConflictDoNothing and returns 409 if already linked",
+    "All route handlers return 400 for invalid UUID path params",
+    "No as any casts remain in frontend pages",
+    "npx tsc --noEmit passes with 0 errors"
+  ],
+  "verification": [
+    "Run npx tsc --noEmit to verify no type errors"
+  ],
+  "blocked_reason": null,
+  "findings": "All 3 review issues fixed. TypeScript compiles with 0 errors. All 430 tests pass (2 skipped DB-dependent suites as before). No new issues introduced."
+}

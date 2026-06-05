@@ -1,79 +1,189 @@
 /**
- * AI gateway tables.
+ * AI Gateway Schema
  *
- * Two-level model:
- *  - ai_providers          (super-admin): catalog of allowed providers + global defaults
- *  - tenant_ai_credentials (tenant):     BYO API key / model per tenant; needs super-admin approval
+ * Two tables to support the multi-provider AI gateway:
  *
- * The AI gateway in lib/ai/gateway.ts ONLY calls a tenant_ai_credentials row
- * whose status === 'approved' AND whose linked ai_providers row is enabled.
+ *  1. `ai_provider_secrets` — per-tenant, per-provider encrypted API keys.
+ *     Replaces the previous `tenants.settings.ai_providers.<id>.api_key_set`
+ *     marker (which stored a presence boolean only). Real keys are encrypted
+ *     with `lib/crypto.encrypt()` under `ENCRYPTION_KEY` (same pattern SSO
+ *     uses for `client_secret`).
+ *
+ *  2. `ai_activity` — one row per gateway call. Drives:
+ *       - the AI Hub status counters (drafts/scoring/tokens today)
+ *       - the AI Activity Log page
+ *       - super-admin AI usage reporting
+ *       - acceptance-rate tracking (was the suggestion kept?)
  */
-
-import { pgTable, uuid, text, boolean, integer, timestamp, jsonb, index, unique } from 'drizzle-orm/pg-core';
+import {
+  pgTable, uuid, text, timestamp, boolean, integer, bigint, index, uniqueIndex,
+} from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import * as utils from './utils';
+import { tenants, users } from './core';
 
-// Catalog of providers the platform supports (super-admin maintained).
-// Examples: openai, anthropic, groq, mistral, ollama, openai-compatible
-export const aiProviders = pgTable('ai_providers', {
+// ── 1. AI PROVIDER SECRETS ───────────────────────────
+// Per-tenant encrypted API keys for the multi-provider gateway.
+// One row per (tenant, provider). Soft-deletable.
+export const aiProviderSecrets = pgTable('ai_provider_secrets', {
   id: utils.pk(),
-  // Stable lower-case identifier used by the gateway switch.
-  // 'openai' | 'anthropic' | 'groq' | 'mistral' | 'ollama' | 'openai-compatible'
-  providerKey: text('provider_key').notNull(),
-  displayName: text('display_name').notNull(),
-  // Default base URL when none is provided by a tenant credential.
-  defaultBaseUrl: text('default_base_url'),
-  // Whether super-admin has globally enabled this provider.
-  enabled: boolean('enabled').notNull().default(true),
-  // Whether this provider supports server-sent streaming.
-  supportsStreaming: boolean('supports_streaming').notNull().default(true),
-  // Whether tenants may use the platform's default key when no BYO key is set.
-  // Set to false to force every tenant to bring their own key + go through approval.
-  allowPlatformKey: boolean('allow_platform_key').notNull().default(false),
-  // Optional rate caps applied platform-wide for this provider.
-  rateLimits: jsonb('rate_limits').default({}),
-  metadata: utils.metadata(),
-  ...utils.audit(),
+  tenantId: utils.tenantId(),
+  /** 'openai' | 'anthropic' | 'groq' | 'ollama' (ollama uses base_url, no key) */
+  provider: text('provider').notNull(),
+  /** AES-256-GCM ciphertext from lib/crypto.encrypt() */
+  encryptedKey: text('encrypted_key').notNull(),
+  /** Last 4 chars of the plaintext key, safe to display */
+  keyPrefix: text('key_prefix'),
+  /** Optional self-hosted base URL (Ollama only). Plain text — not a secret. */
+  baseUrl: text('base_url'),
+  ...utils.lifecycle(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  rotatedAt: timestamp('rotated_at', { withTimezone: true }),
 }, (table) => ({
-  providerKeyIdx: unique('uniq_ai_providers_provider_key').on(table.providerKey),
-  enabledIdx: index('idx_ai_providers_enabled').on(table.enabled),
-  metadataGinIdx: utils.metadataIdx(table),
+  tenantIdx: utils.tenantIdx(table),
+  uniqueTenantProvider: uniqueIndex('idx_ai_provider_secrets_unique')
+    .on(table.tenantId, table.provider)
+    .where(sql`deleted_at IS NULL`),
   activeIdx: utils.activeIdx(table),
 }));
 
-// Tenant-level BYO credentials. status pending → super-admin approves/rejects.
-export const tenantAiCredentials = pgTable('tenant_ai_credentials', {
+// ── 2. AI ACTIVITY LOG ───────────────────────────────
+// One row per gateway invocation. Read by /api/tenant/ai/status,
+// /api/tenant/ai/activity, /superadmin/ai-usage.
+export const aiActivity = pgTable('ai_activity', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
-  providerId: uuid('provider_id').notNull().references(() => aiProviders.id, { onDelete: 'cascade' }),
-  // Default model for this credential, e.g. 'gpt-4o-mini', 'claude-3-5-haiku-20241022'
-  model: text('model').notNull(),
-  // Encrypted via lib/crypto/secrets.ts (pgcrypto or app-level AES-GCM).
-  // NEVER store plaintext keys.
-  encryptedApiKey: text('encrypted_api_key').notNull(),
-  // Optional override of the provider's default base URL (for self-hosted Ollama, OpenAI proxies, etc.).
-  baseUrlOverride: text('base_url_override'),
-  // 'pending' | 'approved' | 'rejected' | 'revoked'
-  status: text('status').notNull().default('pending'),
-  // Free-form rejection / revocation reason captured at decision time.
-  decisionReason: text('decision_reason'),
-  approvedBy: uuid('approved_by'),
-  approvedAt: timestamp('approved_at', { withTimezone: true }),
-  // Optional fallback chain — provider keys, in priority order, used by gateway on failure.
-  fallbackChain: jsonb('fallback_chain').default([]),
-  // Last time this credential successfully completed a call (used for monitoring / surfacing stale keys).
-  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
-  // Aggregated counters for ops dashboards.
-  callCount: integer('call_count').notNull().default(0),
-  errorCount: integer('error_count').notNull().default(0),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  /** Capability: 'draft' | 'lead_scoring' | 'predict_deal' | 'enrich_contact' | 'suggest_followup' | 'summarize' */
+  action: text('action').notNull(),
+  /** Provider that actually answered: 'openai' | 'anthropic' | 'groq' | 'ollama' */
+  provider: text('provider').notNull(),
+  /** Resolved model name, e.g. 'gpt-4o-mini' */
+  model: text('model'),
+  /** 'success' | 'error' | 'rate_limited' | 'fallback_used' */
+  status: text('status').notNull().default('success'),
+  /** Input tokens (prompt) */
+  tokensIn: integer('tokens_in').default(0),
+  /** Output tokens (completion) */
+  tokensOut: integer('tokens_out').default(0),
+  /** Total tokens used (in + out, denormalised for fast SUM) */
+  tokensUsed: integer('tokens_used').default(0),
+  /** Computed cost in 1/100ths of a cent (six-decimal precision) */
+  costCents: bigint('cost_cents', { mode: 'number' }).default(0),
+  /** Wall-clock latency, ms */
+  latencyMs: integer('latency_ms'),
+  /** Optional reference to the entity the call was about (deal_id, contact_id, etc.) */
+  entityType: text('entity_type'),
+  entityId: uuid('entity_id'),
+  /** Error message when status != 'success' */
+  errorMessage: text('error_message'),
+  /** Did the user accept / use the suggestion? Set later via PATCH. */
+  accepted: boolean('accepted'),
+  /** Free-form details (provider raw usage, fallback chain, etc.) */
   metadata: utils.metadata(),
-  ...utils.audit(),
+  createdAt: utils.createdAt(),
+}, (table) => ({
+  tenantIdx: index('idx_ai_activity_tenant_time').on(table.tenantId, table.createdAt),
+  actionIdx: index('idx_ai_activity_action').on(table.tenantId, table.action, table.createdAt),
+  userIdx: index('idx_ai_activity_user').on(table.tenantId, table.userId, table.createdAt),
+  statusIdx: index('idx_ai_activity_status').on(table.tenantId, table.status),
+}));
+
+// ── 3. AI DRAFT TEMPLATES ────────────────────────────
+// Per-tenant prompt templates for the Auto-Draft surface
+// (/tenant/ai/draft). Each template captures kind (email / note / reply
+// / call_prep), entity types it applies to, system + user prompt, and
+// default tone/subject. Soft-delete on edit. Unique on (tenant, slug).
+export const aiDraftTemplates = pgTable('ai_draft_templates', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  /** Stable slug, e.g. 'follow-up-after-demo' */
+  slug: text('slug').notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  /** 'email' | 'note' | 'reply' | 'call_prep' */
+  kind: text('kind').notNull().default('email'),
+  /** Comma-separated entity types this template can target */
+  entityTypes: text('entity_types').notNull().default('contact,deal'),
+  /** System prompt — sets tone / persona / output format */
+  systemPrompt: text('system_prompt').notNull(),
+  /** User prompt template — supports {{contact.first_name}}, {{deal.title}} etc. */
+  userPrompt: text('user_prompt').notNull(),
+  /** Default tone hint surfaced in the picker UI */
+  tone: text('tone').default('professional'),
+  /** Optional default subject line (email kind only) */
+  defaultSubject: text('default_subject'),
+  active: boolean('active').notNull().default(true),
+  ...utils.lifecycle(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
 }, (table) => ({
   tenantIdx: utils.tenantIdx(table),
-  providerIdx: index('idx_tenant_ai_credentials_provider').on(table.providerId),
-  statusIdx: index('idx_tenant_ai_credentials_tenant_status').on(table.tenantId, table.status),
-  // One primary credential per tenant+provider; tenants who want multiple keys
-  // for the same provider can keep older ones with status='revoked'.
-  uniqueActive: unique('uniq_tenant_ai_credential_active').on(table.tenantId, table.providerId, table.status),
-  metadataGinIdx: utils.metadataIdx(table),
+  slugUnique: uniqueIndex('idx_ai_draft_templates_slug')
+    .on(table.tenantId, table.slug)
+    .where(sql`deleted_at IS NULL`),
+  kindIdx: index('idx_ai_draft_templates_kind').on(table.tenantId, table.kind, table.active),
+}));
+
+// ── 4. LEAD SCORING RULES ───────────────────────────
+// Per-tenant rules that drive the AI lead scoring engine.
+// Each rule has a factor (e.g. 'Company Size'), a weight (-100 to 100),
+// and a condition (e.g. 'revenue > 1M').
+export const leadScoringRules = pgTable('lead_scoring_rules', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  /** Human-readable factor name, e.g. 'Role matches persona' */
+  factor: text('factor').notNull(),
+  /** Importance: positive = bonus, negative = penalty. Typically -100 to 100. */
+  weight: integer('weight').notNull().default(10),
+  /** Optional machine-readable condition or prompt hint */
+  condition: text('condition'),
+  /** Order in the settings UI */
+  sortOrder: integer('sort_order').notNull().default(0),
+  active: boolean('active').notNull().default(true),
+  ...utils.lifecycle(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+}, (table) => ({
+  tenantIdx: utils.tenantIdx(table),
+  activeIdx: utils.activeIdx(table),
+}));
+
+// ── 5. AT-RISK RULES ────────────────────────────────
+// Per-tenant rules for flagging deals as 'at risk'.
+// Flagged deals are shown in /tenant/ai/at-risk.
+export const atRiskRules = pgTable('at_risk_rules', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  /** 
+   * Deal stage this rule applies to. 
+   * If null, it's a global rule (fallback).
+   */
+  stageId: uuid('stage_id'),
+  /** 
+   * Flag if no activity for X days. 
+   * Activity = notes, emails, calls, meetings, or field updates.
+   */
+  maxDaysIdle: integer('max_days_idle').notNull().default(14),
+  /** 
+   * Flag if deal has been in this stage for longer than X days,
+   * regardless of activity. Useful for 'Negotiation' or 'Contract' stages.
+   */
+  maxDaysInStage: integer('max_days_in_stage'),
+  /** 
+   * Flag if sentiment score falls below X (0-100).
+   * Sentiment is extracted from the latest email reply using AI.
+   */
+  sentimentThreshold: integer('sentiment_threshold').default(30),
+  /** Optional custom notes for why this stage has these rules */
+  description: text('description'),
+  active: boolean('active').notNull().default(true),
+  metadata: utils.metadata(),
+  ...utils.lifecycle(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+}, (table) => ({
+  tenantIdx: utils.tenantIdx(table),
+  stageIdx: index('idx_at_risk_rules_stage').on(table.tenantId, table.stageId),
   activeIdx: utils.activeIdx(table),
 }));

@@ -7,8 +7,12 @@ import { leads, users, companies, leadActivities, activities } from '@/drizzle/s
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
+<<<<<<< HEAD
 import { resolveOrCreateContactForLead } from '@/lib/contacts/resolve';
 import { generateLeadOid } from '@/lib/leads/oid';
+=======
+import { fireWebhooks } from '@/lib/webhooks';
+>>>>>>> main
 
 // Whitelist for sort columns to prevent SQL injection
 const ALLOWED_SORT_COLUMNS: Record<string, any> = {
@@ -265,6 +269,8 @@ export async function POST(request: NextRequest) {
       action: 'create', entityType: 'lead', entityId: newLead.id,
       newData: { email: v.email, name: `${v.first_name} ${v.last_name ?? ''}`.trim() },
     });
+
+    fireWebhooks(ctx.tenantId, 'lead.created', { id: newLead.id, email: v.email }).catch(() => {});
 
     return NextResponse.json(newLead, { status: 201 });
   } catch (error: any) {

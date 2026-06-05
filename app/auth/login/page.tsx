@@ -6,6 +6,7 @@ import {
   Zap, Loader2, Eye, EyeOff, Mail, Lock, Shield, BarChart3,
   Users, Cpu, CheckCircle, ArrowRight, X
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 
 export default function LoginPage() {
@@ -33,7 +34,11 @@ export default function LoginPage() {
 
       const data = await res.json();
       if (res.ok) {
-        window.location.replace('/tenant/dashboard');
+        toast.success('Welcome back!');
+        setLoading(false);
+        setTimeout(() => {
+          window.location.href = '/tenant/dashboard';
+        }, 800);
       } else {
         setError(data.error || 'Invalid email or password');
         setLoading(false);

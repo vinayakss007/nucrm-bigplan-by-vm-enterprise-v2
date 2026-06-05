@@ -302,6 +302,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
+<<<<<<< HEAD
+=======
+    await executeBatch();
+
+    // Log activity
+    await db.insert(activities).values({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      eventType: 'lead_created',
+      description: `Imported ${results.imported} leads (${results.updated} updated, ${results.skipped} skipped)`,
+      entityType: 'bulk_import',
+      entityId: sql`gen_random_uuid()`,
+      action: 'import_completed',
+    });
+
+>>>>>>> main
     return NextResponse.json({ ok: true, results });
   } catch (err: any) {
     console.error('[leads/import]', err);

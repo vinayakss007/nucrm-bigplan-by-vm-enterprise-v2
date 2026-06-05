@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 /**
  * POST /api/tenant/leads/[id]/convert
  *
@@ -61,6 +62,35 @@ export async function POST(
     }
 
     const assignee = assigned_to || lead.assignedTo || ctx.userId;
+
+    // Build a discovery summary from BANT-style lead fields so it isn't lost on conversion
+    const discovery: Record<string, unknown> = {};
+    if (lead.budget != null) discovery['budget'] = lead.budget;
+    if (lead.budgetCurrency) discovery['budget_currency'] = lead.budgetCurrency;
+    if (lead.authorityLevel && lead.authorityLevel !== 'unknown') discovery['authority_level'] = lead.authorityLevel;
+    if (lead.needDescription) discovery['need_description'] = lead.needDescription;
+    if (lead.timeline) discovery['timeline'] = lead.timeline;
+    if (lead.timelineTargetDate) discovery['timeline_target_date'] = lead.timelineTargetDate;
+    if (lead.companyIndustry) discovery['company_industry'] = lead.companyIndustry;
+    if (lead.value != null) discovery['estimated_value'] = lead.value;
+
+    const hasDiscovery = Object.keys(discovery).length > 0;
+    const discoverySummary = hasDiscovery
+      ? [
+          '── Discovery (carried over from lead) ──',
+          discovery['budget'] != null
+            ? `Budget: ${discovery['budget']}${discovery['budget_currency'] ? ` ${discovery['budget_currency']}` : ''}`
+            : null,
+          discovery['authority_level'] ? `Authority: ${discovery['authority_level']}` : null,
+          discovery['timeline'] ? `Timeline: ${discovery['timeline']}` : null,
+          discovery['timeline_target_date'] ? `Target date: ${discovery['timeline_target_date']}` : null,
+          discovery['company_industry'] ? `Industry: ${discovery['company_industry']}` : null,
+          discovery['estimated_value'] != null ? `Estimated value: ${discovery['estimated_value']}` : null,
+          discovery['need_description'] ? `Need: ${discovery['need_description']}` : null,
+        ]
+          .filter(Boolean)
+          .join('\n')
+      : '';
 
     const result = await db.transaction(async (tx) => {
       // ── 1. Resolve company ──────────────────────────────────────────
@@ -126,6 +156,10 @@ export async function POST(
         if (existing) {
           // Merge key lead fields into existing contact
           contactId = existing.id;
+          // Preserve any existing notes by appending the discovery block
+          const mergedNotes = hasDiscovery
+            ? [discoverySummary, lead.internalNotes].filter(Boolean).join('\n\n')
+            : lead.internalNotes || undefined;
           await tx.update(contacts).set({
             phone: lead.phone || undefined,
             jobTitle: lead.title || undefined,
@@ -134,6 +168,9 @@ export async function POST(
             leadStatus: 'qualified',
             lifecycleStage: 'opportunity',
             score: Math.max(existing.score || 0, lead.score || 0),
+            notes: mergedNotes
+              ? sql`coalesce(${contacts.notes}, '') || ${'\n\n' + mergedNotes}`
+              : undefined,
             updatedAt: new Date()
           }).where(eq(contacts.id, contactId));
         } else {
@@ -144,6 +181,7 @@ export async function POST(
       }
 
       if (isNewContact) {
+        const newContactNotes = [discoverySummary, lead.internalNotes].filter(Boolean).join('\n\n') || null;
         const [contact] = await tx.insert(contacts).values({
           tenantId: ctx.tenantId,
           firstName: lead.firstName,
@@ -162,7 +200,11 @@ export async function POST(
           linkedinUrl: lead.linkedinUrl || null,
           assignedTo: assignee as any,
           createdBy: ctx.userId,
-          notes: lead.internalNotes || null,
+          notes: newContactNotes,
+          metadata: {
+            source_lead_id: id,
+            ...(hasDiscovery ? { discovery } : {}),
+          } as any,
         }).returning({ id: contacts.id });
         if (!contact) throw new Error('Failed to create contact');
         contactId = contact.id;
@@ -222,16 +264,28 @@ export async function POST(
         }
 
         if (resolvedStageId) {
+          // Prefer the lead's estimated value if no explicit deal_value was supplied
+          const resolvedAmount =
+            (typeof deal_value === 'number' && deal_value > 0)
+              ? deal_value
+              : (parseFloat(String(deal_value)) > 0
+                  ? parseFloat(String(deal_value))
+                  : (lead.value != null ? parseFloat(String(lead.value)) || 0 : 0));
+
           const [deal] = await tx.insert(deals).values({
             tenantId: ctx.tenantId,
             title: title,
             stageId: resolvedStageId,
-            amount: (typeof deal_value === 'number' ? deal_value : parseFloat(deal_value) || 0).toString(),
+            amount: resolvedAmount.toString(),
             contactId: contactId,
             companyId: companyId,
             pipelineId: resolvedPipelineId,
             assignedTo: assignee as any,
             createdBy: ctx.userId,
+            metadata: {
+              source_lead_id: id,
+              ...(hasDiscovery ? { discovery } : {}),
+            } as any,
           }).returning({ id: deals.id });
           if (!deal) throw new Error('Failed to create deal');
           dealId = deal.id;
@@ -289,6 +343,6 @@ export async function POST(
 
   } catch (error: any) {
     console.error('[lead convert] error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency, formatDateTimeShort, formatDate, formatRelativeTime, getInitials } from '@/lib/utils';
 import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
+import { ContactTimeline } from '@/components/tenant/contact-timeline';
 import toast from 'react-hot-toast';
 
 // ── Constants ─────────────────────────────────────────────────
@@ -551,8 +552,8 @@ export default function ContactDetailClient({
               {/* Timeline */}
               <div className="admin-card overflow-hidden">
                 <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-                  <p className="text-sm font-semibold">Timeline</p>
-                  <p className="text-xs text-muted-foreground">{activities.length} entries</p>
+                  <p className="text-sm font-semibold">Manual log</p>
+                  <p className="text-xs text-muted-foreground">{activities.length} entries · notes, calls, emails, meetings you log</p>
                 </div>
                 {!activities.length ? (
                   <div className="px-5 py-10 text-center text-sm text-muted-foreground">
@@ -607,6 +608,17 @@ export default function ContactDetailClient({
                     })}
                   </div>
                 )}
+              </div>
+
+              {/* System events timeline — emails opened/clicked, calls, meetings, deals, lifecycle changes, automations, forms, webhooks */}
+              <div className="admin-card overflow-hidden">
+                <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                  <p className="text-sm font-semibold">System events</p>
+                  <p className="text-xs text-muted-foreground">Auto-tracked: email opens/clicks, calls, meetings, deals, lifecycle changes, forms, automations</p>
+                </div>
+                <div className="p-5">
+                  <ContactTimeline contactId={contact.id} />
+                </div>
               </div>
             </div>
           )}

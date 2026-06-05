@@ -8,7 +8,7 @@
 import type { Queue as QueueType } from 'bullmq';
 
 export type QueueProvider = 'redis' | 'pgboss' | 'memory';
-export type JobType = 'send-email' | 'send-notification' | 'send-bulk-emails' | 'export-csv' | 'contact-import' | 'run-automation';
+export type JobType = 'send-email' | 'send-notification' | 'send-bulk-emails' | 'export-csv' | 'contact-import' | 'run-automation' | 'send-lead-warming';
 
 export interface JobData {
   type: JobType;

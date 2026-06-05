@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 /**
  * GDPR Data Export — GET /api/user/export
  * Returns all personal data for the authenticated user as JSON.
@@ -94,6 +95,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: any) {
     console.error('[UserExport] Error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }

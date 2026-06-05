@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
 import { createTenantSchema } from '@/lib/api/schemas';
@@ -115,7 +116,7 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (err: any) { 
     console.error('[Impersonation] Error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 }); 
+    return apiError(err); 
   }
 }
 

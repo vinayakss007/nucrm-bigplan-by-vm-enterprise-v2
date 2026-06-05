@@ -8,6 +8,7 @@ import EmailVerifyBanner from '@/components/tenant/email-verify-banner';
 import ImpersonationBanner from '@/components/shared/impersonation-banner';
 import { CommandPalette } from '@/components/shared/command-palette';
 import { ShortcutsModal } from '@/components/shared/shortcuts-modal';
+import UserPreferencesApplier from '@/components/shared/user-preferences-applier';
 
 interface Props {
   tenant:any; profile:any; roleSlug:string;
@@ -162,6 +163,7 @@ export default function TenantShell({ tenant, profile, roleSlug, permissions, is
 
   return (
     <>
+      <UserPreferencesApplier />
       <ImpersonationBanner />
       <div className="flex h-screen bg-background overflow-hidden">
         {/* Mobile overlay */}
@@ -204,7 +206,7 @@ export default function TenantShell({ tenant, profile, roleSlug, permissions, is
             tenant={tenant} profile={profile} roleSlug={roleSlug}
             onToggleSidebar={() => { if (window.innerWidth < 768) setMobileOpen(o=>!o); else toggle(); }}
           />
-          <main id="main-content" className="flex-1 overflow-y-auto scrollbar-thin p-4 sm:p-6 page-enter" role="main">
+          <main id="main-content" className="flex-1 overflow-y-auto scrollbar-thin p-4 sm:p-5 page-enter" role="main">
             {children}
           </main>
         </div>
