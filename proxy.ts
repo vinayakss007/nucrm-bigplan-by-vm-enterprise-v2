@@ -34,6 +34,9 @@ const PUBLIC_PATHS = [
 const PUBLIC_PREFIXES = ['/_next', '/favicon', '/images', '/static', '/icons', '/api/v2'];
 
 const ALLOWED_ORIGINS = (process.env['ALLOWED_ORIGINS'] || 'http://localhost:3000').split(',').map(s => s.trim());
+if (ALLOWED_ORIGINS.includes('*') && process.env['NODE_ENV'] === 'production') {
+  console.warn('WARNING: ALLOWED_ORIGINS=* in production! Restrict to specific origins.');
+}
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) return true;
@@ -44,7 +47,7 @@ function isPublic(pathname: string): boolean {
 function setCORS(response: NextResponse, origin: string | null, pathname: string): void {
   if (!pathname.startsWith('/api/')) return;
   const allowed = origin && ALLOWED_ORIGINS.some(ao => {
-    if (ao === '*') return true;
+    if (ao === '*' && process.env['NODE_ENV'] !== 'production') return true;
     if (ao.startsWith('*.')) return origin.endsWith(ao.slice(1));
     return ao === origin;
   });
@@ -136,6 +139,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff2?|ttf|eot)$).*)',
   ],
 };
