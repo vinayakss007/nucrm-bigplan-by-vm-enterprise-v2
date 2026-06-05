@@ -20,6 +20,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const { theme, setTheme }       = useTheme();
+  const [mounted, setMounted]     = useState(false);
   const router                    = useRouter();
   const inputRef                  = useRef<HTMLInputElement>(null);
   const timerRef                  = useRef<NodeJS.Timeout>(undefined);
@@ -28,6 +29,8 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   const notifRef                  = useRef<HTMLDivElement>(null);
 
   const color = tenant?.primary_color || '#7c3aed';
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -211,7 +214,8 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
         {/* Dark mode toggle */}
         <button onClick={()=>setTheme(theme==='dark'?'light':'dark')}
           className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent transition-colors text-muted-foreground">
-          {theme==='dark'?<Sun className="w-4 h-4"/>:<Moon className="w-4 h-4"/>}
+          <Sun className="w-4 h-4 hidden dark:block" />
+          <Moon className="w-4 h-4 block dark:hidden" />
         </button>
 
         {/* Notifications bell */}
