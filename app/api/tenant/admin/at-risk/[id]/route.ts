@@ -22,8 +22,8 @@ export async function PATCH(
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
-
     const { id } = await params;
+
     const body = await req.json();
     const validated = validateBody(updateAtRiskRuleSchema, body);
     if (validated instanceof NextResponse) return validated;
@@ -73,8 +73,8 @@ export async function DELETE(
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
-
     const { id } = await params;
+
     const [row] = await db.update(atRiskRules)
       .set({
         deletedAt: new Date(),
