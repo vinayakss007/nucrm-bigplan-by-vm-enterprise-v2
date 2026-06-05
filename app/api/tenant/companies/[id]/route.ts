@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { companies, contacts } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
+import { fireWebhooks } from '@/lib/webhooks';
 
 export async function GET(req: NextRequest, { params }: any) {
   try {
@@ -91,6 +92,8 @@ export async function PATCH(req: NextRequest, { params }: any) {
       entityId: id 
     });
 
+    fireWebhooks(ctx.tenantId, 'company.updated', { id }).catch(() => {});
+
     return NextResponse.json({ data: row });
   } catch (err: any) { 
     console.error('[company PATCH]', err);
@@ -129,6 +132,8 @@ export async function DELETE(req: NextRequest, { params }: any) {
       entityType: 'company', 
       entityId: id 
     });
+
+    fireWebhooks(ctx.tenantId, 'company.deleted', { id }).catch(() => {});
 
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
   } catch (err: any) { 

@@ -1,458 +1,282 @@
 'use client';
 
-/**
- * Workspace admin page for managing SSO (OIDC) providers.
- *
- * Calls the API at /api/tenant/sso/providers. Only the workspace admin
- * role can use it; the API enforces this independently. Client_secret
- * is sent over HTTPS once at create/edit time and never round-trips back
- * to the browser — the form shows "Set secret" vs "Update secret" based
- * on the API's client_secret_present flag.
- */
-import { useEffect, useState, useCallback } from 'react';
-import { Loader2, Plus, Trash2, Pencil, Power, PowerOff, ShieldCheck } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { useState, useEffect } from 'react';
 
-interface SsoProvider {
+interface SSOProvider {
   id: string;
-  provider_type: string;
+  providerType: 'saml' | 'oidc';
   name: string;
-  is_active: boolean;
-  client_secret_present: boolean;
-  config: {
-    issuer?: string;
-    client_id?: string;
-    email_domains?: string[];
-    authorization_endpoint?: string;
-    token_endpoint?: string;
-    jwks_uri?: string;
-  };
-  created_at: string;
-  updated_at: string;
+  config: Record<string, any>;
+  isActive: boolean;
 }
 
-interface FormState {
-  id: string | null;
-  name: string;
-  issuer: string;
-  client_id: string;
-  client_secret: string;
-  email_domains: string;
-  authorization_endpoint: string;
-  token_endpoint: string;
-  jwks_uri: string;
-  is_active: boolean;
-  client_secret_present: boolean;
-}
-
-const EMPTY_FORM: FormState = {
-  id: null,
-  name: '',
-  issuer: '',
-  client_id: '',
-  client_secret: '',
-  email_domains: '',
-  authorization_endpoint: '',
-  token_endpoint: '',
-  jwks_uri: '',
-  is_active: false,
-  client_secret_present: false,
-};
-
-const inp =
-  'w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500';
-const lbl = 'block text-sm font-medium text-foreground/80 mb-1.5';
-
-export default function SsoSettingsPage() {
-  const [providers, setProviders] = useState<SsoProvider[]>([]);
+export default function SSOSettingsPage() {
+  const [providers, setProviders] = useState<SSOProvider[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [providerType, setProviderType] = useState<'saml' | 'oidc'>('oidc');
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // Form state
+  const [form, setForm] = useState({
+    name: '',
+    // SAML
+    entityId: '',
+    ssoUrl: '',
+    certificate: '',
+    // OIDC
+    clientId: '',
+    clientSecret: '',
+    issuer: '',
+    authorizationEndpoint: '',
+    tokenEndpoint: '',
+    userinfoEndpoint: '',
+    redirectUri: '',
+  });
+
+  useEffect(() => {
+    loadProviders();
+  }, []);
+
+  async function loadProviders() {
     try {
-      const res = await fetch('/api/tenant/sso/providers');
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to load providers');
-      setProviders(json.data ?? []);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load providers');
+      const res = await fetch('/api/tenant/sso');
+      if (res.ok) {
+        const { data } = await res.json();
+        setProviders(data || []);
+        // Populate form if existing provider
+        if (data && data.length > 0) {
+          const p = data[0];
+          setProviderType(p.providerType);
+          setForm({
+            name: p.name || '',
+            entityId: p.config?.entityId || '',
+            ssoUrl: p.config?.ssoUrl || '',
+            certificate: p.config?.certificate || '',
+            clientId: p.config?.clientId || '',
+            clientSecret: p.config?.clientSecret || '',
+            issuer: p.config?.issuer || '',
+            authorizationEndpoint: p.config?.authorizationEndpoint || '',
+            tokenEndpoint: p.config?.tokenEndpoint || '',
+            userinfoEndpoint: p.config?.userinfoEndpoint || '',
+            redirectUri: p.config?.redirectUri || '',
+          });
+        }
+      }
+    } catch {
+      // Use defaults
     } finally {
       setLoading(false);
     }
-  }, []);
+  }
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const startCreate = () => {
-    setForm(EMPTY_FORM);
-    setShowForm(true);
-  };
-
-  const startEdit = (p: SsoProvider) => {
-    setForm({
-      id: p.id,
-      name: p.name,
-      issuer: p.config.issuer ?? '',
-      client_id: p.config.client_id ?? '',
-      client_secret: '',
-      email_domains: (p.config.email_domains ?? []).join(', '),
-      authorization_endpoint: p.config.authorization_endpoint ?? '',
-      token_endpoint: p.config.token_endpoint ?? '',
-      jwks_uri: p.config.jwks_uri ?? '',
-      is_active: p.is_active,
-      client_secret_present: p.client_secret_present,
-    });
-    setShowForm(true);
-  };
-
-  const submit = async (e: React.FormEvent) => {
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    try {
-      const payload = {
-        name: form.name,
-        issuer: form.issuer,
-        client_id: form.client_id,
-        ...(form.client_secret ? { client_secret: form.client_secret } : {}),
-        email_domains: form.email_domains
-          .split(',')
-          .map((d) => d.trim())
-          .filter(Boolean),
-        ...(form.authorization_endpoint
-          ? { authorization_endpoint: form.authorization_endpoint }
-          : {}),
-        ...(form.token_endpoint ? { token_endpoint: form.token_endpoint } : {}),
-        ...(form.jwks_uri ? { jwks_uri: form.jwks_uri } : {}),
-        is_active: form.is_active,
-      };
+    setMessage(null);
 
-      const url = form.id
-        ? `/api/tenant/sso/providers/${form.id}`
-        : '/api/tenant/sso/providers';
-      const method = form.id ? 'PATCH' : 'POST';
-      const res = await fetch(url, {
+    const config: Record<string, any> = {};
+    if (providerType === 'saml') {
+      config['entityId'] = form.entityId;
+      config['ssoUrl'] = form.ssoUrl;
+      config['certificate'] = form.certificate;
+    } else {
+      config['clientId'] = form.clientId;
+      config['clientSecret'] = form.clientSecret;
+      config['issuer'] = form.issuer;
+      config['authorizationEndpoint'] = form.authorizationEndpoint;
+      config['tokenEndpoint'] = form.tokenEndpoint;
+      config['userinfoEndpoint'] = form.userinfoEndpoint;
+      config['redirectUri'] = form.redirectUri;
+    }
+
+    const payload = {
+      providerType,
+      name: form.name,
+      config,
+      isActive: true,
+    };
+
+    try {
+      const isUpdate = providers.length > 0;
+      const method = isUpdate ? 'PUT' : 'POST';
+      const body = isUpdate ? { ...payload, id: providers[0]!.id } : payload;
+
+      const res = await fetch('/api/tenant/sso', {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Save failed');
 
-      toast.success(form.id ? 'Provider updated' : 'Provider created');
-      setShowForm(false);
-      setForm(EMPTY_FORM);
-      load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Save failed');
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'SSO configuration saved successfully.' });
+        loadProviders();
+      } else {
+        const err = await res.json();
+        setMessage({ type: 'error', text: err.error || 'Failed to save SSO config' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Network error. Please try again.' });
     } finally {
       setSaving(false);
     }
-  };
+  }
 
-  const toggleActive = async (p: SsoProvider) => {
-    try {
-      const res = await fetch(`/api/tenant/sso/providers/${p.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: p.name,
-          issuer: p.config.issuer,
-          client_id: p.config.client_id,
-          email_domains: p.config.email_domains,
-          authorization_endpoint: p.config.authorization_endpoint,
-          token_endpoint: p.config.token_endpoint,
-          jwks_uri: p.config.jwks_uri,
-          is_active: !p.is_active,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Toggle failed');
-      toast.success(p.is_active ? 'Provider disabled' : 'Provider enabled');
-      load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Toggle failed');
-    }
-  };
-
-  const remove = async (p: SsoProvider) => {
-    if (!confirm(`Delete SSO provider "${p.name}"? Users will fall back to password login.`))
-      return;
-    try {
-      const res = await fetch(`/api/tenant/sso/providers/${p.id}`, { method: 'DELETE' });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Delete failed');
-      toast.success('Provider deleted');
-      load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Delete failed');
-    }
-  };
+  if (loading) {
+    return <div className="p-6">Loading SSO settings...</div>;
+  }
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold flex items-center gap-2">
-            <ShieldCheck className="w-6 h-6 text-violet-500" />
-            Single Sign-On
-          </h1>
-          <p className="text-sm text-foreground/60 mt-1">
-            Connect an OIDC identity provider (Google Workspace, Okta, Azure AD, …) so
-            members of your team can sign in with their work account.
-          </p>
-        </div>
-        {!showForm && (
-          <button
-            onClick={startCreate}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium"
-          >
-            <Plus className="w-4 h-4" /> Add provider
-          </button>
-        )}
+    <div className="max-w-2xl space-y-6 p-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Single Sign-On (SSO)</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Configure SSO to allow team members to sign in with your identity provider.
+        </p>
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-16 text-foreground/40">
-          <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading…
-        </div>
-      ) : showForm ? (
-        <ProviderForm
-          form={form}
-          setForm={setForm}
-          saving={saving}
-          onSubmit={submit}
-          onCancel={() => {
-            setShowForm(false);
-            setForm(EMPTY_FORM);
-          }}
-        />
-      ) : providers.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border p-10 text-center">
-          <ShieldCheck className="w-10 h-10 text-foreground/30 mx-auto mb-3" />
-          <p className="text-sm text-foreground/60">
-            No SSO providers configured. Add one and your team can sign in via their
-            corporate identity.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {providers.map((p) => (
-            <div
-              key={p.id}
-              className="border border-border rounded-xl p-4 flex items-center justify-between"
-            >
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{p.name}</span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-foreground/10 uppercase tracking-wide">
-                    {p.provider_type}
-                  </span>
-                  {p.is_active ? (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600">
-                      Active
-                    </span>
-                  ) : (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600">
-                      Disabled
-                    </span>
-                  )}
-                </div>
-                <div className="text-xs text-foreground/60 mt-1">
-                  {p.config.issuer} · domains: {(p.config.email_domains ?? []).join(', ') || '—'}
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => toggleActive(p)}
-                  title={p.is_active ? 'Disable' : 'Enable'}
-                  className="p-2 rounded-lg hover:bg-foreground/10"
-                >
-                  {p.is_active ? (
-                    <PowerOff className="w-4 h-4" />
-                  ) : (
-                    <Power className="w-4 h-4 text-emerald-600" />
-                  )}
-                </button>
-                <button
-                  onClick={() => startEdit(p)}
-                  title="Edit"
-                  className="p-2 rounded-lg hover:bg-foreground/10"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => remove(p)}
-                  title="Delete"
-                  className="p-2 rounded-lg hover:bg-foreground/10 text-rose-600"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          ))}
+      {message && (
+        <div className={`rounded-md p-3 text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'}`}>
+          {message.text}
         </div>
       )}
+
+      <form onSubmit={handleSave} className="space-y-6">
+        {/* Provider Type */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Provider Type</label>
+          <select
+            value={providerType}
+            onChange={e => setProviderType(e.target.value as 'saml' | 'oidc')}
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+          >
+            <option value="oidc">OpenID Connect (OIDC)</option>
+            <option value="saml">SAML 2.0</option>
+          </select>
+        </div>
+
+        {/* Display Name */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Display Name</label>
+          <input
+            type="text"
+            value={form.name}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            placeholder="e.g. Company Okta, Google Workspace"
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+          />
+        </div>
+
+        {/* SAML Fields */}
+        {providerType === 'saml' && (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Entity ID</label>
+              <input
+                type="text"
+                value={form.entityId}
+                onChange={e => setForm(f => ({ ...f, entityId: e.target.value }))}
+                placeholder="https://your-idp.example.com/entity"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">SSO URL</label>
+              <input
+                type="url"
+                value={form.ssoUrl}
+                onChange={e => setForm(f => ({ ...f, ssoUrl: e.target.value }))}
+                placeholder="https://your-idp.example.com/sso/saml"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">X.509 Certificate</label>
+              <textarea
+                value={form.certificate}
+                onChange={e => setForm(f => ({ ...f, certificate: e.target.value }))}
+                rows={4}
+                placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              />
+            </div>
+          </>
+        )}
+
+        {/* OIDC Fields */}
+        {providerType === 'oidc' && (
+          <>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Client ID</label>
+                <input
+                  type="text"
+                  value={form.clientId}
+                  onChange={e => setForm(f => ({ ...f, clientId: e.target.value }))}
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Client Secret</label>
+                <input
+                  type="password"
+                  value={form.clientSecret}
+                  onChange={e => setForm(f => ({ ...f, clientSecret: e.target.value }))}
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Issuer URL</label>
+              <input
+                type="url"
+                value={form.issuer}
+                onChange={e => setForm(f => ({ ...f, issuer: e.target.value }))}
+                placeholder="https://accounts.google.com"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Authorization Endpoint</label>
+              <input
+                type="url"
+                value={form.authorizationEndpoint}
+                onChange={e => setForm(f => ({ ...f, authorizationEndpoint: e.target.value }))}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Token Endpoint</label>
+              <input
+                type="url"
+                value={form.tokenEndpoint}
+                onChange={e => setForm(f => ({ ...f, tokenEndpoint: e.target.value }))}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Redirect URI</label>
+              <input
+                type="url"
+                value={form.redirectUri}
+                onChange={e => setForm(f => ({ ...f, redirectUri: e.target.value }))}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              />
+            </div>
+          </>
+        )}
+
+        {/* Submit */}
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : 'Save SSO Configuration'}
+          </button>
+        </div>
+      </form>
     </div>
-  );
-}
-
-function ProviderForm(props: {
-  form: FormState;
-  setForm: (f: FormState) => void;
-  saving: boolean;
-  onSubmit: (e: React.FormEvent) => void;
-  onCancel: () => void;
-}) {
-  const { form, setForm, saving, onSubmit, onCancel } = props;
-  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm({ ...form, [k]: v });
-
-  return (
-    <form
-      onSubmit={onSubmit}
-      className="space-y-5 border border-border rounded-xl p-6 bg-foreground/[0.02]"
-    >
-      <h2 className="text-lg font-semibold">
-        {form.id ? 'Edit provider' : 'New OIDC provider'}
-      </h2>
-
-      <div>
-        <label className={lbl}>Display name</label>
-        <input
-          className={inp}
-          required
-          value={form.name}
-          onChange={(e) => set('name', e.target.value)}
-          placeholder="Acme Google Workspace"
-        />
-      </div>
-
-      <div>
-        <label className={lbl}>Issuer (OIDC discovery URL)</label>
-        <input
-          className={inp}
-          required
-          value={form.issuer}
-          onChange={(e) => set('issuer', e.target.value)}
-          placeholder="https://accounts.google.com"
-        />
-        <p className="text-xs text-foreground/50 mt-1">
-          Endpoints will be auto-discovered at <code>{'/.well-known/openid-configuration'}</code>.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className={lbl}>Client ID</label>
-          <input
-            className={inp}
-            required
-            value={form.client_id}
-            onChange={(e) => set('client_id', e.target.value)}
-            placeholder="123-abc.apps.googleusercontent.com"
-          />
-        </div>
-        <div>
-          <label className={lbl}>
-            Client secret{' '}
-            {form.client_secret_present && (
-              <span className="text-xs font-normal text-foreground/50">(leave blank to keep)</span>
-            )}
-          </label>
-          <input
-            className={inp}
-            type="password"
-            required={!form.client_secret_present}
-            value={form.client_secret}
-            onChange={(e) => set('client_secret', e.target.value)}
-            placeholder={form.client_secret_present ? '••••••••' : 'GOCSPX-…'}
-          />
-        </div>
-      </div>
-
-      <div>
-        <label className={lbl}>Email domains</label>
-        <input
-          className={inp}
-          required
-          value={form.email_domains}
-          onChange={(e) => set('email_domains', e.target.value)}
-          placeholder="acme.com, acme.co.uk"
-        />
-        <p className="text-xs text-foreground/50 mt-1">
-          Comma-separated list. Only users whose email matches one of these can sign in via
-          this provider.
-        </p>
-      </div>
-
-      <details>
-        <summary className="text-sm font-medium cursor-pointer">
-          Advanced — manual endpoints (optional)
-        </summary>
-        <div className="grid grid-cols-1 gap-4 mt-3 p-4 border border-border rounded-lg">
-          <div>
-            <label className={lbl}>Authorization endpoint</label>
-            <input
-              className={inp}
-              value={form.authorization_endpoint}
-              onChange={(e) => set('authorization_endpoint', e.target.value)}
-              placeholder="(auto-discovered)"
-            />
-          </div>
-          <div>
-            <label className={lbl}>Token endpoint</label>
-            <input
-              className={inp}
-              value={form.token_endpoint}
-              onChange={(e) => set('token_endpoint', e.target.value)}
-              placeholder="(auto-discovered)"
-            />
-          </div>
-          <div>
-            <label className={lbl}>JWKS URI</label>
-            <input
-              className={inp}
-              value={form.jwks_uri}
-              onChange={(e) => set('jwks_uri', e.target.value)}
-              placeholder="(auto-discovered)"
-            />
-          </div>
-        </div>
-      </details>
-
-      <div className="flex items-center gap-2">
-        <input
-          id="is_active"
-          type="checkbox"
-          checked={form.is_active}
-          onChange={(e) => set('is_active', e.target.checked)}
-        />
-        <label htmlFor="is_active" className="text-sm">
-          Enabled — allow users with claimed domains to sign in via this provider
-        </label>
-      </div>
-
-      <div className="flex gap-2 pt-2 border-t border-border">
-        <button
-          type="submit"
-          disabled={saving}
-          className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
-        >
-          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-          {form.id ? 'Save changes' : 'Create provider'}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 rounded-lg border border-border hover:bg-foreground/5 text-sm"
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
   );
 }

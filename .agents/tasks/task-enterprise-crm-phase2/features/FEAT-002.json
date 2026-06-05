@@ -1,0 +1,33 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "White-label branding engine and multi-frontend API gateway. These two features are combined because they both enable the core multi-SaaS vision: different frontends with different branding hitting the same backend.",
+  "status": "completed",
+  "steps": [
+    "Create lib/branding.ts with: (a) BrandingConfig interface (logoUrl, faviconUrl, primaryColor, secondaryColor, accentColor, companyName, customDomain, hidePoweredBy, customCss, headerLayout), (b) getBrandingForTenant(tenantId) that reads from the tenants table fields (primary_color, logo_url, favicon_url, custom_domain) plus a new branding JSONB column approach - store extended branding in tenant settings JSONB, (c) getBrandingForDomain(domain) that looks up tenant by customDomain field, (d) generateCSSVariables(config) that outputs CSS custom properties string, (e) validateCustomDomain(domain) that checks DNS.",
+    "Create app/api/tenant/branding/route.ts with GET (fetch current branding) and PUT (update branding config). PUT validates the branding schema with Zod, requires admin role. Store branding data in the tenants.settings JSONB field under a 'branding' key since the tenants table already has primaryColor, logoUrl, faviconUrl, customDomain fields.",
+    "Create app/tenant/settings/branding/page.tsx - a client component with form for: logo upload URL, favicon URL, primary/secondary/accent color pickers (simple hex input), company name override, toggle for 'Hide Powered by NuCRM', custom domain input with DNS verification status. Use existing Radix UI components (Input, Button, Label, Switch).",
+    "Create components/shared/branded-header.tsx - a server component that reads branding config and renders a header with custom logo, colors via CSS variables, and conditional 'Powered by NuCRM' badge.",
+    "Create lib/api/gateway.ts with: (a) GatewayConfig interface (allowedOrigins per tenant, rateLimitPerKey, authStrategies: 'api_key'|'jwt'|'oauth2'), (b) resolveGatewayTenant(request) that determines which tenant a request is for based on: API key prefix, custom domain, X-Tenant-ID header, or subdomain, (c) validateCORS(origin, tenantId) that checks if origin is allowed for that tenant, (d) API versioning helper that extracts version from /api/v2/ prefix.",
+    "Create app/api/v2/route.ts as the versioned API entry point with GET handler returning API info (version, available endpoints, documentation link). This establishes the /api/v2/ namespace.",
+    "Create app/api/v2/[...path]/route.ts as a catch-all that forwards to the equivalent /api/tenant/* route after gateway resolution. This allows external frontends to call /api/v2/contacts instead of /api/tenant/contacts, with proper CORS and multi-tenant resolution.",
+    "Update middleware.ts to add /api/v2 routes to PUBLIC_PREFIXES so they go through the gateway's own auth rather than the default JWT middleware. Add the gateway's CORS handling for custom domains.",
+    "Add unit tests in tests/unit/branding.test.ts for: generateCSSVariables produces valid CSS, getBrandingForTenant returns defaults for unconfigured tenant, validateCustomDomain rejects invalid domains. Add tests in tests/unit/gateway.test.ts for: resolveGatewayTenant identifies tenant from API key, validateCORS allows configured origins."
+  ],
+  "acceptance_criteria": [
+    "lib/branding.ts exports BrandingConfig interface, getBrandingForTenant, getBrandingForDomain, generateCSSVariables, validateCustomDomain",
+    "app/api/tenant/branding/route.ts has GET and PUT handlers with proper auth and validation",
+    "lib/api/gateway.ts exports resolveGatewayTenant, validateCORS, GatewayConfig",
+    "app/api/v2/route.ts returns API version info",
+    "app/api/v2/[...path]/route.ts proxies requests to tenant API after gateway resolution",
+    "middleware.ts updated to handle /api/v2 and custom domain routing",
+    "npx tsc --noEmit passes with 0 errors",
+    "npm test passes with new branding and gateway tests"
+  ],
+  "verification": [
+    "npx tsc --noEmit",
+    "npm test"
+  ],
+  "blocked_reason": null,
+  "findings": "All 25 new tests pass (12 branding, 13 gateway). TypeScript strict mode compiles cleanly. Full test suite: 213 passed, 2 pre-existing DB-dependent failures (backup-integrity requiring PostgreSQL). The v2 API gateway uses NextResponse.rewrite for proxying to internal /api/tenant/* routes. The branding engine stores extended config in tenants.settings JSONB under 'branding' key while using direct columns (logoUrl, primaryColor, etc.) for core fields."
+}

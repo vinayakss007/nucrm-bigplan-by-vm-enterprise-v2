@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -212,7 +213,7 @@ Best,
     });
   } catch (error: any) {
     console.error('[AI Email Draft] POST error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -267,6 +268,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('[AI Email Drafts] GET error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }

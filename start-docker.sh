@@ -58,7 +58,7 @@ docker compose down --remove-orphans 2>/dev/null || true
 
 # ── 4. Build & start ────────────────────────────────────────────────────────
 log "Building and starting services…"
-docker compose up -d --build
+docker compose --env-file .env.local up -d --build
 
 # ── 5. Wait for healthy ─────────────────────────────────────────────────────
 log "Waiting for services to become healthy (up to 120 s)…"

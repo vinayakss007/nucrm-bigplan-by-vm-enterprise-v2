@@ -1,9 +1,10 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { users, tenants, tenantMembers, plans, roles, onboardingProgress, sessions, pipelines, dealStages } from '@/drizzle/schema';
 import { eq, count, sql, and } from 'drizzle-orm';
 import { hashPassword, createToken, hashToken, setSessionCookie, validatePassword } from '@/lib/auth/session';
-import { ModuleRegistry } from '@/lib/modules/registry';
+import { installDefaultModules } from '@/lib/modules/auto-install';
 
 export async function POST(request: NextRequest) {
   try {
@@ -144,10 +145,8 @@ export async function POST(request: NextRequest) {
         },
       }).onConflictDoNothing();
 
-      // 4. Activate Core Modules
-      await ModuleRegistry.install(t.id, 'core-crm', u.id);
-      await ModuleRegistry.install(t.id, 'automation-basic', u.id);
-      await ModuleRegistry.install(t.id, 'service-helpdesk', u.id);
+      // 4. Install plan-based default modules (covers core-crm, automation-basic, etc.)
+      await installDefaultModules(t.id, planId);
 
       // 7. Initialize onboarding progress
       await tx.insert(onboardingProgress).values({
@@ -180,6 +179,6 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
   } catch (err: any) {
     console.error('[setup/create-admin]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }

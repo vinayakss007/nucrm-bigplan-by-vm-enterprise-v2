@@ -42,7 +42,24 @@ const CRITICAL_TABLES = [
   'dead_letter_queue',
 ];
 
-describe('Backup Integrity', () => {
+// Skip entire suite if no database is available
+async function isDatabaseAvailable(): Promise<boolean> {
+  const sourceUrl = process.env.DATABASE_URL || 'postgresql://postgres:admin123@localhost:5432/nucrm';
+  const pool = new Pool({ connectionString: sourceUrl, connectionTimeoutMillis: 3000 });
+  try {
+    const client = await pool.connect();
+    client.release();
+    await pool.end();
+    return true;
+  } catch {
+    await pool.end().catch(() => {});
+    return false;
+  }
+}
+
+const dbAvailable = await isDatabaseAvailable();
+
+describe.skipIf(!dbAvailable)('Backup Integrity', () => {
   let sourcePool: Pool;
   let restorePool: Pool;
   let sourceDb: any;

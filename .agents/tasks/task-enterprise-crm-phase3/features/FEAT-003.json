@@ -1,0 +1,38 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "GROUP C: Communication Modules - SMS/Twilio Integration, Live Chat Widget, Email Open/Click Tracking",
+  "status": "completed",
+  "steps": [
+    "Create lib/sms.ts - Twilio SMS integration: sendSMS(to, body, tenantId), sendTemplateSMS(to, templateId, variables, tenantId), handleIncomingSMS(payload) to create/update contact, getDeliveryStatus(messageId). Include message template system with variable interpolation ({{contact.name}}, {{deal.value}}, etc.).",
+    "Create drizzle/schema/comm.ts additions (or separate file if comm.ts is full) - Tables: sms_messages (id, tenantId, contactId, direction ['inbound','outbound'], to, from, body, templateId, status ['queued','sent','delivered','failed'], twilioSid, errorCode, lifecycle), sms_templates (id, tenantId, name, body, variables jsonb, lifecycle). If comm.ts already has SMS tables, skip and use existing.",
+    "Create app/api/tenant/sms/route.ts - POST send SMS (single or bulk), GET list messages with delivery status. Module-gated to 'whatsapp-bot' (SMS is part of messaging bundle).",
+    "Create app/api/tenant/sms/templates/route.ts - CRUD for SMS templates.",
+    "Create app/api/tenant/sms/webhook/route.ts - Twilio webhook handler for delivery status updates and incoming messages. No auth required (webhook signature validation instead).",
+    "Create lib/chat.ts - Live chat system: createChatSession(visitorId, tenantId), sendMessage(sessionId, content, sender), assignAgent(sessionId, agentId), closeChatSession(sessionId), convertChatToLead(sessionId). Real-time aspect uses polling (no WebSocket needed for API layer).",
+    "Create drizzle/schema/chat.ts - Tables: chat_sessions (id, tenantId, visitorId, visitorName, visitorEmail, assignedTo, status ['active','waiting','closed'], channel, convertedLeadId, lifecycle), chat_messages (id, sessionId, tenantId, senderType ['visitor','agent','bot'], senderId, content, lifecycle). Export from index.ts.",
+    "Create app/api/tenant/chat/route.ts - GET active sessions, POST create session. Module-gated to 'service-helpdesk'.",
+    "Create app/api/tenant/chat/[sessionId]/messages/route.ts - GET messages for session (polling), POST send message.",
+    "Create app/api/tenant/chat/widget/route.ts - Public endpoint (no auth) for embeddable widget. GET returns widget config (colors, greeting, position). POST creates visitor session.",
+    "Create app/api/tenant/email/track/route.ts - GET endpoint for tracking pixel (1x1 transparent GIF, logs open event), GET for click redirect (logs click, redirects to destination URL). Both endpoints extract contactId and campaignId from query params. No auth (public tracking endpoints).",
+    "Create drizzle/schema/email-tracking.ts - Tables: email_opens (id, tenantId, contactId, campaignId, emailId, openedAt, ipAddress, userAgent), email_clicks (id, tenantId, contactId, campaignId, emailId, linkUrl, clickedAt, ipAddress). Export from index.ts.",
+    "Create tests/unit/sms.test.ts - Test SMS sending logic, template variable interpolation, delivery status handling. At least 6 test cases.",
+    "Create tests/unit/chat.test.ts - Test chat session creation, message sending, agent assignment, lead conversion. At least 6 test cases."
+  ],
+  "acceptance_criteria": [
+    "npx tsc --noEmit passes with 0 errors",
+    "npm test passes with all new SMS and chat tests passing",
+    "npm run build succeeds",
+    "SMS template interpolation correctly replaces variables",
+    "Chat session lifecycle (create, assign, message, close, convert) works correctly",
+    "Email tracking pixel endpoint returns correct content-type header",
+    "Click tracking endpoint stores click and returns redirect"
+  ],
+  "verification": [
+    "npx tsc --noEmit",
+    "npm test",
+    "npm run build"
+  ],
+  "blocked_reason": null,
+  "findings": "All 310 tests passing (24 new tests added). 2 pre-existing failures (PostgreSQL and backup dir) remain as expected. Build requires JWT_SECRET env var. Zod v4 requires two args for z.record(keySchema, valueSchema). contacts table uses firstName not fullName."
+}

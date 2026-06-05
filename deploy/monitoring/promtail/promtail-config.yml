@@ -1,0 +1,57 @@
+---
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: app-logs
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: nucrm-app
+          __path__: /var/log/app/*.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<level>\w+)\s+(?P<timestamp>\S+)\s+\[(?P<requestId>[^\]]+)\]\s+(?P<message>.*)'
+      - labels:
+          level:
+          requestId:
+
+  - job_name: nginx-logs
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: nucrm-nginx
+          __path__: /var/log/nginx/*.log
+    pipeline_stages:
+      - regex:
+          expression: '(?P<remote_addr>\S+)\s+-\s+(?P<remote_user>\S*)\s+\[(?P<timestamp>[^\]]+)\]\s+"(?P<method>\S+)\s+(?P<path>\S+)\s+(?P<proto>\S+)"\s+(?P<status>\d{3})\s+(?P<bytes>\d+)\s+"(?P<referer>[^"]*)"\s+"(?P<user_agent>[^"]*)"'
+      - labels:
+          method:
+          status:
+          path:
+
+  - job_name: postgres-logs
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: nucrm-postgres
+          __path__: /var/log/postgresql/*.log
+    pipeline_stages:
+      - regex:
+          expression: '(?P<timestamp>\S+)\s+(?P<pid>\d+)\s+(?P<level>\w+):\s+(?P<message>.*)'
+      - labels:
+          level:
+
+  - job_name: redis-logs
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: nucrm-redis
+          __path__: /var/log/redis/*.log

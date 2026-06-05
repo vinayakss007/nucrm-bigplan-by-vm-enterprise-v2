@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Build per-user selective data restore in superadmin. The existing selective-restore page restores per-tenant. Add the ability to filter and restore data owned by a specific user within a tenant. This requires adding user-level filtering to the restore scope/preview/execute API endpoints and updating the UI to allow selecting a specific user.",
+  "status": "completed",
+  "steps": [
+    "Read existing restore APIs at app/api/superadmin/selective-restore/ to understand the current structure",
+    "Add a user_id optional parameter to the scope endpoint (app/api/superadmin/selective-restore/scope/) that filters backup data to records belonging to that user (checking created_by, assigned_to, user_id columns)",
+    "Add a user_id optional parameter to the execute endpoint that only restores records belonging to that user",
+    "Update the preview endpoint to return per-user record breakdown when a tenant is selected",
+    "Update app/superadmin/selective-restore/page.tsx to add a 'User Filter' step between tenant selection and table selection - show a list of users found in the backup data for that tenant, allow selecting one user or 'All Users'",
+    "Add TypeScript types for the new user filter step",
+    "Ensure all changes compile without TypeScript errors"
+  ],
+  "acceptance_criteria": [
+    "The selective restore UI shows a user selection step after tenant selection",
+    "When a user is selected, only that user's data is shown in scope preview",
+    "The execute endpoint respects the user_id filter",
+    "All TypeScript compiles cleanly"
+  ],
+  "verification": [
+    "npx tsc --noEmit 2>&1 | grep 'error TS' | wc -l should output 0",
+    "npm run build completes successfully"
+  ],
+  "blocked_reason": null,
+  "findings": "TypeScript compiles cleanly with 0 errors. Build fails due to pre-existing JWT_SECRET env var missing (confirmed same failure on base state). The existing scope and execute API routes already accept user_id parameter, so only the frontend and a users-listing endpoint were needed."
+}

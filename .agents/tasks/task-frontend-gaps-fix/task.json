@@ -1,0 +1,14 @@
+{
+  "task_id": "task-frontend-gaps-fix",
+  "task_description": "Fix all frontend gaps: create 14 missing settings/management UI pages for existing backend APIs, add [id] detail routes for contracts/subscriptions/orders/quotes, and add kanban boards for tickets and tasks. Total: 20 items across 5 features.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004", "FEAT-005", "FEAT-006"],
+  "blocked_reason": null,
+  "verification": {
+    "build": "pass",
+    "tests": "pass",
+    "test_quality": "pass",
+    "docker_build": "skipped",
+    "summary": "npx tsc --noEmit: 0 errors. npm test: 427 passed, 2 failed (pre-existing integration test failures due to no PostgreSQL in sandbox). npm run build: succeeds, all 20 new routes visible in build output."
+  }
+}

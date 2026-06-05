@@ -1,0 +1,39 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "GROUP A: Compliance + Enterprise Settings UI - GDPR data export, SOC 2 report generation, compliance settings page, SSO settings page, RBAC settings page",
+  "status": "in_progress",
+  "steps": [
+    "Create lib/compliance/gdpr.ts - Export all tenant/user data as JSON/ZIP package (contacts, deals, companies, tasks, activities, emails, notes, files). Include right-to-deletion function that anonymizes PII and marks records as purged. Follow pattern from lib/tenant-data-export.ts but more comprehensive.",
+    "Create lib/compliance/soc2.ts - Generate compliance reports from audit logs. Include controls like access reviews, data encryption status, change management logs. Output structured JSON report with sections for each SOC 2 trust service category.",
+    "Create drizzle/schema/compliance.ts - Add tables: compliance_requests (id, tenantId, type ['gdpr_export','gdpr_delete','soc2_report'], status, requestedBy, completedAt, metadata, lifecycle), data_retention_policies (id, tenantId, entityType, retentionDays, action ['archive','delete','anonymize'], isActive, lifecycle). Export from drizzle/schema/index.ts.",
+    "Create app/api/tenant/compliance/gdpr/route.ts - POST to request GDPR export or deletion (type: 'export'|'delete'). GET to list past requests. Requires admin. Module-gated to 'compliance' module.",
+    "Create app/api/tenant/compliance/soc2/route.ts - POST to generate SOC 2 report. GET to list generated reports. Requires admin. Module-gated to 'compliance' module.",
+    "Create app/api/tenant/compliance/retention/route.ts - GET/POST/PUT for data retention policies. Requires admin.",
+    "Create app/tenant/settings/compliance/page.tsx - Settings page with tabs: Data Retention (configure retention policies per entity type), GDPR (request export, request deletion, view past requests), SOC 2 (generate reports, view past reports). Follow branding page pattern.",
+    "Create app/tenant/settings/compliance/loading.tsx and error.tsx following existing patterns.",
+    "Create app/tenant/settings/sso/page.tsx - Form to configure SSO provider (SAML/OIDC). Fields: provider type selector, entity ID, SSO URL, certificate (for SAML), client ID/secret/issuer (for OIDC). Test connection button. Follow branding page pattern with useState/useEffect/fetch.",
+    "Create app/tenant/settings/sso/loading.tsx and error.tsx.",
+    "Create app/api/tenant/sso/route.ts - GET current SSO config, POST/PUT to save SSO provider settings. Requires admin.",
+    "Create app/tenant/settings/rbac/page.tsx - Three-tab UI: Field Permissions (matrix of roles x fields with read/write/none), Record Permissions (grant access to specific records), Approval Rules (configure approval workflows with conditions). Follow existing settings page patterns.",
+    "Create app/tenant/settings/rbac/loading.tsx and error.tsx.",
+    "Add 'compliance' module to BUILTIN_MODULES in lib/modules/registry.ts with appropriate pricing tiers.",
+    "Create tests/unit/compliance.test.ts - Test GDPR export data assembly, SOC 2 report generation logic, data retention policy enforcement. Mock DB. At least 8 test cases."
+  ],
+  "acceptance_criteria": [
+    "npx tsc --noEmit passes with 0 errors",
+    "npm test passes with all new compliance tests passing",
+    "npm run build succeeds",
+    "GDPR export function assembles all tenant data categories into a structured object",
+    "SOC 2 report generation produces a report with trust service categories",
+    "All three settings pages (compliance, sso, rbac) render without build errors",
+    "Compliance module is registered in the module registry"
+  ],
+  "verification": [
+    "npx tsc --noEmit",
+    "npm test",
+    "npm run build"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

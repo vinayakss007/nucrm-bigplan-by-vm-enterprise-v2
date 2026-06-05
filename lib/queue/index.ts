@@ -8,7 +8,7 @@
 import type { Queue as QueueType } from 'bullmq';
 
 export type QueueProvider = 'redis' | 'pgboss' | 'memory';
-export type JobType = 'send-email' | 'send-notification' | 'send-bulk-emails' | 'export-csv' | 'contact-import' | 'run-automation';
+export type JobType = 'send-email' | 'send-notification' | 'send-bulk-emails' | 'export-csv' | 'contact-import' | 'run-automation' | 'send-lead-warming';
 
 export interface JobData {
   type: JobType;
@@ -157,6 +157,7 @@ async function createPgBossAdapter(databaseUrl: string): Promise<QueueAdapter> {
 
 /**
  * In-Memory Adapter - Dev fallback only!
+ * FIXED: Stores interval reference and clears it properly
  */
 function createMemoryAdapter(): QueueAdapter {
   const pendingJobs: Array<{ type: JobType; data: any; runAt: number }> = [];
@@ -167,9 +168,13 @@ function createMemoryAdapter(): QueueAdapter {
     const dueJobs = pendingJobs.filter(j => j.runAt <= now);
     for (const job of dueJobs) {
       console.log(`[MemoryQueue] Processing: ${job.type}`, job.data);
-      pendingJobs.splice(pendingJobs.indexOf(job), 1);
+      const idx = pendingJobs.indexOf(job);
+      if (idx !== -1) pendingJobs.splice(idx, 1);
     }
   }, 5000);
+
+  // Allow Node to exit even if interval is active (prevents hanging in tests/dev)
+  if (interval.unref) interval.unref();
 
   return {
     provider: 'memory',

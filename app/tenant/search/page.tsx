@@ -4,6 +4,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, Users, TrendingUp, Building2, CheckSquare, Loader2, X, Target } from 'lucide-react';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
+import { AdvancedSearchFilters } from '@/components/tenant/advanced-search';
 
 const STATUS_COLORS: Record<string,string> = {
   new:'bg-slate-100 text-slate-600', contacted:'bg-blue-100 text-blue-700',
@@ -34,6 +35,10 @@ export default function SearchPage() {
   const [results, setResults] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [activeType, setActiveType] = useState('all');
+  const [filters, setFilters] = useState<Record<string, any>>({});
+  const [advancedResults, setAdvancedResults] = useState<any>(null);
+  const [advancedTotal, setAdvancedTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
@@ -67,6 +72,28 @@ export default function SearchPage() {
     setActiveType(type);
     if (query.trim()) search(query, type);
   };
+
+  // Advanced search with filters
+  const advancedSearch = useCallback(async () => {
+    if (!query.trim() && Object.keys(filters).length === 0) return;
+    if (activeType === 'all') return; // Advanced search requires a specific type
+    setLoading(true);
+    try {
+      const res = await fetch('/api/tenant/search/advanced', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ query: query.trim() || undefined, type: activeType, filters, page, limit: 25 }),
+      });
+      const data = await res.json();
+      setAdvancedResults(data.data ?? []);
+      setAdvancedTotal(data.pagination?.total ?? 0);
+    } catch (err) {
+      console.error('[AdvancedSearch] Error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [query, activeType, filters, page]);
 
   const total = results ? (results.contacts?.length ?? 0) + (results.leads?.length ?? 0) + (results.deals?.length ?? 0) + (results.companies?.length ?? 0) + (results.tasks?.length ?? 0) : 0;
 
@@ -118,6 +145,18 @@ export default function SearchPage() {
             </button>
           ))}
         </div>
+      )}
+
+      {/* Advanced Filters (shown when a specific type is selected) */}
+      {activeType !== 'all' && (
+        <AdvancedSearchFilters
+          type={activeType}
+          query={query}
+          filters={filters}
+          onQueryChange={setQuery}
+          onFiltersChange={setFilters}
+          onSearch={advancedSearch}
+        />
       )}
 
       {loading && (

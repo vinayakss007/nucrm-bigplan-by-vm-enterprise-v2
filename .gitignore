@@ -55,7 +55,8 @@ next-env.d.ts
 *.swo
 
 # Project specific
-logs/
+/logs/
+/cache/
 *.log
 npm-startup.log
 app-startup.log
