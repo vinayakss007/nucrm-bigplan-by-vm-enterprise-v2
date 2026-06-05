@@ -1,0 +1,13 @@
+# NuCRM — Cron Schedule (matches vercel.json crons)
+# All jobs call the app's API endpoints with CRON_SECRET auth
+
+*/5 * * * *   /usr/local/bin/run-cron.sh process-sequences
+*/10 * * * *  /usr/local/bin/run-cron.sh retry-webhooks
+0 * * * *     /usr/local/bin/run-cron.sh task-reminders
+0 0 * * *     /usr/local/bin/run-cron.sh trial-check
+0 0 * * 0     /usr/local/bin/run-cron.sh usage-snapshot
+0 2 * * *     /usr/local/bin/run-cron.sh auto-backup
+0 3 * * 0     /usr/local/bin/run-cron.sh backup-health
+0 4 * * 0     /usr/local/bin/run-cron.sh cleanup
+0 9,13,17 * * * /usr/local/bin/run-cron.sh warmup-emails
+0 5 * * *     /usr/local/bin/run-cron.sh subscription-check

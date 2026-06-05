@@ -123,7 +123,6 @@ export function stopNeonKeepAlive() {
   if (keepAliveInterval) {
     clearInterval(keepAliveInterval);
     keepAliveInterval = null;
-    console.log('[KeepAlive] Stopped');
   }
   
   // Remove event listeners
@@ -132,6 +131,9 @@ export function stopNeonKeepAlive() {
     document.removeEventListener('scroll', trackActivity);
     document.removeEventListener('keydown', trackActivity);
   }
+  
+  isEnabled = false;
+  console.log('[KeepAlive] Stopped');
 }
 
 /**

@@ -36,15 +36,35 @@ export function SaveShortcut({ onSave, children, disabled }: Props) {
  * Find the nearest submit button and click it on ⌘S
  * Usage: <form onSubmit={handleSubmit} data-cmd-save />
  * The shell's global shortcut handler will find and click it
+ * 
+ * FIXED: Returns a cleanup function to remove the listener,
+ * preventing memory leaks from repeated calls.
  */
-export function setupCmdSSave() {
-  if (typeof window === 'undefined') return;
-  window.addEventListener('keydown', (e) => {
+let _cmdSHandler: ((e: KeyboardEvent) => void) | null = null;
+
+export function setupCmdSSave(): () => void {
+  if (typeof window === 'undefined') return () => {};
+
+  // Remove previous listener to prevent duplicates
+  if (_cmdSHandler) {
+    window.removeEventListener('keydown', _cmdSHandler);
+  }
+
+  _cmdSHandler = (e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
       e.preventDefault();
-      // Find the nearest button[type=submit] in a form with data-cmd-save
       const btn = document.querySelector('button[type="submit"]') as HTMLButtonElement;
       btn?.click();
     }
-  });
+  };
+
+  window.addEventListener('keydown', _cmdSHandler);
+
+  // Return cleanup function
+  return () => {
+    if (_cmdSHandler) {
+      window.removeEventListener('keydown', _cmdSHandler);
+      _cmdSHandler = null;
+    }
+  };
 }

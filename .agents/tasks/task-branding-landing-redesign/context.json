@@ -1,0 +1,22 @@
+{
+  "project_type": "Next.js 16 multi-tenant SaaS CRM",
+  "language": "TypeScript",
+  "build_system": "npm with Next.js build",
+  "test_framework": "vitest for unit tests, playwright for e2e",
+  "build_command": "npx tsc --noEmit",
+  "test_command": "npx tsc --noEmit",
+  "verification_instructions": "Run npx tsc --noEmit to confirm TypeScript compiles without errors",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "node_modules already installed",
+  "environment_constraints": "No external network for npm install but node_modules already present. Use pre-installed tools only.",
+  "contribution_requirements": "Follow existing patterns - Tailwind CSS for styling, lucide-react for icons, Inter + JetBrains Mono fonts, violet/indigo color scheme",
+  "key_patterns": "Client components use 'use client' directive. Tailwind CSS with custom CSS variables in globals.css. Dark mode via class strategy. Layout wraps with ThemeProvider. Existing animations defined in tailwind.config.ts keyframes and globals.css.",
+  "relevant_files": [
+    "app/page.tsx",
+    "app/globals.css",
+    "app/layout.tsx",
+    "tailwind.config.ts",
+    "tsconfig.json"
+  ],
+  "directory_structure": "app/ contains all routes (Next.js App Router). components/ has shared UI. lib/ has utilities. public/ has static assets. tailwind.config.ts defines theme with custom keyframes and animations."
+}

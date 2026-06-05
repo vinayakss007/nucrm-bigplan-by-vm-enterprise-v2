@@ -131,7 +131,7 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
   const lbl = "block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide";
 
   return (
-    <div className="max-w-5xl space-y-5 animate-fade-in">
+    <div className="max-w-[1600px] mx-auto space-y-5 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">

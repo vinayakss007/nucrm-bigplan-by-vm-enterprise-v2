@@ -5,75 +5,129 @@ import {
   LayoutDashboard, Users, Building2, TrendingUp, CheckSquare,
   BarChart3, Settings, Bell, Calendar, FileBarChart,
   Crown, ChevronDown, UserCheck, Trash2, Search, X, Menu, Zap, Book,
-  LifeBuoy, Package, FileText, ShoppingCart, FileSignature, RefreshCw, Library, Plug,
-  Command, MoreHorizontal,
+  LifeBuoy, Package, FileText, ShoppingCart, FileSignature, RefreshCw, Library,
+  Command, Star, StarOff, Database, Upload, Workflow, Mail, MessageSquare,
+  Trophy, Wrench, Boxes, Sparkles, ListChecks, ArrowRightLeft, Tag, Globe, Filter,
+  BrainCircuit, EyeOff, Send, ShieldCheck, FolderKanban,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 
-// ── Primary nav (always visible) ─────────────────────────
-const PRIMARY_NAV = [
-  { href:'/tenant/dashboard', label:'Dashboard',   icon:LayoutDashboard, shortcut:'⌘1', exact:true },
-  { href:'/tenant/contacts',  label:'Contacts',    icon:Users,           shortcut:'⌘2' },
-  { href:'/tenant/deals',     label:'Deals',       icon:TrendingUp,      shortcut:'⌘3' },
-  { href:'/tenant/tasks',     label:'Tasks',       icon:CheckSquare,     shortcut:'⌘4' },
-  { href:'/tenant/calendar',  label:'Calendar',    icon:Calendar,        shortcut:'⌘5' },
-  { href:'/tenant/kb',        label:'Knowledge',   icon:Library,         shortcut:'⌘6' },
-  { href:'/tenant/tickets',   label:'Helpdesk',    icon:LifeBuoy },
-  { href:'/tenant/reports',   label:'Reports',     icon:FileBarChart,    perm:'reports.view' },
+type NavItem = {
+  href: string;
+  label: string;
+  icon: any;
+  shortcut?: string;
+  exact?: boolean;
+  perm?: string;
+  adminOnly?: boolean;
+  keywords?: string;
+};
+
+type NavSection = {
+  id: string;
+  label: string;
+  items: NavItem[];
+  defaultOpen?: boolean;
+};
+
+// ── Navigation taxonomy ───────────────────────────────────────
+// Single source of truth. All filter / search / pin operations
+// derive from this list.
+const NAV_SECTIONS: NavSection[] = [
+  {
+    id: 'work', label: 'Work', defaultOpen: true,
+    items: [
+      { href:'/tenant/dashboard', label:'Dashboard',  icon:LayoutDashboard, shortcut:'⌘1', exact:true, keywords:'home overview' },
+      { href:'/tenant/leads',     label:'Leads',      icon:UserCheck,       shortcut:'⌘2', keywords:'prospects pipeline' },
+      { href:'/tenant/contacts',  label:'Contacts',   icon:Users,           shortcut:'⌘3', keywords:'people customers' },
+      { href:'/tenant/companies', label:'Companies',  icon:Building2,       shortcut:'⌘4', keywords:'accounts orgs' },
+      { href:'/tenant/deals',     label:'Deals',      icon:TrendingUp,      shortcut:'⌘5', keywords:'opportunities pipeline' },
+      { href:'/tenant/tasks',     label:'Tasks',      icon:CheckSquare,     shortcut:'⌘6', keywords:'todo activities' },
+      { href:'/tenant/projects',  label:'Projects',   icon:FolderKanban,    keywords:'project milestone tracking' },
+      { href:'/tenant/calendar',  label:'Calendar',   icon:Calendar,        keywords:'meetings events' },
+    ],
+  },
+  {
+    id: 'intelligence', label: 'Intelligence', defaultOpen: true,
+    items: [
+      { href:'/tenant/ai',           label:'AI Hub',         icon:Sparkles,     keywords:'ai artificial intelligence draft scoring at-risk summarize' },
+      { href:'/tenant/ai/draft',     label:'Auto-Draft',     icon:Mail,         keywords:'ai draft email follow-up reply' },
+      { href:'/tenant/ai/lead-scoring', label:'Lead Scoring', icon:Trophy,      keywords:'ai score leads ranking next-best-action' },
+      { href:'/tenant/ai/at-risk',   label:'At-Risk Deals',  icon:Zap,          keywords:'ai stalled deal risk pipeline' },
+    ],
+  },
+  {
+    id: 'sales', label: 'Sales',
+    items: [
+      { href:'/tenant/quotes',        label:'Quotes',        icon:FileText,      keywords:'proposal estimate' },
+      { href:'/tenant/offers',        label:'Offers',        icon:Send,          keywords:'buyer link accept decline public' },
+      { href:'/tenant/approvals',     label:'Approvals',     icon:ShieldCheck,   keywords:'pending review approve reject', adminOnly:true },
+      { href:'/tenant/orders',        label:'Orders',        icon:ShoppingCart,  keywords:'sales order' },
+      { href:'/tenant/contracts',     label:'Contracts',     icon:FileSignature, keywords:'agreements legal' },
+      { href:'/tenant/invoices',      label:'Invoices',      icon:FileText,      keywords:'billing receipts' },
+      { href:'/tenant/subscriptions', label:'Subscriptions', icon:RefreshCw,     keywords:'recurring mrr' },
+      { href:'/tenant/products',      label:'Products',      icon:Package,       keywords:'catalog skus' },
+      { href:'/tenant/services',      label:'Services',      icon:Wrench,        keywords:'offerings' },
+    ],
+  },
+  {
+    id: 'support', label: 'Support & Knowledge',
+    items: [
+      { href:'/tenant/tickets', label:'Helpdesk',  icon:LifeBuoy,        keywords:'support tickets cases' },
+      { href:'/tenant/kb',      label:'Knowledge', icon:Library,         keywords:'docs articles' },
+      { href:'/tenant/chat',    label:'Live Chat', icon:MessageSquare,   keywords:'inbox messaging' },
+      { href:'/tenant/sms',     label:'SMS',       icon:MessageSquare,   keywords:'text messages' },
+    ],
+  },
+  {
+    id: 'automate', label: 'Automate',
+    items: [
+      { href:'/tenant/sequences',    label:'Sequences',    icon:Mail,     keywords:'cadence drip email' },
+      { href:'/tenant/automation',   label:'Workflows',    icon:Workflow, keywords:'automation rules triggers' },
+      { href:'/tenant/forms',        label:'Forms',        icon:FileBarChart, keywords:'capture lead forms' },
+      { href:'/tenant/email-templates', label:'Email Templates', icon:Mail, keywords:'snippets' },
+    ],
+  },
+  {
+    id: 'analyze', label: 'Analyze',
+    items: [
+      { href:'/tenant/reports',       label:'Reports',      icon:FileBarChart, perm:'reports.view', keywords:'dashboards charts' },
+      { href:'/tenant/analytics',     label:'Analytics',    icon:BarChart3,    perm:'reports.view', keywords:'metrics insights' },
+      { href:'/tenant/leaderboards',  label:'Leaderboards', icon:Trophy,       keywords:'gamification ranking' },
+    ],
+  },
+  {
+    id: 'data', label: 'Data & Trash',
+    items: [
+      { href:'/tenant/settings/import-export', label:'Import / Export', icon:Upload,        keywords:'csv migration', adminOnly:true },
+      { href:'/tenant/settings/bulk-transfer', label:'Bulk Transfer',   icon:ArrowRightLeft, keywords:'reassign offboard ownership', adminOnly:true },
+      { href:'/tenant/settings/tags-manager',  label:'Tags Manager',    icon:Tag,           keywords:'labels rename merge', adminOnly:true },
+      { href:'/tenant/trash',                  label:'Trash',           icon:Trash2,        keywords:'deleted restore recycle' },
+    ],
+  },
+  {
+    id: 'developer', label: 'Developer',
+    items: [
+      { href:'/tenant/modules',              label:'Modules',         icon:Boxes, keywords:'features toggles' },
+      { href:'/tenant/plugins',              label:'Plugins',         icon:Sparkles, keywords:'extensions' },
+      { href:'/tenant/settings/webhooks',    label:'Webhooks',        icon:Zap,   keywords:'events callbacks', adminOnly:true },
+      { href:'/tenant/settings/api-keys',    label:'API Keys',        icon:Database, keywords:'tokens auth', adminOnly:true },
+      { href:'/tenant/docs',                 label:'API Docs',        icon:Book,  keywords:'reference openapi' },
+    ],
+  },
 ];
 
-// ── Sales (collapsible) ──────────────────────────────────
-const SALES_NAV = [
-  { href:'/tenant/invoices',      label:'Invoices',     icon:FileText },
-  { href:'/tenant/orders',        label:'Orders',       icon:ShoppingCart },
-  { href:'/tenant/contracts',     label:'Contracts',    icon:FileSignature },
-  { href:'/tenant/quotes',        label:'Quotes',       icon:FileText },
-  { href:'/tenant/subscriptions', label:'Subscriptions', icon:RefreshCw },
-];
-
-// ── Tools (collapsible) ──────────────────────────────────
-const TOOLS_NAV = [
-  { href:'/tenant/leads',         label:'Leads',         icon:UserCheck },
-  { href:'/tenant/companies',     label:'Companies',     icon:Building2 },
-  { href:'/tenant/services',      label:'Services',      icon:Package },
-  { href:'/tenant/automation',    label:'Automation',    icon:Zap },
-  { href:'/tenant/forms',         label:'Forms',         icon:FileBarChart },
-  { href:'/tenant/integrations',  label:'Integrations',  icon:Plug },
-  { href:'/tenant/analytics',     label:'Analytics',     icon:BarChart3, perm:'reports.view' },
-  { href:'/tenant/modules',       label:'Modules',       icon:Package },
-  { href:'/tenant/notifications', label:'Notifications', icon:Bell },
-  { href:'/tenant/docs',          label:'API Docs',      icon:Book },
-  { href:'/tenant/trash',         label:'Trash',         icon:Trash2 },
-];
-
-// ── Settings (collapsible with groups) ───────────────────
-const SETTINGS_GROUPS = [
-  { label:'Account', items: [
-    { href:'/tenant/settings/profile',  label:'My Profile' },
-    { href:'/tenant/settings/general',  label:'Workspace' },
-    { href:'/tenant/settings/team',     label:'Team' },
-    { href:'/tenant/settings/billing',  label:'Plan & Billing' },
-    { href:'/tenant/settings/admin',    label:'Org Admin', adminOnly:true },
-  ]},
-  { label:'Security', items: [
-    { href:'/tenant/settings/security', label:'Security & 2FA' },
-    { href:'/tenant/settings/roles',    label:'Roles', adminOnly:true },
-    { href:'/tenant/settings/sessions', label:'Sessions' },
-    { href:'/tenant/settings/api-keys', label:'API Keys', adminOnly:true },
-    { href:'/tenant/settings/audit',    label:'Audit Log', adminOnly:true },
-  ]},
-  { label:'Configure', items: [
-    { href:'/tenant/settings/email',         label:'Email' },
-    { href:'/tenant/settings/integrations',  label:'Integrations' },
-    { href:'/tenant/settings/pipelines',     label:'Pipelines', adminOnly:true },
-    { href:'/tenant/settings/webhooks',      label:'Webhooks' },
-    { href:'/tenant/settings/custom-fields', label:'Custom Fields', adminOnly:true },
-    { href:'/tenant/settings/industry-templates', label:'Industry Templates' },
-    { href:'/tenant/settings/portal',        label:'Customer Portal' },
-    { href:'/tenant/settings/backup',        label:'Backup', adminOnly:true },
-    { href:'/tenant/settings/telegram',      label:'Telegram' },
-  ]},
+// Settings groups — kept compact in the sidebar; full nav lives in
+// the settings page sub-rail.
+const SETTINGS_QUICK = [
+  { href:'/tenant/settings/profile',     label:'My Profile' },
+  { href:'/tenant/settings/preferences', label:'Preferences' },
+  { href:'/tenant/settings/notifications', label:'Notifications' },
+  { href:'/tenant/settings/general',     label:'Workspace' },
+  { href:'/tenant/settings/team',        label:'Team' },
+  { href:'/tenant/settings/admin',       label:'Org Admin', adminOnly:true },
+  { href:'/tenant/settings/billing',     label:'Plan & Billing' },
 ];
 
 interface Props {
@@ -82,159 +136,328 @@ interface Props {
   collapsed?: boolean; onToggle?: () => void; onMobileClose?: () => void;
 }
 
+const PIN_KEY = 'nucrm.sidebar.pinned';
+const FILTER_KEY = 'nucrm.sidebar.query';
+const SECTION_KEY = 'nucrm.sidebar.sections';
+
 export default function TenantSidebar({ tenant, profile, roleSlug, permissions, isAdmin, isSuperAdmin, collapsed=false, onToggle, onMobileClose }: Props) {
   const pathname = usePathname();
-  const [salesOpen, setSalesOpen] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith('/tenant/settings'));
+  const [query, setQuery] = useState('');
+  const [pinned, setPinned] = useState<string[]>([]);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [hiddenItems, setHiddenItems] = useState<string[]>([]);
   const color = tenant?.primary_color || '#7c3aed';
 
-  const hasPerm = (perm?: string) => !perm || isAdmin || permissions?.['all'] || permissions?.[perm];
-  const isActive = (href: string, exact?: boolean) => exact ? pathname === href : href !== '/tenant/dashboard' && pathname.startsWith(href);
-  const isExact = (href: string) => pathname === href;
-
+  // ── Hydrate state from localStorage ─────────────────────────
   useEffect(() => {
-    if (!pathname.startsWith('/tenant/settings')) setSettingsOpen(false);
+    try {
+      const p = localStorage.getItem(PIN_KEY);
+      if (p) setPinned(JSON.parse(p));
+      const q = sessionStorage.getItem(FILTER_KEY);
+      if (q) setQuery(q);
+      const s = localStorage.getItem(SECTION_KEY);
+      if (s) {
+        setOpenSections(JSON.parse(s));
+      } else {
+        setOpenSections(Object.fromEntries(NAV_SECTIONS.map(s => [s.id, !!s.defaultOpen])));
+      }
+
+      // Read hidden_nav_items from the resolved-prefs cache that
+      // <UserPreferencesApplier /> populates on mount.
+      const cached = sessionStorage.getItem('nucrm.prefs.cache');
+      if (cached) {
+        const prefs = JSON.parse(cached);
+        if (Array.isArray(prefs?.hidden_nav_items)) {
+          setHiddenItems(prefs.hidden_nav_items);
+        }
+      }
+    } catch {}
+  }, []);
+
+  // React to live preference changes (Save on Preferences page emits this)
+  useEffect(() => {
+    const handler = () => {
+      try {
+        const cached = sessionStorage.getItem('nucrm.prefs.cache');
+        if (cached) {
+          const prefs = JSON.parse(cached);
+          setHiddenItems(Array.isArray(prefs?.hidden_nav_items) ? prefs.hidden_nav_items : []);
+        }
+      } catch {}
+    };
+    window.addEventListener('nucrm:prefs-changed', handler);
+    return () => window.removeEventListener('nucrm:prefs-changed', handler);
+  }, []);
+
+  // Persist filter
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (query) sessionStorage.setItem(FILTER_KEY, query);
+    else sessionStorage.removeItem(FILTER_KEY);
+  }, [query]);
+
+  // Auto-open sections that contain a match while filtering
+  useEffect(() => {
+    if (!query) return;
+    const next = { ...openSections };
+    const q = query.toLowerCase();
+    NAV_SECTIONS.forEach(sec => {
+      const hasMatch = sec.items.some(i =>
+        i.label.toLowerCase().includes(q) || (i.keywords ?? '').toLowerCase().includes(q)
+      );
+      if (hasMatch) next[sec.id] = true;
+    });
+    setOpenSections(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  // Auto-open settings when on a settings page
+  useEffect(() => {
+    if (pathname.startsWith('/tenant/settings')) setSettingsOpen(true);
   }, [pathname]);
 
-  const navItem = (href: string, label: string, Icon: any, extra?: string, exact?: boolean) => {
-    const active = exact ? isExact(href) : isActive(href);
-    return (
-      <Link key={href} href={href} onClick={onMobileClose}
-        className={cn('group flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all',
-          active
-            ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300'
-            : 'text-muted-foreground hover:bg-accent hover:text-foreground')}>
-        <Icon className={cn('w-4 h-4 shrink-0', active && 'text-violet-600 dark:text-violet-400')} />
-        <span className="flex-1 truncate">{label}</span>
-        {extra && <span className="text-[9px] text-muted-foreground/40 group-hover:text-muted-foreground/60 transition-colors">{extra}</span>}
-      </Link>
-    );
+  const toggleSection = (id: string) => {
+    setOpenSections(prev => {
+      const next = { ...prev, [id]: !prev[id] };
+      try { localStorage.setItem(SECTION_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
   };
 
-  // ── Collapsed ──────────────────────────────────────────
+  const togglePin = useCallback((href: string) => {
+    setPinned(prev => {
+      const next = prev.includes(href) ? prev.filter(h => h !== href) : [...prev, href];
+      try { localStorage.setItem(PIN_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const hasPerm = (item: NavItem) => {
+    if (item.adminOnly && !isAdmin) return false;
+    if (hiddenItems.includes(item.href)) return false;
+    if (!item.perm) return true;
+    return isAdmin || permissions?.['all'] || permissions?.[item.perm];
+  };
+
+  const isActive = (href: string, exact?: boolean) =>
+    exact ? pathname === href : href !== '/tenant/dashboard' && pathname.startsWith(href);
+  const isExact = (href: string) => pathname === href;
+
+  // ── Apply filter ────────────────────────────────────────────
+  const q = query.trim().toLowerCase();
+  const matches = (item: NavItem) =>
+    !q || item.label.toLowerCase().includes(q) || (item.keywords ?? '').toLowerCase().includes(q);
+
+  const visibleSections = useMemo(() =>
+    NAV_SECTIONS.map(sec => ({
+      ...sec,
+      items: sec.items.filter(i => hasPerm(i) && matches(i)),
+    })).filter(sec => sec.items.length > 0)
+  , [q, isAdmin, permissions, hiddenItems]);
+
+  // ── Resolve pinned items ────────────────────────────────────
+  const pinnedItems = useMemo(() => {
+    const all = NAV_SECTIONS.flatMap(s => s.items);
+    return pinned
+      .map(href => all.find(i => i.href === href))
+      .filter((i): i is NavItem => !!(i && hasPerm(i) && matches(i)));
+  }, [pinned, q, isAdmin, permissions, hiddenItems]);
+
+  // ── Collapsed mini sidebar ──────────────────────────────────
   if (collapsed) {
+    const flatTop = NAV_SECTIONS[0]?.items.filter(i => hasPerm(i)) ?? [];
     return (
-      <aside className="tenant-sidebar w-[52px] shrink-0 h-full flex flex-col items-center py-3 gap-1 transition-all duration-300 overflow-hidden border-r border-border">
+      <aside className="tenant-sidebar w-[3.25rem] shrink-0 h-full flex flex-col items-center py-3 gap-1 transition-all duration-300 overflow-hidden border-r border-border">
         <button onClick={onToggle} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground transition-colors mb-1">
           <Menu className="w-4 h-4" />
         </button>
-        {[...PRIMARY_NAV.filter(n=>hasPerm(n.perm)), ...SALES_NAV].slice(0, 10).map(({href,icon:Icon,label,...rest}) => {
-          const exactProp = (rest as any).exact;
-          const active = isActive(href, exactProp);
+        {flatTop.map(({href, icon:Icon, label, exact}) => {
+          const active = isActive(href, exact);
           return (
             <Link key={href} href={href} title={label}
-              className={cn('w-8 h-8 flex items-center justify-center rounded-lg transition-all',
-                active ? 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400' : 'text-muted-foreground hover:bg-accent')}>
-              <Icon className="w-4 h-4" />
+          className={cn('w-9 h-9 flex items-center justify-center rounded-lg transition-all duration-200',
+                 active ? 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400 shadow-sm shadow-violet-500/20' : 'text-foreground/80 hover:scale-110 hover:bg-accent hover:text-foreground')}>
+              <Icon className="w-5 h-5" />
             </Link>
           );
         })}
         <div className="flex-1" />
         {isSuperAdmin && (
-          <Link href="/superadmin/dashboard" title="Super Admin" className="w-8 h-8 flex items-center justify-center rounded-lg text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors">
-            <Crown className="w-4 h-4" />
+          <Link href="/superadmin/dashboard" title="Super Admin" className="w-9 h-9 flex items-center justify-center rounded-lg text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors">
+            <Crown className="w-5 h-5" />
           </Link>
         )}
       </aside>
     );
   }
 
-  // ── Full sidebar ───────────────────────────────────────
+  const navItem = (item: NavItem) => {
+    const { href, label, icon: Icon, shortcut, exact } = item;
+    const active = exact ? isExact(href) : isActive(href);
+    const isPinned = pinned.includes(href);
+    return (
+      <div key={href} className="group relative flex items-stretch">
+        <Link href={href} onClick={onMobileClose}
+          className={cn('flex-1 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[15px] font-extrabold transition-all duration-200',
+            active
+              ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 shadow-sm shadow-violet-500/20'
+              : 'text-foreground hover:scale-[1.02] hover:bg-accent hover:shadow-sm hover:shadow-violet-500/10')}>
+          <Icon className={cn('w-5 h-5 shrink-0', active && 'text-violet-600 dark:text-violet-400')} />
+          <span className="flex-1 truncate">{label}</span>
+          {shortcut && !isPinned && (
+            <span className="text-xs font-bold text-foreground/60 group-hover:text-foreground/80 transition-colors">
+              {shortcut}
+            </span>
+          )}
+        </Link>
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePin(href); }}
+          aria-label={isPinned ? `Unpin ${label}` : `Pin ${label}`}
+          className={cn(
+            'absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded transition-opacity',
+            isPinned
+              ? 'opacity-100 text-amber-500'
+              : 'opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-amber-500'
+          )}
+        >
+          <Star className={cn('w-3 h-3', isPinned && 'fill-current')} />
+        </button>
+      </div>
+    );
+  };
+
+  // ── Full sidebar ────────────────────────────────────────────
   return (
-    <aside className="tenant-sidebar w-[220px] shrink-0 h-full flex flex-col transition-all duration-300 border-r border-border">
-      {/* Brand + quick search */}
+    <aside className="tenant-sidebar w-[14.375rem] shrink-0 h-full flex flex-col transition-all duration-300 border-r border-border">
+      {/* Brand */}
       <div className="h-12 flex items-center gap-2.5 px-3 border-b border-border shrink-0">
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm" style={{ background: color }}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm" style={{ background: color }}>
           {tenant?.name?.charAt(0)?.toUpperCase() ?? 'W'}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold truncate leading-tight">{tenant?.name ?? 'Workspace'}</p>
+          <p className="text-lg font-extrabold truncate leading-tight">{tenant?.name ?? 'Workspace'}</p>
         </div>
         {onToggle && (
-          <button onClick={onToggle} className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md hover:bg-accent text-muted-foreground transition-colors">
+          <button onClick={onToggle} className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md hover:bg-accent text-muted-foreground transition-colors" aria-label="Collapse sidebar">
             <X className="w-3 h-3" />
           </button>
         )}
       </div>
 
+      {/* Inline filter */}
+      <div className="px-2 pt-2 shrink-0">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/60" />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Filter nav…"
+            aria-label="Filter sidebar navigation"
+              className="w-full pl-8 pr-7 py-2 text-sm bg-muted/40 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:bg-background transition-colors"
+          />
+          {query && (
+            <button onClick={() => setQuery('')} aria-label="Clear filter"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-foreground/60 hover:text-foreground">
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Scrollable nav */}
       <nav className="flex-1 px-2 py-2 overflow-y-auto scrollbar-thin space-y-0.5">
-        {/* Primary items */}
-        {PRIMARY_NAV.filter(n => hasPerm(n.perm)).map(({href, label, icon, shortcut, exact:exactProp}) =>
-          navItem(href, label, icon, shortcut, exactProp)
+        {/* Pinned shortcuts */}
+        {pinnedItems.length > 0 && (
+          <div className="mb-2">
+            <p className="px-2.5 py-1 text-xs font-bold text-amber-600/80 dark:text-amber-400/80 uppercase tracking-wider flex items-center gap-1.5">
+              <Star className="w-3 h-3 fill-current" /> Pinned
+            </p>
+            {pinnedItems.map(navItem)}
+            <div className="h-px bg-border my-2" />
+          </div>
         )}
 
-        {/* Divider */}
-        <div className="h-px bg-border my-2" />
+        {/* Empty filter state */}
+        {q && visibleSections.length === 0 && (
+          <div className="px-3 py-6 text-center">
+            <Filter className="w-5 h-5 text-muted-foreground/40 mx-auto mb-2" />
+            <p className="text-xs text-muted-foreground">No matches for "{query}"</p>
+          </div>
+        )}
 
-        {/* ▸ Sales */}
-        <div>
-          <button onClick={() => setSalesOpen(o => !o)}
-            className="flex items-center gap-1.5 w-full px-2.5 py-1 rounded-md text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors">
-            <ChevronDown className={cn('w-3 h-3 transition-transform', salesOpen ? 'rotate-0' : '-rotate-90')} />
-            Sales
-            <span className="text-[9px] text-muted-foreground/40 font-normal normal-case ml-auto">{SALES_NAV.length}</span>
-          </button>
-          {salesOpen && SALES_NAV.map(({href, label, icon}) => navItem(href, label, icon))}
-        </div>
+        {/* Sections */}
+        {visibleSections.map(section => {
+          const isOpen = q ? true : (openSections[section.id] ?? false);
+          return (
+            <div key={section.id} className="mb-1">
+              <button onClick={() => !q && toggleSection(section.id)}
+                className={cn(
+                  'flex items-center gap-1.5 w-full px-2.5 py-1.5 rounded-md text-sm font-extrabold uppercase tracking-wider transition-all duration-200',
+                  q ? 'text-violet-600 dark:text-violet-400' : 'text-foreground/80 hover:text-foreground hover:scale-[1.01]'
+                )}>
+                {!q && <ChevronDown className={cn('w-3 h-3 transition-transform', isOpen ? 'rotate-0' : '-rotate-90')} />}
+                <span className="flex-1 text-left">{section.label}</span>
+                <span className="text-sm text-foreground/80 font-bold normal-case">{section.items.length}</span>
+              </button>
+              {isOpen && (
+                <div className="space-y-0.5 mt-0.5">
+                  {section.items.map(navItem)}
+                </div>
+              )}
+            </div>
+          );
+        })}
 
-        {/* ▸ Tools */}
-        <div>
-          <button onClick={() => setToolsOpen(o => !o)}
-            className="flex items-center gap-1.5 w-full px-2.5 py-1 rounded-md text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors">
-            <ChevronDown className={cn('w-3 h-3 transition-transform', toolsOpen ? 'rotate-0' : '-rotate-90')} />
-            Tools
-            <span className="text-[9px] text-muted-foreground/40 font-normal normal-case ml-auto">{TOOLS_NAV.length}</span>
-          </button>
-          {toolsOpen && TOOLS_NAV.filter(n => hasPerm(n.perm)).map(({href, label, icon}) => navItem(href, label, icon))}
-        </div>
-
-        {/* ▸ Settings */}
-        <div>
-          <button onClick={() => setSettingsOpen(o => !o)}
-            className={cn('flex items-center gap-1.5 w-full px-2.5 py-1 rounded-md text-xs font-semibold uppercase tracking-wider transition-colors',
-              pathname.startsWith('/tenant/settings')
-                ? 'text-violet-700 dark:text-violet-300'
-                : 'text-muted-foreground hover:text-foreground')}>
-            <Settings className="w-3.5 h-3.5" />
-            Settings
-            <ChevronDown className={cn('w-3 h-3 ml-auto transition-transform', settingsOpen && 'rotate-180')} />
-          </button>
-          {settingsOpen && SETTINGS_GROUPS.map(group => {
-            const items = group.items.filter(i => !i.adminOnly || isAdmin);
-            if (!items.length) return null;
-            return (
-              <div key={group.label} className="ml-2 mt-1 mb-2">
-                <p className="px-2.5 mb-0.5 text-[9px] font-semibold text-muted-foreground/50 uppercase tracking-wider">{group.label}</p>
-                {items.map(item => {
-                  const active = pathname === item.href;
-                  return (
-                    <Link key={item.href} href={item.href} onClick={onMobileClose}
-                      className={cn('flex items-center px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
-                        active
-                          ? 'text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/30 font-semibold'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-accent')}>
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
+        {/* Settings (special, always at bottom of nav) */}
+        {!q && (
+          <>
+            <div className="h-px bg-border my-2" />
+            <div>
+              <button onClick={() => setSettingsOpen(o => !o)}
+                className={cn('flex items-center gap-1.5 w-full px-2.5 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200',
+                  pathname.startsWith('/tenant/settings')
+                    ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300'
+                    : 'text-foreground/90 hover:scale-[1.02] hover:bg-accent hover:text-foreground')}>
+                <Settings className="w-4 h-4 shrink-0" />
+                <span className="flex-1 text-left">Settings</span>
+                <ChevronDown className={cn('w-3 h-3 transition-transform', settingsOpen && 'rotate-180')} />
+              </button>
+              {settingsOpen && (
+                <div className="ml-2 mt-0.5 space-y-0.5">
+                  {SETTINGS_QUICK.filter(i => !i.adminOnly || isAdmin).map(item => {
+                    const active = pathname === item.href;
+                    return (
+                      <Link key={item.href} href={item.href} onClick={onMobileClose}
+                        className={cn('block px-2.5 py-1.5 rounded-md text-sm font-bold transition-all duration-200',
+                          active
+                            ? 'text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/30'
+                            : 'text-foreground hover:scale-[1.02] hover:text-foreground hover:bg-accent')}>
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                  <Link href="/tenant/settings" onClick={onMobileClose}
+                    className="block px-2.5 py-1.5 rounded-md text-sm font-bold text-violet-600 hover:underline">
+                    All settings →
+                  </Link>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </nav>
 
       {/* Footer */}
       <div className="p-2 border-t border-border space-y-0.5 shrink-0">
         {isSuperAdmin && (
           <Link href="/superadmin/dashboard"
-            className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors">
-            <Crown className="w-3.5 h-3.5" />Super Admin
+            className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors">
+            <Crown className="w-4 h-4" />Super Admin
           </Link>
         )}
-        <div className="flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-muted-foreground/40">
-          <Command className="w-3 h-3" />K  Quick search
+        <div className="flex items-center gap-2 px-2.5 py-1 text-xs text-foreground/80 font-semibold">
+          <Command className="w-3.5 h-3.5" />K  Quick search
         </div>
       </div>
     </aside>

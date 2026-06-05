@@ -269,17 +269,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Field '${fieldKey}' already exists for ${entityType}` }, { status: 409 });
   }
 
+  const VALID_TYPES = ['text','number','date','boolean','select','multiselect','url','email','phone','textarea','json','formula'] as const;
+  const safeType = VALID_TYPES.includes(fieldType as any) ? fieldType : 'text';
+
   const results = await db.insert(customFieldDefs)
     .values({
       tenantId: ctx.tenantId,
       entityType,
       fieldKey: fieldKey.replace(/[^a-z0-9_]/gi, '_').toLowerCase(),
       fieldLabel,
-      fieldType: safeType,
+      fieldType: safeType as string,
       fieldOptions: fieldOptions || null,
       isRequired: isRequired || false,
       isSearchable: isSearchable !== false,
-      defaultValue: defaultValue || null,
+      defaultValue: defaultValue as string || null,
       displayOrder: displayOrder || 0,
       isCalculated: isCalculated || false,
       formula: formula || null,

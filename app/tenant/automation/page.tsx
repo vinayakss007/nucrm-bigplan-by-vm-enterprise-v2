@@ -127,7 +127,7 @@ export default function AutomationPage() {
   const totalEnabled = prebuilts.filter(p => p.enabled).length + customs.filter(c => c.is_active).length;
 
   return (
-    <div className="max-w-5xl space-y-6 animate-fade-in">
+    <div className="max-w-[1600px] mx-auto space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>

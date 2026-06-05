@@ -73,6 +73,10 @@ const config: Config = {
           '0%': { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' },
         },
+        gradient: {
+          '0%, 100%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
+        },
         'stagger-fade': {
           '0%': { opacity: '0', transform: 'translateY(4px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
@@ -84,6 +88,7 @@ const config: Config = {
         'scale-in': 'scale-in 0.2s ease-out',
         'slide-in-from-left': 'slide-in-from-left 0.3s ease-out',
         shimmer: 'shimmer 2s infinite linear',
+        gradient: 'gradient 3s linear infinite',
         'stagger-fade': 'stagger-fade 0.3s ease-out forwards',
       },
     },

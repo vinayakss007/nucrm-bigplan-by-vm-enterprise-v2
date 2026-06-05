@@ -223,6 +223,27 @@ export const recordPermissions = pgTable('record_permissions', {
   };
 });
 
+// ── 4B. APPROVAL WORKFLOWS ────────────────────────────
+export const approvalRequests = pgTable('approval_requests', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  entityType: text('entity_type').notNull(),
+  entityId: uuid('entity_id').notNull(),
+  ruleId: text('rule_id').notNull(),
+  status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected'
+  requestedBy: uuid('requested_by').references(() => users.id, { onDelete: 'set null' }),
+  approvedBy: uuid('approved_by').references(() => users.id, { onDelete: 'set null' }),
+  rejectedBy: uuid('rejected_by').references(() => users.id, { onDelete: 'set null' }),
+  reason: text('reason'),
+  ...utils.lifecycle(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    entityIdx: index('idx_approval_requests_entity').on(table.tenantId, table.entityType, table.entityId),
+    statusIdx: index('idx_approval_requests_status').on(table.tenantId, table.status),
+  };
+});
+
 // ── 5. API & INFRASTRUCTURE ───────────────────────────
 export const apiKeys = pgTable('api_keys', {
   id: utils.pk(),

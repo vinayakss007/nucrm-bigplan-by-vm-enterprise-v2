@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -62,7 +63,7 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('[Report] GET error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -117,7 +118,7 @@ export async function PATCH(
     });
   } catch (error: any) {
     console.error('[Report] PATCH error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -152,7 +153,7 @@ export async function DELETE(
     });
   } catch (error: any) {
     console.error('[Report] DELETE error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -185,6 +186,6 @@ export async function POST(
     });
   } catch (error: any) {
     console.error('[Report Run] POST error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }

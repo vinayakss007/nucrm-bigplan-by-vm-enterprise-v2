@@ -1,12 +1,47 @@
 import { NextResponse } from 'next/server';
+import * as Sentry from '@sentry/nextjs';
 
+/**
+ * Centralized API error handler.
+ *
+ * SECURITY: Never exposes internal error messages in production.
+ * In development, includes the real message for debugging.
+ * Always reports 5xx errors to Sentry.
+ *
+ * Usage:
+ *   } catch (err: any) { return apiError(err); }
+ */
 export function apiError(err: unknown, message = 'Internal server error', status = 500) {
   const isDev = process.env.NODE_ENV === 'development';
-  console.error(`[API Error ${status}]`, err instanceof Error ? err.message : err);
+  const errMsg = err instanceof Error ? err.message : String(err);
+
+  // Always log server-side for debugging
+  console.error(`[API Error ${status}]`, errMsg);
+
+  // Report to Sentry for 5xx errors
+  if (status >= 500) {
+    Sentry.captureException(err);
+  }
+
+  // NEVER expose internal error messages in production
+  const publicMessage = isDev ? errMsg : message;
+
   return NextResponse.json(
-    { error: isDev && err instanceof Error ? err.message : message },
+    { error: publicMessage },
     { status }
   );
+}
+
+/**
+ * Safe error handler for catch blocks that previously leaked err.message.
+ * Use this as a drop-in replacement for:
+ *   catch (err: any) { return NextResponse.json({ error: err.message }, { status: 500 }); }
+ *
+ * Now use:
+ *   catch (err: any) { return apiError(err); }
+ */
+export function safeApiError(err: unknown) {
+  return apiError(err, 'Internal server error', 500);
 }
 
 export function notFound(entity = 'Resource') {

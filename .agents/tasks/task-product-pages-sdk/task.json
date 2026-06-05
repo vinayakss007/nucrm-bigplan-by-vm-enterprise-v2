@@ -1,0 +1,7 @@
+{
+  "task_id": "task-product-pages-sdk",
+  "task_description": "Create 8 dedicated product entry pages, super admin template builder with CRUD API, tenant onboarding flow, product registry, Drizzle schema for custom templates, and fully expand the SDK for external developers to build services on top of the CRM engine. The CRM also functions as a normal CRM - templates/products are focused entry points but the full CRM capabilities remain accessible.",
+  "status": "completed",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003"],
+  "blocked_reason": null
+}

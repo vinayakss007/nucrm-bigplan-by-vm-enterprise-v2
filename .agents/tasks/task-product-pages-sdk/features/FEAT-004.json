@@ -1,0 +1,34 @@
+{
+  "id": "FEAT-004",
+  "type": "fix",
+  "description": "Address code review issues: onboarding wizard persistence, webhook error handling, realtime ticket auth, file upload documentation, auth SDK JSDoc, template tenant_count drift, and realtime subscribe documentation.",
+  "status": "completed",
+  "steps": [
+    "Create app/api/tenant/onboarding/route.ts - POST endpoint that accepts {templateId, modules, companyName, pipelineName}, calls installTemplateModules, and creates a pipeline",
+    "Update app/tenant/onboarding/page.tsx - Add submit handler in step 3 that calls POST /api/tenant/onboarding",
+    "Update lib/sdk/webhooks.ts - Wrap each handler in try/catch, collect errors, return {acknowledged, event, errors} if any failed",
+    "Update lib/sdk/realtime.ts - Add getTicket() method, use ticket in SSE URL with fallback to token",
+    "Update lib/sdk/files.ts - Add contentEncoding to upload body, add uploadPresigned method, update types",
+    "Update lib/sdk/auth.ts - Add JSDoc explaining token isolation design",
+    "Update app/api/superadmin/templates/route.ts - Compute tenant_count dynamically from join",
+    "Update lib/sdk/realtime.ts - Add JSDoc to subscribe/unsubscribe explaining client-side filtering",
+    "Update SDK types and tests for new return types"
+  ],
+  "acceptance_criteria": [
+    "Onboarding wizard calls POST /api/tenant/onboarding on completion",
+    "WebhookRouter.handle() catches handler errors and returns them in response",
+    "RealtimeSDK.connect() uses a ticket by default with token fallback",
+    "FileSDK.upload includes contentEncoding field, uploadPresigned method exists",
+    "AuthSDK has JSDoc explaining its token isolation design",
+    "GET /api/superadmin/templates computes tenant_count from join",
+    "RealtimeSDK.subscribe has JSDoc explaining client-side filtering",
+    "npx tsc --noEmit passes",
+    "npm test passes"
+  ],
+  "verification": [
+    "npx tsc --noEmit",
+    "npm test"
+  ],
+  "blocked_reason": null,
+  "findings": "All 7 review issues addressed. TypeScript compiles with 0 errors. 397 tests pass (4 new). The 2 integration test failures are pre-existing (PostgreSQL ECONNREFUSED). RealtimeSDK.connect() is now async since it fetches a ticket first."
+}
