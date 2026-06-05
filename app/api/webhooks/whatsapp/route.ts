@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 /**
  * WhatsApp Business API Webhook
  */
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err: any) {
     console.error('[WhatsApp Webhook] Error:', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -151,11 +152,10 @@ async function processWhatsAppPayload(body: any) {
 
         // Activity log
         if (contactRow) {
-          await tx.insert(activities).values({} as any); // @ts-expect-error Schema mismatch - activity insert requires partial object
-    db.insert().values({
+          await tx.insert(activities).values({
             tenantId: integrationRow.tenantId,
             contactId: contactRow.id,
-            type: 'whatsapp_inbound',
+            eventType: 'whatsapp_inbound',
             description: `WhatsApp message from ${from}`,
             metadata: { message_type: msgType, body: text },
             entityType: 'contact',

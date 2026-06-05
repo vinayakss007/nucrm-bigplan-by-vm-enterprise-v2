@@ -1,0 +1,254 @@
+/* ==========================================================================
+   NuCRM Brand Animations - Reusable CSS Keyframes & Utility Classes
+   ==========================================================================
+   Usage: Import this file and apply .animate-xxx classes to elements.
+   All animations respect prefers-reduced-motion.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Fade In
+   Opacity transition from invisible to visible.
+   -------------------------------------------------------------------------- */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* --------------------------------------------------------------------------
+   2. Slide Up
+   Combines upward translation with opacity for content entrance.
+   -------------------------------------------------------------------------- */
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* --------------------------------------------------------------------------
+   3. Float
+   Gentle up-and-down floating motion for decorative elements.
+   -------------------------------------------------------------------------- */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* --------------------------------------------------------------------------
+   4. Pulse Glow
+   Scale pulse combined with a glowing box-shadow for emphasis.
+   -------------------------------------------------------------------------- */
+@keyframes pulse-glow {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px 10px rgba(124, 58, 237, 0.2);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* --------------------------------------------------------------------------
+   5. Gradient Shift
+   Animates background-position for moving gradient backgrounds.
+   Apply with background-size: 200% 200%.
+   -------------------------------------------------------------------------- */
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient-shift {
+  background-size: 200% 200%;
+  animation: gradient-shift 4s ease infinite;
+}
+
+/* --------------------------------------------------------------------------
+   6. Typing Cursor
+   Blinking cursor effect for typing animations.
+   -------------------------------------------------------------------------- */
+@keyframes typing-cursor {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+.animate-typing-cursor {
+  animation: typing-cursor 1s steps(1) infinite;
+}
+
+/* --------------------------------------------------------------------------
+   7. Orbit
+   Circular rotation for decorative orbital elements.
+   -------------------------------------------------------------------------- */
+@keyframes orbit {
+  from {
+    transform: rotate(0deg) translateX(50px) rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg) translateX(50px) rotate(-360deg);
+  }
+}
+
+.animate-orbit {
+  animation: orbit 8s linear infinite;
+}
+
+/* --------------------------------------------------------------------------
+   8. Shimmer Glow
+   Light sweep across an element (loading/skeleton effect or decorative sheen).
+   -------------------------------------------------------------------------- */
+@keyframes shimmer-glow {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer-glow {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(124, 58, 237, 0.1) 20%,
+    rgba(124, 58, 237, 0.3) 50%,
+    rgba(124, 58, 237, 0.1) 80%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-glow 2.5s ease-in-out infinite;
+}
+
+/* --------------------------------------------------------------------------
+   9. Scale Hover
+   Subtle scale-up for card hover states. Apply to parent, trigger on hover.
+   -------------------------------------------------------------------------- */
+@keyframes scale-hover {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.03);
+  }
+}
+
+.animate-scale-hover {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-scale-hover:hover {
+  transform: scale(1.03);
+}
+
+/* --------------------------------------------------------------------------
+   10. Parallax Float
+   Slow diagonal drifting movement for background decorative elements.
+   -------------------------------------------------------------------------- */
+@keyframes parallax-float {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(10px, -15px);
+  }
+  50% {
+    transform: translate(5px, -25px);
+  }
+  75% {
+    transform: translate(-5px, -10px);
+  }
+}
+
+.animate-parallax-float {
+  animation: parallax-float 12s ease-in-out infinite;
+}
+
+/* --------------------------------------------------------------------------
+   Reduced Motion
+   Respects user preference for reduced motion.
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-float,
+  .animate-pulse-glow,
+  .animate-gradient-shift,
+  .animate-typing-cursor,
+  .animate-orbit,
+  .animate-shimmer-glow,
+  .animate-parallax-float {
+    animation: none;
+  }
+
+  .animate-scale-hover:hover {
+    transform: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Animation Delay Utilities
+   Use these to stagger animations on multiple elements.
+   -------------------------------------------------------------------------- */
+.animation-delay-100 {
+  animation-delay: 100ms;
+}
+
+.animation-delay-200 {
+  animation-delay: 200ms;
+}
+
+.animation-delay-300 {
+  animation-delay: 300ms;
+}
+
+.animation-delay-500 {
+  animation-delay: 500ms;
+}
+
+.animation-delay-700 {
+  animation-delay: 700ms;
+}
+
+.animation-delay-1000 {
+  animation-delay: 1000ms;
+}

@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, message: 'Impersonation ended' });
   } catch (err: any) {
     console.error('[Impersonation Stop] Error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: res.rows });
   } catch (err: any) {
     console.error('[Impersonation List] Error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 

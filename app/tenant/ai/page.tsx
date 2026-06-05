@@ -185,14 +185,14 @@ export default function AIHubPage() {
 function Stat({ icon: Icon, label, value, sub, accent }: { icon: any; label: string; value: number | string; sub?: string; accent?: 'amber' }) {
   return (
     <div className={cn(
-      'rounded-xl border p-3',
-      accent === 'amber' ? 'border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/20' : 'border-border bg-card',
+      'rounded-xl border-2 p-3 shadow-sm hover:shadow-md transition-shadow',
+      accent === 'amber' ? 'border-amber-300/80 bg-amber-50/40 dark:bg-amber-950/20' : 'border-border/80 bg-card',
     )}>
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
         <Icon className="w-3 h-3" /> <span className="truncate">{label}</span>
       </div>
-      <p className="text-xl font-bold tabular-nums mt-1">{value}</p>
-      {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+      <p className="text-3xl font-black tabular-nums mt-1 text-black dark:text-white">{value}</p>
+      {sub && <p className="text-[10px] font-medium text-muted-foreground/60 mt-0.5">{sub}</p>}
     </div>
   );
 }
