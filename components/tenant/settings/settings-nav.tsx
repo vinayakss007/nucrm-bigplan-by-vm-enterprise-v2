@@ -105,14 +105,14 @@ export default function SettingsNav() {
             <div key={scope.id} className="space-y-1">
               <div className="flex items-center gap-1.5 px-1 pt-1 pb-0.5">
                 <ScopeIcon className="w-3 h-3 text-muted-foreground/60" />
-                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                <span className="text-xs font-extrabold uppercase tracking-widest text-foreground/70">
                   {scope.label}
                 </span>
-                <span className="text-[9px] text-muted-foreground/40">— {scope.desc}</span>
+                <span className="text-xs text-muted-foreground/60">— {scope.desc}</span>
               </div>
               {groups.map(group => (
                 <div key={group.id} className="space-y-0.5">
-                  <p className="px-2.5 pt-1 text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider">
+                  <p className="px-2.5 pt-1 text-xs font-bold text-muted-foreground/70 uppercase tracking-wider">
                     {group.label}
                   </p>
                   {group.items.map(item => {

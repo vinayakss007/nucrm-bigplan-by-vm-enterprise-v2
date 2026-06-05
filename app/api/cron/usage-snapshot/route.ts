@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
@@ -13,6 +14,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, snapshots: count });
   } catch (err: any) { 
     console.error('[UsageSnapshot] Error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 }); 
+    return apiError(err); 
   }
 }

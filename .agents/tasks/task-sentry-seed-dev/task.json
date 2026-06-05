@@ -1,0 +1,14 @@
+{
+  "task_id": "task-sentry-seed-dev",
+  "task_description": "Create a comprehensive development seed script that populates all database tables with realistic test data for manual testing of every page, route, button, and table in the CRM. Verify existing Sentry integration and update .env.example documentation.",
+  "status": "completed",
+  "feature_order": ["FEAT-001"],
+  "blocked_reason": null,
+  "verification": {
+    "build": "pass",
+    "tests": "pass",
+    "test_quality": "pass",
+    "docker_build": "skipped",
+    "summary": "TypeScript compiles cleanly (tsc --noEmit with project config). Seed script transpiles successfully. All structural elements verified (production guard, idempotent cleanup, credential output)."
+  }
+}

@@ -1,13 +1,17 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contactScores, contacts } from '@/drizzle/schema';
 import { eq, and, sql, desc, gte } from 'drizzle-orm';
 import { can } from '@/lib/auth/middleware';
+import { scoreLead, bulkScoreLeads } from '@/lib/ai/scoring';
 
 /**
  * POST /api/tenant/ai/score
- * Calculate/update contact score
+ * Calculate/update contact score using AI Gateway
+ * 
+ * Body: { contact_id?: string, bulk?: boolean, limit?: number }
  */
 export async function POST(request: NextRequest) {
   try {
@@ -17,32 +21,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const { contact_id } = body;
+    const body = await request.json().catch(() => ({}));
+    const { contact_id, bulk, limit } = body;
+
+    if (bulk) {
+      const results = await bulkScoreLeads(ctx.tenantId, ctx.userId, limit || 10);
+      return NextResponse.json({ ok: true, count: results.length, results });
+    }
 
     if (!contact_id) {
       return NextResponse.json({ error: 'contact_id is required' }, { status: 400 });
     }
 
-    // Calculate score using database function
-    const funcResult = await db.execute(
-      sql`SELECT public.calculate_contact_score(${contact_id}) as score`
-    );
-    const result = funcResult.rows[0];
-
-    // Get updated score details
-    const score = await db.query.contactScores.findFirst({
-      where: eq(contactScores.contactId, contact_id)
-    });
+    const result = await scoreLead(ctx.tenantId, ctx.userId, contact_id);
 
     return NextResponse.json({
       ok: true,
-      score: result?.['score'] || 0,
-      details: score,
+      score: result.score,
+      reason: result.reason,
+      factors: result.factors,
     });
   } catch (error: any) {
     console.error('[AI Score] POST error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -89,21 +90,31 @@ export async function GET(request: NextRequest) {
     }
 
     // Top scored contacts
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limit = Math.min(100, parseInt(searchParams.get('limit') || '10'));
     const min_score = parseInt(searchParams.get('min_score') || '0');
 
-    // Using raw SQL for the view since it's not in the Drizzle schema
-    const topScoredResults = await db.execute(
-      sql`SELECT id, contact_id, overall_score as score, score_factors as risk_factors, created_at 
-          FROM public.top_scored_contacts
-          WHERE tenant_id = ${ctx.tenantId} AND overall_score >= ${min_score}
-          ORDER BY overall_score DESC
-          LIMIT ${limit}`
-    );
+    const topScoredResults = await db.select({
+      id: contactScores.id,
+      contactId: contactScores.contactId,
+      score: contactScores.overallScore,
+      factors: contactScores.scoreFactors,
+      lastScoredAt: contactScores.lastCalculatedAt,
+      firstName: contacts.firstName,
+      lastName: contacts.lastName,
+      email: contacts.email,
+    })
+    .from(contactScores)
+    .innerJoin(contacts, eq(contacts.id, contactScores.contactId))
+    .where(and(
+      eq(contacts.tenantId, ctx.tenantId),
+      gte(contactScores.overallScore, min_score)
+    ))
+    .orderBy(desc(contactScores.overallScore))
+    .limit(limit);
 
-    return NextResponse.json({ data: topScoredResults.rows });
+    return NextResponse.json({ data: topScoredResults });
   } catch (error: any) {
     console.error('[AI Score] GET error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error);
   }
 }
