@@ -533,7 +533,7 @@ describe('Integrations SDK - comprehensive', () => {
 describe('Integrations SDK - verifyWebhookSignature', () => {
   it('verifies correct signature', async () => {
     const { verifyWebhookSignature } = await import('@/lib/integrations/sdk');
-    const crypto = require('crypto');
+    const crypto = await import('crypto');
     const secret = 'webhook-secret';
     const payload = JSON.stringify({ event: 'contact.created' });
     const signature = 'sha256=' + crypto.createHmac('sha256', secret).update(payload).digest('hex');
