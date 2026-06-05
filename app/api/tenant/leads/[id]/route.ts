@@ -6,6 +6,7 @@ import { logAudit } from '@/lib/audit';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
 import { updateLeadSchema } from '@/lib/api/schemas';
+import { fireWebhooks } from '@/lib/webhooks';
 
 /**
  * GET /api/tenant/leads/[id]
@@ -138,6 +139,10 @@ export async function PATCH(
     if (rawBody.need_description !== undefined) updateData.needDescription = rawBody.need_description;
     if (rawBody.timeline !== undefined) updateData.timeline = rawBody.timeline;
     if (rawBody.timeline_target_date !== undefined) updateData.timelineTargetDate = rawBody.timeline_target_date;
+    if (rawBody.budget !== undefined) updateData.budget = rawBody.budget === '' || rawBody.budget == null ? null : String(rawBody.budget);
+    if (rawBody.budget_currency !== undefined) updateData.budgetCurrency = rawBody.budget_currency;
+    if (rawBody.company_industry !== undefined) updateData.companyIndustry = rawBody.company_industry;
+    if (rawBody.value !== undefined) updateData.value = rawBody.value === '' || rawBody.value == null ? null : String(rawBody.value);
     if (rawBody.country !== undefined) updateData.country = rawBody.country;
     if (rawBody.state !== undefined) updateData.state = rawBody.state;
     if (rawBody.city !== undefined) updateData.city = rawBody.city;
@@ -161,16 +166,18 @@ export async function PATCH(
       .returning();
     
     // Log activity for status changes
-    if (body.lead_status) {
+    if (rawBody.lead_status) {
       await db.insert(leadActivities).values({
         tenantId: ctx.tenantId,
         leadId: id,
         performedBy: ctx.userId,
         activityType: 'status_change',
-        description: `Lead status changed to ${body.lead_status}`,
-        activityData: { new_status: body.lead_status },
+        description: `Lead status changed to ${rawBody.lead_status}`,
+        activityData: { new_status: rawBody.lead_status },
       });
     }
+
+    fireWebhooks(ctx.tenantId, 'lead.updated', { id }).catch(() => {});
     
     return NextResponse.json(updatedLead);
   } catch (error: any) {
@@ -220,6 +227,8 @@ export async function DELETE(
       tenantId: ctx.tenantId, userId: ctx.userId,
       action: 'delete', entityType: 'lead', entityId: id,
     });
+
+    fireWebhooks(ctx.tenantId, 'lead.deleted', { id }).catch(() => {});
 
     return NextResponse.json({ success: true, message: 'Moved to trash. Restore within 30 days.' });
   } catch (error: any) {

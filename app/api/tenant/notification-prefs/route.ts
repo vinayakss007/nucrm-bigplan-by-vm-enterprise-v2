@@ -34,13 +34,13 @@ export async function PATCH(req: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
     const safe: Record<string, any> = {};
-    if (v.email_notifications !== undefined) safe.email_notifications = v.email_notifications;
-    if (v.push_notifications !== undefined) safe.push_notifications = v.push_notifications;
-    if (v.notification_frequency !== undefined) safe.notification_frequency = v.notification_frequency;
-    if (v.notify_on_contact_created !== undefined) safe.notify_on_contact_created = v.notify_on_contact_created;
-    if (v.notify_on_deal_won !== undefined) safe.notify_on_deal_won = v.notify_on_deal_won;
-    if (v.notify_on_ticket_created !== undefined) safe.notify_on_ticket_created = v.notify_on_ticket_created;
-    if (v.notify_on_task_due !== undefined) safe.notify_on_task_due = v.notify_on_task_due;
+    if (v['email_notifications'] !== undefined) safe['email_notifications'] = v['email_notifications'];
+    if (v['push_notifications'] !== undefined) safe['push_notifications'] = v['push_notifications'];
+    if (v['notification_frequency'] !== undefined) safe['notification_frequency'] = v['notification_frequency'];
+    if (v['notify_on_contact_created'] !== undefined) safe['notify_on_contact_created'] = v['notify_on_contact_created'];
+    if (v['notify_on_deal_won'] !== undefined) safe['notify_on_deal_won'] = v['notify_on_deal_won'];
+    if (v['notify_on_ticket_created'] !== undefined) safe['notify_on_ticket_created'] = v['notify_on_ticket_created'];
+    if (v['notify_on_task_due'] !== undefined) safe['notify_on_task_due'] = v['notify_on_task_due'];
 
     await db.update(tenantMembers)
       .set({ notificationPrefs: safe, updatedAt: new Date() })

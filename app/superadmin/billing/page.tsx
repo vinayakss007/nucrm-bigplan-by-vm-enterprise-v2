@@ -41,7 +41,7 @@ function PlanForm({ plan, onSave, onClose }: { plan?: any; onSave: () => void; o
           <button onClick={onClose} className="text-white/30 hover:text-white"><X className="w-4 h-4"/></button>
         </div>
         <form onSubmit={save} className="p-6 space-y-5">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {!plan && <div><label className="block text-xs font-medium text-white/50 mb-1">Plan ID (unique slug)</label><input value={f.id} onChange={e=>setF(p=>({...p,id:e.target.value.toLowerCase().replace(/\s+/g,'-')}))} required className={inp} placeholder="pro-plus"/></div>}
             <div className={plan?'col-span-2':''}><label className="block text-xs font-medium text-white/50 mb-1">Display Name</label><input value={f.name} onChange={e=>setF(p=>({...p,name:e.target.value}))} required className={inp} placeholder="Pro"/></div>
             <div><label className="block text-xs font-medium text-white/50 mb-1">Monthly Price ($)</label><input type="number" value={f.price_monthly} onChange={e=>setF(p=>({...p,price_monthly:Number(e.target.value)}))} min="0" className={inp}/></div>
@@ -49,7 +49,7 @@ function PlanForm({ plan, onSave, onClose }: { plan?: any; onSave: () => void; o
           </div>
           <div>
             <p className="text-xs font-semibold text-white/50 uppercase tracking-wide mb-3">Limits <span className="text-white/20 normal-case">(use -1 for unlimited)</span></p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
                 ['max_users','Users'],['max_contacts','Contacts'],['max_deals','Deals'],
                 ['max_automations','Automations'],['max_forms','Forms'],['max_api_calls_day','API Calls/day'],['max_storage_gb','Storage (GB)'],

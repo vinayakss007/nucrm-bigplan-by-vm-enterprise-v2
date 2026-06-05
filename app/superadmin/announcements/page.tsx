@@ -57,7 +57,7 @@ export default function AnnouncementsPage() {
       {showForm && (
         <form onSubmit={save} className="rounded-xl border border-white/10 bg-white/[0.03] p-5 space-y-4">
           <p className="text-sm font-semibold text-white">New Announcement</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="block text-xs font-medium text-white/50 mb-1">Title *</label>
               <input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} required className={inp} placeholder="Scheduled maintenance window"/>

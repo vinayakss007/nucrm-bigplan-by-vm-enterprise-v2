@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -20,8 +21,8 @@ export async function PATCH(request: NextRequest) {
       updatedAt: new Date()
     };
     
-    if (v.first_name !== undefined) updates.fullName = v.first_name.trim();
-    if (v.last_name !== undefined) updates.lastName = v.last_name.trim();
+    if (v.first_name !== undefined) updates.fullName = (v.first_name ?? '').trim();
+    if (v.last_name !== undefined) updates.lastName = (v.last_name ?? '').trim();
     if (v.email !== undefined) updates.email = v.email;
     if (v.phone !== undefined) updates.phone = v.phone?.trim() || null;
     if (v.timezone !== undefined) updates.timezone = v.timezone;
@@ -45,6 +46,6 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ user });
   } catch (err: any) { 
-    return NextResponse.json({ error: err.message }, { status: 500 }); 
+    return apiError(err); 
   }
 }

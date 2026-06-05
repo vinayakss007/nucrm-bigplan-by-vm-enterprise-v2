@@ -1,14 +1,16 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Plus, Search, Grid, List, Trash2, ChevronRight, Download, Upload,
   Users, AlertCircle, X, Mail, Phone, Building2, User, Tag,
   MoreHorizontal, Filter, ChevronDown, Star, Zap, Eye, Activity,
-  CheckCircle, XCircle, RotateCcw, Archive, Globe, Edit,
+  CheckCircle, XCircle, RotateCcw, Archive, Globe, Edit, UserPlus,
+  CircleDot,
 } from 'lucide-react';
 import { cn, formatDate, getInitials, toSnakeCase } from '@/lib/utils';
+import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
 import ImportModal from './import-modal';
 import Pagination from './pagination';
 import toast from 'react-hot-toast';
@@ -23,6 +25,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const STATUS_CONFIG: Record<string,{label:string;color:string;dot:string;icon:any}> = {
   new:         { label:'New',          color:'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',         dot:'bg-slate-400',   icon:Star },
@@ -77,7 +80,7 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: any) {
   };
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-shadow";
-  const lbl = "block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide";
+  const lbl = "block text-sm font-bold text-foreground/80 mb-1.5 uppercase tracking-wide";
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -104,7 +107,7 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: any) {
 
         <form onSubmit={handle} className="mt-1 space-y-5">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><User className="w-3 h-3"/>Identity</p>
+            <p className="text-xs font-extrabold uppercase tracking-widest text-foreground/70 mb-3 flex items-center gap-2"><User className="w-3.5 h-3.5"/>Identity</p>
             <div className="grid grid-cols-2 gap-3">
               <div><label className={lbl}>First Name *</label><input required className={inp} value={form.first_name} onChange={e=>setForm(p=>({...p,first_name:e.target.value}))}/></div>
               <div><label className={lbl}>Last Name</label><input className={inp} value={form.last_name} onChange={e=>setForm(p=>({...p,last_name:e.target.value}))}/></div>
@@ -120,7 +123,7 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: any) {
             </div>
           </div>
           <div className="border-t border-border/50 pt-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><Tag className="w-3 h-3"/>Classification</p>
+            <p className="text-xs font-extrabold uppercase tracking-widest text-foreground/70 mb-3 flex items-center gap-2"><Tag className="w-3.5 h-3.5"/>Classification</p>
             <div className="grid grid-cols-2 gap-3">
               <div><label className={lbl}>Status</label>
                 <select className={inp} value={form.lead_status} onChange={e=>setForm(p=>({...p,lead_status:e.target.value}))}>
@@ -141,7 +144,7 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: any) {
           </div>
           {teamMembers.length>0&&(
             <div className="border-t border-border/50 pt-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><Users className="w-3 h-3"/>Assignment</p>
+              <p className="text-xs font-extrabold uppercase tracking-widest text-foreground/70 mb-3 flex items-center gap-2"><Users className="w-3.5 h-3.5"/>Assignment</p>
               <select className={inp} value={form.assigned_to} onChange={e=>setForm(p=>({...p,assigned_to:e.target.value}))}>
                 <option value="">Unassigned</option>
                 {teamMembers.map((m:any)=><option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
@@ -164,6 +167,14 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
   const [total, setTotal]       = useState(totalCount ?? initialContacts.length);
   const [offset, setOffset]     = useState(initialOffset ?? 0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkPrompt, setBulkPrompt] = useState<
+    | { kind: 'tag' | 'untag'; title: string; placeholder: string }
+    | { kind: 'assign'; title: string }
+    | { kind: 'status'; title: string }
+    | null
+  >(null);
+  const [bulkInput, setBulkInput] = useState('');
   const limit                   = 50;
   const [view, setView]         = useState<'list'|'grid'>('list');
   const [search, setSearch]     = useState(initialQ || '');
@@ -224,6 +235,114 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
     URL.revokeObjectURL(url); toast.success('Exported contacts'); setExporting(false);
   };
 
+  // ── Selection helpers ────────────────────────────────────────────────
+  const toggleOne = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const allSelectedOnPage = useMemo(
+    () => contacts.length > 0 && contacts.every(c => selectedIds.has(c['id'])),
+    [contacts, selectedIds],
+  );
+  const someSelectedOnPage = useMemo(
+    () => contacts.some(c => selectedIds.has(c['id'])) && !allSelectedOnPage,
+    [contacts, selectedIds, allSelectedOnPage],
+  );
+
+  const toggleAllOnPage = useCallback(() => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      const allOn = contacts.length > 0 && contacts.every(c => next.has(c['id']));
+      if (allOn) {
+        for (const c of contacts) next.delete(c['id']);
+      } else {
+        for (const c of contacts) next.add(c['id']);
+      }
+      return next;
+    });
+  }, [contacts]);
+
+  // ── Real bulk-API integration ────────────────────────────────────────
+  const callBulk = useCallback(async (
+    action: 'delete' | 'tag' | 'untag' | 'assign' | 'status',
+    payload?: Record<string, unknown>,
+  ) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await fetch('/api/tenant/contacts/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ids, updates: payload ?? {} }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || `Bulk ${action} failed`);
+        return;
+      }
+      const verb =
+        action === 'delete' ? 'Deleted' :
+        action === 'tag' ? 'Tagged' :
+        action === 'untag' ? 'Untagged' :
+        action === 'assign' ? 'Assigned' :
+        'Updated';
+      toast.success(`${verb} ${data.affected ?? ids.length} contacts`);
+      setSelectedIds(new Set());
+      load(offset);
+    } catch (err) {
+      toast.error(`Bulk ${action} failed`);
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [selectedIds, load, offset]);
+
+  const bulkExportCSV = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await fetch('/api/tenant/contacts/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) {
+        toast.error('Export failed');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `contacts_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${ids.length} contacts`);
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [selectedIds]);
+
+  const submitBulkPrompt = useCallback(async () => {
+    if (!bulkPrompt) return;
+    const value = bulkInput.trim();
+    if (!value) { toast.error('Value required'); return; }
+    if (bulkPrompt.kind === 'tag' || bulkPrompt.kind === 'untag') {
+      await callBulk(bulkPrompt.kind, { tag: value });
+    } else if (bulkPrompt.kind === 'assign') {
+      await callBulk('assign', { assign_to: value });
+    } else if (bulkPrompt.kind === 'status') {
+      await callBulk('status', { lead_status: value });
+    }
+    setBulkPrompt(null);
+    setBulkInput('');
+  }, [bulkPrompt, bulkInput, callBulk]);
+
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header */}
@@ -235,7 +354,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold tracking-tight">Contacts</h1>
-              <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/30 px-2 py-0.5 rounded-full uppercase tracking-wider">{total.toLocaleString()}</span>
+              <span className="text-xs font-extrabold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/30 px-2 py-0.5 rounded-full uppercase tracking-wider">{total.toLocaleString()}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">Your contact database</p>
           </div>
@@ -293,15 +412,22 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
-                {['Contact','Company','Email & Phone','Status','Lifecycle','Added',''].map(h=>(
-                  <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">{h}</th>
+                <th className="w-10 px-4 py-3">
+                  <Checkbox
+                    aria-label="Select all on page"
+                    checked={allSelectedOnPage ? true : someSelectedOnPage ? 'indeterminate' : false}
+                    onCheckedChange={() => toggleAllOnPage()}
+                  />
+                </th>
+                {['Contact','Company','Email & Phone','Status','Lifecycle','Score','Added',''].map(h=>(
+                  <th key={h} className="px-4 py-3 text-left text-xs font-extrabold text-foreground/80 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {loading&&<tr><td colSpan={7} className="py-16 text-center"><div className="flex items-center justify-center gap-2 text-muted-foreground text-sm"><div className="w-4 h-4 border-2 border-violet-500 border-t-transparent rounded-full animate-spin"/>Loading contacts...</div></td></tr>}
+              {loading&&<tr><td colSpan={8} className="py-16 text-center"><div className="flex items-center justify-center gap-2 text-muted-foreground text-sm"><div className="w-4 h-4 border-2 border-violet-500 border-t-transparent rounded-full animate-spin"/>Loading contacts...</div></td></tr>}
               {!loading&&!contacts.length&&(
-                <tr><td colSpan={7} className="py-20 text-center">
+                <tr><td colSpan={8} className="py-20 text-center">
                   <div className="max-w-sm mx-auto">
                     <div className="w-14 h-14 rounded-2xl bg-sky-50 dark:bg-sky-900/20 flex items-center justify-center mx-auto mb-4"><Users className="w-7 h-7 text-sky-400"/></div>
                     <p className="text-sm font-semibold mb-1">{search||statusFilter!=='all'?'No contacts match your filters':'No contacts yet'}</p>
@@ -317,14 +443,18 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                 const StatusIcon=status!.icon;
                 const lifecycleColor=LIFECYCLE_COLORS[c['lifecycle_stage']]||'bg-slate-100 text-slate-600';
                 return (
-                  <Swipeable
-                    key={c['id']}
-                    rightActions={[
-                      { label:'Edit', icon:<Edit className="w-5 h-5"/>, color:'text-white', bg:'bg-violet-500', onClick:()=>router.push(`/tenant/contacts/${c['id']}`) },
-                      ...(permissions.canDelete ? [{ label:'Delete', icon:<Trash2 className="w-5 h-5"/>, color:'text-white', bg:'bg-red-500', onClick:async()=>deleteContact(c['id'],`${c['first_name']} ${c['last_name']}`) }] : []),
-                    ]}
-                  >
-                    <tr className="border-b border-border last:border-0 hover:bg-accent/30 transition-colors cursor-pointer group" onClick={()=>router.push(`/tenant/contacts/${c['id']}`)}>
+                  <tr key={c['id']} className={cn(
+                    "border-b border-border last:border-0 hover:bg-accent/30 transition-colors cursor-pointer group",
+                    selectedIds.has(c['id']) && "bg-violet-50/50 dark:bg-violet-900/10"
+                  )} onClick={()=>router.push(`/tenant/contacts/${c['id']}`)}>
+                    {/* Selection */}
+                    <td className="w-10 px-4 py-3" onClick={e=>e.stopPropagation()}>
+                      <Checkbox
+                        aria-label={`Select ${c['first_name']} ${c['last_name']}`}
+                        checked={selectedIds.has(c['id'])}
+                        onCheckedChange={() => toggleOne(c['id'])}
+                      />
+                    </td>
                     {/* Contact */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
@@ -333,8 +463,8 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold hover:text-violet-600 transition-colors truncate">{c['first_name']} {c['last_name']}</p>
-                          {c['title']&&<p className="text-[10px] text-muted-foreground truncate">{c['title']}</p>}
-                          {c['assigned_name']&&!c['title']&&<p className="text-[10px] text-muted-foreground">→ {c['assigned_name']}</p>}
+                          {c['title']&&<p className="text-xs text-muted-foreground/80 truncate">{c['title']}</p>}
+                          {c['assigned_name']&&!c['title']&&<p className="text-xs text-muted-foreground/80">→ {c['assigned_name']}</p>}
                         </div>
                       </div>
                     </td>
@@ -344,7 +474,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                         ?<div className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0"/><span className="text-sm truncate max-w-[140px]">{c['company_name']}</span></div>
                         :<span className="text-sm text-muted-foreground">—</span>
                       }
-                      {c['lead_source']&&<div className="flex items-center gap-1 mt-0.5 text-[10px] text-muted-foreground"><Globe className="w-2.5 h-2.5"/>{SOURCE_LABELS[c['lead_source']]||c['lead_source']}</div>}
+                      {c['lead_source']&&<div className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground/80"><Globe className="w-3 h-3"/>{SOURCE_LABELS[c['lead_source']]||c['lead_source']}</div>}
                     </td>
                     {/* Contact info */}
                     <td className="px-4 py-3">
@@ -355,16 +485,31 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                     </td>
                     {/* Status */}
                     <td className="px-4 py-3">
-                      <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold',status!.color)}>
+                      <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold',status!.color)}>
                         <StatusIcon className="w-3 h-3"/>{status!.label}
                       </span>
                     </td>
                     {/* Lifecycle */}
                     <td className="px-4 py-3">
                       {c['lifecycle_stage']
-                        ?<span className={cn('inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize',lifecycleColor)}>{c['lifecycle_stage']?.replace(/_/g,' ')}</span>
+                        ?<span className={cn('inline-flex px-2 py-0.5 rounded-full text-xs font-bold capitalize',lifecycleColor)}>{c['lifecycle_stage']?.replace(/_/g,' ')}</span>
                         :<span className="text-xs text-muted-foreground">—</span>
                       }
+                    </td>
+                    {/* Score */}
+                    <td className="px-4 py-3">
+                      {c['score'] > 0 ? (() => {
+                        const tier = getScoreTier(c['score']);
+                        const cfg = getScoreTierConfig(tier);
+                        return (
+                          <div className="flex items-center gap-2">
+                            <span className={cn('text-sm font-extrabold w-6', cfg.color)}>{c['score']}</span>
+                            <div className="flex-1 h-1.5 w-12 bg-muted rounded-full overflow-hidden hidden xl:block">
+                              <div className={cn('h-full', cfg.bar)} style={{ width: `${c['score']}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })() : <span className="text-xs text-muted-foreground">—</span>}
                     </td>
                     {/* Added */}
                     <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDate(c['created_at'])}</td>
@@ -380,7 +525,6 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                       </div>
                     </td>
                   </tr>
-                  </Swipeable>
                 );
               })}
             </tbody>
@@ -426,18 +570,23 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold truncate">{c['first_name']} {c['last_name']}</p>
-                      <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold',status!.color)}>
+                      <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-bold',status!.color)}>
                         <div className={cn('w-1.5 h-1.5 rounded-full',status!.dot)}/>{status!.label}
                       </span>
                     </div>
-                    {c['title']&&<p className="text-[10px] text-muted-foreground truncate mt-0.5">{c['title']}</p>}
+                    {c['title']&&<p className="text-xs text-muted-foreground/80 truncate mt-0.5">{c['title']}</p>}
                     <div className="flex items-center gap-3 mt-2">
-                      {c['email']&&<div className="flex items-center gap-1 text-[10px] text-muted-foreground"><Mail className="w-3 h-3 shrink-0"/><span className="truncate">{c['email']}</span></div>}
-                      {c['phone']&&<div className="flex items-center gap-1 text-[10px] text-muted-foreground"><Phone className="w-3 h-3 shrink-0"/><span>{c['phone']}</span></div>}
+                      {c['email']&&<div className="flex items-center gap-1 text-xs text-muted-foreground/80"><Mail className="w-3.5 h-3.5 shrink-0"/><span className="truncate">{c['email']}</span></div>}
+                      {c['phone']&&<div className="flex items-center gap-1 text-xs text-muted-foreground/80"><Phone className="w-3.5 h-3.5 shrink-0"/><span>{c['phone']}</span></div>}
                     </div>
                     <div className="flex items-center gap-3 mt-1">
-                      {c['company_name']&&<div className="flex items-center gap-1 text-[10px] text-muted-foreground"><Building2 className="w-3 h-3 shrink-0"/><span className="truncate">{c['company_name']}</span></div>}
-                      {c['lifecycle_stage']&&<span className={cn('inline-flex px-1.5 py-0.5 rounded-full text-[9px] font-semibold capitalize',LIFECYCLE_COLORS[c['lifecycle_stage']]||'bg-slate-100 text-slate-600')}>{c['lifecycle_stage']?.replace(/_/g,' ')}</span>}
+                      {c['company_name']&&<div className="flex items-center gap-1 text-xs text-muted-foreground/80"><Building2 className="w-3.5 h-3.5 shrink-0"/><span className="truncate">{c['company_name']}</span></div>}
+                      {c['lifecycle_stage']&&<span className={cn('inline-flex px-1.5 py-0.5 rounded-full text-xs font-bold capitalize',LIFECYCLE_COLORS[c['lifecycle_stage']]||'bg-slate-100 text-slate-600')}>{c['lifecycle_stage']?.replace(/_/g,' ')}</span>}
+                      {c['score'] > 0 && (() => {
+                        const tier = getScoreTier(c['score']);
+                        const cfg = getScoreTierConfig(tier);
+                        return <span className={cn('inline-flex px-1.5 py-0.5 rounded-full text-xs font-bold', cfg.bg, cfg.color)}>{c['score']} Score</span>;
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -468,25 +617,30 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                     <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-sm">
                       {getInitials(`${c['first_name'] ?? ''} ${c['last_name'] ?? ''}`)}
                     </div>
-                    <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold',status!.color)}>
+                    <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-bold',status!.color)}>
                       <div className={cn('w-1.5 h-1.5 rounded-full',status!.dot)}/>{status!.label}
                     </span>
+                    {c['score'] > 0 && (() => {
+                      const tier = getScoreTier(c['score']);
+                      const cfg = getScoreTierConfig(tier);
+                      return <span className={cn('absolute -top-1 -right-1 w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold border-2 border-background shadow-sm', cfg.bg, cfg.color)} title={`Score: ${c['score']}`}>{c['score']}</span>;
+                    })()}
                   </div>
                   <p className="text-sm font-semibold truncate group-hover:text-violet-600 transition-colors">{c['first_name']} {c['last_name']}</p>
-                  {c['title']&&<p className="text-[10px] text-muted-foreground truncate mt-0.5">{c['title']}</p>}
+                  {c['title']&&<p className="text-xs text-muted-foreground/80 truncate mt-0.5">{c['title']}</p>}
                   {c['company_name']&&(
-                    <div className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground">
-                      <Building2 className="w-2.5 h-2.5 shrink-0"/><span className="truncate">{c['company_name']}</span>
+                    <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground/80">
+                      <Building2 className="w-3 h-3 shrink-0"/><span className="truncate">{c['company_name']}</span>
                     </div>
                   )}
                   {c['email']&&(
-                    <div className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
-                      <Mail className="w-2.5 h-2.5 shrink-0"/><span className="truncate">{c['email']}</span>
+                    <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground/80">
+                      <Mail className="w-3 h-3 shrink-0"/><span className="truncate">{c['email']}</span>
                     </div>
                   )}
                   {c['last_activity_at']&&(
-                    <div className="flex items-center gap-1 mt-2 text-[10px] text-muted-foreground border-t border-border/50 pt-2">
-                      <Activity className="w-2.5 h-2.5"/>{formatDate(c['last_activity_at'])}
+                    <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground/80 border-t border-border/50 pt-2">
+                      <Activity className="w-3 h-3"/>{formatDate(c['last_activity_at'])}
                     </div>
                   )}
                 </Link>
@@ -504,19 +658,98 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
         selectedCount={selectedIds.size}
         onClear={() => setSelectedIds(new Set())}
         actions={[
-          { label: 'Delete', icon: Trash2, variant: 'danger', onClick: async () => {
-            if (selectedIds.size === 0) return;
-            await confirmThen(`Delete ${selectedIds.size} contacts?`, async () => {
-              for (const id of selectedIds) {
-                await fetch(`/api/tenant/contacts/${id}`, { method: 'DELETE' });
-              }
-              setSelectedIds(new Set());
-              toast.success(`Deleted ${selectedIds.size} contacts`);
-              load(offset);
-            });
-          }},
+          {
+            label: 'Tag',
+            icon: Tag,
+            onClick: () => { setBulkInput(''); setBulkPrompt({ kind: 'tag', title: 'Add tag to selected contacts', placeholder: 'e.g. vip' }); },
+          },
+          {
+            label: 'Untag',
+            icon: X,
+            onClick: () => { setBulkInput(''); setBulkPrompt({ kind: 'untag', title: 'Remove tag from selected contacts', placeholder: 'tag to remove' }); },
+          },
+          ...(permissions.canAssign && teamMembers.length > 0 ? [{
+            label: 'Assign',
+            icon: UserPlus,
+            onClick: () => { setBulkInput(''); setBulkPrompt({ kind: 'assign' as const, title: 'Assign selected contacts to' }); },
+          }] : []),
+          {
+            label: 'Status',
+            icon: CircleDot,
+            onClick: () => { setBulkInput('new'); setBulkPrompt({ kind: 'status', title: 'Change status of selected contacts' }); },
+          },
+          {
+            label: 'Export',
+            icon: Download,
+            onClick: () => { void bulkExportCSV(); },
+          },
+          ...(permissions.canDelete ? [{
+            label: 'Delete',
+            icon: Trash2,
+            variant: 'danger' as const,
+            onClick: async () => {
+              const count = selectedIds.size;
+              if (count === 0) return;
+              await confirmThen(`Delete ${count} contacts?`, async () => {
+                await callBulk('delete');
+              });
+            },
+          }] : []),
         ]}
       />
+
+      {/* Bulk action input prompt */}
+      {bulkPrompt && (
+        <Dialog open onOpenChange={(o)=>{ if (!o) { setBulkPrompt(null); setBulkInput(''); } }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-sm">{bulkPrompt.title}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 pt-2">
+              {bulkPrompt.kind === 'assign' ? (
+                <select
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                  value={bulkInput}
+                  onChange={e => setBulkInput(e.target.value)}
+                >
+                  <option value="">Select team member…</option>
+                  {teamMembers.map((m: any) => (
+                    <option key={m.user_id} value={m.user_id}>{m.full_name}</option>
+                  ))}
+                </select>
+              ) : bulkPrompt.kind === 'status' ? (
+                <select
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                  value={bulkInput}
+                  onChange={e => setBulkInput(e.target.value)}
+                >
+                  {Object.entries(STATUS_CONFIG).map(([v, cfg]) => (
+                    <option key={v} value={v}>{cfg.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  autoFocus
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                  placeholder={'placeholder' in bulkPrompt ? bulkPrompt.placeholder : ''}
+                  value={bulkInput}
+                  onChange={e => setBulkInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void submitBulkPrompt(); } }}
+                />
+              )}
+              <p className="text-xs text-muted-foreground/80">
+                Affects {selectedIds.size} selected contact{selectedIds.size === 1 ? '' : 's'}.
+              </p>
+              <div className="flex gap-2 justify-end pt-1">
+                <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => { setBulkPrompt(null); setBulkInput(''); }}>Cancel</Button>
+                <Button size="sm" disabled={bulkBusy || !bulkInput.trim()} onClick={() => void submitBulkPrompt()}>
+                  {bulkBusy ? 'Working…' : 'Apply'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

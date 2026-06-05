@@ -8,6 +8,7 @@ import { contacts, companies, users, activities, tenants } from '@/drizzle/schem
 import { eq, and, sql, ne } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { trackFieldChange } from '@/lib/history';
+import { fireWebhooks } from '@/lib/webhooks';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -204,7 +205,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       contactId: contactId,
       entityId: contactId,
       entityType: 'contact',
-      type: 'note',
+      eventType: 'note',
       description: `Updated contact ${row.firstName} ${row.lastName || ''}`.trim(),
       action: 'update',
     }).catch(err => console.error('[contacts PATCH] activity log failed:', err));
@@ -216,6 +217,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       entityType: 'contact',
       entityId: contactId
     });
+
+    fireWebhooks(ctx.tenantId, 'contact.updated', { id: contactId }).catch(() => {});
 
     return NextResponse.json({ data: row });
   } catch (err: any) {
@@ -265,6 +268,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       entityType: 'contact',
       entityId: contactId
     });
+
+    fireWebhooks(ctx.tenantId, 'contact.deleted', { id: contactId }).catch(() => {});
 
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
   } catch (err: any) {

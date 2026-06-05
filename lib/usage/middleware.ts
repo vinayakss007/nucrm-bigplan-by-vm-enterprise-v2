@@ -1,66 +1,86 @@
 /**
- * Usage middleware — drop into any API route to enforce a plan limit.
+ * Usage Limit Middleware
  *
- *   const ctx = await requireAuth(req); if (ctx instanceof NextResponse) return ctx;
- *   const blocked = await checkLimit(ctx, 'contacts'); if (blocked) return blocked;
- *
- * Behavior:
- *   - Off by default. Set `USAGE_LIMITS=on` to enable enforcement.
- *   - When off, the function still records violations but never blocks the
- *     request, so dashboards/alerts get accurate data during rollout.
- *   - Super-admins bypass entirely.
- *   - `null` (unlimited) plan limits skip the check.
+ * Provides middleware functions to check usage limits before
+ * allowing API operations. Returns 429 (Too Many Requests) when
+ * a tenant or user has exceeded their plan limits.
  */
 import { NextResponse } from 'next/server';
-import type { AuthContext } from '@/lib/auth/middleware';
-import { getUsageReport, recordViolation, type LimitKind } from './tracker';
-import { notifyLimitHit } from './notifications';
-
-const ENFORCE = process.env['USAGE_LIMITS'] === 'on';
-
-export interface CheckLimitOptions {
-  /** Override the env flag, e.g. for routes that must always block. */
-  enforce?: boolean;
-}
+import { db } from '@/drizzle/db';
+import { userUsage, planLimits } from '@/drizzle/schema/usage';
+import { tenants } from '@/drizzle/schema/core';
+import { eq, and } from 'drizzle-orm';
 
 /**
- * Returns a 402 NextResponse when the tenant has hit the limit *and*
- * enforcement is enabled. Returns null otherwise.
+ * Check whether the user has exceeded their daily API call limit.
+ * Returns null if within limits, or a 429 NextResponse if exceeded.
  */
-export async function checkLimit(
-  ctx: AuthContext,
-  kind: LimitKind,
-  opts: CheckLimitOptions = {},
+export async function checkUserLimit(
+  tenantId: string,
+  userId: string
 ): Promise<NextResponse | null> {
-  if (ctx.isSuperAdmin) return null;
-  if (!ctx.tenantId || ctx.tenantId === '__superadmin_no_tenant__') return null;
+  try {
+    // Get the tenant's plan
+    const tenant = await db.query.tenants.findFirst({
+      where: eq(tenants.id, tenantId),
+      columns: { planId: true },
+    });
 
-  const report = await getUsageReport(ctx.tenantId, kind);
-  if (!report.exceeded) return null;
-  if (report.limit == null) return null;
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
-  // Record the violation regardless of enforcement so analytics stay accurate.
-  const { created } = await recordViolation(ctx.tenantId, kind, report.limit, report.actual);
-  if (created) {
-    notifyLimitHit({
-      tenantId: ctx.tenantId,
-      kind,
-      limit: report.limit,
-      actual: report.actual,
-    }).catch(() => {});
+    // Get plan limits
+    const limits = await db.query.planLimits.findFirst({
+      where: eq(planLimits.planId, tenant.planId),
+    });
+
+    // If no plan limits configured, allow (no enforcement)
+    if (!limits || !limits.maxApiCallsPerDay) {
+      return null;
+    }
+
+    // Get user's current usage for today
+    const usage = await db.query.userUsage.findFirst({
+      where: and(
+        eq(userUsage.tenantId, tenantId),
+        eq(userUsage.userId, userId)
+      ),
+      columns: { apiCallsToday: true, apiCallsDate: true },
+    });
+
+    // No usage record yet means they are within limits
+    if (!usage) {
+      return null;
+    }
+
+    // Check if the date has rolled over
+    const today = new Date().toISOString().split('T')[0];
+    const usageDate = usage.apiCallsDate ? String(usage.apiCallsDate) : null;
+    if (usageDate !== today) {
+      return null; // Counter is stale, effectively 0
+    }
+
+    const currentCalls = usage.apiCallsToday ?? 0;
+    if (currentCalls >= limits.maxApiCallsPerDay) {
+      return NextResponse.json(
+        {
+          error: 'API rate limit exceeded for today. Please try again tomorrow or upgrade your plan.',
+          limit: limits.maxApiCallsPerDay,
+          current: currentCalls,
+          resets: 'midnight UTC',
+        },
+        { status: 429 }
+      );
+    }
+
+    return null;
+  } catch (error) {
+    console.error('[usage/middleware] checkUserLimit error:', error);
+    // On error, allow the request (fail open for availability)
+    return null;
   }
-
-  const enforce = opts.enforce ?? ENFORCE;
-  if (!enforce) return null;
-
-  return NextResponse.json(
-    {
-      error: `Plan limit reached for ${kind}`,
-      kind,
-      limit: report.limit,
-      actual: report.actual,
-      upgradeUrl: '/tenant/settings/billing',
-    },
-    { status: 402 },
-  );
 }

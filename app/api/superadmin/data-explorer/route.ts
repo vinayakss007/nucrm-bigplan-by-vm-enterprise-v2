@@ -1,3 +1,4 @@
+import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
@@ -94,7 +95,7 @@ async function handleSummary(searchParams: URLSearchParams) {
 
     return NextResponse.json({ summary: summaryRes.rows[0] });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -148,7 +149,7 @@ async function handleSchemaInfo() {
 
     return NextResponse.json({ tables: tableDetails });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -347,7 +348,7 @@ async function handleSearch(searchParams: URLSearchParams) {
     });
   } catch (err: any) {
     console.error('[Superadmin Data Explorer] Search error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -410,7 +411,7 @@ export async function PUT(req: NextRequest) {
       data: result.rows[0],
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -463,6 +464,6 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ message: 'Record deleted', id });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return apiError(err);
   }
 }

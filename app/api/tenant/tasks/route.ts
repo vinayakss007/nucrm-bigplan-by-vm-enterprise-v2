@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { tasks, contacts, deals, users, tenants, plans, activities } from '@/drizzle/schema';
 import { eq, and, or, sql, desc, asc, gte, lte, isNull } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { fireWebhooks } from '@/lib/webhooks';
 
 export async function GET(request: NextRequest) {
   try {
@@ -135,12 +136,14 @@ export async function POST(request: NextRequest) {
         contactId: v.contact_id || null,
         dealId: v.deal_id || null,
         entityType: 'task',
-        entityId: (newTask as any)[0].id,
+        entityId: (newTask as any).id,
         eventType: 'task_created',
         action: 'create',
         description: `Created task: ${v.title}`,
       })
       .catch(err => console.error('[tasks POST] activity log failed:', err));
+
+    fireWebhooks(ctx.tenantId, 'task.created', { id: (newTask as any).id, title: v.title }).catch(() => {});
 
     return NextResponse.json({ data: newTask }, { status: 201 });
   } catch (err: any) {
