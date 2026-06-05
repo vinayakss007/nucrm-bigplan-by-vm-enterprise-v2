@@ -50,4 +50,9 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/worker.ts ./worker.ts
 
 EXPOSE 3000
-CMD ["npm", "start"]
+
+# Memory-limited start — prevents OOM on 4GB machines
+ENV NODE_OPTIONS="--max-old-space-size=2048"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1
+CMD ["npm", "run", "prod:start:custom"]

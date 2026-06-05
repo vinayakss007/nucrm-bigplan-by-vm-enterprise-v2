@@ -47,6 +47,8 @@
     "setup": "cp -n .env.local.example .env.local && npm run db:migrate && echo '\n✅ Run: npm run dev\n'",
     "prod:launch": "bash scripts/production-launch.sh",
     "prod:preflight": "npx tsx scripts/production-preflight.ts",
+    "prod:start": "bash scripts/start-production.sh",
+    "prod:start:custom": "NODE_OPTIONS='--max-old-space-size=2048' next start -H 127.0.0.1",
     "prod:seed": "npx tsx scripts/seed-massive-drizzle.ts",
     "demo:setup": "node setup-demo.js",
     "worker": "tsx worker.ts",
