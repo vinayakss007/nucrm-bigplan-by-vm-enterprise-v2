@@ -276,37 +276,37 @@ export const contracts = pgTable('contracts', {
 // ── SUBSCRIPTIONS MODULE ───────────────────────────────
 // Renamed: Was conflicting with infra.subscriptions
 // This table tracks service/product subscriptions (e.g., monthly hosting)
-export const serviceSubscriptions = pgTable('subscriptions', {
+export const serviceSubscriptions = pgTable('service_subscriptions', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
-  
+
   contactId: uuid('contact_id'),
   companyId: uuid('company_id'),
-  
+
   name: text('name').notNull(),
   planName: text('plan_name'),
   status: text('status').notNull().default('active'),
-  
+
   startDate: date('start_date').notNull(),
   currentPeriodStart: date('current_period_start'),
   currentPeriodEnd: date('current_period_end'),
   cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
   trialEndDate: date('trial_end_date'),
-  
+
   amount: decimal('amount', { precision: 15, scale: 2 }).notNull(),
   currency: text('currency').default('USD'),
   billingFrequency: text('billing_frequency').notNull(),
-  
+
   autoRenew: boolean('auto_renew').default(true),
   paymentMethod: text('payment_method'),
   last4: text('last4'),
-  
+
   metadata: utils.metadata(),
   ...utils.audit(),
 }, (table) => ({
   tenantIdx: utils.tenantIdx(table),
-  contactIdx: index('idx_subscriptions_contact').on(table.contactId),
-  companyIdx: index('idx_subscriptions_company').on(table.companyId),
-  statusIdx: index('idx_subscriptions_status').on(table.tenantId, table.status),
+  contactIdx: index('idx_service_subscriptions_contact').on(table.contactId),
+  companyIdx: index('idx_service_subscriptions_company').on(table.companyId),
+  statusIdx: index('idx_service_subscriptions_status').on(table.tenantId, table.status),
   activeIdx: utils.activeIdx(table),
 }));

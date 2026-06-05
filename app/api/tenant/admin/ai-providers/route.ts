@@ -2,14 +2,17 @@
  * AI Providers (admin only)
  *   GET   /api/tenant/admin/ai-providers
  *   PATCH /api/tenant/admin/ai-providers
+ *   DELETE /api/tenant/admin/ai-providers?provider=openai   (clears the stored key)
  *
- * Storage: tenants.settings.ai_providers (jsonb_set merge)
- * Per provider: { enabled, default_model, temperature, max_tokens, fallback_priority,
- *                 api_key_set (boolean — never echo the key), base_url (Ollama only) }
+ * Storage:
+ *   - Provider config (enabled, default_model, temperature, max_tokens,
+ *     fallback_priority) lives on tenants.settings.ai_providers via jsonb_set.
+ *   - API keys live in ai_provider_secrets (encrypted with AES-256-GCM via
+ *     lib/ai/secrets.ts). Plain `api_key` is accepted on PATCH but never
+ *     echoed back; the response only ever exposes a masked …last4 prefix.
  *
- * Secrets: API keys are not stored on tenants.settings (jsonb is too readable).
- * For now we record api_key_set:true as a marker. The real key should land in
- * a dedicated secrets table or env-per-tenant override; that's a follow-up.
+ * The Ollama "key" is a base_url, not a secret — stored alongside the
+ * ciphertext column so the gateway can resolve it without a second query.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -18,15 +21,38 @@ import { tenants } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
+import {
+  setProviderKey,
+  deleteProviderKey,
+  listProviderKeyMeta,
+  SecretsVaultError,
+  type AIProviderId,
+} from '@/lib/ai/secrets';
 
-const PROVIDERS = ['openai', 'anthropic', 'groq', 'ollama'] as const;
-type ProviderId = typeof PROVIDERS[number];
+const PROVIDERS: AIProviderId[] = ['openai', 'anthropic', 'groq', 'ollama'];
 
-const DEFAULTS: Record<ProviderId, any> = {
-  openai:    { enabled: false, default_model: 'gpt-4o-mini',         temperature: 0.4, max_tokens: 1024, fallback_priority: 1, api_key_set: false },
-  anthropic: { enabled: false, default_model: 'claude-3-5-sonnet',   temperature: 0.4, max_tokens: 1024, fallback_priority: 2, api_key_set: false },
-  groq:      { enabled: false, default_model: 'llama-3.1-70b-versatile', temperature: 0.4, max_tokens: 1024, fallback_priority: 3, api_key_set: false },
-  ollama:    { enabled: false, default_model: 'llama3.1:8b',         temperature: 0.4, max_tokens: 1024, fallback_priority: 4, base_url: 'http://localhost:11434' },
+interface IncomingProvider {
+  enabled?: boolean;
+  default_model?: string;
+  temperature?: number;
+  max_tokens?: number;
+  fallback_priority?: number;
+  api_key?: string;
+  base_url?: string;
+}
+
+const DEFAULTS: Record<AIProviderId, {
+  enabled: boolean;
+  default_model: string;
+  temperature: number;
+  max_tokens: number;
+  fallback_priority: number;
+  base_url?: string;
+}> = {
+  openai:    { enabled: false, default_model: 'gpt-4o-mini',              temperature: 0.4, max_tokens: 1024, fallback_priority: 1 },
+  anthropic: { enabled: false, default_model: 'claude-3-5-sonnet-latest', temperature: 0.4, max_tokens: 1024, fallback_priority: 2 },
+  groq:      { enabled: false, default_model: 'llama-3.1-70b-versatile',  temperature: 0.4, max_tokens: 1024, fallback_priority: 3 },
+  ollama:    { enabled: false, default_model: 'llama3.1:8b',              temperature: 0.4, max_tokens: 1024, fallback_priority: 4, base_url: 'http://localhost:11434' },
 };
 
 export async function GET(req: NextRequest) {
@@ -35,91 +61,182 @@ export async function GET(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const [t] = await db.select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1);
-    const stored = ((t?.settings as any) ?? {}).ai_providers ?? {};
+    const [t] = await db
+      .select({ settings: tenants.settings })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId))
+      .limit(1);
+    const stored = ((t?.settings as Record<string, unknown> | null) ?? {})['ai_providers'] as Record<string, Record<string, unknown>> | undefined ?? {};
+    const keys = await listProviderKeyMeta(ctx.tenantId);
 
-    const providers: Record<string, any> = {};
+    const providers: Record<string, unknown> = {};
     for (const id of PROVIDERS) {
-      providers[id] = { ...DEFAULTS[id], ...(stored[id] ?? {}) };
-      // Never echo the raw key
-      delete providers[id].api_key;
+      providers[id] = {
+        ...DEFAULTS[id],
+        ...(stored[id] ?? {}),
+        api_key_present: keys[id].present,
+        api_key_prefix: keys[id].keyPrefix,
+        rotated_at: keys[id].rotatedAt,
+        // Ollama uses base_url from the secrets table when set; fall back to JSON config
+        ...(id === 'ollama' && keys.ollama.baseUrl ? { base_url: keys.ollama.baseUrl } : {}),
+      };
     }
 
     return NextResponse.json({ providers });
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 }
 
 export async function PATCH(req: NextRequest) {
-  let ctx: any;
   try {
-    ctx = await requireAuth(req);
+    const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
     const incoming = body.providers;
-    if (!incoming || typeof incoming !== 'object')
+    if (!incoming || typeof incoming !== 'object') {
       return NextResponse.json({ error: 'providers object required' }, { status: 400 });
-
-    const safe: Record<string, any> = {};
-    for (const id of PROVIDERS) {
-      if (!incoming[id]) continue;
-      const p = incoming[id];
-      const out: any = {};
-      if (typeof p.enabled === 'boolean') out.enabled = p.enabled;
-      if (typeof p.default_model === 'string' && p.default_model.trim()) out.default_model = p.default_model.trim().slice(0, 100);
-      if (typeof p.temperature === 'number') {
-        if (p.temperature < 0 || p.temperature > 2) return NextResponse.json({ error: `${id}.temperature must be 0-2` }, { status: 400 });
-        out.temperature = p.temperature;
-      }
-      if (typeof p.max_tokens === 'number') {
-        if (!Number.isInteger(p.max_tokens) || p.max_tokens < 16 || p.max_tokens > 32000)
-          return NextResponse.json({ error: `${id}.max_tokens must be 16-32000` }, { status: 400 });
-        out.max_tokens = p.max_tokens;
-      }
-      if (typeof p.fallback_priority === 'number') {
-        if (!Number.isInteger(p.fallback_priority) || p.fallback_priority < 1 || p.fallback_priority > 99)
-          return NextResponse.json({ error: `${id}.fallback_priority must be 1-99` }, { status: 400 });
-        out.fallback_priority = p.fallback_priority;
-      }
-      if (id === 'ollama' && typeof p.base_url === 'string') {
-        const url = p.base_url.trim();
-        if (url && !/^https?:\/\//.test(url))
-          return NextResponse.json({ error: 'ollama.base_url must start with http(s)://' }, { status: 400 });
-        out.base_url = url.slice(0, 200);
-      }
-      // API key: just record presence (real secret lives elsewhere — TODO secrets vault)
-      if (typeof p.api_key === 'string') {
-        out.api_key_set = p.api_key.trim().length > 0;
-      }
-      safe[id] = out;
     }
 
-    await db
-      .update(tenants)
-      .set({
-        settings: sql`
-          jsonb_set(
-            COALESCE(${tenants.settings}, '{}'::jsonb),
-            '{ai_providers}',
-            COALESCE(${tenants.settings}->'ai_providers', '{}'::jsonb) || ${JSON.stringify(safe)}::jsonb
-          )
-        `,
-        updatedAt: new Date(),
-      })
-      .where(eq(tenants.id, ctx.tenantId));
+    // Split incoming payload into:
+    //   - configPatch (written to tenants.settings.ai_providers via jsonb_set)
+    //   - keyUpdates  (written to ai_provider_secrets via the vault)
+    const configPatch: Record<string, Record<string, unknown>> = {};
+    const keyUpdates: Array<{ provider: AIProviderId; apiKey?: string; baseUrl?: string }> = [];
+
+    for (const id of PROVIDERS) {
+      const raw = (incoming as Record<string, unknown>)[id];
+      if (!raw || typeof raw !== 'object') continue;
+      const p = raw as IncomingProvider;
+
+      const cfg: Record<string, unknown> = {};
+      if (typeof p['enabled'] === 'boolean') cfg['enabled'] = p['enabled'];
+      if (typeof p['default_model'] === 'string' && p['default_model'].trim()) {
+        cfg['default_model'] = p['default_model'].trim().slice(0, 100);
+      }
+      if (typeof p['temperature'] === 'number') {
+        if (p['temperature'] < 0 || p['temperature'] > 2) {
+          return NextResponse.json({ error: `${id}.temperature must be 0-2` }, { status: 400 });
+        }
+        cfg['temperature'] = p['temperature'];
+      }
+      if (typeof p['max_tokens'] === 'number') {
+        const mt = p['max_tokens'];
+        if (!Number.isInteger(mt) || mt < 16 || mt > 32000) {
+          return NextResponse.json({ error: `${id}.max_tokens must be 16-32000` }, { status: 400 });
+        }
+        cfg['max_tokens'] = mt;
+      }
+      if (typeof p['fallback_priority'] === 'number') {
+        const fp = p['fallback_priority'];
+        if (!Number.isInteger(fp) || fp < 1 || fp > 99) {
+          return NextResponse.json({ error: `${id}.fallback_priority must be 1-99` }, { status: 400 });
+        }
+        cfg['fallback_priority'] = fp;
+      }
+      if (Object.keys(cfg).length > 0) configPatch[id] = cfg;
+
+      // Key handling — keys never land in tenants.settings; they go in the vault.
+      const update: { provider: AIProviderId; apiKey?: string; baseUrl?: string } = { provider: id };
+      let touched = false;
+      if (typeof p['api_key'] === 'string') {
+        const trimmed = p['api_key'].trim();
+        if (trimmed.length > 0) {
+          update.apiKey = trimmed;
+          touched = true;
+        }
+      }
+      if (id === 'ollama' && typeof p['base_url'] === 'string') {
+        const url = p['base_url'].trim();
+        if (url && !/^https?:\/\//.test(url)) {
+          return NextResponse.json({ error: 'ollama.base_url must start with http(s)://' }, { status: 400 });
+        }
+        update.baseUrl = url;
+        if (!update.apiKey) update.apiKey = ''; // empty string keeps Ollama row valid (key not required)
+        touched = true;
+      }
+      if (touched) keyUpdates.push(update);
+    }
+
+    // 1. Persist non-secret config via jsonb_set merge (preserve sibling keys).
+    if (Object.keys(configPatch).length > 0) {
+      await db
+        .update(tenants)
+        .set({
+          settings: sql`
+            jsonb_set(
+              COALESCE(${tenants.settings}, '{}'::jsonb),
+              '{ai_providers}',
+              COALESCE(${tenants.settings}->'ai_providers', '{}'::jsonb) || ${JSON.stringify(configPatch)}::jsonb
+            )
+          `,
+          updatedAt: new Date(),
+        })
+        .where(eq(tenants.id, ctx.tenantId));
+    }
+
+    // 2. Persist keys via the secrets vault.
+    const updatedProviders: string[] = [];
+    for (const u of keyUpdates) {
+      try {
+        await setProviderKey(ctx.tenantId, u.provider, u.apiKey ?? '', {
+          baseUrl: u.baseUrl,
+          userId: ctx.userId,
+        });
+        updatedProviders.push(u.provider);
+      } catch (err) {
+        if (err instanceof SecretsVaultError && err.code === 'encryption_key_missing') {
+          return NextResponse.json({
+            error: 'Server is not configured to store API keys. Set ENCRYPTION_KEY (>=32 chars) and retry.',
+          }, { status: 503 });
+        }
+        throw err;
+      }
+    }
 
     await logAudit({
-      tenantId: ctx.tenantId, userId: ctx.userId,
-      action: 'update_ai_providers', entityType: 'tenant',
-      newData: { providers: Object.keys(safe) },
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: 'update_ai_providers',
+      entityType: 'tenant',
+      newData: {
+        config_keys: Object.keys(configPatch),
+        keys_rotated: updatedProviders,
+      },
     });
 
-    return NextResponse.json({ ok: true, providers: safe });
-  } catch (err: any) {
+    return NextResponse.json({ ok: true, config: Object.keys(configPatch), keys_rotated: updatedProviders });
+  } catch (err) {
     console.error('[ai-providers PATCH]', err);
+    return apiError(err);
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const ctx = await requireAuth(req);
+    if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+
+    const provider = req.nextUrl.searchParams.get('provider');
+    if (!provider || !PROVIDERS.includes(provider as AIProviderId)) {
+      return NextResponse.json({ error: `provider must be one of ${PROVIDERS.join(', ')}` }, { status: 400 });
+    }
+
+    await deleteProviderKey(ctx.tenantId, provider as AIProviderId);
+
+    await logAudit({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: 'delete_ai_provider_key',
+      entityType: 'tenant',
+      newData: { provider },
+    });
+
+    return NextResponse.json({ ok: true, provider });
+  } catch (err) {
     return apiError(err);
   }
 }

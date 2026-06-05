@@ -56,27 +56,14 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
 
   if (!company) notFound();
 
-  // Fetch stats separately for clarity and performance
-  const [stats] = await db.select({
-    contactCount: sql<number>`(SELECT count(*)::int FROM contacts WHERE company_id = ${company.id} AND deleted_at IS NULL)`,
-    leadCount: sql<number>`(SELECT count(*)::int FROM leads WHERE lower(company_name) = lower(${company.name}) AND tenant_id = ${tid} AND deleted_at IS NULL)`,
-    dealCount: sql<number>`(SELECT count(*)::int FROM deals WHERE company_id = ${company.id} AND deleted_at IS NULL)`,
-    pipelineValue: sql<number>`(SELECT COALESCE(sum(amount),0)::numeric FROM deals d LEFT JOIN deal_stages ds ON ds.id = d.stage_id WHERE d.company_id = ${company.id} AND ds.name NOT IN ('Lost', 'lost') AND d.deleted_at IS NULL)`
-  }).from(sql`dual`).limit(1).catch(() => [{
-     // Fallback if dual doesn't exist (Postgres usually doesn't need it, can just select)
-     contactCount: 0, leadCount: 0, dealCount: 0, pipelineValue: 0
-  }]);
-
-  // Actually, in Postgres we can just do:
-  const [[counts]] = await Promise.all([
-    db.execute(sql`
-      SELECT 
-        (SELECT count(*)::int FROM contacts WHERE company_id = ${company.id} AND deleted_at IS NULL) AS contact_count,
-        (SELECT count(*)::int FROM leads WHERE lower(company_name) = lower(${company.name}) AND tenant_id = ${tid} AND deleted_at IS NULL) AS lead_count,
-        (SELECT count(*)::int FROM deals WHERE company_id = ${company.id} AND deleted_at IS NULL) AS deal_count,
-        (SELECT COALESCE(sum(amount),0)::numeric FROM deals d LEFT JOIN deal_stages ds ON ds.id = d.stage_id WHERE d.company_id = ${company.id} AND ds.name NOT IN ('Lost', 'lost') AND d.deleted_at IS NULL) AS pipeline_value
-    `)
-  ]) as any;
+  const result = await db.execute(sql`
+    SELECT
+      (SELECT count(*)::int FROM contacts WHERE company_id = ${company.id} AND deleted_at IS NULL) AS contact_count,
+      (SELECT count(*)::int FROM leads WHERE lower(company_name) = lower(${company.name}) AND tenant_id = ${tid} AND deleted_at IS NULL) AS lead_count,
+      (SELECT count(*)::int FROM deals WHERE company_id = ${company.id} AND deleted_at IS NULL) AS deal_count,
+      (SELECT COALESCE(sum(amount),0)::numeric FROM deals d LEFT JOIN deal_stages ds ON ds.id = d.stage_id WHERE d.company_id = ${company.id} AND ds.name NOT IN ('Lost', 'lost') AND d.deleted_at IS NULL) AS pipeline_value
+  `);
+  const counts = (result as any).rows?.[0] ?? { contact_count: 0, lead_count: 0, deal_count: 0, pipeline_value: 0 };
 
   const [contacts, leads, deals] = await Promise.all([
     db.select({

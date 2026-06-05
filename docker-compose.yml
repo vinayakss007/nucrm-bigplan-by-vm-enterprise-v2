@@ -1,90 +1,232 @@
+##############################################################################
+# NuCRM — Docker Compose (Full Stack)
+##############################################################################
 
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: nucrm-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: nucrm
-      POSTGRES_PASSWORD: nucrm_secure_password
-      POSTGRES_DB: nucrm
+  # ── Nginx Load Balancer ──────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: nucrm-lb
+    ports:
+      - "${NUCRM_PUBLIC_PORT:-80}:80"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nucrm"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    container_name: nucrm-redis
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      web:
+        condition: service_healthy
     restart: unless-stopped
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
-    ports:
-      - "6379:6379"
+    networks:
+      - nucrm-net
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 3
 
-  app:
+  # ── Web Frontend (Next.js) ───────────────────────────────────────────────
+  web:
     build:
       context: .
-      args:
-        DATABASE_URL: postgresql://nucrm:nucrm_secure_password@db:5432/nucrm?sslmode=disable
-        JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-prod}
-        SENTRY_DSN: ${SENTRY_DSN:-}
-        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
-        SENTRY_ORG: ${SENTRY_ORG:-}
-        SENTRY_PROJECT: ${SENTRY_PROJECT:-}
-        SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
+      dockerfile: Dockerfile
+      target: runner
     container_name: nucrm-app
-    restart: unless-stopped
-    depends_on:
-      db: { condition: service_healthy }
-      redis: { condition: service_healthy }
     environment:
-      DATABASE_URL: postgresql://nucrm:nucrm_secure_password@db:5432/nucrm?sslmode=disable
-      REDIS_URL: redis://redis:6379
-      NODE_ENV: production
-      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-prod-long-enough-for-hmac}
-      SESSION_SECRET: ${SESSION_SECRET:-dev-session-secret-long-enough}
-      SETUP_KEY: ${SETUP_KEY:-dev-setup-key-long-enough-for-testing}
-      CRON_SECRET: ${CRON_SECRET:-dev-cron-secret-long-enough-for-hmac}
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
-      COOKIE_SECURE: "false"
-      SENTRY_DSN: ${SENTRY_DSN:-}
-      NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
-      SENTRY_ORG: ${SENTRY_ORG:-}
-      SENTRY_PROJECT: ${SENTRY_PROJECT:-}
-      SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
-      SENTRY_ENABLE: ${SENTRY_ENABLE:-false}
-      SENTRY_TRACES_SAMPLE_RATE: "0.1"
-    ports:
-      - "3000:3000"
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - SETUP_KEY=${SETUP_KEY}
+      - CRON_SECRET=${CRON_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      - DATABASE_SSL=${DATABASE_SSL:-false}
+      - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-10}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost}
+      - NODE_OPTIONS=--max-old-space-size=2048
+    expose:
+      - "3000"
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nucrm-net
 
+  # ── Background Worker (BullMQ) ───────────────────────────────────────────
   worker:
     build:
       context: .
-      args:
-        DATABASE_URL: postgresql://nucrm:nucrm_secure_password@db:5432/nucrm?sslmode=disable
-        JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-prod}
-    container_name: nucrm-worker
-    restart: unless-stopped
-    depends_on:
-      db: { condition: service_healthy }
-      redis: { condition: service_healthy }
+      dockerfile: Dockerfile
+      target: runner
+    command: ["node", "--import", "tsx", "worker.ts"]
     environment:
-      DATABASE_URL: postgresql://nucrm:nucrm_secure_password@db:5432/nucrm?sslmode=disable
-      REDIS_URL: redis://redis:6379
-      NODE_ENV: production
-      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-prod-long-enough-for-hmac}
-    command: ["npm", "run", "worker"]
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - SETUP_KEY=${SETUP_KEY}
+      - CRON_SECRET=${CRON_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - DATABASE_SSL=${DATABASE_SSL:-false}
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── PostgreSQL ───────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: nucrm-db
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-nucrm}
+      - POSTGRES_USER=${POSTGRES_USER:-nucrm}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nucrm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── Loki (Log Aggregation) ──────────────────────────────────────────────
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: nucrm-loki
+    volumes:
+      - ./deploy/monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - lokidata:/loki
+    command:
+      - '--config.file=/etc/loki/loki-config.yml'
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── Alertmanager ─────────────────────────────────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: nucrm-alertmanager
+    volumes:
+      - ./deploy/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanagerdata:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    ports:
+      - "9093:9093"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── Promtail (Log Shipper) ───────────────────────────────────────────────
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: nucrm-promtail
+    volumes:
+      - ./deploy/monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/log:/var/log:ro
+    command:
+      - '--config.file=/etc/promtail/promtail-config.yml'
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── PgBouncer (Connection Pooling) ──────────────────────────────────────
+  pgbouncer:
+    image: edoburu/pgbouncer:1.23
+    container_name: nucrm-pgbouncer
+    environment:
+      - DB_USER=${POSTGRES_USER:-nucrm}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-nucrm}
+      - POOL_MODE=transaction
+      - DEFAULT_POOL_SIZE=50
+      - MAX_CLIENT_CONN=200
+    ports:
+      - "6432:6432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U ${POSTGRES_USER:-nucrm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+  # ── Redis ────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: nucrm-redis
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+      --appendonly yes
+    volumes:
+      - redisdata:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - nucrm-net
 
 volumes:
-  postgres_data:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local
+  lokidata:
+    driver: local
+  alertmanagerdata:
+    driver: local
+
+networks:
+  nucrm-net:
+    driver: bridge
