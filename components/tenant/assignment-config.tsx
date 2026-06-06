@@ -78,7 +78,7 @@ export default function AssignmentConfig({ teamMembers = [] }: { teamMembers?: {
       ) : (
         <div className="space-y-2">
           {rules.sort((a, b) => a.priority - b.priority).map((rule, i) => {
-            const cfg = TYPE_CONFIG[rule.type] || TYPE_CONFIG.round_robin;
+            const cfg = TYPE_CONFIG[rule.type] || TYPE_CONFIG['round_robin']!;
             const Icon = cfg.icon;
             return (
               <div key={rule.id} className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card hover:shadow-sm transition-shadow">
@@ -92,7 +92,7 @@ export default function AssignmentConfig({ teamMembers = [] }: { teamMembers?: {
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-muted-foreground capitalize">{rule.type.replace(/_/g, ' ')}</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 capitalize">{rule.entityType}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{cfg.description}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{cfg?.description ?? ''}</p>
                 </div>
                 <div className="flex items-center gap-1">
                   <button onClick={() => toggleRule(rule.id, rule.isActive)}

@@ -184,8 +184,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' },
     });
   } catch (err: any) {
-    return new Response("# ERROR
-"), {
+    return new Response("# ERROR\\n", {
       status: 500,
       headers: { 'Content-Type': 'text/plain' },
     });

@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
     
     // Handle specific database errors
     if (error.message?.includes('not found')) {
-      return apiError(err, "Internal server error", 404);
+      return apiError(error, "Internal server error", 404);
     }
     
     return apiError(error);

@@ -23,7 +23,7 @@ export default async function TenantLayout({ children }: { children: React.React
   .limit(1);
 
   const tenant = { ...ctx.tenant, plan: ctx.plan };
-  const branding = tenantToBranding(ctx.tenant);
+  const branding = tenantToBranding(ctx.tenant as any);
 
   // Profile object mapped for compatibility with legacy components
   const profile = { 

@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
 
     // Use tenant's API key or fall back to platform key
     const tenantKey = (moduleInstalled?.settings as any)?.anthropic_api_key;
-    const apiKey = tenantKey || ANTHROPIC_KEY;
+    const apiKey = tenantKey || process.env.ANTHROPIC_API_KEY || '';
     if (!apiKey) {
       return NextResponse.json({ error: 'No Anthropic API key configured. Add one in the AI Assistant module settings.' }, { status: 503 });
     }

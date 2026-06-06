@@ -81,7 +81,7 @@ export function SavedViews({ entityType, currentFilters, currentQuery, onApplyVi
   };
 
   const applyView = (view: SavedView) => {
-    const q = typeof view.filters?.query === 'string' ? view.filters.query : currentQuery;
+    const q = typeof view.filters?.['query'] === 'string' ? view.filters['query'] : currentQuery;
     onApplyView(view.filters, q);
   };
 
