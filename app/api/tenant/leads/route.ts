@@ -7,12 +7,9 @@ import { leads, users, companies, leadActivities, activities } from '@/drizzle/s
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
-<<<<<<< HEAD
 import { resolveOrCreateContactForLead } from '@/lib/contacts/resolve';
 import { generateLeadOid } from '@/lib/leads/oid';
-=======
 import { fireWebhooks } from '@/lib/webhooks';
->>>>>>> main
 
 // Whitelist for sort columns to prevent SQL injection
 const ALLOWED_SORT_COLUMNS: Record<string, any> = {

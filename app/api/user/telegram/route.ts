@@ -97,7 +97,7 @@ export async function PATCH(request: NextRequest) {
 
         return NextResponse.json({ ok: true, message: 'Test message sent!' });
       } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 400 });
+        return apiError(err, "Bad request", 400);
       }
     }
 

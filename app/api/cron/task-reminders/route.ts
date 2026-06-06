@@ -5,6 +5,7 @@ import { tasks, tenantMembers, users, contacts } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { createNotification } from '@/lib/notifications';
+import { apiError } from '@/lib/api-error';
 
 export async function POST(request: NextRequest) {
   if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
@@ -102,6 +103,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok:true, due_today: dueToday.length, overdue: overdue.length, notified });
   } catch (err:any) {
     console.error('[TaskReminders] Error:', err);
-    return NextResponse.json({ error: err.message }, { status:500 });
+    return apiError(err);
   }
 }

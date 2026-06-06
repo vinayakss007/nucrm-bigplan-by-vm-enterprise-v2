@@ -73,15 +73,11 @@ export async function POST(req: NextRequest) {
     const limited = await checkRateLimit(req, { action: 'ai_assistant', max: 30, windowMinutes: 60 });
     if (limited) return limited;
 
-<<<<<<< HEAD
     // Module gate — uniform check across all AI/automation/forms/etc. routes
     const denied = await requireModule(ctx, 'ai-assistant');
     if (denied) return denied;
 
     // Pull module settings (separate from the gate so requireModule stays generic)
-=======
-    // Module gate
->>>>>>> main
     const moduleInstalled = await db.query.tenantModules.findFirst({
       where: and(
         eq(tenantModules.tenantId, ctx.tenantId),
@@ -89,20 +85,18 @@ export async function POST(req: NextRequest) {
         eq(tenantModules.status, 'active'),
       ),
     });
-<<<<<<< HEAD
+    if (!moduleInstalled) {
+      return NextResponse.json(
+        { error: 'AI Assistant module not installed. Install it from Settings → Modules.' },
+        { status: 403 },
+      );
+    }
 
     // Use tenant's API key or fall back to platform key
     const tenantKey = (moduleInstalled?.settings as any)?.anthropic_api_key;
     const apiKey = tenantKey || ANTHROPIC_KEY;
     if (!apiKey) {
       return NextResponse.json({ error: 'No Anthropic API key configured. Add one in the AI Assistant module settings.' }, { status: 503 });
-=======
-    if (!moduleInstalled) {
-      return NextResponse.json(
-        { error: 'AI Assistant module not installed. Install it from Settings → Modules.' },
-        { status: 403 },
-      );
->>>>>>> main
     }
 
     const rawBody = await req.json();
@@ -225,10 +219,7 @@ Score: ${sanitizedContact?.score ?? 0}/100`;
             code: err.code,
           }, { status: 503 });
         }
-        return NextResponse.json({
-          error: err.message,
-          code: err.code,
-        }, { status: 502 });
+        return apiError(err, "Internal server error", 502);
       }
       throw err;
     }

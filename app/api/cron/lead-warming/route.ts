@@ -13,6 +13,7 @@ import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { processLeadWarming, resetMonthlyCounters } from '@/lib/lead-warming/engine';
 import { analyzeUnprocessedReplies } from '@/lib/lead-warming/reply-analyzer';
+import { apiError } from '@/lib/api-error';
 
 export async function POST(req: NextRequest) {
   // Validate cron secret
@@ -46,6 +47,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     console.error('[cron/lead-warming] Error:', err.message);
-    return NextResponse.json({ error: err.message, partial: results }, { status: 500 });
+    return apiError(err, "Internal server error", 500);
   }
 }

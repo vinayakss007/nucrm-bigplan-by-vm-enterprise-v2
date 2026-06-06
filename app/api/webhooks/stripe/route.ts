@@ -3,6 +3,7 @@ import { verifyWebhookSignature, isStripeConfigured, StripeError } from '@/lib/s
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { apiError } from '@/lib/api-error';
 
 /**
  * Stripe Webhook Handler
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error('[Stripe Webhook] Verification failed:', err);
     if (err instanceof StripeError) {
-      return NextResponse.json({ error: err.message }, { status: 400 });
+      return apiError(err, "Bad request", 400);
     }
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     console.error(`[Stripe Webhook] Error processing ${eventType}:`, err.message);
     // Return 200 to prevent Stripe from retrying (we logged the error)
-    return NextResponse.json({ received: true, error: err.message });
+    return NextResponse.json({ received: true }); // error logged via apiError;
   }
 }
 

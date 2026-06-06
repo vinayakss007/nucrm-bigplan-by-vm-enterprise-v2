@@ -14,6 +14,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { leads, leadOffers, users } from '@/drizzle/schema';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { apiError } from '@/lib/api-error';
 
 export async function GET(request: NextRequest, { params }: any) {
   try {
@@ -127,6 +128,6 @@ export async function GET(request: NextRequest, { params }: any) {
     return NextResponse.json({ data });
   } catch (error: any) {
     console.error('[contacts/leads] error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(err, "Internal server error", 500);
   }
 }

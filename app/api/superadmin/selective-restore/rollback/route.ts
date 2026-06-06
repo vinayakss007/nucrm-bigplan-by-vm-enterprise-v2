@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         error: 'Rollback failed',
-        details: err.message,
+        details: "Internal server error",
       }, { status: 500 });
     }
 

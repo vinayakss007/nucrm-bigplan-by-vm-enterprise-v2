@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { apiError } from '@/lib/api-error';
 
 const RESERVED = ['www','app','api','admin','mail','smtp','ftp','ns1','ns2','help','support','billing','dashboard','login','signup','auth','static','cdn','assets'];
 
@@ -23,6 +24,6 @@ export async function GET(request: NextRequest) {
     const isCurrent = existing?.id === ctx.tenantId;
     return NextResponse.json({ available: !existing || isCurrent, current: isCurrent });
   } catch (err:any) { 
-    return NextResponse.json({ error:err.message }, { status:500 }); 
+    return apiError(err); 
   }
 }

@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
         dealsThisMonthValue: 0, newContactsThisMonth: 0, wonThisMonth: 0,
         activities: [], tasks: [], dealsByStage: [], recentContacts: [], upcomingDeals: [],
       },
-      error: err.message ?? 'Failed to load dashboard',
+      error: "Internal server error",
       status: 'error'
     }, { status: 200 });
   }
