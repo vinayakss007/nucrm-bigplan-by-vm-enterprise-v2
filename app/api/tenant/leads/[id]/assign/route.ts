@@ -21,6 +21,7 @@ import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { logAudit } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
+import { apiError } from '@/lib/api-error';
 
 const assignSchema = z.object({
   assigned_to: z.string().uuid('assigned_to must be a uuid'),
@@ -165,6 +166,6 @@ export async function POST(request: NextRequest, { params }: any) {
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     console.error('[leads/assign] error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(err, "Internal server error", 500);
   }
 }

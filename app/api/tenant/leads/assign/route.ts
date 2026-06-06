@@ -7,6 +7,7 @@ import { contacts, leadAssignments, tenantMembers, users } from '@/drizzle/schem
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';
+import { apiError } from '@/lib/api-error';
 
 // POST: assign one or many contacts to a rep
 // { contact_ids: string[], assign_to: string, reason?: string }
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok:true, assigned: rowCount });
   } catch (err:any) { 
-    return NextResponse.json({ error:err.message }, { status:500 }); 
+    return apiError(err); 
   }
 }
 
@@ -143,6 +144,6 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ ok:true, unassigned: rowCount });
   } catch (err:any) { 
-    return NextResponse.json({ error:err.message }, { status:500 }); 
+    return apiError(err); 
   }
 }

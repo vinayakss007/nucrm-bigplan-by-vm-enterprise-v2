@@ -7,6 +7,7 @@ import { RateLimiter, getRateLimitHeaders } from '@/lib/rate-limit';
 import { fireWebhooks, type WebhookEvent } from '@/lib/webhooks';
 import { logAudit } from '@/lib/audit';
 import { devLogger } from '@/lib/dev-logger';
+import { apiError } from '@/lib/api-error';
 
 // ── Constants ──────────────────────────────────────────────────────────
 const MAX_PAYLOAD_SIZE = 1_000_000; // 1 MB
@@ -608,7 +609,7 @@ export async function POST(request: NextRequest) {
         });
       } catch (err: any) {
         hasError = true;
-        results.push({ entity: item.entity, action: item.action, id: null, status: 'error', error: err.message });
+        results.push({ entity: item.entity, action: item.action, id: null, status: 'error', error: "Internal server error" });
 
         logWebhookDelivery({
           tenantId: apiKeyRow.tenantId,

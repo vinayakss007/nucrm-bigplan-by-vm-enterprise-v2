@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (err: any) {
     console.error('[activities GET]', err);
-    return NextResponse.json({ data: [], error: err.message }, { status: 200 });
+    return apiError(err, "Internal server error", 200);
   }
 }
 

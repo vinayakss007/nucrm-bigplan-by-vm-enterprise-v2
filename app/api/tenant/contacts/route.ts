@@ -213,6 +213,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: contact }, { status: 201 });
   } catch (err: any) {
     console.error('[contacts POST]', err);
-    return NextResponse.json({ error: err.message ?? 'Internal server error' }, { status: 500 });
+    return apiError(err, "Internal server error", 500);
   }
 }

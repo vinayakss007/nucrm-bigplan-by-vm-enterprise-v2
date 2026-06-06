@@ -4,6 +4,7 @@ import { db } from '@/drizzle/db';
 import { tenants, users, activities } from '@/drizzle/schema';
 import { eq, and, lt, sql, notExists, inArray } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
+import { apiError } from '@/lib/api-error';
 
 export async function POST(request: NextRequest) {
   if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
@@ -118,6 +119,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok:true, expired, warned });
   } catch (err:any) { 
     console.error('[TrialCheck] Error:', err);
-    return NextResponse.json({ error:err.message }, { status:500 }); 
+    return apiError(err); 
   }
 }

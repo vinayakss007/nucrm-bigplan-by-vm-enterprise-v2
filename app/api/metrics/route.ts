@@ -4,6 +4,7 @@ import { contacts, leads, deals, companies, tasks, activities, tenants, users, d
 import { eq, and, isNull, gte, sql, count, sum, ilike } from 'drizzle-orm';
 import { exportPrometheusMetrics as exportAppMetrics } from '@/lib/metrics';
 import IORedis from 'ioredis';
+import { apiError } from '@/lib/api-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -183,7 +184,8 @@ export async function GET(request: NextRequest) {
       headers: { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' },
     });
   } catch (err: any) {
-    return new Response(`# ERROR ${err.message}\n`, {
+    return new Response("# ERROR
+"), {
       status: 500,
       headers: { 'Content-Type': 'text/plain' },
     });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendEmail } from '@/lib/email/service';
+import { apiError } from '@/lib/api-error';
 
 /**
  * Test Email Endpoint

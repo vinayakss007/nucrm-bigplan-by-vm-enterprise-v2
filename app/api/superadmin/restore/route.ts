@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
     await db.insert(errorLogs).values({
       level: 'fatal',
       code: 'RESTORE_FAILED',
-      message: err.message,
+      message: "Internal server error",
       stack: err.stack?.slice(0, 2000),
     }).catch(() => {});
     return apiError(err);

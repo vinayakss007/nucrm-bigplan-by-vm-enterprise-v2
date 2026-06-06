@@ -6,6 +6,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { createNotification } from '@/lib/notifications';
 import { fireWebhooks } from '@/lib/webhooks';
 import { syncCalculatedFields } from '@/lib/formula/sync';
+import { apiError } from '@/lib/api-error';
 
 export async function POST(req: NextRequest) {
   try {

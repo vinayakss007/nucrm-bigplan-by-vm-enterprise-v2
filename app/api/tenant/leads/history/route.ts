@@ -4,6 +4,7 @@ import { db } from '@/drizzle/db';
 import { leadAssignments, leads, users } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { aliasedTable } from 'drizzle-orm';
+import { apiError } from '@/lib/api-error';
 
 export async function GET(request: NextRequest) {
   try {
@@ -45,6 +46,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data });
   } catch (err:any) { 
     console.error('[leads/history]', err);
-    return NextResponse.json({ error:err.message }, { status:500 }); 
+    return apiError(err); 
   }
 }
