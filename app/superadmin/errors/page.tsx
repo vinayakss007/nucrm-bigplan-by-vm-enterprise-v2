@@ -101,9 +101,9 @@ export default function ErrorsPage() {
       {/* Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
-          { label:'Fatal', desc:LEVEL_CFG.fatal.desc, value:s.fatal_unresolved??0, color:'text-red-400', bg:'bg-red-500/10', filter:'fatal' },
-          { label:'Error', desc:LEVEL_CFG.error.desc, value:s.error_unresolved??0, color:'text-orange-400', bg:'bg-orange-500/10', filter:'error' },
-          { label:'Warn', desc:LEVEL_CFG.warn.desc, value:s.warn_unresolved??0, color:'text-amber-400', bg:'bg-amber-500/10', filter:'warn' },
+          { label:'Fatal', desc:LEVEL_CFG['fatal']?.desc ?? '', value:s.fatal_unresolved??0, color:'text-red-400', bg:'bg-red-500/10', filter:'fatal' },
+          { label:'Error', desc:LEVEL_CFG['error']?.desc ?? '', value:s.error_unresolved??0, color:'text-orange-400', bg:'bg-orange-500/10', filter:'error' },
+          { label:'Warn', desc:LEVEL_CFG['warn']?.desc ?? '', value:s.warn_unresolved??0, color:'text-amber-400', bg:'bg-amber-500/10', filter:'warn' },
           { label:'Last hour', desc:'Errors in the last 60 minutes', value:s.last_hour??0, color:'text-white/60', bg:'bg-white/5', filter:'' },
           { label:'Last 24h', desc:'Errors in the last 24 hours', value:s.last_day??0, color:'text-white/60', bg:'bg-white/5', filter:'' },
         ].map(m => (

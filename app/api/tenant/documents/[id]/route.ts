@@ -23,13 +23,9 @@ export async function GET(
       id: documents.id,
       tenantId: documents.tenantId,
       name: documents.name,
-      storageKey: documents.storageKey,
+      s3Key: documents.s3Key,
       mimeType: documents.mimeType,
       sizeBytes: documents.sizeBytes,
-      description: documents.description,
-      tags: documents.tags,
-      linkedEntityType: documents.linkedEntityType,
-      linkedEntityId: documents.linkedEntityId,
       uploadedBy: documents.uploadedBy,
       createdAt: documents.createdAt,
     })
@@ -43,7 +39,7 @@ export async function GET(
 
   let downloadUrl: string;
   try {
-    downloadUrl = await getSignedUrl(row.storageKey, 600);
+    downloadUrl = await getSignedUrl(row.s3Key, 600);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Could not sign URL';
     console.error('[documents GET] sign failed', msg);
@@ -54,13 +50,9 @@ export async function GET(
     data: {
       id: row.id,
       name: row.name,
-      storage_key: row.storageKey,
+      storage_key: row.s3Key,
       mime_type: row.mimeType,
       size_bytes: row.sizeBytes,
-      description: row.description,
-      tags: row.tags,
-      linked_entity_type: row.linkedEntityType,
-      linked_entity_id: row.linkedEntityId,
       uploaded_by: row.uploadedBy,
       created_at: row.createdAt,
       download_url: downloadUrl,
@@ -82,7 +74,7 @@ export async function DELETE(
     .select({
       id: documents.id,
       tenantId: documents.tenantId,
-      storageKey: documents.storageKey,
+      s3Key: documents.s3Key,
     })
     .from(documents)
     .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
@@ -96,7 +88,7 @@ export async function DELETE(
   // the user sees the document disappear from the UI; a future sweep
   // can collect orphans via the `deleted_at IS NOT NULL` filter.
   try {
-    await deleteObject(row.storageKey);
+    await deleteObject(row.s3Key);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'S3 delete failed';
     console.warn('[documents DELETE] s3 delete failed (soft-deleting row anyway)', msg);
