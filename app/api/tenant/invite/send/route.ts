@@ -7,6 +7,13 @@ import { tenants, plans, invitations, users, tenantMembers } from '@/drizzle/sch
 import { eq, and, sql, isNull } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { randomBytes } from 'crypto';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+const inviteSendSchema = z.object({
+  email: z.string().email('Valid email is required'),
+  roleSlug: z.string().trim().max(50).optional().default('sales_rep'),
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,9 +23,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Permission denied: team.invite required' }, { status: 403 });
     }
 
-    const { email, roleSlug = 'sales_rep' } = await request.json();
-    if (!email) return NextResponse.json({ error: 'email required' }, { status: 400 });
-    const emailLower = email.trim().toLowerCase();
+    const raw = await request.json();
+    const parsed = validateBody(inviteSendSchema, raw);
+    if (parsed instanceof NextResponse) return parsed;
+    const { email, roleSlug } = parsed.data;
+    const emailLower = email.toLowerCase();
 
     // 1. Check if already a member
     const existingMember = await db.query.tenantMembers.findFirst({

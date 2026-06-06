@@ -5,6 +5,13 @@ import { db } from '@/drizzle/db';
 import { sessions } from '@/drizzle/schema';
 import { eq, and, gt, ne, desc } from 'drizzle-orm';
 import { hashToken } from '@/lib/auth/session';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+const deleteSessionSchema = z.object({
+  sessionId: z.string().uuid().optional(),
+  revokeAll: z.boolean().optional(),
+});
 
 export async function GET(request: NextRequest) {
   try {
@@ -43,7 +50,10 @@ export async function DELETE(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     
-    const { sessionId, revokeAll } = await request.json();
+    const body = await request.json();
+    const parsed = validateBody(deleteSessionSchema, body);
+    if (parsed instanceof NextResponse) return parsed;
+    const { sessionId, revokeAll } = parsed.data;
     const currentToken = request.cookies.get('nucrm_session')?.value;
     const currentHash = currentToken ? await hashToken(currentToken) : null;
     

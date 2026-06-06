@@ -6,6 +6,24 @@ import { db } from '@/drizzle/db';
 import { territories, territoryAssignments } from '@/drizzle/schema/territories';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getTerritoryTree } from '@/lib/territories';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+const createTerritorySchema = z.object({
+  name: z.string().min(1, 'name is required'),
+  type: z.enum(['country', 'state', 'city', 'region', 'custom']).or(z.string().min(1)),
+  parentId: z.string().uuid().optional().nullable(),
+  geoConfig: z.record(z.string(), z.unknown()).optional().default({}),
+});
+
+const updateTerritorySchema = z.object({
+  id: z.string().uuid('id is required'),
+  name: z.string().optional(),
+  type: z.enum(['country', 'state', 'city', 'region', 'custom']).or(z.string()).optional(),
+  parentId: z.string().uuid().optional().nullable(),
+  geoConfig: z.record(z.string(), z.unknown()).optional(),
+  assignedTo: z.string().uuid().optional(),
+});
 
 export async function GET(req: NextRequest) {
   try {
@@ -28,20 +46,18 @@ export async function POST(req: NextRequest) {
     const gate = await requireModule(ctx.tenantId, 'core-crm');
     if (gate) return gate;
 
-    const body = await req.json();
-    const { name, type, parentId, geoConfig } = body;
-
-    if (!name || !type) {
-      return NextResponse.json({ error: 'name and type are required' }, { status: 400 });
-    }
+    const raw = await req.json();
+    const parsed = validateBody(createTerritorySchema, raw);
+    if (parsed instanceof NextResponse) return parsed;
+    const { name, type, parentId, geoConfig } = parsed.data;
 
     const [row] = await db.insert(territories).values({
       tenantId: ctx.tenantId,
       name,
-      type,
+      type: type as any,
       parentId: parentId || null,
       geoConfig: geoConfig || {},
-    }).returning();
+    } as any).returning();
 
     return NextResponse.json({ data: row }, { status: 201 });
   } catch (err: any) {
@@ -56,14 +72,12 @@ export async function PUT(req: NextRequest) {
     const gate = await requireModule(ctx.tenantId, 'core-crm');
     if (gate) return gate;
 
-    const body = await req.json();
-    const { id, name, type, parentId, geoConfig, assignedTo } = body;
+    const raw = await req.json();
+    const parsed = validateBody(updateTerritorySchema, raw);
+    if (parsed instanceof NextResponse) return parsed;
+    const { id, name, type, parentId, geoConfig, assignedTo } = parsed.data;
 
-    if (!id) {
-      return NextResponse.json({ error: 'id is required' }, { status: 400 });
-    }
-
-    const updates: Record<string, any> = { updatedAt: new Date() };
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (name !== undefined) updates['name'] = name;
     if (type !== undefined) updates['type'] = type;
     if (parentId !== undefined) updates['parentId'] = parentId;
@@ -72,7 +86,7 @@ export async function PUT(req: NextRequest) {
 
     const [row] = await db
       .update(territories)
-      .set(updates)
+      .set(updates as any)
       .where(and(eq(territories.id, id), eq(territories.tenantId, ctx.tenantId)))
       .returning();
 
