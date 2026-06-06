@@ -225,7 +225,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       entityId: dealId
     });
 
-    fireWebhooks(ctx.tenantId, 'deal.deleted', { id: dealId }).catch((err) => logError(err, "async-catch:[context]"));
+    fireWebhooks(ctx.tenantId, 'deal.deleted', { id: dealId }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
   } catch (err: any) {
@@ -241,7 +241,7 @@ async function handleDealWon(ctx: any, dealId: string, row: any) {
     title: row.title,
     amount: row.amount,
     contact_id: row.contactId,
-  }).catch((err) => logError(err, "async-catch:[context]"));
+  }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
   // Send Email
   if (row.contactId) {
@@ -275,7 +275,7 @@ async function handleDealWon(ctx: any, dealId: string, row: any) {
             <br/>
             <p>Best regards,<br/>${contactData.tenantName} Team</p>
           </div>`,
-        }).catch((err) => logError(err, "async-catch:[context]"));
+        }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
       }
     } catch (e) {
       console.error('[deal-won] Email failed:', e);

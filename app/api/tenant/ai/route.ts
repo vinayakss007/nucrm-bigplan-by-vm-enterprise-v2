@@ -241,7 +241,7 @@ Score: ${sanitizedContact?.score ?? 0}/100`;
       );
     } catch (err) {
       // Bookkeeping failure must not break the user response
-      logError({ error: err, context: 'ai-assistant-recordUsage' }).catch((err) => logError(err, "async-catch:[context]"));
+      logError({ error: err, context: 'ai-assistant-recordUsage' }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     }
 
     const envelope = {
@@ -302,7 +302,7 @@ Score: ${sanitizedContact?.score ?? 0}/100`;
     // Unreachable — switch above already handled every value.
     return NextResponse.json({ ...envelope, result: resp.text });
   } catch (err) {
-    logError({ error: err, context: 'ai-assistant' }).catch((err) => logError(err, "async-catch:[context]"));
+    logError({ error: err, context: 'ai-assistant' }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     return apiError(err);
   }
 }

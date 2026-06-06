@@ -95,7 +95,7 @@ export default function OnboardingPage() {
           company_name: companyName.trim(),
           pipeline_name: pipelineName.trim() || 'Sales Pipeline',
         }),
-      }).catch((err) => logError(err, "async-catch:[context]")); // Non-blocking — don't fail onboarding if this fails
+      }).catch((err) => logError({ error: err, context: "async-catch:[context]" })); // Non-blocking — don't fail onboarding if this fails
 
       setStep(3);
     } catch {
@@ -127,7 +127,7 @@ export default function OnboardingPage() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ product_id: 'skip', modules: [] }),
-            }).catch((err) => logError(err, "async-catch:[context]"));
+            }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
             router.push('/tenant/dashboard');
           }}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors"

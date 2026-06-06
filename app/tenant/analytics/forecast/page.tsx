@@ -28,11 +28,13 @@ export default function ForecastPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+  let ignore = false;
     fetch('/api/tenant/deals?limit=500')
       .then(r => r.json())
       .then(res => { setDeals(res.data || []); setLoading(false); })
       .catch(() => setLoading(false));
-  }, []);
+    return () => { ignore = true; };
+}, []);
 
   const now = new Date();
   const next6Months: string[] = [];

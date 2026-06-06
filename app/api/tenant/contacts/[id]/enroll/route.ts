@@ -85,7 +85,7 @@ export async function POST(req: NextRequest, { params }: any) {
     await db.update(sequences)
       .set({ enrollCount: sql`${sequences.enrollCount} + 1` })
       .where(eq(sequences.id, sequence_id))
-      .catch((err) => logError(err, "async-catch:[context]"));
+      .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({ data: enrollment }, { status: 201 });
   } catch (err: any) { 

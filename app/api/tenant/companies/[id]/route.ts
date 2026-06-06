@@ -93,7 +93,7 @@ export async function PATCH(req: NextRequest, { params }: any) {
       entityId: id 
     });
 
-    fireWebhooks(ctx.tenantId, 'company.updated', { id }).catch((err) => logError(err, "async-catch:[context]"));
+    fireWebhooks(ctx.tenantId, 'company.updated', { id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({ data: row });
   } catch (err: any) { 
@@ -134,7 +134,7 @@ export async function DELETE(req: NextRequest, { params }: any) {
       entityId: id 
     });
 
-    fireWebhooks(ctx.tenantId, 'company.deleted', { id }).catch((err) => logError(err, "async-catch:[context]"));
+    fireWebhooks(ctx.tenantId, 'company.deleted', { id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
   } catch (err: any) { 

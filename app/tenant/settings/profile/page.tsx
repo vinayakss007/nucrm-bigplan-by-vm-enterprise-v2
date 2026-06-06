@@ -16,10 +16,12 @@ export default function ProfileSettingsPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   useEffect(() => {
-    fetch('/api/tenant/me').then(r=>r.json()).then(d=>{
+  let ignore = false;
+    fetch('/api/tenant/me').then(r=>r.json()).then(d=>{ if (ignore) return;
       if(d.user){ setUser(d.user); setProfile({ full_name:d.user.full_name||'', phone:d.user.phone||'', timezone:d.user.timezone||'UTC', avatar_url:d.user.avatar_url||'' }); }
     });
-  }, []);
+    return () => { ignore = true; };
+}, []);
 
   const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving('profile');

@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
           await s3Client.send(new DeleteObjectsCommand({
             Bucket: process.env.BACKUP_BUCKET,
             Delete: { Objects: oldKeys },
-          })).catch((err) => logError(err, "async-catch:[context]"));
+          })).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
         }
       } catch (uploadErr: any) {
         console.error('[backup] S3 upload failed, keeping local:', uploadErr.message);
@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
       .where(and(
         eq(backupAlerts.alertType, 'no_backup'),
         eq(backupAlerts.resolved, false)
-      )).catch((err) => logError(err, "async-catch:[context]"));
+      )).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     console.log(`[backup] completed: ${filename} (${(sizeBytes / 1024 / 1024).toFixed(1)}MB, ${durationMs}ms)`);
     return NextResponse.json({
@@ -229,13 +229,13 @@ export async function POST(request: NextRequest) {
       code: 'BACKUP_FAILED',
       message: `Automated backup failed: ${err.message}`,
       stack: err.stack?.slice(0, 2000)
-    }).catch((err) => logError(err, "async-catch:[context]"));
+    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     // Alert super admin
     await alertSuperAdmin(
       'CRITICAL: Automated Database Backup FAILED',
       `Time: ${new Date().toISOString()}\nError: ${err.message}\n\nManual backup required immediately:\n1. Check database connection\n2. Check disk space\n3. Run backup manually from superadmin console`
-    ).catch((err) => logError(err, "async-catch:[context]"));
+    ).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return apiError(err);
   }

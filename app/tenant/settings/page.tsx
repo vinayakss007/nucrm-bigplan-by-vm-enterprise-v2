@@ -1,6 +1,6 @@
 'use client';
-import {
-import { logError } from '@/lib/errors'; useEffect, useMemo, useState } from 'react';
+import { logError } from '@/lib/errors';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Search, X, Settings as SettingsIcon, ArrowRight, ShieldAlert,
@@ -36,13 +36,15 @@ export default function SettingsIndex() {
   const [summary, setSummary] = useState<{ configured: number; default: number; attention: number; unknown: number }>({ configured: 0, default: 0, attention: 0, unknown: 0 });
 
   useEffect(() => {
+  let ignore = false;
     fetch('/api/tenant/me').then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => setIsAdmin(d.is_admin ?? false)).catch((err) => logError(err, "async-catch:[context]"));
+      .then(d => setIsAdmin(d.is_admin ?? false)).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     fetch('/api/tenant/settings-status').then(r => r.ok ? r.json() : null)
       .then(d => { if (d) { setStatuses(d.statuses ?? {}); setSummary(d.summary ?? summary); } })
-      .catch((err) => logError(err, "async-catch:[context]"));
+      .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => { ignore = true; };
+}, []);
 
   const q = query.trim().toLowerCase();
   const visible = useMemo(() => visibleForRole(isAdmin), [isAdmin]);

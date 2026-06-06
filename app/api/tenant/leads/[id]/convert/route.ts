@@ -234,7 +234,7 @@ export async function POST(
         activityType: 'converted',
         description: 'Lead converted to contact',
         activityData: { contact_id: contactId, created_by: ctx.userId }
-      }).catch((err) => logError(err, "async-catch:[context]"));
+      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
       // ── 4. Optionally create a deal ─────────────────────────────────
       let dealId: string | null = null;
@@ -302,7 +302,7 @@ export async function POST(
             eventType: 'deal_created',
             action: 'create',
             description: 'Deal created from lead conversion',
-          }).catch((err) => logError(err, "async-catch:[context]"));
+          }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
         }
       }
 
@@ -320,7 +320,7 @@ export async function POST(
       id: result.contactId,
       lead_id: id,
       converted_from_lead: true,
-    }).catch((err) => logError(err, "async-catch:[context]"));
+    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     // Notify assignee if different from converter
     if (assignee !== ctx.userId) {

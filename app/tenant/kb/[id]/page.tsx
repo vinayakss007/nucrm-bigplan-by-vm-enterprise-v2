@@ -23,7 +23,7 @@ export default function KBArticlePage() {
       if (!res.ok) { router.push('/tenant/kb'); return; }
       const d = await res.json();
       setArticle(d.data);
-    } catch (err) { logError(err, "catch:[context]"); } finally { setLoading(false); }
+    } catch (err) { logError({ error: err, context: "catch:[context]" }); } finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, [params.id]);
@@ -41,7 +41,7 @@ export default function KBArticlePage() {
         const d = await res.json();
         setArticle((prev: any) => ({ ...prev, helpful: d.data.helpful, notHelpful: d.data.notHelpful }));
       }
-    } catch (err) { logError(err, "catch:[context]"); }
+    } catch (err) { logError({ error: err, context: "catch:[context]" }); }
   };
 
   const deleteArticle = async () => {

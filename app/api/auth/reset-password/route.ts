@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       title: '🔑 Password Changed',
       message: 'Your account password has been successfully changed. If this wasn\'t you, contact support immediately.',
       icon: '⚠️',
-    }).catch((err) => logError(err, "async-catch:[context]"));
+    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {

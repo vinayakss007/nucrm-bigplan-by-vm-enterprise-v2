@@ -39,14 +39,16 @@ export default function PortalSettingsPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   useEffect(() => {
+  let ignore = false;
     Promise.all([
       fetch('/api/tenant/portal/config').then(r => r.json()),
       fetch('/api/tenant/portal/clients').then(r => r.json()),
-    ]).then(([cfg, clt]) => {
+    ]).then(([cfg, clt]) => { if (ignore) return; 
       if (cfg.data) setConfig(cfg.data);
       setClients(clt.data || []);
-    }).finally(() => setLoading(false));
-  }, []);
+     } ).finally(() => setLoading(false));
+    return () => { ignore = true; };
+}, []);
 
   const saveConfig = async () => {
     setSaving(true);

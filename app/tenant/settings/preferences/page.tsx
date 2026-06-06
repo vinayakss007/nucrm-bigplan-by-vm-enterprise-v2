@@ -71,15 +71,17 @@ export default function PreferencesPage() {
   const { setTheme } = useTheme();
 
   useEffect(() => {
+  let ignore = false;
     fetch('/api/user/preferences')
       .then(r => r.ok ? r.json() : { preferences: {}, workspace_defaults: {} })
-      .then(d => {
+      .then(d => { if (ignore) return;
         setPrefs(d.preferences ?? {});
         setOriginal(d.preferences ?? {});
         setWorkspaceDefaults(d.workspace_defaults ?? {});
       })
       .finally(() => setLoading(false));
-  }, []);
+    return () => { ignore = true; };
+}, []);
 
   const dirty = useMemo(() => JSON.stringify(prefs) !== JSON.stringify(original), [prefs, original]);
 

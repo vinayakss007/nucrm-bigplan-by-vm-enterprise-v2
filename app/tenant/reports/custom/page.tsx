@@ -43,7 +43,7 @@ export default function CustomReportBuilder() {
       const res = await fetch('/api/tenant/reports/custom');
       const d = await res.json();
       setSavedReports(d.data || []);
-    } catch (err) { logError(err, "catch:[context]"); }
+    } catch (err) { logError({ error: err, context: "catch:[context]" }); }
   };
 
   const toggleColumn = (col: string) => {

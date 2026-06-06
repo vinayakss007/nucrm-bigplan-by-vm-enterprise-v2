@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
         status: c.status === 'up' ? 'ok' : 'error',
         latencyMs: c.latency_ms,
         message: c.message,
-      }).catch((err) => logError(err, "async-catch:[context]"));
+      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     }
 
     const history = await db

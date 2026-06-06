@@ -31,20 +31,22 @@ export default function OutOfOfficePage() {
   const [meId, setMeId] = useState<string | null>(null);
 
   useEffect(() => {
+  let ignore = false;
     Promise.all([
       fetch('/api/user/out-of-office').then(r => r.ok ? r.json() : { out_of_office: DEFAULT }),
       fetch('/api/tenant/members').then(r => r.ok ? r.json() : { data: [] }),
       fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
-    ]).then(([oooRes, members, me]: any[]) => {
+    ]).then(([oooRes, members, me]: any[]) => { if (ignore) return; 
       setOoo(oooRes.out_of_office ?? DEFAULT);
       setOriginal(oooRes.out_of_office ?? DEFAULT);
       const mapped = (members.data ?? []).map((m: any) => ({
         user_id: m.userId, full_name: m.fullName ?? m.email, email: m.email,
-      }));
+       } ));
       setMembers(mapped);
       setMeId(me?.user?.id ?? null);
     }).finally(() => setLoading(false));
-  }, []);
+    return () => { ignore = true; };
+}, []);
 
   const dirty = JSON.stringify(ooo) !== JSON.stringify(original);
   const today = new Date().toISOString().slice(0, 10);

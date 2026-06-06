@@ -32,14 +32,16 @@ export default function TelegramSettingsPage() {
   const [showToken, setShowToken] = useState(false);
 
   useEffect(() => {
+  let ignore = false;
     fetch('/api/user/telegram')
       .then(r => r.json())
-      .then(d => {
+      .then(d => { if (ignore) return;
         if (d.ok) setSettings(d.settings);
       })
       .catch(() => toast.error('Failed to load Telegram settings'))
       .finally(() => setLoading(false));
-  }, []);
+    return () => { ignore = true; };
+}, []);
 
   const save = async () => {
     setSaving(true);

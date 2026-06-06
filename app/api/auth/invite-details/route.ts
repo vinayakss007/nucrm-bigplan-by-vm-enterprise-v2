@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
           isLoggedIn = u?.email?.toLowerCase() === inv.email.toLowerCase();
         }
       }
-    } catch (err) { logError(err, "catch:[context]"); }
+    } catch (err) { logError({ error: err, context: "catch:[context]" }); }
 
     return NextResponse.json({
       email: inv.email, 

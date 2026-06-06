@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
     await db.update(tenants)
       .set({ currentContacts: sql`${tenants.currentContacts} + 1` })
       .where(eq(tenants.id, ctx.tenantId))
-      .catch((err) => logError(err, "async-catch:[context]"));
+      .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     await fireWebhooks(ctx.tenantId, 'contact.created', { 
       id: contact.id, 
@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
       userId: ctx.userId,
       event: 'contact.created', 
       data: { ...(contact as any) },
-    }).catch((err) => logError(err, "async-catch:[context]"));
+    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({ data: contact }, { status: 201 });
   } catch (err: any) {
