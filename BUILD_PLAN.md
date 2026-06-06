@@ -1,6 +1,6 @@
 # NuCRM Enterprise — Master Build Plan
 
-**Last Updated:** 2026-06-06 (Session 2 — Part 2)
+**Last Updated:** 2026-06-06 (Session 2 — Part 3)
 **This is the single source of truth.** Read before every session.
 
 ---
@@ -9,6 +9,7 @@
 
 ### Completed
 - Created GitHub issues #91–#108 to track all remaining work
+- Created GitHub issues #116–#121 for remaining Week 2 big items
 - **Week 1 issues (1-7) fully resolved** via PRs #99, #100
 - **Week 2 quick wins resolved** (PRs #109–#115):
   - #102: Added `.dockerignore` excluding secrets and build artifacts
@@ -18,12 +19,14 @@
   - #106: Added CSP + HSTS security headers to `next.config.mjs`
   - #107: Replaced hardcoded Grafana admin password with placeholder
   - #108: Fixed V2 API Gateway CORS — deny by default, wildcard only in dev
-- All 7 PRs tested (920 unit tests pass at each step), merged, pushed, branches cleaned.
+- **Issue #8 (#116): API routes leak err.message** ✅ Resolved via PR #122
+  - Replaced `err.message` with `apiError()` across 34 route files
+  - Also fixed 5 merge conflict markers (18 TS errors)
+- All PRs tested (920 unit tests pass at each step), merged, pushed, branches cleaned.
 - Deleted 14 stale merged branches.
 
 ### Remaining Week 2 (Big Items)
-- Issue #8: 50+ API routes leak `err.message` (~1hr)
-- Issue #9: Fix 63 TS errors hidden by `ignoreBuildErrors` (~2hr)
+- Issue #9 (#117): Fix 63 TS errors hidden by `ignoreBuildErrors` (~2hr)
 - Issues #14-15: `.catch(()=>{})` and empty `catch {}` blocks (~4hr combined)
 - Issue #16: `useEffect` without cleanup in 40+ components (~2hr)
 - Issue #17: Missing Zod validation on remaining routes (~3hr)
