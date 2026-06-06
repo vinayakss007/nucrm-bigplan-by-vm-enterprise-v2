@@ -14,7 +14,7 @@ COPY . .
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
-ARG JWT_SECRET="build-jwt-secret"
+ARG JWT_SECRET
 ARG SENTRY_DSN=""
 ARG NEXT_PUBLIC_SENTRY_DSN=""
 ARG SENTRY_ORG=""
