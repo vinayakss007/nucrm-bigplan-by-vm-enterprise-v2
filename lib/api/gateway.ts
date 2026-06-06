@@ -119,11 +119,11 @@ export async function validateCORS(origin: string | null, tenantId: string): Pro
   const settings = (tenant.settings as Record<string, unknown>) ?? {};
   const allowedOrigins = (settings['allowedOrigins'] as string[]) ?? [];
 
-  // If no origins configured, allow all (open API)
-  if (allowedOrigins.length === 0) return true;
+  // If no origins configured, deny (must be explicitly set)
+  if (allowedOrigins.length === 0) return false;
 
-  // Check for wildcard
-  if (allowedOrigins.includes('*')) return true;
+  // Check for wildcard — only allowed in development
+  if (allowedOrigins.includes('*') && process.env['NODE_ENV'] !== 'production') return true;
 
   // Check exact match
   if (allowedOrigins.includes(origin)) return true;
