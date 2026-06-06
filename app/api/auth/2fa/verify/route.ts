@@ -5,6 +5,12 @@ import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { createHmac, randomBytes, createHash } from 'crypto';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+const verify2faBodySchema = z.object({
+  token: z.string().regex(/^\d{6}$/, 'Token must be a 6-digit number'),
+});
 
 function verifyTOTP(secret: string, token: string, window = 1): boolean {
   const base32chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -43,10 +49,10 @@ export async function POST(req: NextRequest) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     
-    const { token } = await req.json();
-    if (!token || !/^\d{6}$/.test(token)) {
-      return NextResponse.json({ error: 'Provide 6-digit TOTP token' }, { status: 400 });
-    }
+    const body = await req.json();
+    const parsed = validateBody(verify2faBodySchema, body);
+    if (parsed instanceof NextResponse) return parsed;
+    const { token } = parsed.data;
 
     const user = await db.query.users.findFirst({
       columns: { totpSecret: true, totpEnabled: true },
