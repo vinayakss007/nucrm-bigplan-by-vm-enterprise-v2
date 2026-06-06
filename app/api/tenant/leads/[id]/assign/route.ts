@@ -166,6 +166,6 @@ export async function POST(request: NextRequest, { params }: any) {
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     console.error('[leads/assign] error:', error);
-    return apiError(err, "Internal server error", 500);
+    return apiError(error, "Internal server error", 500);
   }
 }

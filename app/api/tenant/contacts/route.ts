@@ -4,7 +4,7 @@ import { validateBody, validateQuery } from '@/lib/api/validate';
 import { createContactSchema, contactQuerySchema } from '@/lib/api/schemas';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
-import { checkLimit } from '@/lib/usage/middleware';
+import { checkUserLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, users, tenants, activities } from '@/drizzle/schema';
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Plan limit check (records a violation + alerts owner; only blocks when USAGE_LIMITS=on)
-    const overLimit = await checkLimit(ctx, 'contacts');
+    const overLimit = await checkUserLimit(ctx.tenantId, ctx.userId);
     if (overLimit) return overLimit;
 
     const [contact] = await db.insert(contacts)

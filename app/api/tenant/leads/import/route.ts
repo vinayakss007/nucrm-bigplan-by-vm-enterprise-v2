@@ -302,8 +302,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await executeBatch();
-
     // Log activity
     await db.insert(activities).values({
       tenantId: ctx.tenantId,

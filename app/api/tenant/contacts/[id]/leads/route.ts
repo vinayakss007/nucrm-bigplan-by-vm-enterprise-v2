@@ -128,6 +128,6 @@ export async function GET(request: NextRequest, { params }: any) {
     return NextResponse.json({ data });
   } catch (error: any) {
     console.error('[contacts/leads] error:', error);
-    return apiError(err, "Internal server error", 500);
+    return apiError(error, "Internal server error", 500);
   }
 }

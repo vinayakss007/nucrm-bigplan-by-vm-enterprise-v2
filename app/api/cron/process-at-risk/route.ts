@@ -101,6 +101,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('[Cron At-Risk] Error:', error);
-    return apiError(err, "Internal server error", 500);
+    return apiError(error, "Internal server error", 500);
   }
 }

@@ -1,7 +1,13 @@
 'use client';
 import { useState } from 'react';
 import { PhoneCall, PhoneIncoming, Clock, User, MessageSquare } from 'lucide-react';
-import { cn, formatDuration } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
 import toast from 'react-hot-toast';
 
 interface CallLog {
