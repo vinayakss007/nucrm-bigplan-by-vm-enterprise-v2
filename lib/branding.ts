@@ -189,3 +189,51 @@ export function validateCustomDomain(domain: string): { valid: boolean; error?: 
 }
 
 export { DEFAULT_BRANDING };
+
+// ── Compat exports for BrandingProvider & tenant layout ─────────
+
+export type TenantBranding = BrandingConfig;
+
+/**
+ * Convert TenantBranding to a flat Record<string, string> of CSS custom properties.
+ * Compat alias for generateCSSVariables that returns an object instead of a <style> block.
+ */
+export function brandingToCssVars(branding: TenantBranding): Record<string, string> {
+  return {
+    '--brand-primary': branding.primaryColor,
+    '--brand-secondary': branding.secondaryColor,
+    '--brand-accent': branding.accentColor,
+    ...(branding.logoUrl ? { '--brand-logo-url': `url(${branding.logoUrl})` } : {}),
+    '--brand-header-layout': branding.headerLayout,
+  };
+}
+
+type TenantLike = {
+  id?: string;
+  name?: string | null;
+  primaryColor?: string | null;
+  primary_color?: string | null;
+  settings?: Record<string, unknown> | null;
+  logoUrl?: string | null;
+  faviconUrl?: string | null;
+  customDomain?: string | null;
+};
+
+/**
+ * Convert a raw tenant-like object (from DB or context) into TenantBranding.
+ * Compat alias for getBrandingForTenant that works synchronously from the tenant context.
+ */
+export function tenantToBranding(tenant: TenantLike): TenantBranding {
+  const settings = (tenant.settings ?? {}) as Record<string, unknown>;
+  const brandingOverrides = (settings['branding'] as Partial<BrandingConfig>) ?? {};
+
+  return {
+    ...DEFAULT_BRANDING,
+    logoUrl: tenant.logoUrl ?? DEFAULT_BRANDING.logoUrl,
+    faviconUrl: tenant.faviconUrl ?? DEFAULT_BRANDING.faviconUrl,
+    primaryColor: tenant.primaryColor ?? tenant.primary_color ?? DEFAULT_BRANDING.primaryColor,
+    customDomain: tenant.customDomain ?? DEFAULT_BRANDING.customDomain,
+    companyName: tenant.name ?? DEFAULT_BRANDING.companyName,
+    ...brandingOverrides,
+  };
+}
