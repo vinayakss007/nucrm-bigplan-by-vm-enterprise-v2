@@ -38,7 +38,7 @@ export async function GET(req: NextRequest, { params }: any) {
       { headers: {'Access-Control-Allow-Origin':'*'} }
     );
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500, headers: {'Access-Control-Allow-Origin':'*'} });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: {'Access-Control-Allow-Origin':'*'} });
   }
 }
 

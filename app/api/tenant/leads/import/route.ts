@@ -302,8 +302,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-<<<<<<< HEAD
-=======
     await executeBatch();
 
     // Log activity
@@ -316,8 +314,6 @@ export async function POST(request: NextRequest) {
       entityId: sql`gen_random_uuid()`,
       action: 'import_completed',
     });
-
->>>>>>> main
     return NextResponse.json({ ok: true, results });
   } catch (err: any) {
     console.error('[leads/import]', err);

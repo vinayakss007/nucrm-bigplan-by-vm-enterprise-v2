@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       if (err instanceof GatewayError) {
         const status = err.code === 'no_provider_enabled' || err.code === 'no_key_for_provider' ? 503 : 502;
-        return NextResponse.json({ error: err.message, code: err.code }, { status });
+        return NextResponse.json({ error: "Internal server error", code: err.code }, { status });
       }
       throw err;
     }

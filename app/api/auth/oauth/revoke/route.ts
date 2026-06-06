@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { oauthTokens, oauthClients } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
+import { apiError } from '@/lib/api-error';
 
 export async function POST(request: NextRequest) {
   try {

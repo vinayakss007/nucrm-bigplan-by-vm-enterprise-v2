@@ -6,6 +6,7 @@ import { eq, isNull, and } from 'drizzle-orm';
 import { getAtRiskDeals, AtRiskResult } from '@/lib/ai/at-risk';
 import { sendEmail } from '@/lib/email/service';
 import { formatCurrency } from '@/lib/utils';
+import { apiError } from '@/lib/api-error';
 
 export async function POST(request: NextRequest) {
   if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
@@ -100,6 +101,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('[Cron At-Risk] Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(err, "Internal server error", 500);
   }
 }

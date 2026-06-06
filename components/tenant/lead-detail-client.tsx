@@ -62,42 +62,6 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
   const [activeTab, setActiveTab] = useState<'overview' | 'activities' | 'notes'>('overview');
   const [showEdit, setShowEdit] = useState(false);
   const [editData, setEditData] = useState(lead);
-<<<<<<< HEAD
-  const [showHandoff, setShowHandoff] = useState(false);
-  const [handoffSaving, setHandoffSaving] = useState(false);
-  const [handoffDraft, setHandoffDraft] = useState({ assigned_to: '', reason: '' });
-
-  const submitHandoff = async () => {
-    if (!handoffDraft.assigned_to) {
-      toast.error('Pick a team member to hand off to');
-      return;
-    }
-    setHandoffSaving(true);
-    try {
-      const res = await fetch(`/api/tenant/leads/${lead.id}/assign`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(handoffDraft),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data.error || 'Handoff failed');
-        return;
-      }
-      if (data.no_op) {
-        toast('Already assigned to that user', { icon: 'ℹ️' });
-      } else {
-        toast.success('Lead handed off');
-      }
-      setShowHandoff(false);
-      setHandoffDraft({ assigned_to: '', reason: '' });
-      router.refresh();
-    } catch {
-      toast.error('Handoff failed');
-    } finally {
-      setHandoffSaving(false);
-    }
-=======
   const [editingBant, setEditingBant] = useState(false);
   const [bantSaving, setBantSaving] = useState(false);
   const [bantDraft, setBantDraft] = useState({
@@ -134,7 +98,42 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
       toast.error('Failed to update');
     }
     setBantSaving(false);
->>>>>>> main
+  };
+
+  const [showHandoff, setShowHandoff] = useState(false);
+  const [handoffSaving, setHandoffSaving] = useState(false);
+  const [handoffDraft, setHandoffDraft] = useState({ assigned_to: '', reason: '' });
+
+  const submitHandoff = async () => {
+    if (!handoffDraft.assigned_to) {
+      toast.error('Pick a team member to hand off to');
+      return;
+    }
+    setHandoffSaving(true);
+    try {
+      const res = await fetch(`/api/tenant/leads/${lead.id}/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(handoffDraft),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || 'Handoff failed');
+        return;
+      }
+      if (data.no_op) {
+        toast('Already assigned to that user', { icon: 'ℹ️' });
+      } else {
+        toast.success('Lead handed off');
+      }
+      setShowHandoff(false);
+      setHandoffDraft({ assigned_to: '', reason: '' });
+      router.refresh();
+    } catch {
+      toast.error('Handoff failed');
+    } finally {
+      setHandoffSaving(false);
+    }
   };
 
   const statusConfig = PIPELINE_CONFIG[lead.lead_status as keyof typeof PIPELINE_CONFIG] || PIPELINE_CONFIG.new;

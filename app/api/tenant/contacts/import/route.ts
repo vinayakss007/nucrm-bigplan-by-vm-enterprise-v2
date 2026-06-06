@@ -6,6 +6,7 @@ import { db } from '@/drizzle/db';
 import { contacts, companies, tenants, plans, activities } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { apiError } from '@/lib/api-error';
 
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -278,6 +279,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok:true, results });
   } catch (err: any) {
     console.error('[contacts import POST]', err);
-    return NextResponse.json({ error:err.message }, { status:500 });
+    return apiError(err);
   }
 }

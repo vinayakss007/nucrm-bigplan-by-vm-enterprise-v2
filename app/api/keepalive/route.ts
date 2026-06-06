@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
+import { apiError } from '@/lib/api-error';
 
 /**
  * Keep-Alive Endpoint
@@ -21,10 +22,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (err: any) {
     console.error('[KeepAlive] Error:', err);
-    return NextResponse.json({
-      ok: false,
-      error: err.message,
-    }, { status: 500 });
+    return apiError(err, "Internal server error", 500);
   }
 }
 

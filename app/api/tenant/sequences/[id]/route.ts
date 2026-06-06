@@ -228,7 +228,7 @@ export async function POST(
       } catch (error: any) {
         // Skip if already enrolled or other error
         console.error(`Failed to enroll contact ${contactId}:`, error.message);
-        enrollments.push({ contact_id: contactId, error: error.message });
+        enrollments.push({ contact_id: contactId, error: "Internal server error" });
       }
     }
 
