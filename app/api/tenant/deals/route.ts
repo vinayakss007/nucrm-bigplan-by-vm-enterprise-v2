@@ -8,6 +8,7 @@ import { deals, contacts, companies, users, tenants, plans, activities, pipeline
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fireWebhooks } from '@/lib/webhooks';
+import { logError } from '@/lib/errors';
 
 export async function GET(request: NextRequest) {
   try {
@@ -151,7 +152,7 @@ export async function POST(request: NextRequest) {
     await db.update(tenants)
       .set({ currentDeals: sql`${tenants.currentDeals} + 1` })
       .where(eq(tenants.id, ctx.tenantId))
-      .catch(() => {});
+      .catch((err) => logError(err, "async-catch:[context]"));
 
     // Activity log
     await db.insert(activities)
@@ -168,7 +169,7 @@ export async function POST(request: NextRequest) {
       })
       .catch(err => console.error('[deals POST] activity log failed:', err));
 
-    fireWebhooks(ctx.tenantId, 'deal.created', { id: deal.id, title: deal.title, amount }).catch(() => {});
+    fireWebhooks(ctx.tenantId, 'deal.created', { id: deal.id, title: deal.title, amount }).catch((err) => logError(err, "async-catch:[context]"));
 
     return NextResponse.json({ data: deal }, { status: 201 });
   } catch (err: any) {

@@ -8,6 +8,7 @@ import { companies, contacts } from '@/drizzle/schema';
 import { eq, and, sql, ilike, isNull } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fireWebhooks } from '@/lib/webhooks';
+import { logError } from '@/lib/errors';
 
 export async function GET(request: NextRequest) {
   try {
@@ -115,7 +116,7 @@ export async function POST(request: NextRequest) {
       .returning();
 
     if (row) {
-      fireWebhooks(ctx.tenantId, 'company.created', { id: row.id, name: v.name }).catch(() => {});
+      fireWebhooks(ctx.tenantId, 'company.created', { id: row.id, name: v.name }).catch((err) => logError(err, "async-catch:[context]"));
     }
 
     return NextResponse.json({ data: row }, { status: 201 });

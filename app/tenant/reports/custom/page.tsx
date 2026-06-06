@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { FilePlus, Play, Save, Trash2, Download, Plus, X, Filter, Columns } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { logError } from '@/lib/errors';
 
 const REPORT_TYPES = [
   { id: 'contacts', label: 'Contacts', columns: ['first_name','last_name','email','phone','job_title','lead_status','lead_source','score','lifecycle_stage','company_name','city','country','created_at'] },
@@ -42,7 +43,7 @@ export default function CustomReportBuilder() {
       const res = await fetch('/api/tenant/reports/custom');
       const d = await res.json();
       setSavedReports(d.data || []);
-    } catch {}
+    } catch (err) { logError(err, "catch:[context]"); }
   };
 
   const toggleColumn = (col: string) => {

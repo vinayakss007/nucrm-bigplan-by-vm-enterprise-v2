@@ -10,6 +10,7 @@ import { contacts, companies, users, tenants, activities } from '@/drizzle/schem
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { logError } from '@/lib/errors';
 
 function canViewAll(ctx: any) {
   return ctx.isAdmin || ctx.permissions?.['all'] || ctx.permissions?.['contacts.view_all'];
@@ -193,7 +194,7 @@ export async function POST(request: NextRequest) {
     await db.update(tenants)
       .set({ currentContacts: sql`${tenants.currentContacts} + 1` })
       .where(eq(tenants.id, ctx.tenantId))
-      .catch(() => {});
+      .catch((err) => logError(err, "async-catch:[context]"));
 
     await fireWebhooks(ctx.tenantId, 'contact.created', { 
       id: contact.id, 
@@ -208,7 +209,7 @@ export async function POST(request: NextRequest) {
       userId: ctx.userId,
       event: 'contact.created', 
       data: { ...(contact as any) },
-    }).catch(() => {});
+    }).catch((err) => logError(err, "async-catch:[context]"));
 
     return NextResponse.json({ data: contact }, { status: 201 });
   } catch (err: any) {

@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, plans, usageSnapshots } from '@/drizzle/schema';
 import { eq, and, sql, desc, inArray } from 'drizzle-orm';
+import { logError } from '@/lib/errors';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,7 +13,7 @@ export async function GET(request: NextRequest) {
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     // Trigger usage snapshot
-    await db.execute(sql`SELECT public.snapshot_tenant_usage()`).catch(() => {});
+    await db.execute(sql`SELECT public.snapshot_tenant_usage()`).catch((err) => logError(err, "async-catch:[context]"));
 
     const [tenantUsage, growth] = await Promise.all([
       db.select({
