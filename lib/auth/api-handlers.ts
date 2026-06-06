@@ -280,23 +280,8 @@ export async function POST_signup(request: NextRequest) {
         });
       }
 
-<<<<<<< HEAD
-      // 4. Activate Core Modules
-      // Auto-install every module enabled on the tenant's plan. Falls back to
-      // the legacy hardcoded list when MODULE_AUTO_INSTALL=off so the rollout
-      // is reversible without a code change.
-      if (process.env['MODULE_AUTO_INSTALL'] !== 'off') {
-        const { autoInstallForPlan } = await import('@/lib/modules/auto-install');
-        await autoInstallForPlan(t.id, u.id, { planId: 'free' });
-      } else {
-        await ModuleRegistry.install(t.id, 'core-crm', u.id);
-        await ModuleRegistry.install(t.id, 'automation-basic', u.id);
-        await ModuleRegistry.install(t.id, 'service-helpdesk', u.id);
-      }
-=======
       // 4. Install plan-based default modules (covers core-crm, automation-basic, etc.)
       await installDefaultModules(t.id, 'free');
->>>>>>> main
       
       // Normalized onboarding progress
       await tx.insert(onboardingProgress).values({
