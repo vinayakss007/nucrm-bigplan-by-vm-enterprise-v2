@@ -92,18 +92,20 @@ async function getDemoContext(): Promise<AuthContext | null> {
 /**
  * Require authentication middleware with caching
  *
- * SECURITY: Entire authentication process and RLS context setting 
- * is wrapped in a transaction to ensure RLS session variables persist.
+ * Performs auth check using lightweight SELECT statements without
+ * wrapping in a DB transaction. RLS context is set on the main DB
+ * connection and applies to subsequent handler queries within the
+ * same request.
  */
 export async function requireAuth(request: NextRequest): Promise<AuthContext | NextResponse> {
   const requestId = request.headers.get('x-request-id') || requestContext.generateId();
-  return withRequestId(requestId, () => db.transaction(async (tx) => {
+  return withRequestId(requestId, async () => {
 
     // Try API key auth first
     const apiKeyCtx = await tryApiKeyAuth(request);
     if (apiKeyCtx) {
       apiKeyCtx.authMethod = 'api_key';
-      await setTenantContext(apiKeyCtx.tenantId, apiKeyCtx.userId, tx);
+      await setTenantContext(apiKeyCtx.tenantId, apiKeyCtx.userId);
       requestContext.set(requestId, { ...apiKeyCtx, cachedAt: Date.now() });
       return apiKeyCtx;
     }
@@ -116,7 +118,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
       if (isDemoModeAllowed()) {
         const demoCtx = await getDemoContext();
         if (demoCtx) {
-          await setTenantContext(demoCtx.tenantId, demoCtx.userId, tx);
+          await setTenantContext(demoCtx.tenantId, demoCtx.userId);
           requestContext.set(requestId, { ...demoCtx, cachedAt: Date.now() });
           return demoCtx;
         }
@@ -140,12 +142,12 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     // Use cached context if available
     const cached = await requestContext.getCached(tokenHash);
     if (cached) {
-      const sessionExists = await tx.select({ count: sql`count(*)` })
+      const sessionExists = await db.select({ count: sql`count(*)` })
         .from(sessions)
         .where(and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date())));
 
       if (Number(sessionExists[0]?.count) > 0) {
-        await setTenantContext((cached as AuthContext).tenantId, (cached as AuthContext).userId, tx);
+        await setTenantContext((cached as AuthContext).tenantId, (cached as AuthContext).userId);
         requestContext.set(requestId, cached);
         return cached as AuthContext;
       }
@@ -154,7 +156,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     }
 
     // Cache miss - fetch from database
-    const session = await tx.query.sessions.findFirst({
+    const session = await db.query.sessions.findFirst({
       where: and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date()))
     });
     
@@ -166,7 +168,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     }
 
     // First check if user is a super admin
-    const [userRecord] = await tx.select({
+    const [userRecord] = await db.select({
       id: users.id,
       email: users.email,
       fullName: users.fullName,
@@ -195,13 +197,13 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
         isSuperAdmin: true,
         noWorkspace: !userRecord.lastTenantId,
       };
-      await setTenantContext(ctx.tenantId, ctx.userId, tx);
+      await setTenantContext(ctx.tenantId, ctx.userId);
       await requestContext.cache(tokenHash, { ...ctx, cachedAt: Date.now() });
       return ctx;
     }
 
     // Fetch tenant membership for non-super-admin users
-    const results = await tx.select({
+    const results = await db.select({
       id: users.id,
       email: users.email,
       fullName: users.fullName,
@@ -231,7 +233,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     }
 
     // Set RLS tenant context for database-enforced isolation
-    await setTenantContext(userWithMember.tenantId, userWithMember.id, tx);
+    await setTenantContext(userWithMember.tenantId, userWithMember.id);
 
     const perms = (userWithMember.permissions as Record<string, boolean>) ?? {};
     const ctx: AuthContext = {
@@ -245,7 +247,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     requestContext.set(requestId, { ...ctx, cachedAt: Date.now() });
 
     return ctx;
-  }));
+  });
 }
 
 export function can(ctx: AuthContext, perm: string): boolean {
