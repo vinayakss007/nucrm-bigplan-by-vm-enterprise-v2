@@ -165,12 +165,12 @@ describe('API Gateway', () => {
       expect(result).toBe(false);
     });
 
-    it('returns true when no allowedOrigins configured (open API)', async () => {
+    it('returns false when no allowedOrigins configured (deny by default)', async () => {
       dbReturnValue = [{ settings: {} }];
 
       const { validateCORS } = await import('@/lib/api/gateway');
       const result = await validateCORS('https://example.com', 'tenant-123');
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
 
     it('returns true when origin matches allowed origins', async () => {
