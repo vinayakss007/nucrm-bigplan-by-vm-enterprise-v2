@@ -4,6 +4,19 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users, contacts, deals, tasks, activities, companies, notes, tenantMembers } from '@/drizzle/schema';
 import { eq, and, or, ilike, sql, desc } from 'drizzle-orm';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+const restoreUserDataSchema = z.object({
+  user_id: z.string().uuid('user_id is required'),
+  tenant_id: z.string().uuid('tenant_id is required'),
+  records: z.object({
+    contacts: z.array(z.record(z.string(), z.unknown())).optional(),
+    deals: z.array(z.record(z.string(), z.unknown())).optional(),
+    tasks: z.array(z.record(z.string(), z.unknown())).optional(),
+  }),
+  source: z.string().optional().default('manual'),
+});
 
 /**
  * Per-User Data Find & Restore API
@@ -267,16 +280,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const { user_id, tenant_id, records, source = 'manual' } = body;
-
-    if (!user_id || !tenant_id) {
-      return NextResponse.json({ error: 'user_id and tenant_id are required' }, { status: 400 });
-    }
-
-    if (!records || typeof records !== 'object') {
-      return NextResponse.json({ error: 'records object required (contacts, deals, tasks)' }, { status: 400 });
-    }
+    const raw = await request.json();
+    const parsed = validateBody(restoreUserDataSchema, raw);
+    if (parsed instanceof NextResponse) return parsed;
+    const { user_id, tenant_id, records, source } = parsed.data;
 
     // Verify user and tenant exist
     const user = await db.query.users.findFirst({

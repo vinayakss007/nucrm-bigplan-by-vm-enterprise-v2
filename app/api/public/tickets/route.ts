@@ -3,6 +3,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { supportTickets, contacts } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+const publicTicketSchema = z.object({
+  email: z.string().email('Valid email is required'),
+  subject: z.string().min(1, 'Subject is required').max(300),
+  body: z.string().max(10000).optional().default(''),
+  category: z.string().max(100).optional().default('general'),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
+});
 
 // Public ticket endpoint - uses email to identify the user
 export async function GET(request: NextRequest) {
@@ -35,14 +45,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    if (!body.email || !body.subject) {
-      return NextResponse.json({ error: 'Email and subject are required' }, { status: 400 });
-    }
+    const raw = await request.json();
+    const parsed = validateBody(publicTicketSchema, raw);
+    if (parsed instanceof NextResponse) return parsed;
+    const { email, subject, body, category, priority } = parsed.data;
 
     // Find or create contact
     const contact = await db.query.contacts.findFirst({
-      where: eq(contacts.email, body.email),
+      where: eq(contacts.email, email),
     });
 
     if (!contact) return NextResponse.json({ error: 'No account found with this email' }, { status: 404 });
@@ -50,10 +60,10 @@ export async function POST(request: NextRequest) {
     const [ticket] = await db.insert(supportTickets).values({
       tenantId: contact.tenantId,
       contactId: contact.id,
-      subject: body.subject,
-      body: body.body || '',
-      category: body.category || 'general',
-      priority: body.priority || 'medium',
+      subject,
+      body,
+      category,
+      priority,
       status: 'open',
     }).returning();
 

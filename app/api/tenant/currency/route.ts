@@ -7,6 +7,12 @@ import {
   setRateCache,
   SUPPORTED_CURRENCIES,
 } from '@/lib/currency';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+const setCurrencySchema = z.object({
+  currency: z.string().min(1, 'Currency code is required'),
+});
 
 /**
  * GET /api/tenant/currency
@@ -57,15 +63,10 @@ export async function POST(req: NextRequest) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json();
-    const { currency } = body;
-
-    if (!currency || typeof currency !== 'string') {
-      return NextResponse.json(
-        { error: 'Currency code is required' },
-        { status: 400 }
-      );
-    }
+    const raw = await req.json();
+    const parsed = validateBody(setCurrencySchema, raw);
+    if (parsed instanceof NextResponse) return parsed;
+    const { currency } = parsed.data;
 
     const upperCode = currency.toUpperCase();
     const valid = SUPPORTED_CURRENCIES.find(c => c.code === upperCode);

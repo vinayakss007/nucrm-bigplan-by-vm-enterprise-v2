@@ -16,6 +16,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { getSignedPutUrl } from '@/lib/storage/s3';
 import { randomUUID } from 'crypto';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+const uploadUrlSchema = z.object({
+  name: z.string().min(1, 'name is required'),
+  mime_type: z.string().min(1, 'mime_type is required'),
+  size_bytes: z.number().positive('size_bytes must be a positive integer'),
+});
 
 const MAX_FILE_BYTES = Number(process.env['DOCUMENT_MAX_BYTES'] ?? 100 * 1024 * 1024); // 100 MB default
 
@@ -25,28 +33,16 @@ const FORBIDDEN_MIME_PREFIXES = [
   'application/x-sh',
 ];
 
-interface UploadUrlInput {
-  name: string;
-  mime_type: string;
-  size_bytes: number;
-}
-
 export async function POST(request: NextRequest) {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
 
-  const body = (await request.json().catch(() => null)) as UploadUrlInput | null;
-  if (!body) return NextResponse.json({ error: 'JSON body required' }, { status: 400 });
+  const raw = await request.json().catch(() => null);
+  const parsed = validateBody(uploadUrlSchema, raw);
+  if (parsed instanceof NextResponse) return parsed;
+  const { name: nameRaw, mime_type: mimeType, size_bytes: sizeBytes } = parsed.data;
+  const name = nameRaw.trim();
 
-  const name = typeof body.name === 'string' ? body.name.trim() : '';
-  const mimeType = typeof body.mime_type === 'string' ? body.mime_type.trim() : '';
-  const sizeBytes = Number(body.size_bytes);
-
-  if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 });
-  if (!mimeType) return NextResponse.json({ error: 'mime_type is required' }, { status: 400 });
-  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) {
-    return NextResponse.json({ error: 'size_bytes must be a positive integer' }, { status: 400 });
-  }
   if (sizeBytes > MAX_FILE_BYTES) {
     return NextResponse.json(
       {

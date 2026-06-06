@@ -32,7 +32,7 @@
 
 ### Remaining Week 2 (Big Items)
 - Issue #16 (#119): `useEffect` without cleanup in 40+ components (~2hr)
-- Issue #17 (#120): Missing Zod validation on remaining routes (~3hr)
+- Issue #17 (#120): Missing Zod validation on remaining routes (~3hr) — ✅ PR #126 merged
 - Issue #19 (#121): 200+ `as any` type assertions (~4hr)
 - Issues #14-15: `.catch(()=>{})` and empty `catch {}` blocks (~4hr combined)
 - Issue #16: `useEffect` without cleanup in 40+ components (~2hr)
@@ -155,7 +155,7 @@ All Week 1 critical security issues are resolved:
 | 14 | 103+ `.catch(() => {})` silent swallows | Codebase-wide | Replace with `.catch(err => logError(err, '[context]'))` | 2hr | ❌ Open |
 | 15 | 190+ empty `catch {}` blocks | Codebase-wide | Same — add error logging | 2hr | ❌ Open |
 | 16 | `useEffect` without cleanup (40+ components) | Codebase-wide | Add return cleanup functions, AbortController for fetch | 2hr | ❌ Open |
-| 17 | Most API routes skip Zod validation | ~70% of route files | Add Zod schemas + `validateBody()` to remaining routes | 3hr | ❌ Open |
+| 17 | Most API routes skip Zod validation | ~70% of route files | Add Zod schemas + `validateBody()` to remaining routes | 3hr | ✅ Merged (#126) |
 | 19 | 200+ `as any` type assertions | Codebase-wide | Replace with proper types or `as unknown as T` with TODO | 4hr | ❌ Open |
 
 ### ✅ WEEK 2 COMPLETE (Quick Wins)

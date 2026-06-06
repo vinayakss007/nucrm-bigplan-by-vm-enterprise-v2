@@ -5,6 +5,27 @@ import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { taxRates } from '@/drizzle/schema/financial';
 import { eq, and, sql } from 'drizzle-orm';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+const createTaxRateSchema = z.object({
+  name: z.string().min(1, 'name is required'),
+  rate: z.number().min(0, 'rate is required'),
+  type: z.enum(['percentage', 'fixed']).optional().default('percentage'),
+  country: z.string().max(100).optional().nullable(),
+  state: z.string().max(100).optional().nullable(),
+  isDefault: z.boolean().optional().default(false),
+});
+
+const updateTaxRateSchema = z.object({
+  id: z.string().uuid('Tax rate ID is required'),
+  name: z.string().optional(),
+  rate: z.number().min(0).optional(),
+  type: z.enum(['percentage', 'fixed']).optional(),
+  country: z.string().max(100).optional().nullable(),
+  state: z.string().max(100).optional().nullable(),
+  isDefault: z.boolean().optional(),
+});
 
 /**
  * GET /api/tenant/tax
@@ -48,32 +69,20 @@ export async function POST(req: NextRequest) {
     const gate = await requireModule(ctx.tenantId, 'sales-quotes');
     if (gate) return gate;
 
-    const body = await req.json();
-    const { name, rate, type, country, state, isDefault } = body;
-
-    if (!name || rate === undefined || rate === null) {
-      return NextResponse.json(
-        { error: 'Name and rate are required' },
-        { status: 400 }
-      );
-    }
-
-    if (type && !['percentage', 'fixed'].includes(type)) {
-      return NextResponse.json(
-        { error: "Type must be 'percentage' or 'fixed'" },
-        { status: 400 }
-      );
-    }
+    const raw = await req.json();
+    const parsed = validateBody(createTaxRateSchema, raw);
+    if (parsed instanceof NextResponse) return parsed;
+    const { name, rate, type, country, state, isDefault } = parsed.data;
 
     const [row] = await db.insert(taxRates).values({
       tenantId: ctx.tenantId,
       name,
       rate: String(rate),
-      type: type || 'percentage',
+      type,
       country: country || null,
       state: state || null,
-      isDefault: isDefault || false,
-    }).returning();
+      isDefault,
+    } as any).returning();
 
     return NextResponse.json({ data: row }, { status: 201 });
   } catch (err: any) {
@@ -93,19 +102,18 @@ export async function PUT(req: NextRequest) {
     const gate = await requireModule(ctx.tenantId, 'sales-quotes');
     if (gate) return gate;
 
-    const body = await req.json();
-    const { id, ...updates } = body;
+    const raw = await req.json();
+    const parsed = validateBody(updateTaxRateSchema, raw);
+    if (parsed instanceof NextResponse) return parsed;
+    const { id, ...updates } = parsed.data;
 
-    if (!id) {
-      return NextResponse.json({ error: 'Tax rate ID is required' }, { status: 400 });
+    if ((updates as any).rate !== undefined) {
+      (updates as any).rate = String((updates as any).rate);
     }
-
-    if (updates.rate !== undefined) {
-      updates.rate = String(updates.rate);
-    }
+    delete (updates as any).id;
 
     const [row] = await db.update(taxRates)
-      .set(updates)
+      .set(updates as any)
       .where(and(eq(taxRates.id, id), eq(taxRates.tenantId, ctx.tenantId)))
       .returning();
 

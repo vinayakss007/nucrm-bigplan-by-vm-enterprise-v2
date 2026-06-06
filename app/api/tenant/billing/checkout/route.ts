@@ -5,6 +5,13 @@ import { createCheckoutSession, createPortalSession, getPriceId, isStripeConfigu
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+const checkoutSchema = z.object({
+  plan: z.enum(['starter', 'pro', 'enterprise'], { message: 'Invalid plan. Choose starter, pro, or enterprise.' }),
+  interval: z.enum(['month', 'year']).optional().default('month'),
+});
 
 /**
  * POST /api/tenant/billing/checkout
@@ -22,18 +29,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Payment processing is not configured. Contact support.' }, { status: 503 });
     }
 
-    const body = await request.json();
-    const { plan, interval = 'month' } = body;
+    const raw = await request.json();
+    const parsed = validateBody(checkoutSchema, raw);
+    if (parsed instanceof NextResponse) return parsed;
+    const { plan, interval } = parsed.data;
 
-    if (!plan || !['starter', 'pro', 'enterprise'].includes(plan)) {
-      return NextResponse.json({ error: 'Invalid plan. Choose starter, pro, or enterprise.' }, { status: 400 });
-    }
-
-    if (!['month', 'year'].includes(interval)) {
-      return NextResponse.json({ error: 'Invalid interval. Choose month or year.' }, { status: 400 });
-    }
-
-    const priceId = getPriceId(plan, interval as 'month' | 'year');
+    const priceId = getPriceId(plan, interval);
     if (!priceId) {
       return NextResponse.json({ error: `Price not configured for ${plan}/${interval}. Contact support.` }, { status: 500 });
     }

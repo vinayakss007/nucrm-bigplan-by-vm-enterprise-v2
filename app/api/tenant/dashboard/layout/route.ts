@@ -3,6 +3,13 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { resolveDashboardLayout, saveLayout } from '@/lib/dashboard/layout-resolver';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const dashboardLayoutSchema: z.ZodType<{ layout: any }> = z.object({
+  layout: z.array(z.record(z.string(), z.unknown())),
+});
 
 export async function GET(request: NextRequest) {
   const ctx = await requireAuth(request);
@@ -32,11 +39,9 @@ export async function PUT(request: NextRequest) {
   if (ctx instanceof NextResponse) return ctx;
 
   const body = await request.json();
-  const { layout } = body;
-
-  if (!Array.isArray(layout)) {
-    return NextResponse.json({ error: 'Invalid layout' }, { status: 400 });
-  }
+  const parsed = validateBody(dashboardLayoutSchema, body);
+  if (parsed instanceof NextResponse) return parsed;
+  const { layout } = parsed.data;
 
   await saveLayout(ctx.tenantId, ctx.userId, layout);
   return NextResponse.json({ ok: true });

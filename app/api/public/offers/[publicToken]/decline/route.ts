@@ -18,6 +18,13 @@ import {
   patchOfferMetadata,
   canTransition,
 } from '@/lib/offers';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+const offerDeclineSchema = z.object({
+  reason: z.string().max(500).optional().default(''),
+  email: z.string().email().max(200).optional().nullable(),
+});
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ publicToken: string }> }) {
   try {
@@ -32,9 +39,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
       return NextResponse.json({ error: 'Offer cannot be declined in its current state' }, { status: 409 });
     }
 
-    const body = await req.json().catch(() => ({}));
-    const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 500) : '';
-    const email = typeof body.email === 'string' ? body.email.trim().slice(0, 200) : null;
+    const raw = await req.json().catch(() => ({}));
+    const parsed = validateBody(offerDeclineSchema, raw);
+    if (parsed instanceof NextResponse) return parsed;
+    const reason = (parsed.data.reason ?? '').trim();
+    const email = parsed.data.email?.trim() ?? null;
 
     const now = new Date();
     await db
