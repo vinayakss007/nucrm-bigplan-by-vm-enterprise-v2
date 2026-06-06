@@ -5,6 +5,20 @@ import { db } from '@/drizzle/db';
 import { callLogs } from '@/drizzle/schema';
 import { contacts, companies, users } from '@/drizzle/schema';
 import { eq, and, desc, sql, isNull } from 'drizzle-orm';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+const createCallSchema = z.object({
+  contact_id: z.string().uuid('contact_id must be a valid UUID'),
+  company_id: z.string().uuid().optional().nullable(),
+  deal_id: z.string().uuid().optional().nullable(),
+  direction: z.enum(['inbound', 'outbound']).optional().default('outbound'),
+  duration: z.number().int().min(0).optional().default(0),
+  notes: z.string().max(5000).optional().nullable(),
+  phone_number: z.string().max(30).optional().nullable(),
+  recorded_url: z.string().max(500).optional().nullable(),
+  assigned_to: z.string().uuid().optional().nullable(),
+});
 
 /**
  * POST /api/tenant/calls
@@ -17,12 +31,10 @@ export async function POST(req: NextRequest) {
     const deny = requirePerm(ctx, 'contacts.edit');
     if (deny) return deny;
 
-    const body = await req.json();
-    const { contact_id, company_id, deal_id, direction, duration, notes, phone_number, recorded_url, assigned_to } = body;
-
-    if (!contact_id) {
-      return NextResponse.json({ error: 'contact_id is required' }, { status: 400 });
-    }
+    const raw = await req.json();
+    const parsed = validateBody(createCallSchema, raw);
+    if (parsed instanceof NextResponse) return parsed;
+    const { contact_id, company_id, deal_id, direction, duration, notes, phone_number, recorded_url, assigned_to } = parsed.data;
 
     // Verify contact belongs to tenant
     const [contact] = await db.select({ id: contacts.id })
@@ -41,15 +53,15 @@ export async function POST(req: NextRequest) {
     const [call] = await db.insert(callLogs).values({
       tenantId: ctx.tenantId,
       contactId: contact_id,
-      companyId: company_id || null,
-      dealId: deal_id || null,
+      companyId: company_id ?? null,
+      dealId: deal_id ?? null,
       userId: ctx.userId,
-      direction: direction || 'outbound',
-      duration: duration || 0,
-      notes: notes || null,
-      phoneNumber: phone_number || null,
-      recordedUrl: recorded_url || null,
-      assignedTo: assigned_to || null,
+      direction,
+      duration,
+      notes: notes ?? null,
+      phoneNumber: phone_number ?? null,
+      recordedUrl: recorded_url ?? null,
+      assignedTo: assigned_to ?? null,
     }).returning();
 
     return NextResponse.json({ data: call }, { status: 201 });

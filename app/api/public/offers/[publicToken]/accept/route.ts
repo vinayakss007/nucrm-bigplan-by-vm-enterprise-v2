@@ -25,6 +25,13 @@ import {
   patchOfferMetadata,
   canTransition,
 } from '@/lib/offers';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+const offerAcceptSchema = z.object({
+  email: z.string().email().max(200).optional().nullable(),
+  signature: z.string().max(200).optional().nullable(),
+});
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ publicToken: string }> }) {
   try {
@@ -43,9 +50,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
       return NextResponse.json({ error: 'Offer has expired' }, { status: 410 });
     }
 
-    const body = await req.json().catch(() => ({}));
-    const email = typeof body.email === 'string' ? body.email.trim().slice(0, 200) : null;
-    const signature = typeof body.signature === 'string' ? body.signature.trim().slice(0, 200) : null;
+    const raw = await req.json().catch(() => ({}));
+    const parsed = validateBody(offerAcceptSchema, raw);
+    if (parsed instanceof NextResponse) return parsed;
+    const email = parsed.data.email?.trim() ?? null;
+    const signature = parsed.data.signature?.trim() ?? null;
 
     const now = new Date();
     await db

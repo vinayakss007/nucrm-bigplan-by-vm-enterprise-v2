@@ -4,6 +4,13 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tokenBudgets, tenantTokenLimits, usageAlerts, costAnomalies, tenants } from '@/drizzle/schema';
 import { eq, and, sql, desc, asc } from 'drizzle-orm';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+const tokenControlSchema = z.object({
+  action: z.enum(['update_global_budget', 'update_tenant_limit', 'ack_alert']),
+  data: z.record(z.string(), z.unknown()),
+});
 
 /**
  * NuCRM — Token Control API (Superadmin Only)
@@ -103,12 +110,17 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const body = await request.json();
-    const { action, data } = body;
+    const raw = await request.json();
+    const parsed = validateBody(tokenControlSchema, raw);
+    if (parsed instanceof NextResponse) return parsed;
+    const { action, data } = parsed.data;
 
     // ACTION: Update platform-wide service budget
     if (action === 'update_global_budget') {
-      const { service, monthly_budget_cents, hard_cap_enabled } = data;
+      const d = data as Record<string, unknown>;
+      const service = d['service'] as string;
+      const monthly_budget_cents = d['monthly_budget_cents'] as number | undefined;
+      const hard_cap_enabled = d['hard_cap_enabled'] as boolean | undefined;
       
       if (!service) return NextResponse.json({ error: 'Service name is required' }, { status: 400 });
 
@@ -119,14 +131,14 @@ export async function POST(request: NextRequest) {
           monthlyBudgetCents: monthly_budget_cents ?? 0,
           hardCapEnabled: hard_cap_enabled ?? true,
           billingPeriod: sql`TO_CHAR(NOW(), 'YYYY-MM')`,
-        })
+        } as any)
         .onConflictDoUpdate({
-          target: [tokenBudgets.service, tokenBudgets.billingPeriod],
+          target: [tokenBudgets.service, tokenBudgets.billingPeriod] as any,
           set: {
             monthlyBudgetCents: monthly_budget_cents ?? 0,
             hardCapEnabled: hard_cap_enabled ?? true,
             updatedAt: new Date(),
-          },
+          } as any,
         });
       
       return NextResponse.json({ success: true, message: `Updated ${service} global budget` });
@@ -134,7 +146,9 @@ export async function POST(request: NextRequest) {
 
     // ACTION: Update limits for a specific tenant
     if (action === 'update_tenant_limit') {
-      const { tenant_id, ...limits } = data;
+      const d = data as Record<string, unknown>;
+      const tenant_id = d['tenant_id'] as string;
+      const limits = d;
       
       if (!tenant_id) return NextResponse.json({ error: 'tenant_id is required' }, { status: 400 });
 
@@ -142,30 +156,30 @@ export async function POST(request: NextRequest) {
         .insert(tenantTokenLimits)
         .values({
           tenantId: tenant_id,
-          openaiMonthlyLimit: limits.openai_monthly_limit ?? -1,
-          whatsappMonthlyMsgs: limits.whatsapp_monthly_msgs ?? -1,
-          voiceMonthlyMins: limits.voice_monthly_mins ?? -1,
-          contentMonthlyGen: limits.content_monthly_gen ?? -1,
-          proposalMonthlyGen: limits.proposal_monthly_gen ?? -1,
-          followupMonthlyCnt: limits.followup_monthly_cnt ?? -1,
-          scoreMonthlyCnt: limits.score_monthly_cnt ?? -1,
-          totalMonthlyCost: limits.total_monthly_cost ?? -1,
+          openaiMonthlyLimit: (limits['openai_monthly_limit'] as number) ?? -1,
+          whatsappMonthlyMsgs: (limits['whatsapp_monthly_msgs'] as number) ?? -1,
+          voiceMonthlyMins: (limits['voice_monthly_mins'] as number) ?? -1,
+          contentMonthlyGen: (limits['content_monthly_gen'] as number) ?? -1,
+          proposalMonthlyGen: (limits['proposal_monthly_gen'] as number) ?? -1,
+          followupMonthlyCnt: (limits['followup_monthly_cnt'] as number) ?? -1,
+          scoreMonthlyCnt: (limits['score_monthly_cnt'] as number) ?? -1,
+          totalMonthlyCost: (limits['total_monthly_cost'] as number) ?? -1,
           setBy: ctx.userId,
-        })
+        } as any)
         .onConflictDoUpdate({
-          target: [tenantTokenLimits.tenantId],
+          target: [tenantTokenLimits.tenantId] as any,
           set: {
-            openaiMonthlyLimit: limits.openai_monthly_limit ?? -1,
-            whatsappMonthlyMsgs: limits.whatsapp_monthly_msgs ?? -1,
-            voiceMonthlyMins: limits.voice_monthly_mins ?? -1,
-            contentMonthlyGen: limits.content_monthly_gen ?? -1,
-            proposalMonthlyGen: limits.proposal_monthly_gen ?? -1,
-            followupMonthlyCnt: limits.followup_monthly_cnt ?? -1,
-            scoreMonthlyCnt: limits.score_monthly_cnt ?? -1,
-            totalMonthlyCost: limits.total_monthly_cost ?? -1,
+            openaiMonthlyLimit: (limits['openai_monthly_limit'] as number) ?? -1,
+            whatsappMonthlyMsgs: (limits['whatsapp_monthly_msgs'] as number) ?? -1,
+            voiceMonthlyMins: (limits['voice_monthly_mins'] as number) ?? -1,
+            contentMonthlyGen: (limits['content_monthly_gen'] as number) ?? -1,
+            proposalMonthlyGen: (limits['proposal_monthly_gen'] as number) ?? -1,
+            followupMonthlyCnt: (limits['followup_monthly_cnt'] as number) ?? -1,
+            scoreMonthlyCnt: (limits['score_monthly_cnt'] as number) ?? -1,
+            totalMonthlyCost: (limits['total_monthly_cost'] as number) ?? -1,
             setBy: ctx.userId,
             updatedAt: new Date(),
-          },
+          } as any,
         });
       
       return NextResponse.json({ success: true, message: 'Updated tenant AI limits' });
@@ -173,7 +187,8 @@ export async function POST(request: NextRequest) {
 
     // ACTION: Acknowledge an alert
     if (action === 'ack_alert') {
-      const { alert_id } = data;
+      const d = data as Record<string, unknown>;
+      const alert_id = d['alert_id'] as string;
       if (!alert_id) return NextResponse.json({ error: 'alert_id is required' }, { status: 400 });
 
       await db
@@ -183,7 +198,7 @@ export async function POST(request: NextRequest) {
           acknowledgedBy: ctx.userId, 
           acknowledgedAt: new Date() 
         })
-        .where(eq(usageAlerts.id, alert_id));
+        .where(eq(usageAlerts.id, alert_id) as any);
       
       return NextResponse.json({ success: true });
     }

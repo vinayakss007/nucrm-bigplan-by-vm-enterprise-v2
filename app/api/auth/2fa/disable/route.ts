@@ -5,14 +5,22 @@ import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { verifyPassword } from '@/lib/auth/session';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+const disable2faBodySchema = z.object({
+  password: z.string().min(1, 'Password is required'),
+});
 
 export async function POST(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     
-    const { password } = await req.json();
-    if (!password) return NextResponse.json({ error: 'Current password required to disable 2FA' }, { status: 400 });
+    const body = await req.json();
+    const parsed = validateBody(disable2faBodySchema, body);
+    if (parsed instanceof NextResponse) return parsed;
+    const { password } = parsed.data;
     
     const user = await db.query.users.findFirst({
       columns: { passwordHash: true, totpEnabled: true },

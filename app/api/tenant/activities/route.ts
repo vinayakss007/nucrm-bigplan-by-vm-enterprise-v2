@@ -5,6 +5,17 @@ import { db } from '@/drizzle/db';
 import { activities } from '@/drizzle/schema';
 import { users } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { z } from 'zod';
+import { validateBody } from '@/lib/api/validate';
+
+const createActivitySchema = z.object({
+  type: z.string().min(1, 'type is required'),
+  description: z.string().min(1, 'description is required'),
+  deal_id: z.string().uuid().optional().nullable(),
+  contact_id: z.string().uuid().optional().nullable(),
+  metadata: z.record(z.string(), z.unknown()).optional().default({}),
+  eventType: z.string().optional(),
+});
 
 export async function GET(request: NextRequest) {
   try {
@@ -84,13 +95,13 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await request.json();
-    if (!body.type || !body.description) {
-      return NextResponse.json({ error: 'type and description are required' }, { status: 400 });
-    }
+    const raw = await request.json();
+    const parsed = validateBody(createActivitySchema, raw);
+    if (parsed instanceof NextResponse) return parsed;
+    const { type, description, deal_id, contact_id, metadata } = parsed.data;
 
-    const entity_type = body.deal_id ? 'deal' : (body.contact_id ? 'contact' : 'other');
-    const entity_id = body.deal_id || body.contact_id || ctx.userId;
+    const entity_type = deal_id ? 'deal' : (contact_id ? 'contact' : 'other');
+    const entity_id = deal_id || contact_id || ctx.userId;
 
     const [newActivity] = await db.insert(activities)
       .values({
@@ -98,9 +109,9 @@ export async function POST(request: NextRequest) {
         userId: ctx.userId,
         entityType: entity_type,
         entityId: entity_id,
-        action: body.type,
-        description: body.description,
-        metadata: body.metadata || {}
+        eventType: type,
+        description,
+        metadata
       } as any)
       .returning();
 
