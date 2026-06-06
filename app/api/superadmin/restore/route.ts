@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
       level: 'warn',
       code: 'RESTORE_INITIATED',
       message: `Database restore initiated from backup: ${(backup as any).storagePath} by user ${ctx.userId}`,
-    }).catch((err) => logError(err, "async-catch:[context]"));
+    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     let localPath = (backup as any).storagePath;
     let tempFileCreated = false;
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
       level: 'info',
       code: 'RESTORE_COMPLETED',
       message: `Database restore completed from ${(backup as any).storagePath} in ${durationMs}ms`,
-    }).catch((err) => logError(err, "async-catch:[context]"));
+    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({
       ok: true,
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
       code: 'RESTORE_FAILED',
       message: "Internal server error",
       stack: err.stack?.slice(0, 2000),
-    }).catch((err) => logError(err, "async-catch:[context]"));
+    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     return apiError(err);
   }
 }

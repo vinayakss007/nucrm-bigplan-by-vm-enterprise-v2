@@ -16,12 +16,14 @@ export default function SuperAdminAnalyticsPage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
+  let ignore = false;
     Promise.all([
       fetch('/api/superadmin/tenants').then(r => r.ok ? r.json() : { data: [] }),
       fetch('/api/superadmin/monitoring').then(r => r.ok ? r.json() : null),
-    ]).then(([t, m]) => { setTenants(t.data||[]); setMonitoring(m); setLoading(false); })
+    ]).then(([t, m]) => { if (ignore) return;  setTenants(t.data||[]); setMonitoring(m); setLoading(false);  } )
     .catch(err => { setFetchError(err.message); setLoading(false); });
-  }, []);
+    return () => { ignore = true; };
+}, []);
 
   // Compute metrics
   const PLAN_PRICES: Record<string,number> = { free:0, starter:29, pro:79, enterprise:199 };

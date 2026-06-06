@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
           subject: `Overdue task: ${task.title}`,
           html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px"><h3 style="color:#dc2626">Task overdue: ${task.title}</h3><p style="color:#6b7280">This task was due ${dueStr} and is now overdue.</p><a href="\${process.env.NEXT_PUBLIC_APP_URL}/tenant/tasks" style="display:inline-block;background:#7c3aed;color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">View Tasks →</a></div>`,
           text: `Task overdue: \${task.title} (due \${dueStr}). View: \${process.env.NEXT_PUBLIC_APP_URL}/tenant/tasks`,
-        }).catch((err) => logError(err, "async-catch:[context]"));
+        }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
       }
       notified++;
     }

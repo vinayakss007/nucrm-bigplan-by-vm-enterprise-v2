@@ -93,6 +93,7 @@ export default function NotificationsPage() {
   const [query, setQuery] = useState('');
 
   useEffect(() => {
+  let ignore = false;
     fetch('/api/tenant/notifications/matrix')
       .then(r => r.ok ? r.json() : { matrix: {} })
       .then((d: any) => {
@@ -100,7 +101,8 @@ export default function NotificationsPage() {
         setOriginal(d.matrix ?? {});
       })
       .finally(() => setLoading(false));
-  }, []);
+    return () => { ignore = true; };
+}, []);
 
   const dirty = JSON.stringify(matrix) !== JSON.stringify(original);
 

@@ -24,7 +24,7 @@ export default function HealthPage() {
     setLoading(true);
     const [sa, app] = await Promise.all([
       fetch('/api/superadmin/health').then(r=>r.json()).catch(()=>({checks:[]})),
-      fetch('/api/health').then(r=>r.json()).catch((err) => logError(err, "async-catch:[context]")),
+      fetch('/api/health').then(r=>r.json()).catch((err) => logError({ error: err, context: "async-catch:[context]" })),
     ]);
     setChecks(sa.checks||[]); setAppHealth(app);
     setLastRun(new Date()); setLoading(false);

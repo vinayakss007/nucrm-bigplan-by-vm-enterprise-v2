@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
               <a href="\${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">Upgrade Now →</a>
             </div>`,
             text: `Your NuCRM trial for \${t.name} has ended. Upgrade: \${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing`,
-          }).catch((err) => logError(err, "async-catch:[context]"));
+          }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
         }
       }
     }
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
             <a href="\${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">View Plans →</a>
           </div>`,
           text: `Your NuCRM trial for \${t.name} expires in \${daysLeft} day(s). Upgrade: \${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing`,
-        }).catch((err) => logError(err, "async-catch:[context]"));
+        }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
       }
       // Mark warned
       if (t.ownerId) {
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
           entityType: 'tenant',
           entityId: t.id,
           action: 'trial_warning'
-        }).catch((err) => logError(err, "async-catch:[context]"));
+        }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
       }
     }
 

@@ -28,15 +28,17 @@ export default function UserDefaultsPage() {
   const [isAdmin, setIsAdmin] = useState(true);
 
   useEffect(() => {
+  let ignore = false;
     Promise.all([
       fetch('/api/tenant/admin/user-defaults').then(r => r.ok ? r.json() : { user_defaults: {} }),
       fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
-    ]).then(([d, me]: any[]) => {
-      setDefaults(d.user_defaults ?? {});
+    ]).then(([d, me]: any[]) => { if (ignore) return; 
+      setDefaults(d.user_defaults ?? { } );
       setOriginal(d.user_defaults ?? {});
       setIsAdmin(me?.is_admin ?? false);
     }).finally(() => setLoading(false));
-  }, []);
+    return () => { ignore = true; };
+}, []);
 
   const dirty = useMemo(() => JSON.stringify(defaults) !== JSON.stringify(original), [defaults, original]);
   const setVal = (k: string, v: any) => setDefaults(p => {

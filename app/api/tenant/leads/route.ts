@@ -268,7 +268,7 @@ export async function POST(request: NextRequest) {
       newData: { email: v.email, name: `${v.first_name} ${v.last_name ?? ''}`.trim() },
     });
 
-    fireWebhooks(ctx.tenantId, 'lead.created', { id: newLead.id, email: v.email }).catch((err) => logError(err, "async-catch:[context]"));
+    fireWebhooks(ctx.tenantId, 'lead.created', { id: newLead.id, email: v.email }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json(newLead, { status: 201 });
   } catch (error: any) {
