@@ -129,6 +129,19 @@ export async function proxy(request: NextRequest) {
       setCORS(response, origin, pathname);
       return response;
     }
+    // Tighter rate limit for CSRF token endpoint (5 req/min)
+    if (pathname === '/api/auth/csrf-token') {
+      const ip = getClientIp(request);
+      const result = edgeLimiter.check(`rl:csrf:${ip}`, 5, RATE_LIMIT_WINDOW_MS);
+      if (!result.allowed) {
+        return buildRateLimitResponse(requestId, result, origin);
+      }
+      const response = NextResponse.next();
+      response.headers.set('x-request-id', requestId);
+      setCORS(response, origin, pathname);
+      applyRateLimitHeaders(response, result);
+      return response;
+    }
     // IP-based rate limiting for public API routes
     const ip = getClientIp(request);
     const result = edgeLimiter.check(`rl:pub:${ip}`, RATE_LIMIT_UNAUTH, RATE_LIMIT_WINDOW_MS);
