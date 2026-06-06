@@ -1,6 +1,6 @@
 # NuCRM Enterprise — Master Build Plan
 
-**Last Updated:** 2026-06-06 (Session 2 — Part 3)
+**Last Updated:** 2026-06-06 (Session 2 — Part 4)
 **This is the single source of truth.** Read before every session.
 
 ---
@@ -22,11 +22,14 @@
 - **Issue #8 (#116): API routes leak err.message** ✅ Resolved via PR #122
   - Replaced `err.message` with `apiError()` across 34 route files
   - Also fixed 5 merge conflict markers (18 TS errors)
+- **Issue #9 (#117): TypeScript errors** ✅ Resolved via PR #123
+  - Fixed 27 TS errors across 14 files
+  - `npm run typecheck` now passes with 0 errors
 - All PRs tested (920 unit tests pass at each step), merged, pushed, branches cleaned.
 - Deleted 14 stale merged branches.
 
 ### Remaining Week 2 (Big Items)
-- Issue #9 (#117): Fix 63 TS errors hidden by `ignoreBuildErrors` (~2hr)
+- Issues #14-15 (#118): `.catch(()=>{})` and empty `catch {}` blocks (~4hr combined)
 - Issues #14-15: `.catch(()=>{})` and empty `catch {}` blocks (~4hr combined)
 - Issue #16: `useEffect` without cleanup in 40+ components (~2hr)
 - Issue #17: Missing Zod validation on remaining routes (~3hr)

@@ -8,6 +8,7 @@ import { fireWebhooks, type WebhookEvent } from '@/lib/webhooks';
 import { logAudit } from '@/lib/audit';
 import { devLogger } from '@/lib/dev-logger';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors';
 
 // ── Constants ──────────────────────────────────────────────────────────
 const MAX_PAYLOAD_SIZE = 1_000_000; // 1 MB
@@ -582,7 +583,7 @@ export async function POST(request: NextRequest) {
         // Fire outgoing webhooks for created records
         if (result.action === 'created') {
           const eventType = `${item.entity}.created` as WebhookEvent;
-          fireWebhooks(apiKeyRow.tenantId, eventType, { id: result.id }).catch(() => {});
+          fireWebhooks(apiKeyRow.tenantId, eventType, { id: result.id }).catch((err) => logError(err, "async-catch:[context]"));
         }
 
         // Log audit entry
@@ -593,7 +594,7 @@ export async function POST(request: NextRequest) {
           entityType: item.entity,
           entityId: result.id as string,
           newData: { source: 'inbound_webhook', api_key: apiKeyRow.name },
-        }).catch(() => {});
+        }).catch((err) => logError(err, "async-catch:[context]"));
 
         // Log delivery
         logWebhookDelivery({
@@ -639,7 +640,7 @@ export async function POST(request: NextRequest) {
         entityType: 'api',
         entityId: 'batch',
         newData: { processed: results.length, succeeded: results.filter(r => r.status === 'ok').length, failed: results.filter(r => r.status === 'error').length, duration_ms: duration },
-      }).catch(() => {});
+      }).catch((err) => logError(err, "async-catch:[context]"));
     }
 
     // Dev log

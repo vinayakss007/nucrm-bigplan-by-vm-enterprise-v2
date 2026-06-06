@@ -6,6 +6,7 @@ import { eq, and, isNull, sql } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { createNotification } from '@/lib/notifications';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors';
 
 export async function POST(request: NextRequest) {
   if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
           subject: `Overdue task: ${task.title}`,
           html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px"><h3 style="color:#dc2626">Task overdue: ${task.title}</h3><p style="color:#6b7280">This task was due ${dueStr} and is now overdue.</p><a href="\${process.env.NEXT_PUBLIC_APP_URL}/tenant/tasks" style="display:inline-block;background:#7c3aed;color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">View Tasks →</a></div>`,
           text: `Task overdue: \${task.title} (due \${dueStr}). View: \${process.env.NEXT_PUBLIC_APP_URL}/tenant/tasks`,
-        }).catch(() => {});
+        }).catch((err) => logError(err, "async-catch:[context]"));
       }
       notified++;
     }

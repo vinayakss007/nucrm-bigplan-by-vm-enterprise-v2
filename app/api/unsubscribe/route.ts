@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { contacts, sequenceEnrollments, activities } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
+import { logError } from '@/lib/errors';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -55,7 +56,7 @@ export async function GET(req: NextRequest) {
       entityType: 'contact',
       entityId: contactId,
       action: 'unsubscribe'
-    }).catch(() => {});
+    }).catch((err) => logError(err, "async-catch:[context]"));
 
     // Return a clean HTML page
     return new NextResponse(

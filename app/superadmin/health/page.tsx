@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, RefreshCw, Activity, Clock, Database, Mail, Server, Wifi } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import { logError } from '@/lib/errors';
 
 const STATUS_CFG: Record<string,{icon:any;color:string;bg:string}> = {
   up:       { icon:CheckCircle,  color:'text-emerald-400', bg:'border-emerald-500/20 bg-emerald-500/5' },
@@ -23,7 +24,7 @@ export default function HealthPage() {
     setLoading(true);
     const [sa, app] = await Promise.all([
       fetch('/api/superadmin/health').then(r=>r.json()).catch(()=>({checks:[]})),
-      fetch('/api/health').then(r=>r.json()).catch(()=>{}),
+      fetch('/api/health').then(r=>r.json()).catch((err) => logError(err, "async-catch:[context]")),
     ]);
     setChecks(sa.checks||[]); setAppHealth(app);
     setLastRun(new Date()); setLoading(false);
