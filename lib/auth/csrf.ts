@@ -1,39 +1,17 @@
+import crypto from 'crypto';
+
 /**
  * CSRF Protection Module
  * 
  * Implements Double Submit Cookie pattern for CSRF protection
  */
 
-// Use Web Crypto API for Edge Runtime compatibility
 function getRandomValues(length: number): Uint8Array {
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-    const array = new Uint8Array(length);
-    crypto.getRandomValues(array);
-    return array;
-  }
-  // Fallback for Node.js
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { randomBytes } = require('crypto');
-  return randomBytes(length);
+  return crypto.randomBytes(length);
 }
 
 function createHashSha256(data: string): string {
-  if (typeof crypto !== 'undefined' && crypto.subtle) {
-    // Web Crypto API (Edge Runtime)
-    // Note: This is async, but for CSRF we can use a simpler sync approach
-    // For Edge, we'll use a simple hash that works synchronously
-    let hash = 0;
-    for (let i = 0; i < data.length; i++) {
-      const char = data.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    return Math.abs(hash).toString(36).padStart(10, '0');
-  }
-  // Node.js
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { createHash } = require('crypto');
-  return createHash('sha256').update(data).digest('hex');
+  return crypto.createHash('sha256').update(data).digest('hex');
 }
 
 const CSRF_COOKIE_NAME = 'nucrm_csrf_token';
