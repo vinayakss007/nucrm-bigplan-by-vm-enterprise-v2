@@ -1,0 +1,39 @@
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules
+
+# Build artifacts
+.next
+out
+build
+dist
+
+# Version control
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
+
+# Docker
+Dockerfile
+docker-compose*.yml
+
+# Tests
+coverage
+test-results
+playwright-report
+
+# OS
+.DS_Store
+Thumbs.db
