@@ -8,6 +8,7 @@ import { backupRecords, errorLogs } from '@/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { spawn } from 'child_process';
 import { downloadFromS3, checkFileExists, deleteFile } from '@/lib/restore/runtime-fs';
+import { logError } from '@/lib/errors';
 
 /**
  * Safely run pg_restore with input validation.
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
       level: 'warn',
       code: 'RESTORE_INITIATED',
       message: `Database restore initiated from backup: ${(backup as any).storagePath} by user ${ctx.userId}`,
-    }).catch(() => {});
+    }).catch((err) => logError(err, "async-catch:[context]"));
 
     let localPath = (backup as any).storagePath;
     let tempFileCreated = false;
@@ -153,7 +154,7 @@ export async function POST(request: NextRequest) {
       level: 'info',
       code: 'RESTORE_COMPLETED',
       message: `Database restore completed from ${(backup as any).storagePath} in ${durationMs}ms`,
-    }).catch(() => {});
+    }).catch((err) => logError(err, "async-catch:[context]"));
 
     return NextResponse.json({
       ok: true,
@@ -167,7 +168,7 @@ export async function POST(request: NextRequest) {
       code: 'RESTORE_FAILED',
       message: "Internal server error",
       stack: err.stack?.slice(0, 2000),
-    }).catch(() => {});
+    }).catch((err) => logError(err, "async-catch:[context]"));
     return apiError(err);
   }
 }

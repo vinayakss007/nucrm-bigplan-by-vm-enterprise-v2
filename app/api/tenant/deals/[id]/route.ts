@@ -9,6 +9,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { notifyTenantMembers } from '@/lib/notifications';
+import { logError } from '@/lib/errors';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -224,7 +225,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       entityId: dealId
     });
 
-    fireWebhooks(ctx.tenantId, 'deal.deleted', { id: dealId }).catch(() => {});
+    fireWebhooks(ctx.tenantId, 'deal.deleted', { id: dealId }).catch((err) => logError(err, "async-catch:[context]"));
 
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
   } catch (err: any) {
@@ -240,7 +241,7 @@ async function handleDealWon(ctx: any, dealId: string, row: any) {
     title: row.title,
     amount: row.amount,
     contact_id: row.contactId,
-  }).catch(() => {});
+  }).catch((err) => logError(err, "async-catch:[context]"));
 
   // Send Email
   if (row.contactId) {
@@ -274,7 +275,7 @@ async function handleDealWon(ctx: any, dealId: string, row: any) {
             <br/>
             <p>Best regards,<br/>${contactData.tenantName} Team</p>
           </div>`,
-        }).catch(() => {});
+        }).catch((err) => logError(err, "async-catch:[context]"));
       }
     } catch (e) {
       console.error('[deal-won] Email failed:', e);

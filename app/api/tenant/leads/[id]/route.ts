@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
 import { updateLeadSchema } from '@/lib/api/schemas';
 import { fireWebhooks } from '@/lib/webhooks';
+import { logError } from '@/lib/errors';
 
 /**
  * GET /api/tenant/leads/[id]
@@ -177,7 +178,7 @@ export async function PATCH(
       });
     }
 
-    fireWebhooks(ctx.tenantId, 'lead.updated', { id }).catch(() => {});
+    fireWebhooks(ctx.tenantId, 'lead.updated', { id }).catch((err) => logError(err, "async-catch:[context]"));
     
     return NextResponse.json(updatedLead);
   } catch (error: any) {
@@ -228,7 +229,7 @@ export async function DELETE(
       action: 'delete', entityType: 'lead', entityId: id,
     });
 
-    fireWebhooks(ctx.tenantId, 'lead.deleted', { id }).catch(() => {});
+    fireWebhooks(ctx.tenantId, 'lead.deleted', { id }).catch((err) => logError(err, "async-catch:[context]"));
 
     return NextResponse.json({ success: true, message: 'Moved to trash. Restore within 30 days.' });
   } catch (error: any) {

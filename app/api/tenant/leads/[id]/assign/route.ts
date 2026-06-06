@@ -22,6 +22,7 @@ import { validateBody } from '@/lib/api/validate';
 import { logAudit } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors';
 
 const assignSchema = z.object({
   assigned_to: z.string().uuid('assigned_to must be a uuid'),
@@ -160,7 +161,7 @@ export async function POST(request: NextRequest, { params }: any) {
         title: `Lead handed off to you${lead.leadOid ? `: ${lead.leadOid}` : ''}`,
         body: `${lead.firstName} ${lead.lastName ?? ''}`.trim() + (reason ? ` — ${reason}` : ''),
         link: `/tenant/leads/${id}`,
-      }).catch(() => {});
+      }).catch((err) => logError(err, "async-catch:[context]"));
     }
 
     return NextResponse.json({ ok: true });

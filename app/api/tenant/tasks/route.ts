@@ -8,6 +8,7 @@ import { tasks, contacts, deals, users, tenants, plans, activities } from '@/dri
 import { eq, and, or, sql, desc, asc, gte, lte, isNull } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fireWebhooks } from '@/lib/webhooks';
+import { logError } from '@/lib/errors';
 
 export async function GET(request: NextRequest) {
   try {
@@ -143,7 +144,7 @@ export async function POST(request: NextRequest) {
       })
       .catch(err => console.error('[tasks POST] activity log failed:', err));
 
-    fireWebhooks(ctx.tenantId, 'task.created', { id: (newTask as any).id, title: v.title }).catch(() => {});
+    fireWebhooks(ctx.tenantId, 'task.created', { id: (newTask as any).id, title: v.title }).catch((err) => logError(err, "async-catch:[context]"));
 
     return NextResponse.json({ data: newTask }, { status: 201 });
   } catch (err: any) {

@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import {
+import { logError } from '@/lib/errors'; useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Search, X, Settings as SettingsIcon, ArrowRight, ShieldAlert,
@@ -36,10 +37,10 @@ export default function SettingsIndex() {
 
   useEffect(() => {
     fetch('/api/tenant/me').then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => setIsAdmin(d.is_admin ?? false)).catch(() => {});
+      .then(d => setIsAdmin(d.is_admin ?? false)).catch((err) => logError(err, "async-catch:[context]"));
     fetch('/api/tenant/settings-status').then(r => r.ok ? r.json() : null)
       .then(d => { if (d) { setStatuses(d.statuses ?? {}); setSummary(d.summary ?? summary); } })
-      .catch(() => {});
+      .catch((err) => logError(err, "async-catch:[context]"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

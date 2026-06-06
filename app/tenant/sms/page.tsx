@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { MessageSquare, Plus, X, Loader2, Send, ArrowUpRight, ArrowDownLeft, FileText } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { logError } from '@/lib/errors';
 
 interface SmsMessage {
   id: string;
@@ -69,7 +70,7 @@ export default function SmsPage() {
         const d = await res.json();
         setTemplates(d.data ?? []);
       }
-    } catch {}
+    } catch (err) { logError(err, "catch:[context]"); }
   };
 
   useEffect(() => { load(); }, [filter]);

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import {
+import { logError } from '@/lib/errors'; useState, useCallback, useRef, useEffect } from 'react';
 import {
   Database,
   Upload,
@@ -185,7 +186,7 @@ export default function SelectiveRestorePage() {
           alert('Backup parsing failed: ' + backup.parse_error);
           return;
         }
-      } catch {}
+      } catch (err) { logError(err, "catch:[context]"); }
     }
     alert('Parsing timed out. Please try again later.');
   };
@@ -329,7 +330,7 @@ export default function SelectiveRestorePage() {
                 setStep('done');
                 return;
               }
-            } catch {}
+            } catch (err) { logError(err, "catch:[context]"); }
           }
         }
       }

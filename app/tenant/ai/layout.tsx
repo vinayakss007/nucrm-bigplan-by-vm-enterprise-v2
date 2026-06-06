@@ -5,6 +5,7 @@ import { Sparkles, ChevronRight, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AI_CAPABILITIES } from '@/components/tenant/ai/ai-config';
 import { useEffect, useState } from 'react';
+import { logError } from '@/lib/errors';
 
 /**
  * AI Hub shell — sub-rail on lg+, horizontal scroll pills below lg.
@@ -18,7 +19,7 @@ export default function AILayout({ children }: { children: React.ReactNode }) {
     fetch('/api/tenant/me')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setIsAdmin(d.is_admin ?? false))
-      .catch(() => {});
+      .catch((err) => logError(err, "async-catch:[context]"));
   }, []);
 
   const items = AI_CAPABILITIES.filter(c => !c.adminOnly || isAdmin);

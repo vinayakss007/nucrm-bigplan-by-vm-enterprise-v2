@@ -7,6 +7,7 @@ import { Book, ArrowLeft, Clock, Eye, ThumbsUp, ThumbsDown, Edit, Trash2, Check,
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import { logError } from '@/lib/errors';
 
 export default function KBArticlePage() {
   const params = useParams<{ id: string }>();
@@ -22,7 +23,7 @@ export default function KBArticlePage() {
       if (!res.ok) { router.push('/tenant/kb'); return; }
       const d = await res.json();
       setArticle(d.data);
-    } catch {} finally { setLoading(false); }
+    } catch (err) { logError(err, "catch:[context]"); } finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, [params.id]);
@@ -40,7 +41,7 @@ export default function KBArticlePage() {
         const d = await res.json();
         setArticle((prev: any) => ({ ...prev, helpful: d.data.helpful, notHelpful: d.data.notHelpful }));
       }
-    } catch {}
+    } catch (err) { logError(err, "catch:[context]"); }
   };
 
   const deleteArticle = async () => {

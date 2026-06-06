@@ -15,6 +15,7 @@ import { eq, and, sql, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { createNotification } from '@/lib/notifications';
+import { logError } from '@/lib/errors';
 
 export async function POST(
   request: NextRequest, 
@@ -233,7 +234,7 @@ export async function POST(
         activityType: 'converted',
         description: 'Lead converted to contact',
         activityData: { contact_id: contactId, created_by: ctx.userId }
-      }).catch(() => {});
+      }).catch((err) => logError(err, "async-catch:[context]"));
 
       // ── 4. Optionally create a deal ─────────────────────────────────
       let dealId: string | null = null;
@@ -301,7 +302,7 @@ export async function POST(
             eventType: 'deal_created',
             action: 'create',
             description: 'Deal created from lead conversion',
-          }).catch(() => {});
+          }).catch((err) => logError(err, "async-catch:[context]"));
         }
       }
 
@@ -319,7 +320,7 @@ export async function POST(
       id: result.contactId,
       lead_id: id,
       converted_from_lead: true,
-    }).catch(() => {});
+    }).catch((err) => logError(err, "async-catch:[context]"));
 
     // Notify assignee if different from converter
     if (assignee !== ctx.userId) {

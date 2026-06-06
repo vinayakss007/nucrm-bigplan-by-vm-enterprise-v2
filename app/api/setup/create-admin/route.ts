@@ -5,6 +5,7 @@ import { users, tenants, tenantMembers, plans, roles, onboardingProgress, sessio
 import { eq, count, sql, and } from 'drizzle-orm';
 import { hashPassword, createToken, hashToken, setSessionCookie, validatePassword } from '@/lib/auth/session';
 import { installDefaultModules } from '@/lib/modules/auto-install';
+import { logError } from '@/lib/errors';
 
 export async function POST(request: NextRequest) {
   try {
@@ -155,7 +156,7 @@ export async function POST(request: NextRequest) {
         stepName: 'admin_created',
         isCompleted: true,
         completedAt: new Date(),
-      }).onConflictDoNothing().catch(() => {});
+      }).onConflictDoNothing().catch((err) => logError(err, "async-catch:[context]"));
 
       // 8. Create session
       const token = await createToken(u.id);

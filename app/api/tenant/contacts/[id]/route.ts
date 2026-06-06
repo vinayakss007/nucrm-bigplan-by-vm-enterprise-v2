@@ -9,6 +9,7 @@ import { eq, and, sql, ne } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { trackFieldChange } from '@/lib/history';
 import { fireWebhooks } from '@/lib/webhooks';
+import { logError } from '@/lib/errors';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -218,7 +219,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       entityId: contactId
     });
 
-    fireWebhooks(ctx.tenantId, 'contact.updated', { id: contactId }).catch(() => {});
+    fireWebhooks(ctx.tenantId, 'contact.updated', { id: contactId }).catch((err) => logError(err, "async-catch:[context]"));
 
     return NextResponse.json({ data: row });
   } catch (err: any) {
@@ -259,7 +260,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await db.update(tenants)
       .set({ currentContacts: sql`greatest(0, ${tenants.currentContacts} - 1)` })
       .where(eq(tenants.id, ctx.tenantId))
-      .catch(() => {});
+      .catch((err) => logError(err, "async-catch:[context]"));
 
     await logAudit({
       tenantId: ctx.tenantId,
@@ -269,7 +270,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       entityId: contactId
     });
 
-    fireWebhooks(ctx.tenantId, 'contact.deleted', { id: contactId }).catch(() => {});
+    fireWebhooks(ctx.tenantId, 'contact.deleted', { id: contactId }).catch((err) => logError(err, "async-catch:[context]"));
 
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
   } catch (err: any) {

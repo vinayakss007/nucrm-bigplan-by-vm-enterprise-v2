@@ -5,6 +5,7 @@ import { verifyToken } from '@/lib/auth/session';
 import { db } from '@/drizzle/db';
 import { invitations, tenants, users } from '@/drizzle/schema';
 import { eq, and, gt, isNull, sql } from 'drizzle-orm';
+import { logError } from '@/lib/errors';
 
 export async function GET(request: NextRequest) {
   try {
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
           isLoggedIn = u?.email?.toLowerCase() === inv.email.toLowerCase();
         }
       }
-    } catch {}
+    } catch (err) { logError(err, "catch:[context]"); }
 
     return NextResponse.json({
       email: inv.email, 

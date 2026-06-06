@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
         leadId: contactId,
         activityType: 'created',
         description: `Lead captured via ${source}${form_id ? ` (form: ${form_id})` : ''}`,
-      }).catch(() => {});
+      }).catch((err) => logError(err, "async-catch:[context]"));
     }
 
     // Insert into formSubmissions if form_id provided
@@ -164,13 +164,13 @@ export async function POST(request: NextRequest) {
         formId: form_id,
         contactId: contactId,
         data: { body },
-      }).catch(() => {});
+      }).catch((err) => logError(err, "async-catch:[context]"));
 
       // Increment form submissions count
       await db.update(forms)
         .set({ submissionsCount: sql`${forms.submissionsCount} + 1` })
         .where(eq(forms.id, form_id))
-        .catch(() => {});
+        .catch((err) => logError(err, "async-catch:[context]"));
     }
 
     // Notify workspace owner about new lead
@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
         title: `New lead: ${first_name || ''} ${last_name || email}`.trim(),
         body: `Via ${source}${message ? ` — "${message.slice(0, 80)}"` : ''}`,
         link: `/tenant/leads/${contactId}`,
-      }).catch(() => {});
+      }).catch((err) => logError(err, "async-catch:[context]"));
     }
 
     // Fire webhooks
@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
       email: email.trim(),
       name: `${first_name || ''} ${last_name || ''}`.trim(),
       source,
-    }).catch(() => {});
+    }).catch((err) => logError(err, "async-catch:[context]"));
 
     return NextResponse.json({
       ok: true,
@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
 
   } catch (err: any) {
-    logError({ error: err, context: 'leads/public' }).catch(()=>{});
+    logError({ error: err, context: 'leads/public' }).catch((err) => logError(err, "async-catch:[context]"));
     // Return generic success to visitor even on error
     return NextResponse.json({ ok: true, message: 'Thank you! We will be in touch.' });
   }

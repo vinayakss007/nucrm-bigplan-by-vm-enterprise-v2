@@ -10,6 +10,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveOrCreateContactForLead } from '@/lib/contacts/resolve';
 import { generateLeadOid } from '@/lib/leads/oid';
 import { fireWebhooks } from '@/lib/webhooks';
+import { logError } from '@/lib/errors';
 
 // Whitelist for sort columns to prevent SQL injection
 const ALLOWED_SORT_COLUMNS: Record<string, any> = {
@@ -267,7 +268,7 @@ export async function POST(request: NextRequest) {
       newData: { email: v.email, name: `${v.first_name} ${v.last_name ?? ''}`.trim() },
     });
 
-    fireWebhooks(ctx.tenantId, 'lead.created', { id: newLead.id, email: v.email }).catch(() => {});
+    fireWebhooks(ctx.tenantId, 'lead.created', { id: newLead.id, email: v.email }).catch((err) => logError(err, "async-catch:[context]"));
 
     return NextResponse.json(newLead, { status: 201 });
   } catch (error: any) {

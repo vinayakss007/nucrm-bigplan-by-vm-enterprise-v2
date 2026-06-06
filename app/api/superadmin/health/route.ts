@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { healthChecks } from '@/drizzle/schema';
 import { eq, and, sql, desc, gt } from 'drizzle-orm';
+import { logError } from '@/lib/errors';
 
 async function runCheck(service: string, fn: () => Promise<{ latency_ms: number; message: string }>) {
   try {
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
         status: c.status === 'up' ? 'ok' : 'error',
         latencyMs: c.latency_ms,
         message: c.message,
-      }).catch(() => {});
+      }).catch((err) => logError(err, "async-catch:[context]"));
     }
 
     const history = await db

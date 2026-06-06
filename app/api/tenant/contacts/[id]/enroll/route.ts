@@ -6,6 +6,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, sequences, sequenceSteps, sequenceEnrollments } from '@/drizzle/schema';
 import { eq, and, asc, sql } from 'drizzle-orm';
+import { logError } from '@/lib/errors';
 
 export async function POST(req: NextRequest, { params }: any) {
   try {
@@ -84,7 +85,7 @@ export async function POST(req: NextRequest, { params }: any) {
     await db.update(sequences)
       .set({ enrollCount: sql`${sequences.enrollCount} + 1` })
       .where(eq(sequences.id, sequence_id))
-      .catch(() => {});
+      .catch((err) => logError(err, "async-catch:[context]"));
 
     return NextResponse.json({ data: enrollment }, { status: 201 });
   } catch (err: any) { 

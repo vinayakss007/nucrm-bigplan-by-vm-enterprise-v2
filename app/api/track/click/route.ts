@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { emailTracking, activities } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
+import { logError } from '@/lib/errors';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -58,7 +59,7 @@ export async function GET(req: NextRequest) {
             entityType: 'contact',
             entityId: row.contactId,
             action: 'email_click'
-          }).catch(() => {});
+          }).catch((err) => logError(err, "async-catch:[context]"));
         }
       } catch (err) { 
         console.error('[TrackClick] Error:', err);
