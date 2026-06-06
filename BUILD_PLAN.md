@@ -1,24 +1,36 @@
 # NuCRM Enterprise — Master Build Plan
 
-**Last Updated:** 2026-06-06 (Session 2)
+**Last Updated:** 2026-06-06 (Session 2 — Part 2)
 **This is the single source of truth.** Read before every session.
 
 ---
 
 ## THIS SESSION (Session 2 — 2026-06-06)
 
-### Done
-- Audited all 7 "unmerged" remote branches → all were already squash-merged into main (PRs #54, #56, #58, #60, #62, #64, #79). Deleted stale branches.
-- Created GitHub issues #91–#98 to track all remaining work
-- **PR #99 / Issue #91**: Fixed CSRF hash — replaced fake `String.hashCode()` with `crypto.createHash('sha256')` via top-level ESM import. Removed all `require()` calls and eslint-disable comments from `lib/auth/csrf.ts` (-26 lines).
-- **PR #100 / Issue #92**: Added rate limit (5 req/min) on `/api/auth/csrf-token` endpoint in `proxy.ts`.
-- **PR #101**: Added missing `TenantBranding`, `brandingToCssVars()`, `tenantToBranding()` exports to `lib/branding.ts` (fixes 500 on `/tenant/dashboard`). Added server IPs to `allowedDevOrigins`.
-- All 3 PRs tested (920 unit tests pass at each step), merged, and pushed to `main`.
-- BUILD_PLAN.md updated with these changes.
+### Completed
+- Created GitHub issues #91–#108 to track all remaining work
+- **Week 1 issues (1-7) fully resolved** via PRs #99, #100
+- **Week 2 quick wins resolved** (PRs #109–#115):
+  - #102: Added `.dockerignore` excluding secrets and build artifacts
+  - #103: Removed unnecessary `db.transaction()` wrapper from `requireAuth()`
+  - #104: Set `DATABASE_SSL=true` in production config
+  - #105: Removed hardcoded `JWT_SECRET` default from Dockerfile
+  - #106: Added CSP + HSTS security headers to `next.config.mjs`
+  - #107: Replaced hardcoded Grafana admin password with placeholder
+  - #108: Fixed V2 API Gateway CORS — deny by default, wildcard only in dev
+- All 7 PRs tested (920 unit tests pass at each step), merged, pushed, branches cleaned.
+- Deleted 14 stale merged branches.
 
-### Next
-- Start Week 2 high-priority fixes (issues 7-21 in BUILD_PLAN.md)
-- Phase A (Follow-Up Intelligence): DB table → CRUD API → dashboard widget → missed badge → missed page → auto-schedule
+### Remaining Week 2 (Big Items)
+- Issue #8: 50+ API routes leak `err.message` (~1hr)
+- Issue #9: Fix 63 TS errors hidden by `ignoreBuildErrors` (~2hr)
+- Issues #14-15: `.catch(()=>{})` and empty `catch {}` blocks (~4hr combined)
+- Issue #16: `useEffect` without cleanup in 40+ components (~2hr)
+- Issue #17: Missing Zod validation on remaining routes (~3hr)
+- Issue #19: 200+ `as any` type assertions (~4hr)
+
+### Phase A (Follow-Up Intelligence) — Not Started
+Core vision: DB table → CRUD API → cron → widget → missed badge → page
 
 ---
 
@@ -124,21 +136,29 @@ All Week 1 critical security issues are resolved:
 | 6 | No rate limit on `/api/auth/csrf-token` | ✅ Added 5 req/min limit | #100 |
 | 7 | `require()` used in ESM modules | ✅ Replaced with top-level ESM `import crypto` | #99 |
 
-### 🟡 WEEK 2 — High Priority Fixes
-| 8 | 50+ API routes leak `err.message` | ~50 route files | Wrap in `apiError()` — centralize in `lib/api-error.ts` | 1hr |
-| 9 | `ignoreBuildErrors: true` | `next.config.mjs:15` | Already CI-only. Fix the 63 TS errors it was hiding | 2hr |
-| 10 | No `.dockerignore` | root | Create `.dockerignore` excluding `.env.local`, `node_modules`, `.next` | 5min |
-| 11 | `DATABASE_SSL=false` in production | `deploy/.env.production`, `docker-compose.yml` | Set to `true` in production configs | 5min |
-| 12 | Dockerfile hardcodes `JWT_SECRET` | `Dockerfile:17` | Remove hardcoded secret, use build args only | 10min |
-| 13 | V2 API Gateway wildcard CORS | `lib/api/gateway.ts:123` | Validate `allowedOrigins` against tenant config | 20min |
-| 14 | 103+ `.catch(() => {})` silent swallows | Codebase-wide | Replace with `.catch(err => logError(err, '[context]'))` | 2hr |
-| 15 | 190+ empty `catch {}` blocks | Codebase-wide | Same — add error logging | 2hr |
-| 16 | `useEffect` without cleanup (40+ components) | Codebase-wide | Add return cleanup functions, AbortController for fetch | 2hr |
-| 17 | Most API routes skip Zod validation | ~70% of route files | Add Zod schemas + `validateBody()` to remaining routes | 3hr |
-| 18 | `requireAuth()` wrapped in DB transaction | `lib/auth/middleware.ts:99` | Remove transaction wrapper, use simple SELECT | 15min |
-| 19 | 200+ `as any` type assertions | Codebase-wide | Replace with proper types or `as unknown as T` with TODO | 4hr |
-| 20 | Missing CSP + HSTS headers | `next.config.mjs:57-90` | Add `Content-Security-Policy` and `Strict-Transport-Security` | 20min |
-| 21 | Grafana admin password "admin" | `.env.example:85` | Generate random password, document in setup | 5min |
+### 🟡 WEEK 2 — High Priority Fixes (Remaining)
+
+| # | Issue | File(s) | How to Fix | Est. | Status |
+|---|-------|---------|------------|------|--------|
+| 8 | 50+ API routes leak `err.message` | ~50 route files | Wrap in `apiError()` — centralize in `lib/api-error.ts` | 1hr | ❌ Open |
+| 9 | `ignoreBuildErrors: true` | `next.config.mjs:15` | Already CI-only. Fix the 63 TS errors it was hiding | 2hr | ❌ Open |
+| 14 | 103+ `.catch(() => {})` silent swallows | Codebase-wide | Replace with `.catch(err => logError(err, '[context]'))` | 2hr | ❌ Open |
+| 15 | 190+ empty `catch {}` blocks | Codebase-wide | Same — add error logging | 2hr | ❌ Open |
+| 16 | `useEffect` without cleanup (40+ components) | Codebase-wide | Add return cleanup functions, AbortController for fetch | 2hr | ❌ Open |
+| 17 | Most API routes skip Zod validation | ~70% of route files | Add Zod schemas + `validateBody()` to remaining routes | 3hr | ❌ Open |
+| 19 | 200+ `as any` type assertions | Codebase-wide | Replace with proper types or `as unknown as T` with TODO | 4hr | ❌ Open |
+
+### ✅ WEEK 2 COMPLETE (Quick Wins)
+
+| # | Issue | PR | Status |
+|---|-------|----|--------|
+| 10 | No `.dockerignore` | #109 | ✅ Merged |
+| 11 | `DATABASE_SSL=false` in production | #111 | ✅ Merged |
+| 12 | Dockerfile hardcodes `JWT_SECRET` | #112 | ✅ Merged |
+| 13 | V2 API Gateway wildcard CORS | #115 | ✅ Merged |
+| 18 | `requireAuth()` wrapped in DB transaction | #110 | ✅ Merged |
+| 20 | Missing CSP + HSTS headers | #113 | ✅ Merged |
+| 21 | Grafana admin password "admin" | #114 | ✅ Merged |
 
 ### 🟠 WEEK 3 — Medium Priority
 
