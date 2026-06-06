@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
         await db.update(sequenceEnrollments)
           .set({ nextStepAt: new Date(Date.now() + 3600000) })
           .where(eq(sequenceEnrollments.id, enrollment.id))
-          .catch((err) => logError(err, "async-catch:[context]"));
+          .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
       }
     }
 

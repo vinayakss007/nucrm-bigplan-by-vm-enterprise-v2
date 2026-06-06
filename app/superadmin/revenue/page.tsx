@@ -18,13 +18,15 @@ export default function RevenuePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+  let ignore = false;
     Promise.all([
       fetch('/api/superadmin/revenue').then(r=>r.json()),
       fetch('/api/superadmin/tenants').then(r=>r.json()),
-    ]).then(([rev, ten]) => {
+    ]).then(([rev, ten]) => { if (ignore) return; 
       setData(rev); setTenants(ten.data||[]); setLoading(false);
-    });
-  }, []);
+     } );
+    return () => { ignore = true; };
+}, []);
 
   const m = data?.mrr ?? {};
   const mrr = Number(m.mrr ?? 0);

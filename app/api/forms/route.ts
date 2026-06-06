@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     await db.update(forms)
       .set({ submissionsCount: sql`${forms.submissionsCount} + 1` })
       .where(eq(forms.id, form_id))
-      .catch((err) => logError(err, "async-catch:[context]"));
+      .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     if (form.owner_id && contact_id) {
       await createNotification({
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    await fireWebhooks(form.tenantId, 'contact.created', { form_id, contact_id, ...formData }).catch((err) => logError(err, "async-catch:[context]"));
+    await fireWebhooks(form.tenantId, 'contact.created', { form_id, contact_id, ...formData }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     return NextResponse.json({ ok: true, message: (form.settings as any)?.success_message ?? 'Thank you! We will be in touch.' });
   } catch (err: any) {
     console.error('[forms] Submission error:', err);

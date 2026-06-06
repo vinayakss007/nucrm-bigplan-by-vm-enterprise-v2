@@ -32,15 +32,17 @@ export default function PicklistsPage() {
   const [activeCat, setActiveCat] = useState<Category>('lead_sources');
 
   useEffect(() => {
+  let ignore = false;
     Promise.all([
       fetch('/api/tenant/admin/picklists').then(r => r.ok ? r.json() : { picklists: null }),
       fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
-    ]).then(([d, me]: any[]) => {
+    ]).then(([d, me]: any[]) => { if (ignore) return; 
       setData(d.picklists ?? null);
       setOriginal(d.picklists ?? null);
       setIsAdmin(me?.is_admin ?? false);
-    }).finally(() => setLoading(false));
-  }, []);
+     } ).finally(() => setLoading(false));
+    return () => { ignore = true; };
+}, []);
 
   const dirty = data && original && JSON.stringify(data) !== JSON.stringify(original);
 

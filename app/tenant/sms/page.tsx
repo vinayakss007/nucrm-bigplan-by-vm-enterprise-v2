@@ -70,7 +70,7 @@ export default function SmsPage() {
         const d = await res.json();
         setTemplates(d.data ?? []);
       }
-    } catch (err) { logError(err, "catch:[context]"); }
+    } catch (err) { logError({ error: err, context: "catch:[context]" }); }
   };
 
   useEffect(() => { load(); }, [filter]);

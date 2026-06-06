@@ -19,7 +19,7 @@ export default function AILayout({ children }: { children: React.ReactNode }) {
     fetch('/api/tenant/me')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setIsAdmin(d.is_admin ?? false))
-      .catch((err) => logError(err, "async-catch:[context]"));
+      .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
   }, []);
 
   const items = AI_CAPABILITIES.filter(c => !c.adminOnly || isAdmin);

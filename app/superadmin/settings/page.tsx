@@ -32,11 +32,13 @@ export default function SuperAdminSettingsPage() {
   const [testResult, setTestResult] = useState<'ok'|'fail'|null>(null);
 
   useEffect(() => {
-    fetch('/api/superadmin/settings').then(r=>r.json()).then(d=>{
+  let ignore = false;
+    fetch('/api/superadmin/settings').then(r=>r.json()).then(d=>{ if (ignore) return;
       if(d.data) setS(prev => ({...prev,...d.data}));
       setLoading(false);
     }).catch(()=>setLoading(false));
-  }, []);
+    return () => { ignore = true; };
+}, []);
 
   const set = (k: string) => (e: React.ChangeEvent<any>) => setS(p=>({...p,[k]:e.target.value}));
   const toggle = (k: string) => setS(p=>({...p,[k]: p[k]==='true'?'false':'true'}));

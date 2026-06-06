@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
       })
       .catch(err => console.error('[tasks POST] activity log failed:', err));
 
-    fireWebhooks(ctx.tenantId, 'task.created', { id: (newTask as any).id, title: v.title }).catch((err) => logError(err, "async-catch:[context]"));
+    fireWebhooks(ctx.tenantId, 'task.created', { id: (newTask as any).id, title: v.title }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({ data: newTask }, { status: 201 });
   } catch (err: any) {

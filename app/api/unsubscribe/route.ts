@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
       entityType: 'contact',
       entityId: contactId,
       action: 'unsubscribe'
-    }).catch((err) => logError(err, "async-catch:[context]"));
+    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     // Return a clean HTML page
     return new NextResponse(

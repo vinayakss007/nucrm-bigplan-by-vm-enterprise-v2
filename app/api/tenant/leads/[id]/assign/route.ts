@@ -161,7 +161,7 @@ export async function POST(request: NextRequest, { params }: any) {
         title: `Lead handed off to you${lead.leadOid ? `: ${lead.leadOid}` : ''}`,
         body: `${lead.firstName} ${lead.lastName ?? ''}`.trim() + (reason ? ` — ${reason}` : ''),
         link: `/tenant/leads/${id}`,
-      }).catch((err) => logError(err, "async-catch:[context]"));
+      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     }
 
     return NextResponse.json({ ok: true });

@@ -151,7 +151,7 @@ export default function AIDraftPage() {
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
-    } catch (err) { logError(err, "catch:[context]"); }
+    } catch (err) { logError({ error: err, context: "catch:[context]" }); }
   }
 
   async function rate(accepted: boolean) {
@@ -160,7 +160,7 @@ export default function AIDraftPage() {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: draft.activity_id, accepted }),
-    }).catch((err) => logError(err, "async-catch:[context]"));
+    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
   }
 
   return (

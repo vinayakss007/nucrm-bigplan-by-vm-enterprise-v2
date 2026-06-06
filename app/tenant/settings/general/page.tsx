@@ -21,7 +21,8 @@ export default function TenantGeneralSettings() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   useEffect(() => {
-    fetch('/api/tenant/workspace').then(r=>r.json()).then(d=>{
+  let ignore = false;
+    fetch('/api/tenant/workspace').then(r=>r.json()).then(d=>{ if (ignore) return;
       if (d.data) {
         setTenant(d.data);
         setForm({
@@ -32,7 +33,8 @@ export default function TenantGeneralSettings() {
         });
       }
     });
-  }, []);
+    return () => { ignore = true; };
+}, []);
 
   const checkSubdomain = async (val: string) => {
     if (!val || val.length < 3) { setSubdomainAvailable(null); return; }

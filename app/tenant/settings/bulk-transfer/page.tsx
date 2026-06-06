@@ -37,19 +37,22 @@ export default function BulkTransferPage() {
 
   // Initial loads
   useEffect(() => {
+  let ignore = false;
     Promise.all([
       fetch('/api/tenant/members').then(r => r.ok ? r.json() : { data: [] }),
       fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
-    ]).then(([mem, me]: any[]) => {
+    ]).then(([mem, me]: any[]) => { if (ignore) return; 
       setMembers((mem.data ?? []).map((m: any) => ({
         user_id: m.userId, full_name: m.fullName ?? m.email, email: m.email, role_slug: m.roleSlug ?? '',
-      })));
+       } )));
       setMe({ id: me?.user?.id ?? '', is_admin: me?.is_admin ?? false });
     }).finally(() => setLoadingMembers(false));
-  }, []);
+    return () => { ignore = true; };
+}, []);
 
   // Preview counts whenever from-user / only-open changes
   useEffect(() => {
+  let ignore = false;
     if (!fromUser) { setCounts(null); return; }
     setPreviewLoading(true);
     fetch(`/api/tenant/admin/bulk-transfer?from_user_id=${fromUser}&only_open=${onlyOpen}`)

@@ -49,15 +49,17 @@ export default function LocalizationPage() {
   const [newHoliday, setNewHoliday] = useState({ date: '', name: '' });
 
   useEffect(() => {
+  let ignore = false;
     Promise.all([
       fetch('/api/tenant/admin/localization').then(r => r.ok ? r.json() : { localization: DEFAULTS }),
       fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
-    ]).then(([d, me]: any[]) => {
-      const l = { ...DEFAULTS, ...(d.localization ?? {}) };
+    ]).then(([d, me]: any[]) => { if (ignore) return; 
+      const l = { ...DEFAULTS, ...(d.localization ?? { } ) };
       setLoc(l); setOriginal(l);
       setIsAdmin(me?.is_admin ?? false);
     }).finally(() => setLoading(false));
-  }, []);
+    return () => { ignore = true; };
+}, []);
 
   const dirty = useMemo(() => JSON.stringify(loc) !== JSON.stringify(original), [loc, original]);
 

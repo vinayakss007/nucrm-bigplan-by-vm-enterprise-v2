@@ -27,12 +27,13 @@ export default function TenantAnalyticsPage() {
   const [range, setRange]       = useState(30);
 
   useEffect(() => {
+  let ignore = false;
     Promise.all([
       fetch('/api/tenant/deals?limit=500').then(r=>r.json()),
       fetch('/api/tenant/contacts?limit=500').then(r=>r.json()),
       fetch('/api/tenant/tasks?limit=500').then(r=>r.json()),
       fetch('/api/tenant/pipelines').then(r=>r.json()),
-    ]).then(([d,c,t,p]) => {
+    ]).then(([d,c,t,p]) => { if (ignore) return; 
       setDeals(d.data||[]); 
       setContacts(c.data||[]); 
       setTasks(t.data||[]); 
@@ -40,8 +41,9 @@ export default function TenantAnalyticsPage() {
       const allStages = (p.data||[]).flatMap((pl: any) => (pl.stages||[]));
       setStages(allStages);
       setLoading(false);
-    });
-  }, []);
+     } );
+    return () => { ignore = true; };
+}, []);
 
   const since = new Date(Date.now() - range * 86400000);
   const inRange = (d: any) => new Date(d.created_at) >= since;

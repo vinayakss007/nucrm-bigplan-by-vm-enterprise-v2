@@ -28,15 +28,17 @@ export default function AIProvidersPage() {
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
+  let ignore = false;
     Promise.all([
       fetch('/api/tenant/admin/ai-providers').then(r => r.ok ? r.json() : { providers: {} }),
       fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
-    ]).then(([d, me]: any[]) => {
-      setData(d.providers ?? {});
+    ]).then(([d, me]: any[]) => { if (ignore) return; 
+      setData(d.providers ?? { } );
       setOriginal(d.providers ?? {});
       setIsAdmin(me?.is_admin ?? false);
     }).finally(() => setLoading(false));
-  }, []);
+    return () => { ignore = true; };
+}, []);
 
   const dirty = useMemo(() => JSON.stringify(data) !== JSON.stringify(original), [data, original]);
 
