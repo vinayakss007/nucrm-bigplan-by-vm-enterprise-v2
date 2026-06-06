@@ -1,6 +1,6 @@
 # NuCRM Enterprise — Master Build Plan
 
-**Last Updated:** 2026-06-06 (Session 2 — Part 4)
+**Last Updated:** 2026-06-06 (Session 2 — Part 5)
 **This is the single source of truth.** Read before every session.
 
 ---
@@ -25,11 +25,15 @@
 - **Issue #9 (#117): TypeScript errors** ✅ Resolved via PR #123
   - Fixed 27 TS errors across 14 files
   - `npm run typecheck` now passes with 0 errors
+- **Issues #14-15 (#118): Silent catch blocks** ✅ Resolved via PR #124
+  - Replaced 64 `.catch(() => {})` + 8 empty `catch {}` with logged errors across 40 files
 - All PRs tested (920 unit tests pass at each step), merged, pushed, branches cleaned.
 - Deleted 14 stale merged branches.
 
 ### Remaining Week 2 (Big Items)
-- Issues #14-15 (#118): `.catch(()=>{})` and empty `catch {}` blocks (~4hr combined)
+- Issue #16 (#119): `useEffect` without cleanup in 40+ components (~2hr)
+- Issue #17 (#120): Missing Zod validation on remaining routes (~3hr)
+- Issue #19 (#121): 200+ `as any` type assertions (~4hr)
 - Issues #14-15: `.catch(()=>{})` and empty `catch {}` blocks (~4hr combined)
 - Issue #16: `useEffect` without cleanup in 40+ components (~2hr)
 - Issue #17: Missing Zod validation on remaining routes (~3hr)
