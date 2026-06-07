@@ -1,4 +1,3 @@
-import { db } from '@/drizzle/db';
 import { errorLogs } from '@/drizzle/schema/support';
 import { NextResponse } from 'next/server';
 
@@ -273,6 +272,7 @@ export async function logError(opts: {
   const stack = opts.error instanceof Error ? opts.error.stack : undefined;
   const source = opts.sourceFile ? null : getSourceLocation();
   try {
+    const { db } = await import('@/drizzle/db');
     await db.insert(errorLogs).values({
       tenantId: opts.tenantId ?? null,
       userId: opts.userId ?? null,
