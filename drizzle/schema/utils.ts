@@ -19,8 +19,6 @@ import {
   index
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { tenants, users } from './core';
-
 // =============================================================================
 // CORE COLUMN FACTORIES
 // =============================================================================
@@ -28,8 +26,7 @@ import { tenants, users } from './core';
 export const pk = () => uuid('id').primaryKey().defaultRandom();
 
 export const tenantId = () => uuid('tenant_id')
-  .notNull()
-  .references(() => tenants.id, { onDelete: 'cascade' });
+  .notNull();
 
 export const createdAt = () => timestamp('created_at', { withTimezone: true }).defaultNow().notNull();
 export const updatedAt = () => timestamp('updated_at', { withTimezone: true }).defaultNow();
@@ -37,7 +34,7 @@ export const deletedAt = () => timestamp('deleted_at', { withTimezone: true });
 
 export const metadata = () => jsonb('metadata').default({});
 
-export const createdBy = (): any => uuid('created_by').references(() => users.id, { onDelete: 'set null' });
+export const createdBy = (): any => uuid('created_by');
 export const updatedBy = (): any => uuid('updated_by').references(() => users.id, { onDelete: 'set null' });
 export const deletedBy = (): any => uuid('deleted_by').references(() => users.id, { onDelete: 'set null' });
 

@@ -42,8 +42,6 @@ console.log('[Worker] Background worker starting...');
 console.log('[Worker] Redis URL:', REDIS_URL.replace(/\/\/.*:.*@/, '//*****@'));
 
 const startTime = Date.now();
-var heartbeatInterval: ReturnType<typeof setInterval>;
-
 // Email queue worker
 const emailWorker = new Worker(
   'send-email',
@@ -311,7 +309,7 @@ const webhookWorker = new Worker(
 );
 
 // Health check heartbeat — writes worker status to Redis every 30s
-heartbeatInterval = setInterval(async () => {
+const heartbeatInterval = setInterval(async () => {
   try {
     const info = {
       pid: process.pid,

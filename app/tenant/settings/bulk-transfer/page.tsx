@@ -52,7 +52,6 @@ export default function BulkTransferPage() {
 
   // Preview counts whenever from-user / only-open changes
   useEffect(() => {
-  let ignore = false;
     if (!fromUser) { setCounts(null); return; }
     setPreviewLoading(true);
     fetch(`/api/tenant/admin/bulk-transfer?from_user_id=${fromUser}&only_open=${onlyOpen}`)
