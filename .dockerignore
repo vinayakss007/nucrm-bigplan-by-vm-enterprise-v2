@@ -1,4 +1,9 @@
-# Secrets
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Environment (secrets!)
 .env
 .env.local
 .env.*.local
@@ -6,34 +11,44 @@
 # Dependencies
 node_modules
 
-# Build artifacts
+# Build output
 .next
 out
 build
-dist
+storybook-static
 
-# Version control
-.git
-.gitignore
+# Test artifacts
+coverage
+test-results
+playwright-report
+blob-report
+
+# Logs
+*.log
+logs
+
+# OS files
+.DS_Store
+Thumbs.db
 
 # IDE
 .idea
 .vscode
 *.swp
-
-# Logs
-*.log
-npm-debug.log*
+*.swo
 
 # Docker
 Dockerfile
+.dockerignore
 docker-compose*.yml
+deploy/nginx
 
-# Tests
-coverage
-test-results
-playwright-report
+# Temp / cache
+.cache
+tmp
+.tmp
 
-# OS
-.DS_Store
-Thumbs.db
+# Documentation / plans (not needed in runtime)
+*.md
+PLAN*
+ARCHITECTURE*
