@@ -28,18 +28,23 @@ export interface TableMetadata {
 
 /** Group categorization for tables */
 export type SchemaGroup = 
-  | 'core'      // tenants, users, roles, auth
-  | 'crm'       // contacts, deals, companies, pipelines
-  | 'comm'      // emails, calls, meetings, templates
-  | 'automation'// workflows, triggers, actions
-  | 'infra'     // system settings, backups, announcements
-  | 'marketing' // campaigns, forms, assets
-  | 'support'   // tickets, conversations
-  | 'knowledge' // KB articles, categories
-  | 'tokens'    // API keys, sessions
-  | 'modules'   // custom modules, extensions
-  | 'segments'  // contact segments, lists
-  | 'ai'        // ai provider secrets, activity, templates
+  | 'core'       // tenants, users, roles, auth
+  | 'crm'        // contacts, deals, companies, pipelines
+  | 'comm'       // emails, calls, meetings, templates
+  | 'automation' // workflows, triggers, actions
+  | 'infra'      // system settings, backups, announcements
+  | 'marketing'  // campaigns, forms, assets
+  | 'support'    // tickets, conversations
+  | 'knowledge'  // KB articles, categories
+  | 'tokens'     // API keys, sessions
+  | 'modules'    // custom modules, extensions
+  | 'segments'   // contact segments, lists
+  | 'ai'         // ai provider secrets, activity, templates
+  | 'billing'    // invoices, payments, subscriptions
+  | 'history'    // audit trails, field snapshots
+  | 'documents'  // document storage, folders
+  | 'esignature' // electronic signatures
+  | 'projects'   // project management
 ;
 
 /** Complete table registry entry */
@@ -113,6 +118,9 @@ import {
   conversationKeywords,
   revenueProjections,
   savedViews,
+  contactTags,
+  leadOffers,
+  leadTags,
 } from './crm';
 
 import {
@@ -128,6 +136,7 @@ import {
   emailVerifications,
   emailWarmupConfigs,
   emailWarmupPool,
+  emailWarmupLogs,
   webhookInboundLogs,
   whatsappTemplates,
 } from './comm';
@@ -151,6 +160,8 @@ import {
   aiUsageAggregated,
   automationWorkflows,
   workflowExecutionLogs,
+  deadLetterQueue,
+  scheduledReports,
 } from './automation';
 
 import {
@@ -171,6 +182,7 @@ import {
   tenantBackupRecords,
   tenantRestoreRecords,
   backupAlerts,
+  backupRecords,
   backupSchedules,
   criticalDataBackups,
   permissionOverrides,
@@ -179,6 +191,7 @@ import {
   platformSettings,
   reportExecutions,
   revenueForecastSummary,
+  restoreSnapshots,
   selectiveRestoreAuditLog,
   selectiveRestoreLogs,
   superAdminBackups,
@@ -212,6 +225,10 @@ import {
   apiKeysRegistry,
   usageAlerts,
   costAnomalies,
+  oauthClients,
+  oauthCodes,
+  oauthTokens,
+  portalClients,
 } from './tokens';
 
 import {
@@ -269,6 +286,94 @@ import {
   leadScoringRules,
   atRiskRules,
 } from './ai';
+
+import {
+  assignmentRules,
+  assignmentLogs,
+} from './assignment';
+
+import {
+  chatSessions,
+  chatMessages,
+} from './chat';
+
+import {
+  complianceRequests,
+  dataRetentionPolicies,
+} from './compliance';
+
+import {
+  dashboardLayouts,
+} from './dashboard';
+
+import {
+  documentFolders,
+  documents as documentRecords,
+} from './documents';
+
+import {
+  emailOpens,
+  emailClicks,
+} from './email-tracking';
+
+import {
+  signingRequests,
+  signingEvents,
+} from './esignature';
+
+import {
+  exchangeRates,
+  taxRates,
+  taxExemptions,
+} from './financial';
+
+import {
+  tenantHierarchy,
+  hierarchyPermissions,
+} from './hierarchy';
+
+import {
+  leadWarmingEvents,
+  leadWarmingCampaigns,
+  leadWarmingMessages,
+  leadWarmingReplies,
+  leadWarmingSchedule,
+} from './lead-warming';
+
+import {
+  projects,
+  milestones,
+  projectTasks,
+} from './projects';
+
+import {
+  slaPolicies,
+  slaBreaches,
+} from './sla';
+
+import {
+  smsMessages,
+  smsTemplates,
+} from './sms';
+
+import {
+  territories,
+  territoryAssignments,
+} from './territories';
+
+import {
+  userUsage,
+  planLimits,
+} from './usage';
+
+import {
+  visitors,
+  pageViews,
+} from './visitors';
+
+import {
+  documents as storageDocuments,
+} from './files';
 
 // =============================================================================
 // TABLE REGISTRY DEFINITION
@@ -1074,6 +1179,112 @@ export const TABLE_REGISTRY = {
     },
   },
 
+  contactTags: {
+    table: contactTags,
+    metadata: {
+      name: 'contact_tags',
+      schemaGroup: 'crm',
+      hasTenantId: false,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['contacts', 'tags'],
+      description: 'Junction table linking contacts to tags',
+      isCore: false,
+      indexes: [],
+    },
+  },
+  leadOffers: {
+    table: leadOffers,
+    metadata: {
+      name: 'lead_offers',
+      schemaGroup: 'crm',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: true,
+      hasMetadata: true,
+      dependencies: ['tenants', 'leads'],
+      description: 'Product/service offers made to leads',
+      isCore: false,
+      indexes: ['idx_lead_offers_lead', 'idx_lead_offers_tenant_status', 'idx_lead_offers_metadata_gin', 'idx_lead_offers_active'],
+    },
+  },
+  leadTags: {
+    table: leadTags,
+    metadata: {
+      name: 'lead_tags',
+      schemaGroup: 'crm',
+      hasTenantId: false,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['leads', 'tags'],
+      description: 'Junction table linking leads to tags',
+      isCore: false,
+      indexes: [],
+    },
+  },
+  territories: {
+    table: territories,
+    metadata: {
+      name: 'territories',
+      schemaGroup: 'crm',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants'],
+      description: 'Hierarchical sales territory definitions',
+      isCore: false,
+      indexes: [],
+    },
+  },
+  territoryAssignments: {
+    table: territoryAssignments,
+    metadata: {
+      name: 'territory_assignments',
+      schemaGroup: 'crm',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'territories'],
+      description: 'User-territory membership assignments',
+      isCore: false,
+      indexes: [],
+    },
+  },
+  visitors: {
+    table: visitors,
+    metadata: {
+      name: 'visitors',
+      schemaGroup: 'crm',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants'],
+      description: 'Website visitor tracking records',
+      isCore: false,
+      indexes: [],
+    },
+  },
+  pageViews: {
+    table: pageViews,
+    metadata: {
+      name: 'page_views',
+      schemaGroup: 'crm',
+      hasTenantId: true,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants'],
+      description: 'Individual page view events',
+      isCore: false,
+      indexes: [],
+    },
+  },
+
   // Comm tables
   whatsappConversations: {
     table: whatsappConversations,
@@ -1283,6 +1494,112 @@ export const TABLE_REGISTRY = {
       description: 'WhatsApp message templates',
       isCore: false,
       indexes: ['idx_whatsapp_templates_tenant', 'idx_whatsapp_templates_unique'],
+    },
+  },
+
+  emailWarmupLogs: {
+    table: emailWarmupLogs,
+    metadata: {
+      name: 'email_warmup_logs',
+      schemaGroup: 'comm',
+      hasTenantId: false,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['emailWarmupConfigs', 'emailWarmupPool'],
+      description: 'Email warmup activity logs',
+      isCore: false,
+      indexes: ['idx_email_warmup_logs_config'],
+    },
+  },
+  chatSessions: {
+    table: chatSessions,
+    metadata: {
+      name: 'chat_sessions',
+      schemaGroup: 'comm',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Live chat sessions with visitors',
+      isCore: false,
+      indexes: ['idx_chat_sessions_tenant', 'idx_chat_sessions_status', 'idx_chat_sessions_visitor', 'idx_chat_sessions_assigned'],
+    },
+  },
+  chatMessages: {
+    table: chatMessages,
+    metadata: {
+      name: 'chat_messages',
+      schemaGroup: 'comm',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'chatSessions'],
+      description: 'Individual chat messages in sessions',
+      isCore: false,
+      indexes: ['idx_chat_messages_session', 'idx_chat_messages_tenant'],
+    },
+  },
+  emailOpens: {
+    table: emailOpens,
+    metadata: {
+      name: 'email_opens',
+      schemaGroup: 'comm',
+      hasTenantId: true,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'contacts'],
+      description: 'Email open tracking events',
+      isCore: false,
+      indexes: ['idx_email_opens_tenant', 'idx_email_opens_contact', 'idx_email_opens_campaign'],
+    },
+  },
+  emailClicks: {
+    table: emailClicks,
+    metadata: {
+      name: 'email_clicks',
+      schemaGroup: 'comm',
+      hasTenantId: true,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'contacts'],
+      description: 'Email click tracking events',
+      isCore: false,
+      indexes: ['idx_email_clicks_tenant', 'idx_email_clicks_contact', 'idx_email_clicks_campaign'],
+    },
+  },
+  smsMessages: {
+    table: smsMessages,
+    metadata: {
+      name: 'sms_messages',
+      schemaGroup: 'comm',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'contacts'],
+      description: 'SMS message records',
+      isCore: false,
+      indexes: ['idx_sms_messages_tenant', 'idx_sms_messages_contact', 'idx_sms_messages_status', 'idx_sms_messages_twilio_sid'],
+    },
+  },
+  smsTemplates: {
+    table: smsTemplates,
+    metadata: {
+      name: 'sms_templates',
+      schemaGroup: 'comm',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants'],
+      description: 'SMS template definitions',
+      isCore: false,
+      indexes: ['idx_sms_templates_tenant', 'idx_sms_templates_active'],
     },
   },
 
@@ -1540,6 +1857,67 @@ export const TABLE_REGISTRY = {
       description: 'Workflow execution step logs',
       isCore: false,
       indexes: ['idx_workflow_execution_logs_execution', 'idx_workflow_execution_logs_tenant', 'idx_workflow_execution_logs_level', 'idx_workflow_execution_logs_metadata_g'],
+    },
+  },
+
+  deadLetterQueue: {
+    table: deadLetterQueue,
+    metadata: {
+      name: 'dead_letter_queue',
+      schemaGroup: 'automation',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Failed job executions awaiting retry',
+      isCore: false,
+      indexes: ['idx_dead_letter_status', 'idx_dead_letter_job_type', 'idx_dead_letter_created'],
+    },
+  },
+  scheduledReports: {
+    table: scheduledReports,
+    metadata: {
+      name: 'scheduled_reports',
+      schemaGroup: 'automation',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: true,
+      hasMetadata: false,
+      dependencies: ['tenants'],
+      description: 'Scheduled report delivery configurations',
+      isCore: false,
+      indexes: ['idx_scheduled_reports_status', 'idx_scheduled_reports_next_run'],
+    },
+  },
+  assignmentRules: {
+    table: assignmentRules,
+    metadata: {
+      name: 'assignment_rules',
+      schemaGroup: 'automation',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants'],
+      description: 'Auto-assignment rules for leads/tickets/deals',
+      isCore: false,
+      indexes: ['idx_assignment_rules_tenant', 'idx_assignment_rules_type', 'idx_assignment_rules_active'],
+    },
+  },
+  assignmentLogs: {
+    table: assignmentLogs,
+    metadata: {
+      name: 'assignment_logs',
+      schemaGroup: 'automation',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants'],
+      description: 'Assignment action audit trail',
+      isCore: false,
+      indexes: ['idx_assignment_logs_tenant', 'idx_assignment_logs_rule', 'idx_assignment_logs_entity', 'idx_assignment_logs_assignee'],
     },
   },
 
@@ -2055,6 +2433,142 @@ export const TABLE_REGISTRY = {
     },
   },
 
+  backupRecords: {
+    table: backupRecords,
+    metadata: {
+      name: 'backup_records',
+      schemaGroup: 'infra',
+      hasTenantId: false,
+      hasSoftDelete: true,
+      hasAudit: true,
+      hasMetadata: true,
+      dependencies: [],
+      description: 'System backup operation records',
+      isCore: false,
+      indexes: ['idx_backup_records_status'],
+    },
+  },
+  restoreSnapshots: {
+    table: restoreSnapshots,
+    metadata: {
+      name: 'restore_snapshots',
+      schemaGroup: 'infra',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants'],
+      description: 'Point-in-time restore snapshots',
+      isCore: false,
+      indexes: ['idx_restore_snapshots_tenant'],
+    },
+  },
+  complianceRequests: {
+    table: complianceRequests,
+    metadata: {
+      name: 'compliance_requests',
+      schemaGroup: 'infra',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants'],
+      description: 'GDPR/SOC2 compliance request records',
+      isCore: false,
+      indexes: ['idx_compliance_requests_tenant', 'idx_compliance_requests_type', 'idx_compliance_requests_status'],
+    },
+  },
+  dataRetentionPolicies: {
+    table: dataRetentionPolicies,
+    metadata: {
+      name: 'data_retention_policies',
+      schemaGroup: 'infra',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants'],
+      description: 'Data retention and archival policy configurations',
+      isCore: false,
+      indexes: ['idx_data_retention_tenant', 'idx_data_retention_entity'],
+    },
+  },
+  dashboardLayouts: {
+    table: dashboardLayouts,
+    metadata: {
+      name: 'dashboard_layouts',
+      schemaGroup: 'infra',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: true,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'User dashboard layout configurations',
+      isCore: false,
+      indexes: ['idx_dashboard_layouts_tenant', 'idx_dashboard_layouts_user_default'],
+    },
+  },
+  tenantHierarchy: {
+    table: tenantHierarchy,
+    metadata: {
+      name: 'tenant_hierarchy',
+      schemaGroup: 'infra',
+      hasTenantId: false,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: [],
+      description: 'Multi-tenant parent-child relationship records',
+      isCore: false,
+      indexes: [],
+    },
+  },
+  hierarchyPermissions: {
+    table: hierarchyPermissions,
+    metadata: {
+      name: 'hierarchy_permissions',
+      schemaGroup: 'infra',
+      hasTenantId: false,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenantHierarchy'],
+      description: 'Hierarchy-level permission assignments',
+      isCore: false,
+      indexes: [],
+    },
+  },
+  userUsage: {
+    table: userUsage,
+    metadata: {
+      name: 'user_usage',
+      schemaGroup: 'infra',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Per-user resource usage tracking',
+      isCore: false,
+      indexes: ['idx_user_usage_unique', 'idx_user_usage_tenant'],
+    },
+  },
+  planLimits: {
+    table: planLimits,
+    metadata: {
+      name: 'plan_limits',
+      schemaGroup: 'infra',
+      hasTenantId: false,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: [],
+      description: 'Subscription plan resource limit definitions',
+      isCore: false,
+      indexes: [],
+    },
+  },
+
   // Marketing tables
   sequences: {
     table: sequences,
@@ -2114,6 +2628,82 @@ export const TABLE_REGISTRY = {
       description: 'Contact enrollments in sequences',
       isCore: false,
       indexes: ['idx_sequence_enrollments_tenant', 'idx_seq_enroll_contact', 'idx_seq_enroll_seq', 'idx_seq_enroll_status', 'idx_sequence_enrollments_metadata_g'],
+    },
+  },
+
+  leadWarmingEvents: {
+    table: leadWarmingEvents,
+    metadata: {
+      name: 'lead_warming_events',
+      schemaGroup: 'marketing',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants'],
+      description: 'Lead warming event/festival calendar entries',
+      isCore: false,
+      indexes: ['idx_lead_warming_events_tenant', 'idx_lead_warming_events_type', 'idx_lead_warming_events_month_day', 'idx_lead_warming_events_active'],
+    },
+  },
+  leadWarmingCampaigns: {
+    table: leadWarmingCampaigns,
+    metadata: {
+      name: 'lead_warming_campaigns',
+      schemaGroup: 'marketing',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Lead warming campaign configurations',
+      isCore: false,
+      indexes: ['idx_lead_warming_campaigns_tenant', 'idx_lead_warming_campaigns_status', 'idx_lead_warming_campaigns_active'],
+    },
+  },
+  leadWarmingMessages: {
+    table: leadWarmingMessages,
+    metadata: {
+      name: 'lead_warming_messages',
+      schemaGroup: 'marketing',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants', 'contacts', 'leadWarmingCampaigns', 'leadWarmingEvents'],
+      description: 'Sent lead warming message log',
+      isCore: false,
+      indexes: ['idx_lead_warming_msg_campaign', 'idx_lead_warming_msg_contact', 'idx_lead_warming_msg_status', 'idx_lead_warming_msg_channel'],
+    },
+  },
+  leadWarmingReplies: {
+    table: leadWarmingReplies,
+    metadata: {
+      name: 'lead_warming_replies',
+      schemaGroup: 'marketing',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants', 'contacts', 'leadWarmingCampaigns', 'leadWarmingMessages'],
+      description: 'AI-analyzed lead warming reply records',
+      isCore: false,
+      indexes: ['idx_lead_warming_replies_message', 'idx_lead_warming_replies_contact', 'idx_lead_warming_replies_intent', 'idx_lead_warming_replies_unanalyzed', 'idx_lead_warming_replies_positive'],
+    },
+  },
+  leadWarmingSchedule: {
+    table: leadWarmingSchedule,
+    metadata: {
+      name: 'lead_warming_schedule',
+      schemaGroup: 'marketing',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'contacts', 'leadWarmingCampaigns'],
+      description: 'Per-contact lead warming sending schedule',
+      isCore: false,
+      indexes: ['idx_lead_warming_sched_unique', 'idx_lead_warming_sched_tenant', 'idx_lead_warming_sched_eligible'],
     },
   },
 
@@ -2191,6 +2781,37 @@ export const TABLE_REGISTRY = {
       description: 'Replies to support tickets',
       isCore: false,
       indexes: ['idx_ticket_replies_tenant', 'idx_ticket_replies_ticket'],
+    },
+  },
+
+  slaPolicies: {
+    table: slaPolicies,
+    metadata: {
+      name: 'sla_policies',
+      schemaGroup: 'support',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants'],
+      description: 'SLA policy definitions for support',
+      isCore: false,
+      indexes: ['idx_sla_policies_tenant', 'idx_sla_policies_priority', 'idx_sla_policies_active'],
+    },
+  },
+  slaBreaches: {
+    table: slaBreaches,
+    metadata: {
+      name: 'sla_breaches',
+      schemaGroup: 'support',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants'],
+      description: 'SLA breach event records',
+      isCore: false,
+      indexes: ['idx_sla_breaches_tenant', 'idx_sla_breaches_policy', 'idx_sla_breaches_entity'],
     },
   },
 
@@ -2283,6 +2904,67 @@ export const TABLE_REGISTRY = {
       description: 'AI cost anomaly detection',
       isCore: false,
       indexes: ['idx_cost_anomalies_tenant', 'idx_cost_anomalies_unreviewed'],
+    },
+  },
+
+  oauthClients: {
+    table: oauthClients,
+    metadata: {
+      name: 'oauth_clients',
+      schemaGroup: 'tokens',
+      hasTenantId: true,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'OAuth 2.0 client registrations',
+      isCore: false,
+      indexes: ['idx_oauth_clients_client_id', 'idx_oauth_clients_tenant'],
+    },
+  },
+  oauthCodes: {
+    table: oauthCodes,
+    metadata: {
+      name: 'oauth_codes',
+      schemaGroup: 'tokens',
+      hasTenantId: false,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['oauthClients', 'users'],
+      description: 'OAuth 2.0 authorization codes',
+      isCore: false,
+      indexes: ['idx_oauth_codes_code', 'idx_oauth_codes_client'],
+    },
+  },
+  oauthTokens: {
+    table: oauthTokens,
+    metadata: {
+      name: 'oauth_tokens',
+      schemaGroup: 'tokens',
+      hasTenantId: false,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['oauthClients', 'users'],
+      description: 'OAuth 2.0 access and refresh tokens',
+      isCore: false,
+      indexes: ['idx_oauth_tokens_access', 'idx_oauth_tokens_refresh', 'idx_oauth_tokens_client', 'idx_oauth_tokens_user'],
+    },
+  },
+  portalClients: {
+    table: portalClients,
+    metadata: {
+      name: 'portal_clients',
+      schemaGroup: 'tokens',
+      hasTenantId: true,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'users'],
+      description: 'Client portal access tokens',
+      isCore: false,
+      indexes: ['idx_portal_clients_tenant', 'idx_portal_clients_email', 'idx_portal_clients_token'],
     },
   },
 
@@ -2594,6 +3276,52 @@ export const TABLE_REGISTRY = {
       indexes: [],
     },
   },
+  exchangeRates: {
+    table: exchangeRates,
+    metadata: {
+      name: 'exchange_rates',
+      schemaGroup: 'billing',
+      hasTenantId: false,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: [],
+      description: 'Currency exchange rate records',
+      isCore: false,
+      indexes: ['idx_exchange_rates_pair', 'idx_exchange_rates_fetched'],
+    },
+  },
+  taxRates: {
+    table: taxRates,
+    metadata: {
+      name: 'tax_rates',
+      schemaGroup: 'billing',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants'],
+      description: 'Tax rate configurations per region',
+      isCore: false,
+      indexes: ['idx_tax_rates_tenant', 'idx_tax_rates_region', 'idx_tax_rates_active'],
+    },
+  },
+  taxExemptions: {
+    table: taxExemptions,
+    metadata: {
+      name: 'tax_exemptions',
+      schemaGroup: 'billing',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants'],
+      description: 'Tax exemption records for entities',
+      isCore: false,
+      indexes: ['idx_tax_exemptions_tenant', 'idx_tax_exemptions_entity'],
+    },
+  },
+
   // History tables
   editHistory: {
     table: editHistory,
@@ -2729,6 +3457,132 @@ export const TABLE_REGISTRY = {
       description: 'Rules for flagging deals as at-risk',
       isCore: false,
       indexes: ['idx_at_risk_rules_tenant', 'idx_at_risk_rules_active'],
+    },
+  },
+
+  // Document Management tables
+  documentFolders: {
+    table: documentFolders,
+    metadata: {
+      name: 'document_folders',
+      schemaGroup: 'documents',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants'],
+      description: 'Hierarchical document folder structure',
+      isCore: false,
+      indexes: ['idx_document_folders_tenant', 'idx_document_folders_parent'],
+    },
+  },
+  documentRecords: {
+    table: documentRecords,
+    metadata: {
+      name: 'documents',
+      schemaGroup: 'documents',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants'],
+      description: 'Document metadata records with folder organization',
+      isCore: false,
+      indexes: ['idx_documents_tenant', 'idx_documents_folder', 'idx_documents_entity', 'idx_documents_uploader'],
+    },
+  },
+  storageDocuments: {
+    table: storageDocuments,
+    metadata: {
+      name: 'documents',
+      schemaGroup: 'documents',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants', 'users'],
+      description: 'Workspace file attachments in object storage',
+      isCore: false,
+      indexes: ['idx_documents_tenant', 'idx_documents_active', 'idx_documents_metadata_g', 'idx_documents_link', 'idx_documents_uploader'],
+    },
+  },
+
+  // Electronic Signature tables
+  signingRequests: {
+    table: signingRequests,
+    metadata: {
+      name: 'signing_requests',
+      schemaGroup: 'esignature',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants'],
+      description: 'Electronic signature requests',
+      isCore: false,
+      indexes: ['idx_signing_requests_tenant', 'idx_signing_requests_document', 'idx_signing_requests_status', 'idx_signing_requests_external'],
+    },
+  },
+  signingEvents: {
+    table: signingEvents,
+    metadata: {
+      name: 'signing_events',
+      schemaGroup: 'esignature',
+      hasTenantId: true,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants', 'signingRequests'],
+      description: 'Signature event audit trail',
+      isCore: false,
+      indexes: ['idx_signing_events_request', 'idx_signing_events_tenant', 'idx_signing_events_signer'],
+    },
+  },
+
+  // Project Management tables
+  projects: {
+    table: projects,
+    metadata: {
+      name: 'projects',
+      schemaGroup: 'projects',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: true,
+      hasMetadata: true,
+      dependencies: ['tenants', 'users'],
+      description: 'Project records',
+      isCore: false,
+      indexes: ['idx_projects_tenant', 'idx_projects_status', 'idx_projects_owner', 'idx_projects_active'],
+    },
+  },
+  milestones: {
+    table: milestones,
+    metadata: {
+      name: 'milestones',
+      schemaGroup: 'projects',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants', 'projects'],
+      description: 'Project milestone tracking',
+      isCore: false,
+      indexes: ['idx_milestones_tenant', 'idx_milestones_project'],
+    },
+  },
+  projectTasks: {
+    table: projectTasks,
+    metadata: {
+      name: 'project_tasks',
+      schemaGroup: 'projects',
+      hasTenantId: true,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: ['tenants', 'projects', 'tasks'],
+      description: 'Junction table linking projects to tasks',
+      isCore: false,
+      indexes: ['idx_project_tasks_unique', 'idx_project_tasks_tenant'],
     },
   },
 };
