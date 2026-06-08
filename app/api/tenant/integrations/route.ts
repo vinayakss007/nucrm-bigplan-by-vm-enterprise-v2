@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ data });
-  } catch (err: any) {
-    return apiError(err);
+  } catch (err: unknown) {
+    return apiError(err instanceof Error ? err : new Error(String(err)));
   }
 }
 
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     }).returning();
 
     return NextResponse.json({ data: row }, { status: 201 });
-  } catch (err: any) {
-    return apiError(err);
+  } catch (err: unknown) {
+    return apiError(err instanceof Error ? err : new Error(String(err)));
   }
 }

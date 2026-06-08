@@ -46,8 +46,8 @@ describe('Calculated Fields Integration', () => {
     await query(`DELETE FROM public.contacts WHERE id = $1`, [contactId]);
     
     const contact = await queryOne(`
-      INSERT INTO public.contacts (id, tenant_id, first_name, last_name, email, score)
-      VALUES ($1, $2, 'Test', 'User', 'test@example.com', 75)
+      INSERT INTO public.contacts (id, tenant_id, first_name, last_name, email, score, metadata)
+      VALUES ($1, $2, 'Test', 'User', 'test@example.com', 75, '{}'::jsonb)
       RETURNING *
     `, [contactId, tenantId]);
 

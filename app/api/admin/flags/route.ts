@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllFlags, isEnabled, setOverride, deleteOverride, DEFINED_FLAGS } from '@/lib/flags';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   const flags = await getAllFlags();
   return NextResponse.json({ flags });
 }
