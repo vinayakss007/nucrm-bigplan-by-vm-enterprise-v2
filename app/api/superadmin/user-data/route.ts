@@ -300,15 +300,15 @@ export async function POST(request: NextRequest) {
       let errors = 0;
       for (const contact of records.contacts) {
         try {
+          const { id: _id, ...rest } = contact as Record<string, unknown>;
           await db.insert(contacts).values({
-            ...contact,
-            id: undefined, // Let DB generate new ID
+            ...rest,
             tenantId: tenant_id,
             assignedTo: user_id,
             createdAt: new Date(),
             updatedAt: new Date(),
             deletedAt: null,
-          }).onConflictDoNothing();
+          } as any).onConflictDoNothing();
           restored++;
         } catch { errors++; }
       }
@@ -321,15 +321,15 @@ export async function POST(request: NextRequest) {
       let errors = 0;
       for (const deal of records.deals) {
         try {
+          const { id: _id, ...rest } = deal as Record<string, unknown>;
           await db.insert(deals).values({
-            ...deal,
-            id: undefined,
+            ...rest,
             tenantId: tenant_id,
             assignedTo: user_id,
             createdAt: new Date(),
             updatedAt: new Date(),
             deletedAt: null,
-          }).onConflictDoNothing();
+          } as any).onConflictDoNothing();
           restored++;
         } catch { errors++; }
       }
@@ -342,14 +342,14 @@ export async function POST(request: NextRequest) {
       let errors = 0;
       for (const task of records.tasks) {
         try {
+          const { id: _id, ...rest } = task as Record<string, unknown>;
           await db.insert(tasks).values({
-            ...task,
-            id: undefined,
+            ...rest,
             tenantId: tenant_id,
             assignedTo: user_id,
             createdAt: new Date(),
             updatedAt: new Date(),
-          }).onConflictDoNothing();
+          } as any).onConflictDoNothing();
           restored++;
         } catch { errors++; }
       }
