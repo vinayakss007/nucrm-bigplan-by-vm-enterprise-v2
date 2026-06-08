@@ -348,7 +348,7 @@ async function performTenantRestore(backupId: string, tenantId: string, options:
   return restoreRecord;
 }
 
-async function runTenantRestore(restoreId: string, backupId: string, tenantId: string, options: Record<string, unknown> = {}) {
+async function runTenantRestore(restoreId: string, backupId: string, tenantId: string, options: { deleteExisting?: boolean; skipTables?: string[] } = {}) {
   const startTime = Date.now();
   const { deleteExisting = false, skipTables = [] } = options;
 

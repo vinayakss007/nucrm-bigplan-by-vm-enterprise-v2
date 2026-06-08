@@ -49,7 +49,7 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
         <p className="text-sm font-semibold text-foreground/70 capitalize">{planName} plan</p>
       </div>
       <WidgetGrid
-        layout={layout}
+        layout={layout ?? []}
         tenantId={tenantId}
         userId={userId}
         isAdmin={isAdmin}
