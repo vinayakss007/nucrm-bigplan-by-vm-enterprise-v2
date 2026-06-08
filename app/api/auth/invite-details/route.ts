@@ -5,7 +5,7 @@ import { verifyToken } from '@/lib/auth/session';
 import { db } from '@/drizzle/db';
 import { invitations, tenants, users } from '@/drizzle/schema';
 import { eq, and, gt, isNull, sql } from 'drizzle-orm';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 export async function GET(request: NextRequest) {
   try {

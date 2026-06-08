@@ -241,8 +241,9 @@ export class EmailError extends AppError {
   }
 }
 
-export { logError } from './errors-server';
-export { withErrorLogging } from './errors-server';
+export function logError(opts: { error: any; context?: string; [key: string]: any }): void {
+  console.error(`[logError] ${opts.context ?? ''}`, opts.error);
+}
 
 /**
  * Error handler for API routes

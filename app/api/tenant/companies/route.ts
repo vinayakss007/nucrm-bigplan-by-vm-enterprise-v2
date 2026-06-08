@@ -8,7 +8,7 @@ import { companies, contacts } from '@/drizzle/schema';
 import { eq, and, sql, ilike, isNull } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fireWebhooks } from '@/lib/webhooks';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 export async function GET(request: NextRequest) {
   try {

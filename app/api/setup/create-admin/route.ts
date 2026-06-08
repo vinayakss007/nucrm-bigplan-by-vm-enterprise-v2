@@ -5,7 +5,7 @@ import { users, tenants, tenantMembers, plans, roles, onboardingProgress, sessio
 import { eq, count, sql, and } from 'drizzle-orm';
 import { hashPassword, createToken, hashToken, setSessionCookie, validatePassword } from '@/lib/auth/session';
 import { installDefaultModules } from '@/lib/modules/auto-install';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 export async function POST(request: NextRequest) {
   try {

@@ -8,7 +8,8 @@ import { deals, contacts, companies, users, tenants, plans, activities, pipeline
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fireWebhooks } from '@/lib/webhooks';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
+import { createNotification } from '@/lib/notifications';
 
 export async function GET(request: NextRequest) {
   try {
@@ -168,6 +169,19 @@ export async function POST(request: NextRequest) {
         description: `Created deal "${deal.title}" with amount ${amount}`,
       })
       .catch(err => console.error('[deals POST] activity log failed:', err));
+
+    if (v.assigned_to && v.assigned_to !== ctx.userId) {
+      createNotification({
+        userId: v.assigned_to,
+        tenantId: ctx.tenantId,
+        type: 'deal_assigned',
+        title: `Deal assigned: ${deal.title}`,
+        body: `Amount: ${amount}`,
+        entity_type: 'deal',
+        entity_id: deal.id,
+        link: `/tenant/deals/${deal.id}`,
+      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    }
 
     fireWebhooks(ctx.tenantId, 'deal.created', { id: deal.id, title: deal.title, amount }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 

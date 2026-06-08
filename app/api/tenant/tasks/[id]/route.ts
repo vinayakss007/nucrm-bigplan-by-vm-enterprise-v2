@@ -8,7 +8,8 @@ import { tasks } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
+import { createNotification } from '@/lib/notifications';
 
 export async function PATCH(req: NextRequest, { params }: any) {
   try {
@@ -61,6 +62,16 @@ export async function PATCH(req: NextRequest, { params }: any) {
         entityType: 'task', 
         entityId: id 
       });
+      if (row.createdBy && row.createdBy !== ctx.userId) {
+        createNotification({
+          userId: row.createdBy,
+          tenantId: ctx.tenantId,
+          type: 'task_assigned',
+          title: `Task completed: ${row.title}`,
+          entity_type: 'task',
+          link: `/tenant/tasks`,
+        }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      }
       fireWebhooks(ctx.tenantId, 'task.completed', { id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     }
 

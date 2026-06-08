@@ -8,7 +8,7 @@ import { backupRecords, errorLogs } from '@/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { spawn } from 'child_process';
 import { downloadFromS3, checkFileExists, deleteFile } from '@/lib/restore/runtime-fs';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 /**
  * Safely run pg_restore with input validation.

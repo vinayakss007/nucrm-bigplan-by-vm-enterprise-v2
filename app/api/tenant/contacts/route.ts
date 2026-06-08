@@ -10,7 +10,7 @@ import { contacts, companies, users, tenants, activities } from '@/drizzle/schem
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 function canViewAll(ctx: any) {
   return ctx.isAdmin || ctx.permissions?.['all'] || ctx.permissions?.['contacts.view_all'];

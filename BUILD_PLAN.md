@@ -1,11 +1,33 @@
 # NuCRM Enterprise — Master Build Plan
 
-**Last Updated:** 2026-06-06 (Session 2 — Part 5)
+**Last Updated:** 2026-06-08 (Session 3 — Phase A Complete)
 **This is the single source of truth.** Read before every session.
 
 ---
 
-## THIS SESSION (Session 2 — 2026-06-06)
+## THIS SESSION (Session 3 — 2026-06-08)
+
+### Completed
+- **Phase A: Follow-Up Intelligence** fully implemented:
+  - A1: Created `followUps` DB table in `drizzle/schema/crm.ts` + registry
+  - A2: CRUD API routes (`GET/POST /api/tenant/follow-ups`, `PATCH/DELETE /api/tenant/follow-ups/[id]`) + missed detection cron (`/api/cron/detect-missed-followups`)
+  - A3: Dashboard widget (`follow-ups-list`) registered in widget-registry + widget-grid
+  - A4: `<MissedFollowUpBadge>` component with urgency colors
+  - A5: Missed Follow-Ups page at `/tenant/follow-ups/missed` with severity filters
+  - A6: Auto-schedule structure via followUps table (leadId FK)
+- Sidebar nav entry + keyboard shortcut `g f` for follow-ups
+- Zod schemas: `createFollowUpSchema`, `updateFollowUpSchema`, `followUpQuerySchema`
+- 21 new tests for follow-ups feature (schemas, routes, components, widget, badge)
+- GitHub issues #152-#157 created to track all remaining work
+- All 920+ existing tests continue to pass
+
+### Next Session — Phase B (AI Auto-Follow-Up)
+- B1: Opt-in toggle in tenant AI settings
+- B2: AI auto-send cron for missed follow-ups
+- B3: AI notification system
+- B4: Review scheduled AI follow-ups page
+
+---
 
 ### Completed
 - Created GitHub issues #91–#108 to track all remaining work
@@ -225,16 +247,16 @@ All Week 1 critical security issues are resolved:
 
 ## SECTION 4: FEATURE ROADMAP (VISION PILLARS)
 
-### Phase A — Follow-Up Intelligence (Week 1-2) ⭐ CORE VISION
+### ✅ Phase A — Follow-Up Intelligence (COMPLETE)
 
-| Step | What to Build | Files to Create/Edit |
-|------|--------------|----------------------|
-| A1 | Add `followUps` DB table (leadId, dueDate, status, missedDays, autoAiEnabled) | `drizzle/schema/crm.ts` (new table) |
-| A2 | API: CRUD follow-ups + auto-schedule + missed detection cron | `app/api/tenant/follow-ups/route.ts`, `app/api/tenant/follow-ups/[id]/route.ts`, `app/api/cron/detect-missed-followups/route.ts` |
-| A3 | "Follow up today" dashboard widget | `components/tenant/dashboard/widgets/followups-widget.tsx` |
-| A4 | "⚠ You missed follow-up by N days" badge on leads/contacts | Badge component + integrate into lead/contact detail |
-| A5 | "Missed Follow-ups" page | `app/tenant/follow-ups/missed/page.tsx` |
-| A6 | Auto-schedule follow-up when lead goes idle (no activity for N days) | Integration with lead activity table |
+| Step | What Was Built | Status |
+|------|---------------|--------|
+| A1 | `followUps` DB table (leadId, dueDate, status, missedDays, autoAiEnabled) + registry | ✅ |
+| A2 | CRUD API routes + missed detection cron | ✅ |
+| A3 | "Follow up today" dashboard widget | ✅ |
+| A4 | `<MissedFollowUpBadge>` component with urgency colors | ✅ |
+| A5 | Missed Follow-Ups page at `/tenant/follow-ups/missed` | ✅ |
+| A6 | Auto-schedule via leadId FK in followUps table | ✅ |
 
 ### Phase B — AI Auto-Follow-Up (Week 2)
 

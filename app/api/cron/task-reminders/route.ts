@@ -6,7 +6,7 @@ import { eq, and, isNull, sql } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { createNotification } from '@/lib/notifications';
 import { apiError } from '@/lib/api-error';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 export async function POST(request: NextRequest) {
   if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {

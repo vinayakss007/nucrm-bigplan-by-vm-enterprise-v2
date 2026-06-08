@@ -12,6 +12,7 @@ const TYPE_CFG: Record<string, { icon: any; color: string; bg: string; label: st
   task_due:        { icon: Clock,        color:'text-amber-600',  bg:'bg-amber-100 dark:bg-amber-900/20',  label:'Due' },
   task_overdue:    { icon: AlertTriangle,color:'text-red-600',    bg:'bg-red-100 dark:bg-red-900/20',      label:'Overdue' },
   deal_stage:      { icon: TrendingUp,   color:'text-blue-600',   bg:'bg-blue-100 dark:bg-blue-900/20',    label:'Deal' },
+  deal_assigned:   { icon: TrendingUp,   color:'text-violet-600', bg:'bg-violet-100 dark:bg-violet-900/20', label:'Deal' },
   deal_won:        { icon: Zap,          color:'text-emerald-600',bg:'bg-emerald-100 dark:bg-emerald-900/20',label:'Won' },
   contact_assigned:{ icon: Users,        color:'text-violet-600', bg:'bg-violet-100 dark:bg-violet-900/20', label:'Assigned' },
   mention:         { icon: AtSign,       color:'text-pink-600',   bg:'bg-pink-100 dark:bg-pink-900/20',    label:'Mention' },

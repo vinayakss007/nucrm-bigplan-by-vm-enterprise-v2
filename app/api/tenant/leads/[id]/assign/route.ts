@@ -22,7 +22,7 @@ import { validateBody } from '@/lib/api/validate';
 import { logAudit } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
 import { apiError } from '@/lib/api-error';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 const assignSchema = z.object({
   assigned_to: z.string().uuid('assigned_to must be a uuid'),
