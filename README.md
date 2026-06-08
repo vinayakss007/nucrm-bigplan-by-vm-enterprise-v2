@@ -166,7 +166,9 @@ npm run test:e2e            # Playwright E2E tests
 npm run test:watch          # Watch mode
 ```
 
-**108 tests pass, 0 failing** across unit, integration, and API validation.
+**920 unit tests pass, 0 failing** across all test suites.
+
+[Coverage tracking](https://github.com/vinayakss007/nucrm-bigplan-by-vm-enterprise-v2/issues/151) — baseline 31% lines, target 100%. Run `npm run test:coverage` to view current coverage.
 
 ## Deployment
 
