@@ -362,7 +362,7 @@ async function runTenantRestore(restoreId: string, backupId: string, tenantId: s
       throw new Error('Backup not found or not completed');
     }
 
-    const tables = backup.backupData as Record<string, unknown>;
+    const tables = backup.backupData as Record<string, { columns: string[]; rows: Record<string, unknown>[]; }>;
 
     const importer = new TenantDataImporter(tenantId);
 
