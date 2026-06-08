@@ -214,9 +214,19 @@ describe('email/router.ts', () => {
 });
 
 describe('auth/api-key - generateApiKey', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    const mockChain: any = {
+      values: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.doMock('@/drizzle/db', () => ({
+      db: { insert: vi.fn().mockReturnValue(mockChain) },
+    }));
+  });
+
   it('generateApiKey returns credentials', async () => {
     const { generateApiKey } = await import('@/lib/auth/api-key');
-    const key = generateApiKey();
+    const key = await generateApiKey('tenant-1', 'user-1', 'test-key', ['*']);
     expect(key).toBeDefined();
     expect(typeof key).toBe('object');
   });
@@ -225,9 +235,21 @@ describe('auth/api-key - generateApiKey', () => {
 describe('webhooks - fireWebhooks', () => {
   beforeEach(() => {
     vi.resetModules();
-    vi.doMock('@/lib/db/client', () => ({
-      query: vi.fn().mockResolvedValue({ rows: [] }),
-      queryMany: vi.fn().mockResolvedValue([]),
+    const mockChain: any = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([]),
+      values: vi.fn().mockResolvedValue(undefined),
+      returning: vi.fn().mockResolvedValue([{ id: 'mock-id' }]),
+      set: vi.fn().mockReturnThis(),
+    };
+    vi.doMock('@/drizzle/db', () => ({
+      db: {
+        insert: vi.fn().mockReturnValue(mockChain),
+        select: vi.fn().mockReturnValue(mockChain),
+        update: vi.fn().mockReturnValue(mockChain),
+      },
     }));
   });
 
