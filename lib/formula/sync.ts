@@ -13,7 +13,7 @@ export async function syncCalculatedFields(
   tenantId: string,
   entityType: string,
   entityId: string,
-  recordData: Record<string, any>
+  recordData: Record<string, unknown>
 ): Promise<void> {
   try {
     // 1. Fetch all calculated field definitions for this tenant/entity
@@ -31,7 +31,7 @@ export async function syncCalculatedFields(
     if (!defs.length) return;
 
     // 2. Evaluate each formula
-    const updates: Record<string, any> = {};
+    const updates: Record<string, unknown> = {};
     for (const def of defs) {
       if (!def.formula) continue;
       const value = formulaEngine.evaluate(def.formula, recordData);
@@ -49,7 +49,7 @@ export async function syncCalculatedFields(
 
     await db.execute(sql`
       UPDATE public.${sql.identifier(tableName)} 
-      SET metadata = metadata || \${JSON.stringify(updates)}::jsonb, updated_at = now() 
+      SET metadata = COALESCE(metadata, '{}'::jsonb) || \${JSON.stringify(updates)}::jsonb, updated_at = now() 
       WHERE id = \${entityId} AND tenant_id = \${tenantId}
     `);
   } catch (err) {

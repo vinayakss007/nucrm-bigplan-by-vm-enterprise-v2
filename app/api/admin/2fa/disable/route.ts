@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { users, activities } from '@/drizzle/schema';
+import { users } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       message: `2FA disabled for ${userRow.email}`,
       user: { email: userRow.email, full_name: userRow.fullName }
     });
-  } catch (err: any) {
-    return apiError(err);
+  } catch (err: unknown) {
+    return apiError(err instanceof Error ? err : new Error(String(err)));
   }
 }

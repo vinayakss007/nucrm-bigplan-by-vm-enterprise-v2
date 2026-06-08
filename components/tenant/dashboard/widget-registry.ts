@@ -69,6 +69,12 @@ const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     category: 'revenue', defaultSize: '1x1', minPlan: 'starter',
     refreshInterval: 300, apiEndpoint: '/api/tenant/dashboard/widgets/invoices',
   },
+  'follow-ups-list': {
+    id: 'follow-ups-list', name: 'Follow Ups',
+    description: 'Follow-ups due today and overdue',
+    category: 'core', defaultSize: '1x1', minPlan: 'free',
+    refreshInterval: 120, apiEndpoint: '/api/tenant/dashboard/widgets/follow-ups',
+  },
 }
 
 export function getWidget(id: string): WidgetConfig | undefined {

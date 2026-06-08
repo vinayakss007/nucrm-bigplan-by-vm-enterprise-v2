@@ -11,7 +11,7 @@ import { db } from '@/drizzle/db';
 import { leads, tenantMembers } from '@/drizzle/schema';
 import { eq, and, inArray, sql, not, exists } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 const MAX_BULK = 500;
 

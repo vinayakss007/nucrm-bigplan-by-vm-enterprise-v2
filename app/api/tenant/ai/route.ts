@@ -26,7 +26,7 @@ import { tenantModules } from '@/drizzle/schema/modules';
 import { eq, and } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { checkTokenAndLimits, recordUsage } from '@/lib/ai/common';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 import { chat, GatewayError, type GatewayRequest } from '@/lib/ai/gateway';
 
 // FIX HIGH-03: Sanitize inputs to prevent prompt injection

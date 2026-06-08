@@ -6,7 +6,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, sequences, sequenceSteps, sequenceEnrollments } from '@/drizzle/schema';
 import { eq, and, asc, sql } from 'drizzle-orm';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 export async function POST(req: NextRequest, { params }: any) {
   try {

@@ -9,7 +9,7 @@ import { eq, and, sql, ne } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { trackFieldChange } from '@/lib/history';
 import { fireWebhooks } from '@/lib/webhooks';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {

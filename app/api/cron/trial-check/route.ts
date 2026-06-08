@@ -5,7 +5,7 @@ import { tenants, users, activities } from '@/drizzle/schema';
 import { eq, and, lt, sql, notExists, inArray } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { apiError } from '@/lib/api-error';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 export async function POST(request: NextRequest) {
   if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {

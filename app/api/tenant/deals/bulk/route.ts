@@ -11,7 +11,7 @@ import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines, tenantMembers } from '@/drizzle/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 const MAX_BULK = 500;
 

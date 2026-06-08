@@ -14,6 +14,7 @@ import ContactsRecentWidget from './widgets/contacts-recent-widget';
 import LeadsPipelineWidget from './widgets/leads-pipeline-widget';
 import TicketsWidget from './widgets/tickets-widget';
 import InvoicesWidget from './widgets/invoices-widget';
+import FollowUpsWidget from './widgets/follow-ups-widget';
 
 const WIDGET_MAP: Record<string, FC<WidgetProps>> = {
   'stats-contacts': StatsContactsWidget,
@@ -27,6 +28,7 @@ const WIDGET_MAP: Record<string, FC<WidgetProps>> = {
   'leads-pipeline': LeadsPipelineWidget,
   'tickets-widget': TicketsWidget,
   'invoices-widget': InvoicesWidget,
+  'follow-ups-list': FollowUpsWidget,
 };
 
 const SIZE_CLASSES: Record<string, string> = {

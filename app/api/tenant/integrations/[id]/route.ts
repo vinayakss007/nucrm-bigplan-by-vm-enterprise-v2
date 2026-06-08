@@ -30,8 +30,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ data: row });
-  } catch (err: any) { 
-    return apiError(err); 
+  } catch (err: unknown) { 
+    return apiError(err instanceof Error ? err : new Error(String(err))); 
   }
 }
 
@@ -50,7 +50,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     if (result.rowCount === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ ok: true });
-  } catch (err: any) { 
-    return apiError(err); 
+  } catch (err: unknown) { 
+    return apiError(err instanceof Error ? err : new Error(String(err))); 
   }
 }
