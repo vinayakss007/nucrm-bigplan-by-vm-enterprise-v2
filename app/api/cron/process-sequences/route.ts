@@ -1,7 +1,7 @@
 import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
 import { createEmailTracking, addTracking } from '@/lib/email/service';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { sequenceEnrollments, sequenceSteps, tasks, sequenceStepLogs } from '@/drizzle/schema';

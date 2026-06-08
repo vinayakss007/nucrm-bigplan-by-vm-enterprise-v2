@@ -15,7 +15,7 @@ import { eq, and, sql, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { createNotification } from '@/lib/notifications';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 export async function POST(
   request: NextRequest, 

@@ -88,6 +88,7 @@ export default function TenantShell({ tenant, profile, roleSlug, permissions, is
           'g m': '/tenant/companies',
           'g p': '/tenant/deals',
           'g t': '/tenant/tasks',
+          'g f': '/tenant/follow-ups/missed',
           'g s': '/tenant/settings/general',
         };
 

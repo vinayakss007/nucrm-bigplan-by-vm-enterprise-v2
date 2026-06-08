@@ -3,7 +3,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, plans, users, errorLogs } from '@/drizzle/schema';
 import { eq, and, sql, desc, gt, between, or } from 'drizzle-orm';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 /**
  * Super Admin Platform Stats API

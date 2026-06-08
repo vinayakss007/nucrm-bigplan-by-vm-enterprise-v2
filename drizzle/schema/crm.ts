@@ -905,3 +905,35 @@ export const savedViews = pgTable('saved_views', {
     entityTypeTenantIdx: index('idx_saved_views_entity_tenant').on(table.entityType, table.tenantId),
   };
 });
+
+// ── 25. FOLLOW-UPS ────────────────────────────────────
+export const followUps = pgTable('follow_ups', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  leadId: uuid('lead_id').references(() => leads.id, { onDelete: 'cascade' }),
+  contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'cascade' }),
+  dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'cascade' }),
+  assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }),
+
+  title: text('title').notNull(),
+  description: text('description'),
+  dueDate: timestamp('due_date', { withTimezone: true }).notNull(),
+  status: text('status').notNull().default('pending'),
+  missedDays: integer('missed_days').default(0),
+  autoAiEnabled: boolean('auto_ai_enabled').default(false),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+
+  metadata: utils.metadata(),
+  ...utils.audit(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    assignedIdx: index('idx_follow_ups_assigned').on(table.assignedTo),
+    dueDateIdx: index('idx_follow_ups_due_date').on(table.dueDate),
+    statusIdx: index('idx_follow_ups_status').on(table.tenantId, table.status),
+    leadIdx: index('idx_follow_ups_lead').on(table.leadId),
+    contactIdx: index('idx_follow_ups_contact').on(table.contactId),
+    dealIdx: index('idx_follow_ups_deal').on(table.dealId),
+    activeIdx: utils.activeIdx(table),
+  };
+});

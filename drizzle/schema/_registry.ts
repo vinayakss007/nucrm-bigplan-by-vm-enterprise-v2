@@ -121,6 +121,7 @@ import {
   contactTags,
   leadOffers,
   leadTags,
+  followUps,
 } from './crm';
 
 import {
@@ -1282,6 +1283,22 @@ export const TABLE_REGISTRY = {
       description: 'Individual page view events',
       isCore: false,
       indexes: [],
+    },
+  },
+
+  followUps: {
+    table: followUps,
+    metadata: {
+      name: 'follow_ups',
+      schemaGroup: 'crm',
+      hasTenantId: true,
+      hasSoftDelete: true,
+      hasAudit: false,
+      hasMetadata: true,
+      dependencies: ['tenants', 'leads', 'contacts', 'deals', 'users'],
+      description: 'Follow-up reminders for leads, contacts, and deals',
+      isCore: false,
+      indexes: ['idx_follow_ups_assigned', 'idx_follow_ups_due_date', 'idx_follow_ups_status', 'idx_follow_ups_lead', 'idx_follow_ups_contact', 'idx_follow_ups_deal'],
     },
   },
 

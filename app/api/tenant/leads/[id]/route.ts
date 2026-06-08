@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
 import { updateLeadSchema } from '@/lib/api/schemas';
 import { fireWebhooks } from '@/lib/webhooks';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 /**
  * GET /api/tenant/leads/[id]

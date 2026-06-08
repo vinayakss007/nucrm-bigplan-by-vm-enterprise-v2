@@ -5,7 +5,7 @@ import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, users, tenantBackupRecords, tenantRestoreRecords } from '@/drizzle/schema';
-import { eq, and, desc, sql, count, max } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { TenantDataExporter } from '@/lib/tenant-data-export';
 import { TenantDataImporter } from '@/lib/tenant-data-import';
 
@@ -101,9 +101,9 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({ error: 'Missing tenantId or listBackups parameter' }, { status: 400 });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Tenant Restore GET] Error:', err);
-    return apiError(err);
+    return apiError(err instanceof Error ? err : new Error(String(err)));
   }
 }
 
@@ -154,9 +154,9 @@ export async function POST(req: NextRequest) {
       backupId: backupRecord.id,
       tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Tenant Restore POST] Error:', err);
-    return apiError(err);
+    return apiError(err instanceof Error ? err : new Error(String(err)));
   }
 }
 
@@ -171,7 +171,7 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const validated = validateBody(restoreSchema, body);
     if (validated instanceof NextResponse) return validated;
-    const { backupId, tenantId, confirmRestore, restoreOptions } = validated.data;
+    const { backupId, tenantId, restoreOptions } = validated.data;
 
     if (!backupId && !tenantId) {
       return NextResponse.json({ error: 'backupId or tenantId is required' }, { status: 400 });
@@ -247,9 +247,9 @@ export async function PUT(req: NextRequest) {
     }
 
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Tenant Restore PUT] Error:', err);
-    return apiError(err);
+    return apiError(err instanceof Error ? err : new Error(String(err)));
   }
 }
 
@@ -277,9 +277,9 @@ export async function DELETE(req: NextRequest) {
     }
 
     return NextResponse.json({ message: 'Backup deleted', backupId });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Tenant Restore DELETE] Error:', err);
-    return apiError(err);
+    return apiError(err instanceof Error ? err : new Error(String(err)));
   }
 }
 
@@ -307,12 +307,13 @@ async function performTenantBackup(backupId: string, tenantId: string, includeTa
       .where(eq(tenantBackupRecords.id, backupId));
 
     console.log(`[Tenant Backup ${backupId}] Completed: ${result.tableCount} tables, ${result.totalRecords} records, ${result.dataSize} bytes`);
-  } catch (err: any) {
+  } catch (err: unknown) {
     const duration = Date.now() - startTime;
+    const errorMessage = err instanceof Error ? err.message : String(err);
     await db.update(tenantBackupRecords)
       .set({
         status: 'failed',
-        errorMessage: err.message,
+        errorMessage,
         durationMs: duration,
         completedAt: new Date(),
       })
@@ -323,7 +324,7 @@ async function performTenantBackup(backupId: string, tenantId: string, includeTa
 
 // ── Background Restore Function ─────────────────────────────────────────────
 
-async function performTenantRestore(backupId: string, tenantId: string, options: any = {}, userId: string) {
+async function performTenantRestore(backupId: string, tenantId: string, options: Record<string, unknown> = {}, userId: string) {
   // Create restore record
   const [restoreRecord] = await db.insert(tenantRestoreRecords)
     .values({
@@ -347,7 +348,7 @@ async function performTenantRestore(backupId: string, tenantId: string, options:
   return restoreRecord;
 }
 
-async function runTenantRestore(restoreId: string, backupId: string, tenantId: string, options: any = {}) {
+async function runTenantRestore(restoreId: string, backupId: string, tenantId: string, options: Record<string, unknown> = {}) {
   const startTime = Date.now();
   const { deleteExisting = false, skipTables = [] } = options;
 
@@ -361,7 +362,7 @@ async function runTenantRestore(restoreId: string, backupId: string, tenantId: s
       throw new Error('Backup not found or not completed');
     }
 
-    const tables = backup.backupData as Record<string, any>;
+    const tables = backup.backupData as Record<string, unknown>;
 
     const importer = new TenantDataImporter(tenantId);
 
@@ -384,12 +385,13 @@ async function runTenantRestore(restoreId: string, backupId: string, tenantId: s
       .where(eq(tenantRestoreRecords.id, restoreId));
 
     console.log(`[Tenant Restore ${restoreId}] Completed: ${result.tablesRestored} tables, ${result.recordsRestored} records restored`);
-  } catch (err: any) {
+  } catch (err: unknown) {
     const duration = Date.now() - startTime;
+    const errorMessage = err instanceof Error ? err.message : String(err);
     await db.update(tenantRestoreRecords)
       .set({
         status: 'failed',
-        errorMessage: err.message,
+        errorMessage,
         durationMs: duration,
         completedAt: new Date(),
       })

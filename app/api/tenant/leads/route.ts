@@ -10,7 +10,8 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveOrCreateContactForLead } from '@/lib/contacts/resolve';
 import { generateLeadOid } from '@/lib/leads/oid';
 import { fireWebhooks } from '@/lib/webhooks';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
+import { createNotification } from '@/lib/notifications';
 
 // Whitelist for sort columns to prevent SQL injection
 const ALLOWED_SORT_COLUMNS: Record<string, any> = {
@@ -267,6 +268,18 @@ export async function POST(request: NextRequest) {
       action: 'create', entityType: 'lead', entityId: newLead.id,
       newData: { email: v.email, name: `${v.first_name} ${v.last_name ?? ''}`.trim() },
     });
+
+    if (v.assigned_to && v.assigned_to !== ctx.userId) {
+      createNotification({
+        userId: v.assigned_to,
+        tenantId: ctx.tenantId,
+        type: 'task_assigned',
+        title: `New lead assigned: ${v.first_name} ${v.last_name ?? ''}`.trim(),
+        entity_type: 'lead',
+        entity_id: newLead.id,
+        link: `/tenant/leads/${newLead.id}`,
+      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    }
 
     fireWebhooks(ctx.tenantId, 'lead.created', { id: newLead.id, email: v.email }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 

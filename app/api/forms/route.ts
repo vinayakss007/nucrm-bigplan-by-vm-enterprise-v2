@@ -5,7 +5,7 @@ import { eq, and, isNull, sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createNotification } from '@/lib/notifications';
 import { fireWebhooks } from '@/lib/webhooks';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 export async function POST(req: NextRequest) {
   try {
