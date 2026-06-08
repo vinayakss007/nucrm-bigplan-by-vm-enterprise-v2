@@ -10,23 +10,19 @@ vi.mock('@/lib/auth/middleware', () => ({
 }));
 
 // Mock drizzle db
-let mockFindMany: any;
-let mockInsertChain: any;
+const mockFindMany = vi.hoisted(() => vi.fn());
+const mockReturning = vi.hoisted(() => vi.fn());
+const mockValues = vi.hoisted(() => vi.fn(() => ({ returning: mockReturning })));
+const mockInsertChain = vi.hoisted(() => vi.fn(() => ({ values: mockValues })));
 
-vi.mock('@/drizzle/db', () => {
-  mockFindMany = vi.fn();
-  const mockReturning = vi.fn();
-  const mockValues = vi.fn(() => ({ returning: mockReturning }));
-  mockInsertChain = vi.fn(() => ({ values: mockValues }));
-  return {
-    db: {
-      query: {
-        integrations: { findMany: mockFindMany },
-      },
-      insert: mockInsertChain,
+vi.mock('@/drizzle/db', () => ({
+  db: {
+    query: {
+      integrations: { findMany: mockFindMany },
     },
-  };
-});
+    insert: mockInsertChain,
+  },
+}));
 
 describe('Integrations API - GET (list integrations)', () => {
   beforeEach(() => {
@@ -121,8 +117,7 @@ describe('Integrations API - POST (create integration)', () => {
       roleSlug: 'admin', permissions: {},
     });
 
-    const mockReturning = vi.fn().mockResolvedValue([{ id: '1', type: 'webhook', name: 'My Webhook', is_active: true, created_at: '2024-01-01' }]);
-    const mockValues = vi.fn(() => ({ returning: mockReturning }));
+    mockReturning.mockResolvedValue([{ id: '1', type: 'webhook', name: 'My Webhook', is_active: true, created_at: '2024-01-01' }]);
     mockInsertChain.mockReturnValue({ values: mockValues });
 
     const { POST } = await import('@/app/api/tenant/integrations/route');
@@ -147,8 +142,7 @@ describe('Integrations API - POST (create integration)', () => {
       roleSlug: 'admin', permissions: {},
     });
 
-    const mockReturning = vi.fn().mockResolvedValue([{ id: '2', type: 'zapier', name: 'Zapier', is_active: true, created_at: '2024-01-01' }]);
-    const mockValues = vi.fn(() => ({ returning: mockReturning }));
+    mockReturning.mockResolvedValue([{ id: '2', type: 'zapier', name: 'Zapier', is_active: true, created_at: '2024-01-01' }]);
     mockInsertChain.mockReturnValue({ values: mockValues });
 
     const { POST } = await import('@/app/api/tenant/integrations/route');
@@ -170,8 +164,7 @@ describe('Integrations API - POST (create integration)', () => {
       roleSlug: 'admin', permissions: {},
     });
 
-    const mockReturning = vi.fn().mockResolvedValue([{ id: '3', type: 'n8n', name: 'n8n', is_active: true, created_at: '2024-01-01' }]);
-    const mockValues = vi.fn(() => ({ returning: mockReturning }));
+    mockReturning.mockResolvedValue([{ id: '3', type: 'n8n', name: 'n8n', is_active: true, created_at: '2024-01-01' }]);
     mockInsertChain.mockReturnValue({ values: mockValues });
 
     const { POST } = await import('@/app/api/tenant/integrations/route');
@@ -262,8 +255,7 @@ describe('Integrations API - POST (create integration)', () => {
       roleSlug: 'admin', permissions: {},
     });
 
-    const mockReturning = vi.fn().mockRejectedValue(new Error('DB error'));
-    const mockValues = vi.fn(() => ({ returning: mockReturning }));
+    mockReturning.mockRejectedValue(new Error('DB error'));
     mockInsertChain.mockReturnValue({ values: mockValues });
 
     const { POST } = await import('@/app/api/tenant/integrations/route');
