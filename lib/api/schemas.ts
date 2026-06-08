@@ -932,6 +932,9 @@ export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type UpdateTenantSettingsInput = z.infer<typeof updateTenantSettingsSchema>;
 export type CreateScheduledReportInput = z.infer<typeof createScheduledReportSchema>;
 
+export type CreateFollowUpInput = z.infer<typeof createFollowUpSchema>;
+export type UpdateFollowUpInput = z.infer<typeof updateFollowUpSchema>;
+
 export type CreateBackupInput = z.infer<typeof createBackupSchema>;
 export type BackupConfigInput = z.infer<typeof backupConfigSchema>;
 export type CreateCustomFieldInput = z.infer<typeof createCustomFieldSchema>;
@@ -959,6 +962,34 @@ export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export type CreateMilestoneInput = z.infer<typeof createMilestoneSchema>;
 export type LinkTaskInput = z.infer<typeof linkTaskSchema>;
+
+// ── Follow-Up schemas ──
+export const createFollowUpSchema = z.object({
+  title: requiredString.max(300, 'Title too long'),
+  description: z.string().trim().max(5000).nullable().optional(),
+  due_date: z.string().datetime().nullable().optional(),
+  lead_id: uuid,
+  contact_id: uuid,
+  deal_id: uuid,
+  assigned_to: uuid,
+  status: z.enum(['pending', 'completed', 'missed', 'cancelled']).optional().default('pending'),
+  auto_ai_enabled: z.boolean().optional().default(false),
+});
+
+export const updateFollowUpSchema = createFollowUpSchema.partial();
+
+export const followUpQuerySchema = z.object({
+  offset: z.coerce.number().int().min(0).default(0),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  status: z.string().optional(),
+  lead_id: z.string().uuid().optional(),
+  contact_id: z.string().uuid().optional(),
+  deal_id: z.string().uuid().optional(),
+  assigned_to: z.string().uuid().optional(),
+  due_before: z.string().datetime().optional(),
+  due_after: z.string().datetime().optional(),
+  missed_only: z.coerce.boolean().optional().default(false),
+});
 
 // ── At-Risk Rules schemas ──
 export const atRiskRuleSchema = z.object({

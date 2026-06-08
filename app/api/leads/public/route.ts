@@ -1,4 +1,4 @@
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 /**
  * Public lead capture endpoint — no auth required.
  * Accepts leads from embedded forms, landing pages, etc.

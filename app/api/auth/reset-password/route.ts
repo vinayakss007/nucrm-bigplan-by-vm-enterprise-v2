@@ -8,7 +8,7 @@ import { eq, and, gt, isNull, sql } from 'drizzle-orm';
 import { createHash } from 'crypto';
 import { hashPassword, createToken, hashToken, setSessionCookie, validatePassword } from '@/lib/auth/session';
 import { sendTelegramToUser } from '@/lib/email/service';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 const schema = z.object({
   token: z.string().min(1),

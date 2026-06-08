@@ -8,7 +8,7 @@ import { companies, contacts } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-server';
 
 export async function GET(req: NextRequest, { params }: any) {
   try {
