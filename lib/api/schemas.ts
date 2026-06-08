@@ -352,7 +352,7 @@ export const createAutomationSchema = z.object({
   })).optional().default([]),
   actions: z.array(z.object({
     type: z.string(),
-    config: z.record(z.string(), z.unknown()),
+  config: z.record(z.string(), z.unknown()).optional().default({}),
   })).min(1, 'At least one action required'),
   is_active: z.boolean().optional().default(true),
 });
