@@ -75,10 +75,6 @@
     {
       "idx": 10,
       "version": "7",
-<<<<<<< HEAD
-      "when": 1748332800000,
-      "tag": "0010_workflow_foundation",
-=======
       "when": 1746989500000,
       "tag": "0010_rename_invitations_role",
       "breakpoints": true
@@ -86,16 +82,50 @@
     {
       "idx": 11,
       "version": "7",
-      "when": 1778500000000,
-      "tag": "0011_approval_requests",
+      "when": 1748332800000,
+      "tag": "0010_workflow_foundation",
       "breakpoints": true
     },
     {
       "idx": 12,
       "version": "7",
+      "when": 1778500000000,
+      "tag": "0011_approval_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
       "when": 1746990000000,
       "tag": "0012_rls_policies",
->>>>>>> main
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1746990100000,
+      "tag": "0012_missing_ai_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1746990200000,
+      "tag": "0013_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1746990300000,
+      "tag": "0014_missing_ai_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1746990400000,
+      "tag": "0015_workflow_foundation",
       "breakpoints": true
     }
   ]

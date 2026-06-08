@@ -8,7 +8,6 @@ import { cn } from '@/lib/utils';
 import { PRODUCT_REGISTRY } from '@/lib/products/registry';
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 import { useRouter } from 'next/navigation';
-import { logError } from '@/lib/errors';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   FileText, Brain, MessageCircle, LifeBuoy, Users, Home, ShoppingCart, Receipt,
@@ -95,7 +94,7 @@ export default function OnboardingPage() {
           company_name: companyName.trim(),
           pipeline_name: pipelineName.trim() || 'Sales Pipeline',
         }),
-      }).catch((err) => logError({ error: err, context: "async-catch:[context]" })); // Non-blocking — don't fail onboarding if this fails
+      }).catch((err) => console.error('[onboarding] complete error:', err));
 
       setStep(3);
     } catch {
@@ -127,7 +126,7 @@ export default function OnboardingPage() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ product_id: 'skip', modules: [] }),
-            }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+            }).catch((err) => console.error('[onboarding] skip error:', err));
             router.push('/tenant/dashboard');
           }}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors"

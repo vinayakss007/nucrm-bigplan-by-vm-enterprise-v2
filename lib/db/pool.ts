@@ -21,10 +21,9 @@ export function getPool(): Pool {
       connectionString: cs,
       ssl: ssl ? { rejectUnauthorized: process.env.NODE_ENV === 'production' } : false,
       max: poolSize,
-      idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 5_000,
-      allowExitOnIdle: false,
-      // Reduced statement_timeout from 30s to 10s to prevent slow queries
+      idleTimeoutMillis: 60_000,
+      connectionTimeoutMillis: 30_000,
+      allowExitOnIdle: true,
       statement_timeout: parseInt(process.env['DATABASE_STATEMENT_TIMEOUT'] ?? '10000'),
     });
     global.__pgPool.on('error', err => console.error('[db-pool] error:', err.message));

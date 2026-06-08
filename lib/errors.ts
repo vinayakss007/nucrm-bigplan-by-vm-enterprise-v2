@@ -1,4 +1,3 @@
-import { errorLogs } from '@/drizzle/schema/support';
 import { NextResponse } from 'next/server';
 
 export type ErrorLevel = 'warning' | 'error' | 'fatal';
@@ -242,70 +241,8 @@ export class EmailError extends AppError {
   }
 }
 
-function getSourceLocation(): { file: string; line: number; function: string } | null {
-  const err = new Error();
-  const stack = err.stack?.split('\n');
-  if (!stack) return null;
-  // stack[0] = 'Error', stack[1] = logError itself, stack[2] = caller of logError, stack[3] = actual caller
-  const caller = stack[3] || stack[2] || '';
-  const match = caller.match(/at\s+(?:(.+?)\s+\()?(?:(.+?):(\d+):\d+)\)?/);
-  if (!match) return null;
-  return {
-    function: match[1] || '<anonymous>',
-    file: match[2] || '',
-    line: parseInt(match[3] || '0', 10),
-  };
-}
-
-export async function logError(opts: {
-  error: any;
-  context?: string;
-  tenantId?: string;
-  userId?: string;
-  level?: ErrorLevel;
-  metadata?: Record<string, any>;
-  requestUrl?: string;
-  requestMethod?: string;
-  sourceFile?: string;
-}): Promise<void> {
-  const msg = opts.error instanceof Error ? opts.error.message : String(opts.error ?? 'Unknown error');
-  const stack = opts.error instanceof Error ? opts.error.stack : undefined;
-  const source = opts.sourceFile ? null : getSourceLocation();
-  try {
-    const { db } = await import('@/drizzle/db');
-    await db.insert(errorLogs).values({
-      tenantId: opts.tenantId ?? null,
-      userId: opts.userId ?? null,
-      level: opts.level ?? 'error',
-      message: msg,
-      stack: stack ?? null,
-      context: {
-        context: opts.context,
-        source: opts.sourceFile || (source ? `${source.file}:${source.line} (${source.function})` : null),
-        requestUrl: opts.requestUrl,
-        requestMethod: opts.requestMethod,
-        ...opts.metadata,
-      },
-    });
-  } catch (err: any) {
-    // Never throw from error logging — log to console as fallback
-    console.error('[logError] DB write failed:', msg, '|', err.message);
-  }
-}
-
-/** Wrap a function and log any errors it throws */
-export async function withErrorLogging<T>(
-  fn: () => Promise<T>,
-  context: string,
-  meta?: { tenantId?: string; userId?: string }
-): Promise<T | null> {
-  try {
-    return await fn();
-  } catch (err) {
-    await logError({ error: err, context, ...meta });
-    return null;
-  }
-}
+export { logError } from './errors-server';
+export { withErrorLogging } from './errors-server';
 
 /**
  * Error handler for API routes

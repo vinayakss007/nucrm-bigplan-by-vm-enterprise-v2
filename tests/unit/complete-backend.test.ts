@@ -348,9 +348,19 @@ describe('db/ensure-schema', () => {
 });
 
 describe('auth/api-key', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    const mockChain: any = {
+      values: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.doMock('@/drizzle/db', () => ({
+      db: { insert: vi.fn().mockReturnValue(mockChain) },
+    }));
+  });
+
   it('generateApiKey returns credentials object', async () => {
     const { generateApiKey } = await import('@/lib/auth/api-key');
-    const key = generateApiKey();
+    const key = await generateApiKey('tenant-1', 'user-1', 'test-key', ['*']);
     expect(typeof key).toBe('object');
     expect(key).toBeDefined();
   });

@@ -8,8 +8,22 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 describe('notifications - comprehensive', () => {
   beforeEach(() => {
     vi.resetModules();
-    vi.doMock('@/lib/db/client', () => ({
-      query: vi.fn().mockResolvedValue({ rows: [] }),
+    const mockChain: any = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([]),
+      values: vi.fn().mockResolvedValue(undefined),
+      returning: vi.fn().mockResolvedValue([{ id: 'mock-id' }]),
+      set: vi.fn().mockReturnThis(),
+    };
+    vi.doMock('@/drizzle/db', () => ({
+      db: {
+        insert: vi.fn().mockReturnValue(mockChain),
+        select: vi.fn().mockReturnValue(mockChain),
+        update: vi.fn().mockReturnValue(mockChain),
+      },
     }));
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -119,11 +133,6 @@ describe('notifications - comprehensive', () => {
 
   describe('notifyTenantMembers', () => {
     it('notifies all active members', async () => {
-      const { query } = await import('@/lib/db/client');
-      vi.mocked(query).mockResolvedValueOnce({
-        rows: [{ user_id: 'u1' }, { user_id: 'u2' }, { user_id: 'u3' }]
-      });
-      
       const { notifyTenantMembers } = await import('@/lib/notifications');
       
       await notifyTenantMembers({
@@ -137,11 +146,6 @@ describe('notifications - comprehensive', () => {
     });
 
     it('notifies with entity deep links', async () => {
-      const { query } = await import('@/lib/db/client');
-      vi.mocked(query).mockResolvedValueOnce({
-        rows: [{ user_id: 'u1' }]
-      });
-      
       const { notifyTenantMembers } = await import('@/lib/notifications');
       
       await notifyTenantMembers({
@@ -156,9 +160,6 @@ describe('notifications - comprehensive', () => {
     });
 
     it('handles empty member list', async () => {
-      const { query } = await import('@/lib/db/client');
-      vi.mocked(query).mockResolvedValueOnce({ rows: [] });
-      
       const { notifyTenantMembers } = await import('@/lib/notifications');
       
       await notifyTenantMembers({
@@ -173,9 +174,6 @@ describe('notifications - comprehensive', () => {
 
   describe('processMentions', () => {
     it('processes mentions without finding users', async () => {
-      const { query } = await import('@/lib/db/client');
-      vi.mocked(query).mockResolvedValueOnce({ rows: [] });
-      
       const { processMentions } = await import('@/lib/notifications');
       
       await processMentions('Hello @john and @jane', 'tenant-1', 'user-1');
@@ -342,9 +340,21 @@ describe('metrics - comprehensive', () => {
 describe('webhooks - comprehensive', () => {
   beforeEach(() => {
     vi.resetModules();
-    vi.doMock('@/lib/db/client', () => ({
-      query: vi.fn().mockResolvedValue({ rows: [] }),
-      queryMany: vi.fn().mockResolvedValue([]),
+    const mockChain: any = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([]),
+      values: vi.fn().mockResolvedValue(undefined),
+      returning: vi.fn().mockResolvedValue([{ id: 'mock-id' }]),
+      set: vi.fn().mockReturnThis(),
+    };
+    vi.doMock('@/drizzle/db', () => ({
+      db: {
+        insert: vi.fn().mockReturnValue(mockChain),
+        select: vi.fn().mockReturnValue(mockChain),
+        update: vi.fn().mockReturnValue(mockChain),
+      },
     }));
   });
 
