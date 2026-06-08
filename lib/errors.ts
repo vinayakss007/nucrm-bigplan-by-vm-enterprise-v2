@@ -241,7 +241,7 @@ export class EmailError extends AppError {
   }
 }
 
-export function logError(opts: { error: unknown; context?: string; [key: string]: unknown }): void {
+export async function logError(opts: { error: unknown; context?: string; [key: string]: unknown }): Promise<void> {
   console.error(`[logError] ${opts.context ?? ''}`, opts.error);
 }
 
