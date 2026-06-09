@@ -52,77 +52,27 @@ export async function exportTenantData(tenantId: string): Promise<GDPRExportData
     files: [],
   };
 
-  // Export contacts
-  try {
-    const contacts = await db.execute(
-      sql`SELECT id, first_name, last_name, email, phone, company_id, metadata, created_at 
-          FROM contacts WHERE tenant_id = ${tenantId} AND deleted_at IS NULL`
-    );
-    categories.contacts = contacts.rows as any[];
-  } catch { /* table may not exist */ }
+  // Export all categories in parallel (was 8 sequential queries)
+  const queries = [
+    { key: 'contacts' as const, sql: sql`SELECT id, first_name, last_name, email, phone, company_id, metadata, created_at FROM contacts WHERE tenant_id = ${tenantId} AND deleted_at IS NULL` },
+    { key: 'companies' as const, sql: sql`SELECT id, name, domain, industry, size, metadata, created_at FROM companies WHERE tenant_id = ${tenantId} AND deleted_at IS NULL` },
+    { key: 'deals' as const, sql: sql`SELECT id, title, value, currency, stage_id, contact_id, company_id, metadata, created_at FROM deals WHERE tenant_id = ${tenantId} AND deleted_at IS NULL` },
+    { key: 'tasks' as const, sql: sql`SELECT id, title, description, status, due_date, assigned_to, metadata, created_at FROM tasks WHERE tenant_id = ${tenantId} AND deleted_at IS NULL` },
+    { key: 'activities' as const, sql: sql`SELECT id, type, title, description, contact_id, metadata, created_at FROM activities WHERE tenant_id = ${tenantId} AND deleted_at IS NULL` },
+    { key: 'emails' as const, sql: sql`SELECT id, subject, to_email, from_email, status, metadata, created_at FROM email_log WHERE tenant_id = ${tenantId} AND deleted_at IS NULL` },
+    { key: 'notes' as const, sql: sql`SELECT id, content, entity_type, entity_id, metadata, created_at FROM notes WHERE tenant_id = ${tenantId} AND deleted_at IS NULL` },
+    { key: 'files' as const, sql: sql`SELECT id, filename, mime_type, size, entity_type, entity_id, created_at FROM file_uploads WHERE tenant_id = ${tenantId} AND deleted_at IS NULL` },
+  ];
 
-  // Export companies
-  try {
-    const companies = await db.execute(
-      sql`SELECT id, name, domain, industry, size, metadata, created_at 
-          FROM companies WHERE tenant_id = ${tenantId} AND deleted_at IS NULL`
-    );
-    categories.companies = companies.rows as any[];
-  } catch { /* table may not exist */ }
+  const results = await Promise.all(
+    queries.map(q =>
+      db.execute(q.sql).then(r => ({ key: q.key, rows: r.rows })).catch(() => ({ key: q.key, rows: [] }))
+    )
+  );
 
-  // Export deals
-  try {
-    const deals = await db.execute(
-      sql`SELECT id, title, value, currency, stage_id, contact_id, company_id, metadata, created_at 
-          FROM deals WHERE tenant_id = ${tenantId} AND deleted_at IS NULL`
-    );
-    categories.deals = deals.rows as any[];
-  } catch { /* table may not exist */ }
-
-  // Export tasks
-  try {
-    const tasks = await db.execute(
-      sql`SELECT id, title, description, status, due_date, assigned_to, metadata, created_at 
-          FROM tasks WHERE tenant_id = ${tenantId} AND deleted_at IS NULL`
-    );
-    categories.tasks = tasks.rows as any[];
-  } catch { /* table may not exist */ }
-
-  // Export activities
-  try {
-    const activities = await db.execute(
-      sql`SELECT id, type, title, description, contact_id, metadata, created_at 
-          FROM activities WHERE tenant_id = ${tenantId} AND deleted_at IS NULL`
-    );
-    categories.activities = activities.rows as any[];
-  } catch { /* table may not exist */ }
-
-  // Export email logs
-  try {
-    const emails = await db.execute(
-      sql`SELECT id, subject, to_email, from_email, status, metadata, created_at 
-          FROM email_log WHERE tenant_id = ${tenantId} AND deleted_at IS NULL`
-    );
-    categories.emails = emails.rows as any[];
-  } catch { /* table may not exist */ }
-
-  // Export notes
-  try {
-    const notes = await db.execute(
-      sql`SELECT id, content, entity_type, entity_id, metadata, created_at 
-          FROM notes WHERE tenant_id = ${tenantId} AND deleted_at IS NULL`
-    );
-    categories.notes = notes.rows as any[];
-  } catch { /* table may not exist */ }
-
-  // Export file metadata
-  try {
-    const files = await db.execute(
-      sql`SELECT id, filename, mime_type, size, entity_type, entity_id, created_at 
-          FROM file_uploads WHERE tenant_id = ${tenantId} AND deleted_at IS NULL`
-    );
-    categories.files = files.rows as any[];
-  } catch { /* table may not exist */ }
+  for (const { key, rows } of results) {
+    categories[key] = rows as any[];
+  }
 
   const totalRecords = Object.values(categories).reduce((sum, arr) => sum + arr.length, 0);
 

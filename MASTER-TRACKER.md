@@ -1,127 +1,162 @@
 # NuCRM Enterprise — Master Tracker
 
+**Last Updated:** 2026-06-09
 **Rule:** Every fix/feature gets a GitHub issue → a branch → a PR → merge to main.
 **No direct commits to main.** Everything trackable.
 
 ---
 
-## How This Works
+## SESSION 3 PROGRESS (2026-06-09)
 
-1. Each row has a GitHub issue number
-2. Work happens on a branch named `fix/<slug>` or `feat/<slug>`
-3. When done, push branch → create PR → PR is reviewed → merge to main via PR
-4. After merge, delete branch
+### New PRs Created (Awaiting Review & Merge)
 
----
+| PR | Issue | Title | Branch | Status |
+|----|-------|-------|--------|--------|
+| #186 | #143 | SQL injection fix in custom-fields route | `fix/sql-injection-custom-fields` | 🔴 Open |
+| #187 | #163 | GDPR N+1 parallelized | `fix/gdpr-n-plus-one` | 🔴 Open |
+| #188 | #164 | SOC2 N+1 parallelized | `fix/soc2-n-plus-one` | 🔴 Open |
+| #189 | #167 | verifySecret timing leak fix | `fix/timing-leak-verify-secret` | 🔴 Open |
+| #190 | #174 | apiError + logError coordination | `fix/api-error-log-error` | 🔴 Open |
+| #191 | #175 | superadmin errors strip details | `fix/superadmin-errors-strip-details` | 🔴 Open |
+| — | #157 | Reduce as any assertions (partial batch) | `fix/as-any-assertions` | 🔴 Open |
 
-## PHASE A — Follow-Up Intelligence ✅ COMPLETE
+### New GitHub Issues Created
 
-| Step | Issue | Branch | Status |
-|------|-------|--------|--------|
-| A1-A6 | #152 | `feat/follow-up-intelligence` | ✅ Done |
+| Issue | Title | Branch |
+|-------|-------|--------|
+| #160 | Superadmin error boundaries (BP#23) | `fix/superadmin-error-boundaries` |
+| #161 | TOTP edge cases (BP#24) | `fix/totp-edge-cases` |
+| #162 | DB singleton type safety (BP#25) | `fix/db-singleton-type-safety` |
+| #163 | GDPR N+1 query (BP#26) | `fix/gdpr-n-plus-one` ✅ PR #187 |
+| #164 | SOC2 N+1 query (BP#27) | `fix/soc2-n-plus-one` ✅ PR #188 |
+| #165 | requestToJson parse errors (BP#28) | `fix/request-to-json-errors` |
+| #166 | json().catch empty (BP#29) | `fix/json-parse-error-handling` |
+| #167 | verifySecret timing leak (BP#30) | `fix/timing-leak-verify-secret` ✅ PR #189 |
+| #168 | BigInt serialization (BP#31) | `fix/bigint-serialization` |
+| #169 | dangerouslySetInnerHTML (BP#32) | `fix/dangerous-html-sanitize` |
+| #170 | ESM/CJS mix (BP#33) | `fix/esm-cjs-consistency` |
+| #171 | Log rotation (BP#34) | `fix/log-rotation` |
+| #172 | Loki errors silent (BP#35) | `fix/loki-error-handling` |
+| #173 | Alerting webhook (BP#36) | `feat/error-alerting-webhook` |
+| #174 | apiError + logError (BP#37) | `fix/api-error-log-error` ✅ PR #190 |
+| #175 | superadmin errors details (BP#38) | `fix/superadmin-errors-strip-details` ✅ PR #191 |
+| #176 | Health check (BP#40) | `feat/health-check-endpoint` |
+| #177 | Filesystem warning (BP#41) | `fix/next-dev-filesystem` |
+| #178 | Notification RLS (BP#42) | `fix/notification-rls-errors` |
+| #179 | DB sync error (BP#43) | `fix/db-sync-circular-dependency` |
+| #180 | AI sentiment (BP#44) | `fix/ai-sentiment-population` |
+| #181 | Server Action (BP#45) | `fix/missing-server-action` |
+| #182 | Notification polling (BP#46) | `fix/notification-polling-error` |
+| #183 | OpenAPI/Swagger (BP#47) | `feat/openapi-swagger-docs` |
+| #184 | i18n (BP#49) | `feat/i18n-support` |
+| #185 | FILTER(Boolean) type (BP#50) | `fix/filter-boolean-type` |
 
----
-
-## PHASE B — AI Auto-Follow-Up
-
-| Step | Issue | Branch | Status |
-|------|-------|--------|--------|
-| B1: Opt-in toggle in tenant AI settings | #154 | `feat/ai-auto-followup` | 🔴 Not started |
-| B2: AI auto-send cron for missed follow-ups | #154 | same branch | 🔴 Not started |
-| B3: AI notification "AI sent on your behalf" | #154 | same branch | 🔴 Not started |
-| B4: Review/cancel AI-scheduled page | #154 | same branch | 🔴 Not started |
-
----
-
-## CRITICAL SECURITY (Week 2 Holdovers)
-
-| # | Issue | Branch | Est. | Status |
-|---|-------|--------|------|--------|
-| 155 | 6 critical security issues still OPEN | `fix/critical-security-issues` | 3hr | 🔴 Not started |
-| 129 | SECURITY: .env.local tracked in git — secrets | `fix/env-local-secrets` | 30min | 🔴 Not started |
-| 143 | SQL injection via dynamic table names (custom-fields) | `fix/sql-injection-custom-fields` | 30min | 🔴 Not started |
-
----
-
-## HIGH PRIORITY FIXES
-
-| # | Issue | Branch | Est. | Status |
-|---|-------|--------|------|--------|
-| 157/121 | 200+ `as any` type assertions | `fix/as-any-assertions` | 4hr | 🔴 Not started |
-| 147 | 3067 ESLint warnings → below 100 | `fix/eslint-warnings` | 4hr | 🔴 Not started |
-| 158 | Notification system, hydration, pg bundle, dashboard | `fix/notification-system` | 3hr | 🔴 Not started |
-| 134 | useEffect without cleanup in 40+ components | `fix/useeffect-cleanup` | 2hr | 🔴 Not started |
-| 133 | 103+ .catch(() => {}) + 190+ empty catch {} | `fix/silent-catch-blocks` | 2hr | 🔴 Not started |
-| 148 | Missing FK references on tenantId/createdBy | `fix/missing-fk-references` | 1hr | 🔴 Not started |
-| 141 | 5/24 E2E tests failing (missing seed data) | `fix/e2e-seed-data` | 30min | 🔴 Not started |
-| 149 | Automated daily DB backups with 30-day retention | `ops/daily-db-backups` | 1hr | 🔴 Not started |
-
----
-
-## MEDIUM PRIORITY (Week 3 — BUILD_PLAN Issues 22-48)
-
-| BUILD_PLAN # | GitHub # | Title | Branch | Est. | Status |
-|--------------|----------|-------|--------|------|--------|
-| 22 | #143 | SQL injection in custom-fields route | `fix/sql-injection-custom-fields` | 30min | ✅ PR #186 |
-| 23 | #160 | No error.tsx on superadmin pages | `fix/superadmin-error-boundaries` | 30min | 🔴 Not started |
-| 24 | #161 | Custom TOTP edge cases | `fix/totp-edge-cases` | 20min | 🔴 Not started |
-| 25 | #162 | Proxy-based DB singleton loses type safety | `fix/db-singleton-type-safety` | 10min | 🔴 Not started |
-| 26 | #163 | GDPR N+1 query (8 sequential) | `fix/gdpr-n-plus-one` | 15min | 🔴 Not started |
-| 27 | #164 | SOC2 N+1 query | `fix/soc2-n-plus-one` | 15min | 🔴 Not started |
-| 28 | #165 | requestToJson() swallows parse errors | `fix/request-to-json-errors` | 10min | 🔴 Not started |
-| 29 | #166 | Multiple .json().catch(() => ({})) | `fix/json-parse-error-handling` | 20min | 🔴 Not started |
-| 30 | #167 | verifySecret() timing leak | `fix/timing-leak-verify-secret` | 10min | 🔴 Not started |
-| 31 | #168 | BigInt serialization in metrics | `fix/bigint-serialization` | 5min | 🔴 Not started |
-| 32 | #169 | dangerouslySetInnerHTML in 5 components | `fix/dangerous-html-sanitize` | 20min | 🔴 Not started |
-| 33 | #170 | Mixed ESM/CJS module patterns | `fix/esm-cjs-consistency` | 30min | 🔴 Not started |
-| 34 | #171 | No log rotation for file logger | `fix/log-rotation` | 15min | 🔴 Not started |
-| 35 | #172 | Grafana Loki errors silently dropped | `fix/loki-error-handling` | 10min | 🔴 Not started |
-| 36 | #173 | No real-time alerting for errors | `feat/error-alerting-webhook` | 30min | 🔴 Not started |
-| 37 | #174 | API error + logError don't coordinate | `fix/api-error-log-error` | 10min | 🔴 Not started |
-| 38 | #175 | POST /superadmin/errors returns 500 details | `fix/superadmin-errors-strip-details` | 10min | 🔴 Not started |
-| 39 | — | Cron jobs skip CSRF — document it | `docs/cron-csrf-documentation` | 5min | 🔴 Not started |
-| 40 | #176 | Server hung/unresponsive — health check | `feat/health-check-endpoint` | 30min | 🔴 Not started |
-| 41 | #177 | Slow filesystem warning (.next/dev) | `fix/next-dev-filesystem` | 10min | 🔴 Not started |
-| 42 | #178 | Notification system errors (RLS/FK) | `fix/notification-rls-errors` | 30min | 🔴 Not started |
-| 43 | #179 | Database sync error (db:push fails) | `fix/db-sync-circular-dependency` | 1hr | 🔴 Not started |
-| 44 | #180 | AI Sentiment not populated | `fix/ai-sentiment-population` | 30min | 🔴 Not started |
-| 45 | #181 | Missing Server Action | `fix/missing-server-action` | 10min | 🔴 Not started |
-| 46 | #182 | Notifications API fails every 60s | `fix/notification-polling-error` | 20min | 🔴 Not started |
-| 47 | #183 | No OpenAPI/Swagger docs | `feat/openapi-swagger-docs` | 2hr | 🔴 Not started |
+### Still Needed (No GitHub Issue Yet)
+| BP# | Title | Branch |
+|-----|-------|--------|
+| 39 | Document cron CSRF skip | `docs/cron-csrf-documentation` |
+| 51 | Duplicate jsdom override | `fix/duplicate-jsdom` |
+| 52 | Package name mismatch | `fix/package-name` |
+| 53 | Unused ANALYZE config | `fix/unused-analyze-config` |
+| 54 | Unused STRIPE_PRICE_ID | `fix/unused-stripe-placeholders` |
+| 55 | Merge conflict markers | `fix/merge-conflict-markers` |
+| 56 | Branch protection | `ops/branch-protection` |
 
 ---
 
-## LOW PRIORITY (Week 4 — BUILD_PLAN Issues 49-56)
+## REMAINING WORK (Priority Order)
 
-| BUILD_PLAN # | GitHub # | Title | Branch | Est. | Status |
-|--------------|----------|-------|--------|------|--------|
-| 49 | #184 | No i18n / internationalization | `feat/i18n-support` | 4hr | 🔴 Not started |
-| 50 | #185 | FILTER(Boolean) as string[] assertion | `fix/filter-boolean-type` | 10min | 🔴 Not started |
-| 51 | — | Duplicate jsdom override | `fix/duplicate-jsdom` | 5min | 🔴 Not started |
-| 52 | — | Package name mismatch (nucrm-saas vs nucrm-enterprise) | `fix/package-name` | 5min | 🔴 Not started |
-| 53 | — | Unused ANALYZE=true bundle config | `fix/unused-analyze-config` | 10min | 🔴 Not started |
-| 54 | — | Unused STRIPE_PRICE_ID placeholders | `fix/unused-stripe-placeholders` | 5min | 🔴 Not started |
-| 55 | — | Merge conflict markers in git history | `fix/merge-conflict-markers` | 10min | 🔴 Not started |
-| 56 | — | Branch protection on main | `ops/branch-protection` | 5min | 🔴 Not started |
+### Critical Security
+| Issue | Title | Branch | Est. |
+|-------|-------|--------|------|
+| #155 | 6 critical security issues | `fix/critical-security-issues` | 3hr |
+| #129 | .env.local secrets in git | `fix/env-local-secrets` | 30min |
+
+### High Priority
+| Issue | Title | Branch | Est. | Status |
+|-------|-------|--------|------|--------|
+| #143 | SQL injection custom-fields | `fix/sql-injection-custom-fields` | 30min | ✅ PR #186 |
+| #157 | 200+ as any assertions | `fix/as-any-assertions` | 4hr | 🔴 Partial fix pushed |
+| #147 | 3067 ESLint warnings | `fix/eslint-warnings` | 4hr | 🔴 Not started |
+| #158 | Notification system/hydration/pg | `fix/notification-system` | 3hr | 🔴 Not started |
+| #134 | useEffect cleanup 40+ components | `fix/useeffect-cleanup` | 2hr | 🔴 Not started |
+| #133 | Silent catch blocks | `fix/silent-catch-blocks` | 2hr | 🔴 Not started |
+| #141 | 5 E2E tests failing | `fix/e2e-seed-data` | 30min | 🔴 Not started |
+| #148 | Missing FK references | `fix/missing-fk-references` | 1hr | 🔴 Not started |
+| #149 | Daily DB backups | `ops/daily-db-backups` | 1hr | 🔴 Not started |
+
+### Medium Priority (Week 3)
+| Issue | Title | Branch | Est. | Status |
+|-------|-------|--------|------|--------|
+| #160 | Superadmin error boundaries | `fix/superadmin-error-boundaries` | 30min | 🔴 Not started |
+| #161 | TOTP edge cases | `fix/totp-edge-cases` | 20min | 🔴 Not started |
+| #162 | DB singleton type safety | `fix/db-singleton-type-safety` | 10min | 🔴 Not started |
+| #163 | GDPR N+1 | `fix/gdpr-n-plus-one` | 15min | ✅ PR #187 |
+| #164 | SOC2 N+1 | `fix/soc2-n-plus-one` | 15min | ✅ PR #188 |
+| #165 | requestToJson parse errors | `fix/request-to-json-errors` | 10min | 🔴 Not started |
+| #166 | json().catch empty | `fix/json-parse-error-handling` | 20min | 🔴 Not started |
+| #167 | verifySecret timing leak | `fix/timing-leak-verify-secret` | 10min | ✅ PR #189 |
+| #168 | BigInt serialization | `fix/bigint-serialization` | 5min | 🔴 Not started |
+| #169 | dangerouslySetInnerHTML | `fix/dangerous-html-sanitize` | 20min | 🔴 Not started |
+| #170 | ESM/CJS mix | `fix/esm-cjs-consistency` | 30min | 🔴 Not started |
+| #171 | Log rotation | `fix/log-rotation` | 15min | 🔴 Not started |
+| #172 | Loki errors silent | `fix/loki-error-handling` | 10min | 🔴 Not started |
+| #173 | Alerting webhook | `feat/error-alerting-webhook` | 30min | 🔴 Not started |
+| #174 | apiError + logError coord | `fix/api-error-log-error` | 10min | ✅ PR #190 |
+| #175 | superadmin errors strip details | `fix/superadmin-errors-strip-details` | 10min | ✅ PR #191 |
+| #176 | Health check endpoint | `feat/health-check-endpoint` | 30min | 🔴 Not started |
+| #177 | Filesystem warning | `fix/next-dev-filesystem` | 10min | 🔴 Not started |
+| #178 | Notification RLS errors | `fix/notification-rls-errors` | 30min | 🔴 Not started |
+| #179 | DB sync circular dep | `fix/db-sync-circular-dependency` | 1hr | 🔴 Not started |
+| #180 | AI sentiment population | `fix/ai-sentiment-population` | 30min | 🔴 Not started |
+| #181 | Missing Server Action | `fix/missing-server-action` | 10min | 🔴 Not started |
+| #182 | Notification polling error | `fix/notification-polling-error` | 20min | 🔴 Not started |
+| #183 | OpenAPI/Swagger docs | `feat/openapi-swagger-docs` | 2hr | 🔴 Not started |
+
+### Low Priority
+| Issue | Title | Branch | Est. | Status |
+|-------|-------|--------|------|--------|
+| #184 | i18n support | `feat/i18n-support` | 4hr | 🔴 Not started |
+| #185 | FILTER(Boolean) type | `fix/filter-boolean-type` | 10min | 🔴 Not started |
+
+### Phase Features
+| Issue | Title | Branch | Status |
+|-------|-------|--------|--------|
+| #154 | Phase B: AI Auto-Follow-Up | `feat/ai-auto-followup` | 🔴 Not started |
+| #156 | Phase D: Deliverability Engine | `feat/deliverability-engine` | 🔴 Not started |
+
+### Test Coverage (Target: 100% lib/)
+| Issue | Title | Branch | Status |
+|-------|-------|--------|--------|
+| #151 | Raise lib/ coverage thresholds | `test/coverage-lib` | 🔴 Not started |
+| #153 | Follow-ups coverage | `test/coverage-follow-ups` | 🔴 Not started |
 
 ---
 
-## TEST COVERAGE (Target: 100% lib/)
+## OPEN PULL REQUESTS
 
-| Step | Issue | Branch | Status |
-|------|-------|--------|--------|
-| Track current coverage & raise thresholds | #151 | `test/coverage-lib` | 🔴 Not started |
-| Add coverage for follow-ups feature | #153 | `test/coverage-follow-ups` | 🔴 Not started |
-| Add missing tests for lib/ modules | #151 | `test/coverage-lib` | 🔴 Not started |
-| Raise vitest thresholds to 100% | — | `test/coverage-lib` | 🔴 Not started |
+| PR | Title | Branch | Status |
+|----|-------|--------|--------|
+| #186 | fix: SQL injection custom-fields | `fix/sql-injection-custom-fields` | 🔴 Open |
+| #187 | fix: GDPR N+1 parallelized | `fix/gdpr-n-plus-one` | 🔴 Open |
+| #188 | fix: SOC2 N+1 parallelized | `fix/soc2-n-plus-one` | 🔴 Open |
+| #189 | fix: verifySecret timing leak | `fix/timing-leak-verify-secret` | 🔴 Open |
+| #190 | fix: apiError + logError coord | `fix/api-error-log-error` | 🔴 Open |
+| #191 | fix: superadmin errors strip details | `fix/superadmin-errors-strip-details` | 🔴 Open |
+| #157 | fix: Reduce as any (partial) | `fix/as-any-assertions` | 🔴 Open |
 
 ---
 
-## PHASE D — Deliverability Engine
+## KNOWN FRAGILE INTERFACES
 
-| Step | Issue | Branch | Status |
-|------|-------|--------|--------|
-| D1-D5 | #156 | `feat/deliverability-engine` | 🔴 Not started |
+| File | Used By | Danger Level |
+|------|---------|-------------|
+| `lib/branding.ts` | Branding, tenant layout, BrandingProvider | 🔴 High |
+| `proxy.ts` | Auth, rate limiting, CSRF, public paths | 🔴 High |
+| `lib/auth/api-handlers.ts` | Login, signup, auth flow | 🔴 High |
+| `drizzle/schema/*.ts` | All features share schema registry | 🔴 High |
+| `app/tenant/layout.tsx` | All tenant pages | 🟡 Medium |
+| `lib/auth/csrf.ts` | CSRF across all API routes | 🟡 Medium |
 
 ---
 
