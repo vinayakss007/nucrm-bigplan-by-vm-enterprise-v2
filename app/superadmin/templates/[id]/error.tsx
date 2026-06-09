@@ -1,9 +1,9 @@
 'use client';
-import { useEffect } from 'react';
+import { useCaptureError } from '@/lib/capture-error';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 export default function TemplateEditorError({ error, reset }: { error: Error; reset: () => void }) {
-  useEffect(() => { console.error('[template editor error]', error); }, [error]);
+  useCaptureError(error, 'template-editor');
   return (
     <div className="flex items-center justify-center h-64 p-8">
       <div className="text-center max-w-sm">

@@ -1,4 +1,5 @@
 'use client';
+import { useCaptureError } from '@/lib/capture-error';
 
 export default function Error({
   error,
@@ -7,6 +8,7 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useCaptureError(error, 'plugins');
   return (
     <div className="p-6">
       <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
