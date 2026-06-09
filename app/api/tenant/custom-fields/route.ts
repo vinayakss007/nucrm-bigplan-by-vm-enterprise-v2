@@ -9,7 +9,10 @@ import { users, tenants, featureRegistry } from '@/drizzle/schema';
 import { tasks } from '@/drizzle/schema';
 import { eq, and, asc, desc, sql } from 'drizzle-orm';
 
-const tableMap: Record<string, any> = {
+const VALID_ENTITY_TYPES = ['contact', 'company', 'deal', 'lead', 'task', 'user', 'tenant'] as const;
+type EntityType = typeof VALID_ENTITY_TYPES[number];
+
+const tableMap: Record<EntityType, any> = {
   contact: contacts,
   company: companies,
   deal: deals,
@@ -19,8 +22,17 @@ const tableMap: Record<string, any> = {
   tenant: tenants,
 };
 
+function isEntityType(value: string): value is EntityType {
+  return VALID_ENTITY_TYPES.includes(value as EntityType);
+}
+
 function getTable(entityType: string) {
-  return tableMap[entityType] || null;
+  if (!isEntityType(entityType)) return null;
+  return tableMap[entityType];
+}
+
+function sanitizeFieldKey(key: string): string {
+  return key.replace(/[^a-z0-9_]/gi, '_').toLowerCase();
 }
 
 /**
@@ -178,6 +190,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Unknown entity type: ${entityType}` }, { status: 400 });
     }
 
+    const safeFieldKey = sanitizeFieldKey(fieldKey);
+    if (!safeFieldKey) {
+      return NextResponse.json({ error: 'Invalid fieldKey' }, { status: 400 });
+    }
+
     // Verify ownership
     const entityResult = await db.execute(
       sql`SELECT id FROM ${table} WHERE id = ${entityId} AND tenant_id = ${ctx.tenantId}`
@@ -186,12 +203,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Entity not found or not owned' }, { status: 404 });
     }
 
-    // Update metadata JSONB column
+    // Update metadata JSONB column (fieldKey is sanitized to alphanumeric + underscore)
     await db.execute(
       sql`UPDATE ${table} 
        SET metadata = jsonb_set(
          COALESCE(metadata, '{}'::jsonb),
-         ARRAY[${fieldKey}],
+         ARRAY[${safeFieldKey}],
          to_jsonb(${value}),
          true
        )
@@ -199,10 +216,10 @@ export async function POST(req: NextRequest) {
     );
 
     return NextResponse.json({
-      message: `Custom field '${fieldKey}' set on ${entityType}`,
+      message: `Custom field '${safeFieldKey}' set on ${entityType}`,
       entityType,
       entityId,
-      fieldKey,
+      fieldKey: safeFieldKey,
       value,
     });
   }
@@ -229,9 +246,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Entity not found or not owned' }, { status: 404 });
     }
 
+    // Sanitize all field keys to prevent SQL injection via key names
+    const sanitizedFields: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(fields)) {
+      const safeKey = sanitizeFieldKey(key);
+      if (safeKey) sanitizedFields[safeKey] = val;
+    }
+
     const mergedMetadata = {
       ...(entity.metadata || {}),
-      ...fields,
+      ...sanitizedFields,
     };
 
     await db.execute(
@@ -239,10 +263,10 @@ export async function POST(req: NextRequest) {
     );
 
     return NextResponse.json({
-      message: `${Object.keys(fields).length} custom fields set on ${entityType}`,
+      message: `${Object.keys(sanitizedFields).length} custom fields set on ${entityType}`,
       entityType,
       entityId,
-      fields,
+      fields: sanitizedFields,
     });
   }
 
