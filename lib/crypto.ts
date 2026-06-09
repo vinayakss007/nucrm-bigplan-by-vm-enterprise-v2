@@ -18,12 +18,16 @@ export function verifySecret(provided: string | null, expected: string | undefin
   const a = provided ? Buffer.from(provided) : Buffer.alloc(0);
   const b = expected ? Buffer.from(expected) : Buffer.alloc(0);
 
+  if (a.length === 0 && b.length === 0) {
+    timingSafeEqual(Buffer.alloc(1), Buffer.alloc(1));
+    return false;
+  }
+
   if (a.length === b.length) {
-    if (a.length === 0) return true;
     return timingSafeEqual(a, b);
   }
 
-  const maxLen = Math.max(a.length, b.length, 1);
+  const maxLen = Math.max(a.length, b.length);
   const aPad = Buffer.concat([a, Buffer.alloc(maxLen - a.length)]);
   const bPad = Buffer.concat([b, Buffer.alloc(maxLen - b.length)]);
   timingSafeEqual(aPad, bPad);
