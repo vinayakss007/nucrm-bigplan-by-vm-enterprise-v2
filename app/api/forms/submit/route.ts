@@ -202,6 +202,6 @@ async function requestToJson(req: NextRequest) {
   try {
     return await req.json();
   } catch (e) {
-    return {};
+    throw new Error('Invalid JSON in request body');
   }
 }
