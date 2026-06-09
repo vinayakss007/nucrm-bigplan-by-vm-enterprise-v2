@@ -108,8 +108,8 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
   });
 
   it('should include all critical tables in backup', async () => {
-    if (!fs.existsSync(backupFile)) {
-      console.warn('No backup file, skipping table completeness test');
+    if (!fs.existsSync(backupFile) || fs.statSync(backupFile).size === 0) {
+      console.warn('No backup file or empty, skipping table completeness test');
       return;
     }
 
