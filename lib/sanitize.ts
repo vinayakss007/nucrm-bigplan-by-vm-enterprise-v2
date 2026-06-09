@@ -37,5 +37,5 @@ export function sanitizeHTML(html: string, windowRef?: Window): string {
  * Server-side safe sanitize — strips all tags when no DOM is available
  */
 export function sanitizeHTMLServer(html: string): string {
-  return html.replace(/<[^>]*>/g, '');
+  return html.replace(/<[^>]*>/gi, '');
 }

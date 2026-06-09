@@ -318,6 +318,8 @@ class GrafanaOTLPClient extends EventEmitter {
       });
     } catch (error) {
       console.error('[Grafana] Failed to flush logs:', error);
+      this.logBuffer.unshift(...logs);
+      if (this.logBuffer.length > 1000) this.logBuffer.length = 1000;
     }
   }
 
