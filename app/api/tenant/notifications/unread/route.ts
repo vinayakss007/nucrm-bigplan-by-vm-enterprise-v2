@@ -8,18 +8,20 @@ export async function GET(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    
+
     const [result] = await db.select({
       count: sql<number>`count(*)::int`
     })
     .from(notifications)
     .where(and(
+      eq(notifications.tenantId, ctx.tenantId),
       eq(notifications.userId, ctx.userId),
-      isNull(notifications.readAt)
+      isNull(notifications.readAt),
+      isNull(notifications.deletedAt)
     ));
 
     return NextResponse.json({ count: result?.count ?? 0 });
-  } catch (err) { 
-    return NextResponse.json({ count: 0 }); 
+  } catch (err) {
+    return NextResponse.json({ count: 0 });
   }
 }
