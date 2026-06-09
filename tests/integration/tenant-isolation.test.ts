@@ -51,6 +51,7 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
       .values({
         id: randomUUID(),
         name: 'PenTest Tenant A',
+        slug: `pentest-a-${Date.now()}`,
         subdomain: `pentest-a-${Date.now()}`,
         status: 'active',
       })
@@ -60,6 +61,7 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
       .values({
         id: randomUUID(),
         name: 'PenTest Tenant B',
+        slug: `pentest-b-${Date.now()}`,
         subdomain: `pentest-b-${Date.now()}`,
         status: 'active',
       })
@@ -120,13 +122,17 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
   });
 
   afterAll(async () => {
-    // Cleanup test data
-    await db.delete(schema.contacts).where(eq(schema.contacts.tenantId, tenantAId));
-    await db.delete(schema.contacts).where(eq(schema.contacts.tenantId, tenantBId));
-    await db.delete(schema.users).where(eq(schema.users.tenantId, tenantAId));
-    await db.delete(schema.users).where(eq(schema.users.tenantId, tenantBId));
-    await db.delete(schema.tenants).where(eq(schema.tenants.id, tenantAId));
-    await db.delete(schema.tenants).where(eq(schema.tenants.id, tenantBId));
+    // Cleanup test data (guard against undefined IDs if insert failed)
+    if (tenantAId) {
+      await db.delete(schema.contacts).where(eq(schema.contacts.tenantId, tenantAId)).catch(() => {});
+      await db.delete(schema.users).where(eq(schema.users.tenantId, tenantAId)).catch(() => {});
+      await db.delete(schema.tenants).where(eq(schema.tenants.id, tenantAId)).catch(() => {});
+    }
+    if (tenantBId) {
+      await db.delete(schema.contacts).where(eq(schema.contacts.tenantId, tenantBId)).catch(() => {});
+      await db.delete(schema.users).where(eq(schema.users.tenantId, tenantBId)).catch(() => {});
+      await db.delete(schema.tenants).where(eq(schema.tenants.id, tenantBId)).catch(() => {});
+    }
     await pool.end();
   });
 
