@@ -68,37 +68,37 @@ describe('errors - 100% coverage', () => {
       
       const error = new Error('Test error message');
       
-      await expect(logError({
+      expect(() => logError({
         error,
         context: 'test-context',
         tenantId: 'tenant-123',
         userId: 'user-456',
         level: 'warning',
         metadata: { key: 'value' },
-      })).resolves.not.toThrow();
+      })).not.toThrow();
     });
 
     it('logs non-Error objects', async () => {
       const { logError } = await import('@/lib/errors');
       
-      await expect(logError({
+      expect(() => logError({
         error: 'string error',
         context: 'string-context',
-      })).resolves.not.toThrow();
+      })).not.toThrow();
     });
 
     it('logs null/undefined errors', async () => {
       const { logError } = await import('@/lib/errors');
       
-      await expect(logError({
+      expect(() => logError({
         error: null,
         context: 'null-context',
-      })).resolves.not.toThrow();
+      })).not.toThrow();
       
-      await expect(logError({
+      expect(() => logError({
         error: undefined,
         context: 'undefined-context',
-      })).resolves.not.toThrow();
+      })).not.toThrow();
     });
 
     it('handles very long error messages', async () => {
@@ -106,10 +106,10 @@ describe('errors - 100% coverage', () => {
       
       const longError = new Error('a'.repeat(2000));
       
-      await expect(logError({
+      expect(() => logError({
         error: longError,
         context: 'long-error',
-      })).resolves.not.toThrow();
+      })).not.toThrow();
     });
 
     it('handles errors with long stack traces', async () => {
@@ -122,10 +122,10 @@ describe('errors - 100% coverage', () => {
       try {
         nestedFunction();
       } catch (err) {
-        await expect(logError({
+        expect(() => logError({
           error: err,
           context: 'nested-context',
-        })).resolves.not.toThrow();
+        })).not.toThrow();
       }
     });
   });
