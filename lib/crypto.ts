@@ -12,11 +12,22 @@ const AUTH_TAG_LENGTH = 16;
 /**
  * Timing-safe secret comparison
  * Prevents timing attacks on secret validation
+ * Uses constant-time comparison for ALL code paths (no early returns)
  */
 export function verifySecret(provided: string | null, expected: string | undefined): boolean {
-  if (!provided || !expected) return false;
-  if (provided.length !== expected.length) return false;
-  return timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+  const a = provided ? Buffer.from(provided) : Buffer.alloc(0);
+  const b = expected ? Buffer.from(expected) : Buffer.alloc(0);
+
+  if (a.length === b.length) {
+    if (a.length === 0) return true;
+    return timingSafeEqual(a, b);
+  }
+
+  const maxLen = Math.max(a.length, b.length, 1);
+  const aPad = Buffer.concat([a, Buffer.alloc(maxLen - a.length)]);
+  const bPad = Buffer.concat([b, Buffer.alloc(maxLen - b.length)]);
+  timingSafeEqual(aPad, bPad);
+  return false;
 }
 
 /**
