@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
       country: country || null,
       state: state || null,
       isDefault,
-    } as any).returning();
+    }).returning();
 
     return NextResponse.json({ data: row }, { status: 201 });
   } catch (err: any) {
