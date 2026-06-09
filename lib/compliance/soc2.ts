@@ -55,27 +55,15 @@ export async function generateSOC2Report(
   const now = new Date();
   const periodStart = new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000);
 
-  const sections: SOC2ReportSection[] = [];
-
-  // 1. Security (CC) - Access controls and monitoring
-  const securityControls = await evaluateSecurityControls(tenantId, periodStart, now);
-  sections.push(securityControls);
-
-  // 2. Availability (A) - System uptime and monitoring
-  const availabilityControls = await evaluateAvailabilityControls(tenantId, periodStart, now);
-  sections.push(availabilityControls);
-
-  // 3. Processing Integrity (PI) - Data accuracy
-  const integrityControls = await evaluateIntegrityControls(tenantId, periodStart, now);
-  sections.push(integrityControls);
-
-  // 4. Confidentiality (C) - Data protection
-  const confidentialityControls = await evaluateConfidentialityControls(tenantId, periodStart, now);
-  sections.push(confidentialityControls);
-
-  // 5. Privacy (P) - PII handling
-  const privacyControls = await evaluatePrivacyControls(tenantId, periodStart, now);
-  sections.push(privacyControls);
+  // Run all 5 evaluate functions in parallel (was sequential)
+  const sectionResults = await Promise.all([
+    evaluateSecurityControls(tenantId, periodStart, now),
+    evaluateAvailabilityControls(tenantId, periodStart, now),
+    evaluateIntegrityControls(tenantId, periodStart, now),
+    evaluateConfidentialityControls(tenantId, periodStart, now),
+    evaluatePrivacyControls(tenantId, periodStart, now),
+  ]);
+  const sections = sectionResults;
 
   // Calculate summary
   const allControls = sections.flatMap(s => s.controls);
@@ -113,59 +101,45 @@ async function evaluateSecurityControls(
   const controls: SOC2Control[] = [];
   const now = periodEnd.toISOString();
 
-  // CC6.1 - Access control: Check if roles are configured
-  let rolesConfigured = false;
-  try {
-    const roles = await db.execute(
-      sql`SELECT COUNT(*)::int as count FROM roles WHERE tenant_id = ${tenantId}`
-    );
-    rolesConfigured = ((roles.rows[0] as any)?.count || 0) > 0;
-  } catch { /* table may not exist */ }
+  // CC6.1, CC6.2, CC7.1 — Run 3 queries in parallel (was sequential)
+  const [rolesRes, ssoRes, logsRes] = await Promise.all([
+    db.execute(sql`SELECT COUNT(*)::int as count FROM roles WHERE tenant_id = ${tenantId}`)
+      .then(r => ({ count: (r.rows[0] as any)?.count || 0 }))
+      .catch(() => ({ count: 0 })),
+    db.execute(sql`SELECT COUNT(*)::int as count FROM sso_providers WHERE tenant_id = ${tenantId} AND is_active = true`)
+      .then(r => ({ count: (r.rows[0] as any)?.count || 0 }))
+      .catch(() => ({ count: 0 })),
+    db.execute(sql`SELECT COUNT(*)::int as count FROM audit_logs 
+        WHERE tenant_id = ${tenantId} 
+        AND created_at >= ${periodStart.toISOString()}::timestamptz`)
+      .then(r => ({ count: (r.rows[0] as any)?.count || 0 }))
+      .catch(() => ({ count: 0 })),
+  ]);
 
   controls.push({
     id: 'CC6.1',
     name: 'Logical Access Controls',
     description: 'Role-based access control is configured for the workspace',
-    status: rolesConfigured ? 'pass' : 'warning',
-    evidence: rolesConfigured ? 'Roles configured in workspace' : 'No custom roles found',
+    status: rolesRes.count > 0 ? 'pass' : 'warning',
+    evidence: rolesRes.count > 0 ? 'Roles configured in workspace' : 'No custom roles found',
     lastChecked: now,
   });
-
-  // CC6.2 - Authentication: Check for SSO configuration
-  let ssoConfigured = false;
-  try {
-    const sso = await db.execute(
-      sql`SELECT COUNT(*)::int as count FROM sso_providers WHERE tenant_id = ${tenantId} AND is_active = true`
-    );
-    ssoConfigured = ((sso.rows[0] as any)?.count || 0) > 0;
-  } catch { /* table may not exist */ }
 
   controls.push({
     id: 'CC6.2',
     name: 'Authentication Mechanisms',
     description: 'Single Sign-On (SSO) is configured for enterprise authentication',
-    status: ssoConfigured ? 'pass' : 'warning',
-    evidence: ssoConfigured ? 'SSO provider configured' : 'No SSO provider configured',
+    status: ssoRes.count > 0 ? 'pass' : 'warning',
+    evidence: ssoRes.count > 0 ? 'SSO provider configured' : 'No SSO provider configured',
     lastChecked: now,
   });
-
-  // CC7.1 - Monitoring: Check audit log activity
-  let auditLogCount = 0;
-  try {
-    const logs = await db.execute(
-      sql`SELECT COUNT(*)::int as count FROM audit_logs 
-          WHERE tenant_id = ${tenantId} 
-          AND created_at >= ${periodStart.toISOString()}::timestamptz`
-    );
-    auditLogCount = (logs.rows[0] as any)?.count || 0;
-  } catch { /* table may not exist */ }
 
   controls.push({
     id: 'CC7.1',
     name: 'System Monitoring',
     description: 'Audit logging is active and capturing system events',
-    status: auditLogCount > 0 ? 'pass' : 'warning',
-    evidence: `${auditLogCount} audit events recorded in period`,
+    status: logsRes.count > 0 ? 'pass' : 'warning',
+    evidence: `${logsRes.count} audit events recorded in period`,
     lastChecked: now,
   });
 
