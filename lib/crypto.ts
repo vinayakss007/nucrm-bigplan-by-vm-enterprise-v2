@@ -27,7 +27,7 @@ export function verifySecret(provided: string | null, expected: string | undefin
     return timingSafeEqual(a, b);
   }
 
-  const maxLen = Math.max(a.length, b.length);
+  const maxLen = Math.max(a.length, b.length, 1);
   const aPad = Buffer.concat([a, Buffer.alloc(maxLen - a.length)]);
   const bPad = Buffer.concat([b, Buffer.alloc(maxLen - b.length)]);
   timingSafeEqual(aPad, bPad);
