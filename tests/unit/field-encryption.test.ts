@@ -1,5 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { isSensitiveField, maskSensitiveValue } from '@/lib/field-encryption';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { isSensitiveField, maskSensitiveValue, encryptSensitiveFields, decryptSensitiveFields } from '@/lib/field-encryption';
+
+const mockEncrypt = vi.fn((val: string) => `enc:${val}`);
+const mockDecrypt = vi.fn((val: string) => val.replace('enc:', ''));
+
+vi.mock('@/lib/crypto', () => ({
+  encrypt: (...args: any[]) => mockEncrypt(...args),
+  decrypt: (...args: any[]) => mockDecrypt(...args),
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  process.env.ENCRYPTION_KEY = 'test-encryption-key-32chars';
+});
 
 describe('isSensitiveField', () => {
   it('detects apiKey', () => {
@@ -54,5 +67,91 @@ describe('maskSensitiveValue', () => {
 
   it('masks with longer values past boundary', () => {
     expect(maskSensitiveValue('12345678901', 4)).toBe('1234****8901');
+  });
+
+  it('handles null value', () => {
+    expect(maskSensitiveValue(null as any)).toBe('***');
+  });
+
+  it('handles undefined value', () => {
+    expect(maskSensitiveValue(undefined as any)).toBe('***');
+  });
+});
+
+describe('encryptSensitiveFields', () => {
+  it('encrypts sensitive fields by default list', () => {
+    const data = { name: 'test', apiKey: 'sk-123', email: 'test@test.com' };
+    const result = encryptSensitiveFields(data);
+    expect(result.apiKey).toBe('enc:sk-123');
+    expect(result.name).toBe('test');
+    expect(result.email).toBe('test@test.com');
+  });
+
+  it('encrypts specified fields only', () => {
+    const data = { name: 'test', apiKey: 'sk-123', clientSecret: 'cs-456' };
+    const result = encryptSensitiveFields(data, ['clientSecret']);
+    expect(result.name).toBe('test');
+    expect(result.apiKey).toBe('sk-123');
+    expect(result.clientSecret).toBe('enc:cs-456');
+  });
+
+  it('skips empty values', () => {
+    const data = { apiKey: '', password: null };
+    const result = encryptSensitiveFields(data);
+    expect(result.apiKey).toBe('');
+    expect(result.password).toBeNull();
+    expect(mockEncrypt).not.toHaveBeenCalled();
+  });
+
+  it('returns a new object, not mutating input', () => {
+    const data = { name: 'test', apiKey: 'sk-123' };
+    const result = encryptSensitiveFields(data);
+    expect(result).not.toBe(data);
+    expect(data.apiKey).toBe('sk-123');
+  });
+
+  it('works without ENCRYPTION_KEY', () => {
+    delete process.env.ENCRYPTION_KEY;
+    const data = { apiKey: 'sk-123' };
+    const result = encryptSensitiveFields(data);
+    expect(mockEncrypt).toHaveBeenCalledWith('sk-123', '');
+  });
+});
+
+describe('decryptSensitiveFields', () => {
+  it('decrypts sensitive fields by default list', () => {
+    const data = { name: 'test', apiKey: 'enc:sk-123' };
+    const result = decryptSensitiveFields(data);
+    expect(result.apiKey).toBe('sk-123');
+    expect(result.name).toBe('test');
+  });
+
+  it('decrypts specified fields only', () => {
+    const data = { name: 'test', apiKey: 'enc:sk-123', secretKey: 'enc:sk-456' };
+    const result = decryptSensitiveFields(data, ['secretKey']);
+    expect(result.apiKey).toBe('enc:sk-123');
+    expect(result.secretKey).toBe('sk-456');
+  });
+
+  it('skips empty values', () => {
+    const data = { apiKey: '', password: null };
+    const result = decryptSensitiveFields(data);
+    expect(result.apiKey).toBe('');
+    expect(result.password).toBeNull();
+    expect(mockDecrypt).not.toHaveBeenCalled();
+  });
+
+  it('handles decryption errors gracefully', () => {
+    mockDecrypt.mockImplementationOnce(() => { throw new Error('bad decrypt'); });
+    const data = { apiKey: 'invalid-encrypted' };
+    const result = decryptSensitiveFields(data);
+    expect(result.apiKey).toBe('invalid-encrypted');
+  });
+
+  it('returns a new object, not mutating input', () => {
+    const data = { name: 'test', apiKey: 'enc:sk-123' };
+    const result = decryptSensitiveFields(data);
+    expect(result).not.toBe(data);
+    expect(data.apiKey).toBe('enc:sk-123');
   });
 });

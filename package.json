@@ -1,17 +1,17 @@
 {
-  "name": "nucrm-saas",
+  "name": "nucrm-enterprise",
   "version": "1.0.0",
-  "description": "Multi-tenant SaaS CRM built with Next.js 16, PostgreSQL, and JWT auth",
+  "description": "Multi-tenant Enterprise CRM built with Next.js 16, PostgreSQL, and JWT auth",
   "author": "NuCRM Team",
   "license": "MIT",
   "private": true,
-  "homepage": "https://github.com/nucrm/nucrm-saas#readme",
+  "homepage": "https://github.com/vinayakss007/nucrm-bigplan-by-vm-enterprise-v2#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nucrm/nucrm-saas.git"
+    "url": "https://github.com/vinayakss007/nucrm-bigplan-by-vm-enterprise-v2.git"
   },
   "bugs": {
-    "url": "https://github.com/nucrm/nucrm-saas/issues"
+    "url": "https://github.com/vinayakss007/nucrm-bigplan-by-vm-enterprise-v2/issues"
   },
   "engines": {
     "node": ">=22.0.0"

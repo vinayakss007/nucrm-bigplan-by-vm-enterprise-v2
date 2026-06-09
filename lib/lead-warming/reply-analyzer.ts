@@ -16,6 +16,7 @@ import { leadWarmingReplies, leadWarmingCampaigns, leadWarmingMessages } from '@
 import { contacts, tasks } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
+import { updateContactDealsSentiment } from '@/lib/ai/sentiment';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -357,7 +358,27 @@ export async function processIncomingReply(input: ProcessReplyInput): Promise<Re
       })
       .where(eq(leadWarmingReplies.id, replyRecord.id));
 
-    // 6. Update campaign stats
+    // 6. Propagate sentiment to linked deals
+    try {
+      const mappedScore = clamp((analysis.sentimentScore + 100) / 2, 0, 100);
+      const updatedCount = await updateContactDealsSentiment(
+        originalMessage.contactId,
+        input.tenantId,
+        {
+          score: mappedScore,
+          label: analysis.sentiment,
+          confidence: analysis.intentConfidence,
+          summary: `Reply analysis: ${analysis.summary}`,
+        },
+      );
+      if (updatedCount > 0) {
+        console.log(`[lead-warming] Updated sentiment on ${updatedCount} deal(s) for contact ${originalMessage.contactId}`);
+      }
+    } catch (err: any) {
+      console.error('[lead-warming] Failed to update deal sentiment:', err.message);
+    }
+
+    // 7. Update campaign stats
     await db.update(leadWarmingCampaigns)
       .set({
         totalReplies: sql`${leadWarmingCampaigns.totalReplies} + 1`,
@@ -368,7 +389,7 @@ export async function processIncomingReply(input: ProcessReplyInput): Promise<Re
       })
       .where(eq(leadWarmingCampaigns.id, originalMessage.campaignId));
 
-    // 7. Handle specific intents
+    // 8. Handle specific intents
     await handleIntentActions(input.tenantId, replyRecord.id, originalMessage, contact, analysis);
 
     return analysis;
