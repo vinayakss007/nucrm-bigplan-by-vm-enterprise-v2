@@ -1,6 +1,6 @@
 # NuCRM Enterprise — Master Tracker
 
-**Last Updated:** 2026-06-09 (Session 4)
+**Last Updated:** 2026-06-09 (Session 4 — Resumed after reboot)
 **Rule:** Every fix/feature gets a GitHub issue → a branch → a PR → merge to main.
 **No direct commits to main.** Everything trackable.
 
@@ -24,57 +24,18 @@
 | — | #178 | fix: RLS policy — use safe `current_setting()` with `missing_ok` fallback | `fix/batch-notifications-schema-auth` ✅ |
 | — | #172 | fix: Loki flush — re-queue logs on failure instead of dropping them | `fix/batch-notifications-schema-auth` ✅ |
 | — | #169 | fix: sanitizeHTMLServer — add case-insensitive regex flag | `fix/batch-notifications-schema-auth` ✅ |
+| #186 | #143 | fix: SQL injection — whitelist table names, sanitize fieldKey in custom-fields route | `fix/sql-injection-custom-fields` ✅ |
+| #187 | #163 | fix: GDPR N+1 — 8 sequential queries parallelized with Promise.all() | `fix/gdpr-n-plus-one` ✅ |
+| #188 | #164 | fix: SOC2 N+1 — parallelize evaluate + security queries | `fix/soc2-n-plus-one` ✅ |
+| #189 | #167 | fix: verifySecret timing leak — constant-time comparison for all paths | `fix/timing-leak-verify-secret` ✅ |
+| #190 | #174 | fix: apiError + logError coordination — apiError() calls logError() | `fix/api-error-log-error` ✅ |
+| #191 | #175 | fix: superadmin errors strip details in production | `fix/superadmin-errors-strip-details` ✅ |
+| — | #157 | fix: Reduce as any assertions in 5 route files | `fix/as-any-assertions` ✅ |
+| — | #180 | feat: AI sentiment analysis for deals — analyzeSentiment + deal metadata + lead-warming integration (12 tests) | `main` (direct) ✅ |
 
-## SESSION 3 PROGRESS (2026-06-09)
-
-### New PRs Created (Awaiting Review & Merge)
-
-| PR | Issue | Title | Branch | Status |
-|----|-------|-------|--------|--------|
-| #186 | #143 | SQL injection fix in custom-fields route | `fix/sql-injection-custom-fields` | 🔴 Open |
-| #187 | #163 | GDPR N+1 parallelized | `fix/gdpr-n-plus-one` | 🔴 Open |
-| #188 | #164 | SOC2 N+1 parallelized | `fix/soc2-n-plus-one` | 🔴 Open |
-| #189 | #167 | verifySecret timing leak fix | `fix/timing-leak-verify-secret` | 🔴 Open |
-| #190 | #174 | apiError + logError coordination | `fix/api-error-log-error` | 🔴 Open |
-| #191 | #175 | superadmin errors strip details | `fix/superadmin-errors-strip-details` | 🔴 Open |
-| — | #157 | Reduce as any assertions (partial batch) | `fix/as-any-assertions` | 🔴 Open |
-
-### New GitHub Issues Created
-
-| Issue | Title | Branch |
-|-------|-------|--------|
-| #160 | Superadmin error boundaries (BP#23) | `fix/superadmin-error-boundaries` |
-| #161 | TOTP edge cases (BP#24) | `fix/totp-edge-cases` |
-| #162 | DB singleton type safety (BP#25) | `fix/db-singleton-type-safety` |
-| #163 | GDPR N+1 query (BP#26) | `fix/gdpr-n-plus-one` ✅ PR #187 |
-| #164 | SOC2 N+1 query (BP#27) | `fix/soc2-n-plus-one` ✅ PR #188 |
-| #165 | requestToJson parse errors (BP#28) | `fix/request-to-json-errors` |
-| #166 | json().catch empty (BP#29) | `fix/json-parse-error-handling` |
-| #167 | verifySecret timing leak (BP#30) | `fix/timing-leak-verify-secret` ✅ PR #189 |
-| #168 | BigInt serialization (BP#31) | `fix/bigint-serialization` |
-| #169 | dangerouslySetInnerHTML (BP#32) | `fix/dangerous-html-sanitize` |
-| #170 | ESM/CJS mix (BP#33) | `fix/esm-cjs-consistency` |
-| #171 | Log rotation (BP#34) | `fix/log-rotation` |
-| #172 | Loki errors silent (BP#35) | `fix/loki-error-handling` |
-| #173 | Alerting webhook (BP#36) | `feat/error-alerting-webhook` |
-| #174 | apiError + logError (BP#37) | `fix/api-error-log-error` ✅ PR #190 |
-| #175 | superadmin errors details (BP#38) | `fix/superadmin-errors-strip-details` ✅ PR #191 |
-| #176 | Health check (BP#40) | `feat/health-check-endpoint` |
-| #177 | Filesystem warning (BP#41) | `fix/next-dev-filesystem` |
-| #178 | Notification RLS (BP#42) | `fix/notification-rls-errors` |
-| #179 | DB sync error (BP#43) | `fix/db-sync-circular-dependency` |
-| #180 | AI sentiment (BP#44) | `fix/ai-sentiment-population` |
-| #181 | Server Action (BP#45) | `fix/missing-server-action` |
-| #182 | Notification polling (BP#46) | `fix/notification-polling-error` |
-| #183 | OpenAPI/Swagger (BP#47) | `feat/openapi-swagger-docs` |
-| #184 | i18n (BP#49) | `feat/i18n-support` |
-| #185 | FILTER(Boolean) type (BP#50) | `fix/filter-boolean-type` |
-
-### Still Needed (No GitHub Issue Yet)
-| BP# | Title | Branch |
-|-----|-------|--------|
-| # | Title | Branch | Status |
-|---|-------|--------|--------|
+### Still Open (No GitHub Issue Yet)
+| BP# | Title | Branch | Status |
+|-----|-------|--------|--------|
 | #193 | Document cron CSRF skip | `docs/cron-csrf-documentation` | 🔴 Open |
 | #194 | Duplicate jsdom override | `fix/duplicate-jsdom` | 🔴 Open |
 | #195 | Package name mismatch | `fix/package-name` | 🔴 Open |
@@ -83,21 +44,23 @@
 | — | Merge conflict markers | `fix/merge-conflict-markers` | 🔴 Not created |
 | #196 | Branch protection | `ops/branch-protection` | 🔴 Open |
 
+## SESSION 3 PROGRESS (2026-06-09) — All PRs Now Merged
+
+Previously created issues and branches — all merged to main in Session 4.
+
 ---
 
 ## REMAINING WORK (Priority Order)
 
 ### Critical Security
-| Issue | Title | Branch | Est. |
-|-------|-------|--------|------|
-| #155 | 6 critical security issues | `fix/critical-security-issues` | 3hr |
-| #129 | .env.local secrets in git | `fix/env-local-secrets` | 30min |
+| Issue | Title | Branch | Est. | Status |
+|-------|-------|--------|------|--------|
+| #155 | 6 critical security issues | `fix/critical-security-issues` | 3hr | 🔴 Not started |
+| #129 | .env.local secrets in git | `fix/env-local-secrets` | 30min | 🔴 Not started |
 
 ### High Priority
 | Issue | Title | Branch | Est. | Status |
 |-------|-------|--------|------|--------|
-| #143 | SQL injection custom-fields | `fix/sql-injection-custom-fields` | 30min | ✅ PR #186 |
-| #157 | 200+ as any assertions | `fix/as-any-assertions` | 4hr | 🔴 Partial fix pushed |
 | #147 | 3067 ESLint warnings | `fix/eslint-warnings` | 4hr | 🔴 Not started |
 | #158 | Notification system/hydration/pg | `fix/notification-system` | 3hr | 🔴 Not started |
 | #134 | useEffect cleanup 40+ components | `fix/useeffect-cleanup` | 2hr | 🔴 Not started |
@@ -106,45 +69,23 @@
 | #148 | Missing FK references | `fix/missing-fk-references` | 1hr | 🔴 Not started |
 | #149 | Daily DB backups | `ops/daily-db-backups` | 1hr | 🔴 Not started |
 
-### Medium Priority (Week 3)
+### Medium Priority
 | Issue | Title | Branch | Est. | Status |
 |-------|-------|--------|------|--------|
 | #160 | Superadmin error boundaries | `fix/superadmin-error-boundaries` | 30min | 🔴 Not started |
-| #161 | TOTP edge cases | `fix/totp-edge-cases` | 20min | ✅ Fixed |
 | #162 | DB singleton type safety | `fix/db-singleton-type-safety` | 10min | 🔴 Not started |
-| #163 | GDPR N+1 | `fix/gdpr-n-plus-one` | 15min | ✅ PR #187 |
-| #164 | SOC2 N+1 | `fix/soc2-n-plus-one` | 15min | ✅ PR #188 |
-| #165 | requestToJson parse errors | `fix/request-to-json-errors` | 10min | ✅ Fixed in `fix/batch-small-bugs` |
 | #166 | json().catch empty | `fix/json-parse-error-handling` | 20min | 🔴 Not started |
-| #167 | verifySecret timing leak | `fix/timing-leak-verify-secret` | 10min | ✅ PR #189 |
-| #168 | BigInt serialization | `fix/bigint-serialization` | 5min | ✅ Fixed |
-| #169 | dangerouslySetInnerHTML | `fix/dangerous-html-sanitize` | 20min | ✅ Fixed |
-| #172 | Loki errors silent | `fix/loki-error-handling` | 10min | ✅ Fixed |
-| #178 | Notification RLS errors | `fix/notification-rls-errors` | 30min | ✅ Fixed |
-| #179 | DB sync circular dep | `fix/db-sync-circular-dependency` | 1hr | ✅ Fixed |
-| #181 | Missing Server Action | `fix/missing-server-action` | 10min | ✅ Fixed |
-| #182 | Notification polling error | `fix/notification-polling-error` | 20min | ✅ Fixed |
-| #169 | dangerouslySetInnerHTML | `fix/dangerous-html-sanitize` | 20min | 🔴 Not started |
 | #170 | ESM/CJS mix | `fix/esm-cjs-consistency` | 30min | 🔴 Not started |
 | #171 | Log rotation | `fix/log-rotation` | 15min | 🔴 Not started |
-| #172 | Loki errors silent | `fix/loki-error-handling` | 10min | 🔴 Not started |
 | #173 | Alerting webhook | `feat/error-alerting-webhook` | 30min | 🔴 Not started |
-| #174 | apiError + logError coord | `fix/api-error-log-error` | 10min | ✅ PR #190 |
-| #175 | superadmin errors strip details | `fix/superadmin-errors-strip-details` | 10min | ✅ PR #191 |
 | #176 | Health check endpoint | `feat/health-check-endpoint` | 30min | 🔴 Not started |
 | #177 | Filesystem warning | `fix/next-dev-filesystem` | 10min | 🔴 Not started |
-| #178 | Notification RLS errors | `fix/notification-rls-errors` | 30min | 🔴 Not started |
-| #179 | DB sync circular dep | `fix/db-sync-circular-dependency` | 1hr | 🔴 Not started |
-| #180 | AI sentiment population | `fix/ai-sentiment-population` | 30min | 🔴 Not started |
-| #181 | Missing Server Action | `fix/missing-server-action` | 10min | 🔴 Not started |
-| #182 | Notification polling error | `fix/notification-polling-error` | 20min | 🔴 Not started |
 | #183 | OpenAPI/Swagger docs | `feat/openapi-swagger-docs` | 2hr | 🔴 Not started |
 
 ### Low Priority
 | Issue | Title | Branch | Est. | Status |
 |-------|-------|--------|------|--------|
 | #184 | i18n support | `feat/i18n-support` | 4hr | 🔴 Not started |
-| #185 | FILTER(Boolean) type | `fix/filter-boolean-type` | 10min | ✅ Fixed |
 
 ### Phase Features
 | Issue | Title | Branch | Status |
@@ -155,29 +96,28 @@
 ### Test Coverage (Target: 100% lib/)
 | Issue | Title | Branch | Status |
 |-------|-------|--------|--------|
-| #151 | Raise lib/ coverage thresholds | `test/coverage-lib` | ✅ Merged (PR #192) |
 | #153 | Follow-ups coverage | `test/coverage-follow-ups` | 🔴 Not started |
 
 ---
 
 ## OPEN PULL REQUESTS
 
-| PR | Title | Branch | Status |
-|----|-------|--------|--------|
-| #186 | fix: SQL injection custom-fields | `fix/sql-injection-custom-fields` | 🔴 Open |
-| #187 | fix: GDPR N+1 parallelized | `fix/gdpr-n-plus-one` | 🔴 Open |
-| #188 | fix: SOC2 N+1 parallelized | `fix/soc2-n-plus-one` | 🔴 Open |
-| #189 | fix: verifySecret timing leak | `fix/timing-leak-verify-secret` | 🔴 Open |
-| #190 | fix: apiError + logError coord | `fix/api-error-log-error` | 🔴 Open |
-| #191 | fix: superadmin errors strip details | `fix/superadmin-errors-strip-details` | 🔴 Open |
-| #157 | fix: Reduce as any (partial) | `fix/as-any-assertions` | 🔴 Open |
+*None — all PRs merged to main.*
 
 ## RECENTLY MERGED
 
-| PR | Title | Branch |
-|----|-------|--------|
-| #192 | test: increase lib/ coverage — 39 tests, raise thresholds | `test/coverage-increase-lib` ✅ |
-| — | test: add 7 unit test files — 58 tests across lib modules | `test/coverage-batch-2` ✅ |
+| PR | Issue | Title | Branch |
+|----|-------|-------|--------|
+| #192 | #151 | test: increase lib/ coverage — 39 tests, raise thresholds | `test/coverage-increase-lib` ✅ |
+| — | — | test: add 7 unit test files — 58 tests across lib modules | `test/coverage-batch-2` ✅ |
+| #186 | #143 | fix: SQL injection custom-fields | `fix/sql-injection-custom-fields` ✅ |
+| #187 | #163 | fix: GDPR N+1 parallelized | `fix/gdpr-n-plus-one` ✅ |
+| #188 | #164 | fix: SOC2 N+1 parallelized | `fix/soc2-n-plus-one` ✅ |
+| #189 | #167 | fix: verifySecret timing leak | `fix/timing-leak-verify-secret` ✅ |
+| #190 | #174 | fix: apiError + logError coord | `fix/api-error-log-error` ✅ |
+| #191 | #175 | fix: superadmin errors strip details | `fix/superadmin-errors-strip-details` ✅ |
+| — | #157 | fix: Reduce as any (partial) | `fix/as-any-assertions` ✅ |
+| — | — | feat: AI sentiment analysis for deals | `main` (direct) ✅ |
 
 ---
 
