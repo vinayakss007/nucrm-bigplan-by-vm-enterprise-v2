@@ -33,12 +33,12 @@
 | — | #157 | fix: Reduce as any assertions in 5 route files | `fix/as-any-assertions` ✅ |
 | — | #180 | feat: AI sentiment analysis for deals — analyzeSentiment + deal metadata + lead-warming integration (12 tests) | `main` (direct) ✅ |
 
-### Open PRs (Session 5 — Test Fixes)
+### Merged (Session 5 — Test Fixes)
 | PR | Issue | Title | Branch |
 |----|-------|-------|--------|
-| #205 | #197,#198,#199 | fix: batch test fixes — widget count, esignature async, logError sync | `fix/test-batch-1` 🔄 Open |
-| #206 | #200,#201 | fix: batch test fixes — integrations config optional, tenant isolation slug+cleanup+FK | `fix/test-batch-2` 🔄 Open |
-| #207 | #202,#203,#204 | fix: batch test fixes — vulnerability CRON_SECRET, sync.ts backslash, backup resilient | `fix/test-batch-3` 🔄 Open |
+| #205 | #197,#198,#199 | fix: batch test fixes — widget count, esignature async, logError sync | `fix/test-batch-1` ✅ |
+| #206 | #200,#201 | fix: batch test fixes — integrations config optional, tenant isolation slug+cleanup+FK | `fix/test-batch-2` ✅ |
+| #207 | #202,#203,#204 | fix: batch test fixes — vulnerability CRON_SECRET, sync.ts backslash, backup resilient | `fix/test-batch-3` ✅ |
 
 ### Still Open (No GitHub Issue Yet)
 | BP# | Title | Branch | Status |
