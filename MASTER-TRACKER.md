@@ -16,6 +16,7 @@
 | #192 | #151 | 39 new tests for retry/scoring/keepalive/metrics — raise thresholds (lines 25→40, funcs 35→45, branches 30→35, stmts 25→40) | `test/coverage-increase-lib` ✅ |
 | — | #185 | fix: FILTER(Boolean) as string[] type assertion | `fix/batch-small-bugs` ✅ |
 | — | #165 | fix: requestToJson() swallows JSON parse errors | `fix/batch-small-bugs` ✅ |
+| — | #168 | fix: BigInt serialization in selective-restore backups route | `fix/bigint-serialization` ✅ |
 
 ## SESSION 3 PROGRESS (2026-06-09)
 
@@ -107,7 +108,7 @@
 | #165 | requestToJson parse errors | `fix/request-to-json-errors` | 10min | ✅ Fixed in `fix/batch-small-bugs` |
 | #166 | json().catch empty | `fix/json-parse-error-handling` | 20min | 🔴 Not started |
 | #167 | verifySecret timing leak | `fix/timing-leak-verify-secret` | 10min | ✅ PR #189 |
-| #168 | BigInt serialization | `fix/bigint-serialization` | 5min | 🔴 Not started |
+| #168 | BigInt serialization | `fix/bigint-serialization` | 5min | ✅ Fixed |
 | #169 | dangerouslySetInnerHTML | `fix/dangerous-html-sanitize` | 20min | 🔴 Not started |
 | #170 | ESM/CJS mix | `fix/esm-cjs-consistency` | 30min | 🔴 Not started |
 | #171 | Log rotation | `fix/log-rotation` | 15min | 🔴 Not started |
