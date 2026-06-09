@@ -60,7 +60,13 @@ export async function GET(request: NextRequest) {
         ...b,
         file_size_formatted: formatFileSize(b.fileSize),
       })),
-      stats,
+      stats: {
+        total: Number(stats?.total ?? 0),
+        ready: Number(stats?.ready ?? 0),
+        pending: Number(stats?.pending ?? 0),
+        failed: Number(stats?.failed ?? 0),
+        totalSize: Number(stats?.totalSize ?? 0),
+      },
     });
   } catch (err: any) {
     console.error('[selective-restore/backups GET]', err);
