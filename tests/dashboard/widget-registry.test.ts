@@ -35,7 +35,7 @@ describe('widget-registry', () => {
 
   it('getWidgetsForPlan returns correct count for free plan', () => {
     const freeWidgets = getWidgetsForPlan('free');
-    expect(freeWidgets.length).toBe(8);
+    expect(freeWidgets.length).toBe(9);
     freeWidgets.forEach(w => expect(w.minPlan).toBe('free'));
   });
 
@@ -52,7 +52,7 @@ describe('widget-registry', () => {
 
   it('getWidgetsForPlan falls back to free for unknown plan', () => {
     const widgets = getWidgetsForPlan('unknown-plan');
-    expect(widgets.length).toBe(8);
+    expect(widgets.length).toBe(9);
     widgets.forEach(w => expect(w.minPlan).toBe('free'));
   });
 
