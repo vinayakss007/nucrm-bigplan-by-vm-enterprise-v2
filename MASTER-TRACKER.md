@@ -1,10 +1,19 @@
 # NuCRM Enterprise — Master Tracker
 
-**Last Updated:** 2026-06-09
+**Last Updated:** 2026-06-09 (Session 4)
 **Rule:** Every fix/feature gets a GitHub issue → a branch → a PR → merge to main.
 **No direct commits to main.** Everything trackable.
 
 ---
+
+## SESSION 4 PROGRESS (2026-06-09)
+
+### Merged to main
+
+| PR | Issue | Title | Branch |
+|----|-------|-------|--------|
+| — | — | 7 new unit tests: critical-data-capture, errors-server, field-encryption, history, offers, rate-limit-simple, sanitize (58 tests) | `test/coverage-batch-2` ✅ |
+| #192 | #151 | 39 new tests for retry/scoring/keepalive/metrics — raise thresholds (lines 25→40, funcs 35→45, branches 30→35, stmts 25→40) | `test/coverage-increase-lib` ✅ |
 
 ## SESSION 3 PROGRESS (2026-06-09)
 
@@ -128,7 +137,7 @@
 ### Test Coverage (Target: 100% lib/)
 | Issue | Title | Branch | Status |
 |-------|-------|--------|--------|
-| #151 | Raise lib/ coverage thresholds | `test/coverage-lib` | 🔴 Not started |
+| #151 | Raise lib/ coverage thresholds | `test/coverage-lib` | ✅ Merged (PR #192) |
 | #153 | Follow-ups coverage | `test/coverage-follow-ups` | 🔴 Not started |
 
 ---
@@ -144,6 +153,13 @@
 | #190 | fix: apiError + logError coord | `fix/api-error-log-error` | 🔴 Open |
 | #191 | fix: superadmin errors strip details | `fix/superadmin-errors-strip-details` | 🔴 Open |
 | #157 | fix: Reduce as any (partial) | `fix/as-any-assertions` | 🔴 Open |
+
+## RECENTLY MERGED
+
+| PR | Title | Branch |
+|----|-------|--------|
+| #192 | test: increase lib/ coverage — 39 tests, raise thresholds | `test/coverage-increase-lib` ✅ |
+| — | test: add 7 unit test files — 58 tests across lib modules | `test/coverage-batch-2` ✅ |
 
 ---
 
