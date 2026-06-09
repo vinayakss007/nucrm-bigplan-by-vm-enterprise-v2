@@ -109,7 +109,7 @@ async function logWebhookDelivery(input: {
       status: input.status,
       statusCode: input.statusCode,
       errorMessage: input.errorMessage?.slice(0, 1000) ?? null,
-      recordId: input.recordId ? (input.recordId as any) : null,
+      recordId: input.recordId ? Number(input.recordId) : null,
       payloadSize: input.payloadSize,
       createdAt: new Date(),
     });
@@ -346,7 +346,7 @@ async function handleDeal(
     tenantId,
     createdBy: userId,
     createdAt: new Date(),
-  } as any).returning();
+  }).returning();
 
   return { id: newDeal?.id ?? null, action: 'created' };
 }

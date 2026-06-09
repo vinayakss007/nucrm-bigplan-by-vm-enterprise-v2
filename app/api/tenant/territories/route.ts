@@ -54,10 +54,10 @@ export async function POST(req: NextRequest) {
     const [row] = await db.insert(territories).values({
       tenantId: ctx.tenantId,
       name,
-      type: type as any,
+      type,
       parentId: parentId || null,
       geoConfig: geoConfig || {},
-    } as any).returning();
+    }).returning();
 
     return NextResponse.json({ data: row }, { status: 201 });
   } catch (err: any) {
@@ -86,7 +86,7 @@ export async function PUT(req: NextRequest) {
 
     const [row] = await db
       .update(territories)
-      .set(updates as any)
+      .set(updates)
       .where(and(eq(territories.id, id), eq(territories.tenantId, ctx.tenantId)))
       .returning();
 
