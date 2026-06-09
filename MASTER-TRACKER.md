@@ -14,6 +14,8 @@
 |----|-------|-------|--------|
 | — | — | 7 new unit tests: critical-data-capture, errors-server, field-encryption, history, offers, rate-limit-simple, sanitize (58 tests) | `test/coverage-batch-2` ✅ |
 | #192 | #151 | 39 new tests for retry/scoring/keepalive/metrics — raise thresholds (lines 25→40, funcs 35→45, branches 30→35, stmts 25→40) | `test/coverage-increase-lib` ✅ |
+| — | #185 | fix: FILTER(Boolean) as string[] type assertion | `fix/batch-small-bugs` ✅ |
+| — | #165 | fix: requestToJson() swallows JSON parse errors | `fix/batch-small-bugs` ✅ |
 
 ## SESSION 3 PROGRESS (2026-06-09)
 
@@ -102,7 +104,7 @@
 | #162 | DB singleton type safety | `fix/db-singleton-type-safety` | 10min | 🔴 Not started |
 | #163 | GDPR N+1 | `fix/gdpr-n-plus-one` | 15min | ✅ PR #187 |
 | #164 | SOC2 N+1 | `fix/soc2-n-plus-one` | 15min | ✅ PR #188 |
-| #165 | requestToJson parse errors | `fix/request-to-json-errors` | 10min | 🔴 Not started |
+| #165 | requestToJson parse errors | `fix/request-to-json-errors` | 10min | ✅ Fixed in `fix/batch-small-bugs` |
 | #166 | json().catch empty | `fix/json-parse-error-handling` | 20min | 🔴 Not started |
 | #167 | verifySecret timing leak | `fix/timing-leak-verify-secret` | 10min | ✅ PR #189 |
 | #168 | BigInt serialization | `fix/bigint-serialization` | 5min | 🔴 Not started |
@@ -126,7 +128,7 @@
 | Issue | Title | Branch | Est. | Status |
 |-------|-------|--------|------|--------|
 | #184 | i18n support | `feat/i18n-support` | 4hr | 🔴 Not started |
-| #185 | FILTER(Boolean) type | `fix/filter-boolean-type` | 10min | 🔴 Not started |
+| #185 | FILTER(Boolean) type | `fix/filter-boolean-type` | 10min | ✅ Fixed in `fix/batch-small-bugs` |
 
 ### Phase Features
 | Issue | Title | Branch | Status |
