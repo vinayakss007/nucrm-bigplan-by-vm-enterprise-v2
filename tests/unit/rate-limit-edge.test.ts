@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { EdgeRateLimiter, getRateLimitHeaders, shouldBypassRateLimit } from '@/lib/rate-limit-edge';
+import { EdgeRateLimiter, getRateLimitHeaders, shouldBypassRateLimit, BYPASS_PREFIXES } from '@/lib/rate-limit-edge';
 
 describe('EdgeRateLimiter', () => {
   let limiter: EdgeRateLimiter;
@@ -36,7 +36,6 @@ describe('EdgeRateLimiter', () => {
   });
 
   it('resets after window expires', () => {
-    const past = Date.now() - 100_000;
     limiter = new EdgeRateLimiter(2, 50);
     limiter.check('reset-test', 2, 50);
     limiter.check('reset-test', 2, 50);
@@ -71,6 +70,23 @@ describe('EdgeRateLimiter', () => {
     expect(limiter.check('iso2', 1, 60_000).allowed).toBe(true);
     expect(limiter.check('iso1', 1, 60_000).allowed).toBe(false);
   });
+
+  it('uses default max and window when not provided', () => {
+    const d = new EdgeRateLimiter();
+    expect(d.check('default').limit).toBe(60);
+  });
+
+  it('first request returns correct remaining', () => {
+    const r = limiter.check('first', 10, 60_000);
+    expect(r.remaining).toBe(9);
+  });
+
+  it('returns correct reset timestamp', () => {
+    const before = Date.now();
+    const r = limiter.check('ts', 10, 60_000);
+    expect(r.reset).toBeGreaterThanOrEqual(before + 60_000);
+    expect(r.reset).toBeLessThanOrEqual(before + 60_000 + 100);
+  });
 });
 
 describe('getRateLimitHeaders', () => {
@@ -85,6 +101,12 @@ describe('getRateLimitHeaders', () => {
   it('returns Retry-After > 0 when blocked', () => {
     const h = getRateLimitHeaders({ allowed: false, remaining: 0, reset: Date.now() + 30_000, limit: 60 });
     expect(parseInt(h['Retry-After']!)).toBeGreaterThan(0);
+  });
+
+  it('returns integer for X-RateLimit-Reset', () => {
+    const reset = Date.now() + 60_000;
+    const h = getRateLimitHeaders({ allowed: true, remaining: 10, reset, limit: 100 });
+    expect(h['X-RateLimit-Reset']).toBe(Math.ceil(reset / 1000).toString());
   });
 });
 
@@ -106,5 +128,35 @@ describe('shouldBypassRateLimit', () => {
     expect(shouldBypassRateLimit('/api/tenant/contacts')).toBe(false);
     expect(shouldBypassRateLimit('/api/auth/login')).toBe(false);
     expect(shouldBypassRateLimit('/api/tenant/deals')).toBe(false);
+  });
+
+  it('bypasses cron with sub-paths', () => {
+    expect(shouldBypassRateLimit('/api/cron/daily')).toBe(true);
+    expect(shouldBypassRateLimit('/api/cron/hourly/report')).toBe(true);
+  });
+
+  it('does not bypass root or other paths', () => {
+    expect(shouldBypassRateLimit('/')).toBe(false);
+    expect(shouldBypassRateLimit('/api')).toBe(false);
+    expect(shouldBypassRateLimit('/api/unknown')).toBe(false);
+  });
+});
+
+describe('BYPASS_PREFIXES', () => {
+  it('contains expected bypass paths', () => {
+    expect(BYPASS_PREFIXES).toContain('/api/webhooks/');
+    expect(BYPASS_PREFIXES).toContain('/api/health');
+    expect(BYPASS_PREFIXES).toContain('/api/metrics');
+    expect(BYPASS_PREFIXES).toContain('/api/keepalive');
+    expect(BYPASS_PREFIXES).toContain('/api/cron');
+  });
+});
+
+describe('edgeLimiter singleton', () => {
+  it('is a default EdgeRateLimiter instance', async () => {
+    const mod = await import('@/lib/rate-limit-edge');
+    expect(mod.edgeLimiter).toBeInstanceOf(EdgeRateLimiter);
+    const r = mod.edgeLimiter.check('singleton', 10, 60_000);
+    expect(r.allowed).toBe(true);
   });
 });

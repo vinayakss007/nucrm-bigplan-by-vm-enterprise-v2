@@ -18,6 +18,12 @@
 | — | #165 | fix: requestToJson() swallows JSON parse errors | `fix/batch-small-bugs` ✅ |
 | — | #168 | fix: BigInt serialization in selective-restore backups route | `fix/bigint-serialization` ✅ |
 | — | #161 | fix: TOTP edge cases — validate token format, skip non-base32 chars, reject empty key | `fix/totp-edge-cases` ✅ |
+| — | #182 | fix: Notifications polling — add missing tenantId/deletedAt filters, prevent race condition | `fix/batch-notifications-schema-auth` ✅ |
+| — | #181 | fix: Server Action login — use dynamic APP_URL instead of hardcoded localhost, add error handling | `fix/batch-notifications-schema-auth` ✅ |
+| — | #179 | fix: DB schema — remove duplicate `export * from './ai'`, rename files table collision | `fix/batch-notifications-schema-auth` ✅ |
+| — | #178 | fix: RLS policy — use safe `current_setting()` with `missing_ok` fallback | `fix/batch-notifications-schema-auth` ✅ |
+| — | #172 | fix: Loki flush — re-queue logs on failure instead of dropping them | `fix/batch-notifications-schema-auth` ✅ |
+| — | #169 | fix: sanitizeHTMLServer — add case-insensitive regex flag | `fix/batch-notifications-schema-auth` ✅ |
 
 ## SESSION 3 PROGRESS (2026-06-09)
 
@@ -67,13 +73,15 @@
 ### Still Needed (No GitHub Issue Yet)
 | BP# | Title | Branch |
 |-----|-------|--------|
-| 39 | Document cron CSRF skip | `docs/cron-csrf-documentation` |
-| 51 | Duplicate jsdom override | `fix/duplicate-jsdom` |
-| 52 | Package name mismatch | `fix/package-name` |
-| 53 | Unused ANALYZE config | `fix/unused-analyze-config` |
-| 54 | Unused STRIPE_PRICE_ID | `fix/unused-stripe-placeholders` |
-| 55 | Merge conflict markers | `fix/merge-conflict-markers` |
-| 56 | Branch protection | `ops/branch-protection` |
+| # | Title | Branch | Status |
+|---|-------|--------|--------|
+| #193 | Document cron CSRF skip | `docs/cron-csrf-documentation` | 🔴 Open |
+| #194 | Duplicate jsdom override | `fix/duplicate-jsdom` | 🔴 Open |
+| #195 | Package name mismatch | `fix/package-name` | 🔴 Open |
+| — | Unused ANALYZE config | `fix/unused-analyze-config` | 🔴 Not created |
+| — | Unused STRIPE_PRICE_ID | `fix/unused-stripe-placeholders` | 🔴 Not created |
+| — | Merge conflict markers | `fix/merge-conflict-markers` | 🔴 Not created |
+| #196 | Branch protection | `ops/branch-protection` | 🔴 Open |
 
 ---
 
@@ -110,6 +118,12 @@
 | #166 | json().catch empty | `fix/json-parse-error-handling` | 20min | 🔴 Not started |
 | #167 | verifySecret timing leak | `fix/timing-leak-verify-secret` | 10min | ✅ PR #189 |
 | #168 | BigInt serialization | `fix/bigint-serialization` | 5min | ✅ Fixed |
+| #169 | dangerouslySetInnerHTML | `fix/dangerous-html-sanitize` | 20min | ✅ Fixed |
+| #172 | Loki errors silent | `fix/loki-error-handling` | 10min | ✅ Fixed |
+| #178 | Notification RLS errors | `fix/notification-rls-errors` | 30min | ✅ Fixed |
+| #179 | DB sync circular dep | `fix/db-sync-circular-dependency` | 1hr | ✅ Fixed |
+| #181 | Missing Server Action | `fix/missing-server-action` | 10min | ✅ Fixed |
+| #182 | Notification polling error | `fix/notification-polling-error` | 20min | ✅ Fixed |
 | #169 | dangerouslySetInnerHTML | `fix/dangerous-html-sanitize` | 20min | 🔴 Not started |
 | #170 | ESM/CJS mix | `fix/esm-cjs-consistency` | 30min | 🔴 Not started |
 | #171 | Log rotation | `fix/log-rotation` | 15min | 🔴 Not started |
@@ -130,7 +144,7 @@
 | Issue | Title | Branch | Est. | Status |
 |-------|-------|--------|------|--------|
 | #184 | i18n support | `feat/i18n-support` | 4hr | 🔴 Not started |
-| #185 | FILTER(Boolean) type | `fix/filter-boolean-type` | 10min | ✅ Fixed in `fix/batch-small-bugs` |
+| #185 | FILTER(Boolean) type | `fix/filter-boolean-type` | 10min | ✅ Fixed |
 
 ### Phase Features
 | Issue | Title | Branch | Status |
