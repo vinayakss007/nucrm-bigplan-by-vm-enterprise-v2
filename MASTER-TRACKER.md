@@ -1,6 +1,6 @@
 # NuCRM Enterprise — Master Tracker
 
-**Last Updated:** 2026-06-09 (Session 4 — Resumed after reboot)
+**Last Updated:** 2026-06-09 (Session 5 — Security audit + open branch cleanup)
 **Rule:** Every fix/feature gets a GitHub issue → a branch → a PR → merge to main.
 **No direct commits to main.** Everything trackable.
 
@@ -40,16 +40,12 @@
 | #206 | #200,#201 | fix: batch test fixes — integrations config optional, tenant isolation slug+cleanup+FK | `fix/test-batch-2` ✅ |
 | #207 | #202,#203,#204 | fix: batch test fixes — vulnerability CRON_SECRET, sync.ts backslash, backup resilient | `fix/test-batch-3` ✅ |
 
-### Still Open (No GitHub Issue Yet)
-| BP# | Title | Branch | Status |
-|-----|-------|--------|--------|
-| #193 | Document cron CSRF skip | `docs/cron-csrf-documentation` | 🔴 Open |
-| #194 | Duplicate jsdom override | `fix/duplicate-jsdom` | 🔴 Open |
-| #195 | Package name mismatch | `fix/package-name` | 🔴 Open |
-| — | Unused ANALYZE config | `fix/unused-analyze-config` | 🔴 Not created |
-| — | Unused STRIPE_PRICE_ID | `fix/unused-stripe-placeholders` | 🔴 Not created |
-| — | Merge conflict markers | `fix/merge-conflict-markers` | 🔴 Not created |
-| #196 | Branch protection | `ops/branch-protection` | 🔴 Open |
+### Merged (Session 5 — Security audit + open branch cleanup)
+| PR | Issue | Title | Branch |
+|----|-------|-------|--------|
+| #208 | #194 | fix: remove duplicate jsdom override in package.json | `fix/duplicate-jsdom` ✅ |
+| #210 | #193 | docs: document cron CSRF skip rationale | `docs/cron-csrf-documentation` ✅ |
+| #213 | #211,#212 | fix: remove unused ANALYZE env var and STRIPE_PRICE_ID placeholders | `fix/unused-configs` ✅ |
 
 ## SESSION 3 PROGRESS (2026-06-09) — All PRs Now Merged
 
@@ -60,10 +56,10 @@ Previously created issues and branches — all merged to main in Session 4.
 ## REMAINING WORK (Priority Order)
 
 ### Critical Security
-| Issue | Title | Branch | Est. | Status |
-|-------|-------|--------|------|--------|
-| #155 | 6 critical security issues | `fix/critical-security-issues` | 3hr | 🔴 Not started |
-| #129 | .env.local secrets in git | `fix/env-local-secrets` | 30min | 🔴 Not started |
+| Issue | Title | Outcome |
+|-------|-------|--------|
+| #155 | 6 critical security issues | ✅ ALL 6 confirmed fixed in current code. Closed. |
+| #129 | .env.local secrets in git | ✅ `.env.local` never committed. Closed. |
 
 ### High Priority
 | Issue | Title | Branch | Est. | Status |
@@ -115,16 +111,14 @@ Previously created issues and branches — all merged to main in Session 4.
 
 | PR | Issue | Title | Branch |
 |----|-------|-------|--------|
+| #213 | #211,#212 | fix: remove unused ANALYZE env var and STRIPE_PRICE_ID placeholders | `fix/unused-configs` ✅ |
+| #210 | #193 | docs: document cron CSRF skip rationale | `docs/cron-csrf-documentation` ✅ |
+| #208 | #194 | fix: remove duplicate jsdom override | `fix/duplicate-jsdom` ✅ |
+| #205-207 | #197-204 | fix: 8 test file failures (Session 5 test fixes) | `fix/test-batch-*` ✅ |
 | #192 | #151 | test: increase lib/ coverage — 39 tests, raise thresholds | `test/coverage-increase-lib` ✅ |
 | — | — | test: add 7 unit test files — 58 tests across lib modules | `test/coverage-batch-2` ✅ |
-| #186 | #143 | fix: SQL injection custom-fields | `fix/sql-injection-custom-fields` ✅ |
-| #187 | #163 | fix: GDPR N+1 parallelized | `fix/gdpr-n-plus-one` ✅ |
-| #188 | #164 | fix: SOC2 N+1 parallelized | `fix/soc2-n-plus-one` ✅ |
-| #189 | #167 | fix: verifySecret timing leak | `fix/timing-leak-verify-secret` ✅ |
-| #190 | #174 | fix: apiError + logError coord | `fix/api-error-log-error` ✅ |
-| #191 | #175 | fix: superadmin errors strip details | `fix/superadmin-errors-strip-details` ✅ |
-| — | #157 | fix: Reduce as any (partial) | `fix/as-any-assertions` ✅ |
-| — | — | feat: AI sentiment analysis for deals | `main` (direct) ✅ |
+| — | #195 | fix: package name mismatch — already fixed in code | — ✅ |
+| — | #196 | ops: configure branch protection on main | — ✅ |
 
 ---
 
