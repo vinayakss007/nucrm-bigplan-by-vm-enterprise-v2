@@ -171,7 +171,7 @@ export default function SidebarCustomizeSection({
   const hideAll  = () => onChange([...ALL_HREFS]);
   const applyPreset = (p: typeof PRESETS[number]) => {
     if (p.keep === null) { onChange([]); return; }
-    const keepHrefs = new Set(p.keep.map(label => LABEL_TO_HREF[label]).filter(Boolean) as string[]);
+    const keepHrefs = new Set(p.keep.map(label => LABEL_TO_HREF[label]).filter((h): h is string => !!h));
     onChange(ALL_HREFS.filter(h => !keepHrefs.has(h)));
   };
 
