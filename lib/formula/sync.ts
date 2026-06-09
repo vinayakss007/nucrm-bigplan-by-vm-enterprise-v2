@@ -49,8 +49,8 @@ export async function syncCalculatedFields(
 
     await db.execute(sql`
       UPDATE public.${sql.identifier(tableName)} 
-      SET metadata = COALESCE(metadata, '{}'::jsonb) || \${JSON.stringify(updates)}::jsonb, updated_at = now() 
-      WHERE id = \${entityId} AND tenant_id = \${tenantId}
+      SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(updates)}::jsonb, updated_at = now() 
+      WHERE id = ${entityId} AND tenant_id = ${tenantId}
     `);
   } catch (err) {
     console.error(`[FormulaSync] Failed to sync fields for \${entityType} \${entityId}`, err);

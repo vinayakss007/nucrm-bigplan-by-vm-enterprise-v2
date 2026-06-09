@@ -94,7 +94,7 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
 
     try {
       execSync(
-        `pg_dump "${databaseUrl}" --format=plain --no-owner --no-privileges --schema-only --data-only --exclude-table=pg_* > "${backupFile}"`,
+        `pg_dump "${databaseUrl}" --format=plain --no-owner --no-privileges --schema-only --exclude-table=pg_* > "${backupFile}"`,
         { stdio: 'pipe' }
       );
 
