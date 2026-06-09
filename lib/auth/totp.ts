@@ -8,12 +8,13 @@ import { createHmac } from 'crypto';
  */
 export function verifyTOTP(secret: string, token: string): boolean {
   if (!secret || !token) return false;
+  if (!/^\d{6}$/.test(token)) return false;
 
   const b32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
   let bits = 0, val = 0;
   const kb: number[] = [];
   
-  for (const c of secret.toUpperCase()) {
+  for (const c of secret.replace(/[^A-Za-z0-7]/g, '').toUpperCase()) {
     const idx = b32.indexOf(c);
     if (idx === -1) continue;
     val = (val << 5) | idx;
@@ -24,6 +25,7 @@ export function verifyTOTP(secret: string, token: string): boolean {
     }
   }
   
+  if (kb.length === 0) return false;
   const key = Buffer.from(kb);
   const counter = Math.floor(Date.now() / 30000);
   
