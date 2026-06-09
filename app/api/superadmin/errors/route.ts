@@ -109,7 +109,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (err) {
     console.error('[superadmin/errors POST] failed:', err);
-    return NextResponse.json({ error: 'Failed to log error', details: err instanceof Error ? err.message : String(err) }, { status: 500 });
+    return NextResponse.json({
+      error: 'Failed to log error',
+      ...(process.env.NODE_ENV === 'development' ? { details: err instanceof Error ? err.message : String(err) } : {}),
+    }, { status: 500 });
   }
 }
 
