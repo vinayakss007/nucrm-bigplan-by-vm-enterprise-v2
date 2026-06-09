@@ -208,6 +208,7 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
         createdBy: userAId,
         title: 'Secret Deal A',
         amount: '10000',
+        stageId: '00000000-0000-0000-0000-000000000001',
       })
       .returning();
 
@@ -218,6 +219,7 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
         createdBy: userBId,
         title: 'Secret Deal B',
         amount: '20000',
+        stageId: '00000000-0000-0000-0000-000000000001',
       })
       .returning();
 
@@ -290,8 +292,9 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
     `);
 
     // Document which tables have RLS enabled
+    const rlsRows = Array.isArray(rlsResult) ? rlsResult : (rlsResult as any)?.rows ?? [];
     const rlsStatus: Record<string, boolean> = {};
-    for (const row of rlsResult) {
+    for (const row of rlsRows) {
       rlsStatus[row.tablename as string] = row.rowsecurity === true;
     }
 
