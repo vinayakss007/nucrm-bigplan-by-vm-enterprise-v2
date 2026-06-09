@@ -62,7 +62,7 @@
 
 | BUILD_PLAN # | GitHub # | Title | Branch | Est. | Status |
 |--------------|----------|-------|--------|------|--------|
-| 22 | #143 | SQL injection in custom-fields route | `fix/sql-injection-custom-fields` | 30min | 🔴 Not started |
+| 22 | #143 | SQL injection in custom-fields route | `fix/sql-injection-custom-fields` | 30min | ✅ PR #186 |
 | 23 | #160 | No error.tsx on superadmin pages | `fix/superadmin-error-boundaries` | 30min | 🔴 Not started |
 | 24 | #161 | Custom TOTP edge cases | `fix/totp-edge-cases` | 20min | 🔴 Not started |
 | 25 | #162 | Proxy-based DB singleton loses type safety | `fix/db-singleton-type-safety` | 10min | 🔴 Not started |
