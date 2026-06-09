@@ -1,112 +1,178 @@
 # NuCRM Enterprise — Master Tracker
 
-**Last Updated:** 2026-06-06
-**Read before any work begins.** Update when creating/merging branches.
+**Last Updated:** 2026-06-09
+**Rule:** Every fix/feature gets a GitHub issue → a branch → a PR → merge to main.
+**No direct commits to main.** Everything trackable.
 
 ---
 
-## 1. PARALLEL FEATURE BRANCHES
+## SESSION 3 PROGRESS (2026-06-09)
 
-| Branch | Status | Dependencies | Merged to Main? |
-|--------|--------|-------------|----------------|
-| `feat/foundation-proxy-and-gate` | ✅ Done | — | ✅ Yes |
-| `feat/sso-foundation` | ✅ Done | — | ✅ Yes |
-| `feat/branding` | ✅ Done | `lib/branding.ts` exports | ✅ Yes |
-| `feat/documents` | ✅ Done | — | ✅ Yes |
-| `feat/workflow-foundation` | ✅ Done | — | ✅ Yes |
-| `feat/phase-4-offers` | ✅ Done | — | ✅ Yes |
-| `feat/phase-6-approval-surfaces` | ✅ Done | — | ✅ Yes |
-| `fix/security-vulnerabilities-v2` | ✅ Done | — | ✅ Yes |
-| `chore/middleware-to-proxy` | ✅ Done | — | ✅ Yes |
-| `feat/rate-limit-middleware` | ✅ Done | `proxy.ts` | ✅ Yes |
-| `fix/runtime-errors-ui-v2` | 🔴 **Unmerged** (4 commits) | — | ❌ No |
+### New PRs Created (Awaiting Review & Merge)
 
-### Unmerged: `fix/runtime-errors-ui-v2`
-- `2ef9ab8` — fix invalid Swipeable wrapping `<tr>` elements
-- `9442faa` — fix hydration mismatch in theme toggle button
-- `37d1e42` — fix company detail stats query / result extraction
-- `6c6972d` — add allowed dev origin, simplify PWA manifest icons
+| PR | Issue | Title | Branch | Status |
+|----|-------|-------|--------|--------|
+| #186 | #143 | SQL injection fix in custom-fields route | `fix/sql-injection-custom-fields` | 🔴 Open |
+| #187 | #163 | GDPR N+1 parallelized | `fix/gdpr-n-plus-one` | 🔴 Open |
+| #188 | #164 | SOC2 N+1 parallelized | `fix/soc2-n-plus-one` | 🔴 Open |
+| #189 | #167 | verifySecret timing leak fix | `fix/timing-leak-verify-secret` | 🔴 Open |
+| #190 | #174 | apiError + logError coordination | `fix/api-error-log-error` | 🔴 Open |
+| #191 | #175 | superadmin errors strip details | `fix/superadmin-errors-strip-details` | 🔴 Open |
+| — | #157 | Reduce as any assertions (partial batch) | `fix/as-any-assertions` | 🔴 Open |
+
+### New GitHub Issues Created
+
+| Issue | Title | Branch |
+|-------|-------|--------|
+| #160 | Superadmin error boundaries (BP#23) | `fix/superadmin-error-boundaries` |
+| #161 | TOTP edge cases (BP#24) | `fix/totp-edge-cases` |
+| #162 | DB singleton type safety (BP#25) | `fix/db-singleton-type-safety` |
+| #163 | GDPR N+1 query (BP#26) | `fix/gdpr-n-plus-one` ✅ PR #187 |
+| #164 | SOC2 N+1 query (BP#27) | `fix/soc2-n-plus-one` ✅ PR #188 |
+| #165 | requestToJson parse errors (BP#28) | `fix/request-to-json-errors` |
+| #166 | json().catch empty (BP#29) | `fix/json-parse-error-handling` |
+| #167 | verifySecret timing leak (BP#30) | `fix/timing-leak-verify-secret` ✅ PR #189 |
+| #168 | BigInt serialization (BP#31) | `fix/bigint-serialization` |
+| #169 | dangerouslySetInnerHTML (BP#32) | `fix/dangerous-html-sanitize` |
+| #170 | ESM/CJS mix (BP#33) | `fix/esm-cjs-consistency` |
+| #171 | Log rotation (BP#34) | `fix/log-rotation` |
+| #172 | Loki errors silent (BP#35) | `fix/loki-error-handling` |
+| #173 | Alerting webhook (BP#36) | `feat/error-alerting-webhook` |
+| #174 | apiError + logError (BP#37) | `fix/api-error-log-error` ✅ PR #190 |
+| #175 | superadmin errors details (BP#38) | `fix/superadmin-errors-strip-details` ✅ PR #191 |
+| #176 | Health check (BP#40) | `feat/health-check-endpoint` |
+| #177 | Filesystem warning (BP#41) | `fix/next-dev-filesystem` |
+| #178 | Notification RLS (BP#42) | `fix/notification-rls-errors` |
+| #179 | DB sync error (BP#43) | `fix/db-sync-circular-dependency` |
+| #180 | AI sentiment (BP#44) | `fix/ai-sentiment-population` |
+| #181 | Server Action (BP#45) | `fix/missing-server-action` |
+| #182 | Notification polling (BP#46) | `fix/notification-polling-error` |
+| #183 | OpenAPI/Swagger (BP#47) | `feat/openapi-swagger-docs` |
+| #184 | i18n (BP#49) | `feat/i18n-support` |
+| #185 | FILTER(Boolean) type (BP#50) | `fix/filter-boolean-type` |
+
+### Still Needed (No GitHub Issue Yet)
+| BP# | Title | Branch |
+|-----|-------|--------|
+| 39 | Document cron CSRF skip | `docs/cron-csrf-documentation` |
+| 51 | Duplicate jsdom override | `fix/duplicate-jsdom` |
+| 52 | Package name mismatch | `fix/package-name` |
+| 53 | Unused ANALYZE config | `fix/unused-analyze-config` |
+| 54 | Unused STRIPE_PRICE_ID | `fix/unused-stripe-placeholders` |
+| 55 | Merge conflict markers | `fix/merge-conflict-markers` |
+| 56 | Branch protection | `ops/branch-protection` |
 
 ---
 
-## 2. FEATURE PROGRESS TOWARD VISION
+## REMAINING WORK (Priority Order)
 
-| Vision Pillar | Status | What Exists | What's Missing |
-|--------------|--------|------------|----------------|
-| **Fine pipelines** | ⚠️ Partial | Deal stages, pipelines table, Kanban | Lead-specific pipelines with idle/pending states |
-| **Follow-up intelligence** | ❌ Missing | Tasks exist | No "missed follow-up" badge, no "follow up today" view, no overdue tracking |
-| **AI auto-follow-up** | ❌ Missing | AI gateway foundation | No AI follow-up engine, no opt-in toggle, no AI email drafting for missed follow-ups |
-| **Smart lead scoring** | ⚠️ Partial | Contact scoring (hot/warm/cold) | No configurable rules, no real-time score updates, no weight system |
-| **Multi-channel outreach** | ⚠️ Partial | Email sequences, SMS/Twilio, WhatsApp foundation | No unified inbox per lead, no multi-channel sequence builder |
-| **Deliverability engine** | ❌ Missing | Email sending works | No warmup, spam check, bounce analytics, send-time optimization |
-| **Automated workflows** | ⚠️ Partial | Workflow foundation merged | No no-code builder UI, no trigger/condition/action system |
-| **Real-time analytics** | ⚠️ Partial | Dashboard exists | No follow-up stats, missed-follow-up reports, per-user performance, leaderboards |
-| **Idle lead state** | ❌ Missing | — | Leads should stay idle until explicitly claimed |
+### Critical Security
+| Issue | Title | Branch | Est. |
+|-------|-------|--------|------|
+| #155 | 6 critical security issues | `fix/critical-security-issues` | 3hr |
+| #129 | .env.local secrets in git | `fix/env-local-secrets` | 30min |
+
+### High Priority
+| Issue | Title | Branch | Est. | Status |
+|-------|-------|--------|------|--------|
+| #143 | SQL injection custom-fields | `fix/sql-injection-custom-fields` | 30min | ✅ PR #186 |
+| #157 | 200+ as any assertions | `fix/as-any-assertions` | 4hr | 🔴 Partial fix pushed |
+| #147 | 3067 ESLint warnings | `fix/eslint-warnings` | 4hr | 🔴 Not started |
+| #158 | Notification system/hydration/pg | `fix/notification-system` | 3hr | 🔴 Not started |
+| #134 | useEffect cleanup 40+ components | `fix/useeffect-cleanup` | 2hr | 🔴 Not started |
+| #133 | Silent catch blocks | `fix/silent-catch-blocks` | 2hr | 🔴 Not started |
+| #141 | 5 E2E tests failing | `fix/e2e-seed-data` | 30min | 🔴 Not started |
+| #148 | Missing FK references | `fix/missing-fk-references` | 1hr | 🔴 Not started |
+| #149 | Daily DB backups | `ops/daily-db-backups` | 1hr | 🔴 Not started |
+
+### Medium Priority (Week 3)
+| Issue | Title | Branch | Est. | Status |
+|-------|-------|--------|------|--------|
+| #160 | Superadmin error boundaries | `fix/superadmin-error-boundaries` | 30min | 🔴 Not started |
+| #161 | TOTP edge cases | `fix/totp-edge-cases` | 20min | 🔴 Not started |
+| #162 | DB singleton type safety | `fix/db-singleton-type-safety` | 10min | 🔴 Not started |
+| #163 | GDPR N+1 | `fix/gdpr-n-plus-one` | 15min | ✅ PR #187 |
+| #164 | SOC2 N+1 | `fix/soc2-n-plus-one` | 15min | ✅ PR #188 |
+| #165 | requestToJson parse errors | `fix/request-to-json-errors` | 10min | 🔴 Not started |
+| #166 | json().catch empty | `fix/json-parse-error-handling` | 20min | 🔴 Not started |
+| #167 | verifySecret timing leak | `fix/timing-leak-verify-secret` | 10min | ✅ PR #189 |
+| #168 | BigInt serialization | `fix/bigint-serialization` | 5min | 🔴 Not started |
+| #169 | dangerouslySetInnerHTML | `fix/dangerous-html-sanitize` | 20min | 🔴 Not started |
+| #170 | ESM/CJS mix | `fix/esm-cjs-consistency` | 30min | 🔴 Not started |
+| #171 | Log rotation | `fix/log-rotation` | 15min | 🔴 Not started |
+| #172 | Loki errors silent | `fix/loki-error-handling` | 10min | 🔴 Not started |
+| #173 | Alerting webhook | `feat/error-alerting-webhook` | 30min | 🔴 Not started |
+| #174 | apiError + logError coord | `fix/api-error-log-error` | 10min | ✅ PR #190 |
+| #175 | superadmin errors strip details | `fix/superadmin-errors-strip-details` | 10min | ✅ PR #191 |
+| #176 | Health check endpoint | `feat/health-check-endpoint` | 30min | 🔴 Not started |
+| #177 | Filesystem warning | `fix/next-dev-filesystem` | 10min | 🔴 Not started |
+| #178 | Notification RLS errors | `fix/notification-rls-errors` | 30min | 🔴 Not started |
+| #179 | DB sync circular dep | `fix/db-sync-circular-dependency` | 1hr | 🔴 Not started |
+| #180 | AI sentiment population | `fix/ai-sentiment-population` | 30min | 🔴 Not started |
+| #181 | Missing Server Action | `fix/missing-server-action` | 10min | 🔴 Not started |
+| #182 | Notification polling error | `fix/notification-polling-error` | 20min | 🔴 Not started |
+| #183 | OpenAPI/Swagger docs | `feat/openapi-swagger-docs` | 2hr | 🔴 Not started |
+
+### Low Priority
+| Issue | Title | Branch | Est. | Status |
+|-------|-------|--------|------|--------|
+| #184 | i18n support | `feat/i18n-support` | 4hr | 🔴 Not started |
+| #185 | FILTER(Boolean) type | `fix/filter-boolean-type` | 10min | 🔴 Not started |
+
+### Phase Features
+| Issue | Title | Branch | Status |
+|-------|-------|--------|--------|
+| #154 | Phase B: AI Auto-Follow-Up | `feat/ai-auto-followup` | 🔴 Not started |
+| #156 | Phase D: Deliverability Engine | `feat/deliverability-engine` | 🔴 Not started |
+
+### Test Coverage (Target: 100% lib/)
+| Issue | Title | Branch | Status |
+|-------|-------|--------|--------|
+| #151 | Raise lib/ coverage thresholds | `test/coverage-lib` | 🔴 Not started |
+| #153 | Follow-ups coverage | `test/coverage-follow-ups` | 🔴 Not started |
 
 ---
 
-## 3. OPEN PULL REQUESTS (from GitHub)
+## OPEN PULL REQUESTS
 
-| PR | Title | Branch | Notes |
-|----|-------|--------|-------|
-| 90 | fix: E2E test user seed + vitest timeout | fix/e2e-test-user-setup | Tests only |
-| 89 | fix: Next.js 16 params await, logAudit, cache lock | fix/nextjs16-params-audit-log | |
-| 88 | fix: OOM stability, Docker memory limits | fix/oom-startup-stability | |
-| 87 | fix: requireAuth() super admin context | fix/require-auth-superadmin | |
-| 86 | fix: 4 failing unit tests | fix/failing-integration-tests | |
-| 85 | fix: proxy.ts route exclusions | fix/proxy-route-exclusions | |
-| 84 | fix: CI secrets → GitHub Actions | fix/ci-secrets-environment | |
-| 83 | security: CSRF, JWT, ALLOWED_ORIGINS fix | fix/security-hotfix-2026-06-04 | |
-| 82 | feat: Assignment Rules UI | feat/assignment-rules-ui | |
-| 81 | feat: Call Logger UI | feat/call-logger-ui | |
-| 80 | feat: Saved Views UI | feat/saved-views-ui | |
-| 68 | fix: drizzle-schema tests | quick/fix-drizzle-schema-tests | |
+| PR | Title | Branch | Status |
+|----|-------|--------|--------|
+| #186 | fix: SQL injection custom-fields | `fix/sql-injection-custom-fields` | 🔴 Open |
+| #187 | fix: GDPR N+1 parallelized | `fix/gdpr-n-plus-one` | 🔴 Open |
+| #188 | fix: SOC2 N+1 parallelized | `fix/soc2-n-plus-one` | 🔴 Open |
+| #189 | fix: verifySecret timing leak | `fix/timing-leak-verify-secret` | 🔴 Open |
+| #190 | fix: apiError + logError coord | `fix/api-error-log-error` | 🔴 Open |
+| #191 | fix: superadmin errors strip details | `fix/superadmin-errors-strip-details` | 🔴 Open |
+| #157 | fix: Reduce as any (partial) | `fix/as-any-assertions` | 🔴 Open |
 
 ---
 
-## 4. KNOWN FRAGILE INTERFACES (things that break when touched)
-
-These are the files/areas that **multiple features depend on** — changing them risks breaking other things:
+## KNOWN FRAGILE INTERFACES
 
 | File | Used By | Danger Level |
 |------|---------|-------------|
-| `lib/branding.ts` | Branding feature, tenant layout, BrandingProvider | 🔴 High |
+| `lib/branding.ts` | Branding, tenant layout, BrandingProvider | 🔴 High |
 | `proxy.ts` | Auth, rate limiting, CSRF, public paths | 🔴 High |
 | `lib/auth/api-handlers.ts` | Login, signup, auth flow | 🔴 High |
-| `drizzle/schema/*.ts` | All features share the schema registry | 🔴 High |
+| `drizzle/schema/*.ts` | All features share schema registry | 🔴 High |
 | `app/tenant/layout.tsx` | All tenant pages | 🟡 Medium |
-| `lib/auth/csrf.ts` | CSRF protection across all API routes | 🟡 Medium |
-| `lib/auth/session.ts` | Session/JWT management | 🟡 Medium |
+| `lib/auth/csrf.ts` | CSRF across all API routes | 🟡 Medium |
 
 ---
 
-## 5. PRE-MERGE CHECKLIST (MUST FOLLOW)
+## WORKFLOW
 
-Before merging ANY branch into main, run:
 ```bash
-# 1. TypeScript check
-npx tsc --noEmit --pretty 2>&1 | grep -v "node_modules" | grep "error TS"
+# Start a new fix:
+git checkout main && git pull && git checkout -b fix/<slug>
 
-# 2. Build test
-npm run build 2>&1 | tail -5
+# Do work, commit often:
+git add -A && git commit -m "fix: description (#ISSUE)"
 
-# 3. Unit tests
-npm run test:unit 2>&1 | tail -5
+# Push & create PR:
+git push -u origin fix/<slug>
+gh pr create --title "fix: description" --body "Closes #ISSUE" --base main
 
-# 4. Check new imports exist in target
-git diff main...HEAD -- '*.ts' '*.tsx' | grep "^\+import" | grep "from '@/"
-
-# 5. Smoke test (server starts)
-scripts/smoke-test.sh
+# After PR merges, delete branch:
+git checkout main && git pull && git branch -D fix/<slug>
 ```
-
----
-
-## 6. BRANCH CREATION RULES
-
-When creating a new feature branch:
-1. Branch from `main`
-2. Name: `feat/<short-description>`
-3. Add entry to PARALLEL FEATURE BRANCHES table above
-4. List any dependencies on other branches
-5. After merge → mark as ✅ Yes in Merged column
