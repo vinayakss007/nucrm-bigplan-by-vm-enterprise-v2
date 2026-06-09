@@ -27,7 +27,7 @@ export * from './territories';
 export * from './hierarchy';
 export * from './visitors';
 export * from './templates';
-export * from './ai';
+export { files as storageDocuments } from './files';
 export * from './lead-warming';
 export * from './plugins';
 export * from './projects';
