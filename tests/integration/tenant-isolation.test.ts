@@ -51,6 +51,7 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
       .values({
         id: randomUUID(),
         name: 'PenTest Tenant A',
+        slug: `pentest-a-${Date.now()}`,
         subdomain: `pentest-a-${Date.now()}`,
         status: 'active',
       })
@@ -60,6 +61,7 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
       .values({
         id: randomUUID(),
         name: 'PenTest Tenant B',
+        slug: `pentest-b-${Date.now()}`,
         subdomain: `pentest-b-${Date.now()}`,
         status: 'active',
       })
@@ -120,13 +122,19 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
   });
 
   afterAll(async () => {
-    // Cleanup test data
-    await db.delete(schema.contacts).where(eq(schema.contacts.tenantId, tenantAId));
-    await db.delete(schema.contacts).where(eq(schema.contacts.tenantId, tenantBId));
-    await db.delete(schema.users).where(eq(schema.users.tenantId, tenantAId));
-    await db.delete(schema.users).where(eq(schema.users.tenantId, tenantBId));
-    await db.delete(schema.tenants).where(eq(schema.tenants.id, tenantAId));
-    await db.delete(schema.tenants).where(eq(schema.tenants.id, tenantBId));
+    // Cleanup test data (guard against undefined IDs if insert failed)
+    if (tenantAId) {
+      await db.delete(schema.dealStages).where(eq(schema.dealStages.tenantId, tenantAId)).catch(() => {});
+      await db.delete(schema.pipelines).where(eq(schema.pipelines.tenantId, tenantAId)).catch(() => {});
+      await db.delete(schema.contacts).where(eq(schema.contacts.tenantId, tenantAId)).catch(() => {});
+      await db.delete(schema.users).where(eq(schema.users.tenantId, tenantAId)).catch(() => {});
+      await db.delete(schema.tenants).where(eq(schema.tenants.id, tenantAId)).catch(() => {});
+    }
+    if (tenantBId) {
+      await db.delete(schema.contacts).where(eq(schema.contacts.tenantId, tenantBId)).catch(() => {});
+      await db.delete(schema.users).where(eq(schema.users.tenantId, tenantBId)).catch(() => {});
+      await db.delete(schema.tenants).where(eq(schema.tenants.id, tenantBId)).catch(() => {});
+    }
     await pool.end();
   });
 
@@ -194,6 +202,14 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
   });
 
   it('should prevent access to another tenant deals', async () => {
+    // Create a pipeline and stage for FK constraint
+    const [pipeline] = await db.insert(schema.pipelines)
+      .values({ id: randomUUID(), tenantId: tenantAId, name: 'PenTest Pipeline' })
+      .returning();
+    const [stage] = await db.insert(schema.dealStages)
+      .values({ id: randomUUID(), pipelineId: pipeline.id, tenantId: tenantAId, name: 'PenTest Stage', order: 1 })
+      .returning();
+
     // Create deals for each tenant
     const [dealA] = await db.insert(schema.deals)
       .values({
@@ -202,6 +218,7 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
         createdBy: userAId,
         title: 'Secret Deal A',
         amount: '10000',
+        stageId: stage.id,
       })
       .returning();
 
@@ -212,6 +229,7 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
         createdBy: userBId,
         title: 'Secret Deal B',
         amount: '20000',
+        stageId: stage.id,
       })
       .returning();
 
@@ -229,6 +247,8 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
     // Cleanup
     await db.delete(schema.deals).where(eq(schema.deals.id, dealA.id));
     await db.delete(schema.deals).where(eq(schema.deals.id, dealB.id));
+    await db.delete(schema.dealStages).where(eq(schema.dealStages.id, stage.id));
+    await db.delete(schema.pipelines).where(eq(schema.pipelines.id, pipeline.id));
   });
 
   it('should prevent cross-tenant task access', async () => {
@@ -284,8 +304,9 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
     `);
 
     // Document which tables have RLS enabled
+    const rlsRows = Array.isArray(rlsResult) ? rlsResult : (rlsResult as any)?.rows ?? [];
     const rlsStatus: Record<string, boolean> = {};
-    for (const row of rlsResult) {
+    for (const row of rlsRows) {
       rlsStatus[row.tablename as string] = row.rowsecurity === true;
     }
 
