@@ -223,7 +223,7 @@ describe('E-Signature - HelloSignAdapter', () => {
     await expect(adapter.getStatus('ext-456')).rejects.toThrow('HelloSign API error');
   });
 
-  it('validateWebhook returns false when no event hash header', () => {
+  it('validateWebhook returns false when no event hash header', async () => {
     const { HelloSignAdapter } = await import('@/lib/esignature');
     const adapter = new HelloSignAdapter();
 
