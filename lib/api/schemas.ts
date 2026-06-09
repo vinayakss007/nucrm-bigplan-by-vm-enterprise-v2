@@ -518,7 +518,7 @@ export const updateKbCategorySchema = createKbCategorySchema.partial();
 export const createIntegrationSchema = z.object({
   name: requiredString.max(100),
   type: requiredString.max(50),
-  config: z.record(z.string(), z.unknown()),
+  config: z.record(z.string(), z.unknown()).optional().default({}),
   is_active: z.boolean().optional().default(true),
 });
 
