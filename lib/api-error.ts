@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
+import { logError } from '@/lib/errors';
 
 /**
  * Centralized API error handler.
@@ -15,8 +16,8 @@ export function apiError(err: unknown, message = 'Internal server error', status
   const isDev = process.env.NODE_ENV === 'development';
   const errMsg = err instanceof Error ? err.message : String(err);
 
-  // Always log server-side for debugging
-  console.error(`[API Error ${status}]`, errMsg);
+  // Use centralized logError (coordinates with errors.ts)
+  logError({ error: err, context: `apiError:${status}` });
 
   // Report to Sentry for 5xx errors
   if (status >= 500) {
