@@ -17,6 +17,7 @@
 | — | #185 | fix: FILTER(Boolean) as string[] type assertion | `fix/batch-small-bugs` ✅ |
 | — | #165 | fix: requestToJson() swallows JSON parse errors | `fix/batch-small-bugs` ✅ |
 | — | #168 | fix: BigInt serialization in selective-restore backups route | `fix/bigint-serialization` ✅ |
+| — | #161 | fix: TOTP edge cases — validate token format, skip non-base32 chars, reject empty key | `fix/totp-edge-cases` ✅ |
 
 ## SESSION 3 PROGRESS (2026-06-09)
 
@@ -101,7 +102,7 @@
 | Issue | Title | Branch | Est. | Status |
 |-------|-------|--------|------|--------|
 | #160 | Superadmin error boundaries | `fix/superadmin-error-boundaries` | 30min | 🔴 Not started |
-| #161 | TOTP edge cases | `fix/totp-edge-cases` | 20min | 🔴 Not started |
+| #161 | TOTP edge cases | `fix/totp-edge-cases` | 20min | ✅ Fixed |
 | #162 | DB singleton type safety | `fix/db-singleton-type-safety` | 10min | 🔴 Not started |
 | #163 | GDPR N+1 | `fix/gdpr-n-plus-one` | 15min | ✅ PR #187 |
 | #164 | SOC2 N+1 | `fix/soc2-n-plus-one` | 15min | ✅ PR #188 |

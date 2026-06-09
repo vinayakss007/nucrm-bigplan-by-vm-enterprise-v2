@@ -1,5 +1,5 @@
 /**
- * `documents` — workspace file attachments.
+ * `storageDocuments` — workspace file attachments.
  *
  * Each row is a record-keeping entry for a file the tenant has uploaded
  * to object storage (S3 / R2). The actual bytes live at `storageKey`;
@@ -16,7 +16,7 @@ import { users } from './core';
 import * as utils from './utils';
 
 export const documents = pgTable(
-  'documents',
+  'storage_documents',
   {
     id: utils.pk(),
     tenantId: utils.tenantId(),
