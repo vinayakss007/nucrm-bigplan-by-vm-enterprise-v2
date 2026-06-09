@@ -258,7 +258,7 @@ export async function withErrorLogging<T>(fn: () => Promise<T>, context: string,
  * Error handler for API routes
  */
 export function handleError(error: unknown): NextResponse<ApiError> {
-  console.error('[API Error]', error);
+  logError({ error, context: 'handleError' });
 
   if (error instanceof AppError) {
     return error.toResponse();
