@@ -2,6 +2,7 @@
 
 import React, { Component, ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import * as Sentry from '@sentry/nextjs';
 
 interface Props {
   children: ReactNode;
@@ -25,6 +26,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   override componentDidCatch(error: Error, errorInfo: any) {
     console.error('[ErrorBoundary] Caught error:', error, errorInfo);
+    Sentry.captureException(error, { extra: { errorInfo }, tags: { context: 'ErrorBoundary' } });
   }
 
   handleReset = () => {

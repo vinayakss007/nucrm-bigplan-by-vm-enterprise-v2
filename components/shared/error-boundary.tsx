@@ -1,6 +1,7 @@
 'use client';
 import { Component } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import * as Sentry from '@sentry/nextjs';
 
 interface Props {
   children: React.ReactNode;
@@ -25,6 +26,7 @@ export class AppErrorBoundary extends Component<Props, State> {
 
   override componentDidCatch(error: Error, errorInfo: any) {
     console.error('[Global Error Boundary]', error, errorInfo);
+    Sentry.captureException(error, { extra: { errorInfo }, tags: { context: 'AppErrorBoundary' } });
     this.props.onError?.(error, errorInfo);
   }
 

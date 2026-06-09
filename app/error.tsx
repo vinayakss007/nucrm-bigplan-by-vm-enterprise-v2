@@ -1,9 +1,9 @@
 'use client';
-import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { useCaptureError } from '@/lib/capture-error';
 
 export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  useEffect(() => { console.error('[app error]', error); }, [error]);
+  useCaptureError(error, 'app error');
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="text-center max-w-md">
