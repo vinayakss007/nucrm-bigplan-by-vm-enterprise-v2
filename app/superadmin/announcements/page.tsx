@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Megaphone, Plus, Trash2, CheckCircle, X, Eye, EyeOff } from 'lucide-react';
+import { Megaphone, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
