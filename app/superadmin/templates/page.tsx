@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Package, Plus, Users, Archive, FileText, Edit, Copy, UserPlus } from 'lucide-react';
+import { Package, Plus, Users, FileText, Edit, Copy, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
