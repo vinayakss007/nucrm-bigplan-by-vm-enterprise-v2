@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
           .from(criticalDataBackups)
           .orderBy(desc(criticalDataBackups.backedUpAt))
           .limit(50)
-          .catch(() => []),
+          .catch((err) => { console.error('[backups] critical data failed', err); return []; }),
 
         db.select({
           totalBackups: sql<number>`count(*)::int`,
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
         })
         .from(criticalDataBackups)
         .then(rows => rows[0])
-        .catch(() => ({ totalBackups: 0, restorable: 0, deletedRecords: 0, updatedRecords: 0 })),
+        .catch((err) => { console.error('[backups] stats failed', err); return { totalBackups: 0, restorable: 0, deletedRecords: 0, updatedRecords: 0 }; })),
       ]);
 
       // Get table breakdown
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
         })
         .from(criticalDataBackups)
         .groupBy(criticalDataBackups.tableName)
-        .catch(() => []);
+        .catch((err) => { console.error('[backups] tableStats failed', err); return []; });
 
       const stats: any = statsRes || { totalBackups: 0, restorable: 0, deletedRecords: 0, updatedRecords: 0 };
       stats.by_table = tableStats;
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
         .leftJoin(tenants, eq(tenants.id, sql`${backupRecords.metadata}->>'tenant_id'`))
         .orderBy(desc(backupRecords.createdAt))
         .limit(50)
-        .catch(() => []);
+        .catch((err) => { console.error('[backups] recent list failed', err); return []; });
       
       return NextResponse.json({ backups });
     }
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
       .from(backupSchedules)
       .leftJoin(tenants, eq(tenants.id, backupSchedules.tenantId))
       .orderBy(desc(backupSchedules.createdAt))
-      .catch(() => []);
+      .catch((err) => { console.error('[backups] schedules failed', err); return []; });
 
     return NextResponse.json({ schedules });
   } catch (err: any) { 
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const body = await request.json().catch(() => ({}));
+    const body = await request.json().catch((err) => { console.error('[backups] JSON parse failed', err); return {}; });
 
     // Handle restore action from frontend
     if (body.action === 'restore' && body.backupId) {

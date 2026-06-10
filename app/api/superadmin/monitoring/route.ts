@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, plans, errorLogs, healthChecks, backupRecords, selectiveRestoreLogs, superAdminBackups } from '@/drizzle/schema';
-import { eq, and, sql, desc, gt, inArray, isNull } from 'drizzle-orm';
+import { eq, and, sql, desc, gt, inArray } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     // Get stats
     let stats: any = {};
     try {
-      const statsRes = await db.execute(sql`SELECT public.platform_stats() as data`).catch(() => ({ rows: [{ data: {} }] }));
+      const statsRes = await db.execute(sql`SELECT public.platform_stats() as data`).catch((err) => { console.error('[monitoring] platform_stats failed', err); return { rows: [{ data: {} }] }; });
       stats = (statsRes.rows[0] as any)?.data ?? {};
       // Fill in missing fields computed from query data
       if (stats.mrr === undefined) stats.mrr = planDist.reduce((s: number, p: any) => s + (p.priceMonthly || 0) * (p.tenantCount || 0), 0);

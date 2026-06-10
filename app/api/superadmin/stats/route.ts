@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     }
 
     const [statsRes, recentTenants, recentErrors, recentActivity, expiringSoon, platformUsageRes] = await Promise.all([
-      db.execute(sql`SELECT public.platform_stats() as data`).catch(() => ({ rows: [{ data: {} }] })),
+      db.execute(sql`SELECT public.platform_stats() as data`).catch((err) => { console.error('[stats] platform_stats failed', err); return { rows: [{ data: {} }] }; }),
       
       db.select({
         id: tenants.id,
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
       .leftJoin(users, eq(users.id, tenants.ownerId))
       .orderBy(desc(tenants.createdAt))
       .limit(6)
-      .catch(() => []),
+      .catch((err) => { console.error('[stats] recentTenants failed', err); return []; }),
 
       db.select({
         level: errorLogs.level,
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
       .where(and(eq(errorLogs.resolved, false), or(eq(errorLogs.level, 'error'), eq(errorLogs.level, 'fatal'))))
       .orderBy(desc(errorLogs.createdAt))
       .limit(5)
-      .catch(() => []),
+      .catch((err) => { console.error('[stats] recentErrors failed', err); return []; }),
 
       db.select({
         name: tenants.name,
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
       .orderBy(desc(tenants.createdAt))
       .limit(8)
       .then(rows => rows.map(r => ({ type: 'tenant_created', ...r })))
-      .catch(() => []),
+      .catch((err) => { console.error('[stats] recentActivity failed', err); return []; }),
 
       db.select({
         id: tenants.id,
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
       .from(tenants)
       .where(and(eq(tenants.status, 'trialing'), between(tenants.trialEndsAt, sql`now()`, sql`now() + interval '3 days'`)))
       .orderBy(tenants.trialEndsAt)
-      .catch(() => []),
+      .catch((err) => { console.error('[stats] expiringSoon failed', err); return []; }),
 
       db.select({
         totalTenants: sql<number>`COUNT(*)::int`,
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
       })
       .from(tenants)
       .then(rows => rows[0])
-      .catch(() => ({ totalTenants: 0, activeTenants: 0, trialingTenants: 0, suspendedTenants: 0 })),
+      .catch((err) => { console.error('[stats] platformUsage failed', err); return { totalTenants: 0, activeTenants: 0, trialingTenants: 0, suspendedTenants: 0 }; }),
     ]);
 
     const s = (statsRes.rows[0] as any)?.data ?? {};
