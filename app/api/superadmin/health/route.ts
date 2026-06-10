@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       .where(gt(healthChecks.checkedAt, sql`now() - interval '24 hours'`))
       .orderBy(desc(healthChecks.checkedAt))
       .limit(300)
-      .catch(() => []);
+      .catch((err) => { console.error('[health] history failed', err); return []; });
 
     return NextResponse.json({ checks, history });
   } catch (err: any) {

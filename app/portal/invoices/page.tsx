@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { FileText, Download, DollarSign, Calendar, CheckCircle, Clock } from 'lucide-react';
+import { FileText, Download } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
 
 export default function PortalInvoicesPage() {
@@ -10,7 +10,7 @@ export default function PortalInvoicesPage() {
   useEffect(() => {
     fetch('/api/public/invoices').then(r => r.json()).then(d => {
       setInvoices(d.data || []); setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch((err) => { console.error('[portal/invoices] fetch failed', err); setLoading(false); });
   }, []);
 
   const statusColor: Record<string, string> = {

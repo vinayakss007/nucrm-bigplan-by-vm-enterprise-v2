@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
         .leftJoin(tenants, eq(tenants.id, billingEvents.tenantId))
         .orderBy(desc(billingEvents.createdAt))
         .limit(20)
-        .catch(() => []),
+        .catch((err) => { console.error('[revenue] events failed', err); return []; }),
     ]);
 
     return NextResponse.json({ mrr: mrrRes, events });

@@ -1,11 +1,9 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateBody } from '@/lib/api/validate';
-import { createPlanSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { announcements } from '@/drizzle/schema';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,7 +27,7 @@ export async function GET(request: NextRequest) {
       .from(announcements)
       .orderBy(desc(announcements.createdAt))
       .limit(50)
-      .catch(() => []);
+      .catch((err) => { console.error('[announcements] list failed', err); return []; });
     
     return NextResponse.json({ data });
   } catch (err: any) {
@@ -44,10 +42,7 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     
-    const rawBody = await request.json();
-    const validated = validateBody(createPlanSchema, rawBody);
-    if (validated instanceof NextResponse) return validated;
-    const b = rawBody;
+    const b = await request.json();
     if (!b.title || !b.body) return NextResponse.json({ error: 'title and body required' }, { status: 400 });
 
     const [row] = await db

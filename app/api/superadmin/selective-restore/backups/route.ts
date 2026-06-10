@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       .leftJoin(users, eq(users.id, sql`(metadata->>'uploaded_by')::uuid`))
       .orderBy(desc(superAdminBackups.createdAt))
       .limit(50)
-      .catch(() => []);
+      .catch((err) => { console.error('[selective-restore] list failed', err); return []; });
 
     const [stats] = await db
       .select({

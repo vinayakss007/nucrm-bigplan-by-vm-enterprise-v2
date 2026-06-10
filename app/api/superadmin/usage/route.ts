@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, plans, usageSnapshots } from '@/drizzle/schema';
-import { eq, and, sql, desc, inArray } from 'drizzle-orm';
+import { eq, sql, desc, inArray } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
 
 export async function GET(request: NextRequest) {
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       .where(sql`${usageSnapshots.snapshotDate} > CURRENT_DATE - 30`)
       .groupBy(usageSnapshots.snapshotDate)
       .orderBy(usageSnapshots.snapshotDate)
-      .catch(() => []),
+      .catch((err) => { console.error('[usage] growth query failed', err); return []; }),
     ]);
 
     return NextResponse.json({ tenantUsage, growth });

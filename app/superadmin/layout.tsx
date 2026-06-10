@@ -40,7 +40,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
     open_errors: sql<number>`(SELECT count(*)::int FROM error_logs WHERE resolved = false AND level IN ('error','fatal'))`,
   })
   .from(tenants)
-  .catch(() => [{ total_tenants: 0, active_tenants: 0, open_errors: 0 }]);
+  .catch((err) => { console.error('[superadmin/layout] stats query failed', err); return [{ total_tenants: 0, active_tenants: 0, open_errors: 0 }]; });
 
   return (
     <SuperAdminShell user={userData} stats={stats as any}>{children}</SuperAdminShell>

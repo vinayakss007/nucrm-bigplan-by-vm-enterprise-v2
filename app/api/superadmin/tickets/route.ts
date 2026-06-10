@@ -1,11 +1,9 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { supportTickets, tenants, users } from '@/drizzle/schema';
-import { eq, and, sql, desc, or, asc, inArray } from 'drizzle-orm';
+import { eq, and, sql, desc } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {
@@ -57,7 +55,7 @@ export async function GET(request: NextRequest) {
         })
         .from(supportTickets)
         .then(rows => rows[0])
-        .catch(() => ({ open: 0, in_progress: 0, resolved: 0, critical: 0 })),
+        .catch((err) => { console.error('[tickets] counts failed', err); return { open: 0, in_progress: 0, resolved: 0, critical: 0 }; }),
     ]);
 
     return NextResponse.json({ tickets, counts });
