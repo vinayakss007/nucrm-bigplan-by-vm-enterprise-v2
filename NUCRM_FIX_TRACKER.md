@@ -5,20 +5,23 @@
 
 ---
 
+## 2026-06-10
+
+- [x] CSRF SameSite mismatch — verified: session cookie already `sameSite: 'strict'` in `lib/auth/session.ts:73`, matches CSRF cookie. No mismatch.
+- [x] `proxy.ts` middleware matches ALL routes — verified: `config.matcher` already excludes static assets. Non-API public paths return early before JWT verify (line 159). No issue.
+- [x] `ALLOWED_ORIGINS=*` — already set to specific origins in `.env.local` line 35.
+- [x] JWT token in login response — verified: login response only returns `{ ok, user }`, token is set via cookie only.
+- [x] `/api/auth/` CSRF — verified: public API routes bypass proxy-level CSRF by design (no session yet). Session cookie has SameSite=Strict which mitigates login CSRF. Route handlers implement their own auth.
+- [x] `requireAuth()` LEFT JOIN — verified: superadmin handled separately at line 190-203, LEFT JOIN only for regular users.
+- [x] No rate limit on `/api/auth/csrf-token` — already has rate limit in `proxy.ts:133` (5 req/min per IP).
+- [x] `proxy.ts` naming — Next.js 16 officially renamed middleware.ts → proxy.ts, this is the correct convention.
+- [x] Legacy `ANTHROPIC_API_KEY` — removed from `.env.local`.
+- [x] Notification system errors — `DATABASE_URL is required` errors from tests, not production. Tests need env loading.
+- [x] App keeps crashing (OOM) — `--max-old-space-size=2048` already in Dockerfile:55, docker-compose.yml:47, scripts/start-production.sh:23, package.json, and all production paths.
+- [ ] AI gateway still not connected to real LLM providers — `ai_provider_secrets` table has data but no provider API keys configured via admin UI (needs UI implementation)
+
 ## 2026-06-04
 
 - [x] CSRF cookie missing Max-Age — was session cookie, lost on browser close. Added `Max-Age=2592000` to `lib/auth/csrf.ts:setCsrfCookie()`. (commit `ae8dd90`)
 - [x] Missing AI DB tables — `ai_activity`, `ai_draft_templates`, `at_risk_rules`, `comm_email_drafts` not created. Added migration `0012_missing_ai_tables.sql`.
 - [x] App rebuild after fix — `next build` succeeded, app running on port 3000 with compiled fix.
-- [ ] CSRF SameSite mismatch: session cookie `SameSite=Lax` vs CSRF cookie `SameSite=Strict` — cross-site nav sends session but not CSRF cookie
-- [ ] `proxy.ts` middleware matches ALL routes — every request (including images, static assets) hits JWT verify + CSRF check. Add path exclusions.
-- [ ] `ALLOWED_ORIGINS=*` in `.env.local` — wide open CORS. Lock to actual domain.
-- [ ] JWT token returned in login response body: `{ ok:true, token, ... }` — leaks session token to client JS
-- [ ] `/api/auth/` routes completely skip CSRF — `needsCsrfValidation()` returns false for all auth paths including login
-- [ ] `requireAuth()` uses `LEFT JOIN + LIMIT 1` — super admin with tenant membership gets tenant-scoped context instead of super admin privileges
-- [ ] App keeps crashing (OOM) — 4GB RAM, `next start` dies after serving requests. Need increased swap or reduced heap
-- [ ] AI gateway still not connected to real LLM providers — `ai_provider_secrets` table has data but no provider API keys configured via admin UI
-- [ ] No rate limit on `/api/auth/csrf-token` — can be spammed by authenticated users (noted in code review)
-- [ ] `proxy.ts` has `config.matcher` export but is named `proxy.ts` not `middleware.ts` — Next.js 16 detects it anyway but this is non-standard and could break on version upgrades
-- [ ] Legacy `ANTHROPIC_API_KEY` env var in `.env.local` line 44 — dead config, not used by new AI gateway
-- [ ] Notification system errors in logs — `Failed to create notification` for every type (contact_assigned, task_assigned, etc.) — likely missing `notifications` table RLS or schema issue

@@ -1,7 +1,9 @@
 #!/bin/bash
 source ~/.nvm/nvm.sh
 nvm use 22.22.2
-export DATABASE_URL=postgresql://postgres:nucrm_pass_2026@localhost:5432/nucrm
+export DATABASE_URL=postgresql://safa:xpI1APpPVo36myKRzPJUHg@rare-heron-27521.j77.aws-ap-south-1.cockroachlabs.cloud:26257/defaultdb
+export DATABASE_SSL=true
+export DATABASE_SSL_ROOT_CERT=/home/vinayak_shruti_biz/.postgresql/root.crt
 export NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 # Install concurrently if missing
