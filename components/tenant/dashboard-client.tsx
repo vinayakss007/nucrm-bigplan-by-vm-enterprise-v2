@@ -11,9 +11,11 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
   const [loadingLayout, setLoadingLayout] = useState(true);
 
   useEffect(() => {
-    fetch('/api/tenant/dashboard/layout')
+    const abort = new AbortController();
+    fetch('/api/tenant/dashboard/layout', { signal: abort.signal })
       .then(r => r.json())
       .then(res => {
+        if (abort.signal.aborted) return;
         if (res.layout) {
           setLayout(res.layout);
         } else {
@@ -21,9 +23,10 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
         }
       })
       .catch(() => {
-        setLayout(getPlanDefaultLayout(planName));
+        if (!abort.signal.aborted) setLayout(getPlanDefaultLayout(planName));
       })
-      .finally(() => setLoadingLayout(false));
+      .finally(() => { if (!abort.signal.aborted) setLoadingLayout(false); });
+    return () => abort.abort();
   }, [planName]);
 
   if (loadingLayout) {
