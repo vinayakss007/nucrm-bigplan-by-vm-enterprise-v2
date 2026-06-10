@@ -61,9 +61,11 @@ export default function ReportBuilder() {
 
   // Load available dimensions/metrics
   useEffect(() => {
-    fetch('/api/tenant/reports/builder', { credentials: 'include' })
+    const abort = new AbortController();
+    fetch('/api/tenant/reports/builder', { credentials: 'include', signal: abort.signal })
       .then(r => r.json())
       .then(d => {
+        if (abort.signal.aborted) return;
         setEntities(d.entities || []);
         if (d.entities?.length) {
           const first = d.entities[0];
@@ -72,7 +74,8 @@ export default function ReportBuilder() {
         }
         setConfigLoading(false);
       })
-      .catch(() => setConfigLoading(false));
+      .catch(() => { if (!abort.signal.aborted) setConfigLoading(false); });
+    return () => abort.abort();
   }, []);
 
   // Get current entity config

@@ -20,11 +20,14 @@ export default function OnboardingChecklist() {
   const router = useRouter();
 
   useEffect(() => {
-    fetch('/api/tenant/onboarding').then(r => r.json()).then(d => {
+    const abort = new AbortController();
+    fetch('/api/tenant/onboarding', { signal: abort.signal }).then(r => r.json()).then(d => {
+      if (abort.signal.aborted) return;
       setSteps(d.steps_done ?? []);
       setDismissed(d.completed ?? false);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch(() => { if (!abort.signal.aborted) setLoading(false); });
+    return () => abort.abort();
   }, []);
 
   const complete = (stepId: string) => {
