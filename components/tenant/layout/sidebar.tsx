@@ -173,7 +173,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
           setHiddenItems(prefs.hidden_nav_items);
         }
       }
-    } catch {}
+    } catch { /* Fallback to default on corrupted storage data */ }
   }, []);
 
   // React to live preference changes (Save on Preferences page emits this)
@@ -185,7 +185,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
           const prefs = JSON.parse(cached);
           setHiddenItems(Array.isArray(prefs?.hidden_nav_items) ? prefs.hidden_nav_items : []);
         }
-      } catch {}
+      } catch { /* Fallback to default on corrupted storage data */ }
     };
     window.addEventListener('nucrm:prefs-changed', handler);
     return () => window.removeEventListener('nucrm:prefs-changed', handler);
@@ -221,7 +221,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
   const toggleSection = (id: string) => {
     setOpenSections(prev => {
       const next = { ...prev, [id]: !prev[id] };
-      try { localStorage.setItem(SECTION_KEY, JSON.stringify(next)); } catch {}
+      try { localStorage.setItem(SECTION_KEY, JSON.stringify(next)); } catch { /* Fallback to default on corrupted storage data */ }
       return next;
     });
   };
@@ -229,7 +229,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
   const togglePin = useCallback((href: string) => {
     setPinned(prev => {
       const next = prev.includes(href) ? prev.filter(h => h !== href) : [...prev, href];
-      try { localStorage.setItem(PIN_KEY, JSON.stringify(next)); } catch {}
+      try { localStorage.setItem(PIN_KEY, JSON.stringify(next)); } catch { /* Fallback to default on corrupted storage data */ }
       return next;
     });
   }, []);

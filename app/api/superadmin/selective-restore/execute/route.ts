@@ -8,6 +8,7 @@ import { selectiveRestoreLogs, selectiveRestoreAuditLog, superAdminBackups } fro
 import { eq, and, sql } from 'drizzle-orm';
 import { existsSync } from 'fs';
 import { executeSelectiveRestore, validateTenant, createPreRestoreSnapshot } from '@/lib/restore/restore-executor';
+import { captureError } from '@/lib/capture-error';
 
 const executeRestoreSchema = z.object({
   backup_id: z.string().min(1),
@@ -230,6 +231,6 @@ async function createAuditLog(params: AuditLogParams) {
       // In schema, selectiveRestoreAuditLog has: tenantId, action, tableName, recordId, oldData, newData, performedBy, performedAt.
     });
   } catch (err) {
-    console.error('[audit-log]', err);
+    captureError(err, 'SelectiveRestore:AuditLog');
   }
 }

@@ -26,7 +26,7 @@ for (const fn of BLOCKED_FUNCTIONS) {
   try {
     delete (math as any)[fn];
   } catch {
-    // Some may not exist, that's fine
+    // Fallback to default on corrupted storage data
   }
 }
 

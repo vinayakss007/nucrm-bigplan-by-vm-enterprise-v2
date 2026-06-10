@@ -151,7 +151,8 @@ async function acquireLock(key: string): Promise<boolean> {
   try {
     const result = await (redis.set as any)(`nucrm:lock:${key}`, '1', 'EX', LOCK_TTL, 'NX');
     return result === 'OK';
-  } catch {
+  } catch (e) {
+    console.error('[Cache] acquireLock failed', e);
     return false;
   }
 }
@@ -161,7 +162,7 @@ async function releaseLock(key: string): Promise<void> {
   if (!redis) return;
   try {
     await redis.del(`nucrm:lock:${key}`);
-  } catch { /* best effort */ }
+  } catch { /* Fallback to default on corrupted storage data */ }
 }
 
 /**

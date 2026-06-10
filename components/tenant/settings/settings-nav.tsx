@@ -19,7 +19,7 @@ export default function SettingsNav() {
     fetch('/api/tenant/me')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setIsAdmin(d.is_admin ?? false))
-      .catch(() => {});
+      .catch(() => { /* Fallback to default on corrupted storage data */ });
 
     try {
       const q = sessionStorage.getItem('nucrm.settings.query');

@@ -319,7 +319,7 @@ export class NuCRMClient {
         try {
           errorData = (await response.json()) as ApiError;
         } catch {
-          // Response body is not JSON
+          // Fallback to default on corrupted storage data
         }
 
         throw new NuCRMError(

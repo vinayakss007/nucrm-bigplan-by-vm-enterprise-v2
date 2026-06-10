@@ -624,7 +624,7 @@ export async function seedSystemEvents(): Promise<number> {
       inserted++;
     } catch (err: any) {
       // Skip duplicates
-      console.warn(`[lead-warming] Seed skipped ${festival.name}:`, err.message);
+      console.error(`[lead-warming] Seed skipped ${festival.name}:`, err.message);
     }
   }
 
