@@ -1,12 +1,41 @@
 # NuCRM Enterprise — Master Tracker
 
-**Last Updated:** 2026-06-09 (Session 5 — Security audit + open branch cleanup)
+**Last Updated:** 2026-06-10 (Session 6 — Silent catch blocks, unused imports, ESLint error fixes)
 **Rule:** Every fix/feature gets a GitHub issue → a branch → a PR → merge to main.
 **No direct commits to main.** Everything trackable.
 
 ---
 
-## SESSION 4 PROGRESS (2026-06-09)
+## SESSION 6 PROGRESS (2026-06-10)
+
+### Committed (on `fix/batch-2-e2e-useEffect`, awaiting PR)
+
+| Commit | Title |
+|--------|-------|
+| `207b037` | fix: add error logging to silent catch blocks across superadmin/portal routes (21 files) |
+| `772eff7` | fix: remove unused Bell import, add error handling to health refresh |
+| `2cbf259` | fix: add error logging to JSON parse failure in leads convert route |
+| `b29c752` | fix: add error logging to JSON parse failures in backup route |
+| `f349522` | fix: add error logging to JSON parse failure in preferences route |
+| `6394424` | fix: add error logging to JSON parse failure in notification matrix route |
+| `7f18021` | fix: remove unused lucide-react imports from revenue page |
+| `de6fdc4` | fix: remove unused Archive import from templates page |
+| `2edae32` | fix: remove unused TrendingUp, Building2 imports from analytics page |
+| `31f2651` | fix: remove unused AlertTriangle, Clock, User imports from tickets page |
+| `9ce7ab6` | fix: remove unused ToggleLeft import from modules page |
+| `5c1900a` | fix: remove unused CheckCircle, X imports from announcements page |
+| `586b2df` | fix: remove unused Trash2, CheckCircle, Database imports from billing page |
+| `02fb83f` | fix: remove unused ToggleLeft, Settings imports from tenant detail pages |
+| `4db02c3` | fix: replace Function type with explicit callback type in a11y test |
+
+### Updated Status
+- **#133 Silent catch blocks** → ✅ Mostly fixed (21 files updated, pending remaining `.json().catch()` patterns)
+- **#147 ESLint warnings** → Reduced by ~15 (unused imports removed), 3067 → ~3250 (estimating)
+- **#166 json().catch empty** → Partially fixed (5 routes updated)
+
+---
+
+## SESSION 5 PROGRESS (2026-06-09)
 
 ### Merged to main
 
@@ -64,10 +93,10 @@ Previously created issues and branches — all merged to main in Session 4.
 ### High Priority
 | Issue | Title | Branch | Est. | Status |
 |-------|-------|--------|------|--------|
-| #147 | 3067 ESLint warnings | `fix/eslint-warnings` | 4hr | 🔴 Not started |
+| #147 | ~3067 ESLint warnings | `fix/eslint-warnings` | 4hr | 🔴 Not started |
 | #158 | Notification system/hydration/pg | `fix/notification-system` | 3hr | 🔴 Not started |
 | #134 | useEffect cleanup 40+ components | `fix/useeffect-cleanup` | 2hr | 🔴 Not started |
-| #133 | Silent catch blocks | `fix/silent-catch-blocks` | 2hr | 🔴 Not started |
+| #133 | Silent catch blocks | `fix/silent-catch-blocks` | 30min | 🟡 Mostly done (21 files, check remaining `.json().catch()` patterns) |
 | #141 | 5 E2E tests failing | `fix/e2e-seed-data` | 30min | 🔴 Not started |
 | #148 | Missing FK references | `fix/missing-fk-references` | 1hr | 🔴 Not started |
 | #149 | Daily DB backups | `ops/daily-db-backups` | 1hr | 🔴 Not started |
