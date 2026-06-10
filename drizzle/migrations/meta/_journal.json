@@ -2,101 +2,22 @@
   "version": "7",
   "dialect": "postgresql",
   "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1777981715293,
-      "tag": "0000_init",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1778251492391,
-      "tag": "0001_perpetual_the_stranger",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1778405943769,
-      "tag": "0002_billing_migration",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1746988800000,
-      "tag": "0003_fix_duplicate_tables",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1746988900000,
-      "tag": "0004_performance_indexes",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1746989000000,
-      "tag": "0005_brute_force_protection",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1746989100000,
-      "tag": "0006_super_admin_audit_logs",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1746989200000,
-      "tag": "0007_workflow_functions",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1746989300000,
-      "tag": "0008_services_contacts_companies",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1746989400000,
-      "tag": "0009_audit_hash_chain",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-<<<<<<< HEAD
-      "when": 1748332800000,
-      "tag": "0010_workflow_foundation",
-=======
-      "when": 1746989500000,
-      "tag": "0010_rename_invitations_role",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1778500000000,
-      "tag": "0011_approval_requests",
-      "breakpoints": true
-    },
-    {
-      "idx": 12,
-      "version": "7",
-      "when": 1746990000000,
-      "tag": "0012_rls_policies",
->>>>>>> main
-      "breakpoints": true
-    }
+    {"idx": 0, "version": "7", "when": 1777981715293, "tag": "0000_init", "breakpoints": true},
+    {"idx": 1, "version": "7", "when": 1778251492391, "tag": "0001_perpetual_the_stranger", "breakpoints": true},
+    {"idx": 2, "version": "7", "when": 1778405943769, "tag": "0002_billing_migration", "breakpoints": true},
+    {"idx": 3, "version": "7", "when": 1746988800000, "tag": "0003_fix_duplicate_tables", "breakpoints": true},
+    {"idx": 4, "version": "7", "when": 1746988900000, "tag": "0004_performance_indexes", "breakpoints": true},
+    {"idx": 5, "version": "7", "when": 1746989000000, "tag": "0005_brute_force_protection", "breakpoints": true},
+    {"idx": 6, "version": "7", "when": 1746989100000, "tag": "0006_super_admin_audit_logs", "breakpoints": true},
+    {"idx": 7, "version": "7", "when": 1746989200000, "tag": "0007_workflow_functions", "breakpoints": true},
+    {"idx": 8, "version": "7", "when": 1746989300000, "tag": "0008_services_contacts_companies", "breakpoints": true},
+    {"idx": 9, "version": "7", "when": 1746989400000, "tag": "0009_audit_hash_chain", "breakpoints": true},
+    {"idx": 10, "version": "7", "when": 1746989500000, "tag": "0010_rename_invitations_role", "breakpoints": true},
+    {"idx": 11, "version": "7", "when": 1748332800000, "tag": "0011_approval_requests", "breakpoints": true},
+    {"idx": 12, "version": "7", "when": 1746990000000, "tag": "0012_rls_policies", "breakpoints": true},
+    {"idx": 13, "version": "7", "when": 1746990100000, "tag": "0013_documents", "breakpoints": true},
+    {"idx": 14, "version": "7", "when": 1746990200000, "tag": "0014_missing_ai_tables", "breakpoints": true},
+    {"idx": 15, "version": "7", "when": 1746990300000, "tag": "0015_workflow_foundation", "breakpoints": true},
+    {"idx": 16, "version": "7", "when": 1746990400000, "tag": "0016_fix_rls_notifications", "breakpoints": true}
   ]
 }
