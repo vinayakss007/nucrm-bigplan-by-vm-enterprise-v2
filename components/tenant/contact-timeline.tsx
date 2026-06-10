@@ -114,24 +114,28 @@ export function ContactTimeline({ contactId, limit = 50, compact = false }: Cont
   const [filter, setFilter] = useState<string>('all')
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null)
 
-  const loadTimeline = useCallback(async () => {
+  const loadTimeline = useCallback(async (signal?: AbortSignal) => {
     setLoading(true)
     try {
       const params = new URLSearchParams({ limit: String(limit) })
       if (filter !== 'all') {
         params.set('event_type', filter)
       }
-      const res = await fetch(`/api/tenant/contacts/${contactId}/timeline?${params}`)
+      const res = await fetch(`/api/tenant/contacts/${contactId}/timeline?${params}`, { signal })
+      if (signal?.aborted) return
       const data = await res.json()
-      setEvents(data.data || [])
+      if (!signal?.aborted) setEvents(data.data || [])
     } catch (error) {
-      console.error('Failed to load timeline:', error)
+      if (error instanceof DOMException && (error as DOMException).name === 'AbortError') return
+      if (!signal?.aborted) console.error('Failed to load timeline:', error)
     }
-    setLoading(false)
+    if (!signal?.aborted) setLoading(false)
   }, [contactId, limit, filter])
 
   useEffect(() => {
-    loadTimeline()
+    const abort = new AbortController()
+    loadTimeline(abort.signal)
+    return () => abort.abort()
   }, [loadTimeline])
 
   // Get unique event types for filter
