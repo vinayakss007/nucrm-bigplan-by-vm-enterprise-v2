@@ -30,7 +30,7 @@ export async function POST(
     }
 
     const { id } = await params;
-    const rawBody = await request.json().catch(() => ({}));
+    const rawBody = await request.json().catch((err) => { console.error('[leads/convert] JSON parse failed', err); return {}; });
     const validated = validateBody(convertLeadSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
