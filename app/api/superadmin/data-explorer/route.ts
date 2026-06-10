@@ -143,7 +143,7 @@ async function handleSchemaInfo() {
           totalRows: parseInt((countResult.rows[0] as any).count || '0', 10),
         });
       } catch {
-        // Skip tables that can't be queried
+        // Silently skip during migration/setup when tables may not exist yet
       }
     }
 

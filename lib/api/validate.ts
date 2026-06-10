@@ -75,7 +75,8 @@ export function withValidation<T>(
     let body: unknown;
     try {
       body = await request.json();
-    } catch {
+    } catch (e) {
+      console.error('[Validate] Invalid JSON body', e);
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
@@ -96,7 +97,8 @@ export async function safeJson(request: Request): Promise<{ data: any } | NextRe
   try {
     const data = await request.json();
     return { data };
-  } catch {
+  } catch (e) {
+    console.error('[Validate] Invalid JSON body', e);
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 }

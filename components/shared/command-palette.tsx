@@ -287,7 +287,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       if (saved) {
         setRecentItems(JSON.parse(saved))
       }
-    } catch {}
+    } catch { /* Fallback to default on corrupted storage data */ }
   }, [])
 
   // Save recent item
@@ -310,7 +310,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     setRecentItems(updated)
     try {
       localStorage.setItem('nucrm_recent_items', JSON.stringify(updated))
-    } catch {}
+    } catch { /* Fallback to default on corrupted storage data */ }
   }, [recentItems])
 
   // Filter and search items

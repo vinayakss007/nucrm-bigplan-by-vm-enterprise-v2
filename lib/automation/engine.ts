@@ -24,6 +24,7 @@ import {
 import { eq, and, sql } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { createNotification } from '@/lib/notifications';
+import { captureError } from '@/lib/capture-error';
 
 export type TriggerEvent =
   | 'contact.created' | 'contact.updated'
@@ -77,10 +78,10 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
           status: 'success',
           triggeredBy: payload.userId || null,
           metadata: enrichedData,
-        }).catch((err) => console.error('[automation] Failed to log run:', err.message));
+        }).catch((err) => captureError(err, 'automation:log-run'));
 
       } catch (err: any) {
-        console.error(`[automation] ${automation.name} (${automation.id}) failed:`, err.message);
+        captureError(err, `automation:${automation.name}`);
 
         await db.insert(automationRuns).values({
           tenantId: payload.tenantId,
@@ -90,11 +91,11 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
           triggeredBy: payload.userId || null,
           errorMessage: err.message,
           metadata: payload.data,
-        }).catch((err) => console.error('[automation] Failed to log failed run:', err.message));
+        }).catch((err) => captureError(err, 'automation:log-failed-run'));
       }
     }
   } catch (err: any) {
-    console.error('[automation] evaluateAutomations error:', err.message);
+    captureError(err, 'automation:evaluate');
   }
 }
 
@@ -205,7 +206,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
           )
         `);
       } catch (err: any) {
-        console.error(`[automation] Sequence enrollment failed:`, err.message);
+        captureError(err, 'automation:sequence-enrollment');
       }
       break;
     }
@@ -265,7 +266,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
           signal: AbortSignal.timeout(10_000),
         });
       } catch (err: any) {
-        console.error('[automation] WhatsApp send failed:', err.message);
+        captureError(err, 'automation:whatsapp-send');
       }
       break;
     }

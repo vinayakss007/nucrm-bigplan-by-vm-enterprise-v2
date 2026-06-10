@@ -50,7 +50,7 @@ export async function getQueueAdapter(): Promise<QueueAdapter> {
       console.log(`[Queue] Using Redis provider`);
       return adapter;
     } catch (err) {
-      console.warn(`[Queue] Redis unavailable: ${(err as Error).message}. Falling back to pg-boss...`);
+      console.warn('[Queue] Redis unavailable, falling back to pg-boss...', (err as Error).message);
     }
   }
 

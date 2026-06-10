@@ -50,6 +50,7 @@ export function decryptSensitiveFields<T extends Record<string, any>>(
       try {
         result[k as keyof T] = decrypt(String(value), encKey) as any;
       } catch {
+        // Fallback to default on corrupted storage data
         result[k as keyof T] = value;
       }
     }

@@ -72,6 +72,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
       return () => bc.close();
     } catch (error) {
       console.error('[header] BroadcastChannel error:', error);
+      // Fallback to default on corrupted storage data
     }
   }, [router]);
 
