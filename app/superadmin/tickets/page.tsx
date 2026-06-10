@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { MessageSquare, AlertTriangle, Clock, CheckCircle, ChevronDown, Search, User } from 'lucide-react';
+import { MessageSquare, CheckCircle, ChevronDown, Search } from 'lucide-react';
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
