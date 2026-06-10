@@ -147,8 +147,8 @@ export async function checkThresholds(tenantId: string): Promise<void> {
                 },
               })
               .onConflictDoNothing()
-              .catch(() => {
-                // Notification creation is non-fatal
+              .catch((e) => {
+                console.warn('[Usage] Failed to create threshold notification', e);
               });
           }
 

@@ -301,7 +301,7 @@ class DevelopmentLogger {
           Sentry.captureException(err, {
             tags: { context, userId },
           });
-        }).catch(() => {});
+        }).catch((e) => console.warn('[DevLogger] Failed to capture Sentry exception', e));
       }
     }
 

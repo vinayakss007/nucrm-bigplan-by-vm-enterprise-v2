@@ -106,7 +106,7 @@ export async function POST_login(request: NextRequest) {
           await db.update(users)
             .set({ totpBackupCodes: codes.filter((x:string)=>x!==hash) })
             .where(eq(users.id, user.id))
-            .catch(()=>{});
+            .catch((e) => devLogger.warn('[Auth] Failed to update backup codes', e));
         }
       }
       if (!valid) return NextResponse.json({ error:'Invalid 2FA code', requires_2fa:true }, { status:401 });
@@ -153,8 +153,8 @@ export async function POST_signup(request: NextRequest) {
         .where(and(eq(platformSettings.key, 'allow_signups'), isNull(platformSettings.tenantId)))
         .limit(1);
       allowSignups = allowSignupsSetting?.value !== 'false';
-    } catch {
-      // Table doesn't exist or query failed - allow signups by default
+    } catch (e) {
+      console.warn('[Auth] Failed to check signups setting, defaulting to allowed:', e);
       allowSignups = true;
     }
     
@@ -318,7 +318,7 @@ export async function POST_signup(request: NextRequest) {
       message: `**${user.fullName}** (${user.email}) joined\nWorkspace: **${tenant.name}** (\`${tenant.slug}\`)`,
       color: '#10b981',
       url: `${process.env.NEXT_PUBLIC_APP_URL}/tenant`,
-    }).catch(() => {});
+    }).catch((e) => devLogger.warn('[Auth] Failed to send webhook notification', e));
 
     // Send Telegram notification if user configured it (fire-and-forget)
     sendTelegram({
@@ -328,7 +328,7 @@ export async function POST_signup(request: NextRequest) {
       message: `${user.fullName} (${user.email}) joined\nWorkspace: ${tenant.name} (${tenant.slug})`,
       icon: '🟢',
       url: `${process.env.NEXT_PUBLIC_APP_URL}/tenant`,
-    }).catch(() => {});
+    }).catch((e) => devLogger.warn('[Auth] Failed to send Telegram notification', e));
 
     // Send verification email (fire-and-forget)
     if (process.env.RESEND_API_KEY || process.env.SMTP_HOST) {
@@ -364,13 +364,14 @@ export async function POST_logout(request: NextRequest) {
     const token = request.cookies.get('nucrm_session')?.value;
     if (token) {
       const tokenHash = await hashToken(token);
-      await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash)).catch(()=>{});
+      await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash)).catch((e) => devLogger.warn('[Auth] Failed to delete session on logout', e));
     }
     await clearSessionCookie();
     const logoutResponse = NextResponse.json({ ok:true });
     logoutResponse.headers.set('Set-Cookie', 'nucrm_csrf_token=; Path=/; SameSite=Strict; Max-Age=0');
     return logoutResponse;
-  } catch {
+  } catch (e) {
+    console.error('[Auth] Logout failed:', e);
     await clearSessionCookie();
     const logoutResponse = NextResponse.json({ ok:true });
     logoutResponse.headers.set('Set-Cookie', 'nucrm_csrf_token=; Path=/; SameSite=Strict; Max-Age=0');

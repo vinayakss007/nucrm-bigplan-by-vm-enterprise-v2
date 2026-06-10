@@ -106,7 +106,8 @@ async function fetchOAuth2Token(
     if (!res.ok) return null;
     const data = await res.json() as Record<string, unknown>;
     return (data['access_token'] as string) || null;
-  } catch {
+  } catch (e) {
+    console.error('[Plugin] Token exchange failed:', e);
     return null;
   }
 }
@@ -152,7 +153,8 @@ export async function executePluginAction(
       const interpolatedBody = interpolate(action.bodyTemplate, params);
       try {
         requestBody = JSON.parse(interpolatedBody);
-      } catch {
+      } catch (e) {
+        console.warn('[Plugin] Body template is not valid JSON, using as raw string:', e);
         requestBody = interpolatedBody;
       }
       if (!requestHeaders['Content-Type']) {
@@ -199,8 +201,8 @@ export async function executePluginAction(
     let data: unknown = responseBody;
     try {
       data = JSON.parse(responseBody);
-    } catch {
-      // Leave as text
+    } catch (e) {
+      console.warn('[Plugin] Response is not valid JSON, leaving as raw text:', e);
     }
 
     // Apply response mapping if configured
@@ -327,8 +329,7 @@ async function logExecution(
       success: details.success,
       errorMessage: details.errorMessage ?? null,
     });
-  } catch {
-    // Don't fail the action if logging fails
-    console.error('[PluginEngine] Failed to log execution');
+  } catch (e) {
+    console.error('[PluginEngine] Failed to log execution:', e);
   }
 }

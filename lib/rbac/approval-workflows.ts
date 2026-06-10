@@ -102,7 +102,7 @@ export async function requestApproval(
     eventType: 'approval_requested',
     description: `Approval requested for ${entityType} ${entityId}`,
     metadata: { ruleId },
-  }).catch(() => {});
+  }).catch((e) => console.warn('[Approval] Failed to log audit', e));
 
   return result as unknown as ApprovalRequest;
 }
@@ -135,7 +135,7 @@ export async function approveRequest(
       eventType: 'approval_approved',
       description: `Approval granted for ${result.entityType} ${result.entityId}`,
       metadata: { requestId },
-    }).catch(() => {});
+    }).catch((e) => console.warn('[Approval] Failed to log approval activity', e));
   }
 
   return result;
@@ -171,7 +171,7 @@ export async function rejectRequest(
       eventType: 'approval_rejected',
       description: `Approval rejected for ${result.entityType} ${result.entityId}: ${reason}`,
       metadata: { requestId, reason },
-    }).catch(() => {});
+    }).catch((e) => console.warn('[Approval] Failed to log rejection activity', e));
   }
 
   return result;
