@@ -28,8 +28,8 @@ export async function hasCompletedOnboarding(tenantId: string, userId: string): 
     });
 
     return !!result;
-  } catch {
-    // If table doesn't exist or query fails, don't block the user
+  } catch (e) {
+    console.error('[Onboarding] Check failed, defaulting to complete:', e);
     return true;
   }
 }

@@ -26,8 +26,9 @@ async function getPgDumpVersion(): Promise<string> {
   try {
     const { stdout } = await exec('pg_dump --version');
     return stdout.trim();
-  } catch {
-    return 'unknown';
+  } catch (e) {
+    console.error('[Backup] Backup failed:', e);
+    return { success: false, error: 'Backup failed' };
   }
 }
 

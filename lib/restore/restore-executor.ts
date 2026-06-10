@@ -151,7 +151,8 @@ export async function createPreRestoreSnapshot(
       const result = await db.execute(sql.raw(`SELECT * FROM public.${table} WHERE tenant_id = '${tenantId}'`));
       snapshotData[table] = result.rows;
       totalRecords += result.rows.length;
-    } catch {
+    } catch (e) {
+      console.warn('[Restore] Failed to snapshot table:', table, e);
       snapshotData[table] = [];
     }
   }
@@ -357,7 +358,8 @@ export async function countExistingRecords(
         `SELECT count(*)::int as cnt FROM public.${table} WHERE tenant_id = '${tenantId}'`
       ));
       counts[table] = (result.rows[0] as any)?.cnt ?? 0;
-    } catch {
+    } catch (e) {
+      console.warn('[Restore] Failed to count table:', table, e);
       counts[table] = 0;
     }
   }

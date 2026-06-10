@@ -110,8 +110,8 @@ export async function anonymizeTenantData(tenantId: string): Promise<GDPRDeletio
     const count = Number(result.rowCount) || 0;
     categoryCounts['contacts'] = count;
     totalAnonymized += count;
-  } catch { /* table may not exist */ }
-
+  } catch (e) { console.warn('[GDPR] Contacts table may not exist:', e); }
+ 
   // Anonymize companies
   try {
     const result = await db.execute(
@@ -124,8 +124,8 @@ export async function anonymizeTenantData(tenantId: string): Promise<GDPRDeletio
     const count = Number(result.rowCount) || 0;
     categoryCounts['companies'] = count;
     totalAnonymized += count;
-  } catch { /* table may not exist */ }
-
+  } catch (e) { console.warn('[GDPR] Companies table may not exist:', e); }
+ 
   // Anonymize notes
   try {
     const result = await db.execute(
@@ -138,8 +138,8 @@ export async function anonymizeTenantData(tenantId: string): Promise<GDPRDeletio
     const count = Number(result.rowCount) || 0;
     categoryCounts['notes'] = count;
     totalAnonymized += count;
-  } catch { /* table may not exist */ }
-
+  } catch (e) { console.warn('[GDPR] Notes table may not exist:', e); }
+ 
   // Anonymize activities
   try {
     const result = await db.execute(
@@ -152,8 +152,8 @@ export async function anonymizeTenantData(tenantId: string): Promise<GDPRDeletio
     const count = Number(result.rowCount) || 0;
     categoryCounts['activities'] = count;
     totalAnonymized += count;
-  } catch { /* table may not exist */ }
-
+  } catch (e) { console.warn('[GDPR] Activities table may not exist:', e); }
+ 
   // Soft-delete email logs
   try {
     const result = await db.execute(
@@ -166,8 +166,8 @@ export async function anonymizeTenantData(tenantId: string): Promise<GDPRDeletio
     const count = Number(result.rowCount) || 0;
     categoryCounts['emails'] = count;
     totalAnonymized += count;
-  } catch { /* table may not exist */ }
-
+  } catch (e) { console.warn('[GDPR] Email logs table may not exist:', e); }
+ 
   return {
     tenantId,
     processedAt: new Date().toISOString(),

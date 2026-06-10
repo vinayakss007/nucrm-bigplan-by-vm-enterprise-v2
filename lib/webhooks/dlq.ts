@@ -142,7 +142,8 @@ export async function retryFromDLQ(dlqEntryId: string): Promise<boolean> {
   try {
     await processWebhookDelivery(payload.deliveryId, payload.url);
     return true;
-  } catch {
+  } catch (e) {
+    console.error('[DLQ] Retry delivery failed:', e);
     return false;
   }
 }
@@ -159,7 +160,8 @@ export async function bulkRetryDLQ(dlqEntryIds: string[]): Promise<{ succeeded: 
       const result = await retryFromDLQ(id);
       if (result) succeeded++;
       else failed++;
-    } catch {
+    } catch (e) {
+      console.error('[DLQ] Bulk retry failed for entry:', id, e);
       failed++;
     }
   }

@@ -174,8 +174,8 @@ export function clearExpiredCache(): void {
         if (isStale(entry)) {
           keysToRemove.push(key);
         }
-      } catch {
-        // Invalid JSON, remove
+      } catch (e) {
+        console.warn('[Cache] Invalid JSON in cache entry:', key, e);
         keysToRemove.push(key);
       }
     }
@@ -228,7 +228,8 @@ export function getCacheStats(): { total: number; size: number; entries: Array<{
           key: key.replace(CACHE_PREFIX, ''),
           age: Date.now() - entry.timestamp,
         });
-      } catch {
+      } catch (e) {
+        console.warn('[Cache] Failed to parse cache entry for stats:', key, e);
         entries.push({ key: key.replace(CACHE_PREFIX, ''), age: -1 });
       }
     }

@@ -25,8 +25,8 @@ const BLOCKED_FUNCTIONS = [
 for (const fn of BLOCKED_FUNCTIONS) {
   try {
     delete (math as any)[fn];
-  } catch {
-    // Some may not exist, that's fine
+  } catch (e) {
+    console.warn('[Formula] Failed to block dangerous function:', fn, e);
   }
 }
 

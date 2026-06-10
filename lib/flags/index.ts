@@ -55,7 +55,8 @@ async function getFlagOverrides(): Promise<Record<string, FlagOverride>> {
     await redis.connect();
     const raw = await redis.get('flags:overrides');
     return raw ? JSON.parse(raw) : {};
-  } catch {
+  } catch (e) {
+    console.error('[Flags] Failed to get flag overrides from Redis:', e);
     return {};
   } finally {
     redis.disconnect();

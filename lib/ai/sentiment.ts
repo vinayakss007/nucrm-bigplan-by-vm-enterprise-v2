@@ -67,8 +67,9 @@ function parseSentimentResponse(raw: string): SentimentResult {
       confidence: clamp(parsed.confidence ?? 50, 0, 100),
       summary: String(parsed.summary ?? '').slice(0, 300),
     };
-  } catch {
-    return fallbackSentiment(raw);
+  } catch (e) {
+    console.error('[Sentiment] Failed to parse AI response as JSON, using fallback:', e);
+    return fallbackSentiment(cleaned);
   }
 }
 

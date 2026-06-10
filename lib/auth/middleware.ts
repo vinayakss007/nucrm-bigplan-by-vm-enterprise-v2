@@ -39,7 +39,9 @@ async function extractToken(request: NextRequest): Promise<string | null> {
     const store = await cookies();
     const val = store.get('nucrm_session')?.value;
     if (val) return val;
-  } catch {}
+  } catch (e) {
+    console.error('[Auth] Failed to read cookie store:', e);
+  }
   return request.cookies.get('nucrm_session')?.value ?? null;
 }
 

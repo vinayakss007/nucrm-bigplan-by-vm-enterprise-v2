@@ -549,8 +549,8 @@ function parseMessageResponse(raw: string): { subject: string; body: string } {
   try {
     const parsed = JSON.parse(cleaned);
     return { subject: parsed.subject || '', body: parsed.body || '' };
-  } catch {
-    // If not JSON, use raw text as body
+  } catch (e) {
+    console.warn('[LeadWarming] Failed to parse AI response as JSON, using raw text:', e);
     return { subject: '', body: cleaned };
   }
 }

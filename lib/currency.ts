@@ -164,8 +164,8 @@ export function formatCurrency(
       style: 'currency',
       currency: currencyCode,
     }).format(amount);
-  } catch {
-    // Fallback for unsupported locale/currency combo
+  } catch (e) {
+    console.warn('[Currency] Format failed, using fallback:', currencyCode, locale, e);
     const info = SUPPORTED_CURRENCIES.find(c => c.code === currencyCode);
     const symbol = info?.symbol || currencyCode;
     return `${symbol}${amount.toFixed(info?.decimalPlaces ?? 2)}`;

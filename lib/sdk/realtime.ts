@@ -40,8 +40,8 @@ export class RealtimeSDK {
         const data = await res.json() as { ticket: string };
         return data.ticket;
       }
-    } catch {
-      // Fall back to API key if ticket endpoint is unavailable
+    } catch (e) {
+      console.warn('[RealtimeSDK] Ticket fetch failed, using API key directly:', e);
     }
     return this.apiKey;
   }
@@ -61,8 +61,8 @@ export class RealtimeSDK {
         const parsed = JSON.parse(event.data as string) as RealtimeEvent;
         this.dispatch(parsed.type, parsed);
         this.dispatch(parsed.channel, parsed);
-      } catch {
-        // Ignore malformed messages
+      } catch (e) {
+        console.warn('[RealtimeSDK] Ignoring malformed SSE message:', e);
       }
     };
 
