@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
       .catch(() => ({ totalTenants: 0, activeTenants: 0, trialingTenants: 0, suspendedTenants: 0 })),
     ]);
 
-    const s = (statsRes.rows[0] as any)?.data ?? {};
+    const s = ((statsRes.rows[0] as Record<string, unknown>)?.data ?? {}) as Record<string, unknown>;
     const mrr = Number(s.mrr ?? 0);
 
     const response = {

@@ -9,7 +9,7 @@ let DOMPurify: ReturnType<typeof createDOMPurify> | null = null;
 
 function getDOMPurify(windowRef: Window) {
   if (!DOMPurify) {
-    DOMPurify = createDOMPurify(windowRef as any);
+    DOMPurify = createDOMPurify(windowRef as unknown as Parameters<typeof createDOMPurify>[0]);
   }
   return DOMPurify;
 }

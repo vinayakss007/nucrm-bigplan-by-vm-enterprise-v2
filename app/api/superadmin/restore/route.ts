@@ -119,15 +119,15 @@ export async function POST(request: NextRequest) {
     await db.insert(errorLogs).values({
       level: 'warn',
       code: 'RESTORE_INITIATED',
-      message: `Database restore initiated from backup: ${(backup as any).storagePath} by user ${ctx.userId}`,
+      message: `Database restore initiated from backup: ${backup.storagePath} by user ${ctx.userId}`,
     }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
-    let localPath = (backup as any).storagePath;
+    let localPath = backup.storagePath;
     let tempFileCreated = false;
 
     // Download from S3 if needed
     if (['s3', 's3_r2'].includes(backup.storageType || '')) {
-      localPath = await downloadFromS3({ storagePath: (backup as any).storagePath, id: backup.id }, {
+      localPath = await downloadFromS3({ storagePath: backup.storagePath, id: backup.id }, {
         bucket: process.env.BACKUP_BUCKET || '',
         region: process.env.AWS_REGION,
         endpoint: process.env.AWS_ENDPOINT_URL,
@@ -153,12 +153,12 @@ export async function POST(request: NextRequest) {
     await db.insert(errorLogs).values({
       level: 'info',
       code: 'RESTORE_COMPLETED',
-      message: `Database restore completed from ${(backup as any).storagePath} in ${durationMs}ms`,
+      message: `Database restore completed from ${backup.storagePath} in ${durationMs}ms`,
     }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({
       ok: true,
-      message: `Database restored from backup: ${(backup as any).storagePath}`,
+      message: `Database restored from backup: ${backup.storagePath}`,
       duration_ms: durationMs,
     });
   } catch (err: any) {

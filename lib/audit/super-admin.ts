@@ -79,7 +79,7 @@ async function getPreviousSuperAdminHash(): Promise<string | null> {
     ORDER BY created_at DESC
     LIMIT 1
   `);
-  const rows = (result as unknown as any[]);
+  const rows = (result as unknown as Record<string, unknown>[]);
   return rows?.[0]?.hash ?? null;
 }
 
@@ -199,7 +199,7 @@ export async function verifySuperAdminAuditChain(limit = 10000): Promise<SuperAd
     LIMIT ${limit}
   `);
 
-  const logs = result as unknown as any[];
+  const logs = result as unknown as Record<string, unknown>[];
 
   if (logs.length === 0) {
     return { valid: true, totalChecked: 0, brokenAtIndex: null, brokenEntryId: null, details: 'No audit logs to verify' };
@@ -324,7 +324,7 @@ export async function getSuperAdminAuditLogs(filters: {
 
   return {
     data: results,
-    total: (countResult as any)?.[0]?.total || 0,
+    total: (countResult as unknown as { total?: number }[])?.[0]?.total || 0,
     limit,
     offset,
   };

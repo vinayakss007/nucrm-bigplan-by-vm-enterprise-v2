@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
 
     const [t] = await db.select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1);
-    const stored = ((t?.settings as any) ?? {}).picklists ?? {};
+    const stored = (((t?.settings as Record<string, unknown>) ?? {}).picklists ?? {}) as Record<string, unknown>;
 
     const result: Record<PicklistCategory, PicklistEntry[]> = { ...DEFAULTS };
     for (const cat of CATEGORIES) {
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  let ctx: any;
+  let ctx: Awaited<ReturnType<typeof requireAuth>>;
   try {
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;

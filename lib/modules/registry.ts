@@ -301,7 +301,7 @@ export class ModuleRegistry {
       where: eq(modules.id, moduleId),
       columns: { manifest: true }
     });
-    const savedPricing = (dbModule?.manifest as any)?.pricing;
+    const savedPricing = (dbModule?.manifest as { pricing?: Record<string, unknown> } | undefined)?.pricing;
     const pricing = savedPricing || manifest.pricing;
 
     // Check tenant's plan

@@ -126,7 +126,7 @@ async function createRedisAdapter(redisUrl: string): Promise<QueueAdapter> {
 async function createPgBossAdapter(databaseUrl: string): Promise<QueueAdapter> {
   // Dynamic import - only loads if pg-boss is needed
   const PgBossModule = await import('pg-boss');
-  const PgBoss = (PgBossModule as any).default || PgBossModule;
+  const PgBoss = (PgBossModule as { default?: new (...args: unknown[]) => unknown }).default || PgBossModule;
 
   const boss = new PgBoss({ connectionString: databaseUrl });
   await boss.start();
