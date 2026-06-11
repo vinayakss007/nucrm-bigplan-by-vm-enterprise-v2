@@ -41,7 +41,7 @@ async function sendViaResend(payload: EmailPayload): Promise<SendResult> {
       }),
     });
 
-    const data = await res.json() as any;
+    const data = await res.json() as { id?: string; message?: string };
     if (res.ok) {
       return { success: true, provider: 'resend', messageId: data.id };
     }

@@ -131,14 +131,14 @@ export async function POST(request: NextRequest) {
           monthlyBudgetCents: monthly_budget_cents ?? 0,
           hardCapEnabled: hard_cap_enabled ?? true,
           billingPeriod: sql`TO_CHAR(NOW(), 'YYYY-MM')`,
-        } as any)
+        })
         .onConflictDoUpdate({
-          target: [tokenBudgets.service, tokenBudgets.billingPeriod] as any,
+          target: [tokenBudgets.service, tokenBudgets.billingPeriod],
           set: {
             monthlyBudgetCents: monthly_budget_cents ?? 0,
             hardCapEnabled: hard_cap_enabled ?? true,
             updatedAt: new Date(),
-          } as any,
+          },
         });
       
       return NextResponse.json({ success: true, message: `Updated ${service} global budget` });
@@ -165,9 +165,9 @@ export async function POST(request: NextRequest) {
           scoreMonthlyCnt: (limits['score_monthly_cnt'] as number) ?? -1,
           totalMonthlyCost: (limits['total_monthly_cost'] as number) ?? -1,
           setBy: ctx.userId,
-        } as any)
+        })
         .onConflictDoUpdate({
-          target: [tenantTokenLimits.tenantId] as any,
+          target: [tenantTokenLimits.tenantId],
           set: {
             openaiMonthlyLimit: (limits['openai_monthly_limit'] as number) ?? -1,
             whatsappMonthlyMsgs: (limits['whatsapp_monthly_msgs'] as number) ?? -1,
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
             totalMonthlyCost: (limits['total_monthly_cost'] as number) ?? -1,
             setBy: ctx.userId,
             updatedAt: new Date(),
-          } as any,
+          },
         });
       
       return NextResponse.json({ success: true, message: 'Updated tenant AI limits' });
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
           acknowledgedBy: ctx.userId, 
           acknowledgedAt: new Date() 
         })
-        .where(eq(usageAlerts.id, alert_id) as any);
+        .where(eq(usageAlerts.id, alert_id));
       
       return NextResponse.json({ success: true });
     }

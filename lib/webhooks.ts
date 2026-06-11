@@ -61,7 +61,7 @@ export async function fireWebhooks(
     const payload = JSON.stringify(payloadObj);
 
     for (const hook of hooks) {
-      const config = hook.config as any;
+      const config = hook.config as { url?: string; events?: string[]; secret?: string; headers?: Record<string, string> };
       const url = config?.url;
       if (!url) continue;
 

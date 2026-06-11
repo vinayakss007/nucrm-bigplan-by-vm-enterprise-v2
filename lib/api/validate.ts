@@ -83,7 +83,7 @@ export function withValidation<T>(
     if (result instanceof NextResponse) return result;
 
     // Extract auth context from request (set by middleware or requireAuth)
-    const ctx = (request as any).ctx;
+    const ctx = (request as unknown as { ctx: Record<string, unknown> }).ctx;
 
     return handler(request, ctx, result.data);
   };

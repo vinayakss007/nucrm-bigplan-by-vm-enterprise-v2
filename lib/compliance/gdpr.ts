@@ -9,18 +9,20 @@
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 
+type GDPRDataCategory = Record<string, unknown>[];
+
 export interface GDPRExportData {
   tenantId: string;
   exportedAt: string;
   categories: {
-    contacts: any[];
-    companies: any[];
-    deals: any[];
-    tasks: any[];
-    activities: any[];
-    emails: any[];
-    notes: any[];
-    files: any[];
+    contacts: GDPRDataCategory;
+    companies: GDPRDataCategory;
+    deals: GDPRDataCategory;
+    tasks: GDPRDataCategory;
+    activities: GDPRDataCategory;
+    emails: GDPRDataCategory;
+    notes: GDPRDataCategory;
+    files: GDPRDataCategory;
   };
   metadata: {
     totalRecords: number;
@@ -71,7 +73,7 @@ export async function exportTenantData(tenantId: string): Promise<GDPRExportData
   );
 
   for (const { key, rows } of results) {
-    categories[key] = rows as any[];
+    categories[key] = rows as GDPRDataCategory;
   }
 
   const totalRecords = Object.values(categories).reduce((sum, arr) => sum + arr.length, 0);
@@ -82,7 +84,7 @@ export async function exportTenantData(tenantId: string): Promise<GDPRExportData
     categories,
     metadata: {
       totalRecords,
-      dataCategories: Object.keys(categories).filter(k => (categories as any)[k].length > 0),
+      dataCategories: (Object.keys(categories) as Array<keyof typeof categories>).filter(k => categories[k].length > 0),
     },
   };
 }

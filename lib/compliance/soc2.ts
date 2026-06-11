@@ -104,15 +104,15 @@ async function evaluateSecurityControls(
   // CC6.1, CC6.2, CC7.1 — Run 3 queries in parallel (was sequential)
   const [rolesRes, ssoRes, logsRes] = await Promise.all([
     db.execute(sql`SELECT COUNT(*)::int as count FROM roles WHERE tenant_id = ${tenantId}`)
-      .then(r => ({ count: (r.rows[0] as any)?.count || 0 }))
+      .then(r => ({ count: (r.rows[0] as { count?: number })?.count || 0 }))
       .catch(() => ({ count: 0 })),
     db.execute(sql`SELECT COUNT(*)::int as count FROM sso_providers WHERE tenant_id = ${tenantId} AND is_active = true`)
-      .then(r => ({ count: (r.rows[0] as any)?.count || 0 }))
+      .then(r => ({ count: (r.rows[0] as { count?: number })?.count || 0 }))
       .catch(() => ({ count: 0 })),
     db.execute(sql`SELECT COUNT(*)::int as count FROM audit_logs 
         WHERE tenant_id = ${tenantId} 
         AND created_at >= ${periodStart.toISOString()}::timestamptz`)
-      .then(r => ({ count: (r.rows[0] as any)?.count || 0 }))
+      .then(r => ({ count: (r.rows[0] as { count?: number })?.count || 0 }))
       .catch(() => ({ count: 0 })),
   ]);
 
@@ -217,7 +217,7 @@ async function evaluateIntegrityControls(
           AND action IN ('update', 'delete', 'create')
           AND created_at >= ${periodStart.toISOString()}::timestamptz`
     );
-    changeCount = (changes.rows[0] as any)?.count || 0;
+    changeCount = (changes.rows[0] as { count?: number })?.count || 0;
   } catch { /* table may not exist */ }
 
   controls.push({
@@ -298,7 +298,7 @@ async function evaluatePrivacyControls(
       sql`SELECT COUNT(*)::int as count FROM data_retention_policies 
           WHERE tenant_id = ${tenantId} AND is_active = true`
     );
-    retentionConfigured = ((retention.rows[0] as any)?.count || 0) > 0;
+    retentionConfigured = ((retention.rows[0] as { count?: number })?.count || 0) > 0;
   } catch { /* table may not exist */ }
 
   controls.push({

@@ -356,7 +356,8 @@ export async function countExistingRecords(
       const result = await db.execute(sql.raw(
         `SELECT count(*)::int as cnt FROM public.${table} WHERE tenant_id = '${tenantId}'`
       ));
-      counts[table] = (result.rows[0] as any)?.cnt ?? 0;
+      const row = result.rows[0] as { cnt?: number } | undefined;
+      counts[table] = row?.cnt ?? 0;
     } catch {
       counts[table] = 0;
     }

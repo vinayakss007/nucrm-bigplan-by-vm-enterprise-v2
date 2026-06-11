@@ -54,7 +54,7 @@ export async function moveToDeadLetterQueue(deliveryId: string): Promise<string 
     return null; // Only failed deliveries go to DLQ
   }
 
-  const metadata = (delivery.metadata as any) || {};
+  const metadata = (delivery.metadata as Record<string, unknown>) || {};
   const url = metadata.url || '';
 
   // Insert into the dead_letter_queue table
@@ -103,7 +103,7 @@ export async function retryFromDLQ(dlqEntryId: string): Promise<boolean> {
     throw new Error(`DLQ entry ${dlqEntryId} is not retryable (status: ${entry.status})`);
   }
 
-  const payload = entry.payload as any;
+  const payload = entry.payload as { deliveryId?: string; headers?: Record<string, unknown> };
   if (!payload || !payload.deliveryId) {
     throw new Error('Invalid DLQ payload — missing deliveryId');
   }

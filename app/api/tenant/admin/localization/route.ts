@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       .where(eq(tenants.id, ctx.tenantId))
       .limit(1);
 
-    const stored = ((t?.settings as any) ?? {}).localization ?? {};
+    const stored = (((t?.settings as Record<string, unknown>) ?? {}).localization ?? {}) as Record<string, unknown>;
     return NextResponse.json({ localization: { ...DEFAULTS, ...stored } });
   } catch (err: any) {
     return apiError(err);
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  let ctx: any;
+  let ctx: Awaited<ReturnType<typeof requireAuth>>;
   try {
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -123,7 +123,7 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ error: 'max 200 holidays' }, { status: 400 });
     }
 
-    const safe: any = {};
+    const safe: Record<string, unknown> = {};
     if (incoming.timezone !== undefined) safe.timezone = String(incoming.timezone).slice(0, 100);
     if (incoming.currency !== undefined) safe.currency = String(incoming.currency).toUpperCase();
     if (incoming.fiscal_year_start_month !== undefined) safe.fiscal_year_start_month = Number(incoming.fiscal_year_start_month);
@@ -139,7 +139,7 @@ export async function PATCH(req: NextRequest) {
       };
     }
     if (holidays !== undefined) {
-      safe.holidays = (holidays as any[]).map(h => ({ date: h.date, name: String(h.name).trim().slice(0, 200) }));
+      safe.holidays = (holidays as { date: string; name: string }[]).map(h => ({ date: h.date, name: String(h.name).trim().slice(0, 200) }));
     }
 
     // Merge into tenants.settings.localization without touching siblings

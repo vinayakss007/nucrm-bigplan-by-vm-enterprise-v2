@@ -232,7 +232,7 @@ async function processCampaign(
  * Get contacts eligible for warming (respecting filters, cooldown, opt-out)
  */
 async function getEligibleContacts(campaign: any): Promise<ContactToWarm[]> {
-  const filter = campaign.targetFilter as any || {};
+  const filter = (campaign.targetFilter as Record<string, unknown>) || {};
 
   // Build WHERE conditions
   const conditions: any[] = [
@@ -604,7 +604,7 @@ export async function seedSystemEvents(): Promise<number> {
     try {
       await db.insert(leadWarmingEvents)
         .values({
-          tenantId: null as any, // System events have no tenant
+          tenantId: null as unknown as string, // System events have no tenant
           name: festival.name,
           eventType: festival.eventType,
           recurrence: 'yearly',

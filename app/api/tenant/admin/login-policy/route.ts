@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
       .where(eq(tenants.id, ctx.tenantId))
       .limit(1);
 
-    const stored = ((t?.settings as any) ?? {}).login_policy ?? {};
+    const stored = (((t?.settings as Record<string, unknown>) ?? {}).login_policy ?? {}) as Record<string, unknown>;
 
     // Deep-merge defaults <- stored
     const merged = {
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  let ctx: any;
+  let ctx: Awaited<ReturnType<typeof requireAuth>>;
   try {
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -93,7 +93,7 @@ export async function PATCH(req: NextRequest) {
     if (!incoming || typeof incoming !== 'object')
       return NextResponse.json({ error: 'login_policy object required' }, { status: 400 });
 
-    const safe: any = {};
+    const safe: Record<string, unknown> = {};
 
     // Password
     if (incoming.password && typeof incoming.password === 'object') {

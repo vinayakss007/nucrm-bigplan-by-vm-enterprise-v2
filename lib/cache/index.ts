@@ -30,7 +30,7 @@ function getRedisClient(): Redis {
     if (!redisUrl) {
       // Fallback to in-memory cache if Redis not available
       console.warn('[Cache] Redis not configured, using in-memory cache');
-      return null as any;
+      return null as unknown as Redis;
     }
 
     redis = new Redis(redisUrl, {
@@ -149,7 +149,7 @@ async function acquireLock(key: string): Promise<boolean> {
   const redis = getRedisClient();
   if (!redis) return true;
   try {
-    const result = await (redis.set as any)(`nucrm:lock:${key}`, '1', 'EX', LOCK_TTL, 'NX');
+    const result = await redis.call('SET', `nucrm:lock:${key}`, '1', 'EX', LOCK_TTL, 'NX');
     return result === 'OK';
   } catch {
     return false;

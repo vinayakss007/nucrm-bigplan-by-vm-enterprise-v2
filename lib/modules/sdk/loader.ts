@@ -52,7 +52,7 @@ class ModuleLoader {
     return rows
       .filter(r => r.manifest && typeof r.manifest === 'object')
       .map(r => {
-        const manifest = r.manifest as any;
+        const manifest = r.manifest as Record<string, unknown>;
         return {
           id: r.id,
           name: r.name,

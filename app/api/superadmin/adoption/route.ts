@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
             AND COALESCE(settings->'out_of_office'->>'end_date',   '0001-01-01') >= ${today})::int AS users_ooo
     `);
 
-    const row = (result as any).rows?.[0] ?? {};
+    const row = (result.rows?.[0] ?? {}) as Record<string, unknown>;
 
     return NextResponse.json({
       total_tenants: Number(row.total_tenants) || 0,

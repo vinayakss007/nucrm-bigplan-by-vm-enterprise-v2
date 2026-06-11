@@ -188,7 +188,7 @@ export async function recordUsage(
     .values({
       tenantId,
       moduleName: module,
-      billingPeriod: currentPeriod as any,
+      billingPeriod: currentPeriod as unknown as string,
       count: 1,
       tokensUsed,
       costCents: actualCostCents,
@@ -329,15 +329,23 @@ async function getGlobalBudget(service: string) {
     )
   });
 
-  return result || {
+  const fallback: typeof tokenBudgets.$inferSelect = {
+    id: '',
     service,
-    monthly_budget_cents: 0,
-    current_month_cents: 0,
-    hard_cap_enabled: true,
-    alert_at_50pct: true,
-    alert_at_80pct: true,
-    alert_at_100pct: true,
-  } as any;
+    monthlyBudgetCents: 0,
+    currentMonthCents: 0,
+    hardCapEnabled: true,
+    alertAt50pct: true,
+    alertAt80pct: true,
+    alertAt100pct: true,
+    softCapEnabled: true,
+    billingPeriod: '',
+    resetDay: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    deletedAt: null,
+  };
+  return result || fallback;
 }
 
 async function getTenantLimits(tenantId: string) {
