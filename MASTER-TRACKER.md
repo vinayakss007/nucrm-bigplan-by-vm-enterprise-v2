@@ -1,6 +1,6 @@
 # NuCRM Enterprise — Master Tracker
 
-**Last Updated:** 2026-06-09 (Session 5 — Security audit + open branch cleanup)
+**Last Updated:** 2026-06-11 (Session 6 — as any reduction + jsonb metadata fixes)
 **Rule:** Every fix/feature gets a GitHub issue → a branch → a PR → merge to main.
 **No direct commits to main.** Everything trackable.
 
@@ -105,7 +105,9 @@ Previously created issues and branches — all merged to main in Session 4.
 
 ## OPEN PULL REQUESTS
 
-*None — all PRs merged to main.*
+| PR | Issue | Title | Branch |
+|----|-------|-------|--------|
+| #220 | #157 | fix: reduce as many assertions in lib/ and app/api/ routes (Session 6) | `fix/continue-as-any-fixes` 🟡 |
 
 ## RECENTLY MERGED
 
