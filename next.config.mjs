@@ -6,9 +6,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 let nextConfig = {
   allowedDevOrigins: ['34.55.131.136', '34.29.235.190', '136.119.162.223', 'localhost:3000', '4bc0-34-58-30-100.ngrok-free.app', '34.170.154.229', '34.30.91.246'],
-  turbopack: {
-    root: __dirname,
-  },
 
   // TypeScript — ignore build errors in CI only
   typescript: {

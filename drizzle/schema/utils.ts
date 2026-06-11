@@ -35,8 +35,8 @@ export const deletedAt = () => timestamp('deleted_at', { withTimezone: true });
 export const metadata = () => jsonb('metadata').default({});
 
 export const createdBy = (): any => uuid('created_by');
-export const updatedBy = (): any => uuid('updated_by').references(() => { const { users } = require('./core'); return users.id; }, { onDelete: 'set null' });
-export const deletedBy = (): any => uuid('deleted_by').references(() => { const { users } = require('./core'); return users.id; }, { onDelete: 'set null' });
+export const updatedBy = (): any => uuid('updated_by');
+export const deletedBy = (): any => uuid('deleted_by');
 
 // =============================================================================
 // HELPERS
