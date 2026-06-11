@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
         WHERE t.id = ${ctx.tenantId}
         LIMIT 1`
   );
-  const row = (result as any).rows?.[0] ?? { industry: null, plan_name: 'free' };
+  const row = (result.rows?.[0] ?? {}) as { industry?: string | null; plan_name?: string };
 
   const layoutResult = await resolveDashboardLayout(
     ctx.tenantId,
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
         WHERE t.id = ${ctx.tenantId}
         LIMIT 1`
   );
-  const row = (result as any).rows?.[0] ?? { industry: null, plan_name: 'free' };
+  const row = (result.rows?.[0] ?? {}) as { industry?: string | null; plan_name?: string };
 
   const layoutResult = await resolveDashboardLayout(
     ctx.tenantId,

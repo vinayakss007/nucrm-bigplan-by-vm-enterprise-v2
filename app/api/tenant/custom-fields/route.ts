@@ -294,7 +294,7 @@ export async function POST(req: NextRequest) {
   }
 
   const VALID_TYPES = ['text','number','date','boolean','select','multiselect','url','email','phone','textarea','json','formula'] as const;
-  const safeType = VALID_TYPES.includes(fieldType as any) ? fieldType : 'text';
+  const safeType = (VALID_TYPES as readonly string[]).includes(fieldType) ? fieldType : 'text';
 
   const results = await db.insert(customFieldDefs)
     .values({

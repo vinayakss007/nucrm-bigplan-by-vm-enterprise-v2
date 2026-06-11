@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       // 2. Create actions if provided
       if (actions.length > 0) {
         const actionValues = actions.map((action: any, index: number) => ({
-          workflowId: (newWorkflow as any)[0].id,
+          workflowId: newWorkflow.id,
           tenantId: ctx.tenantId,
           orderIndex: index + 1,
           actionType: action.action_type || 'email',

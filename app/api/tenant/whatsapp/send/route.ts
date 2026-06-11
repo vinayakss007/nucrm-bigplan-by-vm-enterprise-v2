@@ -41,9 +41,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'WhatsApp integration not configured' }, { status: 400 });
     }
 
-    const config = integration.config as any;
-    const phoneNumberId = config?.phone_number_id;
-    const accessToken = config?.access_token;
+    const config = integration.config as Record<string, unknown>;
+    const phoneNumberId = config?.phone_number_id as string | undefined;
+    const accessToken = config?.access_token as string | undefined;
 
     if (!phoneNumberId || !accessToken) {
       return NextResponse.json({ error: 'WhatsApp credentials not configured' }, { status: 400 });

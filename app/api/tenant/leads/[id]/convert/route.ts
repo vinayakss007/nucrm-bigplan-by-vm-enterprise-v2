@@ -19,7 +19,7 @@ import { logError } from '@/lib/errors-server';
 
 export async function POST(
   request: NextRequest, 
-  { params }: any
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
     const ctx = await requireAuth(request);
@@ -135,7 +135,7 @@ export async function POST(
           phone: lead.phone || undefined,
           jobTitle: lead.title || undefined,
           companyId: companyId || undefined,
-          assignedTo: assignee as any,
+          assignedTo: assignee,
           leadStatus: 'qualified',
           lifecycleStage: 'opportunity',
           score: sql`GREATEST(coalesce(${contacts.score}, 0), ${lead.score ?? 0})`,
@@ -165,7 +165,7 @@ export async function POST(
             phone: lead.phone || undefined,
             jobTitle: lead.title || undefined,
             companyId: companyId || undefined,
-            assignedTo: assignee as any,
+            assignedTo: assignee,
             leadStatus: 'qualified',
             lifecycleStage: 'opportunity',
             score: Math.max(existing.score || 0, lead.score || 0),
@@ -199,13 +199,13 @@ export async function POST(
           country: lead.country || null,
           city: lead.city || null,
           linkedinUrl: lead.linkedinUrl || null,
-          assignedTo: assignee as any,
+          assignedTo: assignee,
           createdBy: ctx.userId,
           notes: newContactNotes,
           metadata: {
             source_lead_id: id,
             ...(hasDiscovery ? { discovery } : {}),
-          } as any,
+          },
         }).returning({ id: contacts.id });
         if (!contact) throw new Error('Failed to create contact');
         contactId = contact.id;
@@ -281,12 +281,12 @@ export async function POST(
             contactId: contactId,
             companyId: companyId,
             pipelineId: resolvedPipelineId,
-            assignedTo: assignee as any,
+            assignedTo: assignee,
             createdBy: ctx.userId,
             metadata: {
               source_lead_id: id,
               ...(hasDiscovery ? { discovery } : {}),
-            } as any,
+            },
           }).returning({ id: deals.id });
           if (!deal) throw new Error('Failed to create deal');
           dealId = deal.id;
@@ -327,7 +327,7 @@ export async function POST(
       await createNotification({
         userId: assignee,
         tenantId: ctx.tenantId,
-        type: 'contact_assigned' as any,
+        type: 'contact_assigned',
         title: `Lead converted: ${lead.firstName} ${lead.lastName ?? ''}`.trim(),
         body: result.dealId ? 'A new contact and deal have been created for you.' : 'A new contact has been created for you.',
         link: `/tenant/contacts/${result.contactId}`,

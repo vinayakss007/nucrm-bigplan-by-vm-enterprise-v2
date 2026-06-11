@@ -7,7 +7,7 @@ import { eq, and } from 'drizzle-orm';
 import { validateBody } from '@/lib/api/validate';
 import { updateWebhookSchema } from '@/lib/api/schemas';
 
-export async function PATCH(req: NextRequest, { params }: any) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -27,14 +27,14 @@ export async function PATCH(req: NextRequest, { params }: any) {
     
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     
-    const currentConfig = (existing.config as any) || {};
+    const currentConfig = (existing.config ?? {}) as Record<string, unknown>;
     const newConfig = {
       ...currentConfig,
       url: url || currentConfig.url,
       events: events || currentConfig.events,
     };
     
-    const updateData: any = { updatedAt: new Date() };
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (name !== undefined) updateData.name = name;
     if (is_active !== undefined) updateData.isActive = is_active;
     if (url !== undefined || events !== undefined) updateData.config = newConfig;
@@ -50,8 +50,8 @@ export async function PATCH(req: NextRequest, { params }: any) {
     return NextResponse.json({ 
       data: { 
         ...row, 
-        url: (row.config as any)?.url,
-        events: (row.config as any)?.events 
+        url: ((row.config as Record<string, unknown>)?.url as string | undefined),
+        events: ((row.config as Record<string, unknown>)?.events as string[] | undefined) 
       } 
     });
   } catch (err: any) { 
@@ -59,7 +59,7 @@ export async function PATCH(req: NextRequest, { params }: any) {
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: any) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;

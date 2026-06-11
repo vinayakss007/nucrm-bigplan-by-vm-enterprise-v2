@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
         (SELECT count(*)::int FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock') AS waiting,
         (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') AS max_conn
     `);
-    const poolRow = poolRes.rows[0] as any;
+    const poolRow = poolRes.rows[0] as Record<string, unknown>;
     push(metrics, 'nucrm_db_active_connections', 'Active DB connections', 'gauge', parseInt(poolRow?.active || '0'));
     push(metrics, 'nucrm_db_active_queries', 'DB connections running a query', 'gauge', parseInt(poolRow?.active_queries || '0'));
     push(metrics, 'nucrm_db_waiting_queries', 'DB connections waiting on lock', 'gauge', parseInt(poolRow?.waiting || '0'));

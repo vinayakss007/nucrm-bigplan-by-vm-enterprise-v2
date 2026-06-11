@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
             })
             .returning({ id: users.id, email: users.email });
           
-          ownerId = (newUser as any)?.[0]?.id;
+          ownerId = newUser?.id;
           if (!owner_password) temp_password = pwd;
         }
       }

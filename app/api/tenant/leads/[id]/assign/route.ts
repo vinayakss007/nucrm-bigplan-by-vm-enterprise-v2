@@ -29,7 +29,7 @@ const assignSchema = z.object({
   reason: z.string().trim().max(500).optional().nullable(),
 });
 
-export async function POST(request: NextRequest, { params }: any) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -157,7 +157,7 @@ export async function POST(request: NextRequest, { params }: any) {
       await createNotification({
         userId: newAssignee,
         tenantId: ctx.tenantId,
-        type: 'contact_assigned' as any,
+        type: 'contact_assigned' as string,
         title: `Lead handed off to you${lead.leadOid ? `: ${lead.leadOid}` : ''}`,
         body: `${lead.firstName} ${lead.lastName ?? ''}`.trim() + (reason ? ` — ${reason}` : ''),
         link: `/tenant/leads/${id}`,

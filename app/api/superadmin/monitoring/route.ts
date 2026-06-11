@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     let stats: any = {};
     try {
       const statsRes = await db.execute(sql`SELECT public.platform_stats() as data`).catch(() => ({ rows: [{ data: {} }] }));
-      stats = (statsRes.rows[0] as any)?.data ?? {};
+      stats = (statsRes.rows[0] as Record<string, unknown>)?.data as Record<string, unknown> ?? {};
       // Fill in missing fields computed from query data
       if (stats.mrr === undefined) stats.mrr = planDist.reduce((s: number, p: any) => s + (p.priceMonthly || 0) * (p.tenantCount || 0), 0);
       if (stats.trialing === undefined) stats.trialing = 0;
@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
         FROM public.health_checks 
         ORDER BY service, checked_at DESC
       `);
-      return res.rows as any[];
+      return res.rows as unknown[];
     }, []);
 
     // Get backup status

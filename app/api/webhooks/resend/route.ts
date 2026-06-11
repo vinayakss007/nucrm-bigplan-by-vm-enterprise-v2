@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
                 action: event.type
               }));
 
-              await tx.insert(activities).values(activityInserts as any);
+              await tx.insert(activities).values(activityInserts as typeof activities.$inferInsert[]);
               
               console.log(`[resend-webhook] ${event.type}: ${affectedContacts.length} contact(s) marked DNC for ${email}`);
             }

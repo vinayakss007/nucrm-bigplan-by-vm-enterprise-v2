@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
-    const configId = (config as any)?.[0]?.id;
+    const configId = config?.id;
 
     // Add participants to pool
     if (Array.isArray(participants) && participants.length > 0) {

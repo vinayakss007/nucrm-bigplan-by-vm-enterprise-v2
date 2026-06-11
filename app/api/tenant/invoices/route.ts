@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (contactId) {
-      whereConditions.push(eq(invoices.contactId, contactId as any));
+      whereConditions.push(eq(invoices.contactId, contactId));
     }
 
     const offset = (page - 1) * limit;
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       notes: notes ?? null,
       terms: terms ?? null,
       createdBy: userId,
-    } as any).returning();
+    } as typeof invoices.$inferInsert).returning();
 
     if (!invoice) throw new Error('Failed to create invoice');
 

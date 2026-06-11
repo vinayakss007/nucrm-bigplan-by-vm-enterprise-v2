@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
 
     if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
 
-    const settings = (tenant.settings as any) ?? {};
+    const settings = (tenant.settings as Record<string, unknown>) ?? {};
     const memberCount = await db
       .select({ c: sql<number>`count(*)::int` })
       .from(tenantMembers)

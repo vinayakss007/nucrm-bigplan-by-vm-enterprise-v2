@@ -118,7 +118,7 @@ export async function POST(
         eventType: event_type,
         description,
         metadata: metadata || {},
-      } as any)
+      } as typeof activities.$inferInsert)
       .returning();
 
     return NextResponse.json({

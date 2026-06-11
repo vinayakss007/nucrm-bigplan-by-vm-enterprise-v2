@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
       tenantId: ctx.tenantId, 
       userId: ctx.userId,
       event: 'contact.created', 
-      data: { ...(contact as any) },
+      data: { ...contact },
     }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({ data: contact }, { status: 201 });

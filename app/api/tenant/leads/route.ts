@@ -231,7 +231,7 @@ export async function POST(request: NextRequest) {
           customFields: v.custom_fields,
           contactId: resolve.contactId,
           leadOid,
-          productId: (v as any).product_id || null,
+          productId: (v as { product_id?: string }).product_id || null,
         })
         .returning();
 

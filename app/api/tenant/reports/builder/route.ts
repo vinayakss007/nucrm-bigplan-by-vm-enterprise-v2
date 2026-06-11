@@ -200,7 +200,7 @@ async function executeReport(params: ReportParams): Promise<ReportResult> {
   const { rows } = await db.execute(sql.raw(buildParameterizedQuery(query, queryParams)));
 
   // Calculate total and percentages
-  const data = (rows as any[]).map(row => ({
+  const data = (rows as { label?: unknown; value?: unknown }[]).map(row => ({
     label: row.label?.toString() || 'Unknown',
     value: Number(row.value) || 0,
     percentage: 0,

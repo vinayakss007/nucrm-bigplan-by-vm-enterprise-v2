@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 
       const stagesToCreate = (stages || defaultStages).map((s: any, idx: number) => ({
         tenantId: ctx.tenantId,
-        pipelineId: (newPipeline as any)[0].id,
+        pipelineId: newPipeline.id,
         name: s.name || s.label || s.id,
         order: s.order ?? idx
       }));

@@ -13,7 +13,7 @@ import { updateAutomationSchema } from '@/lib/api/schemas';
  */
 export async function GET(
   req: NextRequest, 
-  { params }: any
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(req);
@@ -55,7 +55,7 @@ export async function GET(
       status: run.status,
       trigger_type: run.triggerEvent,
       actions_run: run.stepsCompleted,
-      duration_ms: (run.metadata as any)?.duration_ms || 0, // Assuming duration might be in metadata
+      duration_ms: (run.metadata as Record<string, unknown>)?.duration_ms as number || 0,
       error: run.errorMessage,
       created_at: run.createdAt
     }));
@@ -63,7 +63,7 @@ export async function GET(
     return NextResponse.json({ 
       data: { 
         ...automation, 
-        created_by_name: (automation as any).createdBy?.fullName,
+        created_by_name: automation.createdBy?.fullName,
         recent_runs: recentRuns 
       } 
     });
@@ -79,7 +79,7 @@ export async function GET(
  */
 export async function PATCH(
   req: NextRequest, 
-  { params }: any
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(req);
@@ -97,7 +97,7 @@ export async function PATCH(
     if (validated instanceof NextResponse) return validated;
     const body = validated.data;
 
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       updatedAt: new Date(),
     };
 
@@ -133,7 +133,7 @@ export async function PATCH(
  */
 export async function DELETE(
   req: NextRequest, 
-  { params }: any
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(req);

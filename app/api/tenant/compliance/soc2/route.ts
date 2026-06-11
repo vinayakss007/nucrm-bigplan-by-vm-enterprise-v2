@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
         .set({
           status: 'completed',
           completedAt: new Date(),
-          result: report as any,
+          result: report as Record<string, unknown>,
         })
         .where(eq(complianceRequests.id, request!.id));
     } catch (err: any) {
