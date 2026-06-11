@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
       ContentLength: sizeBytes,
     });
 
-    const uploadUrl = await getSignedUrl(s3 as any, command, { expiresIn: 3600 });
+    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
 
     // Store document metadata
     const [doc] = await db.insert(documents).values({

@@ -43,9 +43,9 @@ async function aggregateTags(tenantId: string): Promise<Array<{ tag: string } & 
     ORDER BY tag;
   `);
 
-  const list = (rows as any).rows ?? rows;
+  const list = rows.rows ?? rows;
   const map = new Map<string, Counts>();
-  for (const r of list as any[]) {
+  for (const r of (list as { tag: string; resource: string; count: number }[])) {
     const key = r.tag as string;
     const cur = map.get(key) ?? { leads: 0, contacts: 0, companies: 0, total: 0 };
     if (r.resource === 'leads')     cur.leads     = Number(r.count);
@@ -87,9 +87,9 @@ async function renameAcrossTables(tenantId: string, fromTag: string, toTag: stri
       WHERE tenant_id = ${tenantId} AND ${fromTag} = ANY(tags) AND deleted_at IS NULL
   `);
   return {
-    leads:     (c1 as any).rowCount ?? 0,
-    contacts:  (c2 as any).rowCount ?? 0,
-    companies: (c3 as any).rowCount ?? 0,
+    leads:     c1.rowCount ?? 0,
+    contacts:  c2.rowCount ?? 0,
+    companies: c3.rowCount ?? 0,
   };
 }
 
@@ -107,16 +107,16 @@ async function deleteAcrossTables(tenantId: string, tag: string) {
       WHERE tenant_id = ${tenantId} AND ${tag} = ANY(tags) AND deleted_at IS NULL
   `);
   return {
-    leads:     (c1 as any).rowCount ?? 0,
-    contacts:  (c2 as any).rowCount ?? 0,
-    companies: (c3 as any).rowCount ?? 0,
+    leads:     c1.rowCount ?? 0,
+    contacts:  c2.rowCount ?? 0,
+    companies: c3.rowCount ?? 0,
   };
 }
 
 const TAG_RE = /^[\w \-./&]{1,40}$/;
 
 export async function POST(req: NextRequest) {
-  let ctx: any;
+  let ctx: Awaited<ReturnType<typeof requireAuth>>;
   try {
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;

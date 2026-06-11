@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     }).returning();
 
     await db.update(users)
-      .set({ lastTenantId: (tenant as any)[0].id })
+      .set({ lastTenantId: tenant.id })
       .where(eq(users.id, ctx.userId));
 
     return NextResponse.json({ data: tenant }, { status: 201 });

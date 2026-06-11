@@ -42,12 +42,12 @@ export async function GET(req: NextRequest) {
       ))
       .limit(1);
 
-    const tSettings = (t?.settings as any) ?? {};
-    const uPrefs = ((u?.metadata as any) ?? {}).prefs ?? {};
-    const mSettings = (m?.settings as any) ?? {};
-    const mNotif = (m?.notificationPrefs as any) ?? {};
+    const tSettings = (t?.settings ?? {}) as Record<string, unknown>;
+    const uPrefs = ((u?.metadata ?? {}) as Record<string, unknown>).prefs ?? {};
+    const mSettings = (m?.settings ?? {}) as Record<string, unknown>;
+    const mNotif = (m?.notificationPrefs ?? {}) as Record<string, unknown>;
 
-    const has = (obj: any) => obj && typeof obj === 'object' && Object.keys(obj).length > 0;
+    const has = (obj: unknown) => obj !== null && typeof obj === 'object' && Object.keys(obj as Record<string, unknown>).length > 0;
     const lp = tSettings.login_policy ?? {};
 
     // Derive a status per route. Pages we don't measure return 'unknown'.

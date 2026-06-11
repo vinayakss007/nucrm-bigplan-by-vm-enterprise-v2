@@ -52,7 +52,7 @@ const DEFAULTS: Record<string, Record<Channel, boolean>> = Object.fromEntries(
       telegram: false,
     }];
   })
-) as any;
+) as Record<string, Record<Channel, boolean>>;
 
 export async function GET(req: NextRequest) {
   try {
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
       columns: { notificationPrefs: true },
     });
 
-    const stored = ((row?.notificationPrefs as any) ?? {}).matrix ?? {};
+    const stored = ((row?.notificationPrefs as Record<string, unknown>)?.matrix ?? {}) as Record<string, Record<Channel, boolean>>;
 
     // Merge defaults <- stored, restricted to known keys
     const matrix: Record<string, Record<Channel, boolean>> = {};
@@ -103,7 +103,7 @@ export async function PATCH(req: NextRequest) {
     for (const [key, value] of Object.entries(incoming)) {
       if (!EVENT_KEYS.has(key)) continue;
       if (!value || typeof value !== 'object') continue;
-      const v = value as any;
+      const v = value as Record<string, unknown>;
       safe[key] = {
         in_app:   v.in_app   === true,
         email:    v.email    === true,

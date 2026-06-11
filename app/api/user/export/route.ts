@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
         type: notifications.type,
         title: notifications.title,
         body: notifications.body,
-        isRead: (notifications as any).isRead,
+        isRead: (notifications as { isRead: unknown }).isRead,
         createdAt: notifications.createdAt
       })
       .from(notifications)

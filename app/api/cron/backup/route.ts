@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
 
   // Create backup record
   const [backup] = await db.insert(backupRecords).values({
-    backupType: backupType as any,
+    backupType: backupType as 'full' | 'schema' | 'selective',
     status: 'running',
     initiatedAuto: true,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)

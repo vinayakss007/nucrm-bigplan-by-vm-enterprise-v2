@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     .innerJoin(plans, eq(plans.id, tenants.planId))
     .where(eq(tenants.id, ctx.tenantId));
 
-    const features = tenantWithPlan?.features as any;
+    const features = tenantWithPlan?.features as Record<string, unknown> | null;
     const maxTasks = features?.max_tasks;
     
     if (maxTasks > 0) {
@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
         contactId: v.contact_id || null,
         dealId: v.deal_id || null,
         entityType: 'task',
-        entityId: (newTask as any).id,
+        entityId: newTask.id,
         eventType: 'task_created',
         action: 'create',
         description: `Created task: ${v.title}`,
@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
       }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     }
 
-    fireWebhooks(ctx.tenantId, 'task.created', { id: (newTask as any).id, title: v.title }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    fireWebhooks(ctx.tenantId, 'task.created', { id: newTask.id, title: v.title }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({ data: newTask }, { status: 201 });
   } catch (err: any) {

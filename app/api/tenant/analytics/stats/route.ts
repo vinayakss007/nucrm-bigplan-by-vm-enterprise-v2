@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     const revenue = Number(invoicesResult[0]?.total || 0) + Number(ordersResult[0]?.total || 0);
-    const dealsWithWon = await db.select({ count: sql<number>`count(*)` }).from(deals).where(and(eq(deals.tenantId, ctx.tenantId), eq(deals.stageId, 'won' as any)));
+    const dealsWithWon = await db.select({ count: sql<number>`count(*)` }).from(deals).where(and(eq(deals.tenantId, ctx.tenantId), eq(deals.stageId, sql`'won'`)));
     const winRate = (dealsCount[0]?.count ?? 0) > 0 ? (Number(dealsWithWon[0]?.count || 0) / Number(dealsCount[0]?.count || 1)) * 100 : 0;
 
     return NextResponse.json({

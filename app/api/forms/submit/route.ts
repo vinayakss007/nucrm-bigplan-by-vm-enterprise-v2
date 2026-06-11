@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Trigger "Form Submitted" webhook/automation
-      await fireWebhooks(form.tenantId, 'contact.created' as any, { 
+      await fireWebhooks(form.tenantId, 'contact.created', { 
         form_id: form.id, 
         form_name: form.name,
         contact_id: contactId,
@@ -189,7 +189,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ 
       ok: true, 
-      message: (form.settings as any)?.success_message || 'Thank you! Your submission has been received.' 
+      message: (form.settings as Record<string, unknown>)?.success_message as string || 'Thank you! Your submission has been received.' 
     });
 
   } catch (err: any) {

@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await db.execute(sql`SELECT public.calculate_churn_risk(${contact_id}) as probability`);
-    const probability = (result.rows[0] as any)?.probability || 0;
+    const probability = (result.rows[0] as Record<string, unknown>)?.probability as number || 0;
 
     const [prediction] = await db.select()
       .from(churnPredictions)

@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       headers:{ 'Authorization':`Bearer ${stripeKey}`, 'Content-Type':'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ customer: tenant.stripeCustomerId, return_url: `${appUrl}/tenant/settings/billing` }).toString(),
     });
-    const session = await res.json() as any;
+    const session = await res.json() as { url: string; error?: { message: string } };
     if (!res.ok) return NextResponse.json({ error: session.error?.message ?? 'Stripe error' }, { status:400 });
     
     return NextResponse.json({ url: session.url });

@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     const state = searchParams.get('state');
     const activeOnly = searchParams.get('active') !== 'false';
 
-    const filters: any[] = [eq(taxRates.tenantId, ctx.tenantId)];
+    const filters: ReturnType<typeof eq>[] = [eq(taxRates.tenantId, ctx.tenantId)];
     if (activeOnly) filters.push(eq(taxRates.isActive, true));
     if (country) filters.push(eq(taxRates.country, country));
     if (state) filters.push(eq(taxRates.state, state));
@@ -107,13 +107,14 @@ export async function PUT(req: NextRequest) {
     if (parsed instanceof NextResponse) return parsed;
     const { id, ...updates } = parsed.data;
 
-    if ((updates as any).rate !== undefined) {
-      (updates as any).rate = String((updates as any).rate);
+    const updateData = { ...updates } as Record<string, unknown>;
+    if (updateData.rate !== undefined) {
+      updateData.rate = String(updateData.rate);
     }
-    delete (updates as any).id;
+    delete updateData.id;
 
     const [row] = await db.update(taxRates)
-      .set(updates as any)
+      .set(updateData as typeof taxRates.$inferInsert)
       .where(and(eq(taxRates.id, id), eq(taxRates.tenantId, ctx.tenantId)))
       .returning();
 

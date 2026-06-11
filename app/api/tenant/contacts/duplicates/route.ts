@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
       LIMIT ${limit}
     `);
 
-    const rows = (res.rows as any[]) || [];
+    const rows = (res.rows as unknown[]) || [];
 
     // The original code had a different mapping logic in the comments vs actual code.
     // Let's stick to the mapping logic that makes sense for the returned rows.

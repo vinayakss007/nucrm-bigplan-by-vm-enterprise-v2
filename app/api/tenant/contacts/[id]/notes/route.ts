@@ -76,7 +76,7 @@ export async function POST(
         eventType: type,
         description: description.trim(),
         metadata: metadata || {},
-      } as any)
+      } as typeof activities.$inferInsert)
       .returning();
 
     // Update contact last activity

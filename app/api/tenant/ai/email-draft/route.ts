@@ -196,7 +196,7 @@ Best,
         tone,
         length,
         createdBy: ctx.userId
-      } as any)
+      } as typeof emailDrafts.$inferInsert)
       .returning();
     
     const draft = drafts[0];

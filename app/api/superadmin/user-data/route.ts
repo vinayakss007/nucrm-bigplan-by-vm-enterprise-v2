@@ -308,7 +308,7 @@ export async function POST(request: NextRequest) {
             createdAt: new Date(),
             updatedAt: new Date(),
             deletedAt: null,
-          } as any).onConflictDoNothing();
+          } as typeof contacts.$inferInsert).onConflictDoNothing();
           restored++;
         } catch { errors++; }
       }
@@ -329,7 +329,7 @@ export async function POST(request: NextRequest) {
             createdAt: new Date(),
             updatedAt: new Date(),
             deletedAt: null,
-          } as any).onConflictDoNothing();
+          } as typeof deals.$inferInsert).onConflictDoNothing();
           restored++;
         } catch { errors++; }
       }
@@ -349,7 +349,7 @@ export async function POST(request: NextRequest) {
             assignedTo: user_id,
             createdAt: new Date(),
             updatedAt: new Date(),
-          } as any).onConflictDoNothing();
+          } as typeof tasks.$inferInsert).onConflictDoNothing();
           restored++;
         } catch { errors++; }
       }

@@ -63,13 +63,13 @@ export async function POST(request: NextRequest) {
 
     if (filters) {
       if (filters.status && 'status' in reportConfig.table) {
-        conditions.push(eq(reportConfig.table.status as any, filters.status));
+        conditions.push(eq(reportConfig.table.status as unknown as string, filters.status));
       }
       if (filters.stage && 'stage' in reportConfig.table) {
-        conditions.push(eq(reportConfig.table.stage as any, filters.stage));
+        conditions.push(eq(reportConfig.table.stage as unknown as string, filters.stage));
       }
       if (filters.lead_status && 'leadStatus' in reportConfig.table) {
-        conditions.push(eq(reportConfig.table.leadStatus as any, filters.lead_status));
+        conditions.push(eq(reportConfig.table.leadStatus as unknown as string, filters.lead_status));
       }
       if (filters.created_after) {
         conditions.push(gt(reportConfig.table.createdAt, new Date(filters.created_after)));
@@ -84,9 +84,9 @@ export async function POST(request: NextRequest) {
         .select(reportConfig.columns)
         .from(reportConfig.table)
         .where(and(...conditions))
-        .groupBy(reportConfig.columns[0]) as any;
+        .groupBy(reportConfig.columns[0]) as unknown as ReturnType<typeof db.select>;
     } else {
-      query = query.where(and(...conditions)).orderBy(desc(reportConfig.table.createdAt)).limit(limit) as any;
+      query = query.where(and(...conditions)).orderBy(desc(reportConfig.table.createdAt)).limit(limit) as unknown as ReturnType<typeof db.select>;
     }
 
     const results = await query;

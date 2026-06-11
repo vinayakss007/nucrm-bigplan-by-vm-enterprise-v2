@@ -75,9 +75,9 @@ export async function POST(request: NextRequest) {
     // Notify assignee
     if (assign_to !== ctx.userId) {
       await createNotification({
-        userId: assign_to, tenantId: ctx.tenantId, type:'contact_assigned' as any,
+        userId: assign_to, tenantId: ctx.tenantId, type:'contact_assigned' as string,
         title: `${rowCount} lead${rowCount!==1?'s':''} assigned to you`,
-        body: reason||undefined, link:'/tenant/leads', entity_type: 'lead' as any,
+        body: reason||undefined, link:'/tenant/leads', entity_type: 'lead' as string,
       });
     }
 

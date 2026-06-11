@@ -44,7 +44,7 @@ async function _GET(request: NextRequest) {
       isNull(supportTickets.deletedAt),
       status ? eq(supportTickets.status, status) : null,
       contactId ? eq(supportTickets.contactId, contactId) : null
-    ].filter(Boolean) as any;
+    ].filter((x): x is NonNullable<typeof x> => x != null);
 
     const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
       .from(supportTickets)
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
         category: v.category || 'general',
         priority: v.priority,
         status: v.status,
-      } as any)
+      } as typeof supportTickets.$inferInsert)
       .returning();
 
     return NextResponse.json({ data: row }, { status: 201 });
