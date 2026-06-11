@@ -58,10 +58,10 @@ export default function PluginsPage() {
   const [logs, setLogs] = useState<Record<string, LogEntry[]>>({});
   const [selectedTemplate, setSelectedTemplate] = useState<(typeof TEMPLATES)[number] | null>(null);
 
-  const loadPlugins = useCallback(async () => {
+  const loadPlugins = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/tenant/plugins');
+      const res = await fetch('/api/tenant/plugins', { signal });
       if (res.ok) {
         const d = await res.json() as { data: Plugin[] };
         setPlugins(d.data ?? []);
@@ -71,7 +71,11 @@ export default function PluginsPage() {
     }
   }, []);
 
-  useEffect(() => { void loadPlugins(); }, [loadPlugins]);
+  useEffect(() => {
+    const c = new AbortController();
+    void loadPlugins(c.signal);
+    return () => c.abort();
+  }, [loadPlugins]);
 
   const loadLogs = async (pluginId: string) => {
     const res = await fetch(`/api/tenant/plugins/${pluginId}/logs?limit=50`);

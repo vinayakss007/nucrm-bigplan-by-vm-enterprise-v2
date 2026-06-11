@@ -41,10 +41,10 @@ export default function AssignmentRulesPage() {
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/assignment-rules');
+      setLoading(true);
+      const res = await fetch('/api/tenant/assignment-rules', { signal });
       if (res.ok) {
         const d = await res.json();
         setRules(d.data ?? []);
@@ -54,7 +54,11 @@ export default function AssignmentRulesPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const c = new AbortController();
+    load(c.signal);
+    return () => c.abort();
+  }, []);
 
   const openCreate = () => {
     setEditing(null);

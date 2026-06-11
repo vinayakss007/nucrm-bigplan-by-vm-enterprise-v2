@@ -48,10 +48,10 @@ export default function TerritoriesPage() {
     return result;
   };
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/territories');
+      setLoading(true);
+      const res = await fetch('/api/tenant/territories', { signal });
       if (res.ok) {
         const d = await res.json();
         setTerritories(d.data ?? []);
@@ -61,7 +61,11 @@ export default function TerritoriesPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const c = new AbortController();
+    load(c.signal);
+    return () => c.abort();
+  }, []);
 
   const allTerritories = flattenTree(territories);
 

@@ -11,6 +11,7 @@ import {
   DeleteObjectsCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
 
 const s3Client = new S3Client({
@@ -100,10 +101,9 @@ export async function uploadFileToS3(
   return key;
 }
 
-export async function getSignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
-  const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
+export async function getPresignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
   const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
-  return getSignedUrl(s3Client as any, command, { expiresIn });
+  return getSignedUrl(s3Client, command, { expiresIn });
 }
 
 /**
@@ -125,7 +125,7 @@ export async function getSignedPutUrl(args: {
     ContentType: args.contentType,
     ...(args.contentLengthBytes ? { ContentLength: args.contentLengthBytes } : {}),
   });
-  return getSignedUrl(s3Client as any, command, {
+  return getSignedUrl(s3Client, command, {
     expiresIn: args.expiresInSeconds ?? 600, // 10 minutes
   });
 }

@@ -44,11 +44,15 @@ export default function SubscriptionDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Subscription>>({});
 
-  useEffect(() => { fetchSubscription(); }, [id]);
+  useEffect(() => {
+    const c = new AbortController();
+    fetchSubscription(c.signal);
+    return () => c.abort();
+  }, [id]);
 
-  const fetchSubscription = async () => {
+  const fetchSubscription = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(`/api/tenant/subscriptions/${id}`);
+      const res = await fetch(`/api/tenant/subscriptions/${id}`, { signal });
       if (!res.ok) throw new Error('Not found');
       const data = await res.json();
       setSubscription(data.data);

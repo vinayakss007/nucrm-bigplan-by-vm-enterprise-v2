@@ -135,9 +135,9 @@ export default function TicketsKanbanPage() {
     useSensor(KeyboardSensor)
   );
 
-  const fetchTickets = useCallback(async () => {
+  const fetchTickets = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/tickets');
+      const res = await fetch('/api/tenant/tickets', { signal });
       const data = await res.json();
       setTickets(data.data || []);
     } catch {
@@ -147,7 +147,11 @@ export default function TicketsKanbanPage() {
     }
   }, []);
 
-  useEffect(() => { fetchTickets(); }, [fetchTickets]);
+  useEffect(() => {
+    const c = new AbortController();
+    fetchTickets(c.signal);
+    return () => c.abort();
+  }, [fetchTickets]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);

@@ -36,12 +36,12 @@ export default function WebhookLogsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const limit = 20;
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (signal?: AbortSignal) => {
     try {
-      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      setLoading(true);
+      const params = new URLSearchParams({ limit: String(limit), offset: String((page - 1) * limit) });
       if (statusFilter !== 'all') params.set('status', statusFilter);
-      const res = await fetch(`/api/tenant/webhooks/logs?${params}`);
+      const res = await fetch(`/api/tenant/webhooks/logs?${params}`, { signal });
       if (res.ok) {
         const d = await res.json();
         setLogs(d.data ?? []);
@@ -52,7 +52,11 @@ export default function WebhookLogsPage() {
     }
   };
 
-  useEffect(() => { load(); }, [page, statusFilter]);
+  useEffect(() => {
+    const c = new AbortController();
+    load(c.signal);
+    return () => c.abort();
+  }, [page, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 

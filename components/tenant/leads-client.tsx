@@ -107,23 +107,28 @@ export default function LeadsClient({
   });
   const [addingLead, setAddingLead] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     const q = new URLSearchParams({ limit: '100' });
     if (activeStatus !== 'all') q.set('lead_status', activeStatus);
     if (search) q.set('q', search);
     try {
-      const res = await fetch('/api/tenant/contacts?' + q);
+      const res = await fetch('/api/tenant/contacts?' + q, { signal });
       const data = await res.json();
       setLeads(data.data ?? []);
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       toast.error('Failed to load leads');
     } finally {
       setLoading(false);
     }
   }, [activeStatus, search]);
 
-  useEffect(() => { load(); }, [activeStatus, search]);
+  useEffect(() => {
+    const c = new AbortController();
+    load(c.signal);
+    return () => c.abort();
+  }, [activeStatus, search]);
 
   // Pipeline statistics
   const stats = Object.entries(PIPELINE_CONFIG).map(([id, config]) => {

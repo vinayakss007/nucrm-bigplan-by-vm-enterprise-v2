@@ -135,7 +135,7 @@ export async function POST(
           phone: lead.phone || undefined,
           jobTitle: lead.title || undefined,
           companyId: companyId || undefined,
-          assignedTo: assignee as any,
+          assignedTo: assignee,
           leadStatus: 'qualified',
           lifecycleStage: 'opportunity',
           score: sql`GREATEST(coalesce(${contacts.score}, 0), ${lead.score ?? 0})`,
@@ -165,7 +165,7 @@ export async function POST(
             phone: lead.phone || undefined,
             jobTitle: lead.title || undefined,
             companyId: companyId || undefined,
-            assignedTo: assignee as any,
+            assignedTo: assignee,
             leadStatus: 'qualified',
             lifecycleStage: 'opportunity',
             score: Math.max(existing.score || 0, lead.score || 0),
@@ -199,13 +199,13 @@ export async function POST(
           country: lead.country || null,
           city: lead.city || null,
           linkedinUrl: lead.linkedinUrl || null,
-          assignedTo: assignee as any,
+          assignedTo: assignee,
           createdBy: ctx.userId,
           notes: newContactNotes,
           metadata: {
             source_lead_id: id,
             ...(hasDiscovery ? { discovery } : {}),
-          } as any,
+          },
         }).returning({ id: contacts.id });
         if (!contact) throw new Error('Failed to create contact');
         contactId = contact.id;

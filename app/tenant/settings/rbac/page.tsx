@@ -39,16 +39,18 @@ export default function RBACSettingsPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    loadData();
+    const c = new AbortController();
+    loadData(c.signal);
+    return () => c.abort();
   }, []);
 
-  async function loadData() {
+  async function loadData(signal?: AbortSignal) {
     setLoading(true);
     try {
       const [fpRes, rpRes, arRes] = await Promise.all([
-        fetch('/api/tenant/rbac/field-permissions').catch(() => null),
-        fetch('/api/tenant/rbac/record-permissions').catch(() => null),
-        fetch('/api/tenant/rbac/approval-rules').catch(() => null),
+        fetch('/api/tenant/rbac/field-permissions', { signal }).catch(() => null),
+        fetch('/api/tenant/rbac/record-permissions', { signal }).catch(() => null),
+        fetch('/api/tenant/rbac/approval-rules', { signal }).catch(() => null),
       ]);
 
       if (fpRes?.ok) {

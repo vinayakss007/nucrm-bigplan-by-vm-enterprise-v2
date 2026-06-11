@@ -27,17 +27,21 @@ export default function AssignmentConfig({ teamMembers = [] }: { teamMembers?: {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
 
-  const loadRules = useCallback(async () => {
+  const loadRules = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/tenant/assignment-rules');
+      const res = await fetch('/api/tenant/assignment-rules', { signal });
       const data = await res.json();
       setRules(data.data ?? []);
     } catch { setRules([]); }
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadRules(); }, [loadRules]);
+  useEffect(() => {
+    const c = new AbortController();
+    loadRules(c.signal);
+    return () => c.abort();
+  }, [loadRules]);
 
   const toggleRule = async (id: string, current: boolean) => {
     const res = await fetch(`/api/tenant/assignment-rules`, {

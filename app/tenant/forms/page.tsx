@@ -31,13 +31,17 @@ export default function FormsPage() {
     settings:{ success_message:'Thank you! We will be in touch.', notify_email:'' },
   });
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true);
-    const res = await fetch('/api/tenant/forms');
+    const res = await fetch('/api/tenant/forms', { signal });
     if (res.ok) { const d = await res.json(); setForms(d.data ?? []); }
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const c = new AbortController();
+    load(c.signal);
+    return () => c.abort();
+  }, []);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);

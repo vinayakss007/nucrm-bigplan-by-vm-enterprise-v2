@@ -34,16 +34,18 @@ export default function ComplianceSettingsPage() {
   const [newPolicy, setNewPolicy] = useState({ entityType: 'contacts', retentionDays: 365, action: 'archive' });
 
   useEffect(() => {
-    loadData();
+    const c = new AbortController();
+    loadData(c.signal);
+    return () => c.abort();
   }, []);
 
-  async function loadData() {
+  async function loadData(signal?: AbortSignal) {
     setLoading(true);
     try {
       const [retRes, gdprRes, soc2Res] = await Promise.all([
-        fetch('/api/tenant/compliance/retention'),
-        fetch('/api/tenant/compliance/gdpr'),
-        fetch('/api/tenant/compliance/soc2'),
+        fetch('/api/tenant/compliance/retention', { signal }),
+        fetch('/api/tenant/compliance/gdpr', { signal }),
+        fetch('/api/tenant/compliance/soc2', { signal }),
       ]);
 
       if (retRes.ok) {

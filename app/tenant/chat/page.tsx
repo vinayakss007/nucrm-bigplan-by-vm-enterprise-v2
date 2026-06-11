@@ -47,12 +47,12 @@ export default function ChatPage() {
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (filter !== 'all') params.set('status', filter);
-      const res = await fetch(`/api/tenant/chat?${params}`);
+      const res = await fetch(`/api/tenant/chat?${params}`, { signal });
       if (res.ok) {
         const d = await res.json();
         setSessions(d.data ?? []);
@@ -62,45 +62,11 @@ export default function ChatPage() {
     }
   };
 
-  const loadMessages = async (session: ChatSession) => {
-    setSelectedSession(session);
-    setLoadingMessages(true);
-    setMessages([]);
-    try {
-      const res = await fetch(`/api/tenant/chat/${session.id}/messages`);
-      if (res.ok) {
-        const d = await res.json();
-        setMessages(d.data ?? []);
-      }
-    } finally {
-      setLoadingMessages(false);
-    }
-  };
-
-  const sendReply = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedSession || !replyText.trim()) return;
-    setSendingReply(true);
-    try {
-      const res = await fetch(`/api/tenant/chat/${selectedSession.id}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: replyText, senderType: 'agent' }),
-      });
-      if (res.ok) {
-        const d = await res.json();
-        setMessages(prev => [...prev, d.data]);
-        setReplyText('');
-      } else {
-        const d = await res.json();
-        toast.error(d.error || 'Failed to send message');
-      }
-    } finally {
-      setSendingReply(false);
-    }
-  };
-
-  useEffect(() => { load(); }, [filter]);
+  useEffect(() => {
+    const c = new AbortController();
+    load(c.signal);
+    return () => c.abort();
+  }, [filter]);
 
   return (
     <div className="space-y-4 animate-fade-in">

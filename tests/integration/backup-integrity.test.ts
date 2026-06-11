@@ -1,15 +1,3 @@
-/**
- * Backup Integrity Testing
- *
- * Verifies that backups are:
- * 1. Complete — all critical tables are included
- * 2. Restorable — can be loaded into a fresh database
- * 3. Consistent — foreign key relationships are preserved
- * 4. Not corrupted — checksums match
- *
- * Run: npx vitest run tests/integration/backup-integrity.test.ts
- */
-
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -19,95 +7,79 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
-// Critical tables that MUST be in every backup
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://nucrm:nucrm123@localhost:5432/nucrm_fresh';
+
 const CRITICAL_TABLES = [
-  'tenants',
-  'users',
-  'contacts',
-  'companies',
-  'deals',
-  'deal_stages',
-  'pipelines',
-  'tasks',
-  'tickets',
-  'leads',
-  'activities',
-  'audit_logs',
-  'webhooks',
-  'webhook_deliveries',
-  'invoices',
-  'invoice_line_items',
-  'roles',
-  'permissions',
-  'dead_letter_queue',
+  'tenants', 'users', 'contacts', 'companies', 'deals', 'deal_stages',
+  'pipelines', 'tasks', 'support_tickets', 'leads', 'activities', 'audit_logs',
+  'webhooks', 'webhook_deliveries', 'invoices', 'invoice_line_items',
+  'roles', 'field_permissions', 'dead_letter_queue',
 ];
 
-// Skip entire suite if no database is available
 async function isDatabaseAvailable(): Promise<boolean> {
-  const sourceUrl = process.env.DATABASE_URL || 'postgresql://postgres:admin123@localhost:5432/nucrm';
-  const pool = new Pool({ connectionString: sourceUrl, connectionTimeoutMillis: 3000 });
+  const p = new Pool({ connectionString: DATABASE_URL, connectionTimeoutMillis: 3000 });
   try {
-    const client = await pool.connect();
+    const client = await p.connect();
     client.release();
-    await pool.end();
+    await p.end();
     return true;
   } catch {
-    await pool.end().catch(() => {});
+    await p.end().catch(() => {});
+    return false;
+  }
+}
+
+async function isPgDumpAvailable(): Promise<boolean> {
+  try {
+    const { execSync } = await import('child_process');
+    execSync('pg_dump --version', { stdio: 'pipe' });
+    return true;
+  } catch {
     return false;
   }
 }
 
 const dbAvailable = await isDatabaseAvailable();
+const pgDumpAvailable = await isPgDumpAvailable();
 
 describe.skipIf(!dbAvailable)('Backup Integrity', () => {
   let sourcePool: Pool;
-  let restorePool: Pool;
   let sourceDb: any;
-  let restoreDb: any;
   let backupFile: string;
 
   beforeAll(async () => {
-    const sourceUrl = process.env.DATABASE_URL || 'postgresql://postgres:admin123@localhost:5432/nucrm';
-    const restoreUrl = process.env.RESTORE_DATABASE_URL || 'postgresql://postgres:admin123@localhost:5433/nucrm_restore';
-
-    sourcePool = new Pool({ connectionString: sourceUrl });
+    sourcePool = new Pool({ connectionString: DATABASE_URL });
     sourceDb = drizzle(sourcePool, { schema });
-
-    restorePool = new Pool({ connectionString: restoreUrl });
-    restoreDb = drizzle(restorePool, { schema });
-
     backupFile = path.join(__dirname, '../../tmp/backup-test.sql');
   });
 
   afterAll(async () => {
     await sourcePool.end();
-    await restorePool.end();
     if (fs.existsSync(backupFile)) {
       fs.unlinkSync(backupFile);
     }
   });
 
-  it('should create a backup file', async () => {
-    // Create backup using pg_dump
+  it('should create a backup file', { timeout: 30000, skip: !pgDumpAvailable }, async () => {
     const { execSync } = await import('child_process');
-    const databaseUrl = process.env.DATABASE_URL || 'postgresql://postgres:admin123@localhost:5432/nucrm';
-
     try {
       execSync(
-        `pg_dump "${databaseUrl}" --format=plain --no-owner --no-privileges --schema-only --data-only --exclude-table=pg_* > "${backupFile}"`,
+        `pg_dump "${DATABASE_URL}" --format=plain --no-owner --no-privileges --data-only > "${backupFile}"`,
         { stdio: 'pipe' }
       );
-
       expect(fs.existsSync(backupFile)).toBe(true);
       const stats = fs.statSync(backupFile);
       expect(stats.size).toBeGreaterThan(0);
     } catch (error: any) {
-      // If pg_dump is not available, skip this test
-      console.warn('pg_dump not available, skipping backup creation test');
+      if (error.message?.includes('pg_dump')) {
+        console.warn('pg_dump execution failed:', error.message.substring(0, 200));
+        return;
+      }
+      throw error;
     }
   });
 
-  it('should include all critical tables in backup', async () => {
+  it('should include all critical tables in backup', { skip: !pgDumpAvailable }, async () => {
     if (!fs.existsSync(backupFile)) {
       console.warn('No backup file, skipping table completeness test');
       return;
@@ -116,17 +88,15 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
     const backupContent = fs.readFileSync(backupFile, 'utf-8');
 
     for (const table of CRITICAL_TABLES) {
-      // Check for COPY or INSERT statements for this table
       const hasTableData = backupContent.includes(`COPY public.${table}`) ||
                            backupContent.includes(`INSERT INTO public.${table}`) ||
                            backupContent.includes(`COPY ${table}`) ||
                            backupContent.includes(`INSERT INTO ${table}`);
-
       expect(hasTableData, `Backup missing data for table: ${table}`).toBe(true);
     }
   });
 
-  it('should have valid backup checksum', async () => {
+  it('should have valid backup checksum', { skip: !pgDumpAvailable }, async () => {
     if (!fs.existsSync(backupFile)) {
       console.warn('No backup file, skipping checksum test');
       return;
@@ -136,14 +106,13 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
     const checksum = crypto.createHash('sha256').update(backupContent).digest('hex');
 
     expect(checksum).toBeDefined();
-    expect(checksum.length).toBe(64); // SHA-256 produces 64 hex chars
+    expect(checksum.length).toBe(64);
   });
 
   it('should have consistent row counts between source and backup', async () => {
-    // Get row counts from source database
     const sourceCounts: Record<string, number> = {};
 
-    for (const table of CRITICAL_TABLES.slice(0, 5)) { // Test first 5 tables
+    for (const table of CRITICAL_TABLES.slice(0, 5)) {
       try {
         const [result] = await sourceDb.execute(sql`SELECT count(*)::int FROM ${sql.identifier(table)}`);
         sourceCounts[table] = result?.count || 0;
@@ -152,35 +121,27 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
       }
     }
 
-    // Verify counts are reasonable (non-negative)
     for (const [table, count] of Object.entries(sourceCounts)) {
       expect(count, `Row count for ${table} should be non-negative`).toBeGreaterThanOrEqual(0);
     }
   });
 
   it('should verify foreign key constraints are preserved', async () => {
-    // Check that foreign key constraints exist in the schema
     const fkResult = await sourceDb.execute(sql`
-      SELECT
-        tc.table_name,
-        tc.constraint_name,
-        kcu.column_name,
-        ccu.table_name AS foreign_table_name,
-        ccu.column_name AS foreign_column_name
+      SELECT tc.table_name, tc.constraint_name, kcu.column_name,
+        ccu.table_name AS foreign_table_name, ccu.column_name AS foreign_column_name
       FROM information_schema.table_constraints AS tc
-      JOIN information_schema.key_column_usage AS kcu
-        ON tc.constraint_name = kcu.constraint_name
-      JOIN information_schema.constraint_column_usage AS ccu
-        ON ccu.constraint_name = tc.constraint_name
+      JOIN information_schema.key_column_usage AS kcu ON tc.constraint_name = kcu.constraint_name
+      JOIN information_schema.constraint_column_usage AS ccu ON ccu.constraint_name = tc.constraint_name
       WHERE tc.constraint_type = 'FOREIGN KEY'
       LIMIT 10
     `);
 
-    expect(Array.isArray(fkResult)).toBe(true);
-    expect(fkResult.length).toBeGreaterThan(0);
+    const rows = Array.isArray(fkResult) ? fkResult : fkResult?.rows || [];
+    expect(rows.length).toBeGreaterThan(0);
   });
 
-  it('should have backup metadata (timestamp, size, checksum)', async () => {
+  it('should have backup metadata (timestamp, size, checksum)', { skip: !pgDumpAvailable }, async () => {
     if (!fs.existsSync(backupFile)) {
       console.warn('No backup file, skipping metadata test');
       return;
@@ -199,7 +160,6 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
   });
 
   it('should detect corrupted backup files', async () => {
-    // Create a corrupted backup file
     const corruptFile = backupFile.replace('.sql', '-corrupt.sql');
     fs.writeFileSync(corruptFile, 'CORRUPTED_DATA_NOT_A_VALID_BACKUP');
 
@@ -208,7 +168,6 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
 
     expect(isCorrupt).toBe(true);
 
-    // Cleanup
     if (fs.existsSync(corruptFile)) {
       fs.unlinkSync(corruptFile);
     }

@@ -45,11 +45,15 @@ export default function QuoteDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Quote>>({});
 
-  useEffect(() => { fetchQuote(); }, [id]);
+  useEffect(() => {
+    const c = new AbortController();
+    fetchQuote(c.signal);
+    return () => c.abort();
+  }, [id]);
 
-  const fetchQuote = async () => {
+  const fetchQuote = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(`/api/tenant/quotes/${id}`);
+      const res = await fetch(`/api/tenant/quotes/${id}`, { signal });
       if (!res.ok) throw new Error('Not found');
       const data = await res.json();
       setQuote(data.data);

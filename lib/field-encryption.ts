@@ -30,7 +30,7 @@ export function encryptSensitiveFields<T extends Record<string, any>>(
 
   for (const [k, value] of Object.entries(result)) {
     if (fieldsToEncrypt.some(f => k.toLowerCase().includes(f.toLowerCase())) && value) {
-      result[k as keyof T] = encrypt(String(value), encKey) as any;
+      result[k as keyof T] = encrypt(String(value), encKey);
     }
   }
 
@@ -48,7 +48,7 @@ export function decryptSensitiveFields<T extends Record<string, any>>(
   for (const [k, value] of Object.entries(result)) {
     if (fieldsToDecrypt.some(f => k.toLowerCase().includes(f.toLowerCase())) && value) {
       try {
-        result[k as keyof T] = decrypt(String(value), encKey) as any;
+        result[k as keyof T] = decrypt(String(value), encKey);
       } catch {
         result[k as keyof T] = value;
       }

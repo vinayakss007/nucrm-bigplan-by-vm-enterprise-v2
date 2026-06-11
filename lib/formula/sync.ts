@@ -47,10 +47,11 @@ export async function syncCalculatedFields(
     const tableName = getTableName(entityType);
     if (!tableName) return;
 
+    const updatesJson = JSON.stringify(updates);
     await db.execute(sql`
       UPDATE public.${sql.identifier(tableName)} 
-      SET metadata = metadata || \${JSON.stringify(updates)}::jsonb, updated_at = now() 
-      WHERE id = \${entityId} AND tenant_id = \${tenantId}
+      SET metadata = metadata || ${updatesJson}::jsonb, updated_at = now() 
+      WHERE id = ${entityId} AND tenant_id = ${tenantId}
     `);
   } catch (err) {
     console.error(`[FormulaSync] Failed to sync fields for \${entityType} \${entityId}`, err);

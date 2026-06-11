@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
       country: country || null,
       state: state || null,
       isDefault,
-    } as any).returning();
+    }).returning();
 
     return NextResponse.json({ data: row }, { status: 201 });
   } catch (err: any) {
@@ -107,13 +107,14 @@ export async function PUT(req: NextRequest) {
     if (parsed instanceof NextResponse) return parsed;
     const { id, ...updates } = parsed.data;
 
-    if ((updates as any).rate !== undefined) {
-      (updates as any).rate = String((updates as any).rate);
+    const dbUpdates: Record<string, unknown> = { ...updates };
+    if (dbUpdates.rate !== undefined) {
+      dbUpdates.rate = String(dbUpdates.rate);
     }
-    delete (updates as any).id;
+    delete dbUpdates.id;
 
     const [row] = await db.update(taxRates)
-      .set(updates as any)
+      .set(dbUpdates)
       .where(and(eq(taxRates.id, id), eq(taxRates.tenantId, ctx.tenantId)))
       .returning();
 

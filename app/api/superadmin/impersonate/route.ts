@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
       ) as session_id
     `);
 
-    const sessionId = (res.rows[0] as any)?.session_id;
+    const sessionId = (res.rows[0] as { session_id?: string } | undefined)?.session_id;
 
     // Create session token for impersonated user
     const token = await createToken(targetUserId);

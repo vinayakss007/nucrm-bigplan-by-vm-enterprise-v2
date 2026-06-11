@@ -32,10 +32,10 @@ export default function TicketsPage() {
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
 
-  const loadTickets = async () => {
+  const loadTickets = async (signal?: AbortSignal) => {
     try {
       setLoading(true);
-      const res = await fetch('/api/tenant/tickets');
+      const res = await fetch('/api/tenant/tickets', { signal });
       const d = await res.json();
       if (res.ok) setTickets(d.data || []);
       else if (res.status === 403) {
@@ -43,13 +43,18 @@ export default function TicketsPage() {
         setTickets([]);
       }
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       toast.error('Failed to load tickets');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { loadTickets(); }, []);
+  useEffect(() => {
+    const c = new AbortController();
+    loadTickets(c.signal);
+    return () => c.abort();
+  }, []);
 
   const filtered = tickets.filter(t => {
     const matchesFilter = filter === 'all' || t.status === filter;

@@ -26,7 +26,11 @@ export default function TrashPage() {
     setItems(data.data ?? []);
     setLoading(false);
   };
-  useEffect(() => { load(); }, [filter]);
+  useEffect(() => {
+    const c = new AbortController();
+    load(c.signal);
+    return () => c.abort();
+  }, [filter]);
 
   const restore = async (item: any) => {
     setRestoring(item.id);

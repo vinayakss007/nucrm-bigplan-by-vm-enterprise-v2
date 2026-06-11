@@ -55,11 +55,15 @@ export default function OrderDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Order>>({});
 
-  useEffect(() => { fetchOrder(); }, [id]);
+  useEffect(() => {
+    const c = new AbortController();
+    fetchOrder(c.signal);
+    return () => c.abort();
+  }, [id]);
 
-  const fetchOrder = async () => {
+  const fetchOrder = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(`/api/tenant/orders/${id}`);
+      const res = await fetch(`/api/tenant/orders/${id}`, { signal });
       if (!res.ok) throw new Error('Not found');
       const data = await res.json();
       setOrder(data.data);

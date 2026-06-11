@@ -53,11 +53,14 @@ export default function BulkTransferPage() {
   // Preview counts whenever from-user / only-open changes
   useEffect(() => {
     if (!fromUser) { setCounts(null); return; }
+    const c = new AbortController();
     setPreviewLoading(true);
-    fetch(`/api/tenant/admin/bulk-transfer?from_user_id=${fromUser}&only_open=${onlyOpen}`)
+    fetch(`/api/tenant/admin/bulk-transfer?from_user_id=${fromUser}&only_open=${onlyOpen}`, { signal: c.signal })
       .then(r => r.ok ? r.json() : { counts: null })
       .then(d => setCounts(d.counts ?? null))
+      .catch(() => {})
       .finally(() => setPreviewLoading(false));
+    return () => c.abort();
   }, [fromUser, onlyOpen]);
 
   const totalSelected = useMemo(() => {

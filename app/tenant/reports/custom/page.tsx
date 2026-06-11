@@ -34,13 +34,15 @@ export default function CustomReportBuilder() {
   const currentType = REPORT_TYPES.find(r => r.id === reportType)!;
 
   useEffect(() => {
+    const c = new AbortController();
     setSelectedColumns(currentType.columns.slice(0, 5));
-    loadSaved();
+    loadSaved(c.signal);
+    return () => c.abort();
   }, [reportType]);
 
-  const loadSaved = async () => {
+  const loadSaved = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/reports/custom');
+      const res = await fetch('/api/tenant/reports/custom', { signal });
       const d = await res.json();
       setSavedReports(d.data || []);
     } catch (err) { logError({ error: err, context: "catch:[context]" }); }

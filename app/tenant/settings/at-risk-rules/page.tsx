@@ -36,13 +36,13 @@ export default function AtRiskRulesPage() {
   const [editing, setEditing] = useState<Partial<AtRiskRule> | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  function load() {
+  function load(signal?: AbortSignal) {
     setLoading(true);
     setError(null);
     
     Promise.all([
-      fetch('/api/tenant/admin/at-risk', { cache: 'no-store' }).then(r => r.json()),
-      fetch('/api/tenant/pipelines', { cache: 'no-store' }).then(r => r.json())
+      fetch('/api/tenant/admin/at-risk', { signal, cache: 'no-store' }).then(r => r.json()),
+      fetch('/api/tenant/pipelines', { signal, cache: 'no-store' }).then(r => r.json())
     ])
     .then(([rulesData, pipelinesData]) => {
       setRules(rulesData);
@@ -52,7 +52,11 @@ export default function AtRiskRulesPage() {
     .finally(() => setLoading(false));
   }
 
-  useEffect(load, []);
+  useEffect(() => {
+    const c = new AbortController();
+    load(c.signal);
+    return () => c.abort();
+  }, []);
 
   async function save(r: Partial<AtRiskRule>) {
     setBusy('save');

@@ -32,10 +32,10 @@ export default function LeadScoringRulesPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [recomputeResult, setRecomputeResult] = useState<{ count: number } | null>(null);
 
-  function load() {
+  function load(signal?: AbortSignal) {
     setLoading(true);
     setError(null);
-    fetch('/api/tenant/admin/lead-scoring', { cache: 'no-store' })
+    fetch('/api/tenant/admin/lead-scoring', { signal, cache: 'no-store' })
       .then(async r => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
         return r.json();
@@ -44,7 +44,11 @@ export default function LeadScoringRulesPage() {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }
-  useEffect(load, []);
+  useEffect(() => {
+    const c = new AbortController();
+    load(c.signal);
+    return () => c.abort();
+  }, []);
 
   async function save(r: Partial<Rule>) {
     setBusy('save');

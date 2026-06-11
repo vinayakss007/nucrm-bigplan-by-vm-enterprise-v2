@@ -145,9 +145,9 @@ export default function TasksKanbanPage() {
     useSensor(KeyboardSensor)
   );
 
-  const fetchTasks = useCallback(async () => {
+  const fetchTasks = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/tasks');
+      const res = await fetch('/api/tenant/tasks', { signal });
       const data = await res.json();
       setTasks(data.data || []);
     } catch {
@@ -157,7 +157,11 @@ export default function TasksKanbanPage() {
     }
   }, []);
 
-  useEffect(() => { fetchTasks(); }, [fetchTasks]);
+  useEffect(() => {
+    const c = new AbortController();
+    fetchTasks(c.signal);
+    return () => c.abort();
+  }, [fetchTasks]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);

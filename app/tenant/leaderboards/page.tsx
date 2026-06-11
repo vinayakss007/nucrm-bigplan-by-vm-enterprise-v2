@@ -37,6 +37,7 @@ export default function LeaderboardsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const c = new AbortController();
     async function fetchLeaderboard() {
       setLoading(true);
       setError(null);
@@ -45,17 +46,19 @@ export default function LeaderboardsPage() {
         if (period === 'custom' && customStart) params.set('start', customStart);
         if (period === 'custom' && customEnd) params.set('end', customEnd);
 
-        const res = await fetch(`/api/tenant/leaderboards?${params.toString()}`);
+        const res = await fetch(`/api/tenant/leaderboards?${params.toString()}`, { signal: c.signal });
         if (!res.ok) throw new Error('Failed to load leaderboard');
         const json = await res.json();
         setData(json.data || []);
       } catch (err: any) {
+        if (err instanceof Error && err.name === 'AbortError') return;
         setError(err.message || 'Failed to load leaderboard');
       } finally {
         setLoading(false);
       }
     }
     fetchLeaderboard();
+    return () => c.abort();
   }, [metric, period, customStart, customEnd]);
 
   return (

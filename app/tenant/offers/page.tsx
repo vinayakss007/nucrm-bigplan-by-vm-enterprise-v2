@@ -73,10 +73,10 @@ export default function OffersListPage() {
     return p.toString();
   }, [page, statusFilter]);
 
-  function load() {
+  function load(signal?: AbortSignal) {
     setLoading(true);
     setError(null);
-    fetch(`/api/tenant/offers?${qs}`, { cache: 'no-store' })
+    fetch(`/api/tenant/offers?${qs}`, { signal, cache: 'no-store' })
       .then(async r => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
         return r.json();
@@ -85,7 +85,11 @@ export default function OffersListPage() {
       .catch(e => setError(e.message || 'Failed to load'))
       .finally(() => setLoading(false));
   }
-  useEffect(load, [qs]);
+  useEffect(() => {
+    const c = new AbortController();
+    load(c.signal);
+    return () => c.abort();
+  }, [qs]);
 
   const filteredOffers = useMemo(() => {
     if (!data) return [];

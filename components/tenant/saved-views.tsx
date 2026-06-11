@@ -34,17 +34,21 @@ export function SavedViews({ entityType, currentFilters, currentQuery, onApplyVi
   const [saveShared, setSaveShared] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const loadViews = useCallback(async () => {
+  const loadViews = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/tenant/views?entity_type=${entityType}`);
+      const res = await fetch(`/api/tenant/views?entity_type=${entityType}`, { signal });
       const data = await res.json();
       setViews(data.data ?? []);
     } catch { setViews([]); }
     setLoading(false);
   }, [entityType]);
 
-  useEffect(() => { loadViews(); }, [loadViews]);
+  useEffect(() => {
+    const c = new AbortController();
+    loadViews(c.signal);
+    return () => c.abort();
+  }, [loadViews]);
 
   const saveView = async () => {
     if (!saveName.trim()) return;

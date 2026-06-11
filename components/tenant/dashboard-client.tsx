@@ -11,7 +11,8 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
   const [source, setSource] = useState<string>('plan');
 
   useEffect(() => {
-    fetch('/api/tenant/dashboard/layout')
+    const c = new AbortController();
+    fetch('/api/tenant/dashboard/layout', { signal: c.signal })
       .then(r => r.json())
       .then(res => {
         if (res.layout) {
@@ -22,6 +23,7 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
       .catch(() => {
         setLayout(getPlanDefaultLayout(planName));
       });
+    return () => c.abort();
   }, [planName]);
 
   const displayLayout = useMemo(() => layout ?? getPlanDefaultLayout(planName), [layout, planName]);

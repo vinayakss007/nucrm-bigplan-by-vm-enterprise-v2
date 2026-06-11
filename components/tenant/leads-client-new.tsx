@@ -273,7 +273,9 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
   }, [search]);
 
   useEffect(()=>{
-    load(0, activeStatus, debouncedSearch);
+    const c = new AbortController();
+    load(0, activeStatus, debouncedSearch, c.signal);
+    return () => c.abort();
   }, [debouncedSearch, activeStatus, sortBy, sortOrder]);
 
   const handleSearch=(q:string)=>{setSearch(q);};

@@ -51,12 +51,12 @@ export default function EsignaturePage() {
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (filter !== 'all') params.set('status', filter);
-      const res = await fetch(`/api/tenant/esignature?${params}`);
+      const res = await fetch(`/api/tenant/esignature?${params}`, { signal });
       if (res.ok) {
         const d = await res.json();
         setRequests(d.data ?? []);
@@ -66,7 +66,11 @@ export default function EsignaturePage() {
     }
   };
 
-  useEffect(() => { load(); }, [filter]);
+  useEffect(() => {
+    const c = new AbortController();
+    load(c.signal);
+    return () => c.abort();
+  }, [filter]);
 
   const openCreate = () => {
     setForm({ documentId: '', provider: 'internal', signers: [{ name: '', email: '' }] });

@@ -16,7 +16,8 @@ export default function SettingsNav() {
   const [query, setQuery] = useState('');
 
   useEffect(() => {
-    fetch('/api/tenant/me')
+    const c = new AbortController();
+    fetch('/api/tenant/me', { signal: c.signal })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setIsAdmin(d.is_admin ?? false))
       .catch(() => {});
@@ -25,6 +26,7 @@ export default function SettingsNav() {
       const q = sessionStorage.getItem('nucrm.settings.query');
       if (q) setQuery(q);
     } catch {}
+    return () => c.abort();
   }, []);
 
   useEffect(() => {

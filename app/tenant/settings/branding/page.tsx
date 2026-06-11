@@ -33,9 +33,10 @@ export default function BrandingSettingsPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
+    const c = new AbortController();
     async function loadBranding() {
       try {
-        const res = await fetch('/api/tenant/branding');
+        const res = await fetch('/api/tenant/branding', { signal: c.signal });
         if (res.ok) {
           const { data } = await res.json();
           setForm({
@@ -58,6 +59,7 @@ export default function BrandingSettingsPage() {
       }
     }
     loadBranding();
+    return () => c.abort();
   }, []);
 
   async function handleSave(e: React.FormEvent) {

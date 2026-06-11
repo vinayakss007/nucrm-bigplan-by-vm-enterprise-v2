@@ -35,12 +35,14 @@ export default function SSOSettingsPage() {
   });
 
   useEffect(() => {
-    loadProviders();
+    const c = new AbortController();
+    loadProviders(c.signal);
+    return () => c.abort();
   }, []);
 
-  async function loadProviders() {
+  async function loadProviders(signal?: AbortSignal) {
     try {
-      const res = await fetch('/api/tenant/sso');
+      const res = await fetch('/api/tenant/sso', { signal });
       if (res.ok) {
         const { data } = await res.json();
         setProviders(data || []);

@@ -34,14 +34,14 @@ export default function CalendarPage() {
   const [contacts, setContacts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadEvents = (month: Date) => {
+  const loadEvents = (month: Date, signal?: AbortSignal) => {
     setLoading(true);
     const start = startOfMonth(month).toISOString().split('T')[0];
     const end = endOfMonth(month).toISOString().split('T')[0];
     Promise.all([
-      fetch(`/api/tenant/meetings?start=${start}&end=${end}`).then(r => r.json()).catch(() => ({ data: [] })),
-      fetch(`/api/tenant/tasks?limit=200`).then(r => r.json()).catch(() => ({ data: [] })),
-      fetch('/api/tenant/contacts?limit=200').then(r => r.json()).catch(() => ({ data: [] })),
+      fetch(`/api/tenant/meetings?start=${start}&end=${end}`, { signal }).then(r => r.json()).catch(() => ({ data: [] })),
+      fetch(`/api/tenant/tasks?limit=200`, { signal }).then(r => r.json()).catch(() => ({ data: [] })),
+      fetch('/api/tenant/contacts?limit=200', { signal }).then(r => r.json()).catch(() => ({ data: [] })),
     ]).then(([meetings, tasks, cs]) => {
       const evs: CalEvent[] = [
         ...(meetings.data || []).map((m: any) => ({
@@ -65,7 +65,11 @@ export default function CalendarPage() {
     });
   };
 
-  useEffect(() => { loadEvents(currentMonth); }, [currentMonth]);
+  useEffect(() => {
+    const c = new AbortController();
+    loadEvents(currentMonth, c.signal);
+    return () => c.abort();
+  }, [currentMonth]);
 
   const days = eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) });
   const startPad = getDay(startOfMonth(currentMonth));

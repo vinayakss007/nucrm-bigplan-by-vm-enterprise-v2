@@ -35,22 +35,24 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
   const [showTemplates, setShowTemplates] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const loadMessages = useCallback(async () => {
+  const loadMessages = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true)
     try {
-      const res = await fetch(`/api/tenant/whatsapp/messages?contact_id=${contactId}`)
+      const res = await fetch(`/api/tenant/whatsapp/messages?contact_id=${contactId}`, { signal })
       if (!res.ok) throw new Error('Failed to load messages')
       const data = await res.json()
       setMessages(data.data || [])
     } catch (err: any) {
+      if (err instanceof Error && err.name === 'AbortError') return
       // Silently fail - WhatsApp may not be configured
     } finally {
       setLoading(false)
     }
   }, [contactId])
 
-  const loadTemplates = useCallback(async () => {
+  const loadTemplates = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/whatsapp/templates')
+      const res = await fetch('/api/tenant/whatsapp/templates', { signal })
       if (!res.ok) return
       const data = await res.json()
       setTemplates(data.data || [])
@@ -59,7 +61,12 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
     }
   }, [])
 
-  useEffect(() => { loadMessages(); loadTemplates() }, [loadMessages, loadTemplates])
+  useEffect(() => {
+    const c = new AbortController()
+    loadMessages(c.signal)
+    loadTemplates(c.signal)
+    return () => c.abort()
+  }, [loadMessages, loadTemplates])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })

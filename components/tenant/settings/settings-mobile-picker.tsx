@@ -20,8 +20,10 @@ export default function SettingsMobilePicker() {
   const [query, setQuery] = useState('');
 
   useEffect(() => {
-    fetch('/api/tenant/me').then(r => r.ok ? r.json() : Promise.reject())
+    const c = new AbortController();
+    fetch('/api/tenant/me', { signal: c.signal }).then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setIsAdmin(d.is_admin ?? false)).catch(() => {});
+    return () => c.abort();
   }, []);
 
   // Close sheet on route change

@@ -68,10 +68,10 @@ export default function AITemplatesPage() {
   const [editing, setEditing] = useState<Template | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  function load() {
+  function load(signal?: AbortSignal) {
     setLoading(true);
     setError(null);
-    fetch('/api/tenant/admin/ai-templates', { cache: 'no-store' })
+    fetch('/api/tenant/admin/ai-templates', { signal, cache: 'no-store' })
       .then(async r => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
         return r.json();
@@ -80,7 +80,11 @@ export default function AITemplatesPage() {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }
-  useEffect(load, []);
+  useEffect(() => {
+    const c = new AbortController();
+    load(c.signal);
+    return () => c.abort();
+  }, []);
 
   async function installSeed(slug: string) {
     setBusy('install:' + slug);

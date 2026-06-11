@@ -89,7 +89,8 @@ export async function recordFailedAttempt(
         AND attempted_at > ${windowStart}
     `);
     
-    const ipCount = (ipResult.rows?.[0] as any)?.count || 0;
+    const ipRow = ipResult.rows?.[0] as { count?: number } | undefined;
+    const ipCount = ipRow?.count || 0;
 
     // Count recent failed attempts for this email
     const emailResult = await db.execute(sql`
@@ -100,7 +101,8 @@ export async function recordFailedAttempt(
         AND attempted_at > ${windowStart}
     `);
     
-    const emailCount = (emailResult.rows?.[0] as any)?.count || 0;
+    const emailRow = emailResult.rows?.[0] as { count?: number } | undefined;
+    const emailCount = emailRow?.count || 0;
 
     // Block IP if too many attempts
     if (ipCount >= config.maxAttempts) {
@@ -184,7 +186,8 @@ export async function getBruteForceStatus(
         AND attempted_at > ${windowStart}
     `);
 
-    const attempts = (result.rows?.[0] as any)?.count || 0;
+    const row = result.rows?.[0] as { count?: number } | undefined;
+    const attempts = row?.count || 0;
     const checkBlock = await isBlocked(identifier, type, config);
 
     return {
@@ -219,8 +222,8 @@ export async function cleanupOldRecords(): Promise<{ blocksCleaned: number; atte
     `);
 
     return {
-      blocksCleaned: (blockResult as any)?.rowCount || 0,
-      attemptsCleaned: (attemptsResult as any)?.rowCount || 0,
+      blocksCleaned: (blockResult as { rowCount?: number })?.rowCount || 0,
+      attemptsCleaned: (attemptsResult as { rowCount?: number })?.rowCount || 0,
     };
   } catch (err) {
     devLogger.error(err as Error, '[brute-force] cleanup failed');

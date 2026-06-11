@@ -26,13 +26,17 @@ export default function NotificationsPage() {
   const [filter, setFilter] = useState<'all'|'unread'>('all');
   const router = useRouter();
 
-  const load = async () => {
-    const res = await fetch('/api/tenant/notifications');
+  const load = async (signal?: AbortSignal) => {
+    const res = await fetch('/api/tenant/notifications', { signal });
     const d = await res.json();
     setNotifications((d.data ?? []).map((n: any) => toSnakeCase(n)));
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const c = new AbortController();
+    load(c.signal);
+    return () => c.abort();
+  }, []);
 
   const isUnread = (n: any) => !n.read_at && !n.is_read;
 

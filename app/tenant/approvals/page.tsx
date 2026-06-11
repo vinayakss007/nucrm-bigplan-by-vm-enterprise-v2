@@ -86,10 +86,10 @@ export default function ApprovalsPage() {
     return p.toString();
   }, [filter]);
 
-  function load() {
+  function load(signal?: AbortSignal) {
     setLoading(true);
     setError(null);
-    fetch(`/api/tenant/approvals?${qs}`, { cache: 'no-store' })
+    fetch(`/api/tenant/approvals?${qs}`, { signal, cache: 'no-store' })
       .then(async r => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
         return r.json();
@@ -98,7 +98,11 @@ export default function ApprovalsPage() {
       .catch(e => setError(e.message || 'Failed to load'))
       .finally(() => setLoading(false));
   }
-  useEffect(load, [qs]);
+  useEffect(() => {
+    const c = new AbortController();
+    load(c.signal);
+    return () => c.abort();
+  }, [qs]);
 
   async function decide(row: Row, action: 'approve' | 'reject', reason?: string) {
     setBusyId(row.id);
