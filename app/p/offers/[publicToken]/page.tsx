@@ -64,7 +64,7 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
     fetch(`/api/public/offers/${publicToken}`, { cache: 'no-store' })
       .then(async r => {
         if (!r.ok) {
-          const body = await r.json().catch(() => ({}));
+          const body = await r.json().catch(e => { console.error('[json] parse error:', e); return {}; });
           throw Object.assign(new Error(body.error ?? `Unable to load offer (${r.status})`), { status: r.status });
         }
         return r.json();

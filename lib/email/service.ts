@@ -237,7 +237,7 @@ export async function sendTelegram(opts: {
     });
 
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json().catch(e => { console.error('[json] parse error:', e); return {}; });
       console.error('[telegram] Failed:', data.description || res.status);
     }
   } catch (err) {

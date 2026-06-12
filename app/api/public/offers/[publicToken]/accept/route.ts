@@ -50,7 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
       return NextResponse.json({ error: 'Offer has expired' }, { status: 410 });
     }
 
-    const raw = await req.json().catch(() => ({}));
+    const raw = await req.json().catch(e => { console.error('[json] parse error:', e); return {}; });
     const parsed = validateBody(offerAcceptSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const email = parsed.data.email?.trim() ?? null;

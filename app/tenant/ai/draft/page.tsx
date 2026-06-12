@@ -64,7 +64,7 @@ export default function AIDraftPage() {
   useEffect(() => {
     fetch('/api/tenant/admin/ai-templates')
       .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+        if (!r.ok) throw new Error((await r.json().catch(e => { console.error('[json] parse error:', e); return {}; })).error ?? `HTTP ${r.status}`);
         return r.json();
       })
       .then((d: { templates: Template[]; seeds: Template[] }) => {

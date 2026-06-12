@@ -34,7 +34,7 @@ export default function AIAtRiskPage() {
     setError(null);
     fetch('/api/tenant/ai/at-risk', { cache: 'no-store' })
       .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+        if (!r.ok) throw new Error((await r.json().catch(e => { console.error('[json] parse error:', e); return {}; })).error ?? `HTTP ${r.status}`);
         return r.json();
       })
       .then(d => setDeals(d.data))

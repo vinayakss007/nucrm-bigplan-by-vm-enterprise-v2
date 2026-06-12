@@ -37,7 +37,7 @@ export default function LeadScoringRulesPage() {
     setError(null);
     fetch('/api/tenant/admin/lead-scoring', { cache: 'no-store' })
       .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+        if (!r.ok) throw new Error((await r.json().catch(e => { console.error('[json] parse error:', e); return {}; })).error ?? `HTTP ${r.status}`);
         return r.json();
       })
       .then(d => setRules(d.rules))
@@ -72,7 +72,7 @@ export default function LeadScoringRulesPage() {
     setBusy('delete:' + id);
     try {
       const r = await fetch(`/api/tenant/admin/lead-scoring/${id}`, { method: 'DELETE' });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+      if (!r.ok) throw new Error((await r.json().catch(e => { console.error('[json] parse error:', e); return {}; })).error ?? `HTTP ${r.status}`);
       load();
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(null); }

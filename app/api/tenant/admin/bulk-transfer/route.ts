@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     if (auth.error) return auth.error;
     ctx = auth.ctx!;
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(e => { console.error('[json] parse error:', e); return {}; });
     const fromUserId: string | undefined = body.from_user_id;
     const toUserId:   string | undefined = body.to_user_id;
     const resources: Resource[] = Array.isArray(body.resources) ? body.resources : [];

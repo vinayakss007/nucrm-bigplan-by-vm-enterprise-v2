@@ -96,7 +96,7 @@ export default function AIActivityPage() {
     setError(null);
     fetch(`/api/tenant/ai/activity?${qs}`, { cache: 'no-store' })
       .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+        if (!r.ok) throw new Error((await r.json().catch(e => { console.error('[json] parse error:', e); return {}; })).error ?? `HTTP ${r.status}`);
         return r.json();
       })
       .then(setData)
@@ -112,7 +112,7 @@ export default function AIActivityPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, accepted }),
       });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Failed');
+      if (!r.ok) throw new Error((await r.json().catch(e => { console.error('[json] parse error:', e); return {}; })).error ?? 'Failed');
       // Optimistic update
       setData(prev => prev ? {
         ...prev,

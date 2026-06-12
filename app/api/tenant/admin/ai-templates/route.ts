@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const body = (await req.json().catch(() => ({}))) as UpsertBody;
+    const body = (await req.json().catch(e => { console.error('[json] parse error:', e); return {}; })) as UpsertBody;
 
     // Allow installing a seed template by slug
     if (typeof body.slug === 'string' && !body.system_prompt && !body.user_prompt) {

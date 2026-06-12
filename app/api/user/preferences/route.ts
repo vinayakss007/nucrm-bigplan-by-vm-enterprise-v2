@@ -144,7 +144,7 @@ export async function PATCH(req: NextRequest) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(e => { console.error('[json] parse error:', e); return {}; });
 
     // Validate strings
     for (const k of STRING_VALIDATED) {

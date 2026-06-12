@@ -39,7 +39,7 @@ export default function AILeadScoringPage() {
     setError(null);
     fetch('/api/tenant/leads?sort_by=score&sort_order=DESC&limit=100', { cache: 'no-store' })
       .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+        if (!r.ok) throw new Error((await r.json().catch(e => { console.error('[json] parse error:', e); return {}; })).error ?? `HTTP ${r.status}`);
         return r.json();
       })
       .then(d => {
@@ -75,7 +75,7 @@ export default function AILeadScoringPage() {
     setBusy('recompute');
     try {
       const r = await fetch('/api/tenant/admin/lead-scoring/recompute', { method: 'POST' });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+      if (!r.ok) throw new Error((await r.json().catch(e => { console.error('[json] parse error:', e); return {}; })).error ?? `HTTP ${r.status}`);
       load();
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(null); }

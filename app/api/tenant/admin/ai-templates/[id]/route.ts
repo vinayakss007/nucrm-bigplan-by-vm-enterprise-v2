@@ -42,7 +42,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
     if (!existing) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(e => { console.error('[json] parse error:', e); return {}; });
 
     const patch: Record<string, unknown> = { updatedAt: new Date(), updatedBy: ctx.userId };
     if (typeof body.name === 'string' && body.name.trim()) patch['name'] = body.name.trim().slice(0, 120);

@@ -71,7 +71,7 @@ export async function PATCH(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(e => { console.error('[json] parse error:', e); return {}; });
     const incoming = body.localization;
     if (!incoming || typeof incoming !== 'object')
       return NextResponse.json({ error: 'localization object required' }, { status: 400 });

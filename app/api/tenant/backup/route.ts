@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json().catch(() => ({}));
+    const body = await request.json().catch(e => { console.error('[json] parse error:', e); return {}; });
     const backupType = body.backup_type === 'schema' ? 'schema' : 'full';
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
         message: 'Backup completed successfully',
       });
     } else {
-      const cronError = await cronRes.json().catch(() => ({}));
+      const cronError = await cronRes.json().catch(e => { console.error('[json] parse error:', e); return {}; });
       return NextResponse.json({ error: cronError.error || 'Backup failed' }, { status: 500 });
     }
   } catch (err: any) {

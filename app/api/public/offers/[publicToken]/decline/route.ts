@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
       return NextResponse.json({ error: 'Offer cannot be declined in its current state' }, { status: 409 });
     }
 
-    const raw = await req.json().catch(() => ({}));
+    const raw = await req.json().catch(e => { console.error('[json] parse error:', e); return {}; });
     const parsed = validateBody(offerDeclineSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const reason = (parsed.data.reason ?? '').trim();

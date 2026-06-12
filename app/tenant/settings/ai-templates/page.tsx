@@ -73,7 +73,7 @@ export default function AITemplatesPage() {
     setError(null);
     fetch('/api/tenant/admin/ai-templates', { cache: 'no-store' })
       .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+        if (!r.ok) throw new Error((await r.json().catch(e => { console.error('[json] parse error:', e); return {}; })).error ?? `HTTP ${r.status}`);
         return r.json();
       })
       .then(setData)
@@ -137,7 +137,7 @@ export default function AITemplatesPage() {
     setError(null);
     try {
       const r = await fetch(`/api/tenant/admin/ai-templates/${t.id}`, { method: 'DELETE' });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+      if (!r.ok) throw new Error((await r.json().catch(e => { console.error('[json] parse error:', e); return {}; })).error ?? `HTTP ${r.status}`);
       load();
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(null); }

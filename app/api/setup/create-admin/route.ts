@@ -10,7 +10,7 @@ import { logError } from '@/lib/errors-server';
 export async function POST(request: NextRequest) {
   try {
     // Parse body once
-    const body = await request.json().catch(() => ({}));
+    const body = await request.json().catch(e => { console.error('[json] parse error:', e); return {}; });
     const { full_name, email, password, workspace_name, setup_key } = body;
 
     // Only works if zero super admin users exist

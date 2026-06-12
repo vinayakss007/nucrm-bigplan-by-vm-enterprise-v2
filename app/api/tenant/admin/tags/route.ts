@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(e => { console.error('[json] parse error:', e); return {}; });
     const action = body.action;
 
     if (action === 'rename') {

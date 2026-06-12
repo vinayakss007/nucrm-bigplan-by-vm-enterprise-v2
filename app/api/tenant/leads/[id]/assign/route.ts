@@ -39,7 +39,7 @@ export async function POST(request: NextRequest, { params }: any) {
     }
 
     const { id } = await params;
-    const rawBody = await request.json().catch(() => ({}));
+    const rawBody = await request.json().catch(e => { console.error('[json] parse error:', e); return {}; });
     const validated = validateBody(assignSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const { assigned_to: newAssignee, reason } = validated.data;

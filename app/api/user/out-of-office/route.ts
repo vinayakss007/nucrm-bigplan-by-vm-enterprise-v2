@@ -64,7 +64,7 @@ export async function PATCH(req: NextRequest) {
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(e => { console.error('[json] parse error:', e); return {}; });
     const ooo = body.out_of_office;
     if (!ooo || typeof ooo !== 'object')
       return NextResponse.json({ error: 'out_of_office object required' }, { status: 400 });

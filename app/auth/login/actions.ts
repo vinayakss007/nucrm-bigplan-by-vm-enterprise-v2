@@ -14,7 +14,7 @@ export async function loginAction(formData: FormData) {
     });
 
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
+      const body = await res.json().catch(e => { console.error('[json] parse error:', e); return {}; });
       return { error: body.error || `Login failed (${res.status})` };
     }
 

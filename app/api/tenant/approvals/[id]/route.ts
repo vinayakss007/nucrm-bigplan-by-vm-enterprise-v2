@@ -31,7 +31,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params;
     if (!id) return NextResponse.json({ error: 'request id required' }, { status: 400 });
 
-    const body = (await req.json().catch(() => ({}))) as PatchBody;
+    const body = (await req.json().catch(e => { console.error('[json] parse error:', e); return {}; })) as PatchBody;
     const action = body.action;
     if (action !== 'approve' && action !== 'reject') {
       return NextResponse.json({ error: "action must be 'approve' or 'reject'" }, { status: 400 });

@@ -63,7 +63,7 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
     setError(null);
     fetch(`/api/tenant/quotes/${id}`, { cache: 'no-store' })
       .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+        if (!r.ok) throw new Error((await r.json().catch(e => { console.error('[json] parse error:', e); return {}; })).error ?? `HTTP ${r.status}`);
         return r.json();
       })
       .then(d => {

@@ -65,7 +65,7 @@ export default function ErrorsPage() {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ id, resolveAll, level: lvl }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Resolve failed');
+      if (!res.ok) throw new Error((await res.json().catch(e => { console.error('[json] parse error:', e); return {}; })).error || 'Resolve failed');
       toast.success(resolveAll ? 'All resolved' : 'Marked resolved');
       load();
     } catch (err: any) {
