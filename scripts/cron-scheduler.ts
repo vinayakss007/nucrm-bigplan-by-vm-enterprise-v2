@@ -38,6 +38,7 @@ const JOBS: CronJob[] = [
   { name: 'trial-check',         path: '/api/cron/trial-check',         schedule: '0 0 * * *',         intervalMs: 24 * 60 * 60_000 },
   { name: 'usage-snapshot',      path: '/api/cron/usage-snapshot',      schedule: '0 0 * * 0',         intervalMs: 7 * 24 * 60 * 60_000 },
   { name: 'auto-backup',         path: '/api/cron/auto-backup',         schedule: '0 2 * * *',         intervalMs: 24 * 60 * 60_000 },
+  { name: 'backup',              path: '/api/cron/backup',              schedule: '30 2 * * *',        intervalMs: 24 * 60 * 60_000 },
   { name: 'backup-health',       path: '/api/cron/backup-health',       schedule: '0 3 * * 0',         intervalMs: 7 * 24 * 60 * 60_000 },
   { name: 'cleanup',             path: '/api/cron/cleanup',             schedule: '0 4 * * 0',         intervalMs: 7 * 24 * 60 * 60_000 },
   { name: 'warmup-emails',       path: '/api/cron/warmup-emails',       schedule: '0 9,13,17 * * *',   intervalMs: 4 * 60 * 60_000 },
