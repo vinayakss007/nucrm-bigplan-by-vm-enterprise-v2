@@ -8,9 +8,11 @@ export default function PortalInvoicesPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let ignore = false;
     fetch('/api/public/invoices').then(r => r.json()).then(d => {
-      setInvoices(d.data || []); setLoading(false);
-    }).catch(() => setLoading(false));
+      if (!ignore) { setInvoices(d.data || []); setLoading(false); }
+    }).catch(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
   }, []);
 
   const statusColor: Record<string, string> = {

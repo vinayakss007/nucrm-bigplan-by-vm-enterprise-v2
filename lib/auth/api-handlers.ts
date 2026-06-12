@@ -106,7 +106,7 @@ export async function POST_login(request: NextRequest) {
           await db.update(users)
             .set({ totpBackupCodes: codes.filter((x:string)=>x!==hash) })
             .where(eq(users.id, user.id))
-            .catch(()=>{});
+            .catch(e => logError({ error: e, context: "api-handlers" }));
         }
       }
       if (!valid) return NextResponse.json({ error:'Invalid 2FA code', requires_2fa:true }, { status:401 });
@@ -318,7 +318,7 @@ export async function POST_signup(request: NextRequest) {
       message: `**${user.fullName}** (${user.email}) joined\nWorkspace: **${tenant.name}** (\`${tenant.slug}\`)`,
       color: '#10b981',
       url: `${process.env.NEXT_PUBLIC_APP_URL}/tenant`,
-    }).catch(() => {});
+    }).catch(e => logError({ error: e, context: 'api-handlers' }));
 
     // Send Telegram notification if user configured it (fire-and-forget)
     sendTelegram({
@@ -328,7 +328,7 @@ export async function POST_signup(request: NextRequest) {
       message: `${user.fullName} (${user.email}) joined\nWorkspace: ${tenant.name} (${tenant.slug})`,
       icon: '🟢',
       url: `${process.env.NEXT_PUBLIC_APP_URL}/tenant`,
-    }).catch(() => {});
+    }).catch(e => logError({ error: e, context: 'api-handlers' }));
 
     // Send verification email (fire-and-forget)
     if (process.env.RESEND_API_KEY || process.env.SMTP_HOST) {
@@ -364,7 +364,7 @@ export async function POST_logout(request: NextRequest) {
     const token = request.cookies.get('nucrm_session')?.value;
     if (token) {
       const tokenHash = await hashToken(token);
-      await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash)).catch(()=>{});
+      await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash)).catch(e => logError({ error: e, context: "api-handlers" }));
     }
     await clearSessionCookie();
     const logoutResponse = NextResponse.json({ ok:true });

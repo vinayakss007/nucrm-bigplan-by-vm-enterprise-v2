@@ -12,9 +12,11 @@ export default function PortalKBArticlePage() {
   const [helpful, setHelpful] = useState<boolean | null>(null);
 
   useEffect(() => {
+    let ignore = false;
     fetch(`/api/public/kb/articles/${params.id}`).then(r => r.json()).then(d => {
-      setArticle(d.data); setLoading(false);
-    }).catch(() => setLoading(false));
+      if (!ignore) { setArticle(d.data); setLoading(false); }
+    }).catch(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
   }, [params.id]);
 
   if (loading) return (

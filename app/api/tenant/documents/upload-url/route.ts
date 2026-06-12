@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
 
-  const raw = await request.json().catch(() => null);
+  const raw = await request.json().catch(e => { console.error('[upload-url]', e); return null; });
   const parsed = validateBody(uploadUrlSchema, raw);
   if (parsed instanceof NextResponse) return parsed;
   const { name: nameRaw, mime_type: mimeType, size_bytes: sizeBytes } = parsed.data;

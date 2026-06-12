@@ -301,7 +301,7 @@ class DevelopmentLogger {
           Sentry.captureException(err, {
             tags: { context, userId },
           });
-        }).catch(() => {});
+        }).catch(() => {/* Sentry unavailable */});
       }
     }
 

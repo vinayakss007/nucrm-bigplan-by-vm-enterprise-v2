@@ -35,16 +35,22 @@ export default function HealthPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let ignore = false;
     fetch('/api/health')
       .then(r => r.json())
       .then(d => {
-        setHealth(d);
-        setLoading(false);
+        if (!ignore) {
+          setHealth(d);
+          setLoading(false);
+        }
       })
       .catch(err => {
-        console.error(err);
-        setLoading(false);
+        if (!ignore) {
+          console.error(err);
+          setLoading(false);
+        }
       });
+    return () => { ignore = true; };
   }, []);
 
   const refresh = () => {

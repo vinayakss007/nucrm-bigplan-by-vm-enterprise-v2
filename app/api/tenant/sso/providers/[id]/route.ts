@@ -39,7 +39,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  const body = (await request.json().catch(() => null)) as
+  const body = (await request.json().catch(e => { console.error('[sso]', e); return null; })) as
     | (Parameters<typeof validateInput>[0] & { is_active?: boolean })
     | null;
   const validationError = validateInput(body, { secretRequired: false });

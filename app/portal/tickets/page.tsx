@@ -10,9 +10,11 @@ export default function PortalTicketsPage() {
   const [showCreate, setShowCreate] = useState(false);
 
   useEffect(() => {
+    let ignore = false;
     fetch('/api/public/tickets').then(r => r.json()).then(d => {
-      setTickets(d.data || []); setLoading(false);
-    }).catch(() => setLoading(false));
+      if (!ignore) { setTickets(d.data || []); setLoading(false); }
+    }).catch(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
   }, []);
 
   const statusColor: Record<string, string> = {

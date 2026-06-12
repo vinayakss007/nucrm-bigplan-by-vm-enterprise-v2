@@ -39,36 +39,37 @@ export default function RBACSettingsPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    let ignore = false;
+    async function loadData() {
+      setLoading(true);
+      try {
+        const [fpRes, rpRes, arRes] = await Promise.all([
+        fetch('/api/tenant/rbac/field-permissions').catch(e => { console.error('[rbac]', e); return null; }),
+        fetch('/api/tenant/rbac/record-permissions').catch(e => { console.error('[rbac]', e); return null; }),
+        fetch('/api/tenant/rbac/approval-rules').catch(e => { console.error('[rbac]', e); return null; }),
+        ]);
 
-  async function loadData() {
-    setLoading(true);
-    try {
-      const [fpRes, rpRes, arRes] = await Promise.all([
-        fetch('/api/tenant/rbac/field-permissions').catch(() => null),
-        fetch('/api/tenant/rbac/record-permissions').catch(() => null),
-        fetch('/api/tenant/rbac/approval-rules').catch(() => null),
-      ]);
-
-      if (fpRes?.ok) {
-        const { data } = await fpRes.json();
-        setFieldPermissions(data || []);
+        if (!ignore && fpRes?.ok) {
+          const { data } = await fpRes.json();
+          setFieldPermissions(data || []);
+        }
+        if (!ignore && rpRes?.ok) {
+          const { data } = await rpRes.json();
+          setRecordPermissions(data || []);
+        }
+        if (!ignore && arRes?.ok) {
+          const { data } = await arRes.json();
+          setApprovalRules(data || []);
+        }
+      } catch {
+        // Defaults on error
+      } finally {
+        if (!ignore) setLoading(false);
       }
-      if (rpRes?.ok) {
-        const { data } = await rpRes.json();
-        setRecordPermissions(data || []);
-      }
-      if (arRes?.ok) {
-        const { data } = await arRes.json();
-        setApprovalRules(data || []);
-      }
-    } catch {
-      // Defaults on error
-    } finally {
-      setLoading(false);
     }
-  }
+    loadData();
+    return () => { ignore = true; };
+  }, []);
 
   if (loading) {
     return <div className="p-6">Loading RBAC settings...</div>;

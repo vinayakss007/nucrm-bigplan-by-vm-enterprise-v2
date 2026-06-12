@@ -15,10 +15,12 @@ export default function AILayout({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    let ignore = false;
     fetch('/api/tenant/me')
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => setIsAdmin(d.is_admin ?? false))
+      .then(d => { if (!ignore) setIsAdmin(d.is_admin ?? false); })
       .catch((err) => console.error('[AI Layout] fetch /api/tenant/me failed:', err));
+    return () => { ignore = true; };
   }, []);
 
   const items = AI_CAPABILITIES.filter(c => !c.adminOnly || isAdmin);

@@ -33,10 +33,11 @@ export default function BrandingSettingsPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
+    let ignore = false;
     async function loadBranding() {
       try {
         const res = await fetch('/api/tenant/branding');
-        if (res.ok) {
+        if (!ignore && res.ok) {
           const { data } = await res.json();
           setForm({
             logoUrl: data.logoUrl || '',
@@ -54,10 +55,11 @@ export default function BrandingSettingsPage() {
       } catch {
         // Use defaults on error
       } finally {
-        setLoading(false);
+        if (!ignore) setLoading(false);
       }
     }
     loadBranding();
+    return () => { ignore = true; };
   }, []);
 
   async function handleSave(e: React.FormEvent) {

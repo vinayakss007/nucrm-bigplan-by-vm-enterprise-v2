@@ -14,12 +14,14 @@ export default function TenantSettingsAuditPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let ignore = false;
     if (!params?.id) return;
     fetch(`/api/superadmin/tenant-settings?tenant_id=${params.id}`)
       .then(r => r.ok ? r.json() : Promise.reject(r))
-      .then(setData)
-      .catch(() => setData({ error: true }))
-      .finally(() => setLoading(false));
+      .then(d => { if (!ignore) setData(d); })
+      .catch(() => { if (!ignore) setData({ error: true }); })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
   }, [params?.id]);
 
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;

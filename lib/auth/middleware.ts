@@ -39,7 +39,7 @@ async function extractToken(request: NextRequest): Promise<string | null> {
     const store = await cookies();
     const val = store.get('nucrm_session')?.value;
     if (val) return val;
-  } catch {}
+  } catch { /* cookies() not available in middleware */ }
   return request.cookies.get('nucrm_session')?.value ?? null;
 }
 

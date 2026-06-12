@@ -10,9 +10,11 @@ export default function PortalKBPage() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
+    let ignore = false;
     fetch('/api/public/kb/articles?status=published').then(r => r.json()).then(d => {
-      setArticles(d.data || []); setLoading(false);
-    }).catch(() => setLoading(false));
+      if (!ignore) { setArticles(d.data || []); setLoading(false); }
+    }).catch(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
   }, []);
 
   const filtered = articles.filter(a =>

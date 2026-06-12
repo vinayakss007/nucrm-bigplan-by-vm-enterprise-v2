@@ -35,40 +35,41 @@ export default function SSOSettingsPage() {
   });
 
   useEffect(() => {
-    loadProviders();
-  }, []);
-
-  async function loadProviders() {
-    try {
-      const res = await fetch('/api/tenant/sso');
-      if (res.ok) {
-        const { data } = await res.json();
-        setProviders(data || []);
-        // Populate form if existing provider
-        if (data && data.length > 0) {
-          const p = data[0];
-          setProviderType(p.providerType);
-          setForm({
-            name: p.name || '',
-            entityId: p.config?.entityId || '',
-            ssoUrl: p.config?.ssoUrl || '',
-            certificate: p.config?.certificate || '',
-            clientId: p.config?.clientId || '',
-            clientSecret: p.config?.clientSecret || '',
-            issuer: p.config?.issuer || '',
-            authorizationEndpoint: p.config?.authorizationEndpoint || '',
-            tokenEndpoint: p.config?.tokenEndpoint || '',
-            userinfoEndpoint: p.config?.userinfoEndpoint || '',
-            redirectUri: p.config?.redirectUri || '',
-          });
+    let ignore = false;
+    async function loadProviders() {
+      try {
+        const res = await fetch('/api/tenant/sso');
+        if (!ignore && res.ok) {
+          const { data } = await res.json();
+          setProviders(data || []);
+          // Populate form if existing provider
+          if (data && data.length > 0) {
+            const p = data[0];
+            setProviderType(p.providerType);
+            setForm({
+              name: p.name || '',
+              entityId: p.config?.entityId || '',
+              ssoUrl: p.config?.ssoUrl || '',
+              certificate: p.config?.certificate || '',
+              clientId: p.config?.clientId || '',
+              clientSecret: p.config?.clientSecret || '',
+              issuer: p.config?.issuer || '',
+              authorizationEndpoint: p.config?.authorizationEndpoint || '',
+              tokenEndpoint: p.config?.tokenEndpoint || '',
+              userinfoEndpoint: p.config?.userinfoEndpoint || '',
+              redirectUri: p.config?.redirectUri || '',
+            });
+          }
         }
+      } catch {
+        // Use defaults
+      } finally {
+        if (!ignore) setLoading(false);
       }
-    } catch {
-      // Use defaults
-    } finally {
-      setLoading(false);
     }
-  }
+    loadProviders();
+    return () => { ignore = true; };
+  }, []);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();

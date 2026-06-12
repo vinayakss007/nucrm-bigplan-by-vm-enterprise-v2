@@ -127,7 +127,7 @@ export async function fireWebhooks(
         await db.update(integrations)
           .set({ lastUsedAt: new Date() })
           .where(eq(integrations.id, hook.id))
-          .catch(() => {});
+          .catch((e: any) => logger.warn(`[webhooks] silent error: ${e?.message}`));
           
       } catch (err: any) {
         logger.warn(`[webhook] ${hook.name} delivery error: ${err.message}`);

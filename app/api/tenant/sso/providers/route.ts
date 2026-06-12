@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Admin required' }, { status: 403 });
   }
 
-  const body = (await request.json().catch(() => null)) as OidcProviderInput | null;
+  const body = (await request.json().catch(e => { console.error('[sso]', e); return null; })) as OidcProviderInput | null;
   const validationError = validateInput(body, { secretRequired: true });
   if (validationError) return validationError;
   const v = body!;

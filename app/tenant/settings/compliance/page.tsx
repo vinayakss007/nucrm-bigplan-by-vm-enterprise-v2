@@ -34,36 +34,37 @@ export default function ComplianceSettingsPage() {
   const [newPolicy, setNewPolicy] = useState({ entityType: 'contacts', retentionDays: 365, action: 'archive' });
 
   useEffect(() => {
-    loadData();
-  }, []);
+    let ignore = false;
+    async function loadData() {
+      setLoading(true);
+      try {
+        const [retRes, gdprRes, soc2Res] = await Promise.all([
+          fetch('/api/tenant/compliance/retention'),
+          fetch('/api/tenant/compliance/gdpr'),
+          fetch('/api/tenant/compliance/soc2'),
+        ]);
 
-  async function loadData() {
-    setLoading(true);
-    try {
-      const [retRes, gdprRes, soc2Res] = await Promise.all([
-        fetch('/api/tenant/compliance/retention'),
-        fetch('/api/tenant/compliance/gdpr'),
-        fetch('/api/tenant/compliance/soc2'),
-      ]);
-
-      if (retRes.ok) {
-        const { data } = await retRes.json();
-        setPolicies(data || []);
+        if (!ignore && retRes.ok) {
+          const { data } = await retRes.json();
+          setPolicies(data || []);
+        }
+        if (!ignore && gdprRes.ok) {
+          const { data } = await gdprRes.json();
+          setGdprRequests(data || { exports: [], deletions: [] });
+        }
+        if (!ignore && soc2Res.ok) {
+          const { data } = await soc2Res.json();
+          setSoc2Reports(data || []);
+        }
+      } catch {
+        // Defaults on error
+      } finally {
+        if (!ignore) setLoading(false);
       }
-      if (gdprRes.ok) {
-        const { data } = await gdprRes.json();
-        setGdprRequests(data || { exports: [], deletions: [] });
-      }
-      if (soc2Res.ok) {
-        const { data } = await soc2Res.json();
-        setSoc2Reports(data || []);
-      }
-    } catch {
-      // Defaults on error
-    } finally {
-      setLoading(false);
     }
-  }
+    loadData();
+    return () => { ignore = true; };
+  }, []);
 
   async function createRetentionPolicy(e: React.FormEvent) {
     e.preventDefault();
