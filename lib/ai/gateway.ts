@@ -92,7 +92,7 @@ interface ProviderConfig {
   temperature: number;
   max_tokens: number;
   fallback_priority: number;
-  base_url?: string; // ollama only
+  base_url?: string;
 }
 
 const PROVIDER_DEFAULTS: Record<AIProviderId, ProviderConfig> = {
@@ -281,10 +281,14 @@ async function callProvider(
   const temperature = req.temperature ?? cfg.temperature;
 
   switch (provider) {
-    case 'openai':
-      return callOpenAILike('https://api.openai.com', apiKey, model, req.system, req.messages, max_tokens, temperature);
-    case 'groq':
-      return callOpenAILike('https://api.groq.com/openai', apiKey, model, req.system, req.messages, max_tokens, temperature);
+    case 'openai': {
+      const url = baseUrlOverride || cfg.base_url || 'https://api.openai.com';
+      return callOpenAILike(url, apiKey, model, req.system, req.messages, max_tokens, temperature);
+    }
+    case 'groq': {
+      const url = baseUrlOverride || cfg.base_url || 'https://api.groq.com/openai';
+      return callOpenAILike(url, apiKey, model, req.system, req.messages, max_tokens, temperature);
+    }
     case 'anthropic':
       return callAnthropic(apiKey, model, req.system, req.messages, max_tokens, temperature);
     case 'ollama': {
