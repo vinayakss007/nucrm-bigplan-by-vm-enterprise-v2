@@ -1,8 +1,8 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckSquare, Plus, X, User, Clock, Tag, Filter, CheckCircle, Trash2, AlertTriangle, Edit } from 'lucide-react';
-import { cn, formatDate, formatRelativeTime } from '@/lib/utils';
+import { CheckSquare, Plus, X, User, Clock, CheckCircle, Trash2, Edit } from 'lucide-react';
+import { cn, formatDate } from '@/lib/utils';
 import { Swipeable } from '@/components/ui/swipeable';
 import toast from 'react-hot-toast';
 

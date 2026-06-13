@@ -4,6 +4,7 @@ import { verifyCronSecret } from '@/lib/auth/cron';
 import { TenantDataExporter } from '@/lib/tenant-data-export';
 import { sendAlertEmail } from '@/lib/email/alerts';
 import { apiError } from '@/lib/api-error';
+import { captureError } from '@/lib/capture-error';
 
 /**
  * Automated Backup Scheduler
@@ -163,8 +164,8 @@ async function backupSingleTenant(
         `Backup Failed: ${tenantName}`,
         `Backup failed for tenant ${tenantName}: ${err.message}`,
       );
-    } catch {
-      // Email alert failed — log only
+    } catch (err) {
+      captureError(err, 'AutoBackup:EmailAlert');
     }
 
     throw err;

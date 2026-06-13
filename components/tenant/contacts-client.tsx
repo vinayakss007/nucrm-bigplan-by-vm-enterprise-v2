@@ -24,7 +24,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const STATUS_CONFIG: Record<string,{label:string;color:string;dot:string;icon:any}> = {
@@ -294,7 +293,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
       toast.success(`${verb} ${data.affected ?? ids.length} contacts`);
       setSelectedIds(new Set());
       load(offset);
-    } catch (err) {
+    } catch {
       toast.error(`Bulk ${action} failed`);
     } finally {
       setBulkBusy(false);

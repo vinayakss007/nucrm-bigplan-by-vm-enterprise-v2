@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
           ))
           .orderBy(desc(contacts.updatedAt))
           .limit(limit)
-        : Promise.resolve([] as any[]),
+        : Promise.resolve([] as unknown as Awaited<ReturnType<typeof db.select>>),
 
       (type === 'all' || type === 'leads')
         ? db.select({
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
           ))
           .orderBy(desc(leads.updatedAt))
           .limit(limit)
-        : Promise.resolve([] as any[]),
+        : Promise.resolve([] as unknown as Awaited<ReturnType<typeof db.select>>),
 
       (type === 'all' || type === 'deals')
         ? db.select({
@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
           ))
           .orderBy(desc(deals.updatedAt))
           .limit(limit)
-        : Promise.resolve([] as any[]),
+        : Promise.resolve([] as unknown as Awaited<ReturnType<typeof db.select>>),
 
       (type === 'all' || type === 'companies')
         ? db.select({
@@ -136,7 +136,7 @@ export async function GET(request: NextRequest) {
           ))
           .orderBy(desc(companies.updatedAt))
           .limit(limit)
-        : Promise.resolve([] as any[]),
+        : Promise.resolve([] as unknown as Awaited<ReturnType<typeof db.select>>),
 
       (type === 'all' || type === 'tasks')
         ? db.select({
@@ -164,10 +164,10 @@ export async function GET(request: NextRequest) {
           ))
           .orderBy(asc(tasks.dueDate))
           .limit(limit)
-        : Promise.resolve([] as any[]),
+        : Promise.resolve([] as unknown as Awaited<ReturnType<typeof db.select>>),
     ]);
 
-    const total = contactResults.length + leadResults.length + dealResults.length + companyResults.length + taskResults.length;
+    const total = (contactResults as any[]).length + (leadResults as any[]).length + (dealResults as any[]).length + (companyResults as any[]).length + (taskResults as any[]).length;
     return NextResponse.json({ 
       contacts: contactResults, 
       leads: leadResults, 

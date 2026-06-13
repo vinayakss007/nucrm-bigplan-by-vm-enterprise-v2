@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     ));
 
     return NextResponse.json({ count: result?.count ?? 0 });
-  } catch (err) {
+  } catch {
     return NextResponse.json({ count: 0 });
   }
 }

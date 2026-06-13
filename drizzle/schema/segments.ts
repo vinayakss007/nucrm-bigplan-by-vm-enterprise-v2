@@ -1,5 +1,4 @@
-import { uniqueIndex, pgTable, uuid, text, timestamp, jsonb, index, integer } from 'drizzle-orm/pg-core';
-import { tenants, users } from './core';
+import { pgTable, uuid, text, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
 import * as utils from './utils';
 
 // ── 1. DYNAMIC SEGMENTS (SMART LISTS) ────────────────

@@ -1,8 +1,8 @@
 'use client';
-import { useEffect } from 'react';
+import { useCaptureError } from '@/lib/capture-error';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 export default function TenantError({ error, reset }: { error: Error; reset: () => void }) {
-  useEffect(() => { console.error('[tenant error]', error); }, [error]);
+  useCaptureError(error, 'tenant-dashboard');
   return (
     <div className="flex items-center justify-center h-64 p-8">
       <div className="text-center max-w-sm">

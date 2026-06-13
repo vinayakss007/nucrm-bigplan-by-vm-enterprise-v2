@@ -99,9 +99,9 @@ export async function GET(request: NextRequest) {
     ]);
 
     dbStats = {
-      tables: parseInt((tableCount.rows[0] as any)?.count || '0'),
-      totalRows: parseInt((rowCount.rows[0] as any)?.count || '0'),
-      activeConnections: parseInt((connectionCount.rows[0] as any)?.count || '0'),
+      tables: parseInt(((tableCount.rows[0] as Record<string, unknown>)?.['count'] as string) || '0'),
+      totalRows: parseInt(((rowCount.rows[0] as Record<string, unknown>)?.['count'] as string) || '0'),
+      activeConnections: parseInt(((connectionCount.rows[0] as Record<string, unknown>)?.['count'] as string) || '0'),
     };
   } catch (error) {
     console.error('Failed to get DB stats:', error);
@@ -126,11 +126,11 @@ export async function GET(request: NextRequest) {
     memory,
     environment: {
       nodeEnv: process.env.NODE_ENV,
-      databaseUrl: (process.env as any).DATABASE_URL ? 'configured' : 'not configured',
-      resendApiKey: (process.env as any).RESEND_API_KEY ? ((process.env as any).RESEND_API_KEY.startsWith('re_test_') ? 'test mode' : 'configured') : 'not configured',
-      sentryDsn: (process.env as any).SENTRY_DSN ? 'configured' : 'not configured',
-      databaseSsl: (process.env as any).DATABASE_SSL,
-      databasePoolSize: (process.env as any).DATABASE_POOL_SIZE,
+      databaseUrl: (process.env as Record<string, string | undefined>)['DATABASE_URL'] ? 'configured' : 'not configured',
+      resendApiKey: (process.env as Record<string, string | undefined>)['RESEND_API_KEY'] ? ((process.env as Record<string, string | undefined>)['RESEND_API_KEY']?.startsWith('re_test_') ? 'test mode' : 'configured') : 'not configured',
+      sentryDsn: (process.env as Record<string, string | undefined>)['SENTRY_DSN'] ? 'configured' : 'not configured',
+      databaseSsl: (process.env as Record<string, string | undefined>)['DATABASE_SSL'],
+      databasePoolSize: (process.env as Record<string, string | undefined>)['DATABASE_POOL_SIZE'],
     },
     _meta: {
       accessLevel: 'super-admin-only',
@@ -169,7 +169,7 @@ export async function GET_LOGS(request: NextRequest) {
  * GET /api/dev/stats
  * Get current statistics
  */
-export async function GET_STATS(request: NextRequest) {
+export async function GET_STATS(_request: NextRequest) {
   if (process.env.NODE_ENV !== 'development') {
     return NextResponse.json({ error: 'Development only' }, { status: 403 });
   }
@@ -234,7 +234,7 @@ export async function GET_ERRORS(request: NextRequest) {
  * POST /api/dev/clear
  * Clear all logs
  */
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   if (process.env.NODE_ENV !== 'development') {
     return NextResponse.json({ error: 'Development only' }, { status: 403 });
   }

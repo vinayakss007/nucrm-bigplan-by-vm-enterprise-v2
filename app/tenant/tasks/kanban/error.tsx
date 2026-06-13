@@ -1,6 +1,8 @@
 'use client';
+import { useCaptureError } from '@/lib/capture-error';
 
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  useCaptureError(error, 'tenant-tasks-kanban');
   return (
     <div className="flex flex-col items-center justify-center h-48 gap-4">
       <p className="text-destructive font-medium">Failed to load task board</p>

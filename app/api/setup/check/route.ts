@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
-import { eq, count, sql } from 'drizzle-orm';
+import { eq, count } from 'drizzle-orm';
 
 // Public endpoint — checks if any SUPER ADMIN users exist yet
 export async function GET() {

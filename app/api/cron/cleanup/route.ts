@@ -1,3 +1,4 @@
+import { captureError } from '@/lib/capture-error';
 import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
@@ -37,13 +38,13 @@ export async function POST(request: NextRequest) {
       const row = result.rows[0] as { count: number };
       r['trash_purged'] = row?.count ?? 0;
     } catch (err) {
-      console.error('[Cleanup] Purge trash failed:', err);
+      captureError(err, 'Cleanup:PurgeTrash');
       r['trash_purged'] = 0;
     }
 
     return NextResponse.json({ ok: true, cleaned: r });
   } catch (err: any) { 
-    console.error('[Cleanup] Error:', err);
+    captureError(err, 'Cleanup:Main');
     return apiError(err); 
   }
 }

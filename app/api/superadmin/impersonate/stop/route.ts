@@ -5,7 +5,7 @@ import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 const schema = z.object({ sessionId: z.string().min(1) });
 

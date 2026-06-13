@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Book, ArrowLeft, Clock, Eye, ThumbsUp, ThumbsDown, Edit, Trash2, Check, X } from 'lucide-react';
+import { ArrowLeft, Clock, Eye, ThumbsUp, ThumbsDown, Edit, Trash2, X } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -26,7 +26,7 @@ export default function KBArticlePage() {
     } catch (err) { logError({ error: err, context: "catch:[context]" }); } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [params.id]);
+  useEffect(() => { load(); }, [params.id, load]);
 
   const vote = async (action: 'helpful' | 'not_helpful') => {
     if (voted) return;

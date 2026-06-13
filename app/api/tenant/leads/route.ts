@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateBody, validateQuery } from '@/lib/api/validate';
-import { createLeadSchema, leadQuerySchema } from '@/lib/api/schemas';
+import { validateBody } from '@/lib/api/validate';
+import { createLeadSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { leads, users, companies, leadActivities, activities } from '@/drizzle/schema';
@@ -231,7 +231,7 @@ export async function POST(request: NextRequest) {
           customFields: v.custom_fields,
           contactId: resolve.contactId,
           leadOid,
-          productId: (v as any).product_id || null,
+          productId: (v as { product_id?: string }).product_id || null,
         })
         .returning();
 

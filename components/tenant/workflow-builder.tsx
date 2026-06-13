@@ -24,7 +24,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import toast from 'react-hot-toast'
 
 // ─── Custom Node Data Type ─────────────────────────────────────────────────────
@@ -226,7 +225,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
     }
 
     loadWorkflow()
-  }, [workflowId])
+  }, [workflowId, setEdges])
 
   const onConnect: OnConnect = useCallback(
     (connection) => {
@@ -278,7 +277,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
       const sortedNodes = nodes.sort((a, b) => a.position.y - b.position.y)
       const actions = sortedNodes
         .filter(n => n.data['nodeType'] !== 'trigger')
-        .map((node, index) => ({
+        .map((node, _index) => ({
           action_type: node.data['nodeType'].replace('action_', ''),
           action_config: node.data['config'] || {},
           condition_type: node.data['nodeType'] === 'condition' ? 'if' : 'always',

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines } from '@/drizzle/schema';
-import { eq, and, isNull, gte, sql, desc } from 'drizzle-orm';
+import { eq, and, isNull, gte, sql } from 'drizzle-orm';
 import { withCache } from '@/lib/dashboard/widget-cache';
 
 export async function GET(request: NextRequest) {

@@ -127,6 +127,13 @@
       "when": 1746990400000,
       "tag": "0015_workflow_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1779574618000,
+      "tag": "0018_add_fk_references",
+      "breakpoints": true
     }
   ]
 }

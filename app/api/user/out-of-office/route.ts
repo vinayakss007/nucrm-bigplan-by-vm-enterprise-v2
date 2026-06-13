@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
       columns: { settings: true },
     });
 
-    const stored = ((row?.settings as any) ?? {}).out_of_office ?? {};
+    const stored = (((row?.settings as Record<string, unknown>) ?? {})['out_of_office'] ?? {}) as Record<string, unknown>;
     return NextResponse.json({ out_of_office: { ...DEFAULT_OOO, ...stored } });
   } catch (err: any) {
     return apiError(err);
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  let ctx: any;
+  let ctx: Awaited<ReturnType<typeof requireAuth>>;
   try {
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;

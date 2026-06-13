@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, timestamp, jsonb, integer, bigint, boolean, date, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { tenants, users } from './core';
+import { users } from './core';
 import * as utils from './utils';
 
 // ── 1. USER USAGE TRACKING ────────────────────────────

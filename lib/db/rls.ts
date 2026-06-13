@@ -55,7 +55,7 @@ export async function verifyRLSEnabled(tableName: string): Promise<boolean> {
     const result = await db.execute(
       sql`SELECT rowsecurity FROM pg_tables WHERE schemaname = 'public' AND tablename = ${tableName}`
     );
-    return (result.rows[0] as any)?.rowsecurity ?? false;
+    return (result.rows[0] as { rowsecurity?: boolean })?.rowsecurity ?? false;
   } catch (error) {
     console.error('[RLS] Failed to verify RLS status:', error);
     return false;

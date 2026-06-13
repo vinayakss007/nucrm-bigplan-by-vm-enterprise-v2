@@ -122,9 +122,9 @@ async function handleSchemaInfo() {
       ORDER BY t.table_name
     `);
 
-    const tables = tablesRes.rows as any[];
+    const tables = tablesRes.rows as { table_name: string; column_count: number; has_tenant_id: boolean; has_soft_delete: boolean }[];
     const tenantTables = tables.filter(t => t.has_tenant_id);
-    const tableDetails: any[] = [];
+    const tableDetails: { table: string; columns: unknown; totalRows: number }[] = [];
 
     for (const table of tenantTables.slice(0, 20)) {
       try {
@@ -140,10 +140,10 @@ async function handleSchemaInfo() {
         tableDetails.push({
           table: table.table_name,
           columns: columnsRes.rows,
-          totalRows: parseInt((countResult.rows[0] as any).count || '0', 10),
+          totalRows: parseInt(((countResult.rows[0] as Record<string, unknown>)?.['count'] as string) || '0', 10),
         });
       } catch {
-        // Skip tables that can't be queried
+        // Silently skip during migration/setup when tables may not exist yet
       }
     }
 
@@ -193,7 +193,7 @@ async function handleSearch(searchParams: URLSearchParams) {
       const where = conds.length ? sql`WHERE ${sql.join(conds, sql` AND `)}` : sql``;
 
       const totalRes = await db.execute(sql`SELECT count(*) FROM tenants t ${where}`);
-      const total = parseInt((totalRes.rows[0] as any).count || '0', 10);
+      const total = parseInt(((totalRes.rows[0] as Record<string, unknown>)?.['count'] as string) || '0', 10);
 
       const dataRes = await db.execute(sql`
         SELECT t.id, t.name, t.slug, t.status, p.name as plan,
@@ -222,7 +222,7 @@ async function handleSearch(searchParams: URLSearchParams) {
       const where = sql`WHERE ${sql.join(conds, sql` AND `)}`;
 
       const totalRes = await db.execute(sql`SELECT count(*) FROM contacts c ${where}`);
-      const total = parseInt((totalRes.rows[0] as any).count || '0', 10);
+      const total = parseInt(((totalRes.rows[0] as Record<string, unknown>)?.['count'] as string) || '0', 10);
 
       const dataRes = await db.execute(sql`
         SELECT c.id, c.first_name, c.last_name, c.email, c.phone,
@@ -250,7 +250,7 @@ async function handleSearch(searchParams: URLSearchParams) {
       const where = sql`WHERE ${sql.join(conds, sql` AND `)}`;
 
       const totalRes = await db.execute(sql`SELECT count(*) FROM leads l ${where}`);
-      const total = parseInt((totalRes.rows[0] as any).count || '0', 10);
+      const total = parseInt(((totalRes.rows[0] as Record<string, unknown>)?.['count'] as string) || '0', 10);
 
       const dataRes = await db.execute(sql`
         SELECT l.id, l.first_name, l.last_name, l.email, l.phone,
@@ -273,7 +273,7 @@ async function handleSearch(searchParams: URLSearchParams) {
       const where = sql`WHERE ${sql.join(conds, sql` AND `)}`;
 
       const totalRes = await db.execute(sql`SELECT count(*) FROM deals d ${where}`);
-      const total = parseInt((totalRes.rows[0] as any).count || '0', 10);
+      const total = parseInt(((totalRes.rows[0] as Record<string, unknown>)?.['count'] as string) || '0', 10);
 
       const dataRes = await db.execute(sql`
         SELECT d.id, d.title, d.amount, d.stage_id, d.close_date,
@@ -298,7 +298,7 @@ async function handleSearch(searchParams: URLSearchParams) {
       const where = sql`WHERE ${sql.join(conds, sql` AND `)}`;
 
       const totalRes = await db.execute(sql`SELECT count(*) FROM companies co ${where}`);
-      const total = parseInt((totalRes.rows[0] as any).count || '0', 10);
+      const total = parseInt(((totalRes.rows[0] as Record<string, unknown>)?.['count'] as string) || '0', 10);
 
       const dataRes = await db.execute(sql`
         SELECT co.id, co.name, co.industry, co.website, co.phone,
@@ -321,7 +321,7 @@ async function handleSearch(searchParams: URLSearchParams) {
       const where = conds.length ? sql`WHERE ${sql.join(conds, sql` AND `)}` : sql``;
 
       const totalRes = await db.execute(sql`SELECT count(DISTINCT u.id) FROM users u ${where}`);
-      const total = parseInt((totalRes.rows[0] as any).count || '0', 10);
+      const total = parseInt(((totalRes.rows[0] as Record<string, unknown>)?.['count'] as string) || '0', 10);
 
       const dataRes = await db.execute(sql`
         SELECT u.id, u.email, u.full_name, u.is_super_admin,

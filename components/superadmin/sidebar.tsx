@@ -71,13 +71,13 @@ export default function SuperAdminSidebar({ profile, collapsed, onToggle }: Prop
       const s = localStorage.getItem(SECTION_KEY);
       if (s) setOpenSections(JSON.parse(s));
       else setOpenSections(Object.fromEntries(SECTIONS.map(sec => [sec.id, !!sec.defaultOpen])));
-    } catch {
+    } catch { /* Fallback to default on corrupted storage data */
       setOpenSections(Object.fromEntries(SECTIONS.map(sec => [sec.id, !!sec.defaultOpen])));
     }
     try {
       const q = sessionStorage.getItem(SEARCH_KEY);
       if (q) setQuery(q);
-    } catch {}
+    } catch { /* Fallback to default on corrupted storage data */ }
   }, []);
 
   // Persist filter
@@ -102,7 +102,7 @@ export default function SuperAdminSidebar({ profile, collapsed, onToggle }: Prop
   const toggleSection = (id: string) => {
     setOpenSections(prev => {
       const next = { ...prev, [id]: !prev[id] };
-      try { localStorage.setItem(SECTION_KEY, JSON.stringify(next)); } catch {}
+      try { localStorage.setItem(SECTION_KEY, JSON.stringify(next)); } catch { /* Fallback to default on corrupted storage data */ }
       return next;
     });
   };

@@ -28,7 +28,7 @@ function applyToHtml(prefs: any) {
       const wantCollapsed = prefs.sidebar_default === 'collapsed';
       localStorage.setItem('sidebar_collapsed', String(wantCollapsed));
     }
-  } catch {}
+  } catch { /* Fallback to default on corrupted storage data */ }
 }
 
 async function fetchAndApply() {
@@ -38,8 +38,8 @@ async function fetchAndApply() {
     const data = await res.json();
     applyToHtml(data.preferences ?? {});
     // Cache a tiny copy so reload feels instant before the next fetch
-    try { sessionStorage.setItem('nucrm.prefs.cache', JSON.stringify(data.preferences ?? {})); } catch {}
-  } catch {}
+    try { sessionStorage.setItem('nucrm.prefs.cache', JSON.stringify(data.preferences ?? {})); } catch { /* Fallback to default on corrupted storage data */ }
+  } catch { /* Fallback to default on corrupted storage data */ }
 }
 
 export default function UserPreferencesApplier() {
@@ -48,7 +48,7 @@ export default function UserPreferencesApplier() {
     try {
       const cached = sessionStorage.getItem('nucrm.prefs.cache');
       if (cached) applyToHtml(JSON.parse(cached));
-    } catch {}
+    } catch { /* Fallback to default on corrupted storage data */ }
 
     fetchAndApply();
 

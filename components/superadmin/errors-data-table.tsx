@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useMemo } from 'react'
-import { MoreHorizontal, AlertTriangle, CheckCircle, XCircle, Eye, RefreshCw } from 'lucide-react'
+import { MoreHorizontal, AlertTriangle, CheckCircle, XCircle, Eye } from 'lucide-react'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'

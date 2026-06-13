@@ -24,7 +24,7 @@ export async function loginAction(formData: FormData) {
     } else {
       return { error: data.error || 'Login failed' };
     }
-  } catch (err) {
+  } catch {
     return { error: 'Unable to connect to authentication service' };
   }
 }

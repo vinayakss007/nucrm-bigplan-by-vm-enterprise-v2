@@ -1,10 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { db } from '@/drizzle/db';
 import { contacts, leads, deals, companies, tasks, activities, tenants, users, dealStages, pipelines } from '@/drizzle/schema';
 import { eq, and, isNull, gte, sql, count, sum, ilike } from 'drizzle-orm';
 import { exportPrometheusMetrics as exportAppMetrics } from '@/lib/metrics';
 import IORedis from 'ioredis';
-import { apiError } from '@/lib/api-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,12 +102,12 @@ export async function GET(request: NextRequest) {
         (SELECT count(*)::int FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock') AS waiting,
         (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') AS max_conn
     `);
-    const poolRow = poolRes.rows[0] as any;
-    push(metrics, 'nucrm_db_active_connections', 'Active DB connections', 'gauge', parseInt(poolRow?.active || '0'));
-    push(metrics, 'nucrm_db_active_queries', 'DB connections running a query', 'gauge', parseInt(poolRow?.active_queries || '0'));
-    push(metrics, 'nucrm_db_waiting_queries', 'DB connections waiting on lock', 'gauge', parseInt(poolRow?.waiting || '0'));
-    push(metrics, 'nucrm_db_max_connections', 'Max DB connections configured', 'gauge', parseInt(poolRow?.max_conn || '100'));
-    push(metrics, 'nucrm_db_pool_available', 'Available DB connections (max - active)', 'gauge', parseInt(poolRow?.max_conn || '100') - parseInt(poolRow?.active || '0'));
+    const poolRow = poolRes.rows[0] as Record<string, unknown>;
+    push(metrics, 'nucrm_db_active_connections', 'Active DB connections', 'gauge', parseInt(String(poolRow?.['active'] ?? '0')));
+    push(metrics, 'nucrm_db_active_queries', 'DB connections running a query', 'gauge', parseInt(String(poolRow?.['active_queries'] ?? '0')));
+    push(metrics, 'nucrm_db_waiting_queries', 'DB connections waiting on lock', 'gauge', parseInt(String(poolRow?.['waiting'] ?? '0')));
+    push(metrics, 'nucrm_db_max_connections', 'Max DB connections configured', 'gauge', parseInt(String(poolRow?.['max_conn'] ?? '100')));
+    push(metrics, 'nucrm_db_pool_available', 'Available DB connections (max - active)', 'gauge', parseInt(String(poolRow?.['max_conn'] ?? '100')) - parseInt(String(poolRow?.['active'] ?? '0')));
 
     // ── Redis / Cache Metrics ──────────────────────────────────
     let redisConn: IORedis | null = null;
@@ -149,7 +148,7 @@ export async function GET(request: NextRequest) {
             push(metrics, 'nucrm_queue_jobs_total', `Jobs in queue ${queue}`, 'gauge', delayed, `{queue="${queue}",status="delayed"}`);
             push(metrics, 'nucrm_queue_jobs_total', `Jobs in queue ${queue}`, 'gauge', failed, `{queue="${queue}",status="failed"}`);
           }
-        } catch { /* queue may not exist yet */ }
+        } catch { /* Silently skip during migration/setup when tables may not exist yet */ }
       }
 
       // Worker health heartbeat

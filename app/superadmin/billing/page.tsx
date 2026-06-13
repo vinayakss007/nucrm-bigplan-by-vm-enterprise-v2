@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { CreditCard, Plus, Edit, Trash2, CheckCircle, X, Save, Loader2, Users, Database, Zap, Crown } from 'lucide-react';
+import { CreditCard, Plus, Edit, X, Save, Loader2, Users, Zap, Crown } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import toast from 'react-hot-toast';
 

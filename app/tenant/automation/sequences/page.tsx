@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Plus, ChevronRight, Users, Clock, CheckCircle2, Pause, Trash2, Loader2, X, Play } from 'lucide-react';
-import { cn, formatRelativeTime } from '@/lib/utils';
+import { Plus, Clock, Trash2, Loader2, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 const STEP_ACTIONS = ['send_email','send_whatsapp','send_sms','create_task','send_notification','wait'];

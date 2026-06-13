@@ -1,7 +1,6 @@
 'use client';
 import type { WidgetProps } from '@/types/dashboard';
 import { Users } from 'lucide-react';
-import Link from 'next/link';
 import { StatCard } from './stat-card';
 
 export default function StatsContactsWidget({ data }: WidgetProps) {

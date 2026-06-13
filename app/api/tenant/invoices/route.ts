@@ -3,7 +3,7 @@ import { validateBody, validateQuery } from '@/lib/api/validate';
 import { createInvoiceSchema, invoiceQuerySchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { invoices, invoiceLineItems } from '@/drizzle/schema';
-import { eq, and, desc, sql, like, count } from 'drizzle-orm';
+import { eq, and, desc, sql, count } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 
 export async function GET(request: NextRequest) {
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (contactId) {
-      whereConditions.push(eq(invoices.contactId, contactId as any));
+      whereConditions.push(eq(invoices.contactId, contactId));
     }
 
     const offset = (page - 1) * limit;
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       notes: notes ?? null,
       terms: terms ?? null,
       createdBy: userId,
-    } as any).returning();
+    } as typeof invoices.$inferInsert).returning();
 
     if (!invoice) throw new Error('Failed to create invoice');
 

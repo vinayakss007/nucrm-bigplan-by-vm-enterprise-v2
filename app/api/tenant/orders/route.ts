@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (contactId) {
-      whereConditions.push(eq(orders.contactId, contactId as any));
+      whereConditions.push(eq(orders.contactId, contactId));
     }
 
     const offset = (page - 1) * limit;
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       notes: notes ?? null,
       customerNotes: null,
       createdBy: userId,
-    } as any).returning();
+    } as typeof orders.$inferInsert).returning();
 
     if (!order) throw new Error('Failed to create order');
 

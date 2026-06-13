@@ -8,7 +8,7 @@ import { alertSuperAdmin } from '@/lib/email/service';
 import { exec as execCb } from 'child_process';
 import { promisify } from 'util';
 import { spawn } from 'child_process';
-import { checkDirExists, ensureDir, deleteFile, getFileStats } from '@/lib/backups/runtime-fs';
+import { ensureDir, deleteFile, getFileStats } from '@/lib/backups/runtime-fs';
 import { logError } from '@/lib/errors-server';
 
 const exec = promisify(execCb);
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
 
   // Create backup record
   const [backup] = await db.insert(backupRecords).values({
-    backupType: backupType as any,
+    backupType: backupType as 'full' | 'schema' | 'selective',
     status: 'running',
     initiatedAuto: true,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)

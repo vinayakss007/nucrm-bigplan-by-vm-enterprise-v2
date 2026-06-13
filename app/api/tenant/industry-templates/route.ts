@@ -3,7 +3,6 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { customFieldDefs, pipelines, dealStages, automations } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 
 export async function POST(req: NextRequest) {

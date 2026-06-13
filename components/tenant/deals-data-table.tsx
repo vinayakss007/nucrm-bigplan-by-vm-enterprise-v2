@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
-import { Plus, MoreHorizontal, Edit, Trash2, DollarSign, User, Building, Calendar, Tag, UserPlus, ArrowRightLeft, Trophy, X as XIcon, Layers } from 'lucide-react'
+import { Plus, MoreHorizontal, Edit, Trash2, DollarSign, Tag, UserPlus, ArrowRightLeft, Trophy, X as XIcon, Layers } from 'lucide-react'
 import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'

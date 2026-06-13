@@ -18,7 +18,7 @@ export default function TenantSettingsAuditPage() {
     fetch(`/api/superadmin/tenant-settings?tenant_id=${params.id}`)
       .then(r => r.ok ? r.json() : Promise.reject(r))
       .then(setData)
-      .catch(() => setData({ error: true }))
+      .catch((err) => { console.error('[tenant-settings] fetch failed', err); setData({ error: true }); })
       .finally(() => setLoading(false));
   }, [params?.id]);
 

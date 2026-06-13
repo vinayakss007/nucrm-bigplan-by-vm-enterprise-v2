@@ -6,8 +6,8 @@ import { apiError } from '@/lib/api-error';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
-import { tenants, users, plans } from '@/drizzle/schema';
-import { eq, desc, sql, count, isNull, and, like, or } from 'drizzle-orm';
+import { tenants, users } from '@/drizzle/schema';
+import { eq, desc, count, and, like, or } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 
 export async function GET(request: NextRequest) {

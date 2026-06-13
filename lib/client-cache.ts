@@ -79,6 +79,7 @@ function evictIfNeeded(): void {
         const entry = JSON.parse(localStorage.getItem(key) || '{}');
         entries.push({ key, timestamp: entry.timestamp || 0 });
       } catch {
+        // Fallback to default on corrupted storage data
         localStorage.removeItem(key);
       }
     }
@@ -145,8 +146,8 @@ export function setInCache<T>(key: string, data: T, config?: CacheConfig): void 
       clearAll();
       try {
         setInCache(key, data, config);
-      } catch {
-        // Give up if still fails
+      } catch (e) {
+        console.warn('[ClientCache] Failed to set cache even after cleanup', e);
       }
     }
   }

@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
-import { executeAction, getProviderDef } from '@/lib/integrations/registry';
+import { executeAction } from '@/lib/integrations/registry';
 
 export async function POST(request: NextRequest) {
   try {

@@ -27,6 +27,7 @@ async function getPgDumpVersion(): Promise<string> {
     const { stdout } = await exec('pg_dump --version');
     return stdout.trim();
   } catch {
+    // Fallback to default on corrupted storage data
     return 'unknown';
   }
 }

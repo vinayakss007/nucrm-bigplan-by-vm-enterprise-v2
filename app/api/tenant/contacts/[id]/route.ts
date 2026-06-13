@@ -185,7 +185,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         await trackFieldChange(
           ctx.tenantId,
           ctx.userId,
-          (ctx as any).user?.fullName || null,
+          (ctx as { user?: { fullName?: string | null } }).user?.fullName ?? null,
           ctx.user?.email || null,
           'contact',
           contactId,

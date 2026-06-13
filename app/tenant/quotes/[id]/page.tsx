@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Edit2, Trash2, Save, X, FileText, Send, CheckCircle, XCircle, Calendar, DollarSign, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, Edit2, Trash2, Save, X, FileText, Send, CheckCircle, XCircle, Calendar, ShoppingCart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -45,20 +45,20 @@ export default function QuoteDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Quote>>({});
 
-  useEffect(() => { fetchQuote(); }, [id]);
-
   const fetchQuote = async () => {
     try {
       const res = await fetch(`/api/tenant/quotes/${id}`);
       if (!res.ok) throw new Error('Not found');
       const data = await res.json();
       setQuote(data.data);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load quote');
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => { fetchQuote(); }, [id, fetchQuote]);
 
   const handleEdit = () => {
     if (quote) {
@@ -88,7 +88,7 @@ export default function QuoteDetailPage() {
       setQuote(data.data);
       setEditing(false);
       toast.success('Quote updated');
-    } catch (error) {
+    } catch {
       toast.error('Failed to update quote');
     }
   };
@@ -104,7 +104,7 @@ export default function QuoteDetailPage() {
       const data = await res.json();
       setQuote(data.data);
       toast.success(`Quote marked as ${newStatus}`);
-    } catch (error) {
+    } catch {
       toast.error('Failed to change status');
     }
   };
@@ -116,7 +116,7 @@ export default function QuoteDetailPage() {
       if (!res.ok) throw new Error('Failed');
       toast.success('Quote deleted');
       router.push('/tenant/quotes');
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete quote');
     }
   };

@@ -3,13 +3,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, Search, Upload, Download, MoreHorizontal, Edit, Trash2, AlertCircle, X, UserPlus } from 'lucide-react'
-import { cn, formatDate, getInitials } from '@/lib/utils'
+import { Plus, Upload, Download, MoreHorizontal, Edit, Trash2, AlertCircle, X, UserPlus } from 'lucide-react'
+import { cn, formatDate } from '@/lib/utils'
 import { confirmThen } from '@/components/ui/confirm-dialog'
 import { InlineEdit } from '@/components/ui/inline-edit'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -149,7 +148,7 @@ export default function ContactsDataTable({
     }
     loadDataWithAbort()
     return () => abortController.abort()
-  }, [])
+  }, [, globalFilter])
 
   const columns: ColumnDef<Contact>[] = useMemo(() => [
     {

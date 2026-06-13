@@ -106,7 +106,8 @@ async function fetchOAuth2Token(
     if (!res.ok) return null;
     const data = await res.json() as Record<string, unknown>;
     return (data['access_token'] as string) || null;
-  } catch {
+  } catch (e) {
+    console.error('[PluginEngine] OAuth2 token fetch failed', e);
     return null;
   }
 }
@@ -153,6 +154,7 @@ export async function executePluginAction(
       try {
         requestBody = JSON.parse(interpolatedBody);
       } catch {
+        // Fallback to default on corrupted storage data
         requestBody = interpolatedBody;
       }
       if (!requestHeaders['Content-Type']) {
@@ -200,7 +202,7 @@ export async function executePluginAction(
     try {
       data = JSON.parse(responseBody);
     } catch {
-      // Leave as text
+      // Fallback to default on corrupted storage data
     }
 
     // Apply response mapping if configured
@@ -272,6 +274,7 @@ export async function testPluginConnection(plugin: PluginDefinition): Promise<Pl
   } catch (err: unknown) {
     const latencyMs = Date.now() - startTime;
     const message = err instanceof Error ? err.message : 'Connection failed';
+    console.error('[PluginEngine] Connection test failed', err);
     return { success: false, latencyMs, message };
   }
 }
@@ -327,8 +330,8 @@ async function logExecution(
       success: details.success,
       errorMessage: details.errorMessage ?? null,
     });
-  } catch {
+  } catch (e) {
     // Don't fail the action if logging fails
-    console.error('[PluginEngine] Failed to log execution');
+    console.error('[PluginEngine] Failed to log execution', e);
   }
 }

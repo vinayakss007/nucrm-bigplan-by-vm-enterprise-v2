@@ -28,7 +28,7 @@ export default function PipelinesSettingsPage() {
     if (r.ok) { const d = await r.json(); setPipelines(d.data??[]); if (!selected && d.data?.length) setSelected(d.data[0]); }
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [, load]);
 
   const createPipeline = async () => {
     if (!newName.trim()) return;

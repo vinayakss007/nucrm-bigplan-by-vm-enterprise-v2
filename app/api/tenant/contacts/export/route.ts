@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    const deny = requirePerm(ctx, 'contacts.export' as any);
+    const deny = requirePerm(ctx, 'contacts.export' as string);
     if (deny) return deny;
 
     const { searchParams } = new URL(request.url);

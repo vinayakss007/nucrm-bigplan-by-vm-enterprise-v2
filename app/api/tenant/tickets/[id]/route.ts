@@ -5,7 +5,7 @@ import { validateBody } from '@/lib/api/validate';
 import { updateTicketSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { supportTickets, ticketReplies, contacts, users } from '@/drizzle/schema';
-import { eq, and, desc, asc } from 'drizzle-orm';
+import { eq, and, asc } from 'drizzle-orm';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {

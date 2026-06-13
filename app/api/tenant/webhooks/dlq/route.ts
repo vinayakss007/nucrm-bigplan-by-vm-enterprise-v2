@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
     const status = searchParams.get('status') || undefined;
 
-    const { entries, total } = await dlq.listDLQEntries(ctx.tenantId, { limit, offset, status });
+    const { entries, total } = await dlq.listDLQEntries(ctx.tenantId, { limit, offset: offset, status });
     const stats = await dlq.getDLQStats(ctx.tenantId);
 
     return NextResponse.json({
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'retry_all': {
-        const { entries } = await dlq.listDLQEntries(ctx.tenantId, { limit: 1000, status: 'pending' });
+        const { entries } = await dlq.listDLQEntries(ctx.tenantId, { limit: 1000, offset: 0, status: 'pending' });
         const entryIds = entries.map((e: any) => e.id);
         if (entryIds.length === 0) {
           return NextResponse.json({ succeeded: 0, failed: 0, message: 'No pending DLQ entries' });

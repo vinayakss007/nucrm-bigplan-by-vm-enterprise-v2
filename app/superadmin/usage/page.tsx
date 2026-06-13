@@ -1,13 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { BarChart3, RefreshCw, Search, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
-import { cn, formatRelativeTime } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const TICK = { fill:'rgba(255,255,255,0.3)', fontSize:10 };
 const TIP  = { background:'hsl(222,32%,9%)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, fontSize:11 };
 
-function UsageBar({ pct, danger }: { pct: number; danger?: boolean }) {
+function UsageBar({ pct, _danger }: { pct: number; _danger?: boolean }) {
   const capped = Math.min(100, pct);
   return (
     <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">

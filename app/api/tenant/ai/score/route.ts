@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contactScores, contacts } from '@/drizzle/schema';
-import { eq, and, sql, desc, gte } from 'drizzle-orm';
+import { eq, and, desc, gte } from 'drizzle-orm';
 import { can } from '@/lib/auth/middleware';
 import { scoreLead, bulkScoreLeads } from '@/lib/ai/scoring';
 

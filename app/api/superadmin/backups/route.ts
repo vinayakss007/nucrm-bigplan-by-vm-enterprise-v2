@@ -1,11 +1,9 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { backupRecords, backupSchedules, criticalDataBackups, tenants, users } from '@/drizzle/schema';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { eq, sql, desc } from 'drizzle-orm';
 import { createBackup } from '@/lib/backups/backup-service';
 
 export async function GET(request: NextRequest) {
@@ -20,21 +18,33 @@ export async function GET(request: NextRequest) {
 
     if (critical === 'true') {
       const [deleted, statsRes] = await Promise.all([
-        db.select()
-          .from(criticalDataBackups)
-          .orderBy(desc(criticalDataBackups.backedUpAt))
-          .limit(50)
-          .catch(() => []),
+        (async () => {
+          try {
+            return await db.select()
+              .from(criticalDataBackups)
+              .orderBy(desc(criticalDataBackups.backedUpAt))
+              .limit(50);
+          } catch (err) {
+            console.error('[backups] critical data failed', err);
+            return [];
+          }
+        })(),
 
-        db.select({
-          totalBackups: sql<number>`count(*)::int`,
-          restorable: sql<number>`count(*) FILTER (WHERE ${criticalDataBackups.canRestore} = true)::int`,
-          deletedRecords: sql<number>`count(*) FILTER (WHERE ${criticalDataBackups.operation} = 'delete')::int`,
-          updatedRecords: sql<number>`count(*) FILTER (WHERE ${criticalDataBackups.operation} = 'update')::int`,
-        })
-        .from(criticalDataBackups)
-        .then(rows => rows[0])
-        .catch(() => ({ totalBackups: 0, restorable: 0, deletedRecords: 0, updatedRecords: 0 })),
+        (async () => {
+          try {
+            return await db.select({
+              totalBackups: sql<number>`count(*)::int`,
+              restorable: sql<number>`count(*) FILTER (WHERE ${criticalDataBackups.canRestore} = true)::int`,
+              deletedRecords: sql<number>`count(*) FILTER (WHERE ${criticalDataBackups.operation} = 'delete')::int`,
+              updatedRecords: sql<number>`count(*) FILTER (WHERE ${criticalDataBackups.operation} = 'update')::int`,
+            })
+            .from(criticalDataBackups)
+            .then(rows => rows[0]);
+          } catch (err) {
+            console.error('[backups] stats failed', err);
+            return { totalBackups: 0, restorable: 0, deletedRecords: 0, updatedRecords: 0 };
+          }
+        })(),
       ]);
 
       // Get table breakdown
@@ -45,7 +55,7 @@ export async function GET(request: NextRequest) {
         })
         .from(criticalDataBackups)
         .groupBy(criticalDataBackups.tableName)
-        .catch(() => []);
+        .catch((err) => { console.error('[backups] tableStats failed', err); return []; });
 
       const stats: any = statsRes || { totalBackups: 0, restorable: 0, deletedRecords: 0, updatedRecords: 0 };
       stats.by_table = tableStats;
@@ -75,7 +85,7 @@ export async function GET(request: NextRequest) {
         .leftJoin(tenants, eq(tenants.id, sql`${backupRecords.metadata}->>'tenant_id'`))
         .orderBy(desc(backupRecords.createdAt))
         .limit(50)
-        .catch(() => []);
+        .catch((err) => { console.error('[backups] recent list failed', err); return []; });
       
       return NextResponse.json({ backups });
     }
@@ -97,7 +107,7 @@ export async function GET(request: NextRequest) {
       .from(backupSchedules)
       .leftJoin(tenants, eq(tenants.id, backupSchedules.tenantId))
       .orderBy(desc(backupSchedules.createdAt))
-      .catch(() => []);
+      .catch((err) => { console.error('[backups] schedules failed', err); return []; });
 
     return NextResponse.json({ schedules });
   } catch (err: any) { 
@@ -112,7 +122,7 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const body = await request.json().catch(() => ({}));
+    const body = await request.json().catch((err) => { console.error('[backups] JSON parse failed', err); return {}; });
 
     // Handle restore action from frontend
     if (body.action === 'restore' && body.backupId) {
@@ -135,7 +145,7 @@ export async function POST(request: NextRequest) {
       await db
         .update(backupRecords)
         .set({ 
-          metadata: { ...(((backup as any).metadata) || {}), tenant_id } 
+          metadata: { ...((backup as { metadata?: Record<string, unknown> }).metadata || {}), tenant_id } 
         })
         .where(eq(backupRecords.id, backup.id));
     }

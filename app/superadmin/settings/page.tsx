@@ -36,7 +36,7 @@ export default function SuperAdminSettingsPage() {
     fetch('/api/superadmin/settings').then(r=>r.json()).then(d=>{ if (ignore) return;
       if(d.data) setS(prev => ({...prev,...d.data}));
       setLoading(false);
-    }).catch(()=>setLoading(false));
+    }).catch((err) => { console.error('[settings] fetch failed', err); setLoading(false); });
     return () => { ignore = true; };
 }, []);
 

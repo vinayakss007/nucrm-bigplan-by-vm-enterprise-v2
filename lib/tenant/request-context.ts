@@ -17,7 +17,6 @@
  */
 
 import { AsyncLocalStorage } from 'async_hooks';
-import { NextRequest } from 'next/server';
 import { cache as redisCache } from '@/lib/cache/index';
 
 export interface RequestContext {

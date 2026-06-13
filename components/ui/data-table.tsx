@@ -22,7 +22,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -51,7 +50,6 @@ import {
   Search,
   X,
 } from "lucide-react"
-import { cn } from "@/lib/utils"
 
 export { ColumnDef }
 

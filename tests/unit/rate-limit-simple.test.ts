@@ -104,7 +104,7 @@ describe('checkPublicRateLimit', () => {
   });
 
   it('handles x-forwarded-for with multiple IPs', () => {
-    const req = { headers: { get: (name: string) => '172.31.0.1, 172.31.0.2, 172.31.0.3' } };
+    const req = { headers: { get: (_name: string) => '172.31.0.1, 172.31.0.2, 172.31.0.3' } };
     const opts = { max: 1, windowMs: 60000 };
     expect(checkPublicRateLimit(req as any, opts)).toBeNull();
     const result = checkPublicRateLimit(req as any, opts);

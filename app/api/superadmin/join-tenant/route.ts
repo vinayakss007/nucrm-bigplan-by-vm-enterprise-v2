@@ -2,7 +2,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { tenants, users, tenantMembers, roles, pipelines, dealStages, contacts, companies, deals } from '@/drizzle/schema';
+import { tenants, tenantMembers, roles, pipelines, dealStages } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 
 export async function POST(request: NextRequest) {

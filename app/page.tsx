@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Sparkles, ArrowRight, Zap, Shield, Bot, Puzzle,
   Check, ChevronRight, Play, Globe, Mail, BarChart3,
@@ -277,7 +277,7 @@ export default function LandingPage() {
             <div className="relative">
               {/* Integration dots grid */}
               <div className="grid grid-cols-3 gap-6 max-w-xs mx-auto lg:mx-0">
-                {integrations.map((item, i) => (
+                {integrations.map((item, _i) => (
                   <div key={item.label} className="flex flex-col items-center gap-2">
                     <div className="w-16 h-16 rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 flex items-center justify-center hover:border-violet-500/30 hover:scale-110 transition-all duration-300">
                       <item.icon className="w-7 h-7 text-violet-400" />

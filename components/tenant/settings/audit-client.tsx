@@ -1,6 +1,6 @@
 'use client';
 import { useState, useMemo } from 'react';
-import { Shield, Search, Filter, User, X, ChevronDown } from 'lucide-react';
+import { Shield, Search, User, X, ChevronDown } from 'lucide-react';
 import { cn, formatDateTimeShort, formatRelativeTime } from '@/lib/utils';
 
 const ACTION_CFG: Record<string, { color: string; bg: string }> = {

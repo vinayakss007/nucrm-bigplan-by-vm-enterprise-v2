@@ -5,7 +5,7 @@ import { db } from '@/drizzle/db';
 import { aiInsights } from '@/drizzle/schema';
 import { contacts, deals } from '@/drizzle/schema';
 import { activities } from '@/drizzle/schema';
-import { eq, and, desc, sql, lt, gt } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { can } from '@/lib/auth/middleware';
 
 /**

@@ -54,7 +54,8 @@ export async function verifyToken(token: string): Promise<{ userId: string } | n
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
     return { userId: payload.sub as string };
-  } catch {
+  } catch (e) {
+    console.error('[Session] Token verification failed', e);
     return null;
   }
 }

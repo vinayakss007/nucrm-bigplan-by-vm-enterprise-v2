@@ -1,6 +1,5 @@
 import { pgTable, uuid, text, timestamp, integer, jsonb, boolean, index } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
-import { tenants, users } from './core';
+import { users } from './core';
 import * as utils from './utils';
 
 // ── 1. CUSTOM PLUGINS ─────────────────────────────────

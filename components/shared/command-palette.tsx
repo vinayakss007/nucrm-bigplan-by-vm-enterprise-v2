@@ -36,7 +36,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
 
 interface CommandItem {
   id: string
@@ -287,7 +286,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       if (saved) {
         setRecentItems(JSON.parse(saved))
       }
-    } catch {}
+    } catch { /* Fallback to default on corrupted storage data */ }
   }, [])
 
   // Save recent item
@@ -310,7 +309,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     setRecentItems(updated)
     try {
       localStorage.setItem('nucrm_recent_items', JSON.stringify(updated))
-    } catch {}
+    } catch { /* Fallback to default on corrupted storage data */ }
   }, [recentItems])
 
   // Filter and search items
@@ -498,7 +497,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                     <CategoryHeader label="Results" icon={Search} />
                   )}
                   <div className="space-y-0.5">
-                    {items.map((item, index) => {
+                    {items.map((item, _index) => {
                       const globalIndex = allVisibleItems.indexOf(item)
                       return <CommandItemRow key={item.id} item={item} index={globalIndex} />
                     })}

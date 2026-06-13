@@ -57,7 +57,7 @@ export async function queueWebhook(payload: WebhookPayload): Promise<string> {
   // Immediately attempt delivery
   try {
     await processWebhookDelivery(result.id, payload.url, payload.headers);
-  } catch (err) {
+  } catch {
     // Will be retried
   }
 
@@ -78,14 +78,14 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
     throw new Error(`Webhook delivery ${deliveryId} not found`);
   }
 
-  const deliveryUrl = url || (delivery.metadata as any)?.url;
+  const deliveryUrl = url || (delivery.metadata as { url?: string })?.url;
   if (!deliveryUrl) {
     throw new Error(`No URL found for webhook delivery ${deliveryId}`);
   }
 
   const payloadData = delivery.payload;
-  const attempt = ((delivery.metadata as any)?.attempt || 0) + 1;
-  const maxRetries = (delivery.metadata as any)?.max_retries || 3;
+  const attempt = ((delivery.metadata as { attempt?: number })?.attempt || 0) + 1;
+  const maxRetries = (delivery.metadata as { max_retries?: number })?.max_retries || 3;
 
   const sigHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -145,7 +145,7 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
           responseBody: error.message,
           durationMs: durationMs,
           metadata: {
-            ...(delivery.metadata as any),
+            ...(delivery.metadata as Record<string, unknown>),
             attempt,
             max_retries: maxRetries,
             url: deliveryUrl,
@@ -164,7 +164,7 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
           responseBody: error.message,
           durationMs: durationMs,
           metadata: {
-            ...(delivery.metadata as any),
+            ...(delivery.metadata as Record<string, unknown>),
             attempt,
             max_retries: maxRetries,
             url: deliveryUrl,

@@ -5,7 +5,7 @@ import { createNoteSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { activities, users, contacts } from '@/drizzle/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { processMentions } from '@/lib/notifications';
 
 export async function GET(
@@ -76,7 +76,7 @@ export async function POST(
         eventType: type,
         description: description.trim(),
         metadata: metadata || {},
-      } as any)
+      } as typeof activities.$inferInsert)
       .returning();
 
     // Update contact last activity
