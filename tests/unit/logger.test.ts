@@ -5,9 +5,17 @@ vi.mock('@/lib/tenant/request-context', () => ({
 }));
 
 const mockAppendFileSync = vi.fn();
+const mockExistsSync = vi.fn().mockReturnValue(false);
+const mockStatSync = vi.fn().mockReturnValue({ size: 0 });
+const mockUnlinkSync = vi.fn();
+const mockRenameSync = vi.fn();
 vi.mock('fs', () => ({
-  default: { appendFileSync: mockAppendFileSync },
+  default: { appendFileSync: mockAppendFileSync, existsSync: mockExistsSync, statSync: mockStatSync, unlinkSync: mockUnlinkSync, renameSync: mockRenameSync },
   appendFileSync: mockAppendFileSync,
+  existsSync: mockExistsSync,
+  statSync: mockStatSync,
+  unlinkSync: mockUnlinkSync,
+  renameSync: mockRenameSync,
 }));
 
 describe('logger', () => {

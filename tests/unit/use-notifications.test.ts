@@ -13,6 +13,8 @@ vi.mock('react', () => ({
     if (cleanup) cleanupRegistry.push(cleanup);
   },
   useCallback: (fn: any) => fn,
+  useRef: (initial: any) => ({ current: initial }),
+  useMemo: (fn: any) => fn(),
 }));
 
 let mockEventSourceInstance: any;

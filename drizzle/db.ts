@@ -3,19 +3,19 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { getPool } from '../lib/db/pool';
 import * as schema from './schema';
 
-let _db: NodePgDatabase<typeof schema> | null = null;
+export type DbClient = NodePgDatabase<typeof schema>;
 
-export function getDb(): NodePgDatabase<typeof schema> {
+let _db: DbClient | null = null;
+
+export function getDb(): DbClient {
   if (!_db) {
     _db = drizzle(getPool(), { schema });
   }
   return _db;
 }
 
-export const db = new Proxy({} as NodePgDatabase<typeof schema>, {
+export const db: DbClient = new Proxy({} as DbClient, {
   get(_, prop) {
-    return getDb()[prop as keyof typeof _db];
+    return getDb()[prop as keyof DbClient];
   }
 });
-
-export type DbClient = NodePgDatabase<typeof schema>;

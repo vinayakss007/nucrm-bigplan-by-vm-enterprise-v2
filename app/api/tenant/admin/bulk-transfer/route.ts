@@ -105,7 +105,8 @@ export async function POST(req: NextRequest) {
     if (auth.error) return auth.error;
     ctx = auth.ctx!;
 
-    const body = await req.json().catch(() => ({}));
+    let body;
+    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const fromUserId: string | undefined = body.from_user_id;
     const toUserId:   string | undefined = body.to_user_id;
     const resources: Resource[] = Array.isArray(body.resources) ? body.resources : [];

@@ -38,6 +38,7 @@ declare namespace NodeJS {
     R2_ACCOUNT_ID?: string;
     AWS_S3_BUCKET?: string;
     RESEND_WEBHOOK_SECRET?: string;
+    CRITICAL_ERROR_WEBHOOK_URL?: string;
     [key: string]: string | undefined;
   }
 }

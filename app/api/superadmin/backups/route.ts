@@ -122,7 +122,8 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const body = await request.json().catch((err) => { console.error('[backups] JSON parse failed', err); return {}; });
+    let body;
+    try { body = await request.json(); } catch (err) { console.error('[backups] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     // Handle restore action from frontend
     if (body.action === 'restore' && body.backupId) {
