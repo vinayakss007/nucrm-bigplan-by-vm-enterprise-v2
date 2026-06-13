@@ -7,6 +7,7 @@ import { documents, documentFolders } from '@/drizzle/schema/documents';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import type { Client } from '@aws-sdk/types';
 
 const s3 = new S3Client({
   region: process.env['AWS_REGION'] || 'us-east-1',
@@ -14,7 +15,7 @@ const s3 = new S3Client({
     accessKeyId: process.env['AWS_ACCESS_KEY_ID'],
     secretAccessKey: process.env['AWS_SECRET_ACCESS_KEY'] || '',
   } : undefined,
-});
+}) as any;
 
 const BUCKET = process.env['S3_DOCUMENTS_BUCKET'] || 'nucrm-documents';
 
@@ -109,7 +110,7 @@ export async function POST(req: NextRequest) {
       ContentLength: sizeBytes,
     });
 
-    const uploadUrl = await getSignedUrl(s3 as any, command, { expiresIn: 3600 });
+    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
 
     // Store document metadata
     const [doc] = await db.insert(documents).values({

@@ -6,7 +6,6 @@ import { updateFollowUpSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { followUps } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
-import { logError } from '@/lib/errors-server';
 
 export async function PATCH(req: NextRequest, { params }: any) {
   try {

@@ -26,6 +26,7 @@ class MockEventSource {
   close = vi.fn();
 
   constructor(public url: string) {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     mockEventSourceInstance = this;
     this.onopen = () => {};
     this.onerror = () => {};

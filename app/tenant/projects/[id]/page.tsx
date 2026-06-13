@@ -1,7 +1,7 @@
 import { requireTenantCtx, can } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
 import { projects, milestones, projectTasks, tasks, users, tenantMembers } from '@/drizzle/schema';
-import { eq, and, isNull, sql, desc } from 'drizzle-orm';
+import { eq, and, isNull, desc } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import ProjectDetailClient from '@/components/tenant/project-detail-client';
 

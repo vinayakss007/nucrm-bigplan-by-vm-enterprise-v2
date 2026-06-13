@@ -1,11 +1,9 @@
 'use client';
-import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { useCaptureError } from '@/lib/capture-error';
 
 export default function SuperAdminError({ error, reset }: { error: Error; reset: () => void }) {
-  useEffect(() => {
-    console.error('[superadmin error]', error);
-  }, [error]);
+  useCaptureError(error, 'superadmin error');
 
   return (
     <div className="flex items-center justify-center h-[calc(100vh-12rem)] p-8">

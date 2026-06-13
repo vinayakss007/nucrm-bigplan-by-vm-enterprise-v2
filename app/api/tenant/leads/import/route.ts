@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
 
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    const deny = requirePerm(ctx, 'leads.import' as any);
+    const deny = requirePerm(ctx, 'leads.import' as string);
     if (deny) return deny;
 
     const rawBody = await request.json();

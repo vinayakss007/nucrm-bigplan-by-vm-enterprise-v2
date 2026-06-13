@@ -73,7 +73,7 @@ export function getInitials(name: string): string {
 
 export function toSnakeCase(obj: Record<string, any>): Record<string, any> {
   if (obj === null || obj === undefined) return obj;
-  if (Array.isArray(obj)) return obj.map(toSnakeCase) as any;
+  if (Array.isArray(obj)) return obj.map(toSnakeCase) as unknown as Record<string, any>;
   if (typeof obj !== 'object') return obj;
   const result: Record<string, any> = {};
   for (const [key, value] of Object.entries(obj)) {

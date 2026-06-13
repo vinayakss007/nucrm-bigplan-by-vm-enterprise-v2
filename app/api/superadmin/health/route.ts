@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { healthChecks } from '@/drizzle/schema';
-import { eq, and, sql, desc, gt } from 'drizzle-orm';
+import { sql, desc, gt } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
 
 async function runCheck(service: string, fn: () => Promise<{ latency_ms: number; message: string }>) {
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       .where(gt(healthChecks.checkedAt, sql`now() - interval '24 hours'`))
       .orderBy(desc(healthChecks.checkedAt))
       .limit(300)
-      .catch(() => []);
+      .catch((err) => { console.error('[health] history failed', err); return []; });
 
     return NextResponse.json({ checks, history });
   } catch (err: any) {

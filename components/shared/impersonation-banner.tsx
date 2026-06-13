@@ -1,8 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { X, User, ArrowLeft, ShieldAlert } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { X, ArrowLeft, ShieldAlert } from 'lucide-react';
 
 export default function ImpersonationBanner() {
   const [visible, setVisible] = useState(false);

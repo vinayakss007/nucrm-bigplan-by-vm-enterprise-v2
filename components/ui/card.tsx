@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { clsx } from 'clsx';
-import { shadows, borderRadius, colors } from '@/lib/design-tokens';
 
 interface CardProps {
   children: React.ReactNode;

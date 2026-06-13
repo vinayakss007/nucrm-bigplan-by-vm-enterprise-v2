@@ -5,7 +5,7 @@ import { db } from '@/drizzle/db';
 import { emailDrafts } from '@/drizzle/schema/comm';
 import { contacts, companies, deals } from '@/drizzle/schema';
 import { tenantModules } from '@/drizzle/schema/modules';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { can } from '@/lib/auth/middleware';
 
 /**
@@ -196,7 +196,7 @@ Best,
         tone,
         length,
         createdBy: ctx.userId
-      } as any)
+      } as typeof emailDrafts.$inferInsert)
       .returning();
     
     const draft = drafts[0];

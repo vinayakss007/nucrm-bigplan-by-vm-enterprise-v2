@@ -11,7 +11,7 @@ import { eq, and, desc, sql } from 'drizzle-orm';
  */
 export async function GET(
   request: NextRequest,
-  { params }: any
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(request);
@@ -60,7 +60,7 @@ export async function GET(
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: any
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(request);
@@ -93,7 +93,7 @@ export async function PATCH(
       const currentNodes = nodes || workflowResult?.nodes || [];
       const currentActionsCount = actions !== undefined ? actions.length : (actionsCountResult[0]?.count || 0);
 
-      if (!currentNodes || (currentNodes as any[]).length === 0) {
+      if (!currentNodes || (currentNodes as unknown[]).length === 0) {
         return NextResponse.json({ error: 'Cannot activate workflow without nodes' }, { status: 400 });
       }
       if (currentActionsCount === 0) {
@@ -153,7 +153,7 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: any
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(request);
@@ -181,7 +181,7 @@ export async function DELETE(
  */
 export async function POST(
   request: NextRequest,
-  { params }: any
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(request);
@@ -207,7 +207,7 @@ export async function POST(
 
     return NextResponse.json({
       ok: true,
-      execution_id: (result.rows[0] as any)?.execution_id,
+      execution_id: (result.rows[0] as Record<string, unknown>)?.['execution_id'] as string,
       message: 'Workflow test started',
     });
   } catch (error: any) {

@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Key, Plus, Trash2, Copy, Eye, EyeOff, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Key, Plus, Trash2, Copy, CheckCircle } from 'lucide-react';
 import { cn, formatDate, formatRelativeTime, apiFetch } from '@/lib/utils';
 import toast from 'react-hot-toast';
 

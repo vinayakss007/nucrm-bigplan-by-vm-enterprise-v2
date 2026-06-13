@@ -19,7 +19,7 @@ export async function GET(request: Request) {
       const res = await db.execute(sql`SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename='users'`);
       dbStatus = 'connected';
       schemaReady = res.rowCount! > 0;
-    } catch (e) {
+    } catch {
       dbStatus = 'error';
     }
 

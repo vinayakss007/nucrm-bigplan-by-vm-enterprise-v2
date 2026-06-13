@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Plus, Search, Edit, Trash2, X, DollarSign, Clock, Package, Building2, User, Users, Mail, Phone } from 'lucide-react';
+import { Plus, Search, Trash2, X, DollarSign, Clock, Package, Building2, User, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface Service {
@@ -186,7 +186,7 @@ export default function ServicesPage() {
       });
       fetchServices();
       toast.success('Contact linked to service');
-    } catch (error) {
+    } catch {
       toast.error('Failed to link contact');
     }
   };
@@ -200,7 +200,7 @@ export default function ServicesPage() {
       });
       fetchServices();
       toast.success('Contact unlinked');
-    } catch (error) {
+    } catch {
       toast.error('Failed to unlink contact');
     }
   };
@@ -257,7 +257,7 @@ export default function ServicesPage() {
       if (!res.ok) throw new Error('Failed to update');
       toast.success(service.isActive ? 'Service deactivated' : 'Service activated');
       fetchServices();
-    } catch (error) {
+    } catch {
       toast.error('Failed to update service');
     }
   };
@@ -270,7 +270,7 @@ export default function ServicesPage() {
       if (!res.ok) throw new Error('Failed to delete');
       toast.success('Service deleted');
       fetchServices();
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete service');
     }
   };

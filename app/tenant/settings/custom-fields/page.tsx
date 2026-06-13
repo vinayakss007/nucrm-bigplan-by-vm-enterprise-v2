@@ -61,11 +61,6 @@ export default function TenantCustomFields() {
   const [editingField, setEditingField] = useState<CustomField | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  useEffect(() => {
-    loadFields();
-    loadFeatures();
-  }, [entityType]);
-
   const loadFields = async () => {
     setLoading(true);
     try {
@@ -133,6 +128,11 @@ export default function TenantCustomFields() {
       console.error('Failed to delete field:', err);
     }
   };
+
+  useEffect(() => {
+    loadFields();
+    loadFeatures();
+  }, [entityType, loadFields]);
 
   const ENTITY_TYPES = [
     { value: 'contact', label: 'Contacts', icon: '👤' },
@@ -247,7 +247,7 @@ export default function TenantCustomFields() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800/50">
-              {fields.map((field, i) => (
+              {fields.map((field, _i) => (
                 <tr key={field.id} className="hover:bg-gray-800/30">
                   <td className="px-4 py-3 text-sm text-gray-500 w-16">{field.display_order}</td>
                   <td className="px-4 py-3 text-sm font-medium text-white">{field.field_label}</td>

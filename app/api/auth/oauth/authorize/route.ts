@@ -3,7 +3,6 @@ import { db } from '@/drizzle/db';
 import { oauthClients, oauthCodes } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
-import { apiError } from '@/lib/api-error';
 
 export async function GET(request: NextRequest) {
   try {

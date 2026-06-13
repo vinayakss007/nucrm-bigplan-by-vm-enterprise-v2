@@ -41,7 +41,7 @@ async function sendViaResend(payload: EmailPayload): Promise<SendResult> {
       }),
     });
 
-    const data = await res.json() as any;
+    const data = await res.json() as { id?: string; message?: string };
     if (res.ok) {
       return { success: true, provider: 'resend', messageId: data.id };
     }
@@ -145,7 +145,7 @@ export async function alertSuperAdmin(subject: string, message: string) {
       <p style="color:#9ca3af;font-size:12px;margin-top:16px">Sent from NuCRM monitoring</p>
     </div>`,
     text: `${subject}\n\n${message}`,
-  }).catch(() => {});
+  }).catch((e) => console.error('[Email] Failed to send admin alert:', e));
 }
 
 /**

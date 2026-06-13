@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, Users, Building2, ArrowUpRight, ArrowDownRight, RefreshCw, Zap } from 'lucide-react';
+import { DollarSign, TrendingUp, Users, Building2, Zap } from 'lucide-react';
 import { cn, formatCurrency, formatDate, formatRelativeTime } from '@/lib/utils';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 

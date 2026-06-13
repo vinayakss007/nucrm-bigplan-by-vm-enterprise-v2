@@ -1,4 +1,4 @@
-import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
+import { PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { devLogger } from '@/lib/dev-logger';
 import { AsyncLocalStorage } from 'async_hooks';
 import { getPool as _getPool } from './pool';

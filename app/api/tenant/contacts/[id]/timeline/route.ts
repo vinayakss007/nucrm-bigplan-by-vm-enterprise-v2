@@ -5,7 +5,7 @@ import { createNoteSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { activities, users, contacts } from '@/drizzle/schema';
-import { eq, and, desc, sql, count } from 'drizzle-orm';
+import { eq, and, desc, count } from 'drizzle-orm';
 
 /**
  * GET /api/tenant/contacts/[id]/timeline
@@ -118,7 +118,7 @@ export async function POST(
         eventType: event_type,
         description,
         metadata: metadata || {},
-      } as any)
+      } as typeof activities.$inferInsert)
       .returning();
 
     return NextResponse.json({

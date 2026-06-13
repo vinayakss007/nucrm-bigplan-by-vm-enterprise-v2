@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef } from 'react';
-import { Upload, Download, FileText, Loader2, AlertTriangle, CheckCircle, X, Database } from 'lucide-react';
+import { Upload, Download, Loader2, AlertTriangle, CheckCircle, X, Database } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 

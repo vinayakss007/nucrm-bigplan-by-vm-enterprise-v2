@@ -13,7 +13,7 @@ import { eq, and, sql } from 'drizzle-orm';
  */
 export async function POST(
   request: NextRequest,
-  { params }: any
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(request);
@@ -53,7 +53,7 @@ export async function POST(
 
     return NextResponse.json({
       ok: true,
-      execution_id: (result.rows[0] as any)?.execution_id,
+      execution_id: (result.rows[0] as Record<string, unknown>)?.['execution_id'] as string,
       message: 'Workflow execution started',
     }, { status: 202 });
   } catch (err: any) {

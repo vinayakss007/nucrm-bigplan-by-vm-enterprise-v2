@@ -154,7 +154,7 @@ export async function POST_signup(request: NextRequest) {
         .limit(1);
       allowSignups = allowSignupsSetting?.value !== 'false';
     } catch {
-      // Table doesn't exist or query failed - allow signups by default
+      // Silently skip during migration/setup when tables may not exist yet
       allowSignups = true;
     }
     
@@ -318,7 +318,7 @@ export async function POST_signup(request: NextRequest) {
       message: `**${user.fullName}** (${user.email}) joined\nWorkspace: **${tenant.name}** (\`${tenant.slug}\`)`,
       color: '#10b981',
       url: `${process.env.NEXT_PUBLIC_APP_URL}/tenant`,
-    }).catch(() => {});
+    }).catch((e) => { console.error('[auth/signup] Webhook notification failed', e); });
 
     // Send Telegram notification if user configured it (fire-and-forget)
     sendTelegram({
@@ -328,7 +328,7 @@ export async function POST_signup(request: NextRequest) {
       message: `${user.fullName} (${user.email}) joined\nWorkspace: ${tenant.name} (${tenant.slug})`,
       icon: '🟢',
       url: `${process.env.NEXT_PUBLIC_APP_URL}/tenant`,
-    }).catch(() => {});
+    }).catch((e) => { console.error('[auth/signup] Telegram notification failed', e); });
 
     // Send verification email (fire-and-forget)
     if (process.env.RESEND_API_KEY || process.env.SMTP_HOST) {
@@ -364,13 +364,14 @@ export async function POST_logout(request: NextRequest) {
     const token = request.cookies.get('nucrm_session')?.value;
     if (token) {
       const tokenHash = await hashToken(token);
-      await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash)).catch(()=>{});
+      await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash)).catch((e) => { console.error('[auth/logout] Failed to delete session', e); });
     }
     await clearSessionCookie();
     const logoutResponse = NextResponse.json({ ok:true });
     logoutResponse.headers.set('Set-Cookie', 'nucrm_csrf_token=; Path=/; SameSite=Strict; Max-Age=0');
     return logoutResponse;
-  } catch {
+  } catch (e) {
+    console.error('[auth/logout] Logout error, clearing cookies anyway', e);
     await clearSessionCookie();
     const logoutResponse = NextResponse.json({ ok:true });
     logoutResponse.headers.set('Set-Cookie', 'nucrm_csrf_token=; Path=/; SameSite=Strict; Max-Age=0');

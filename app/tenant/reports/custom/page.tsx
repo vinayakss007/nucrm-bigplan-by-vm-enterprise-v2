@@ -36,7 +36,7 @@ export default function CustomReportBuilder() {
   useEffect(() => {
     setSelectedColumns(currentType.columns.slice(0, 5));
     loadSaved();
-  }, [reportType]);
+  }, [reportType, currentType.columns]);
 
   const loadSaved = async () => {
     try {

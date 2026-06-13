@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { 
   Plus, X, GripVertical, Settings, Save, Eye, Copy, Check, 
   Trash2, ChevronLeft, Layout, Type, Mail, Phone, Hash, 
@@ -80,7 +80,7 @@ export default function FormBuilderPage() {
         const d = await res.json();
         toast.error(d.error || 'Failed to save');
       }
-    } catch (err) {
+    } catch {
       toast.error('Network error');
     } finally {
       setSaving(false);
@@ -159,7 +159,7 @@ export default function FormBuilderPage() {
         <div className="flex-1 bg-muted/30 overflow-y-auto p-8">
           {activeTab === 'fields' && (
             <div className="max-w-2xl mx-auto space-y-4">
-              {fields.map((field, index) => (
+              {fields.map((field, _index) => (
                 <div key={field.id} className="group relative bg-card border border-border rounded-2xl p-4 shadow-sm hover:shadow-md transition-all">
                   <div className="absolute -left-3 top-1/2 -translate-y-1/2 max-md:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                     <div className="p-1.5 bg-card border border-border rounded-lg cursor-grab">

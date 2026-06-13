@@ -1,8 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { FileText, ExternalLink, ArrowLeft, Download, AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { FileText, ExternalLink, ArrowLeft, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { formatDate, cn } from '@/lib/utils';
-import toast from 'react-hot-toast';
 
 const STATUS_ICONS: Record<string, any> = {
   paid: CheckCircle,

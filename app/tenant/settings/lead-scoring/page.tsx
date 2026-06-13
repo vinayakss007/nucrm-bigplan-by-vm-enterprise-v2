@@ -89,7 +89,7 @@ export default function LeadScoringRulesPage() {
         });
       }
       load();
-    } catch (e) { setError('Failed to install some starters'); }
+    } catch { setError('Failed to install some starters'); }
     finally { setBusy(null); }
   }
 

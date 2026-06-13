@@ -44,7 +44,7 @@ export default function SettingsIndex() {
       .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
     return () => { ignore = true; };
-}, []);
+}, [, summary]);
 
   const q = query.trim().toLowerCase();
   const visible = useMemo(() => visibleForRole(isAdmin), [isAdmin]);

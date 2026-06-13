@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Users, Plus, X, Mail, Crown, Shield, UserMinus, RotateCcw,
   ChevronDown, AlertTriangle, CheckCircle, Clock, UserCheck, ArrowRight, Loader2 } from 'lucide-react';
 import { cn, formatDate, formatRelativeTime, getInitials } from '@/lib/utils';
@@ -85,7 +85,7 @@ function RemoveMemberModal({ member, members, onConfirm, onClose }: any) {
   );
 }
 
-export default function TeamSettingsClient({ members: initialMembers, invitations: initialInvitations, roles, tenantId, currentUserId }: any) {
+export default function TeamSettingsClient({ members: initialMembers, invitations: initialInvitations, roles, _tenantId, currentUserId }: any) {
   const [members, setMembers]         = useState(initialMembers ?? []);
   const [invitations, setInvitations] = useState(initialInvitations ?? []);
   const [showInvite, setShowInvite]   = useState(false);
@@ -143,7 +143,7 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
           reload(); 
         } else toast.error(d.error);
       }
-    } catch (err) {
+    } catch {
       toast.error('Failed to add member');
     } finally {
       setInviting(false);

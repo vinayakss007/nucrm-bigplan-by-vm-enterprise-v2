@@ -1,11 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, Users, CheckSquare, DollarSign, Target, RefreshCw } from 'lucide-react';
+import { BarChart3, TrendingUp, CheckSquare, DollarSign, Target } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line,
 } from 'recharts';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
 const STAGE_COLORS: Record<string,string> = {

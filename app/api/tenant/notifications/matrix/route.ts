@@ -52,7 +52,7 @@ const DEFAULTS: Record<string, Record<Channel, boolean>> = Object.fromEntries(
       telegram: false,
     }];
   })
-) as any;
+) as Record<string, Record<Channel, boolean>>;
 
 export async function GET(req: NextRequest) {
   try {
@@ -68,17 +68,17 @@ export async function GET(req: NextRequest) {
       columns: { notificationPrefs: true },
     });
 
-    const stored = ((row?.notificationPrefs as any) ?? {}).matrix ?? {};
+    const stored = ((row?.notificationPrefs as Record<string, unknown>)?.['matrix'] ?? {}) as Record<string, Record<string, boolean>>;
 
     // Merge defaults <- stored, restricted to known keys
     const matrix: Record<string, Record<Channel, boolean>> = {};
     for (const key of EVENT_KEYS) {
       const def = DEFAULTS[key]!;
-      const cur = stored[key] ?? {};
+      const cur = (stored[key] ?? {}) as Record<string, boolean>;
       matrix[key] = {
-        in_app:   typeof cur.in_app   === 'boolean' ? cur.in_app   : def.in_app,
-        email:    typeof cur.email    === 'boolean' ? cur.email    : def.email,
-        telegram: typeof cur.telegram === 'boolean' ? cur.telegram : def.telegram,
+        in_app:   typeof cur['in_app']   === 'boolean' ? cur['in_app']   : def.in_app,
+        email:    typeof cur['email']    === 'boolean' ? cur['email']    : def.email,
+        telegram: typeof cur['telegram'] === 'boolean' ? cur['telegram'] : def.telegram,
       };
     }
 
@@ -93,7 +93,7 @@ export async function PATCH(req: NextRequest) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch((err) => { console.error('[notifications/matrix] JSON parse failed', err); return {}; });
     const incoming = body.matrix;
     if (!incoming || typeof incoming !== 'object')
       return NextResponse.json({ error: 'matrix object required' }, { status: 400 });
@@ -103,11 +103,11 @@ export async function PATCH(req: NextRequest) {
     for (const [key, value] of Object.entries(incoming)) {
       if (!EVENT_KEYS.has(key)) continue;
       if (!value || typeof value !== 'object') continue;
-      const v = value as any;
+      const v = value as Record<string, unknown>;
       safe[key] = {
-        in_app:   v.in_app   === true,
-        email:    v.email    === true,
-        telegram: v.telegram === true,
+        in_app:   v['in_app']   === true,
+        email:    v['email']    === true,
+        telegram: v['telegram'] === true,
       };
     }
 

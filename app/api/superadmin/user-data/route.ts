@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { users, contacts, deals, tasks, activities, companies, notes, tenantMembers } from '@/drizzle/schema';
+import { users, contacts, deals, tasks, activities, tenantMembers } from '@/drizzle/schema';
 import { eq, and, or, ilike, sql, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
@@ -308,7 +308,7 @@ export async function POST(request: NextRequest) {
             createdAt: new Date(),
             updatedAt: new Date(),
             deletedAt: null,
-          } as any).onConflictDoNothing();
+          } as typeof contacts.$inferInsert).onConflictDoNothing();
           restored++;
         } catch { errors++; }
       }
@@ -329,7 +329,7 @@ export async function POST(request: NextRequest) {
             createdAt: new Date(),
             updatedAt: new Date(),
             deletedAt: null,
-          } as any).onConflictDoNothing();
+          } as typeof deals.$inferInsert).onConflictDoNothing();
           restored++;
         } catch { errors++; }
       }
@@ -349,7 +349,7 @@ export async function POST(request: NextRequest) {
             assignedTo: user_id,
             createdAt: new Date(),
             updatedAt: new Date(),
-          } as any).onConflictDoNothing();
+          } as typeof tasks.$inferInsert).onConflictDoNothing();
           restored++;
         } catch { errors++; }
       }

@@ -123,7 +123,7 @@ export async function resolveOrCreateContactForLead(
       if ((lead.score ?? 0) > (existing.score ?? 0)) patch['score'] = lead.score ?? 0;
       if (Object.keys(patch).length > 0) {
         patch['updatedAt'] = new Date();
-        await tx.update(contacts).set(patch as any).where(eq(contacts.id, existing.id));
+        await tx.update(contacts).set(patch as Partial<typeof contacts.$inferInsert>).where(eq(contacts.id, existing.id));
       }
       return { contactId: existing.id, companyId, isNewContact: false };
     }
@@ -148,7 +148,7 @@ export async function resolveOrCreateContactForLead(
       country: lead.country || null,
       city: lead.city || null,
       linkedinUrl: lead.linkedinUrl || null,
-      assignedTo: (lead.assignedTo as any) || null,
+      assignedTo: (lead.assignedTo as string | null) || null,
       createdBy: userId,
       notes: lead.internalNotes || null,
     })

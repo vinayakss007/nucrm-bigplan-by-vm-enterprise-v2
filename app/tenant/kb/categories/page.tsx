@@ -1,7 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { FolderPlus, Settings, X, GripVertical, Trash2, Plus } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 
@@ -64,7 +63,7 @@ export default function KBCategoriesPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {categories.map((c, i) => (
+          {categories.map((c, _i) => (
             <div key={c.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between group">
               <div className="flex items-center gap-3">
                 <GripVertical className="w-4 h-4 text-muted-foreground/30 cursor-grab" />

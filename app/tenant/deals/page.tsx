@@ -1,7 +1,7 @@
 import { requireTenantCtx, can } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
 import { deals, contacts, companies, users, tenantMembers, pipelines, dealStages } from '@/drizzle/schema';
-import { eq, and, or, isNull, sql, desc, asc } from 'drizzle-orm';
+import { eq, and, or, isNull, desc, asc } from 'drizzle-orm';
 import DealsPageClient from './deals-page-client';
 
 export default async function DealsPage() {

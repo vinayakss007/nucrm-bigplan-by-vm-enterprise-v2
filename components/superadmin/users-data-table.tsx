@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo } from 'react'
 import { Crown, XCircle, CheckCircle, Plus, Mail, Loader2 } from 'lucide-react'
-import { cn, formatRelativeTime } from '@/lib/utils'
+import { formatRelativeTime } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'

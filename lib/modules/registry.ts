@@ -6,7 +6,7 @@
 import { db } from '@/drizzle/db';
 import { tenantModules, modules } from '@/drizzle/schema/modules';
 import { tenants } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import type { ModuleManifest } from '@/types';
 
 export const BUILTIN_MODULES: ModuleManifest[] = [
@@ -301,12 +301,12 @@ export class ModuleRegistry {
       where: eq(modules.id, moduleId),
       columns: { manifest: true }
     });
-    const savedPricing = (dbModule?.manifest as any)?.pricing;
+    const savedPricing = (dbModule?.manifest as { pricing?: Record<string, unknown> } | undefined)?.pricing;
     const pricing = savedPricing || manifest.pricing;
 
     // Check tenant's plan
     const plan = await ModuleRegistry.getTenantPlan(tenantId);
-    const planConfig = pricing?.[plan];
+    const planConfig = pricing?.[plan] as { enabled?: boolean } | undefined;
 
     if (!planConfig?.enabled) {
       return { ok: false, error: `Module not available on your ${plan} plan. Upgrade to access ${manifest.name}.` };

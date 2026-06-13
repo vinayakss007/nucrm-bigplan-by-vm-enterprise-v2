@@ -1,4 +1,4 @@
-import { requireTenantCtx, can } from '@/lib/tenant/context';
+import { requireTenantCtx } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
 import { followUps, contacts, leads, deals, users } from '@/drizzle/schema';
 import { eq, and, isNull, asc, lte, sql } from 'drizzle-orm';

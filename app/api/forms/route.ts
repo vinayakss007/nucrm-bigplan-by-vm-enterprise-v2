@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
-import { forms, tenants, contacts, formSubmissions, activities } from '@/drizzle/schema';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { forms, tenants, contacts, formSubmissions } from '@/drizzle/schema';
+import { eq, and, sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createNotification } from '@/lib/notifications';
 import { fireWebhooks } from '@/lib/webhooks';
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     if (!form) return NextResponse.json({ error: 'Form not found or inactive' }, { status: 404 });
     
     if (!['active', 'trialing'].includes(form.tenant_status || '')) {
-      return NextResponse.json({ ok: true, message: (form.settings as any)?.success_message ?? 'Thank you!' });
+      return NextResponse.json({ ok: true, message: (form.settings as Record<string, unknown>)?.['success_message'] as string ?? 'Thank you!' });
     }
 
     const email = formData.email?.trim()?.toLowerCase();
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
     }
 
     await fireWebhooks(form.tenantId, 'contact.created', { form_id, contact_id, ...formData }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
-    return NextResponse.json({ ok: true, message: (form.settings as any)?.success_message ?? 'Thank you! We will be in touch.' });
+    return NextResponse.json({ ok: true, message: (form.settings as Record<string, unknown>)?.['success_message'] as string ?? 'Thank you! We will be in touch.' });
   } catch (err: any) {
     console.error('[forms] Submission error:', err);
     return NextResponse.json({ ok: true, message: 'Thank you! Your submission has been received.' });

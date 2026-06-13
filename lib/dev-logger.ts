@@ -122,7 +122,7 @@ class DevelopmentLogger {
       try {
         const Sentry = await import('@sentry/nextjs');
         Sentry.captureMessage(message, { level: level === 'error' ? 'error' : 'info' });
-      } catch (e) {
+      } catch {
         // Sentry not configured or failed
       }
     }
@@ -301,7 +301,7 @@ class DevelopmentLogger {
           Sentry.captureException(err, {
             tags: { context, userId },
           });
-        }).catch(() => {});
+        }).catch((e) => console.warn('[DevLogger] Failed to capture Sentry exception', e));
       }
     }
 

@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { validateBody } from '@/lib/api/validate';
-import { createFollowUpSchema, followUpQuerySchema } from '@/lib/api/schemas';
+import { createFollowUpSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { followUps, contacts, leads, deals, users } from '@/drizzle/schema';
-import { eq, and, isNull, or, desc, asc, gte, lte, sql } from 'drizzle-orm';
-import { logError } from '@/lib/errors-server';
+import { eq, and, isNull, desc, asc, gte, lte, sql } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {

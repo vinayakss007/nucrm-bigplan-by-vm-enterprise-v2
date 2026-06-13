@@ -36,8 +36,8 @@ export default function AdoptionMonitoringPage() {
   const load = async () => {
     setRefreshing(true);
     const [adoptionRes, activityRes] = await Promise.all([
-      fetch('/api/superadmin/adoption').then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/superadmin/recent-activity?limit=20').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/superadmin/adoption').then(r => r.ok ? r.json() : null).catch((err) => { console.error('[adoption] fetch failed', err); return null; }),
+      fetch('/api/superadmin/recent-activity?limit=20').then(r => r.ok ? r.json() : null).catch((err) => { console.error('[adoption] activity fetch failed', err); return null; }),
     ]);
     setData(adoptionRes);
     setActivity(activityRes);

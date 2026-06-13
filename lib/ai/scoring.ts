@@ -7,7 +7,7 @@
 import { db } from '@/drizzle/db';
 import { leadScoringRules } from '@/drizzle/schema/ai';
 import { contacts, contactScores } from '@/drizzle/schema/crm';
-import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { chat } from './gateway';
 
 export interface ScoringResult {
@@ -71,7 +71,7 @@ Output ONLY a JSON object: { "score": number, "reason": string, "factors": { "fa
   try {
     const jsonMatch = resp.text.match(/\{[\s\S]*\}/);
     parsed = JSON.parse(jsonMatch ? jsonMatch[0] : resp.text);
-  } catch (e) {
+  } catch {
     throw new Error('AI returned invalid JSON');
   }
 

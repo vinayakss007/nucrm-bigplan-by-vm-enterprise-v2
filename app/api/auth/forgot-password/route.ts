@@ -4,7 +4,7 @@ import { validateBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { users, passwordResets } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
-import { createHash, randomBytes } from 'crypto';
+import { randomBytes } from 'crypto';
 import { sendEmail } from '@/lib/email/service';
 import { checkRateLimit } from '@/lib/rate-limit';
 

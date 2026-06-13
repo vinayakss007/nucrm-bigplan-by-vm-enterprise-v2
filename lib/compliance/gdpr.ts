@@ -9,18 +9,20 @@
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 
+type GDPRDataCategory = Record<string, unknown>[];
+
 export interface GDPRExportData {
   tenantId: string;
   exportedAt: string;
   categories: {
-    contacts: any[];
-    companies: any[];
-    deals: any[];
-    tasks: any[];
-    activities: any[];
-    emails: any[];
-    notes: any[];
-    files: any[];
+    contacts: GDPRDataCategory;
+    companies: GDPRDataCategory;
+    deals: GDPRDataCategory;
+    tasks: GDPRDataCategory;
+    activities: GDPRDataCategory;
+    emails: GDPRDataCategory;
+    notes: GDPRDataCategory;
+    files: GDPRDataCategory;
   };
   metadata: {
     totalRecords: number;
@@ -71,7 +73,7 @@ export async function exportTenantData(tenantId: string): Promise<GDPRExportData
   );
 
   for (const { key, rows } of results) {
-    categories[key] = rows as any[];
+    categories[key] = rows as GDPRDataCategory;
   }
 
   const totalRecords = Object.values(categories).reduce((sum, arr) => sum + arr.length, 0);
@@ -82,7 +84,7 @@ export async function exportTenantData(tenantId: string): Promise<GDPRExportData
     categories,
     metadata: {
       totalRecords,
-      dataCategories: Object.keys(categories).filter(k => (categories as any)[k].length > 0),
+      dataCategories: (Object.keys(categories) as Array<keyof typeof categories>).filter(k => categories[k].length > 0),
     },
   };
 }
@@ -110,8 +112,8 @@ export async function anonymizeTenantData(tenantId: string): Promise<GDPRDeletio
     const count = Number(result.rowCount) || 0;
     categoryCounts['contacts'] = count;
     totalAnonymized += count;
-  } catch { /* table may not exist */ }
-
+  } catch (e) { console.warn('[GDPR] Contacts table may not exist:', e); }
+ 
   // Anonymize companies
   try {
     const result = await db.execute(
@@ -124,8 +126,8 @@ export async function anonymizeTenantData(tenantId: string): Promise<GDPRDeletio
     const count = Number(result.rowCount) || 0;
     categoryCounts['companies'] = count;
     totalAnonymized += count;
-  } catch { /* table may not exist */ }
-
+  } catch (e) { console.warn('[GDPR] Companies table may not exist:', e); }
+ 
   // Anonymize notes
   try {
     const result = await db.execute(
@@ -138,8 +140,8 @@ export async function anonymizeTenantData(tenantId: string): Promise<GDPRDeletio
     const count = Number(result.rowCount) || 0;
     categoryCounts['notes'] = count;
     totalAnonymized += count;
-  } catch { /* table may not exist */ }
-
+  } catch (e) { console.warn('[GDPR] Notes table may not exist:', e); }
+ 
   // Anonymize activities
   try {
     const result = await db.execute(
@@ -152,8 +154,8 @@ export async function anonymizeTenantData(tenantId: string): Promise<GDPRDeletio
     const count = Number(result.rowCount) || 0;
     categoryCounts['activities'] = count;
     totalAnonymized += count;
-  } catch { /* table may not exist */ }
-
+  } catch (e) { console.warn('[GDPR] Activities table may not exist:', e); }
+ 
   // Soft-delete email logs
   try {
     const result = await db.execute(
@@ -166,8 +168,8 @@ export async function anonymizeTenantData(tenantId: string): Promise<GDPRDeletio
     const count = Number(result.rowCount) || 0;
     categoryCounts['emails'] = count;
     totalAnonymized += count;
-  } catch { /* table may not exist */ }
-
+  } catch (e) { console.warn('[GDPR] Email logs table may not exist:', e); }
+ 
   return {
     tenantId,
     processedAt: new Date().toISOString(),

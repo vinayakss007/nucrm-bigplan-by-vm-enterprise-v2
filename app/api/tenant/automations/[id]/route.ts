@@ -13,7 +13,7 @@ import { updateAutomationSchema } from '@/lib/api/schemas';
  */
 export async function GET(
   req: NextRequest, 
-  { params }: any
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(req);
@@ -30,17 +30,19 @@ export async function GET(
         eq(automations.tenantId, ctx.tenantId),
         isNull(automations.deletedAt)
       ),
-      with: {
-        createdBy: {
-          columns: {
-            fullName: true,
-          }
-        }
-      }
     });
 
     if (!automation) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    let createdByName: string | null | undefined;
+    if (automation.createdBy) {
+      const creator = await db.query.users.findFirst({
+        where: eq(users.id, automation.createdBy),
+        columns: { fullName: true },
+      });
+      createdByName = creator?.fullName;
     }
 
     const runs = await db.query.automationRuns.findMany({
@@ -55,15 +57,16 @@ export async function GET(
       status: run.status,
       trigger_type: run.triggerEvent,
       actions_run: run.stepsCompleted,
-      duration_ms: (run.metadata as any)?.duration_ms || 0, // Assuming duration might be in metadata
+      duration_ms: (run.metadata as Record<string, unknown>)?.['duration_ms'] as number || 0,
       error: run.errorMessage,
       created_at: run.createdAt
     }));
 
+    const createdName = createdByName;
     return NextResponse.json({ 
       data: { 
         ...automation, 
-        created_by_name: (automation as any).createdBy?.fullName,
+        created_by_name: createdName,
         recent_runs: recentRuns 
       } 
     });
@@ -79,7 +82,7 @@ export async function GET(
  */
 export async function PATCH(
   req: NextRequest, 
-  { params }: any
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(req);
@@ -97,17 +100,17 @@ export async function PATCH(
     if (validated instanceof NextResponse) return validated;
     const body = validated.data;
 
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       updatedAt: new Date(),
     };
 
-    if (body.name !== undefined) updateData.name = body.name;
-    if (body.description !== undefined) updateData.description = body.description;
-    if (body.is_active !== undefined) updateData.isActive = body.is_active;
-    if (rawBody.trigger_type !== undefined) updateData.triggerType = rawBody.trigger_type;
-    if (rawBody.trigger_config !== undefined) updateData.triggerConfig = rawBody.trigger_config;
-    if (body.actions !== undefined) updateData.actions = body.actions;
-    if (body.conditions !== undefined) updateData.conditions = body.conditions;
+    if (body.name !== undefined) updateData['name'] = body.name;
+    if (body.description !== undefined) updateData['description'] = body.description;
+    if (body.is_active !== undefined) updateData['isActive'] = body.is_active;
+    if (rawBody.trigger_type !== undefined) updateData['triggerType'] = rawBody.trigger_type;
+    if (rawBody.trigger_config !== undefined) updateData['triggerConfig'] = rawBody.trigger_config;
+    if (body.actions !== undefined) updateData['actions'] = body.actions;
+    if (body.conditions !== undefined) updateData['conditions'] = body.conditions;
 
     const [row] = await db.update(automations)
       .set(updateData)
@@ -133,7 +136,7 @@ export async function PATCH(
  */
 export async function DELETE(
   req: NextRequest, 
-  { params }: any
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireAuth(req);

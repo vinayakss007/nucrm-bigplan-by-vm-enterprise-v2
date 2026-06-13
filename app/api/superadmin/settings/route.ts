@@ -5,7 +5,7 @@ import { platformSettingsSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { isNull } from 'drizzle-orm';
 
 const ALLOWED = [
   'platform_name', 'support_email', 'app_url', 'allow_signups', 'require_email_verify',

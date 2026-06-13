@@ -4,13 +4,13 @@ import {
   DndContext, DragOverlay, closestCorners, KeyboardSensor, 
   PointerSensor, TouchSensor, useSensor, useSensors, type DragEndEvent, type DragStartEvent 
 } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { 
   Plus, GripVertical, X, MoreHorizontal, Calendar, DollarSign, 
   User, Clock, CheckCircle, AlertCircle, ChevronRight, TrendingUp, Building2
 } from 'lucide-react';
-import { cn, formatCurrency, formatDate, formatRelativeTime } from '@/lib/utils';
+import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 interface Deal {
@@ -112,7 +112,7 @@ function DealCard({ deal, isDragging }: DealCardProps) {
   );
 }
 
-function StageColumn({ stage, deals, onDealMove }: { stage: Stage; deals: Deal[]; onDealMove: (dealId: string, newStageId: string) => void }) {
+function StageColumn({ stage, deals, _onDealMove }: { stage: Stage; deals: Deal[]; _onDealMove: (dealId: string, newStageId: string) => void }) {
   const total = deals.reduce((sum, d) => sum + (parseFloat(d.amount || '0') || 0), 0);
 
   return (
@@ -211,7 +211,7 @@ export default function DealsKanbanPage() {
           setDeals(prev => prev.map(d => d.id === activeDeal.id ? { ...d, stageId: newStageId } : d));
           toast.success(`Deal moved to ${stages.find(s => s.id === newStageId)?.name}`);
         }
-      } catch (error) {
+      } catch {
         toast.error('Failed to move deal');
       }
     }
@@ -326,7 +326,7 @@ export default function DealsKanbanPage() {
                 key={stage.id}
                 stage={stage}
                 deals={getDealsByStage(stage.id)}
-                onDealMove={(dealId, newStageId) => {
+                _onDealMove={(dealId: string, newStageId: string) => {
                   setDeals(prev => prev.map(d => d.id === dealId ? { ...d, stageId: newStageId } : d));
                 }}
               />

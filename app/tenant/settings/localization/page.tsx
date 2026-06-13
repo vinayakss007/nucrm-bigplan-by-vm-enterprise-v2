@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { Globe, Clock, DollarSign, Calendar, Briefcase, Plus, X, Save, Loader2, ShieldX, Hash } from 'lucide-react';
+import { Globe, Clock, DollarSign, Calendar, Briefcase, Plus, X, Save, Loader2, ShieldX } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 

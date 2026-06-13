@@ -78,7 +78,7 @@ function ContractsPageInner() {
       setShowModal(false);
       setForm({ contactId: '', title: '', contractType: 'service', startDate: '', endDate: '', totalValue: '', terms: '', notes: '' });
       fetchContracts();
-    } catch (error) { toast.error('Failed to create contract'); }
+    } catch { toast.error('Failed to create contract'); }
   };
 
   const getContactName = (contactId: string | null) => {

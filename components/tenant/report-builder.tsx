@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { BarChart3, PieChart, TrendingUp, Download, Loader2, Play, RefreshCw, Calendar } from 'lucide-react';
-import { cn, formatCurrency } from '@/lib/utils';
+import { BarChart3, PieChart, TrendingUp, Download, Loader2, Play, Calendar } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -61,9 +61,11 @@ export default function ReportBuilder() {
 
   // Load available dimensions/metrics
   useEffect(() => {
-    fetch('/api/tenant/reports/builder', { credentials: 'include' })
+    const abort = new AbortController();
+    fetch('/api/tenant/reports/builder', { credentials: 'include', signal: abort.signal })
       .then(r => r.json())
       .then(d => {
+        if (abort.signal.aborted) return;
         setEntities(d.entities || []);
         if (d.entities?.length) {
           const first = d.entities[0];
@@ -72,7 +74,8 @@ export default function ReportBuilder() {
         }
         setConfigLoading(false);
       })
-      .catch(() => setConfigLoading(false));
+      .catch(() => { if (!abort.signal.aborted) setConfigLoading(false); });
+    return () => abort.abort();
   }, []);
 
   // Get current entity config
@@ -85,7 +88,7 @@ export default function ReportBuilder() {
       setSelectedMetric('count');
       setSelectedMetricField('');
     }
-  }, [selectedEntity]);
+  }, [selectedEntity, entityConfig]);
 
   // Run report
   const runReport = useCallback(async () => {

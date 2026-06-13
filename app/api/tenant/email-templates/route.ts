@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       bodyHtml: v.body,
       category: v.category || 'general',
       createdBy: ctx.userId,
-    } as any).returning({
+    } as typeof emailTemplates.$inferInsert).returning({
       id: emailTemplates.id,
       name: emailTemplates.name,
       subject: emailTemplates.subject,

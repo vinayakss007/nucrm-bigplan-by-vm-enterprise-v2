@@ -3,6 +3,7 @@ export async function checkDirExists(path: string): Promise<boolean> {
     const fs = await import('fs');
     return fs.existsSync(path);
   } catch {
+    // Fallback to default on corrupted storage data
     return false;
   }
 }
@@ -27,6 +28,7 @@ export async function getFileStats(path: string): Promise<{ size: number } | nul
     const stats = fs.statSync(path);
     return { size: stats.size };
   } catch {
+    // Fallback to default on corrupted storage data
     return null;
   }
 }

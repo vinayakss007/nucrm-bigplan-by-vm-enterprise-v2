@@ -7,15 +7,15 @@ function makeQueryResult() {
     limit: vi.fn().mockReturnValue(Promise.resolve([])),
   });
 }
-const mockWhere = vi.fn().mockImplementation((...args: any[]) => ({
+const mockWhere = vi.fn().mockImplementation((..._args: any[]) => ({
   orderBy: vi.fn().mockReturnValue(makeQueryResult()),
 }));
-const mockFrom = vi.fn().mockImplementation((...args: any[]) => ({ where: mockWhere }));
+const mockFrom = vi.fn().mockImplementation((..._args: any[]) => ({ where: mockWhere }));
 
 vi.mock('@/drizzle/db', () => ({
   db: {
     insert: (...args: any[]) => mockDbInsert(...args),
-    select: (...args: any[]) => ({ from: mockFrom }),
+    select: (..._args: any[]) => ({ from: mockFrom }),
   },
 }));
 

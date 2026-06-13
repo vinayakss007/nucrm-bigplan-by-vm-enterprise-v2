@@ -78,7 +78,7 @@ export default function FormsPage() {
         const d = await res.json();
         setSubmissions(d.data?.submissions ?? []);
       }
-    } catch (err) {
+    } catch {
       toast.error('Failed to load submissions');
     } finally {
       setLoadingSubmissions(false);
@@ -293,7 +293,7 @@ export default function FormsPage() {
                     </div>
                   ) : (
                     <div className="divide-y divide-border">
-                      {submissions.map((sub, i) => (
+                      {submissions.map((sub, _i) => (
                         <div key={sub.id} className="p-5 hover:bg-accent/30 transition-colors">
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-3">

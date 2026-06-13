@@ -5,7 +5,7 @@ import { validateBody } from '@/lib/api/validate';
 import { createRoleSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { roles } from '@/drizzle/schema';
-import { eq, and, desc, isNull } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {

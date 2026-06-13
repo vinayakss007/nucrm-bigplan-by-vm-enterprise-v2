@@ -64,15 +64,15 @@ export async function GET(req: NextRequest) {
       .where(eq(tenants.id, ctx.tenantId))
       .limit(1);
 
-    const stored = ((t?.settings as any) ?? {}).login_policy ?? {};
+    const stored = (((t?.settings as Record<string, unknown>) ?? {})['login_policy'] ?? {}) as Record<string, unknown>;
 
     // Deep-merge defaults <- stored
     const merged = {
-      password:    { ...DEFAULTS.password,    ...(stored.password    ?? {}) },
-      two_factor:  { ...DEFAULTS.two_factor,  ...(stored.two_factor  ?? {}) },
-      session:     { ...DEFAULTS.session,     ...(stored.session     ?? {}) },
-      network:     { ...DEFAULTS.network,     ...(stored.network     ?? {}) },
-      login:       { ...DEFAULTS.login,       ...(stored.login       ?? {}) },
+      password:    { ...DEFAULTS.password,    ...(stored['password']    ?? {}) },
+      two_factor:  { ...DEFAULTS.two_factor,  ...(stored['two_factor']  ?? {}) },
+      session:     { ...DEFAULTS.session,     ...(stored['session']     ?? {}) },
+      network:     { ...DEFAULTS.network,     ...(stored['network']     ?? {}) },
+      login:       { ...DEFAULTS.login,       ...(stored['login']       ?? {}) },
     };
 
     return NextResponse.json({ login_policy: merged });
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  let ctx: any;
+  let ctx: Awaited<ReturnType<typeof requireAuth>>;
   try {
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -93,7 +93,7 @@ export async function PATCH(req: NextRequest) {
     if (!incoming || typeof incoming !== 'object')
       return NextResponse.json({ error: 'login_policy object required' }, { status: 400 });
 
-    const safe: any = {};
+    const safe: Record<string, unknown> = {};
 
     // Password
     if (incoming.password && typeof incoming.password === 'object') {
@@ -107,7 +107,7 @@ export async function PATCH(req: NextRequest) {
       const reuse = Number(p.prevent_reuse_count ?? 0);
       if (!Number.isInteger(reuse) || reuse < 0 || reuse > 24)
         return NextResponse.json({ error: 'password.prevent_reuse_count must be 0-24' }, { status: 400 });
-      safe.password = {
+      safe['password'] = {
         min_length: minLen,
         require_uppercase: p.require_uppercase === true,
         require_number:    p.require_number    === true,
@@ -125,7 +125,7 @@ export async function PATCH(req: NextRequest) {
       const grace = Number(t.grace_period_days ?? DEFAULTS.two_factor.grace_period_days);
       if (!Number.isInteger(grace) || grace < 0 || grace > 90)
         return NextResponse.json({ error: 'two_factor.grace_period_days must be 0-90' }, { status: 400 });
-      safe.two_factor = {
+      safe['two_factor'] = {
         enforcement: t.enforcement ?? DEFAULTS.two_factor.enforcement,
         grace_period_days: grace,
       };
@@ -143,7 +143,7 @@ export async function PATCH(req: NextRequest) {
       const conc = Number(s.max_concurrent ?? 0);
       if (!Number.isInteger(conc) || conc < 0 || conc > 50)
         return NextResponse.json({ error: 'session.max_concurrent must be 0-50' }, { status: 400 });
-      safe.session = { idle_timeout_minutes: idle, max_lifetime_hours: life, max_concurrent: conc };
+      safe['session'] = { idle_timeout_minutes: idle, max_lifetime_hours: life, max_concurrent: conc };
     }
 
     // Network / IP allowlist
@@ -160,7 +160,7 @@ export async function PATCH(req: NextRequest) {
       }
       if (cleaned.length > 200)
         return NextResponse.json({ error: 'Max 200 IP entries' }, { status: 400 });
-      safe.network = {
+      safe['network'] = {
         ip_allowlist_enabled: n.ip_allowlist_enabled === true,
         ip_allowlist: cleaned,
       };
@@ -176,7 +176,7 @@ export async function PATCH(req: NextRequest) {
         if (v && !isDomain(v))
           return NextResponse.json({ error: `Email domain not valid: ${d}` }, { status: 400 });
       }
-      safe.login = {
+      safe['login'] = {
         allow_self_signup: l.allow_self_signup === true,
         allowed_email_domains: allowed.map((d: string) => String(d).trim().toLowerCase()).filter(Boolean),
         blocked_email_domains: blocked.map((d: string) => String(d).trim().toLowerCase()).filter(Boolean),

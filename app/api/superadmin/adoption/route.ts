@@ -70,27 +70,27 @@ export async function GET(req: NextRequest) {
             AND COALESCE(settings->'out_of_office'->>'end_date',   '0001-01-01') >= ${today})::int AS users_ooo
     `);
 
-    const row = (result as any).rows?.[0] ?? {};
+    const row = (result.rows?.[0] ?? {}) as Record<string, unknown>;
 
     return NextResponse.json({
-      total_tenants: Number(row.total_tenants) || 0,
+      total_tenants: Number(row['total_tenants']) || 0,
       adoption: {
-        localization:  Number(row.adoption_localization)  || 0,
-        login_policy:  Number(row.adoption_login_policy)  || 0,
-        picklists:     Number(row.adoption_picklists)     || 0,
-        user_defaults: Number(row.adoption_user_defaults) || 0,
+        localization:  Number(row['adoption_localization'])  || 0,
+        login_policy:  Number(row['adoption_login_policy'])  || 0,
+        picklists:     Number(row['adoption_picklists'])     || 0,
+        user_defaults: Number(row['adoption_user_defaults']) || 0,
       },
       drift: {
-        weak_password_policy: Number(row.weak_password_policy) || 0,
-        two_factor_off:       Number(row.two_factor_off)       || 0,
-        two_factor_required:  Number(row.two_factor_required)  || 0,
-        ip_allowlist_on:      Number(row.ip_allowlist_on)      || 0,
-        self_signup_on:       Number(row.self_signup_on)       || 0,
+        weak_password_policy: Number(row['weak_password_policy']) || 0,
+        two_factor_off:       Number(row['two_factor_off'])       || 0,
+        two_factor_required:  Number(row['two_factor_required'])  || 0,
+        ip_allowlist_on:      Number(row['ip_allowlist_on'])      || 0,
+        self_signup_on:       Number(row['self_signup_on'])       || 0,
       },
       users: {
-        total:             Number(row.users_total)      || 0,
-        with_prefs:        Number(row.users_with_prefs) || 0,
-        out_of_office_now: Number(row.users_ooo)        || 0,
+        total:             Number(row['users_total'])      || 0,
+        with_prefs:        Number(row['users_with_prefs']) || 0,
+        out_of_office_now: Number(row['users_ooo'])        || 0,
       },
     });
   } catch (err: any) {

@@ -283,7 +283,7 @@ describe('SMS - sendSMS', () => {
 
   it('accepts optional contactId', async () => {
     vi.mocked(db.insert).mockReturnValue({
-      values: vi.fn((vals: any) => ({
+      values: vi.fn((_vals: any) => ({
         returning: vi.fn().mockResolvedValue([{ id: 'msg-5' }]),
       })),
     } as any);

@@ -177,7 +177,7 @@ export function Swipeable({ children, leftActions = [], rightActions = [], onSwi
         className={cn('absolute top-0 bottom-0 flex', isLeft ? 'left-0 -translate-x-full' : 'right-0 translate-x-full')}
         style={{ width: `${Math.min(offsetValue, MAX_SWIPE)}px` }}
       >
-        {actions.map((action, index) => {
+        {actions.map((action, _index) => {
           const width = action.width || 80;
           const isActive = activeAction === action.label;
           return (

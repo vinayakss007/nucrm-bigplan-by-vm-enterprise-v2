@@ -4,7 +4,6 @@ import { db } from '@/drizzle/db';
 import { portalClients, platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
-import crypto from 'crypto';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
 

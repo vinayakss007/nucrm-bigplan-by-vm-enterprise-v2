@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Zap, ToggleLeft, ToggleRight, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Zap, ToggleRight, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -32,7 +32,7 @@ export default function TenantModulesPage() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [, load]);
 
   const toggleModule = async (mod: any) => {
     setToggling(mod.id);

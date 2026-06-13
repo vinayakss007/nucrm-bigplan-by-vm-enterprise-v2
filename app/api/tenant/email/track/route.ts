@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { apiError } from '@/lib/api-error';
 import { db } from '@/drizzle/db';
 import { emailOpens, emailClicks } from '@/drizzle/schema/email-tracking';
 import { tenants } from '@/drizzle/schema/core';
@@ -96,7 +95,7 @@ export async function GET(req: NextRequest) {
         'Expires': '0',
       },
     });
-  } catch (err) {
+  } catch {
     // Even on error, return the pixel to avoid broken images
     return new NextResponse(TRACKING_PIXEL, {
       status: 200,

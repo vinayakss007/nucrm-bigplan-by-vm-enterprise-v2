@@ -24,6 +24,18 @@ import {
 import { eq, and, sql } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { createNotification } from '@/lib/notifications';
+import { captureError } from '@/lib/capture-error';
+
+interface AutomationCondition {
+  field?: string;
+  operator?: string;
+  value?: unknown;
+}
+
+interface AutomationAction {
+  type: string;
+  config: Record<string, unknown>;
+}
 
 export type TriggerEvent =
   | 'contact.created' | 'contact.updated'
@@ -64,9 +76,9 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
           deal_id: payload.dealId ?? payload.data?.['deal_id'],
         };
 
-        if (!meetsConditions(automation.conditions as any[], enrichedData)) continue;
+        if (!meetsConditions(automation.conditions as AutomationCondition[], enrichedData)) continue;
 
-        for (const action of (automation.actions as any[] ?? [])) {
+        for (const action of (automation.actions as AutomationAction[] ?? [])) {
           await executeAction(action, payload, enrichedData);
         }
 
@@ -77,10 +89,10 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
           status: 'success',
           triggeredBy: payload.userId || null,
           metadata: enrichedData,
-        }).catch((err) => console.error('[automation] Failed to log run:', err.message));
+        }).catch((err) => captureError(err, 'automation:log-run'));
 
       } catch (err: any) {
-        console.error(`[automation] ${automation.name} (${automation.id}) failed:`, err.message);
+        captureError(err, `automation:${automation.name}`);
 
         await db.insert(automationRuns).values({
           tenantId: payload.tenantId,
@@ -90,11 +102,11 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
           triggeredBy: payload.userId || null,
           errorMessage: err.message,
           metadata: payload.data,
-        }).catch((err) => console.error('[automation] Failed to log failed run:', err.message));
+        }).catch((err) => captureError(err, 'automation:log-failed-run'));
       }
     }
   } catch (err: any) {
-    console.error('[automation] evaluateAutomations error:', err.message);
+    captureError(err, 'automation:evaluate');
   }
 }
 
@@ -205,7 +217,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
           )
         `);
       } catch (err: any) {
-        console.error(`[automation] Sequence enrollment failed:`, err.message);
+        captureError(err, 'automation:sequence-enrollment');
       }
       break;
     }
@@ -237,7 +249,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
         )
       });
 
-      const configObj = integration?.config as any;
+      const configObj = integration?.config as { phone_number_id?: string; access_token?: string } | undefined;
       const phoneNumberId = configObj?.phone_number_id;
       const accessToken = configObj?.access_token;
 
@@ -265,7 +277,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
           signal: AbortSignal.timeout(10_000),
         });
       } catch (err: any) {
-        console.error('[automation] WhatsApp send failed:', err.message);
+        captureError(err, 'automation:whatsapp-send');
       }
       break;
     }

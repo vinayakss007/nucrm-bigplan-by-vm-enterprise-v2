@@ -67,9 +67,9 @@ export async function GET(req: NextRequest) {
     `);
 
     return NextResponse.json({
-      bulk_ops:          (bulkOps as any).rows         ?? [],
-      settings_changes:  (settingsChanges as any).rows ?? [],
-      critical:          (critical as any).rows        ?? [],
+      bulk_ops:          bulkOps.rows         ?? [],
+      settings_changes:  settingsChanges.rows ?? [],
+      critical:          critical.rows        ?? [],
     });
   } catch (err: any) {
     console.error('[superadmin recent-activity]', err);

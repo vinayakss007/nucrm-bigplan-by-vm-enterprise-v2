@@ -26,7 +26,6 @@ vi.mock('@/drizzle/schema', () => ({
   },
 }));
 
-import { eq } from 'drizzle-orm';
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((a: any, b: any) => ({ a, b })),
 }));

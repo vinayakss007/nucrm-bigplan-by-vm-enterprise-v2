@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { leads, tenantMembers } from '@/drizzle/schema';
-import { eq, and, inArray, sql, not, exists } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 

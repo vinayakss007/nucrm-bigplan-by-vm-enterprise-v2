@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { leadAssignments, leads, users } from '@/drizzle/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { aliasedTable } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 

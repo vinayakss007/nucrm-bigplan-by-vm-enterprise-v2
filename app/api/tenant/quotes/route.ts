@@ -19,10 +19,11 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
 
-    let whereClause = eq(quotes.tenantId, tenantId);
-    if (status) whereClause = and(whereClause, eq(quotes.status, status)) as any;
-    if (contactId) whereClause = and(whereClause, eq(quotes.contactId, contactId as any)) as any;
-    if (dealId) whereClause = and(whereClause, eq(quotes.dealId, dealId as any)) as any;
+    const conditions: ReturnType<typeof eq>[] = [eq(quotes.tenantId, tenantId)];
+    if (status) conditions.push(eq(quotes.status, status));
+    if (contactId) conditions.push(eq(quotes.contactId, contactId));
+    if (dealId) conditions.push(eq(quotes.dealId, dealId));
+    const whereClause = and(...conditions);
 
     const offset = (page - 1) * limit;
     const results = await db.select().from(quotes).where(whereClause).orderBy(desc(quotes.createdAt)).limit(limit).offset(offset);
@@ -89,18 +90,18 @@ export async function POST(request: NextRequest) {
     }).returning();
 
     if (items?.length) {
-      const lineItems = items.map((item: any, idx: number) => ({
-        quoteId: (quote as any)[0].id,
+      const lineItems = items.map((item: { description?: string; quantity?: string | number; unit_price?: string | number; tax_rate?: string | number }, idx: number) => ({
+        quoteId: quote!.id,
         productId: null,
-        description: item.description,
+        description: item.description ?? '',
         quantity: String(item.quantity || 1),
         unitPrice: String(item.unit_price || 0),
         discountPercent: '0',
         taxPercent: String(item.tax_rate || 0),
-        total: String(((parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0)).toFixed(2)),
+        total: String(((parseFloat(String(item.quantity)) || 1) * (parseFloat(String(item.unit_price)) || 0)).toFixed(2)),
         sortOrder: idx,
-      }));
-      await db.insert(quoteLineItems).values(lineItems);
+      } as typeof quoteLineItems.$inferInsert));
+      await db.insert(quoteLineItems).values(lineItems as typeof quoteLineItems.$inferInsert[]);
     }
 
     return NextResponse.json({ quote }, { status: 201 });

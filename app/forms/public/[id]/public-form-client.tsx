@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 export default function PublicFormClient({ form }: { form: any }) {
   const [loading, setLoading] = useState(false);
