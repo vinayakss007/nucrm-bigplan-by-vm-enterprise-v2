@@ -1,4 +1,5 @@
 import { errorLogs } from '@/drizzle/schema/support';
+import { sendCriticalErrorAlert } from '@/lib/critical-error-alert';
 
 type ErrorLevel = 'warning' | 'error' | 'fatal';
 
@@ -48,6 +49,10 @@ export async function logError(opts: {
     });
   } catch (err: any) {
     console.error('[logError] DB write failed:', msg, '|', err.message);
+  }
+
+  if (opts.level === 'fatal') {
+    sendCriticalErrorAlert({ error: opts.error, level: opts.level, context: opts.context }).catch(() => {});
   }
 }
 
