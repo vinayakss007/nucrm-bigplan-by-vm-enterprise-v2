@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface NotificationState {
   unreadCount: number;
@@ -8,24 +8,29 @@ interface NotificationState {
 
 export function useNotifications(enabled = true) {
   const [state, setState] = useState<NotificationState>({ unreadCount: 0, connected: false });
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     if (!enabled) return;
 
     let eventSource: EventSource | null = null;
-    let reconnectTimer: NodeJS.Timeout;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
     let reconnectAttempts = 0;
 
     const connect = () => {
+      if (!mountedRef.current) return;
       try {
         eventSource = new EventSource('/api/tenant/notifications/stream');
 
         eventSource.onopen = () => {
+          if (!mountedRef.current) return;
           setState(prev => ({ ...prev, connected: true }));
           reconnectAttempts = 0;
         };
 
         eventSource.addEventListener('message', (event) => {
+          if (!mountedRef.current) return;
           try {
             const data = JSON.parse(event.data);
             if (data.type === 'unread') {
@@ -35,19 +40,25 @@ export function useNotifications(enabled = true) {
         });
 
         eventSource.onerror = () => {
+          if (!mountedRef.current) return;
           eventSource?.close();
           setState(prev => ({ ...prev, connected: false }));
-          // Exponential backoff reconnect
+          if (!mountedRef.current) return;
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
           reconnectTimer = setTimeout(connect, delay);
           reconnectAttempts++;
         };
-      } catch { /* Fallback to default on corrupted storage data */ }
+      } catch {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[useNotifications] Failed to create EventSource');
+        }
+      }
     };
 
     connect();
 
     return () => {
+      mountedRef.current = false;
       eventSource?.close();
       clearTimeout(reconnectTimer);
     };
