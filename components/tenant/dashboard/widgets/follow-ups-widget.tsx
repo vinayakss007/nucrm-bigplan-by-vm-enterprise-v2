@@ -1,4 +1,5 @@
 'use client';
+import { useMemo } from 'react';
 import type { WidgetProps } from '@/types/dashboard';
 import { formatDate, cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -6,7 +7,11 @@ import Link from 'next/link';
 export default function FollowUpsWidget({ data }: WidgetProps) {
   const items = data?.items ?? [];
   const stats = data?.stats ?? {};
-  const today = new Date().toISOString().split('T')[0] || '';
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
 
   return (
     <div>
@@ -36,7 +41,8 @@ export default function FollowUpsWidget({ data }: WidgetProps) {
       ) : (
         <div className="divide-y divide-border">
           {items.slice(0, 5).map((f: any) => {
-            const overdue = f.dueDate && f.dueDate < today;
+            const dueDate = f.dueDate ? new Date(f.dueDate) : null;
+            const overdue = dueDate && dueDate < today;
             return (
               <Link
                 key={f.id}
