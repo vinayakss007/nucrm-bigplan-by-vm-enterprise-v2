@@ -39,9 +39,8 @@ export async function PATCH(
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  const body = (await request.json().catch(() => null)) as
-    | (Parameters<typeof validateInput>[0] & { is_active?: boolean })
-    | null;
+  let body: (Parameters<typeof validateInput>[0] & { is_active?: boolean }) | null;
+  try { body = await request.json() as Parameters<typeof validateInput>[0] & { is_active?: boolean }; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
   const validationError = validateInput(body, { secretRequired: false });
   if (validationError) return validationError;
   const v = body!;

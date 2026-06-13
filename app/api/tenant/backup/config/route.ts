@@ -165,7 +165,8 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const rawBody = await request.json().catch(() => ({}));
+    let rawBody;
+    try { rawBody = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const validated = validateBody(backupConfigSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
