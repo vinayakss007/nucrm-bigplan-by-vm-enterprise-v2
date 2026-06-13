@@ -258,7 +258,9 @@ export async function PATCH(request: NextRequest) {
     } else if (action === 'reactivate') {
       await db.update(tenantMembers).set({ status: 'active' }).where(eq(tenantMembers.id, memberId));
     } else if (action === 'assign_lead') {
-      const { contactId } = await request.json().catch(() => ({}));
+      let _parsedBody: { contactId?: string };
+      try { _parsedBody = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+      const { contactId } = _parsedBody;
       if (contactId) {
         await db.update(contacts).set({ assignedTo: target.userId, lastAssignedAt: new Date() }).where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId)));
         await db.insert(leadAssignments).values({
