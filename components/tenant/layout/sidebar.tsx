@@ -399,7 +399,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
                 )}>
                 {!q && <ChevronDown className={cn('w-3 h-3 transition-transform', isOpen ? 'rotate-0' : '-rotate-90')} />}
                 <span className="flex-1 text-left">{section.label}</span>
-                <span suppressHydrationWarning className="text-sm text-foreground/80 font-bold normal-case">{section.items.length}</span>
+                <span className="text-sm text-foreground/80 font-bold normal-case">{section.items.length}</span>
               </button>
               {isOpen && (
                 <div className="space-y-0.5 mt-0.5">
