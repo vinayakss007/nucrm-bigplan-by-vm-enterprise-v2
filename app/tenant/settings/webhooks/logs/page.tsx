@@ -52,7 +52,7 @@ export default function WebhookLogsPage() {
     }
   };
 
-  useEffect(() => { load(); }, [page, statusFilter]);
+  useEffect(() => { load(); }, [page, statusFilter, load]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 

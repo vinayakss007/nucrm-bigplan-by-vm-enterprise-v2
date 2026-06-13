@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Trash2, RotateCcw, AlertTriangle, Filter, X, Clock } from 'lucide-react';
+import { Trash2, RotateCcw, AlertTriangle, X, Clock } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -26,7 +26,7 @@ export default function TrashPage() {
     setItems(data.data ?? []);
     setLoading(false);
   };
-  useEffect(() => { load(); }, [filter]);
+  useEffect(() => { load(); }, [filter, load]);
 
   const restore = async (item: any) => {
     setRestoring(item.id);

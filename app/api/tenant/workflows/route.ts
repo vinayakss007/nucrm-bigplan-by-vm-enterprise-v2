@@ -2,9 +2,9 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
 import { createWorkflowSchema } from '@/lib/api/schemas';
-import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
+import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { workflows, workflowActions, workflowExecutions } from '@/drizzle/schema';
+import { workflows, workflowActions } from '@/drizzle/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 
 /**
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       // 2. Create actions if provided
       if (actions.length > 0) {
         const actionValues = actions.map((action: any, index: number) => ({
-          workflowId: (newWorkflow as any)[0].id,
+          workflowId: newWorkflow!.id,
           tenantId: ctx.tenantId,
           orderIndex: index + 1,
           actionType: action.action_type || 'email',

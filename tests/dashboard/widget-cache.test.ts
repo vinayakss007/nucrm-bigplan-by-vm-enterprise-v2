@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { withCache, invalidateWidgetCache, getCacheStats, clearCache } from '@/lib/dashboard/widget-cache';
 
+function jsonResponse(data: unknown): Response {
+  return new Response(JSON.stringify(data), {
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
 describe('widget-cache', () => {
   beforeEach(() => {
     clearCache();
@@ -10,15 +16,15 @@ describe('widget-cache', () => {
     let callCount = 0;
     const fetcher = async () => {
       callCount++;
-      return { value: 42 };
+      return jsonResponse({ value: 42 });
     };
 
     const result1 = await withCache('tenant-1', 'test-widget', 60, fetcher);
-    expect(result1).toEqual({ value: 42 });
+    expect(await result1.json()).toEqual({ value: 42 });
     expect(callCount).toBe(1);
 
     const result2 = await withCache('tenant-1', 'test-widget', 60, fetcher);
-    expect(result2).toEqual({ value: 42 });
+    expect(await result2.json()).toEqual({ value: 42 });
     expect(callCount).toBe(1);
   });
 
@@ -26,7 +32,7 @@ describe('widget-cache', () => {
     let callCount = 0;
     const fetcher = async () => {
       callCount++;
-      return { value: callCount };
+      return jsonResponse({ value: callCount });
     };
 
     await withCache('tenant-1', 'ttl-test', 0, fetcher);
@@ -35,36 +41,36 @@ describe('widget-cache', () => {
   });
 
   it('isolates caches per tenant', async () => {
-    const fetcher = async (n: number) => ({ value: n });
+    const fetcher = (n: number) => async () => jsonResponse({ value: n });
 
-    await withCache('tenant-a', 'widget', 60, () => fetcher(1));
-    await withCache('tenant-b', 'widget', 60, () => fetcher(2));
+    await withCache('tenant-a', 'widget', 60, fetcher(1));
+    await withCache('tenant-b', 'widget', 60, fetcher(2));
 
-    const a = await withCache('tenant-a', 'widget', 60, () => fetcher(3));
-    const b = await withCache('tenant-b', 'widget', 60, () => fetcher(4));
+    const a = await withCache('tenant-a', 'widget', 60, fetcher(3));
+    const b = await withCache('tenant-b', 'widget', 60, fetcher(4));
 
-    expect(a).toEqual({ value: 1 });
-    expect(b).toEqual({ value: 2 });
+    expect(await a.json()).toEqual({ value: 1 });
+    expect(await b.json()).toEqual({ value: 2 });
   });
 
   it('isolates caches per widget key', async () => {
-    const fetcher = async (n: number) => ({ value: n });
+    const fetcher = (n: number) => async () => jsonResponse({ value: n });
 
-    await withCache('t1', 'widget-a', 60, () => fetcher(10));
-    await withCache('t1', 'widget-b', 60, () => fetcher(20));
+    await withCache('t1', 'widget-a', 60, fetcher(10));
+    await withCache('t1', 'widget-b', 60, fetcher(20));
 
-    const a = await withCache('t1', 'widget-a', 60, () => fetcher(30));
-    const b = await withCache('t1', 'widget-b', 60, () => fetcher(40));
+    const a = await withCache('t1', 'widget-a', 60, fetcher(30));
+    const b = await withCache('t1', 'widget-b', 60, fetcher(40));
 
-    expect(a).toEqual({ value: 10 });
-    expect(b).toEqual({ value: 20 });
+    expect(await a.json()).toEqual({ value: 10 });
+    expect(await b.json()).toEqual({ value: 20 });
   });
 
   it('invalidates specific cache entries', async () => {
     let callCount = 0;
     const fetcher = async () => {
       callCount++;
-      return { value: callCount };
+      return jsonResponse({ value: callCount });
     };
 
     await withCache('t1', 'w1', 60, fetcher);

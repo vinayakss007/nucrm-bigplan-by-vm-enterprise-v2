@@ -1,8 +1,7 @@
 "use client"
 
-import { useState, useCallback } from 'react'
-import { X, GitMerge, AlertTriangle, CheckCircle, ArrowRight, User, Mail, Phone, Building } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { useState } from 'react'
+import { X, GitMerge, AlertTriangle, CheckCircle, ArrowRight, User, Mail, Phone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'

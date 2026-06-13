@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { tenants, tenantMembers, users } from '@/drizzle/schema';
+import { tenants, tenantMembers } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
 
     if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
 
-    const settings = (tenant.settings as any) ?? {};
+    const settings = (tenant.settings as Record<string, unknown>) ?? {};
     const memberCount = await db
       .select({ c: sql<number>`count(*)::int` })
       .from(tenantMembers)
@@ -66,10 +66,10 @@ export async function GET(req: NextRequest) {
       },
       // Surface every settings sub-tree the tenant admin can edit
       settings: {
-        localization:  settings.localization ?? null,
-        login_policy:  settings.login_policy ?? null,
-        picklists:     settings.picklists ?? null,
-        user_defaults: settings.user_defaults ?? null,
+        localization:  settings['localization'] ?? null,
+        login_policy:  settings['login_policy'] ?? null,
+        picklists:     settings['picklists'] ?? null,
+        user_defaults: settings['user_defaults'] ?? null,
         // Other arbitrary keys (anything tenants drop into settings)
         other_keys: Object.keys(settings).filter(k => !['localization','login_policy','picklists','user_defaults'].includes(k)),
       },

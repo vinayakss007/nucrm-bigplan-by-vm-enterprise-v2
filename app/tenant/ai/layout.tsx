@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sparkles, ChevronRight, ShieldCheck } from 'lucide-react';
+import { Sparkles, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AI_CAPABILITIES } from '@/components/tenant/ai/ai-config';
 import { useEffect, useState } from 'react';

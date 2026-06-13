@@ -3,7 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, users, plans } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { dbCache, invalidateCache } from '@/lib/db/cache';
 
 export async function GET(request: NextRequest) {
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     }).returning();
 
     await db.update(users)
-      .set({ lastTenantId: (tenant as any)[0].id })
+      .set({ lastTenantId: tenant!.id })
       .where(eq(users.id, ctx.userId));
 
     return NextResponse.json({ data: tenant }, { status: 201 });

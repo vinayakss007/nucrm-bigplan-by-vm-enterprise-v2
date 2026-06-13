@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Zap, CheckCircle, AlertTriangle, Loader2, Mail } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Loader2, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 function AcceptInviteContent() {

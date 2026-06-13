@@ -1,7 +1,7 @@
 import { requireTenantCtx, can } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
 import { sequences as sequencesTable, sequenceEnrollments, contacts } from '@/drizzle/schema';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { eq, sql, desc } from 'drizzle-orm';
 import SequencesClient from '@/components/tenant/sequences-client';
 
 export default async function SequencesPage() {

@@ -1,12 +1,11 @@
 "use client"
 
-import { useState, useCallback } from 'react'
-import { Plus, Mail, Calendar, Clock, Phone, Pause, Trash2, Edit, Play, Copy, Users } from 'lucide-react'
+import { useState } from 'react'
+import { Mail, Calendar, Clock, Phone, Trash2, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
 import toast from 'react-hot-toast'
 
 interface SequenceStep {

@@ -165,8 +165,9 @@ export class TenantDataImporter {
               // Fallback for tables where tenant_id might be named differently or need subquery
               // (This is mostly a safety net from the original code)
               await tx.execute(sql`DELETE FROM ${sql.identifier(table)} WHERE id IN (SELECT id FROM ${sql.identifier(table)} WHERE tenant_id = ${this.tenantId})`);
-            } catch {
-              // Table might not exist or use different column — skip
+            } catch (e) {
+              // Silently skip during migration/setup when tables may not exist yet
+              console.warn('[Import] Failed to delete table', table, (e as Error).message);
             }
           }
         }

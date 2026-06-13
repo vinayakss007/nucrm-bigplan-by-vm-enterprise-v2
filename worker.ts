@@ -1,11 +1,10 @@
 // Background Worker for NuCRM SaaS
 // Handles scheduled jobs, email sending, webhook delivery, etc.
 
-import { Queue, Worker } from 'bullmq';
+import { Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { db } from '@/drizzle/db';
-import { notifications, contacts, activities, webhookDeliveries } from '@/drizzle/schema';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { notifications } from '@/drizzle/schema';
 
 const REDIS_URL = process.env['REDIS_URL'] || 'redis://localhost:6379';
 

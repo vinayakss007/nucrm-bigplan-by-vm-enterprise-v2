@@ -5,7 +5,7 @@ import { createPlanSchema, updatePlanSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { plans, tenants } from '@/drizzle/schema';
-import { eq, and, sql, asc, desc } from 'drizzle-orm';
+import { eq, sql, asc } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {

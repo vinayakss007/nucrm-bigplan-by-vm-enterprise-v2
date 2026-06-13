@@ -74,7 +74,7 @@ class NuCRMClient {
   // ── Contacts ────────────────────────────────────────────────
   readonly contacts = {
     list: (params?: { limit?: number; offset?: number; q?: string; lead_status?: string }) => {
-      const q = new URLSearchParams(params as any).toString();
+      const q = new URLSearchParams(params as Record<string, string>).toString();
       return this.req<{ data: any[]; total: number }>(`/api/tenant/contacts?${q}`);
     },
     get: (id: string) => this.req<{ data: any }>(`/api/tenant/contacts/${id}`),
@@ -88,7 +88,7 @@ class NuCRMClient {
   // ── Deals ───────────────────────────────────────────────────
   readonly deals = {
     list: (params?: { limit?: number; stage?: string }) => {
-      const q = new URLSearchParams(params as any).toString();
+      const q = new URLSearchParams(params as Record<string, string>).toString();
       return this.req<{ data: any[]; total: number }>(`/api/tenant/deals?${q}`);
     },
     get: (id: string) => this.req<{ data: any }>(`/api/tenant/deals/${id}`),
@@ -100,7 +100,7 @@ class NuCRMClient {
   // ── Tasks ───────────────────────────────────────────────────
   readonly tasks = {
     list: (params?: { limit?: number }) => {
-      const q = new URLSearchParams(params as any).toString();
+      const q = new URLSearchParams(params as Record<string, string>).toString();
       return this.req<{ data: any[] }>(`/api/tenant/tasks?${q}`);
     },
     create: (body: TaskInput) => this.req<{ data: any }>('/api/tenant/tasks', { method:'POST', body:JSON.stringify(body) }),
@@ -111,7 +111,7 @@ class NuCRMClient {
   // ── Companies ───────────────────────────────────────────────
   readonly companies = {
     list: (params?: { q?: string }) => {
-      const q = new URLSearchParams(params as any).toString();
+      const q = new URLSearchParams(params as Record<string, string>).toString();
       return this.req<{ data: any[] }>(`/api/tenant/companies?${q}`);
     },
     create: (body: { name: string; industry?: string; website?: string; phone?: string }) =>

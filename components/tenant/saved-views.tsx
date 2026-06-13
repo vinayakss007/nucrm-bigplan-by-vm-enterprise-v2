@@ -1,7 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { Bookmark, BookmarkPlus, X, Trash2, Share2, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,

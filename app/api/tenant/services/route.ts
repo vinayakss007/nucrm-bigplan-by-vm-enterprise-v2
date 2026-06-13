@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
 import { createServiceSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
-import { services, serviceCategories } from '@/drizzle/schema';
-import { eq, and, desc, sql, like } from 'drizzle-orm';
+import { services } from '@/drizzle/schema';
+import { eq, and, desc, like } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 
 export async function GET(request: NextRequest) {

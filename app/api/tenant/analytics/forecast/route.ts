@@ -4,7 +4,7 @@ import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { dealForecasts } from '@/drizzle/schema';
 import { revenueForecastSummary } from '@/drizzle/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql } from 'drizzle-orm';
 
 /**
  * GET /api/tenant/analytics/forecast
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await db.execute(sql`SELECT public.calculate_deal_win_probability(${deal_id}) as probability`);
-    const probability = (result.rows[0] as any)?.probability || 0;
+    const probability = (result.rows[0] as Record<string, unknown>)?.['probability'] as number || 0;
 
     const [forecast] = await db.select()
       .from(dealForecasts)

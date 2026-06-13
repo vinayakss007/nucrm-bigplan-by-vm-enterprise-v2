@@ -82,7 +82,7 @@ export async function getAtRiskDeals(tenantId: string): Promise<AtRiskResult[]> 
     const idleDays = Math.floor((now.getTime() - (deal.updatedAt?.getTime() || 0)) / (1000 * 60 * 60 * 24));
     const stageDays = Math.floor((now.getTime() - (deal.stageEnteredAt?.getTime() || 0)) / (1000 * 60 * 60 * 24));
     
-    const currentSentiment = (deal.metadata as any)?.ai_sentiment?.score ?? 100;
+    const currentSentiment = (deal.metadata as { ai_sentiment?: { score?: number } } | undefined)?.ai_sentiment?.score ?? 100;
 
     const reasons: string[] = [];
     if (idleDays >= idleLimit) reasons.push(`No activity for ${idleDays} days (Limit: ${idleLimit})`);

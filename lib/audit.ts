@@ -1,7 +1,7 @@
 import { db } from '@/drizzle/db';
 import { auditLogs } from '@/drizzle/schema';
 import { logger } from '@/lib/logger';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { createHash } from 'crypto';
 
 function computeHash(payload: Record<string, unknown>): string {

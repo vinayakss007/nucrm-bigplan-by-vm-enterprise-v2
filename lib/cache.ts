@@ -174,8 +174,9 @@ export function clearExpiredCache(): void {
         if (isStale(entry)) {
           keysToRemove.push(key);
         }
-      } catch {
+      } catch (e) {
         // Invalid JSON, remove
+        console.warn('[Cache] Invalid JSON in cache entry, removing', e);
         keysToRemove.push(key);
       }
     }
@@ -229,6 +230,7 @@ export function getCacheStats(): { total: number; size: number; entries: Array<{
           age: Date.now() - entry.timestamp,
         });
       } catch {
+        // Fallback to default on corrupted storage data
         entries.push({ key: key.replace(CACHE_PREFIX, ''), age: -1 });
       }
     }

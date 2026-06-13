@@ -1,6 +1,6 @@
 import { uniqueIndex, pgTable, uuid, text, timestamp, jsonb, boolean, integer, numeric, decimal, index, bigint } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { tenants, users } from './core';
+import { users } from './core';
 import { contacts, leads, deals } from './crm';
 import * as utils from './utils';
 

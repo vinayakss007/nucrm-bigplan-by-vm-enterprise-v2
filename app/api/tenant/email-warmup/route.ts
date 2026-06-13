@@ -5,7 +5,7 @@ import { emailWarmupConfigSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { emailWarmupConfigs, emailWarmupPool } from '@/drizzle/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { getWarmUpStats } from '@/lib/email/warmup';
 
 /**
@@ -88,16 +88,16 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
-    const configId = (config as any)?.[0]?.id;
+    const configId = config?.id;
 
     // Add participants to pool
     if (Array.isArray(participants) && participants.length > 0) {
       const poolValues = participants.map((p: any) => ({
-        configId,
+        configId: configId!,
         participantEmail: p.email,
         participantName: p.name || '',
         status: 'active',
-      }));
+      } as typeof emailWarmupPool.$inferInsert));
 
       await db.insert(emailWarmupPool)
         .values(poolValues)

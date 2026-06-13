@@ -107,23 +107,28 @@ export default function LeadsClient({
   });
   const [addingLead, setAddingLead] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     const q = new URLSearchParams({ limit: '100' });
     if (activeStatus !== 'all') q.set('lead_status', activeStatus);
     if (search) q.set('q', search);
     try {
-      const res = await fetch('/api/tenant/contacts?' + q);
+      const res = await fetch('/api/tenant/contacts?' + q, { signal });
       const data = await res.json();
-      setLeads(data.data ?? []);
+      if (!signal?.aborted) setLeads(data.data ?? []);
     } catch (err) {
-      toast.error('Failed to load leads');
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (!signal?.aborted) toast.error('Failed to load leads');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [activeStatus, search]);
 
-  useEffect(() => { load(); }, [activeStatus, search]);
+  useEffect(() => {
+    const abort = new AbortController();
+    load(abort.signal);
+    return () => abort.abort();
+  }, [load]);
 
   // Pipeline statistics
   const stats = Object.entries(PIPELINE_CONFIG).map(([id, config]) => {
@@ -201,7 +206,7 @@ export default function LeadsClient({
     }
   };
 
-  const deleteLead = async (leadId: string, name: string) => {
+  const deleteLead = async (leadId: string, _name: string) => {
     try {
       const res = await fetch(`/api/tenant/contacts/${leadId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireTenantCtx } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
-import { contacts, deals, invoices, activities, orders } from '@/drizzle/schema';
-import { eq, and, sql, gte, between } from 'drizzle-orm';
+import { contacts, deals, invoices, orders } from '@/drizzle/schema';
+import { eq, and, sql, gte } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     const revenue = Number(invoicesResult[0]?.total || 0) + Number(ordersResult[0]?.total || 0);
-    const dealsWithWon = await db.select({ count: sql<number>`count(*)` }).from(deals).where(and(eq(deals.tenantId, ctx.tenantId), eq(deals.stageId, 'won' as any)));
+    const dealsWithWon = await db.select({ count: sql<number>`count(*)` }).from(deals).where(and(eq(deals.tenantId, ctx.tenantId), eq(deals.stageId, sql`'won'`)));
     const winRate = (dealsCount[0]?.count ?? 0) > 0 ? (Number(dealsWithWon[0]?.count || 0) / Number(dealsCount[0]?.count || 1)) * 100 : 0;
 
     return NextResponse.json({

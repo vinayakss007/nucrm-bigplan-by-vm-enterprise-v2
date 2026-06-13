@@ -56,7 +56,8 @@ export function showUndoToast(
             try {
               await undoFn();
               toast.success('Undone');
-            } catch {
+            } catch (e) {
+              console.error('[Undo] Undo action failed:', e);
               toast.error('Undo failed');
             }
           }}

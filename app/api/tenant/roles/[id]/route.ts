@@ -3,7 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { roles } from '@/drizzle/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { validateBody } from '@/lib/api/validate';
 import { updateRoleSchema } from '@/lib/api/schemas';
 

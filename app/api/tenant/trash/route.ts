@@ -3,7 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, deals, tasks, companies } from '@/drizzle/schema';
-import { eq, and, isNotNull, sql, desc, isNull } from 'drizzle-orm';
+import { eq, and, isNotNull, sql, desc } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 
 export async function GET(req: NextRequest) {
@@ -138,7 +138,7 @@ export async function DELETE(req: NextRequest) {
 
     if (purge_all) {
       const result = await db.execute(sql`SELECT public.purge_trash() as count`);
-      return NextResponse.json({ ok: true, purged: (result.rows[0] as any)?.count ?? 0 });
+      return NextResponse.json({ ok: true, purged: (result.rows[0] as Record<string, unknown>)?.['count'] as number ?? 0 });
     }
 
     if (!id || !resource_type) return NextResponse.json({ error: 'id and resource_type required' }, { status: 400 });

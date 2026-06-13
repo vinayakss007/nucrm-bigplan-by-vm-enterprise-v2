@@ -121,7 +121,7 @@ export default function AssignmentConfig({ teamMembers = [] }: { teamMembers?: {
   );
 }
 
-function AssignmentRuleForm({ teamMembers, onSaved, onClose }: any) {
+function AssignmentRuleForm({ _teamMembers, onSaved, onClose }: any) {
   const [form, setForm] = useState({
     name: '',
     type: 'round_robin',

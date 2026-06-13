@@ -170,30 +170,29 @@ export default function AIProvidersPage() {
                 </Field>
               </div>
 
-              {/* API key (or base URL for Ollama) */}
-              {p.id === 'ollama' ? (
-                <Field label="Base URL" hint="Where your Ollama server lives">
-                  <input className={inp} value={cfg.base_url ?? ''}
-                    onChange={e => setField(p.id, 'base_url', e.target.value)}
-                    placeholder="http://localhost:11434" />
-                </Field>
-              ) : (
-                <Field label={cfg.api_key_set ? 'API key (replace to update)' : 'API key'}>
-                  <div className="relative">
-                    <input
-                      type={showKey[p.id] ? 'text' : 'password'}
-                      className={cn(inp, 'pr-9 font-mono')}
-                      value={cfg.api_key ?? ''}
-                      onChange={e => setField(p.id, 'api_key', e.target.value)}
-                      placeholder={cfg.api_key_set ? '•••••••• already saved' : 'sk-…'}
-                    />
-                    <button type="button" onClick={() => setShowKey(s => ({ ...s, [p.id]: !s[p.id] }))}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground">
-                      {showKey[p.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                </Field>
-              )}
+              {/* API key */}
+              <Field label={cfg.api_key_set ? 'API key (replace to update)' : 'API key'}>
+                <div className="relative">
+                  <input
+                    type={showKey[p.id] ? 'text' : 'password'}
+                    className={cn(inp, 'pr-9 font-mono')}
+                    value={cfg.api_key ?? ''}
+                    onChange={e => setField(p.id, 'api_key', e.target.value)}
+                    placeholder={cfg.api_key_set ? '•••••••• already saved' : 'sk-…'}
+                  />
+                  <button type="button" onClick={() => setShowKey(s => ({ ...s, [p.id]: !s[p.id] }))}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground">
+                    {showKey[p.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </Field>
+
+              {/* Base URL — override the provider's default endpoint */}
+              <Field label="Base URL" hint="Override API endpoint (leave blank for default)">
+                <input className={inp} value={cfg.base_url ?? ''}
+                  onChange={e => setField(p.id, 'base_url', e.target.value)}
+                  placeholder={p.id === 'openai' ? 'https://api.openai.com' : p.id === 'groq' ? 'https://api.groq.com/openai' : p.id === 'ollama' ? 'http://localhost:11434' : 'https://api.anthropic.com'} />
+              </Field>
             </div>
           );
         })}

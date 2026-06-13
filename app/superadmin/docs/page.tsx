@@ -1,7 +1,6 @@
 'use client';
 import { useState } from 'react';
 import { Book, Shield, Database, RefreshCw, AlertTriangle, ChevronDown, ChevronRight, FileText, ExternalLink } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 const SECTIONS = [
   {

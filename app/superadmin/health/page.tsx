@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, AlertTriangle, RefreshCw, Activity, Clock, Database, Mail, Server, Wifi } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, RefreshCw, Activity, Database, Mail, Server, Wifi } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { logError } from '@/lib/errors';
 
@@ -23,7 +23,7 @@ export default function HealthPage() {
   const run = async () => {
     setLoading(true);
     const [sa, app] = await Promise.all([
-      fetch('/api/superadmin/health').then(r=>r.json()).catch(()=>({checks:[]})),
+      fetch('/api/superadmin/health').then(r=>r.json()).catch((err) => { console.error('[health] superadmin health fetch failed', err); return {checks:[]}; }),
       fetch('/api/health').then(r=>r.json()).catch((err) => logError({ error: err, context: "async-catch:[context]" })),
     ]);
     setChecks(sa.checks||[]); setAppHealth(app);

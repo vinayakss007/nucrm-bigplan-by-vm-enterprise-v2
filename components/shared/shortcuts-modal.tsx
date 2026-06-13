@@ -6,9 +6,7 @@ import {
   DialogOverlay,
   DialogPortal,
 } from '@radix-ui/react-dialog'
-import { X, Keyboard, Command, Search, Plus, FileText, Trash2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { Badge } from '@/components/ui/badge'
+import { X, Keyboard, Command, Search, Plus } from 'lucide-react'
 
 interface Shortcut {
   keys: string

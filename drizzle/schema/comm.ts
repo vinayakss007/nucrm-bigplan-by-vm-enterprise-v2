@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { uniqueIndex, pgTable, uuid, text, timestamp, integer, jsonb, boolean, index } from 'drizzle-orm/pg-core';
-import { tenants, users, apiKeys } from './core';
+import { users, apiKeys } from './core';
 import { contacts, deals, companies } from './crm';
 import { webhooks } from './automation';
 import { sequenceEnrollments } from './marketing';

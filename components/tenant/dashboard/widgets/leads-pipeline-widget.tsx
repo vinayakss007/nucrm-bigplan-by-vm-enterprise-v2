@@ -1,6 +1,6 @@
 'use client';
 import type { WidgetProps } from '@/types/dashboard';
-import { Target, TrendingUp, Users } from 'lucide-react';
+import { Target, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 
 export default function LeadsPipelineWidget({ data }: WidgetProps) {

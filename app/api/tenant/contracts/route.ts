@@ -18,13 +18,13 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
 
-    let whereClause = eq(contracts.tenantId, tenantId);
+    const filters = [eq(contracts.tenantId, tenantId)];
     if (status) {
-      whereClause = and(whereClause, eq(contracts.status, status)) as any;
+      filters.push(eq(contracts.status, status));
     }
 
     const offset = (page - 1) * limit;
-    const results = await db.select().from(contracts).where(whereClause).orderBy(desc(contracts.startDate)).limit(limit).offset(offset);
+    const results = await db.select().from(contracts).where(and(...filters)).orderBy(desc(contracts.startDate)).limit(limit).offset(offset);
     const countResult = await db.select({ count: count() }).from(contracts).where(eq(contracts.tenantId, tenantId));
     const total = countResult[0]?.count ?? 0;
 
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       notes: description,
       documentUrl: null,
       createdBy: userId,
-    } as any).returning();
+    } as unknown as typeof contracts.$inferInsert).returning();
 
     return NextResponse.json({ contract }, { status: 201 });
   } catch (error) {

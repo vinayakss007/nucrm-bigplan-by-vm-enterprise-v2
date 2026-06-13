@@ -3,9 +3,9 @@ import { validateBody } from '@/lib/api/validate';
 import { assignContactSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, leadAssignments, tenantMembers, users } from '@/drizzle/schema';
+import { contacts, tenantMembers, users } from '@/drizzle/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
-import { createNotification } from '@/lib/notifications';
+import { createNotification, type NotificationType } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';
 import { apiError } from '@/lib/api-error';
 
@@ -75,9 +75,9 @@ export async function POST(request: NextRequest) {
     // Notify assignee
     if (assign_to !== ctx.userId) {
       await createNotification({
-        userId: assign_to, tenantId: ctx.tenantId, type:'contact_assigned' as any,
+        userId: assign_to, tenantId: ctx.tenantId, type: 'contact_assigned' as NotificationType,
         title: `${rowCount} lead${rowCount!==1?'s':''} assigned to you`,
-        body: reason||undefined, link:'/tenant/leads', entity_type: 'lead' as any,
+        body: reason || undefined, link: '/tenant/leads', entity_type: 'lead' as const,
       });
     }
 

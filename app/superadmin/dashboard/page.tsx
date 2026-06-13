@@ -6,7 +6,7 @@ import { users, tenants, plans, errorLogs } from '@/drizzle/schema';
 import { eq, and, sql, desc, gte, between } from 'drizzle-orm';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Building2, Users, DollarSign, AlertTriangle, ArrowRight,
-  Activity, Clock, CheckCircle, TrendingUp, Zap } from 'lucide-react';
+  Clock, CheckCircle, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
@@ -29,7 +29,7 @@ export default async function SuperAdminDashboard() {
   if (!user?.isSuperAdmin) redirect('/tenant/dashboard');
 
   const [statsRes, recentTenants, recentErrors, recentActivity, expiringSoon] = await Promise.all([
-    db.execute(sql`SELECT public.platform_stats() as data`).catch(() => ({ rows: [{ data: {} }] })),
+    db.execute(sql`SELECT public.platform_stats() as data`).catch((err) => { console.error('[dashboard] platform_stats failed', err); return { rows: [{ data: {} }] }; }),
     
     db.select({
       id: tenants.id,
@@ -46,7 +46,7 @@ export default async function SuperAdminDashboard() {
     .leftJoin(users, eq(users.id, tenants.ownerId))
     .orderBy(desc(tenants.createdAt))
     .limit(6)
-    .catch(() => []),
+    .catch((err) => { console.error('[dashboard] recentTenants failed', err); return []; }),
 
     db.select({
       level: errorLogs.level,
@@ -60,7 +60,7 @@ export default async function SuperAdminDashboard() {
     ))
     .orderBy(desc(errorLogs.createdAt))
     .limit(5)
-    .catch(() => []),
+    .catch((err) => { console.error('[dashboard] recentErrors failed', err); return []; }),
 
     db.select({
       type: sql<string>`'tenant_created'`.as('type'),
@@ -71,7 +71,7 @@ export default async function SuperAdminDashboard() {
     .where(gte(tenants.createdAt, sql`now() - interval '7 days'`))
     .orderBy(desc(tenants.createdAt))
     .limit(8)
-    .catch(() => []),
+    .catch((err) => { console.error('[dashboard] recentActivity failed', err); return []; }),
 
     db.select({
       id: tenants.id,
@@ -85,7 +85,7 @@ export default async function SuperAdminDashboard() {
       between(tenants.trialEndsAt, sql`now()`, sql`now() + interval '3 days'`)
     ))
     .orderBy(tenants.trialEndsAt)
-    .catch(() => []),
+    .catch((err) => { console.error('[dashboard] expiringSoon failed', err); return []; }),
   ]);
 
   const s = (statsRes as any).rows?.[0]?.data ?? {};

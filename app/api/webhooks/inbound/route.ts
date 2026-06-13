@@ -7,7 +7,6 @@ import { RateLimiter, getRateLimitHeaders } from '@/lib/rate-limit';
 import { fireWebhooks, type WebhookEvent } from '@/lib/webhooks';
 import { logAudit } from '@/lib/audit';
 import { devLogger } from '@/lib/dev-logger';
-import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 
 // ── Constants ──────────────────────────────────────────────────────────
@@ -112,7 +111,7 @@ async function logWebhookDelivery(input: {
       recordId: input.recordId ? Number(input.recordId) : null,
       payloadSize: input.payloadSize,
       createdAt: new Date(),
-    });
+    } as unknown as typeof webhookInboundLogs.$inferInsert);
   } catch (err) {
     console.error('[webhook] Failed to log delivery:', err);
   }
@@ -344,9 +343,10 @@ async function handleDeal(
   const [newDeal] = await db.insert(deals).values({
     ...dealData,
     tenantId,
+    stageId: '', // placeholder - will be resolved
     createdBy: userId,
     createdAt: new Date(),
-  }).returning();
+  } as unknown as typeof deals.$inferInsert).returning();
 
   return { id: newDeal?.id ?? null, action: 'created' };
 }

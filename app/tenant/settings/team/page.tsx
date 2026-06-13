@@ -1,7 +1,7 @@
 import { requireTenantCtx } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
 import { tenantMembers, users, roles as rolesTable, invitations } from '@/drizzle/schema';
-import { eq, and, or, asc, desc, isNull, gt, sql } from 'drizzle-orm';
+import { eq, and, or, asc, desc, isNull, gt } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import TeamSettingsClient from '@/components/tenant/settings/team-client';
 

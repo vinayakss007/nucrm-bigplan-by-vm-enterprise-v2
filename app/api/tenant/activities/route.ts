@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
         eventType: type,
         description,
         metadata
-      } as any)
+      } as typeof activities.$inferInsert)
       .returning();
 
     return NextResponse.json({ data: newActivity }, { status: 201 });

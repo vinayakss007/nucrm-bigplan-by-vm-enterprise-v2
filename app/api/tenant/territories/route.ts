@@ -3,8 +3,8 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
-import { territories, territoryAssignments } from '@/drizzle/schema/territories';
-import { eq, and, isNull } from 'drizzle-orm';
+import { territories } from '@/drizzle/schema/territories';
+import { eq, and } from 'drizzle-orm';
 import { getTerritoryTree } from '@/lib/territories';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     const [row] = await db.insert(territories).values({
       tenantId: ctx.tenantId,
       name,
-      type,
+      type: type as typeof territories.$inferInsert.type,
       parentId: parentId || null,
       geoConfig: geoConfig || {},
     }).returning();

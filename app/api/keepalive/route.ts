@@ -9,7 +9,7 @@ import { apiError } from '@/lib/api-error';
  * Simple query to keep Neon connection warm
  * Called every 5 minutes by client-side service
  */
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
     const start = Date.now();
     await db.execute(sql`SELECT 1 as ping`);

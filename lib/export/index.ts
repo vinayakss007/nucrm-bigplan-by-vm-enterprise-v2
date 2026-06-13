@@ -130,7 +130,7 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
   }
   
   const headers = Object.keys(data[0]);
-  const rows = data.map(row => headers.map(h => (row as any)[h] === null ? '' : escapeCSV((row as any)[h])).join(','));
+  const rows = data.map(row => headers.map(h => (row as Record<string, unknown>)[h] === null ? '' : escapeCSV((row as Record<string, unknown>)[h] as string)).join(','));
   
   return [headers.join(','), ...rows].join('\n');
 }

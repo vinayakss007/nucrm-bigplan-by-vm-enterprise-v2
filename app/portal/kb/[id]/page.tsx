@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Book, ArrowLeft, Clock, Eye, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Book, ArrowLeft, ThumbsUp, ThumbsDown, Clock, Eye } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 
 export default function PortalKBArticlePage() {
@@ -14,7 +14,7 @@ export default function PortalKBArticlePage() {
   useEffect(() => {
     fetch(`/api/public/kb/articles/${params.id}`).then(r => r.json()).then(d => {
       setArticle(d.data); setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch((err) => { console.error('[portal/kb/article] fetch failed', err); setLoading(false); });
   }, [params.id]);
 
   if (loading) return (

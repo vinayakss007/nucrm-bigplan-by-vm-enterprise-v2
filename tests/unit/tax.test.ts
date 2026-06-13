@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { calculateTax, calculateCompoundTax, applyTaxToLineItems, getTaxRatesForRegion } from '@/lib/tax';
+import { calculateTax, calculateCompoundTax, applyTaxToLineItems } from '@/lib/tax';
 
 // Mock DB
 vi.mock('@/drizzle/db', () => ({

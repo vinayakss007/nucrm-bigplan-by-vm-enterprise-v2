@@ -29,7 +29,7 @@ export default function SimpleLogin() {
         setMessage('Success! Token: ' + data.token?.substring(0, 20) + '...');
         setTimeout(() => router.push('/tenant/dashboard'), 1500);
       }
-    } catch (err) {
+    } catch {
       setMessage('Error: Cannot connect to server');
     }
     

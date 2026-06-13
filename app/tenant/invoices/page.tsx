@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Plus, Search, Eye, Send, Download, FileText, X, CheckCircle, Clock, AlertCircle, Filter } from 'lucide-react';
+import { Plus, Search, Eye, Download, FileText, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -86,7 +86,7 @@ function InvoicesPageInner() {
       setShowModal(false);
       setForm({ title: '', contactId: '', issueDate: new Date().toISOString().split('T')[0], dueDate: '', notes: '', items: [{ description: '', quantity: '1', unitPrice: '0' }], discountType: 'percentage', discountValue: '0', taxRate: '0' });
       fetchInvoices();
-    } catch (error) {
+    } catch {
       toast.error('Failed to create invoice');
     }
   };

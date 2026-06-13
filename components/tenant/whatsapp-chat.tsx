@@ -42,7 +42,7 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
       const data = await res.json()
       setMessages(data.data || [])
     } catch (err: any) {
-      // Silently fail - WhatsApp may not be configured
+      console.error('[whatsapp] loadMessages failed', err);
     } finally {
       setLoading(false)
     }
@@ -54,8 +54,8 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
       if (!res.ok) return
       const data = await res.json()
       setTemplates(data.data || [])
-    } catch {
-      // Silently fail
+    } catch (err) {
+      console.error('[whatsapp] loadTemplates failed', err);
     }
   }, [])
 

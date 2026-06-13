@@ -25,7 +25,8 @@ export class WebhookVerifier {
       }
 
       return timingSafeEqual(sigBuffer, expectedBuffer);
-    } catch {
+    } catch (e) {
+      console.error('[WebhookVerifier] Signature verification failed', e);
       return false;
     }
   }

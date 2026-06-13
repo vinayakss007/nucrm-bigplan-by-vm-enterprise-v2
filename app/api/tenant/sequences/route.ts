@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
     // Create steps in sequence_steps table
     if (steps.length > 0) {
       const stepValues = steps.map((step: any, index: number) => ({
-        sequenceId: (newSequence as any)[0].id,
+        sequenceId: newSequence!.id,
         tenantId: ctx.tenantId,
         stepNumber: index + 1,
         stepType: step.type || 'email',

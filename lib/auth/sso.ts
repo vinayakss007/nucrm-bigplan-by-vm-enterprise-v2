@@ -301,7 +301,7 @@ export function validateOIDCToken(
     }
 
     return { valid: true, payload };
-  } catch (err) {
+  } catch {
     return { valid: false, error: 'Failed to parse token' };
   }
 }

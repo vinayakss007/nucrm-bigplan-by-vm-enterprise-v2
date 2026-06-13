@@ -19,7 +19,7 @@ export function InlineEdit({ value, onSave, type = 'text', options, className = 
   useEffect(() => {
     if (editing && type === 'text') inputRef.current?.focus();
     if (editing && type === 'select') selectRef.current?.focus();
-  }, [editing]);
+  }, [editing, type]);
 
   const save = async () => {
     if (draft === value || saving) return;

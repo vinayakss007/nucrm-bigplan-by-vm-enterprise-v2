@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { DashboardDataState } from '@/types/dashboard';
 
 interface UseWidgetDataOptions {
@@ -28,7 +28,7 @@ export function useWidgetData<T = any>(
           return
         }
       }
-    } catch {}
+    } catch { /* Fallback to default on corrupted storage data */ }
 
     if (!isBackground) {
       setState(prev => ({ ...prev, loading: true }))
@@ -49,7 +49,7 @@ export function useWidgetData<T = any>(
         sessionStorage.setItem(cacheKey, JSON.stringify({
           data: payload, timestamp: Date.now(),
         }))
-      } catch {}
+      } catch { /* Fallback to default on corrupted storage data */ }
 
       setState({ data: payload, loading: false, error: null, stale: false })
     } catch (err) {

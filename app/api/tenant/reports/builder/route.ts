@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, deals, tasks, companies, activities } from '@/drizzle/schema';
-import { eq, and, sql, gte, lte, count, sum, avg } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 /**
@@ -200,7 +199,7 @@ async function executeReport(params: ReportParams): Promise<ReportResult> {
   const { rows } = await db.execute(sql.raw(buildParameterizedQuery(query, queryParams)));
 
   // Calculate total and percentages
-  const data = (rows as any[]).map(row => ({
+  const data = (rows as { label?: unknown; value?: unknown }[]).map(row => ({
     label: row.label?.toString() || 'Unknown',
     value: Number(row.value) || 0,
     percentage: 0,

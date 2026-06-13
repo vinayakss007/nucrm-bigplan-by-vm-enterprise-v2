@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { validateBody, validateQuery } from '@/lib/api/validate';
-import { createTaskSchema, taskQuerySchema } from '@/lib/api/schemas';
+import { validateBody } from '@/lib/api/validate';
+import { createTaskSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tasks, contacts, deals, users, tenants, plans, activities } from '@/drizzle/schema';
@@ -97,8 +97,8 @@ export async function POST(request: NextRequest) {
     .innerJoin(plans, eq(plans.id, tenants.planId))
     .where(eq(tenants.id, ctx.tenantId));
 
-    const features = tenantWithPlan?.features as any;
-    const maxTasks = features?.max_tasks;
+    const features = tenantWithPlan?.features as Record<string, unknown> | null;
+    const maxTasks = (features?.['max_tasks'] ?? 0) as number;
     
     if (maxTasks > 0) {
       const [taskCount] = await db.select({ 
@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
         contactId: v.contact_id || null,
         dealId: v.deal_id || null,
         entityType: 'task',
-        entityId: (newTask as any).id,
+        entityId: newTask!.id,
         eventType: 'task_created',
         action: 'create',
         description: `Created task: ${v.title}`,
@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
       }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     }
 
-    fireWebhooks(ctx.tenantId, 'task.created', { id: (newTask as any).id, title: v.title }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    fireWebhooks(ctx.tenantId, 'task.created', { id: newTask!.id, title: v.title }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({ data: newTask }, { status: 201 });
   } catch (err: any) {

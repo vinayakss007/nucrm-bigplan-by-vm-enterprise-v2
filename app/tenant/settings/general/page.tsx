@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { Save, Globe, Palette, Crown, Download, Loader2, ArrowUpRight,
   Link2, CheckCircle, AlertTriangle, Copy, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -114,7 +115,7 @@ export default function TenantGeneralSettings() {
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center border border-border overflow-hidden">
                   {faviconPreview || tenant?.favicon_url ? (
-                    <img src={faviconPreview || tenant?.favicon_url} className="w-full h-full object-contain" alt="Favicon" />
+                    <Image src={faviconPreview || tenant?.favicon_url} className="w-full h-full object-contain" alt="Favicon" />
                   ) : (
                     <Globe className="w-4 h-4 text-muted-foreground" />
                   )}

@@ -1,5 +1,4 @@
 import { verifySecret } from '@/lib/crypto';
-import { logError } from '@/lib/errors-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { retryFailedWebhooks } from '@/lib/webhooks';
 

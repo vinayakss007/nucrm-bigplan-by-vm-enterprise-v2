@@ -1,6 +1,5 @@
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
-import Link from 'next/link';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Mail, Phone, Globe, Linkedin, Building2, Edit, Save,
@@ -9,7 +8,7 @@ import {
   Clock, User, Tag, AlertCircle, RotateCcw, History,
   FileText, ShoppingCart, FileSignature, RefreshCw, DollarSign,
 } from 'lucide-react';
-import { cn, formatCurrency, formatDateTimeShort, formatDate, formatRelativeTime, getInitials } from '@/lib/utils';
+import { cn, formatCurrency, formatDateTimeShort, formatDate, formatRelativeTime } from '@/lib/utils';
 import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
 import { ContactTimeline } from '@/components/tenant/contact-timeline';
 import toast from 'react-hot-toast';
@@ -50,7 +49,7 @@ const ACTIVITY_ICONS: Record<string,any> = {
 };
 
 // ── QuickAdd: Task inline ──────────────────────────────────────
-function QuickAddTask({ contactId, contactName, teamMembers, onAdded }: any) {
+function QuickAddTask({ contactId, _contactName, teamMembers, onAdded }: any) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title:'', priority:'medium', due_date:'', assigned_to:'' });
   const [saving, setSaving] = useState(false);
@@ -95,7 +94,7 @@ function QuickAddTask({ contactId, contactName, teamMembers, onAdded }: any) {
 }
 
 // ── QuickAdd: Deal inline ──────────────────────────────────────
-function QuickAddDeal({ contactId, companies, onAdded }: any) {
+function QuickAddDeal({ contactId, _companies, onAdded }: any) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title:'', value:'', stage:'lead', close_date:'' });
   const [saving, setSaving] = useState(false);
@@ -221,7 +220,7 @@ export default function ContactDetailClient({
         .catch(err => console.error('Failed to load history', err))
         .finally(() => setLoadingHistory(false));
     }
-  }, [activeTab]);
+  }, [activeTab, contact.id]);
 
   // Fetch the contact's leads (one contact, many leads) on first open
   useEffect(() => {
@@ -233,7 +232,7 @@ export default function ContactDetailClient({
         .catch(err => console.error('Failed to load contact leads', err))
         .finally(() => setLoadingContactLeads(false));
     }
-  }, [activeTab]);
+  }, [activeTab, contact.id]);
 
   // ── Add activity / note ──────────────────────────────────────
   const addNote = async (e: React.FormEvent) => {

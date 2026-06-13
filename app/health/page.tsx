@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CheckCircle, AlertCircle, XCircle, Loader2, Database, Mail, Bell, User, Cpu } from 'lucide-react';
+import { CheckCircle, AlertCircle, XCircle, Loader2, Database, Mail, User, Cpu } from 'lucide-react';
 
 interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -52,6 +52,7 @@ export default function HealthPage() {
     fetch('/api/health')
       .then(r => r.json())
       .then(d => setHealth(d))
+      .catch(err => console.error('[health] refresh failed', err))
       .finally(() => setLoading(false));
   };
 

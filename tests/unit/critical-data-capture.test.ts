@@ -19,16 +19,16 @@ vi.mock('@/drizzle/db', () => ({
   db: {
     execute: (...args: any[]) => mockDbExecute(...args),
     insert: (...args: any[]) => mockDbInsert(...args),
-    select: (...args: any[]) => ({
-      from: (...fargs: any[]) => ({
-        where: (...wargs: any[]) => Object.assign(
+    select: (..._args: any[]) => ({
+      from: (..._fargs: any[]) => ({
+        where: (..._wargs: any[]) => Object.assign(
           Promise.resolve([{ total_backups: 0, restorable: 0, deleted_records: 0, updated_records: 0 }]),
           {
-            groupBy: (...gargs: any[]) => ({
-              orderBy: (...oargs: any[]) => Promise.resolve([]),
+            groupBy: (..._gargs: any[]) => ({
+              orderBy: (..._oargs: any[]) => Promise.resolve([]),
             }),
-            orderBy: (...oargs: any[]) => Promise.resolve([]),
-            limit: (...largs: any[]) => Promise.resolve([]),
+            orderBy: (..._oargs: any[]) => Promise.resolve([]),
+            limit: (..._largs: any[]) => Promise.resolve([]),
           }
         ),
       }),

@@ -65,7 +65,7 @@ export async function sessionExists(token: string): Promise<boolean> {
 /**
  * Delete all sessions for a user
  */
-export async function deleteUserSessions(userId: string): Promise<void> {
+export async function deleteUserSessions(_userId: string): Promise<void> {
   // Note: This requires scanning keys, which is expensive
   // Better to track sessions in a separate data structure
   console.warn('[Session] deleteUserSessions requires key scanning - use with caution');

@@ -11,7 +11,6 @@ import type { ModuleManifest } from './types';
 import { BUILTIN_MODULES, ModuleRegistry } from '../registry';
 import { db } from '@/drizzle/db';
 import { modules } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
 
 class ModuleLoader {
   private externalModules: ModuleManifest[] = [];
@@ -52,22 +51,22 @@ class ModuleLoader {
     return rows
       .filter(r => r.manifest && typeof r.manifest === 'object')
       .map(r => {
-        const manifest = r.manifest as any;
+        const manifest = r.manifest as Record<string, unknown>;
         return {
           id: r.id,
           name: r.name,
-          version: manifest.version || '1.0.0',
-          description: manifest.description || '',
-          category: manifest.category || 'utility',
-          icon: manifest.icon || '🔌',
-          pricing: manifest.pricing || {},
-          features: manifest.features || [],
-          permissions: manifest.permissions || [],
-          pages: manifest.pages || [],
-          settings_schema: manifest.settings_schema || [],
-          webhooks: manifest.webhooks || [],
-          dependsOn: manifest.dependsOn || [],
-          author: manifest.author || 'Unknown',
+          version: manifest['version'] || '1.0.0',
+          description: manifest['description'] || '',
+          category: manifest['category'] || 'utility',
+          icon: manifest['icon'] || '🔌',
+          pricing: manifest['pricing'] || {},
+          features: manifest['features'] || [],
+          permissions: manifest['permissions'] || [],
+          pages: manifest['pages'] || [],
+          settings_schema: manifest['settings_schema'] || [],
+          webhooks: manifest['webhooks'] || [],
+          dependsOn: manifest['dependsOn'] || [],
+          author: manifest['author'] || 'Unknown',
         } as ModuleManifest;
       });
   }

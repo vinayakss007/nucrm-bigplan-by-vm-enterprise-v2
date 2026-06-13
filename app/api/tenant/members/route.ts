@@ -9,7 +9,7 @@ import {
   contacts, deals, tasks, userDepartures, 
   tenants, leadAssignments, activities 
 } from '@/drizzle/schema';
-import { eq, and, or, sql, desc, asc, ne, isNull } from 'drizzle-orm';
+import { eq, and, or, sql, desc, asc, isNull } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';
 import { hashPassword } from '@/lib/auth/session';

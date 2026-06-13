@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Book, Search, ChevronDown, Code, Copy, Check } from 'lucide-react';
+import { Book, Search, ChevronDown, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 

@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { modules, tenantModules } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { tenantModules } from '@/drizzle/schema';
+import { eq, and } from 'drizzle-orm';
 import { BUILTIN_MODULES, ModuleRegistry } from '@/lib/modules/registry';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

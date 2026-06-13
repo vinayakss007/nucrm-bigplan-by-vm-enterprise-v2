@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Building2, Plus, Search, X, LogIn, Trash2, AlertTriangle, Loader2,
   ChevronDown, CheckCircle, XCircle, Clock, Crown, Mail, Phone,
   DollarSign, Shield, RefreshCw, Edit, Save, Zap } from 'lucide-react';
-import { cn, formatDate, formatRelativeTime, formatCurrency } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 
@@ -383,12 +383,12 @@ export default function SuperAdminTenantsPage() {
       </div>
 
       {editTenant && <EditModal tenant={editTenant} onSave={()=>{setEditTenant(null);load();}} onClose={()=>setEditTenant(null)} />}
-      {modulesTenant && <ModulesModal tenant={modulesTenant} onClose={()=>setModulesTenant(null)} onSaved={()=>{setModulesTenant(null);load();}} />}
+      {modulesTenant && <ModulesModal tenant={modulesTenant} onClose={()=>setModulesTenant(null)} _onSaved={()=>{setModulesTenant(null);load();}} />}
     </div>
   );
 }
 
-function ModulesModal({ tenant, onClose, onSaved }: { tenant: any; onClose: () => void; onSaved: () => void }) {
+function ModulesModal({ tenant, onClose, _onSaved }: { tenant: any; onClose: () => void; _onSaved: () => void }) {
   const [modules, setModules] = useState<any[]>([]);
   const [plan, setPlan] = useState('');
   const [loading, setLoading] = useState(true);
@@ -401,7 +401,7 @@ function ModulesModal({ tenant, onClose, onSaved }: { tenant: any; onClose: () =
     setPlan(d.plan || 'free');
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [, load]);
 
   const toggleModule = async (mod: any) => {
     setToggling(mod.id);

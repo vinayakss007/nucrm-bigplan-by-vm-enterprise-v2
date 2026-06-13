@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Plus, Search, RefreshCw, CreditCard, X, Calendar } from 'lucide-react';
+import { Plus, Search, RefreshCw, X, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -58,7 +58,7 @@ export default function SubscriptionsPage() {
       setShowModal(false);
       setForm({ name: '', planName: '', startDate: new Date().toISOString().split('T')[0], currentPeriodEnd: '', amount: '', billingFrequency: 'monthly', autoRenew: true, paymentMethod: '', last4: '' });
       fetchSubscriptions();
-    } catch (error) { toast.error('Failed to create subscription'); }
+    } catch { toast.error('Failed to create subscription'); }
   };
 
   const filtered = subscriptions.filter(s => s.name.toLowerCase().includes(search.toLowerCase()));
