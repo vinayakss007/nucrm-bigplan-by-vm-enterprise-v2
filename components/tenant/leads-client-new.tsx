@@ -228,7 +228,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
   const totalLeads = useMemo(()=>Object.values(statsMap).reduce((a,b)=>a+b,0),[statsMap]);
   const conversionRate = totalLeads>0?Math.round(((statsMap['converted']||0)/totalLeads)*100):0;
 
-  const load = useCallback(async(newOffset=0,status=activeStatus,q=debouncedSearch)=>{
+  const load = useCallback(async(newOffset=0,status=activeStatus,q=debouncedSearch, signal?: AbortSignal)=>{
     const requestTime = Date.now();
     lastRequestTime.current = requestTime;
     setLoading(true);
@@ -237,7 +237,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
       if(status!=='all')params.set('lead_status',status);
       if(q)params.set('q',q);
       
-      const res=await fetch('/api/tenant/leads?'+params);
+      const res=await fetch('/api/tenant/leads?'+params, { signal });
       if (!res.ok) throw new Error('Failed to fetch');
       
       const data=await res.json();
@@ -255,6 +255,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
         }, 250);
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       console.error('[Leads load error]', err);
       setLoading(false);
     }
@@ -272,7 +273,9 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
   }, [search]);
 
   useEffect(()=>{
-    load(0, activeStatus, debouncedSearch);
+    const abort = new AbortController();
+    load(0, activeStatus, debouncedSearch, abort.signal);
+    return () => abort.abort();
   }, [debouncedSearch, activeStatus, sortBy, sortOrder, load]);
 
   const handleSearch=(q:string)=>{setSearch(q);};

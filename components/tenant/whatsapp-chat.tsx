@@ -35,31 +35,37 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
   const [showTemplates, setShowTemplates] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const loadMessages = useCallback(async () => {
+  const loadMessages = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(`/api/tenant/whatsapp/messages?contact_id=${contactId}`)
+      const res = await fetch(`/api/tenant/whatsapp/messages?contact_id=${contactId}`, { signal })
       if (!res.ok) throw new Error('Failed to load messages')
       const data = await res.json()
-      setMessages(data.data || [])
+      if (!signal?.aborted) setMessages(data.data || [])
     } catch (err: any) {
-      console.error('[whatsapp] loadMessages failed', err);
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      if (!signal?.aborted) console.error('[whatsapp] loadMessages failed', err);
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }, [contactId])
 
-  const loadTemplates = useCallback(async () => {
+  const loadTemplates = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/whatsapp/templates')
+      const res = await fetch('/api/tenant/whatsapp/templates', { signal })
       if (!res.ok) return
       const data = await res.json()
-      setTemplates(data.data || [])
+      if (!signal?.aborted) setTemplates(data.data || [])
     } catch (err) {
-      console.error('[whatsapp] loadTemplates failed', err);
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      if (!signal?.aborted) console.error('[whatsapp] loadTemplates failed', err);
     }
   }, [])
 
-  useEffect(() => { loadMessages(); loadTemplates() }, [loadMessages, loadTemplates])
+  useEffect(() => {
+    const abort = new AbortController();
+    loadMessages(abort.signal); loadTemplates(abort.signal);
+    return () => abort.abort();
+  }, [loadMessages, loadTemplates])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
