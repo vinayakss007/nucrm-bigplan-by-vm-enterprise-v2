@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { quotes, quoteLineItems, contacts, tenants } from '@/drizzle/schema';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, asc } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import {

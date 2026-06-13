@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, companies, deals, tasks, leads, users, activities } from '@/drizzle/schema';
-import { eq, and, desc, sql, gt, lt, gte, lte, like, ilike, inArray } from 'drizzle-orm';
+import { contacts, companies, deals, tasks, leads } from '@/drizzle/schema';
+import { eq, and, desc, sql, gt, lt } from 'drizzle-orm';
 
 const REPORT_QUERIES: Record<string, any> = {
   contacts: {

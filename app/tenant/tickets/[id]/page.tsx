@@ -40,7 +40,7 @@ export default function TicketDetailPage() {
     } catch { toast.error('Failed to load'); } finally { setLoading(false); }
   };
 
-  useEffect(() => { loadTicket(); }, [params['id']]);
+  useEffect(() => { loadTicket(); }, [params['id'], loadTicket]);
 
   const sendReply = async () => {
     if (!replyText.trim()) return;

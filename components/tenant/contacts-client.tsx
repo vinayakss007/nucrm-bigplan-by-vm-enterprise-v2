@@ -24,7 +24,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const STATUS_CONFIG: Record<string,{label:string;color:string;dot:string;icon:any}> = {
@@ -161,7 +160,7 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: any) {
   );
 }
 
-export default function TenantContactsClient({ initialContacts, companies, teamMembers, permissions, tenantId, userId, totalCount, initialOffset, initialQ, initialStatus }: Props) {
+export default function TenantContactsClient({ initialContacts, companies, teamMembers, permissions, _tenantId, _userId, totalCount, initialOffset, initialQ, initialStatus }: Props) {
   const normalize = (data: any[]) => (data || []).map((c: any) => toSnakeCase(c));
   const [contacts, setContacts] = useState(normalize(initialContacts));
   const [total, setTotal]       = useState(totalCount ?? initialContacts.length);
@@ -294,7 +293,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
       toast.success(`${verb} ${data.affected ?? ids.length} contacts`);
       setSelectedIds(new Set());
       load(offset);
-    } catch (err) {
+    } catch {
       toast.error(`Bulk ${action} failed`);
     } finally {
       setBulkBusy(false);

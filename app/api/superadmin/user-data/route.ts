@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { users, contacts, deals, tasks, activities, companies, notes, tenantMembers } from '@/drizzle/schema';
+import { users, contacts, deals, tasks, activities, tenantMembers } from '@/drizzle/schema';
 import { eq, and, or, ilike, sql, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';

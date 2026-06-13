@@ -30,7 +30,7 @@ const DEFAULT_CONFIG: BruteForceConfig = {
 export async function isBlocked(
   identifier: string,
   type: 'ip' | 'email',
-  config: BruteForceConfig = DEFAULT_CONFIG
+  _config: BruteForceConfig = DEFAULT_CONFIG
 ): Promise<{ blocked: boolean; blockedUntil?: Date; reason?: string }> {
   try {
     const now = new Date();

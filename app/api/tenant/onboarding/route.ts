@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
       steps_done: stepsDone, 
       completed: isCompleted 
     });
-  } catch (err) { 
+  } catch { 
     return NextResponse.json({ steps_done: [], completed: false }); 
   }
 }

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tokenBudgets, tenantTokenLimits, usageAlerts, costAnomalies, tenants } from '@/drizzle/schema';
-import { eq, and, sql, desc, asc } from 'drizzle-orm';
+import { eq, sql, desc, asc } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 

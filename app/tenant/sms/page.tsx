@@ -73,7 +73,7 @@ export default function SmsPage() {
     } catch (err) { logError({ error: err, context: "catch:[context]" }); }
   };
 
-  useEffect(() => { load(); }, [filter]);
+  useEffect(() => { load(); }, [filter, load]);
   useEffect(() => { loadTemplates(); }, []);
 
   const openCompose = () => {

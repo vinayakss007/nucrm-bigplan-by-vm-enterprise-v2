@@ -3,7 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, deals, tasks, companies } from '@/drizzle/schema';
-import { eq, and, isNotNull, sql, desc, isNull } from 'drizzle-orm';
+import { eq, and, isNotNull, sql, desc } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 
 export async function GET(req: NextRequest) {

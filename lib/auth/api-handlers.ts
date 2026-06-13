@@ -1,10 +1,9 @@
-import { logError } from '@/lib/errors';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { users, sessions, tenants, roles, tenantMembers, emailVerifications, pipelines, dealStages, platformSettings } from '@/drizzle/schema';
 import { onboardingProgress } from '@/drizzle/schema';
 import { isNull } from 'drizzle-orm';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { hashPassword, verifyPassword, createToken, hashToken, setSessionCookie, clearSessionCookie, validatePassword } from '@/lib/auth/session';
 import { generateCsrfToken, setCsrfCookie } from '@/lib/auth/csrf';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -13,7 +12,7 @@ import { devLogger } from '@/lib/dev-logger';
 import { logger } from '@/lib/logger';
 import { randomBytes, createHash, createHmac } from 'crypto';
 import { installDefaultModules } from '@/lib/modules/auto-install';
-import { isBlocked, recordFailedAttempt, recordSuccessfulLogin, getBruteForceStatus } from '@/lib/security/brute-force';
+import { isBlocked, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/security/brute-force';
 
 // ── Login ─────────────────────────────────────────────────────
 export async function POST_login(request: NextRequest) {

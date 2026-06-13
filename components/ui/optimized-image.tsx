@@ -30,7 +30,7 @@ export function OptimizedImage({
   fill,
   priority,
   sizes = '100vw',
-  fallback = '/placeholder.png',
+  _fallback = '/placeholder.png',
 }: OptimizedImageProps) {
   const [error, setError] = useState(false);
 

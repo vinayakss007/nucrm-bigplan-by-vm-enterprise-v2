@@ -3,7 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { validateBody, validateQuery } from '@/lib/api/validate';
 import { createContactSchema, contactQuerySchema } from '@/lib/api/schemas';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { checkUserLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, users, tenants, activities } from '@/drizzle/schema';

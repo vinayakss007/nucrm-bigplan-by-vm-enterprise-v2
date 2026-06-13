@@ -5,7 +5,7 @@ import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { supportTickets, tenants, users } from '@/drizzle/schema';
-import { eq, and, sql, desc, or, asc, inArray } from 'drizzle-orm';
+import { eq, and, sql, desc } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {

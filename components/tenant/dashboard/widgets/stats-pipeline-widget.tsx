@@ -1,7 +1,6 @@
 'use client';
 import type { WidgetProps } from '@/types/dashboard';
 import { TrendingUp } from 'lucide-react';
-import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils';
 import { StatCard } from './stat-card';
 

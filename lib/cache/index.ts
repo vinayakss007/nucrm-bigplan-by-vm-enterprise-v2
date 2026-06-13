@@ -442,7 +442,7 @@ export async function health(): Promise<{ status: string; latency?: number }> {
       status: latency < 10 ? 'healthy' : 'slow',
       latency,
     };
-  } catch (error) {
+  } catch {
     return { status: 'unhealthy', latency: 0 };
   }
 }

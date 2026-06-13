@@ -2,7 +2,7 @@ import { createHmac, randomUUID } from 'crypto';
 import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { webhookQueue } from '@/drizzle/schema/support';
-import { eq, and, lte, lt, sql, asc } from 'drizzle-orm';
+import { eq, and, lte, lt, asc } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
 
 /**

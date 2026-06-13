@@ -169,7 +169,7 @@ export async function GET_LOGS(request: NextRequest) {
  * GET /api/dev/stats
  * Get current statistics
  */
-export async function GET_STATS(request: NextRequest) {
+export async function GET_STATS(_request: NextRequest) {
   if (process.env.NODE_ENV !== 'development') {
     return NextResponse.json({ error: 'Development only' }, { status: 403 });
   }
@@ -234,7 +234,7 @@ export async function GET_ERRORS(request: NextRequest) {
  * POST /api/dev/clear
  * Clear all logs
  */
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   if (process.env.NODE_ENV !== 'development') {
     return NextResponse.json({ error: 'Development only' }, { status: 403 });
   }

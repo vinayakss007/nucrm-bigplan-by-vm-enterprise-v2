@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useState, useEffect, useMemo } from 'react';
 import { ExternalLink, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { GROUPS, SCOPES, visibleForRole } from './settings-config';
+import { SCOPES, visibleForRole } from './settings-config';
 
 /**
  * Desktop side-rail. Hidden below `lg` — mobile uses <SettingsMobilePicker />.

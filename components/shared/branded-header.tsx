@@ -1,4 +1,5 @@
 import { BrandingConfig, generateCSSVariables } from '@/lib/branding';
+import Image from 'next/image';
 
 interface BrandedHeaderProps {
   branding: BrandingConfig;
@@ -24,7 +25,7 @@ export function BrandedHeader({ branding }: BrandedHeaderProps) {
       >
         <div className="flex items-center gap-3">
           {branding.logoUrl && (
-            <img
+            <Image
               src={branding.logoUrl}
               alt={branding.companyName ?? 'Logo'}
               className="h-8 w-auto"

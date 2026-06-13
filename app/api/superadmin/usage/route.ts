@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, plans, usageSnapshots } from '@/drizzle/schema';
-import { eq, and, sql, desc, inArray } from 'drizzle-orm';
+import { eq, sql, desc, inArray } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
 
 export async function GET(request: NextRequest) {

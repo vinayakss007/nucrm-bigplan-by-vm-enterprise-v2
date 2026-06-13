@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useMemo } from 'react'
-import { Plus, MoreHorizontal, Edit, Trash2, CheckCircle, Clock, AlertTriangle, Columns, UserPlus, Flag, Calendar as CalendarIcon, RotateCcw } from 'lucide-react'
+import { Plus, MoreHorizontal, Edit, Trash2, CheckCircle, AlertTriangle, Columns, UserPlus, Flag, Calendar as CalendarIcon, RotateCcw } from 'lucide-react'
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
@@ -301,7 +301,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
       id: 'complete',
       label: 'Mark Complete',
       icon: <CheckCircle className="w-3.5 h-3.5" />,
-      onClick: async (ids: string[]) => callBulk('complete', ids),
+      onClick: async (ids: string[, today]) => callBulk('complete', ids),
     },
     {
       id: 'reopen',

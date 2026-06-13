@@ -42,7 +42,7 @@ export default function ContractDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Contract>>({});
 
-  useEffect(() => { fetchContract(); }, [id]);
+  useEffect(() => { fetchContract(); }, [id, fetchContract]);
 
   const fetchContract = async () => {
     try {
@@ -50,7 +50,7 @@ export default function ContractDetailPage() {
       if (!res.ok) throw new Error('Not found');
       const data = await res.json();
       setContract(data.data);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load contract');
     } finally {
       setLoading(false);
@@ -85,7 +85,7 @@ export default function ContractDetailPage() {
       setContract(data.data);
       setEditing(false);
       toast.success('Contract updated');
-    } catch (error) {
+    } catch {
       toast.error('Failed to update contract');
     }
   };
@@ -101,7 +101,7 @@ export default function ContractDetailPage() {
       const data = await res.json();
       setContract(data.data);
       toast.success(`Status changed to ${newStatus}`);
-    } catch (error) {
+    } catch {
       toast.error('Failed to change status');
     }
   };
@@ -113,7 +113,7 @@ export default function ContractDetailPage() {
       if (!res.ok) throw new Error('Failed');
       toast.success('Contract deleted');
       router.push('/tenant/contracts');
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete contract');
     }
   };

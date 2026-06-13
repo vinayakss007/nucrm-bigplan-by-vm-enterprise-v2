@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateBody, validateQuery } from '@/lib/api/validate';
-import { createLeadSchema, leadQuerySchema } from '@/lib/api/schemas';
+import { validateBody } from '@/lib/api/validate';
+import { createLeadSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { leads, users, companies, leadActivities, activities } from '@/drizzle/schema';

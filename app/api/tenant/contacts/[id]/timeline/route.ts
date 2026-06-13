@@ -5,7 +5,7 @@ import { createNoteSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { activities, users, contacts } from '@/drizzle/schema';
-import { eq, and, desc, sql, count } from 'drizzle-orm';
+import { eq, and, desc, count } from 'drizzle-orm';
 
 /**
  * GET /api/tenant/contacts/[id]/timeline

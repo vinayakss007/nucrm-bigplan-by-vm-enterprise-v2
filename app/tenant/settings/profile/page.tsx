@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Save, User, Lock, Loader2, CheckCircle, Eye, EyeOff, Bell, Clock } from 'lucide-react';
+import { Save, User, Lock, Loader2, Eye, EyeOff, Bell, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 

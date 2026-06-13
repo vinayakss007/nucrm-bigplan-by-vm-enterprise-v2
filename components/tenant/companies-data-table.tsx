@@ -1,13 +1,11 @@
 "use client"
 
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import Link from 'next/link'
-import { Plus, MoreHorizontal, Edit, Trash2, Building2, Globe, Phone, Users, Tag, UserPlus, Archive, ArrowRightLeft } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Plus, MoreHorizontal, Edit, Trash2, Building2, Globe, Tag, UserPlus, Archive } from 'lucide-react'
 import { confirmThen } from '@/components/ui/confirm-dialog'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   DropdownMenu,
@@ -38,7 +36,7 @@ interface Props {
   teamMembers?: { user_id: string; full_name: string }[]
 }
 
-export default function CompaniesDataTable({ initialCompanies, permissions, tenantId, userId, teamMembers = [] }: Props) {
+export default function CompaniesDataTable({ initialCompanies, permissions, _tenantId, _userId, teamMembers = [] }: Props) {
   const [companies, setCompanies] = useState(initialCompanies)
   const [total, setTotal] = useState(initialCompanies.length)
   const [loading, setLoading] = useState(false)

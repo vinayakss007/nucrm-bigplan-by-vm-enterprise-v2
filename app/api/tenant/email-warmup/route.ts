@@ -5,7 +5,7 @@ import { emailWarmupConfigSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { emailWarmupConfigs, emailWarmupPool } from '@/drizzle/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { getWarmUpStats } from '@/lib/email/warmup';
 
 /**

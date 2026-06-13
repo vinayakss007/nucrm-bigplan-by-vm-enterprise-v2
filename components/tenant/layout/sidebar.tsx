@@ -141,7 +141,7 @@ const PIN_KEY = 'nucrm.sidebar.pinned';
 const FILTER_KEY = 'nucrm.sidebar.query';
 const SECTION_KEY = 'nucrm.sidebar.sections';
 
-export default function TenantSidebar({ tenant, profile, roleSlug, permissions, isAdmin, isSuperAdmin, collapsed=false, onToggle, onMobileClose }: Props) {
+export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions, isAdmin, isSuperAdmin, collapsed=false, onToggle, onMobileClose }: Props) {
   const pathname = usePathname();
   const [query, setQuery] = useState('');
   const [pinned, setPinned] = useState<string[]>([]);
@@ -255,7 +255,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
       ...sec,
       items: sec.items.filter(i => hasPerm(i) && matches(i)),
     })).filter(sec => sec.items.length > 0)
-  , [q, isAdmin, permissions, hiddenItems]);
+  , [q, isAdmin, permissions, hiddenItems, hasPerm]);
 
   // ── Resolve pinned items ────────────────────────────────────
   const pinnedItems = useMemo(() => {
@@ -263,7 +263,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
     return pinned
       .map(href => all.find(i => i.href === href))
       .filter((i): i is NavItem => !!(i && hasPerm(i) && matches(i)));
-  }, [pinned, q, isAdmin, permissions, hiddenItems]);
+  }, [pinned, q, isAdmin, permissions, hiddenItems, hasPerm]);
 
   // ── Collapsed mini sidebar ──────────────────────────────────
   if (collapsed) {

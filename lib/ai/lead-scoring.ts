@@ -5,7 +5,7 @@
  * defined in `lead_scoring_rules`.
  */
 import { db } from '@/drizzle/db';
-import { leads, leadScoringRules, aiActivity } from '@/drizzle/schema';
+import { leads, leadScoringRules } from '@/drizzle/schema';
 import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import { chat } from './gateway';
 

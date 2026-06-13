@@ -57,7 +57,7 @@ export async function queueWebhook(payload: WebhookPayload): Promise<string> {
   // Immediately attempt delivery
   try {
     await processWebhookDelivery(result.id, payload.url, payload.headers);
-  } catch (err) {
+  } catch {
     // Will be retried
   }
 

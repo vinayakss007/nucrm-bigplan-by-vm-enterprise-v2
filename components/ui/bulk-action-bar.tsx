@@ -1,5 +1,5 @@
 'use client';
-import { X, CheckSquare, Trash2, UserPlus, Tag, Archive } from 'lucide-react';
+import { X, CheckSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface BulkAction {

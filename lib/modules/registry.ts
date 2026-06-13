@@ -6,7 +6,7 @@
 import { db } from '@/drizzle/db';
 import { tenantModules, modules } from '@/drizzle/schema/modules';
 import { tenants } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import type { ModuleManifest } from '@/types';
 
 export const BUILTIN_MODULES: ModuleManifest[] = [

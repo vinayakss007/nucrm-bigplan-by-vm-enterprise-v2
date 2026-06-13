@@ -160,7 +160,7 @@ function parseAIResponse(raw: string): ReplyAnalysis {
       extractedEntities: cleanEntities(parsed.extracted_entities),
       requiresFollowUp: Boolean(parsed.requires_follow_up),
     };
-  } catch (err) {
+  } catch {
     console.error('[lead-warming] Failed to parse AI response:', raw.slice(0, 200));
     return fallbackAnalysis(raw);
   }

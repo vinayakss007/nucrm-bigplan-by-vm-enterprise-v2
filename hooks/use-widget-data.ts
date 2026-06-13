@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { DashboardDataState } from '@/types/dashboard';
 
 interface UseWidgetDataOptions {

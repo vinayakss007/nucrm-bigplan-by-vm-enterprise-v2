@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
  * 
  * Usage: <script src="https://yourcrm.com/api/embed/form.js" data-form-id="FORM_ID"></script>
  */
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   
   const js = `

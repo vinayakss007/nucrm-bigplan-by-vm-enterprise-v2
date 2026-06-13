@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users, sessions, activities, notifications, tenantMembers, tenants } from '@/drizzle/schema';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   try {

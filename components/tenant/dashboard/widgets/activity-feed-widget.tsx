@@ -1,7 +1,7 @@
 'use client';
 import type { WidgetProps } from '@/types/dashboard';
 import { Activity, Target, Calendar, Zap, CheckSquare, TrendingUp } from 'lucide-react';
-import { formatRelativeTime, cn } from '@/lib/utils';
+import { formatRelativeTime } from '@/lib/utils';
 import Link from 'next/link';
 
 const ACTIVITY_ICONS: Record<string, any> = {

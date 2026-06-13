@@ -7,7 +7,7 @@
  */
 
 import { execSync } from 'child_process';
-import { writeFileSync, existsSync, mkdirSync, readFileSync, unlinkSync } from 'fs';
+import { existsSync, readFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 
 const BUCKET = process.env['S3_BUCKET'] || 'nucrm-backups';

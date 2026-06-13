@@ -28,7 +28,7 @@ interface MissedFollowUpsClientProps {
   teamMembers: Array<{ userId: string; fullName: string | null }>;
 }
 
-export function MissedFollowUpsClient({ items, teamMembers }: MissedFollowUpsClientProps) {
+export function MissedFollowUpsClient({ items, _teamMembers }: MissedFollowUpsClientProps) {
   const [filter, setFilter] = useState<string>('all');
 
   const filtered = filter === 'all'

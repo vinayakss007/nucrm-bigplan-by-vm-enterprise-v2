@@ -15,7 +15,7 @@
 
 import { db } from '@/drizzle/db';
 import { deadLetterQueue, webhookDeliveries } from '@/drizzle/schema/automation';
-import { eq, and, sql, gt, isNull, desc, inArray } from 'drizzle-orm';
+import { eq, and, sql, gt, desc } from 'drizzle-orm';
 import { devLogger } from '@/lib/dev-logger';
 
 export interface DLQEntry {

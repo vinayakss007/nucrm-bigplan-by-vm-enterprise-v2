@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Plus, Globe, Check, X, Trash2, Loader2, ChevronDown, CheckCircle, XCircle, Clock, Copy } from 'lucide-react';
-import { cn, formatRelativeTime, formatDate } from '@/lib/utils';
+import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 const WEBHOOK_EVENTS = [

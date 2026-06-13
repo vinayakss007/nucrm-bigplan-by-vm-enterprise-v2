@@ -40,7 +40,7 @@ interface Props {
   userId: string;
 }
 
-export default function TaskDetailClient({ task, permissions, tenantId, userId }: Props) {
+export default function TaskDetailClient({ task, permissions, _tenantId, _userId }: Props) {
   const router = useRouter();
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);

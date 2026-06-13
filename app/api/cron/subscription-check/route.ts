@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { tenants, subscriptions, billingEvents } from '@/drizzle/schema';
 import { eq, and, lt, ne, or, sql } from 'drizzle-orm';
-import { apiError } from '@/lib/api-error';
 
 /**
  * POST /api/cron/subscription-check

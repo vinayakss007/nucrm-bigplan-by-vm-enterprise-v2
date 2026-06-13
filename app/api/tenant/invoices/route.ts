@@ -3,7 +3,7 @@ import { validateBody, validateQuery } from '@/lib/api/validate';
 import { createInvoiceSchema, invoiceQuerySchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { invoices, invoiceLineItems } from '@/drizzle/schema';
-import { eq, and, desc, sql, like, count } from 'drizzle-orm';
+import { eq, and, desc, sql, count } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 
 export async function GET(request: NextRequest) {

@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronRight, Plus, Calendar, Clock, MapPin, CheckSquare,
   Users, TrendingUp, FileText, MoreHorizontal, Edit, Trash2, ExternalLink
 } from 'lucide-react';
-import { cn, formatDate, formatCurrency } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, addMonths, subMonths, getDay, startOfWeek, endOfWeek, addWeeks, subWeeks, addDays, subDays } from 'date-fns';
 import toast from 'react-hot-toast';
 

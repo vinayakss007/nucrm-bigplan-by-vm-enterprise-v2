@@ -1,8 +1,7 @@
 "use client"
 
-import { useState, useCallback } from 'react'
-import { X, GitMerge, AlertTriangle, CheckCircle, ArrowRight, User, Mail, Phone, Building } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { useState } from 'react'
+import { X, GitMerge, AlertTriangle, CheckCircle, ArrowRight, User, Mail, Phone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -223,7 +222,7 @@ export function ContactMergeModal({ duplicates, loading, onMerge, onClose }: Con
                   { key: 'last_name', label: 'Last Name', icon: User },
                   { key: 'email', label: 'Email', icon: Mail },
                   { key: 'phone', label: 'Phone', icon: Phone },
-                ].map(({ key, label, icon: Icon }) => (
+                ].map(({ key, _label, icon: Icon }) => (
                   <div key={key} className="grid grid-cols-3 gap-4 items-center p-3 rounded-lg border border-border">
                     <div className="text-center">
                       <div className="flex items-center justify-center gap-1.5 text-sm">

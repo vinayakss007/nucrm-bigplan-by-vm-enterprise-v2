@@ -64,7 +64,7 @@ export default function TenantCustomFields() {
   useEffect(() => {
     loadFields();
     loadFeatures();
-  }, [entityType]);
+  }, [entityType, loadFields]);
 
   const loadFields = async () => {
     setLoading(true);
@@ -247,7 +247,7 @@ export default function TenantCustomFields() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800/50">
-              {fields.map((field, i) => (
+              {fields.map((field, _i) => (
                 <tr key={field.id} className="hover:bg-gray-800/30">
                   <td className="px-4 py-3 text-sm text-gray-500 w-16">{field.display_order}</td>
                   <td className="px-4 py-3 text-sm font-medium text-white">{field.field_label}</td>

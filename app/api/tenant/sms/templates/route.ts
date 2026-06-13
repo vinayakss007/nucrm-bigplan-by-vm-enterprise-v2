@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { smsTemplates } from '@/drizzle/schema/sms';
-import { eq, and, desc, sql, isNull } from 'drizzle-orm';
+import { eq, and, desc, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { extractTemplateVariables } from '@/lib/sms';

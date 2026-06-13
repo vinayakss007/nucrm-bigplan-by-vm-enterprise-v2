@@ -1,8 +1,8 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckSquare, Plus, X, User, Clock, Tag, Filter, CheckCircle, Trash2, AlertTriangle, Edit } from 'lucide-react';
-import { cn, formatDate, formatRelativeTime } from '@/lib/utils';
+import { CheckSquare, Plus, X, User, Clock, CheckCircle, Trash2, Edit } from 'lucide-react';
+import { cn, formatDate } from '@/lib/utils';
 import { Swipeable } from '@/components/ui/swipeable';
 import toast from 'react-hot-toast';
 
@@ -12,7 +12,7 @@ const PRIORITY_CFG = {
   low:    { label:'Low',    dot:'bg-slate-400', badge:'text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400' },
 };
 
-export default function TenantTasksClient({ initialTasks, contacts, deals, teamMembers, permissions }: {
+export default function TenantTasksClient({ initialTasks, contacts, _deals, teamMembers, permissions }: {
   initialTasks: any[]; contacts: any[]; deals: any[]; teamMembers: any[];
   permissions: { canCreate:boolean; canEdit:boolean; canDelete:boolean; canAssign:boolean };
 }) {

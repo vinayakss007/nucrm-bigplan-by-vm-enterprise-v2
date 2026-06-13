@@ -1,10 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { db } from '@/drizzle/db';
 import { contacts, leads, deals, companies, tasks, activities, tenants, users, dealStages, pipelines } from '@/drizzle/schema';
 import { eq, and, isNull, gte, sql, count, sum, ilike } from 'drizzle-orm';
 import { exportPrometheusMetrics as exportAppMetrics } from '@/lib/metrics';
 import IORedis from 'ioredis';
-import { apiError } from '@/lib/api-error';
 
 export const dynamic = 'force-dynamic';
 

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, deals, activities, tasks, dealStages, pipelines } from '@/drizzle/schema';
-import { eq, and, isNull, notInArray, gte, sql, desc, asc, inArray } from 'drizzle-orm';
+import { eq, and, isNull, notInArray, sql, desc, asc } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {

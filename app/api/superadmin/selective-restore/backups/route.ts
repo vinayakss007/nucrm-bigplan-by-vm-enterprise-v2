@@ -3,11 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { superAdminBackups, users } from '@/drizzle/schema';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { eq, sql, desc } from 'drizzle-orm';
 import { writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { parseBackupFile, validateBackupFile, formatFileSize } from '@/lib/restore/backup-parser';
+import { parseBackupFile, formatFileSize } from '@/lib/restore/backup-parser';
 
 const UPLOAD_DIR = join(process.cwd(), 'uploads', 'backups');
 

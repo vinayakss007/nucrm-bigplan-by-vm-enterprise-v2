@@ -81,10 +81,10 @@ interface Props {
 export default function LeadsClient({
   initialLeads,
   companies,
-  teamMembers,
-  permissions,
+  _teamMembers,
+  _permissions,
   totalCount,
-  tenantId,
+  _tenantId,
   userId,
 }: Props) {
   const router = useRouter();
@@ -116,14 +116,14 @@ export default function LeadsClient({
       const res = await fetch('/api/tenant/contacts?' + q);
       const data = await res.json();
       setLeads(data.data ?? []);
-    } catch (err) {
+    } catch {
       toast.error('Failed to load leads');
     } finally {
       setLoading(false);
     }
   }, [activeStatus, search]);
 
-  useEffect(() => { load(); }, [activeStatus, search]);
+  useEffect(() => { load(); }, [activeStatus, search, load]);
 
   // Pipeline statistics
   const stats = Object.entries(PIPELINE_CONFIG).map(([id, config]) => {
@@ -201,7 +201,7 @@ export default function LeadsClient({
     }
   };
 
-  const deleteLead = async (leadId: string, name: string) => {
+  const deleteLead = async (leadId: string, _name: string) => {
     try {
       const res = await fetch(`/api/tenant/contacts/${leadId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();

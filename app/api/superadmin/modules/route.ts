@@ -5,7 +5,7 @@ import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { modules, tenantModules } from '@/drizzle/schema';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
 
 export async function GET(req: NextRequest) {

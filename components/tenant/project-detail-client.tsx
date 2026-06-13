@@ -81,7 +81,7 @@ export default function ProjectDetailClient({
   milestones: initialMilestones,
   linkedTasks: initialLinkedTasks,
   allTasks,
-  teamMembers,
+  _teamMembers,
   permissions,
 }: Props) {
   const router = useRouter();

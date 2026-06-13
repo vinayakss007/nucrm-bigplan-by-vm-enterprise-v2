@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Crown, ArrowUpRight, Users, Database, Zap, CheckCircle, ExternalLink, Loader2, CreditCard, FileText } from 'lucide-react';
+import { Crown, ArrowUpRight, Users, Database, Zap, Loader2, CreditCard, FileText } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';

@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema/core';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { bulkScoreLeads } from '@/lib/ai/scoring';
 import { verifyCronSecret } from '@/lib/auth/cron';
 

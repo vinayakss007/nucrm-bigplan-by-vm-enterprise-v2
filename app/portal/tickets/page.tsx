@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { LifeBuoy, Plus, Clock, CheckCircle2, AlertCircle, User, MessageSquare, X } from 'lucide-react';
+import { LifeBuoy, Plus } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 

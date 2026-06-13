@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -206,7 +205,7 @@ interface Lead {
   tags?: string[];
 }
 
-export default function LeadsClientNew({ permissions, teamMembers, companies, stats, sources, tenantId, userId }: Props) {
+export default function LeadsClientNew({ permissions, teamMembers, companies, stats, _sources, _tenantId, _userId }: Props) {
   const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -274,7 +273,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
 
   useEffect(()=>{
     load(0, activeStatus, debouncedSearch);
-  }, [debouncedSearch, activeStatus, sortBy, sortOrder]);
+  }, [debouncedSearch, activeStatus, sortBy, sortOrder, load]);
 
   const handleSearch=(q:string)=>{setSearch(q);};
   const handleStatus=(s:string)=>{setActiveStatus(s);};

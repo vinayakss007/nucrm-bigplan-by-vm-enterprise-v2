@@ -32,7 +32,7 @@ function ModuleLoadingSkeleton() {
   );
 }
 
-function ModuleDisabledPlaceholder({ moduleId }: { moduleId: string }) {
+function ModuleDisabledPlaceholder({ _moduleId }: { _moduleId: string }) {
   // Render nothing — the sidebar/nav should already hide the link
   return null;
 }

@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Plus, Search, FileText, X, Send, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Search, FileText, X, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -83,7 +83,7 @@ function QuotesPageInner() {
       setShowModal(false);
       setForm({ title: '', contactId: '', dealId: '', expiresAt: '', notes: '', terms: '', items: [{ description: '', quantity: '1', unitPrice: '0' }], discount: '0', tax: '0' });
       fetchQuotes();
-    } catch (error) { toast.error('Failed to create quote'); }
+    } catch { toast.error('Failed to create quote'); }
   };
 
   const addItem = () => setForm({ ...form, items: [...form.items, { description: '', quantity: '1', unitPrice: '0' } as { description: string; quantity: string; unitPrice: string }] });

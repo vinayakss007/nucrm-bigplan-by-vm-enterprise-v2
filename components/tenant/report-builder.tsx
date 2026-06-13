@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { BarChart3, PieChart, TrendingUp, Download, Loader2, Play, RefreshCw, Calendar } from 'lucide-react';
-import { cn, formatCurrency } from '@/lib/utils';
+import { BarChart3, PieChart, TrendingUp, Download, Loader2, Play, Calendar } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ export default function ReportBuilder() {
       setSelectedMetric('count');
       setSelectedMetricField('');
     }
-  }, [selectedEntity]);
+  }, [selectedEntity, entityConfig]);
 
   // Run report
   const runReport = useCallback(async () => {

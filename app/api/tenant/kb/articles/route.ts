@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth } from '@/lib/auth/middleware';
 import { validateBody } from '@/lib/api/validate';
 import { createKbArticleSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { kbArticles, kbCategories } from '@/drizzle/schema';
-import { eq, and, desc, isNull, asc, ilike, sql } from 'drizzle-orm';
+import { eq, and, desc, isNull, sql } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {

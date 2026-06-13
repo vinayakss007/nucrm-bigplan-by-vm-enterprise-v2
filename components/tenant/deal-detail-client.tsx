@@ -53,7 +53,7 @@ interface Props {
   userId: string;
 }
 
-export default function DealDetailClient({ deal, tasks, activities, permissions, tenantId, userId }: Props) {
+export default function DealDetailClient({ deal, tasks, activities, permissions, _tenantId, _userId }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'activities' | 'documents'>('overview');
   const [showEdit, setShowEdit] = useState(false);

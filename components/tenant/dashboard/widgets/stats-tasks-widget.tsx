@@ -1,7 +1,6 @@
 'use client';
 import type { WidgetProps } from '@/types/dashboard';
 import { CheckSquare } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { StatCard } from './stat-card';
 
 export default function StatsTasksWidget({ data }: WidgetProps) {

@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { selectiveRestoreLogs, selectiveRestoreAuditLog, superAdminBackups } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { selectiveRestoreLogs, selectiveRestoreAuditLog } from '@/drizzle/schema';
+import { eq, sql } from 'drizzle-orm';
 import { rollbackToSnapshot } from '@/lib/restore/restore-executor';
 
 const schema = z.object({ restore_log_id: z.string().min(1) });

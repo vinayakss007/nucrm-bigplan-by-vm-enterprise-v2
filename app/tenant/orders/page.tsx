@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Plus, Search, Package, Truck, CheckCircle, Clock, X, User, FileText } from 'lucide-react';
+import { Plus, Search, Package, X, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -91,7 +91,7 @@ function OrdersPageInner() {
       setShowModal(false);
       setForm({ title: '', contactId: '', orderDate: new Date().toISOString().split('T')[0], expectedDeliveryDate: '', notes: '', items: [{ description: '', quantity: '1', unitPrice: '0' }] });
       fetchOrders();
-    } catch (error) {
+    } catch {
       toast.error('Failed to create order');
     }
   };

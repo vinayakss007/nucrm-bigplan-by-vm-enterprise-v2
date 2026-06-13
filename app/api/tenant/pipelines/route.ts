@@ -5,7 +5,7 @@ import { validateBody } from '@/lib/api/validate';
 import { createPipelineSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { pipelines, dealStages, deals } from '@/drizzle/schema';
-import { eq, and, asc, desc, sql } from 'drizzle-orm';
+import { eq, asc, desc, sql } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   try {

@@ -3,7 +3,7 @@ import { validateBody } from '@/lib/api/validate';
 import { assignContactSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, leadAssignments, tenantMembers, users } from '@/drizzle/schema';
+import { contacts, tenantMembers, users } from '@/drizzle/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';

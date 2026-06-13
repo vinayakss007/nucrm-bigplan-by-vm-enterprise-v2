@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, deals, tasks, companies, activities } from '@/drizzle/schema';
-import { eq, and, sql, gte, lte, count, sum, avg } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 /**

@@ -8,7 +8,7 @@ import {
   costAnomalies 
 } from '@/drizzle/schema/tokens';
 import { aiUsageAggregated, aiUsageLogs } from '@/drizzle/schema';
-import { eq, and, sql, desc, gt, gte, lt, isNull } from 'drizzle-orm';
+import { eq, and, sql, gt, lt, isNull } from 'drizzle-orm';
 
 /**
  * Shared AI Utilities — Token Control & Usage Tracking
@@ -238,7 +238,7 @@ export async function recordUsage(
 export async function checkForAnomaly(
   tenantId: string,
   service: string,
-  costCents: number
+  _costCents: number
 ): Promise<{ anomaly: boolean; severity: 'low' | 'medium' | 'high' } | null> {
   // Get average daily spend for this tenant over last 7 days
   const dailySpend = db.select({

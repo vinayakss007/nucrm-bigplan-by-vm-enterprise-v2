@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyToken } from '@/lib/auth/session';
 import { db } from '@/drizzle/db';
-import { users, tenants, errorLogs } from '@/drizzle/schema';
+import { users, tenants } from '@/drizzle/schema';
 import { eq, sql, count } from 'drizzle-orm';
 import SuperAdminShell from '@/components/superadmin/shell';
 

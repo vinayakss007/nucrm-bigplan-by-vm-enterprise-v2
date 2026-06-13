@@ -1,6 +1,6 @@
 'use client';
 import { useState, useCallback } from 'react';
-import { TrendingUp, Plus, X, List, Columns, DollarSign, User, Calendar, Trash2, ChevronDown } from 'lucide-react';
+import { TrendingUp, Plus, X, List, Columns, User, Calendar, Trash2 } from 'lucide-react';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';

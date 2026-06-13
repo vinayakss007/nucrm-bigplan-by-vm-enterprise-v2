@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, users, tenantMembers } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 
 type StatusValue = 'configured' | 'default' | 'attention' | 'unknown';

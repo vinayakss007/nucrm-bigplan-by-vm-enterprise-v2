@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireTenantCtx } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
-import { contacts, deals, invoices, activities, orders } from '@/drizzle/schema';
-import { eq, and, sql, gte, between } from 'drizzle-orm';
+import { contacts, deals, invoices, orders } from '@/drizzle/schema';
+import { eq, and, sql, gte } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {

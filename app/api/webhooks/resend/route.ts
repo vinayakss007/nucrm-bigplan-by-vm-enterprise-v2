@@ -7,7 +7,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { contacts, sequenceEnrollments, activities } from '@/drizzle/schema';
-import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
+import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
 
 export async function POST(req: NextRequest) {

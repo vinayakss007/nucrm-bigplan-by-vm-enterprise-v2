@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   FileEdit, Send, Wand2, AlertCircle, Loader2, Check, ChevronDown, Settings as SettingsIcon,
   Copy, RefreshCw, Sparkles, ExternalLink,

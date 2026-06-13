@@ -102,7 +102,7 @@ export default function TenantsDataTable({ initialTenants }: Props) {
     }
   }
 
-  const suspendTenant = async (tenantId: string, name: string) => {
+  const suspendTenant = async (tenantId: string, _name: string) => {
     const res = await fetch('/api/superadmin/tenants', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

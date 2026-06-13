@@ -6,7 +6,6 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { createNotification } from '@/lib/notifications';
 import { fireWebhooks } from '@/lib/webhooks';
 import { syncCalculatedFields } from '@/lib/formula/sync';
-import { apiError } from '@/lib/api-error';
 
 export async function POST(req: NextRequest) {
   try {
@@ -201,7 +200,7 @@ export async function POST(req: NextRequest) {
 async function requestToJson(req: NextRequest) {
   try {
     return await req.json();
-  } catch (e) {
+  } catch {
     throw new Error('Invalid JSON in request body');
   }
 }

@@ -2,9 +2,9 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
 import { createWorkflowSchema } from '@/lib/api/schemas';
-import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
+import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { workflows, workflowActions, workflowExecutions } from '@/drizzle/schema';
+import { workflows, workflowActions } from '@/drizzle/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 
 /**

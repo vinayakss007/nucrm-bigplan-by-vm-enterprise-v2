@@ -4,7 +4,7 @@ import { validateBody } from '@/lib/api/validate';
 import { createProjectSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { projects, projectTasks, tasks, users } from '@/drizzle/schema';
+import { projects, users } from '@/drizzle/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 import { ModuleRegistry } from '@/lib/modules/registry';
 

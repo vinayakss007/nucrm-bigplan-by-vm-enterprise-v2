@@ -39,7 +39,7 @@ export default function SuperAdminUsersPage() {
     setMe(m);
     setLoading(false);
   };
-  useEffect(() => { load(); }, [search]);
+  useEffect(() => { load(); }, [search, load]);
 
   const transferSuperAdmin = async () => {
     if (!transferTarget) { toast.error('Select a target user'); return; }

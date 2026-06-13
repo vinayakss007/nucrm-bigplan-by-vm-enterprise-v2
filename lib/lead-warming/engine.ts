@@ -21,9 +21,8 @@ import {
   leadWarmingMessages,
   leadWarmingSchedule,
 } from '@/drizzle/schema/lead-warming';
-import { eq, and, sql, lte, gte, isNull, or, inArray } from 'drizzle-orm';
+import { eq, and, sql, gte, isNull, or, inArray } from 'drizzle-orm';
 import { chat } from '@/lib/ai/gateway';
-import { sendEmail } from '@/lib/email/service';
 import { addJob } from '@/lib/queue';
 
 // ── Festival Calendar (System Events) ─────────────────────────────────────
@@ -576,7 +575,7 @@ function getDefaultMessage(contact: ContactToWarm, event: any): GeneratedMessage
 
 // ── Email Template Wrapper ────────────────────────────────────────────────
 
-function wrapInEmailTemplate(body: string, contact: ContactToWarm): string {
+function wrapInEmailTemplate(body: string, _contact: ContactToWarm): string {
   const unsubLink = `{{UNSUBSCRIBE_URL}}`;
   return `
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px;">

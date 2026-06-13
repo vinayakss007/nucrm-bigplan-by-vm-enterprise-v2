@@ -7,7 +7,6 @@ import { RateLimiter, getRateLimitHeaders } from '@/lib/rate-limit';
 import { fireWebhooks, type WebhookEvent } from '@/lib/webhooks';
 import { logAudit } from '@/lib/audit';
 import { devLogger } from '@/lib/dev-logger';
-import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 
 // ── Constants ──────────────────────────────────────────────────────────

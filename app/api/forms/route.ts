@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
-import { forms, tenants, contacts, formSubmissions, activities } from '@/drizzle/schema';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { forms, tenants, contacts, formSubmissions } from '@/drizzle/schema';
+import { eq, and, sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createNotification } from '@/lib/notifications';
 import { fireWebhooks } from '@/lib/webhooks';

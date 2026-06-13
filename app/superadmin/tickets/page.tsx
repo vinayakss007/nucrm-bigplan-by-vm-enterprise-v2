@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { MessageSquare, AlertTriangle, Clock, CheckCircle, ChevronDown, Search, User } from 'lucide-react';
-import { cn, formatDate, formatRelativeTime } from '@/lib/utils';
+import { MessageSquare, CheckCircle, ChevronDown, Search } from 'lucide-react';
+import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 const PRI_CFG: Record<string,string> = { critical:'text-red-400 bg-red-500/15', high:'text-amber-400 bg-amber-500/15', normal:'text-blue-400 bg-blue-500/15', low:'text-white/40 bg-white/5' };
@@ -21,7 +21,7 @@ export default function TicketsPage() {
     const res = await fetch('/api/superadmin/tickets' + q);
     const d = await res.json(); setData(d); setLoading(false);
   };
-  useEffect(() => { load(); }, [status]);
+  useEffect(() => { load(); }, [status, load]);
 
   const update = async (id: string, updates: any) => {
     await fetch('/api/superadmin/tickets',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,...updates}) });

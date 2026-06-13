@@ -5,7 +5,7 @@ import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { selectiveRestoreLogs, selectiveRestoreAuditLog, superAdminBackups } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { existsSync } from 'fs';
 import { executeSelectiveRestore, validateTenant, createPreRestoreSnapshot } from '@/lib/restore/restore-executor';
 

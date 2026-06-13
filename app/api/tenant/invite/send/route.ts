@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, plans, invitations, users, tenantMembers } from '@/drizzle/schema';
-import { eq, and, sql, isNull } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { randomBytes } from 'crypto';
 import { z } from 'zod';

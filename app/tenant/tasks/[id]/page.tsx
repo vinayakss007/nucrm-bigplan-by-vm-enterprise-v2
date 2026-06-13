@@ -1,6 +1,6 @@
 import { requireTenantCtx, can } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
-import { tasks, contacts, deals, companies, users } from '@/drizzle/schema';
+import { tasks, contacts, deals, users } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import TaskDetailClient from '@/components/tenant/task-detail-client';

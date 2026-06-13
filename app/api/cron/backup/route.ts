@@ -8,7 +8,7 @@ import { alertSuperAdmin } from '@/lib/email/service';
 import { exec as execCb } from 'child_process';
 import { promisify } from 'util';
 import { spawn } from 'child_process';
-import { checkDirExists, ensureDir, deleteFile, getFileStats } from '@/lib/backups/runtime-fs';
+import { ensureDir, deleteFile, getFileStats } from '@/lib/backups/runtime-fs';
 import { logError } from '@/lib/errors-server';
 
 const exec = promisify(execCb);

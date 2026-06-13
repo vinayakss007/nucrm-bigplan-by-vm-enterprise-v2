@@ -45,7 +45,7 @@ export default function VisitorsPage() {
     }
   };
 
-  useEffect(() => { load(); }, [filter, minScore, maxScore]);
+  useEffect(() => { load(); }, [filter, minScore, maxScore, load]);
 
   const sorted = [...visitors].sort((a, b) => {
     if (sortBy === 'score') return sortDesc ? b.score - a.score : a.score - b.score;

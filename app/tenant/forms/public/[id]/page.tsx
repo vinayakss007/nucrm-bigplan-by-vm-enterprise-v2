@@ -16,7 +16,7 @@ export default function PublicFormPage() {
 
   useEffect(() => {
     loadForm();
-  }, [formId]);
+  }, [formId, loadForm]);
 
   const loadForm = async () => {
     try {

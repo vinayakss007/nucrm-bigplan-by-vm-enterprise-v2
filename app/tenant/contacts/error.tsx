@@ -1,7 +1,7 @@
 'use client';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
-export default function ContactsError({ error, reset }: { error: Error; reset: () => void }) {
+export default function ContactsError({ _error, reset }: { _error: Error; reset: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] p-8">
       <div className="w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mb-4">

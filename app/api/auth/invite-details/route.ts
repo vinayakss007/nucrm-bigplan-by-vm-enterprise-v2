@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth/session';
 import { db } from '@/drizzle/db';
 import { invitations, tenants, users } from '@/drizzle/schema';
-import { eq, and, gt, isNull, sql } from 'drizzle-orm';
+import { eq, and, gt, isNull } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
 
 export async function GET(request: NextRequest) {

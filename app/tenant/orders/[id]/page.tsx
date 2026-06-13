@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Edit2, Trash2, Save, X, Package, Truck, CheckCircle, Clock, Calendar, DollarSign } from 'lucide-react';
+import { ArrowLeft, Edit2, Trash2, Save, X, Package, Truck, CheckCircle, Clock, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -55,7 +55,7 @@ export default function OrderDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Order>>({});
 
-  useEffect(() => { fetchOrder(); }, [id]);
+  useEffect(() => { fetchOrder(); }, [id, fetchOrder]);
 
   const fetchOrder = async () => {
     try {
@@ -63,7 +63,7 @@ export default function OrderDetailPage() {
       if (!res.ok) throw new Error('Not found');
       const data = await res.json();
       setOrder(data.data);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load order');
     } finally {
       setLoading(false);
@@ -100,7 +100,7 @@ export default function OrderDetailPage() {
       setOrder(data.data);
       setEditing(false);
       toast.success('Order updated');
-    } catch (error) {
+    } catch {
       toast.error('Failed to update order');
     }
   };
@@ -116,7 +116,7 @@ export default function OrderDetailPage() {
       const data = await res.json();
       setOrder(data.data);
       toast.success(`Order marked as ${newStatus}`);
-    } catch (error) {
+    } catch {
       toast.error('Failed to change status');
     }
   };
@@ -128,7 +128,7 @@ export default function OrderDetailPage() {
       if (!res.ok) throw new Error('Failed');
       toast.success('Order deleted');
       router.push('/tenant/orders');
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete order');
     }
   };

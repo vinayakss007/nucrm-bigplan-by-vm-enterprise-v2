@@ -1,6 +1,6 @@
 import { uniqueIndex, pgTable, uuid, text, timestamp, jsonb, decimal, integer, boolean, index, primaryKey, bigint, date, numeric } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { tenants, users } from './core';
+import { users } from './core';
 import * as utils from './utils';
 
 // ── 1. CRM MODULE ─────────────────────────────────────

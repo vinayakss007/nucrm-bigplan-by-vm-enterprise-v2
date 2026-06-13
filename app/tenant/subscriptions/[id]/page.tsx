@@ -44,7 +44,7 @@ export default function SubscriptionDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Subscription>>({});
 
-  useEffect(() => { fetchSubscription(); }, [id]);
+  useEffect(() => { fetchSubscription(); }, [id, fetchSubscription]);
 
   const fetchSubscription = async () => {
     try {
@@ -52,7 +52,7 @@ export default function SubscriptionDetailPage() {
       if (!res.ok) throw new Error('Not found');
       const data = await res.json();
       setSubscription(data.data);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load subscription');
     } finally {
       setLoading(false);
@@ -85,7 +85,7 @@ export default function SubscriptionDetailPage() {
       setSubscription(data.data);
       setEditing(false);
       toast.success('Subscription updated');
-    } catch (error) {
+    } catch {
       toast.error('Failed to update subscription');
     }
   };
@@ -106,7 +106,7 @@ export default function SubscriptionDetailPage() {
       const data = await res.json();
       setSubscription(data.data);
       toast.success(`Subscription ${action === 'cancel' ? 'cancelled' : action === 'pause' ? 'paused' : 'resumed'}`);
-    } catch (error) {
+    } catch {
       toast.error(`Failed to ${action} subscription`);
     }
   };
@@ -118,7 +118,7 @@ export default function SubscriptionDetailPage() {
       if (!res.ok) throw new Error('Failed');
       toast.success('Subscription deleted');
       router.push('/tenant/subscriptions');
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete subscription');
     }
   };

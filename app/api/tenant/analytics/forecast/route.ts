@@ -4,7 +4,7 @@ import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { dealForecasts } from '@/drizzle/schema';
 import { revenueForecastSummary } from '@/drizzle/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql } from 'drizzle-orm';
 
 /**
  * GET /api/tenant/analytics/forecast

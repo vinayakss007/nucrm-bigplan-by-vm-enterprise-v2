@@ -5,7 +5,7 @@ import { db } from '@/drizzle/db';
 import { contacts, companies, deals } from '@/drizzle/schema';
 import { tasks, activities } from '@/drizzle/schema';
 import { users, tenantMembers } from '@/drizzle/schema';
-import { eq, and, asc, sql } from 'drizzle-orm';
+import { eq, asc } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {

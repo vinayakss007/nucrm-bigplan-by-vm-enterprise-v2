@@ -6,7 +6,7 @@ import { createApiKeySchema } from '@/lib/api/schemas';
 import { generateApiKey } from '@/lib/auth/api-key';
 import { db } from '@/drizzle/db';
 import { apiKeys } from '@/drizzle/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 
 /**
  * GET /api/tenant/api-keys

@@ -14,8 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, leads, companies } from '@/drizzle/schema';
-import { eq, sql, and } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 

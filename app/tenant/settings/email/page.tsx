@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Mail, Save, Loader2, CheckCircle, AlertTriangle, Send } from 'lucide-react';
+import { Mail, Loader2, CheckCircle, AlertTriangle, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function EmailSettingsPage() {

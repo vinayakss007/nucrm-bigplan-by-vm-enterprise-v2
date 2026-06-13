@@ -11,7 +11,6 @@ import type { ModuleManifest } from './types';
 import { BUILTIN_MODULES, ModuleRegistry } from '../registry';
 import { db } from '@/drizzle/db';
 import { modules } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
 
 class ModuleLoader {
   private externalModules: ModuleManifest[] = [];

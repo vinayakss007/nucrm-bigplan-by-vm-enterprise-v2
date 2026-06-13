@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { backupRecords, platformSettings } from '@/drizzle/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { backupRecords } from '@/drizzle/schema';
+import { desc } from 'drizzle-orm';
 
 /**
  * GET /api/tenant/backup

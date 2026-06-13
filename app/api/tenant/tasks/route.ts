@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { validateBody, validateQuery } from '@/lib/api/validate';
-import { createTaskSchema, taskQuerySchema } from '@/lib/api/schemas';
+import { validateBody } from '@/lib/api/validate';
+import { createTaskSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tasks, contacts, deals, users, tenants, plans, activities } from '@/drizzle/schema';

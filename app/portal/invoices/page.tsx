@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { FileText, Download, DollarSign, Calendar, CheckCircle, Clock } from 'lucide-react';
+import { FileText, Download } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
 
 export default function PortalInvoicesPage() {

@@ -20,7 +20,7 @@ import {
   ChevronDown,
   Filter,
 } from 'lucide-react'
-import { cn, formatRelativeTime, formatDate } from '@/lib/utils'
+import { cn, formatRelativeTime } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'

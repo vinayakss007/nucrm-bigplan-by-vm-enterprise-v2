@@ -56,7 +56,7 @@ export default function SearchPage() {
     const q = searchParams.get('q');
     if (q) { setQuery(q); search(q); }
     inputRef.current?.focus();
-  }, []);
+  }, [, search]);
 
   const handleInput = (val: string) => {
     setQuery(val);
