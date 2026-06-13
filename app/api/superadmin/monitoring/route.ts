@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, plans, errorLogs, healthChecks, backupRecords, selectiveRestoreLogs, superAdminBackups } from '@/drizzle/schema';
 import { eq, and, sql, desc, gt, inArray, isNull } from 'drizzle-orm';
+import { captureError } from '@/lib/capture-error';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
         const result = await fn();
         return result;
       } catch (err) {
-        console.error('[safeQuery error]', err);
+        captureError(err, 'Monitoring:SafeQuery');
         return fallback;
       }
     };
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
       if (stats.mrr === undefined) stats.mrr = planDist.reduce((s: number, p: any) => s + (p.priceMonthly || 0) * (p.tenantCount || 0), 0);
       if (stats.trialing === undefined) stats.trialing = 0;
     } catch (err) {
-      console.error('[platform_stats error]', err);
+      captureError(err, 'Monitoring:PlatformStats');
     }
 
     // Get recent errors
@@ -170,7 +171,7 @@ export async function GET(request: NextRequest) {
       dbSize: dbSize[0]?.size || '0 B',
     });
   } catch (err: any) {
-    console.error('[superadmin/monitoring GET]', err);
+    captureError(err, 'Monitoring:GET');
     return apiError(err);
   }
 }

@@ -42,6 +42,7 @@ export class RealtimeSDK {
       }
     } catch {
       // Fall back to API key if ticket endpoint is unavailable
+      console.error('[RealtimeSDK] Failed to get ticket, falling back to API key');
     }
     return this.apiKey;
   }
@@ -63,6 +64,7 @@ export class RealtimeSDK {
         this.dispatch(parsed.channel, parsed);
       } catch {
         // Ignore malformed messages
+        console.warn('[RealtimeSDK] Malformed message received');
       }
     };
 

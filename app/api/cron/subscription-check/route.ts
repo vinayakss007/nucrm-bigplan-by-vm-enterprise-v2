@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { tenants, subscriptions, billingEvents } from '@/drizzle/schema';
 import { eq, and, lt, ne, or, sql } from 'drizzle-orm';
+import { captureError } from '@/lib/capture-error';
 import { apiError } from '@/lib/api-error';
 
 /**
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
 
         downgraded++;
       } catch (err: any) {
-        console.error(`[subscription-check] Failed to downgrade tenant ${sub.tenantId}:`, err.message);
+        captureError(err, `subscription-check:${sub.tenantId}`);
       }
     }
 
@@ -110,7 +111,7 @@ export async function POST(request: Request) {
       timestamp: new Date().toISOString(),
     });
   } catch (err: any) {
-    console.error('[subscription-check] Cron failed:', err.message);
+    captureError(err, 'subscription-check:cron');
     return NextResponse.json(
       { error: 'Internal error', message: err.message },
       { status: 500 }

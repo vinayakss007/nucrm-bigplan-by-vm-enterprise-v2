@@ -2,7 +2,7 @@
  * COMPREHENSIVE INTEGRATION ENDPOINTS TESTS
  * Tests all integration API endpoints + SDK methods
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock auth middleware
 vi.mock('@/lib/auth/middleware', () => ({

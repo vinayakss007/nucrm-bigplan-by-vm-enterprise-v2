@@ -79,8 +79,8 @@ async function getPreviousSuperAdminHash(): Promise<string | null> {
     ORDER BY created_at DESC
     LIMIT 1
   `);
-  const rows = (result as unknown as any[]);
-  return rows?.[0]?.hash ?? null;
+  const rows = (result as unknown as Array<Record<string, unknown>>);
+  return (rows?.[0] as Record<string, unknown>)?.['hash'] as string | null ?? null;
 }
 
 function computeSuperAdminHash(entry: {
@@ -199,7 +199,7 @@ export async function verifySuperAdminAuditChain(limit = 10000): Promise<SuperAd
     LIMIT ${limit}
   `);
 
-  const logs = result as unknown as any[];
+  const logs = result as unknown as Record<string, unknown>[];
 
   if (logs.length === 0) {
     return { valid: true, totalChecked: 0, brokenAtIndex: null, brokenEntryId: null, details: 'No audit logs to verify' };
@@ -207,44 +207,45 @@ export async function verifySuperAdminAuditChain(limit = 10000): Promise<SuperAd
 
   for (let i = 0; i < logs.length; i++) {
     const entry = logs[i];
-    const expectedPrevious = i === 0 ? null : logs[i - 1].hash;
+    if (!entry) continue;
+    const expectedPrevious = i === 0 ? null : (logs[i - 1] as Record<string, unknown>)?.['hash'] as string | null;
 
-    if (entry.previous_hash !== expectedPrevious) {
+    if ((entry as Record<string, unknown>)?.['previous_hash'] !== expectedPrevious) {
       return {
         valid: false,
         totalChecked: i + 1,
         brokenAtIndex: i,
-        brokenEntryId: entry.id,
-        details: `Hash chain broken at entry ${i} (ID: ${entry.id}). Expected previousHash: ${expectedPrevious}, got: ${entry.previous_hash}`,
+        brokenEntryId: (entry as Record<string, unknown>)?.['id'] as string | null,
+        details: `Hash chain broken at entry ${i} (ID: ${String((entry as Record<string, unknown>)?.['id'])}). Expected previousHash: ${expectedPrevious}, got: ${String((entry as Record<string, unknown>)?.['previous_hash'])}`,
       };
     }
 
     const hashPayload = {
-      adminId: entry.admin_id,
-      adminEmail: entry.admin_email,
-      action: entry.action,
-      targetType: entry.target_type,
-      targetId: entry.target_id,
-      targetName: entry.target_name,
-      tenantId: entry.tenant_id,
-      tenantName: entry.tenant_name,
-      ipAddress: entry.ip_address,
-      userAgent: entry.user_agent,
-      oldData: entry.old_data,
-      newData: entry.new_data,
-      metadata: entry.metadata,
-      previousHash: entry.previous_hash,
+      adminId: (entry as Record<string, unknown>)?.['admin_id'] as string,
+      adminEmail: (entry as Record<string, unknown>)?.['admin_email'] as string,
+      action: (entry as Record<string, unknown>)?.['action'] as string,
+      targetType: (entry as Record<string, unknown>)?.['target_type'] as string | null,
+      targetId: (entry as Record<string, unknown>)?.['target_id'] as string | null,
+      targetName: (entry as Record<string, unknown>)?.['target_name'] as string | null,
+      tenantId: (entry as Record<string, unknown>)?.['tenant_id'] as string | null,
+      tenantName: (entry as Record<string, unknown>)?.['tenant_name'] as string | null,
+      ipAddress: (entry as Record<string, unknown>)?.['ip_address'] as string | null,
+      userAgent: (entry as Record<string, unknown>)?.['user_agent'] as string | null,
+      oldData: (entry as Record<string, unknown>)?.['old_data'] as string | null,
+      newData: (entry as Record<string, unknown>)?.['new_data'] as string | null,
+      metadata: (entry as Record<string, unknown>)?.['metadata'] as string | null,
+      previousHash: (entry as Record<string, unknown>)?.['previous_hash'] as string | null,
     };
 
     const expectedHash = computeSuperAdminHash(hashPayload);
 
-    if (entry.hash !== expectedHash) {
+    if ((entry as Record<string, unknown>)?.['hash'] !== expectedHash) {
       return {
         valid: false,
         totalChecked: i + 1,
         brokenAtIndex: i,
-        brokenEntryId: entry.id,
-        details: `Entry hash mismatch at index ${i} (ID: ${entry.id}). Expected: ${expectedHash}, got: ${entry.hash}`,
+        brokenEntryId: (entry as Record<string, unknown>)?.['id'] as string | null,
+        details: `Entry hash mismatch at index ${i} (ID: ${String((entry as Record<string, unknown>)?.['id'])}). Expected: ${expectedHash}, got: ${String((entry as Record<string, unknown>)?.['hash'])}`,
       };
     }
   }
@@ -324,7 +325,7 @@ export async function getSuperAdminAuditLogs(filters: {
 
   return {
     data: results,
-    total: (countResult as any)?.[0]?.total || 0,
+    total: (countResult as unknown as { total?: number }[])?.[0]?.total || 0,
     limit,
     offset,
   };

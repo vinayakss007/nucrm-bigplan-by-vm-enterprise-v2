@@ -53,7 +53,7 @@ export async function syncCalculatedFields(
       WHERE id = ${entityId} AND tenant_id = ${tenantId}
     `);
   } catch (err) {
-    console.error(`[FormulaSync] Failed to sync fields for \${entityType} \${entityId}`, err);
+    console.error('[FormulaSync] Failed to sync fields', err);
   }
 }
 

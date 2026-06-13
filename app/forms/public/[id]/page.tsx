@@ -1,4 +1,5 @@
 import { db } from '@/drizzle/db';
+import Image from 'next/image';
 import { forms, tenants } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
@@ -39,7 +40,7 @@ export default async function PublicFormPage({ params }: any) {
       <div className="w-full max-w-xl">
         {form.logo_url && (
           <div className="flex justify-center mb-8">
-            <img src={form.logo_url} alt={form.tenant_name} className="h-12 object-contain" />
+            <Image src={form.logo_url} alt={form.tenant_name} className="h-12 object-contain" />
           </div>
         )}
         

@@ -33,15 +33,16 @@ test.describe('Notification System', () => {
       expect(true).toBeTruthy();
     });
 
-    test('landing/login/signup pages are accessible', async ({ page }) => {
-      // Root page
-      await page.goto('/');
+    test('landing/login/signup pages are accessible', async ({ page, context }) => {
+      // Clear cookies to avoid redirect loops for authenticated sessions
+      await context.clearCookies();
+      await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 15000 });
       await expect(page).toHaveURL(/\//);
-      
+
       // Auth login
       await page.goto('/auth/login');
       await expect(page.locator('input[name="email"]')).toBeVisible();
-      
+
       // Auth signup
       await page.goto('/auth/signup');
       await expect(page.locator('input[type="email"]').first()).toBeVisible();

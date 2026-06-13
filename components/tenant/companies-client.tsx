@@ -1,7 +1,6 @@
 'use client';
 import { useState, useCallback } from 'react';
 import { Plus, Search, Building2, Globe, Users, Lock } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 
@@ -74,7 +73,7 @@ export default function TenantCompaniesClient({ initialCompanies, permissions, t
   );
 }
 
-function CompanyFormModal({ company, tenantId, userId, onSaved, onClose }: any) {
+function CompanyFormModal({ company, _tenantId, _userId, onSaved, onClose }: any) {
   const [form, setForm] = useState({ name: company?.name||'', industry: company?.industry||'', size: company?.size||'', website: company?.website||'', phone: company?.phone||'', address: company?.address||'', notes: company?.notes||'' });
   const [saving, setSaving] = useState(false);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";

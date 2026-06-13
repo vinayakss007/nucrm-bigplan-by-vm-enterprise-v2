@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Check, Download, Settings, Zap, ChevronRight, Star, ShieldCheck, Loader2, X, ExternalLink } from 'lucide-react';
+import { Check, Download, Settings, ChevronRight, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 

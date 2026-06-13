@@ -20,7 +20,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import * as utils from './utils';
-import { tenants, users } from './core';
+import { users } from './core';
 
 // ── 1. AI PROVIDER SECRETS ───────────────────────────
 // Per-tenant encrypted API keys for the multi-provider gateway.

@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { backupRecords, platformSettings } from '@/drizzle/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { backupRecords } from '@/drizzle/schema';
+import { desc } from 'drizzle-orm';
 
 /**
  * GET /api/tenant/backup
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json().catch(() => ({}));
+    const body = await request.json().catch((err) => { console.error('[backup] JSON parse failed', err); return {}; });
     const backupType = body.backup_type === 'schema' ? 'schema' : 'full';
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
         message: 'Backup completed successfully',
       });
     } else {
-      const cronError = await cronRes.json().catch(() => ({}));
+      const cronError = await cronRes.json().catch((err) => { console.error('[backup] cron response parse failed', err); return {}; });
       return NextResponse.json({ error: cronError.error || 'Backup failed' }, { status: 500 });
     }
   } catch (err: any) {

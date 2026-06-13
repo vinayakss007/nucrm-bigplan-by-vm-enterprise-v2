@@ -100,7 +100,7 @@ export default function ChatPage() {
     }
   };
 
-  useEffect(() => { load(); }, [filter]);
+  useEffect(() => { load(); }, [filter, load]);
 
   return (
     <div className="space-y-4 animate-fade-in">

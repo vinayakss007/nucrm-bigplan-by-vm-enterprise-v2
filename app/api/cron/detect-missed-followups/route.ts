@@ -4,7 +4,6 @@ import { verifySecret } from '@/lib/crypto';
 import { db } from '@/drizzle/db';
 import { followUps } from '@/drizzle/schema';
 import { eq, and, lte, isNull, sql } from 'drizzle-orm';
-import { logError } from '@/lib/errors-server';
 
 export async function POST(req: NextRequest) {
   if (!verifySecret(req.headers.get('x-cron-secret'), process.env.CRON_SECRET))

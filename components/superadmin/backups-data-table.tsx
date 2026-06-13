@@ -114,7 +114,7 @@ export default function BackupsDataTable({ initialBackups }: Props) {
     }
   }
 
-  const downloadBackup = async (id: string, filePath: string) => {
+  const downloadBackup = async (id: string, _filePath: string) => {
     toast.success('Download started')
     // In production, this would trigger a signed URL download
     window.open(`/api/superadmin/backups/${id}/download`, '_blank')

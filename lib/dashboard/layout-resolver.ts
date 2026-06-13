@@ -23,7 +23,7 @@ export async function getSavedLayout(
   const tenantRow = await db.query.dashboardLayouts.findFirst({
     where: and(
       eq(dashboardLayouts.tenantId, tenantId),
-      eq(dashboardLayouts.userId, null as any),
+      eq(dashboardLayouts.userId, null as unknown as string),
       eq(dashboardLayouts.isDefault, true),
     ),
     orderBy: desc(dashboardLayouts.updatedAt),

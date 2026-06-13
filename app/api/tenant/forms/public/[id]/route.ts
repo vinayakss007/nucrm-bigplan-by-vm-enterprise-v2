@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { apiError } from '@/lib/api-error';
 import { db } from '@/drizzle/db';
 import { forms, tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 
-export async function GET(req: NextRequest, { params }: any) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     
@@ -33,7 +32,7 @@ export async function GET(req: NextRequest, { params }: any) {
         name: form.name, 
         fields: form.fields, 
         description: form.description, 
-        settings: { success_message: (form.settings as any)?.success_message ?? 'Thank you!' } 
+        settings: { success_message: (form.settings as Record<string, unknown>)?.['success_message'] as string ?? 'Thank you!' } 
       },
       { headers: {'Access-Control-Allow-Origin':'*'} }
     );

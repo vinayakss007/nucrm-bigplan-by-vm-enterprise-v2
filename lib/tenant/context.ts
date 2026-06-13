@@ -127,6 +127,7 @@ export async function requireTenantCtx(): Promise<TenantContext> {
       const isExempt = pathname.startsWith('/tenant/settings') || pathname.startsWith('/tenant/trial-expired') || pathname.startsWith('/api/');
       if (!isExempt) redirect('/tenant/trial-expired');
     } catch {
+      // Fallback to default on corrupted storage data
       redirect('/tenant/trial-expired');
     }
   }

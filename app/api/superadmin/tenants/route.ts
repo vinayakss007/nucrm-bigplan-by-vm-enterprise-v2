@@ -5,7 +5,7 @@ import { createTenantSchema, updateTenantSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, users, tenantMembers, plans } from '@/drizzle/schema';
-import { eq, and, sql, ilike, desc, or, inArray } from 'drizzle-orm';
+import { eq, and, sql, ilike, desc, or } from 'drizzle-orm';
 import { hashPassword } from '@/lib/auth/session';
 
 export async function GET(request: NextRequest) {
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
             })
             .returning({ id: users.id, email: users.email });
           
-          ownerId = (newUser as any)?.[0]?.id;
+          ownerId = newUser?.id;
           if (!owner_password) temp_password = pwd;
         }
       }

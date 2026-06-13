@@ -336,7 +336,7 @@ export class TenantDataExporter {
           });
         }
       } catch {
-        // Table doesn't exist
+        // Silently skip during migration/setup when tables may not exist yet
       }
     }
 

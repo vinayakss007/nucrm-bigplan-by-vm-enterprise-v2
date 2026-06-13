@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users, sessions, activities, notifications, tenantMembers, tenants } from '@/drizzle/schema';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   try {
@@ -50,17 +50,17 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(activities.createdAt))
       .limit(500),
 
-      db.select({
-        type: notifications.type,
-        title: notifications.title,
-        body: notifications.body,
-        isRead: (notifications as any).isRead,
-        createdAt: notifications.createdAt
-      })
-      .from(notifications)
+      db.select().from(notifications)
       .where(eq(notifications.userId, ctx.userId))
       .orderBy(desc(notifications.createdAt))
-      .limit(200),
+      .limit(200)
+       .then(rows => rows.map(r => ({
+        type: r.type,
+        title: r.title,
+        body: r.body,
+        isRead: r.readAt !== null,
+        createdAt: r.createdAt
+      }))),
 
       db.select({
         org_name: tenants.name,

@@ -2,7 +2,7 @@ import { createHmac, randomUUID } from 'crypto';
 import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { webhookQueue } from '@/drizzle/schema/support';
-import { eq, and, lte, lt, sql, asc } from 'drizzle-orm';
+import { eq, and, lte, lt, asc } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
 
 /**
@@ -61,7 +61,7 @@ export async function fireWebhooks(
     const payload = JSON.stringify(payloadObj);
 
     for (const hook of hooks) {
-      const config = hook.config as any;
+      const config = hook.config as { url?: string; events?: string[]; secret?: string; headers?: Record<string, string> };
       const url = config?.url;
       if (!url) continue;
 
@@ -127,7 +127,7 @@ export async function fireWebhooks(
         await db.update(integrations)
           .set({ lastUsedAt: new Date() })
           .where(eq(integrations.id, hook.id))
-          .catch(() => {});
+          .catch((e) => console.warn('[Webhook] Failed to update last used timestamp', e));
           
       } catch (err: any) {
         logger.warn(`[webhook] ${hook.name} delivery error: ${err.message}`);

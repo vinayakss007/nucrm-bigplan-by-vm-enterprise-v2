@@ -165,7 +165,7 @@ export function formatCurrency(
       currency: currencyCode,
     }).format(amount);
   } catch {
-    // Fallback for unsupported locale/currency combo
+    // Fallback to default on corrupted storage data
     const info = SUPPORTED_CURRENCIES.find(c => c.code === currencyCode);
     const symbol = info?.symbol || currencyCode;
     return `${symbol}${amount.toFixed(info?.decimalPlaces ?? 2)}`;

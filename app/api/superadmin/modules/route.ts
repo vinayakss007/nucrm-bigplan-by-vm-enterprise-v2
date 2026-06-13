@@ -5,7 +5,7 @@ import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { modules, tenantModules } from '@/drizzle/schema';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
 
 export async function GET(req: NextRequest) {
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     }).from(modules);
 
     const savedPricing = Object.fromEntries(
-      dbModules.map(m => [m.id, (m.manifest as any)?.pricing || null])
+      dbModules.map(m => [m.id, (m.manifest as Record<string, unknown>)?.['pricing'] || null])
     );
 
     const data = BUILTIN_MODULES.map(m => ({

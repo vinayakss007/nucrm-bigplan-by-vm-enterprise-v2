@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { verifyToken } from '@/lib/auth/session';
 import { db } from '@/drizzle/db';
 import { companies, contacts as contactsTable, leads as leadsTable, deals as dealsTable, tenantMembers, dealStages } from '@/drizzle/schema';
-import { eq, and, sql, desc, count, sum } from 'drizzle-orm';
+import { eq, and, sql, desc } from 'drizzle-orm';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { ArrowLeft, Globe, Phone, Building2, Users, TrendingUp } from 'lucide-react';
 

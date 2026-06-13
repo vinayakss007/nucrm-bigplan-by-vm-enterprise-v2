@@ -8,7 +8,7 @@ import {
   costAnomalies 
 } from '@/drizzle/schema/tokens';
 import { aiUsageAggregated, aiUsageLogs } from '@/drizzle/schema';
-import { eq, and, sql, desc, gt, gte, lt, isNull } from 'drizzle-orm';
+import { eq, and, sql, gt, lt, isNull } from 'drizzle-orm';
 
 /**
  * Shared AI Utilities — Token Control & Usage Tracking
@@ -57,24 +57,24 @@ export async function checkTokenAndLimits(
 
   // 1. Check global budget
   const globalBudget = await getGlobalBudget(service);
-  if (globalBudget.hard_cap_enabled && globalBudget.monthly_budget_cents > 0) {
-    if (globalBudget.current_month_cents >= globalBudget.monthly_budget_cents) {
+  if (globalBudget.hardCapEnabled && globalBudget.monthlyBudgetCents > 0) {
+    if (globalBudget.currentMonthCents >= globalBudget.monthlyBudgetCents) {
       return { allowed: false, reason: 'PLATFORM_BUDGET_EXHAUSTED' };
     }
     // Check soft cap alerts
-    const pctUsed = (globalBudget.current_month_cents / globalBudget.monthly_budget_cents) * 100;
-    if (pctUsed >= 100 && globalBudget.alert_at_100pct) {
+    const pctUsed = (globalBudget.currentMonthCents / globalBudget.monthlyBudgetCents) * 100;
+    if (pctUsed >= 100 && globalBudget.alertAt100pct) {
       await createAlert({
         alert_type: 'budget_100',
         target_type: 'platform',
         service,
-        current_value: globalBudget.current_month_cents,
-        threshold_value: globalBudget.monthly_budget_cents,
-        message: `${service} budget exhausted (${formatCurrency(globalBudget.current_month_cents)}/${formatCurrency(globalBudget.monthly_budget_cents)})`,
+        current_value: globalBudget.currentMonthCents,
+        threshold_value: globalBudget.monthlyBudgetCents,
+        message: `${service} budget exhausted (${formatCurrency(globalBudget.currentMonthCents)}/${formatCurrency(globalBudget.monthlyBudgetCents)})`,
       });
-    } else if (pctUsed >= 80 && globalBudget.alert_at_80pct) {
+    } else if (pctUsed >= 80 && globalBudget.alertAt80pct) {
       // Only alert once per threshold crossing
-      await checkAndAlertThreshold('platform', null, service, 'budget_80', globalBudget.current_month_cents, globalBudget.monthly_budget_cents);
+      await checkAndAlertThreshold('platform', null, service, 'budget_80', globalBudget.currentMonthCents, globalBudget.monthlyBudgetCents);
     }
   }
 
@@ -148,8 +148,8 @@ export async function checkTokenAndLimits(
     allowed: true,
     remaining: {
       tenant_monthly: tenantRemaining !== undefined && tenantRemaining >= 0 ? tenantRemaining : undefined,
-      global_budget: globalBudget.monthly_budget_cents > 0
-        ? globalBudget.monthly_budget_cents - globalBudget.current_month_cents
+      global_budget: globalBudget.monthlyBudgetCents > 0
+        ? globalBudget.monthlyBudgetCents - globalBudget.currentMonthCents
         : undefined,
     },
   };
@@ -188,7 +188,7 @@ export async function recordUsage(
     .values({
       tenantId,
       moduleName: module,
-      billingPeriod: currentPeriod as any,
+      billingPeriod: currentPeriod as unknown as string,
       count: 1,
       tokensUsed,
       costCents: actualCostCents,
@@ -238,7 +238,7 @@ export async function recordUsage(
 export async function checkForAnomaly(
   tenantId: string,
   service: string,
-  costCents: number
+  _costCents: number
 ): Promise<{ anomaly: boolean; severity: 'low' | 'medium' | 'high' } | null> {
   // Get average daily spend for this tenant over last 7 days
   const dailySpend = db.select({
@@ -329,15 +329,23 @@ async function getGlobalBudget(service: string) {
     )
   });
 
-  return result || {
+  const fallback: typeof tokenBudgets.$inferSelect = {
+    id: '',
     service,
-    monthly_budget_cents: 0,
-    current_month_cents: 0,
-    hard_cap_enabled: true,
-    alert_at_50pct: true,
-    alert_at_80pct: true,
-    alert_at_100pct: true,
-  } as any;
+    monthlyBudgetCents: 0,
+    currentMonthCents: 0,
+    hardCapEnabled: true,
+    alertAt50pct: true,
+    alertAt80pct: true,
+    alertAt100pct: true,
+    softCapEnabled: true,
+    billingPeriod: '',
+    resetDay: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    deletedAt: null,
+  };
+  return result || fallback;
 }
 
 async function getTenantLimits(tenantId: string) {

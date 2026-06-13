@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireTenantCtx } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
 import { scheduledReports } from '@/drizzle/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const ctx = await requireTenantCtx();
     if (ctx instanceof NextResponse) return ctx;

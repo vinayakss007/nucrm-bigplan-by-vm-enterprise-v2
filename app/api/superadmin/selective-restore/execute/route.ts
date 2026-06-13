@@ -5,9 +5,10 @@ import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { selectiveRestoreLogs, selectiveRestoreAuditLog, superAdminBackups } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { existsSync } from 'fs';
 import { executeSelectiveRestore, validateTenant, createPreRestoreSnapshot } from '@/lib/restore/restore-executor';
+import { captureError } from '@/lib/capture-error';
 
 const executeRestoreSchema = z.object({
   backup_id: z.string().min(1),
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
       tenant_id,
       action: 'execute',
       performed_by: ctx.userId,
-      performed_by_email: (ctx as any).user?.email,
+      performed_by_email: (ctx as { user?: { email?: string } }).user?.email,
       details: { backup_id, tables, restore_mode },
       ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
       user_agent: request.headers.get('user-agent'),
@@ -139,7 +140,7 @@ export async function POST(request: NextRequest) {
               backupFilePath: backup.storagePath!,
               tenantId: tenant_id,
               tables,
-              restoreMode: restore_mode as any,
+              restoreMode: restore_mode,
               performedBy: ctx.userId,
               userId: user_id,
             },
@@ -230,6 +231,6 @@ async function createAuditLog(params: AuditLogParams) {
       // In schema, selectiveRestoreAuditLog has: tenantId, action, tableName, recordId, oldData, newData, performedBy, performedAt.
     });
   } catch (err) {
-    console.error('[audit-log]', err);
+    captureError(err, 'SelectiveRestore:AuditLog');
   }
 }

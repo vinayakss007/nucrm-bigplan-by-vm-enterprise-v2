@@ -1,4 +1,4 @@
-import { sendEmail, alertSuperAdmin } from './service';
+import { alertSuperAdmin } from './service';
 
 export async function sendAlertEmail(subject: string, message: string) {
   await alertSuperAdmin(subject, message);

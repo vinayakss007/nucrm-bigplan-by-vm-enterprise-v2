@@ -5,7 +5,7 @@
 import { db } from '@/drizzle/db';
 import { emailWarmupConfigs, emailWarmupPool, emailWarmupLogs } from '@/drizzle/schema';
 import { tenants } from '@/drizzle/schema';
-import { eq, and, sql, lt, desc, asc, gte, or } from 'drizzle-orm';
+import { eq, and, sql, lt, asc, or } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 
 // ─── Warm-Up Email Templates ──────────────────────────────────────────────

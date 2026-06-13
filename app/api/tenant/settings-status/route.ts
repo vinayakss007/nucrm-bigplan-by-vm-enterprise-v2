@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, users, tenantMembers } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 
 type StatusValue = 'configured' | 'default' | 'attention' | 'unknown';
@@ -42,13 +42,13 @@ export async function GET(req: NextRequest) {
       ))
       .limit(1);
 
-    const tSettings = (t?.settings as any) ?? {};
-    const uPrefs = ((u?.metadata as any) ?? {}).prefs ?? {};
-    const mSettings = (m?.settings as any) ?? {};
-    const mNotif = (m?.notificationPrefs as any) ?? {};
+    const tSettings = (t?.settings ?? {}) as Record<string, unknown>;
+    const uPrefs = ((u?.metadata ?? {}) as Record<string, unknown>)['prefs'] ?? {};
+    const mSettings = (m?.settings ?? {}) as Record<string, unknown>;
+    const mNotif = (m?.notificationPrefs ?? {}) as Record<string, unknown>;
 
-    const has = (obj: any) => obj && typeof obj === 'object' && Object.keys(obj).length > 0;
-    const lp = tSettings.login_policy ?? {};
+    const has = (obj: unknown) => obj !== null && typeof obj === 'object' && Object.keys(obj as Record<string, unknown>).length > 0;
+    const lp = (tSettings['login_policy'] ?? {}) as Record<string, any>;
 
     // Derive a status per route. Pages we don't measure return 'unknown'.
     const statuses: Record<string, StatusEntry> = {};
@@ -58,19 +58,19 @@ export async function GET(req: NextRequest) {
                                                   hint: u?.emailVerified ? 'Email verified' : 'Verify your email' };
     statuses['/tenant/settings/preferences']  = has(uPrefs) ? { status: 'configured', hint: 'Custom prefs set' } : { status: 'default', hint: 'Using defaults' };
     statuses['/tenant/settings/security']     = u?.totpEnabled ? { status: 'configured', hint: '2FA enabled' } : { status: 'attention', hint: '2FA not enabled' };
-    statuses['/tenant/settings/notifications'] = has(mNotif?.matrix) ? { status: 'configured', hint: 'Customised' } : { status: 'default' };
-    statuses['/tenant/settings/out-of-office'] = mSettings?.out_of_office?.enabled ? { status: 'attention', hint: 'Currently away' } : { status: 'default' };
+    statuses['/tenant/settings/notifications'] = has(mNotif?.['matrix']) ? { status: 'configured', hint: 'Customised' } : { status: 'default' };
+    statuses['/tenant/settings/out-of-office'] = ((mSettings?.['out_of_office'] as Record<string, boolean>)?.['enabled']) ? { status: 'attention', hint: 'Currently away' } : { status: 'default' };
     statuses['/tenant/settings/sessions']     = { status: 'unknown' };
     statuses['/tenant/settings/telegram']     = { status: 'unknown' };
 
     // ── Workspace ──
     statuses['/tenant/settings/general']        = { status: 'configured' };
     statuses['/tenant/settings/branding']       = { status: 'unknown' };
-    statuses['/tenant/settings/localization']   = has(tSettings.localization) ? { status: 'configured' } : { status: 'default' };
-    statuses['/tenant/settings/user-defaults']  = has(tSettings.user_defaults) ? { status: 'configured', hint: `${Object.keys(tSettings.user_defaults).length} defaults set` } : { status: 'default' };
-    statuses['/tenant/settings/picklists']      = has(tSettings.picklists) ? { status: 'configured' } : { status: 'default' };
+    statuses['/tenant/settings/localization']   = has(tSettings['localization'] as Record<string, unknown>) ? { status: 'configured' } : { status: 'default' };
+    statuses['/tenant/settings/user-defaults']  = has(tSettings['user_defaults'] as Record<string, unknown>) ? { status: 'configured', hint: `${Object.keys(tSettings['user_defaults'] as Record<string, unknown>).length} defaults set` } : { status: 'default' };
+    statuses['/tenant/settings/picklists']      = has(tSettings['picklists'] as Record<string, unknown>) ? { status: 'configured' } : { status: 'default' };
     statuses['/tenant/settings/tags-manager']   = { status: 'unknown' };
-    statuses['/tenant/settings/currency']       = tSettings.localization?.currency ? { status: 'configured' } : { status: 'default' };
+    statuses['/tenant/settings/currency']       = (tSettings['localization'] as Record<string, unknown>)?.['currency'] ? { status: 'configured' } : { status: 'default' };
     statuses['/tenant/settings/tax']            = { status: 'unknown' };
     statuses['/tenant/settings/pipelines']      = { status: 'unknown' };
     statuses['/tenant/settings/custom-fields']  = { status: 'unknown' };
@@ -89,10 +89,10 @@ export async function GET(req: NextRequest) {
       statuses['/tenant/settings/billing']      = { status: 'configured' };
 
       // Login policy — derive from password / 2fa / IP / signup flags
-      const minLen = Number(lp?.password?.min_length ?? 12);
-      const tfa = lp?.two_factor?.enforcement ?? 'optional';
-      const ipOn = lp?.network?.ip_allowlist_enabled === true;
-      const signup = lp?.login?.allow_self_signup === true;
+      const minLen = Number((lp?.['password'] as Record<string, unknown>)?.['min_length'] ?? 12);
+      const tfa = (lp?.['two_factor'] as Record<string, unknown>)?.['enforcement'] ?? 'optional';
+      const ipOn = (lp?.['network'] as Record<string, unknown>)?.['ip_allowlist_enabled'] === true;
+      const signup = (lp?.['login'] as Record<string, unknown>)?.['allow_self_signup'] === true;
       const concerns: string[] = [];
       if (minLen < 12) concerns.push(`pwd min ${minLen}`);
       if (tfa === 'off') concerns.push('2FA off');

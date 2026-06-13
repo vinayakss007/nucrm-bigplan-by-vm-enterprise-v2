@@ -14,10 +14,6 @@ export default function PublicFormPage() {
   const [submitted, setSubmitted] = useState(false);
   const [values, setValues] = useState<Record<string, any>>({});
 
-  useEffect(() => {
-    loadForm();
-  }, [formId]);
-
   const loadForm = async () => {
     try {
       const res = await fetch(`/api/tenant/forms/public/${formId}`);
@@ -30,6 +26,10 @@ export default function PublicFormPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadForm();
+  }, [formId, loadForm]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

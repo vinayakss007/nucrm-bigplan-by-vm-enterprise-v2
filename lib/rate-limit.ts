@@ -65,7 +65,7 @@ export class RateLimiter {
   /**
    * ✅ FIXED: Cleanup old entries outside sliding window
    */
-  private async cleanupOldEntries(key: string, windowStart: number): Promise<void> {
+  private async cleanupOldEntries(_key: string, _windowStart: number): Promise<void> {
     // The cache.incr with TTL already handles expiration
     // This is a no-op for simple counter-based rate limiting
     // For true sliding window, use Redis sorted sets instead

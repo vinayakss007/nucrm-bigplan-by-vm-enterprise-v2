@@ -50,6 +50,7 @@ export function ConfirmDialog({ open, onOpenChange, title, message, confirmLabel
 }
 
 import toast from 'react-hot-toast';
+import { captureError } from '@/lib/capture-error';
 
 export function confirmThen(message: string, action: () => void | Promise<void>): Promise<boolean> {
   return new Promise((resolve) => {
@@ -66,7 +67,7 @@ export function confirmThen(message: string, action: () => void | Promise<void>)
           <button
             onClick={async () => {
               toast.dismiss(t.id);
-              try { await action(); } catch {}
+              try { await action(); } catch (e) { captureError(e, 'confirmThen'); toast.error('Action failed'); }
               resolve(true);
             }}
             className="px-2.5 py-1 text-xs font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"

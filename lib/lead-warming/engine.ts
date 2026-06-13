@@ -21,9 +21,8 @@ import {
   leadWarmingMessages,
   leadWarmingSchedule,
 } from '@/drizzle/schema/lead-warming';
-import { eq, and, sql, lte, gte, isNull, or, inArray } from 'drizzle-orm';
+import { eq, and, sql, gte, isNull, or, inArray } from 'drizzle-orm';
 import { chat } from '@/lib/ai/gateway';
-import { sendEmail } from '@/lib/email/service';
 import { addJob } from '@/lib/queue';
 
 // ── Festival Calendar (System Events) ─────────────────────────────────────
@@ -232,7 +231,7 @@ async function processCampaign(
  * Get contacts eligible for warming (respecting filters, cooldown, opt-out)
  */
 async function getEligibleContacts(campaign: any): Promise<ContactToWarm[]> {
-  const filter = campaign.targetFilter as any || {};
+  const filter = (campaign.targetFilter as Record<string, unknown>) || {};
 
   // Build WHERE conditions
   const conditions: any[] = [
@@ -241,8 +240,8 @@ async function getEligibleContacts(campaign: any): Promise<ContactToWarm[]> {
   ];
 
   // Apply tag/status filters if defined
-  if (filter.leadStatus && Array.isArray(filter.leadStatus) && filter.leadStatus.length > 0) {
-    conditions.push(inArray(contacts.leadStatus, filter.leadStatus));
+  if (filter['leadStatus'] && Array.isArray(filter['leadStatus']) && filter['leadStatus'].length > 0) {
+    conditions.push(inArray(contacts.leadStatus, filter['leadStatus']));
   }
 
   const allContacts = await db.select({
@@ -549,8 +548,8 @@ function parseMessageResponse(raw: string): { subject: string; body: string } {
   try {
     const parsed = JSON.parse(cleaned);
     return { subject: parsed.subject || '', body: parsed.body || '' };
-  } catch {
-    // If not JSON, use raw text as body
+  } catch (e) {
+    console.warn('[LeadWarming] Failed to parse AI response as JSON, using raw text:', e);
     return { subject: '', body: cleaned };
   }
 }
@@ -576,7 +575,7 @@ function getDefaultMessage(contact: ContactToWarm, event: any): GeneratedMessage
 
 // ── Email Template Wrapper ────────────────────────────────────────────────
 
-function wrapInEmailTemplate(body: string, contact: ContactToWarm): string {
+function wrapInEmailTemplate(body: string, _contact: ContactToWarm): string {
   const unsubLink = `{{UNSUBSCRIBE_URL}}`;
   return `
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px;">
@@ -604,7 +603,7 @@ export async function seedSystemEvents(): Promise<number> {
     try {
       await db.insert(leadWarmingEvents)
         .values({
-          tenantId: null as any, // System events have no tenant
+          tenantId: null as unknown as string, // System events have no tenant
           name: festival.name,
           eventType: festival.eventType,
           recurrence: 'yearly',
@@ -624,7 +623,7 @@ export async function seedSystemEvents(): Promise<number> {
       inserted++;
     } catch (err: any) {
       // Skip duplicates
-      console.warn(`[lead-warming] Seed skipped ${festival.name}:`, err.message);
+      console.error(`[lead-warming] Seed skipped ${festival.name}:`, err.message);
     }
   }
 

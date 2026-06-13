@@ -118,12 +118,12 @@ export async function GET(req: NextRequest) {
       .select({ locale: users.locale, theme: users.theme, metadata: users.metadata })
       .from(users).where(eq(users.id, ctx.userId)).limit(1);
 
-    const userPrefs = (u?.metadata as any)?.prefs ?? {};
+    const userPrefs = ((u?.metadata as Record<string, unknown>)?.['prefs'] ?? {}) as Record<string, unknown>;
 
     // Workspace defaults (admin-set overrides for fields the user hasn't customised)
     const [t] = await db
       .select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1);
-    const workspaceDefaults = ((t?.settings as any) ?? {}).user_defaults ?? {};
+    const workspaceDefaults = (((t?.settings as Record<string, unknown>) ?? {})['user_defaults'] ?? {}) as Record<string, unknown>;
 
     const resolved: Record<string, any> = { ...DEFAULTS, ...workspaceDefaults, ...userPrefs };
     if (u?.locale) resolved['locale'] = u.locale;
@@ -144,17 +144,17 @@ export async function PATCH(req: NextRequest) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch((err) => { console.error('[preferences] JSON parse failed', err); return {}; });
 
     // Validate strings
     for (const k of STRING_VALIDATED) {
-      const list = (VALID as any)[k];
+      const list = (VALID as Record<string, unknown>)[k] as string[] | undefined;
       if (body[k] !== undefined && list && !list.includes(body[k]))
         return NextResponse.json({ error: `${k} must be one of ${list.join(', ')}` }, { status: 400 });
     }
     // Validate numbers
     for (const k of NUMBER_VALIDATED) {
-      const list = (VALID as any)[k];
+      const list = (VALID as Record<string, unknown>)[k] as number[] | undefined;
       if (body[k] !== undefined && list && !list.includes(Number(body[k])))
         return NextResponse.json({ error: `${k} must be one of ${list.join(', ')}` }, { status: 400 });
     }
@@ -165,14 +165,14 @@ export async function PATCH(req: NextRequest) {
     if (body.email_signature !== undefined && typeof body.email_signature === 'string' && body.email_signature.length > 5000)
       return NextResponse.json({ error: 'email_signature too long (max 5000)' }, { status: 400 });
 
-    const update: any = { updatedAt: new Date() };
-    if (typeof body.locale === 'string') update.locale = body.locale;
-    if (typeof body.theme === 'string')  update.theme = body.theme;
+    const update: Record<string, unknown> = { updatedAt: new Date() };
+    if (typeof body.locale === 'string') update['locale'] = body.locale;
+    if (typeof body.theme === 'string')  update['theme'] = body.theme;
 
     // Build the metadata.prefs patch (everything else)
     const patch: Record<string, any> = {};
     for (const k of [...STRING_VALIDATED, ...NUMBER_VALIDATED]) {
-      if (body[k] !== undefined) patch[k] = NUMBER_VALIDATED.includes(k as any) ? Number(body[k]) : body[k];
+      if (body[k] !== undefined) patch[k] = NUMBER_VALIDATED.includes(k as typeof NUMBER_VALIDATED[number]) ? Number(body[k]) : body[k];
     }
     for (const k of BOOLEAN_KEYS) {
       if (body[k] !== undefined) patch[k] = body[k] === true;
@@ -189,7 +189,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (Object.keys(patch).length > 0) {
-      update.metadata = sql`
+      update['metadata'] = sql`
         jsonb_set(
           COALESCE(${users.metadata}, '{}'::jsonb),
           '{prefs}',

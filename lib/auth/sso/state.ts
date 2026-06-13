@@ -60,7 +60,8 @@ export async function readSsoState(): Promise<SsoStatePayload | null> {
       nonce: String(payload['nonce']),
       redirectTo: payload['redirectTo'] ? String(payload['redirectTo']) : undefined,
     };
-  } catch {
+  } catch (e) {
+    console.error('[SsoState] Failed to read SSO state', e);
     return null;
   }
 }

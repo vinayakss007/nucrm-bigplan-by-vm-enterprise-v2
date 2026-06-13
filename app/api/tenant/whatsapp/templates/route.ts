@@ -28,9 +28,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'WhatsApp not configured' }, { status: 400 });
     }
 
-    const config = integration.config as any;
-    const accessToken = config?.access_token;
-    const businessAccountId = config?.business_account_id;
+    const config = integration.config as Record<string, unknown>;
+    const accessToken = config?.['access_token'] as string | undefined;
+    const businessAccountId = config?.['business_account_id'] as string | undefined;
 
     if (!accessToken || !businessAccountId) {
       return NextResponse.json({ error: 'WhatsApp credentials incomplete' }, { status: 400 });
@@ -77,9 +77,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'WhatsApp not configured' }, { status: 400 });
     }
 
-    const config = integration.config as any;
-    const accessToken = config?.access_token;
-    const businessAccountId = config?.business_account_id;
+    const config = integration.config as Record<string, unknown>;
+    const accessToken = config?.['access_token'] as string | undefined;
+    const businessAccountId = config?.['business_account_id'] as string | undefined;
 
     if (!accessToken || !businessAccountId) {
       return NextResponse.json({ error: 'WhatsApp credentials incomplete' }, { status: 400 });

@@ -10,10 +10,10 @@
  * (GHSA-8gw3-rxh4-v6jx, GHSA-jc85-fpwf-qm7x) with NO fix available.
  */
 
-import { create, all } from 'mathjs';
+import { create, all, type MathJsInstance } from 'mathjs';
 
 // Create a restricted mathjs instance — no dangerous functions
-const math = create(all as any) as any;
+const math = create(all as unknown as any);
 
 // Remove dangerous functions that could be abused
 const BLOCKED_FUNCTIONS = [
@@ -24,9 +24,9 @@ const BLOCKED_FUNCTIONS = [
 
 for (const fn of BLOCKED_FUNCTIONS) {
   try {
-    delete (math as any)[fn];
+    delete (math as unknown as Record<string, unknown>)[fn];
   } catch {
-    // Some may not exist, that's fine
+    // Fallback to default on corrupted storage data
   }
 }
 

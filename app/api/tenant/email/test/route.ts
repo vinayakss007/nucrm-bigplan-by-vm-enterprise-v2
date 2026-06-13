@@ -1,5 +1,4 @@
 import { checkRateLimit } from '@/lib/rate-limit';
-import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
 import { testEmailSchema } from '@/lib/api/schemas';

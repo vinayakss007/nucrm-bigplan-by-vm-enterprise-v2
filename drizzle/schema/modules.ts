@@ -1,5 +1,5 @@
-import { uniqueIndex, pgTable, uuid, text, timestamp, jsonb, index, boolean } from 'drizzle-orm/pg-core';
-import { tenants, users } from './core';
+import { uniqueIndex, pgTable, uuid, text, timestamp, jsonb, boolean } from 'drizzle-orm/pg-core';
+import { users } from './core';
 import * as utils from './utils';
 
 // ── 1. MODULE REGISTRY ────────────────────────────────

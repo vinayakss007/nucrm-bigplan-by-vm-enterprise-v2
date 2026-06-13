@@ -42,7 +42,7 @@ export default function TicketsPage() {
         // Module not active
         setTickets([]);
       }
-    } catch (err) {
+    } catch {
       toast.error('Failed to load tickets');
     } finally {
       setLoading(false);

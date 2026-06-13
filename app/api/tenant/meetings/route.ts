@@ -5,7 +5,7 @@ import { createMeetingSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { meetings, contacts } from '@/drizzle/schema';
-import { eq, and, isNull, gte, lte, sql, asc, desc } from 'drizzle-orm';
+import { eq, and, isNull, gte, lte, sql, asc } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {

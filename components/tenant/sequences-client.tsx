@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from 'react'
-import { Plus, Mail, Pause, Play, Archive, Copy, Trash2, Users, TrendingUp, Edit } from 'lucide-react'
+import { Plus, Mail, Pause, Play, Trash2, Users, TrendingUp, Edit } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'

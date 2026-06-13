@@ -2,7 +2,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { supportTickets, contacts } from '@/drizzle/schema';
-import { eq, and, desc, isNull } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 

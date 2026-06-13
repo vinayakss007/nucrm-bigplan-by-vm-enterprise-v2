@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
     const [t] = await db
       .select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1);
 
-    const stored = ((t?.settings as any) ?? {}).user_defaults ?? {};
+    const stored = (((t?.settings as Record<string, unknown>) ?? {})['user_defaults'] ?? {}) as Record<string, unknown>;
     return NextResponse.json({ user_defaults: stored });
   } catch (err: any) {
     return apiError(err);
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  let ctx: any;
+  let ctx: Awaited<ReturnType<typeof requireAuth>>;
   try {
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -79,11 +79,11 @@ export async function PATCH(req: NextRequest) {
     if (!incoming || typeof incoming !== 'object')
       return NextResponse.json({ error: 'user_defaults object required' }, { status: 400 });
 
-    const safe: Record<string, any> = {};
+    const safe: Record<string, unknown> = {};
 
     for (const k of STRING_VALIDATED) {
       if (incoming[k] === undefined || incoming[k] === null) continue;
-      const list = (VALID as any)[k];
+      const list = (VALID as Record<string, unknown>)[k] as readonly unknown[] | undefined;
       if (list && !list.includes(incoming[k]))
         return NextResponse.json({ error: `${k} must be one of ${list.join(', ')}` }, { status: 400 });
       safe[k] = incoming[k];
@@ -91,7 +91,7 @@ export async function PATCH(req: NextRequest) {
     for (const k of NUMBER_VALIDATED) {
       if (incoming[k] === undefined || incoming[k] === null) continue;
       const v = Number(incoming[k]);
-      const list = (VALID as any)[k];
+      const list = (VALID as Record<string, unknown>)[k] as readonly unknown[] | undefined;
       if (list && !list.includes(v))
         return NextResponse.json({ error: `${k} must be one of ${list.join(', ')}` }, { status: 400 });
       safe[k] = v;

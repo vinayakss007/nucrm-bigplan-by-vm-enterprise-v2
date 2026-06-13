@@ -5,7 +5,7 @@ import { backupConfigSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
-import { eq, and, like, sql } from 'drizzle-orm';
+import { eq, and, like } from 'drizzle-orm';
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';

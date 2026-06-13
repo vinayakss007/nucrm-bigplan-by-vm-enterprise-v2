@@ -147,7 +147,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         entity_type: 'deal',
         entity_id: dealId,
         link: `/tenant/deals/${dealId}`
-      } as any);
+      } as Parameters<typeof notifyTenantMembers>[0]);
 
       await db.insert(activities).values({
         tenantId: ctx.tenantId,
@@ -291,7 +291,7 @@ async function handleDealWon(ctx: any, dealId: string, row: any) {
   // For now, let's use metadata to be safe and compatible.
   await db.update(deals)
     .set({
-      metadata: { ...((row.metadata as any) || {}), won_at: new Date().toISOString() }
+      metadata: { ...((row.metadata as Record<string, unknown>) || {}), won_at: new Date().toISOString() }
     })
     .where(eq(deals.id, dealId))
     .catch(err => console.error('[deal-won] Failed to update metadata:', err));

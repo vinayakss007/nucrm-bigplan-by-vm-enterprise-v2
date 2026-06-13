@@ -91,8 +91,8 @@ export async function GET(req: NextRequest) {
     try {
       const atRiskDeals = await getAtRiskDeals(ctx.tenantId);
       at_risk_count = atRiskDeals.length;
-    } catch (e) {
-      // Fallback if rules table missing or other error
+    } catch {
+      // Silently skip during migration/setup when tables may not exist yet
     }
 
     return NextResponse.json({

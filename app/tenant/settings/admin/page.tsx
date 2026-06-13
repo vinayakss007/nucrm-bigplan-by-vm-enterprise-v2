@@ -1,12 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { Building2, Users, CreditCard, TrendingUp, Plus, AlertCircle, CheckCircle, Clock, Crown, Settings, Shield } from 'lucide-react';
+import { Building2, Users, CreditCard, TrendingUp, AlertCircle, Clock, Crown, Settings, Shield } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
-import { getFromCache, setInCache, removeFromCache } from '@/lib/client-cache';
+import { getFromCache, setInCache } from '@/lib/client-cache';
 
 export default function OrganizationAdminPage() {
   const cacheKey = 'org:admin:overview';
@@ -45,7 +44,7 @@ export default function OrganizationAdminPage() {
       // Cache for 5 minutes
       setInCache(cacheKey, data, { ttl: 5 * 60 * 1000 });
       setLoading(false);
-    } catch (err) {
+    } catch {
       toast.error('Failed to load organization data');
       setLoading(false);
     }

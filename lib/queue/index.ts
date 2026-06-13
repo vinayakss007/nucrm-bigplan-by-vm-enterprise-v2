@@ -50,7 +50,7 @@ export async function getQueueAdapter(): Promise<QueueAdapter> {
       console.log(`[Queue] Using Redis provider`);
       return adapter;
     } catch (err) {
-      console.warn(`[Queue] Redis unavailable: ${(err as Error).message}. Falling back to pg-boss...`);
+      console.warn('[Queue] Redis unavailable, falling back to pg-boss...', (err as Error).message);
     }
   }
 
@@ -126,9 +126,10 @@ async function createRedisAdapter(redisUrl: string): Promise<QueueAdapter> {
 async function createPgBossAdapter(databaseUrl: string): Promise<QueueAdapter> {
   // Dynamic import - only loads if pg-boss is needed
   const PgBossModule = await import('pg-boss');
-  const PgBoss = (PgBossModule as any).default || PgBossModule;
+  const PgBoss = (PgBossModule as { default?: new (...args: unknown[]) => unknown }).default || PgBossModule;
 
-  const boss = new PgBoss({ connectionString: databaseUrl });
+  const BossConstructor = PgBoss as new (...args: unknown[]) => unknown;
+  const boss = new BossConstructor({ connectionString: databaseUrl }) as any;
   await boss.start();
   pgbossInstance = boss;
 

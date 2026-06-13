@@ -3,7 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth, requireModule } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { automationWorkflows } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { getAllWorkflows } from '@/lib/automation/workflows';
 
 export async function GET(request: NextRequest) {

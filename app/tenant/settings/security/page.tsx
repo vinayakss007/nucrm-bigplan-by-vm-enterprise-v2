@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Shield, Lock, Key, Download, RefreshCw, Trash2, Eye, EyeOff, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -481,7 +482,7 @@ export default function SecuritySettingsPage() {
                       // Extract the img src if it's an img tag
                       const imgMatch = totpQrCode.match(/<img[^>]+src="([^"]+)"/);
                       if (imgMatch) {
-                        return <img src={imgMatch[1]} alt="QR Code for 2FA setup" className="w-48 h-48" />;
+                        return <Image src={imgMatch[1]!} alt="QR Code for 2FA setup" className="w-48 h-48" />;
                       }
                       // If it's an SVG, render it directly (sanitized by checking it starts with <svg)
                       if (totpQrCode.startsWith('<svg')) {

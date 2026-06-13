@@ -15,7 +15,7 @@
 
 import { db } from '@/drizzle/db';
 import { deadLetterQueue, webhookDeliveries } from '@/drizzle/schema/automation';
-import { eq, and, sql, gt, isNull, desc, inArray } from 'drizzle-orm';
+import { eq, and, sql, gt, isNull, desc, inArray, lt } from 'drizzle-orm';
 import { devLogger } from '@/lib/dev-logger';
 
 export interface DLQEntry {
@@ -142,162 +142,73 @@ export async function retryFromDLQ(dlqEntryId: string): Promise<boolean> {
   try {
     await processWebhookDelivery(payload.deliveryId, payload.url);
     return true;
-  } catch {
+  } catch (e) {
+    console.error('[DLQ] Retry from DLQ failed', e);
     return false;
   }
 }
 
-/**
- * Bulk retry multiple DLQ entries.
- */
-export async function bulkRetryDLQ(dlqEntryIds: string[]): Promise<{ succeeded: number; failed: number }> {
+export async function listDLQEntries(tenantId: string, options: { limit: number; offset: number; status?: string }): Promise<{ entries: DLQEntry[]; total: number }> {
+  const where = and(
+    eq(deadLetterQueue.tenantId, tenantId),
+    ...(options.status ? [eq(deadLetterQueue.status, options.status)] : []),
+  );
+
+  const entries = await db.query.deadLetterQueue.findMany({
+    where,
+    limit: options.limit,
+    offset: options.offset,
+    orderBy: desc(deadLetterQueue.createdAt),
+  });
+
+  const total = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(deadLetterQueue)
+    .where(where)
+    .then(rows => rows[0]?.count ?? 0);
+
+  return { entries: entries as DLQEntry[], total };
+}
+
+export async function getDLQStats(tenantId: string): Promise<{ pending: number; resolved: number; total: number }> {
+  const [pending, resolved, total] = await Promise.all([
+    db.select({ count: sql<number>`count(*)` }).from(deadLetterQueue).where(and(eq(deadLetterQueue.tenantId, tenantId), eq(deadLetterQueue.status, 'pending'))).then(r => r[0]?.count ?? 0),
+    db.select({ count: sql<number>`count(*)` }).from(deadLetterQueue).where(and(eq(deadLetterQueue.tenantId, tenantId), eq(deadLetterQueue.status, 'resolved'))).then(r => r[0]?.count ?? 0),
+    db.select({ count: sql<number>`count(*)` }).from(deadLetterQueue).where(eq(deadLetterQueue.tenantId, tenantId)).then(r => r[0]?.count ?? 0),
+  ]);
+  return { pending, resolved, total };
+}
+
+export async function bulkRetryDLQ(ids: string[]): Promise<{ succeeded: number; failed: number }> {
   let succeeded = 0;
   let failed = 0;
-
-  for (const id of dlqEntryIds) {
+  for (const id of ids) {
     try {
-      const result = await retryFromDLQ(id);
-      if (result) succeeded++;
-      else failed++;
+      await retryFromDLQ(id);
+      succeeded++;
     } catch {
       failed++;
     }
   }
-
   return { succeeded, failed };
 }
 
-/**
- * Purge old DLQ entries older than the specified days.
- */
-export async function purgeOldDLQEntries(daysOld: number = 30): Promise<number> {
+export async function purgeDLQEntry(id: string, tenantId: string): Promise<boolean> {
+  const result = await db
+    .delete(deadLetterQueue)
+    .where(and(eq(deadLetterQueue.id, id), eq(deadLetterQueue.tenantId, tenantId)))
+    .returning({ id: deadLetterQueue.id });
+  return result.length > 0;
+}
+
+export async function purgeOldDLQEntries(daysOld: number): Promise<number> {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - daysOld);
-
-  const result = await db.delete(deadLetterQueue)
-    .where(and(
-      eq(deadLetterQueue.jobType, 'webhook'),
-      gt(sql`${cutoff.toISOString()}`, deadLetterQueue.failedAt),
-    ));
-
-  const count = result.rowCount || 0;
-  devLogger.queue('dlq', `Purged ${count} webhook entries older than ${daysOld} days`);
-  return count;
-}
-
-/**
- * Get DLQ statistics for a tenant.
- */
-export async function getDLQStats(tenantId: string): Promise<{
-  total: number;
-  byEventType: Array<{ eventType: string; count: number }>;
-  oldestEntry: Date | null;
-  resolved: number;
-  pending: number;
-}> {
-  const totalResult = await db.select({ count: sql<number>`count(*)::int` })
-    .from(deadLetterQueue)
-    .where(and(
-      eq(deadLetterQueue.tenantId, tenantId),
-      eq(deadLetterQueue.jobType, 'webhook'),
-    ));
-
-  const pendingResult = await db.select({ count: sql<number>`count(*)::int` })
-    .from(deadLetterQueue)
-    .where(and(
-      eq(deadLetterQueue.tenantId, tenantId),
-      eq(deadLetterQueue.jobType, 'webhook'),
-      eq(deadLetterQueue.status, 'pending'),
-    ));
-
-  const resolvedResult = await db.select({ count: sql<number>`count(*)::int` })
-    .from(deadLetterQueue)
-    .where(and(
-      eq(deadLetterQueue.tenantId, tenantId),
-      eq(deadLetterQueue.jobType, 'webhook'),
-      eq(deadLetterQueue.status, 'resolved'),
-    ));
-
-  const oldestResult = await db.select({ failedAt: deadLetterQueue.failedAt })
-    .from(deadLetterQueue)
-    .where(and(
-      eq(deadLetterQueue.tenantId, tenantId),
-      eq(deadLetterQueue.jobType, 'webhook'),
-    ))
-    .orderBy(deadLetterQueue.failedAt)
-    .limit(1);
-
-  return {
-    total: totalResult[0]?.count || 0,
-    pending: pendingResult[0]?.count || 0,
-    resolved: resolvedResult[0]?.count || 0,
-    oldestEntry: oldestResult[0]?.failedAt || null,
-    byEventType: [],
-  };
-}
-
-/**
- * List DLQ entries for a tenant with pagination.
- */
-export async function listDLQEntries(
-  tenantId: string,
-  options: { limit?: number; offset?: number; status?: string } = {}
-): Promise<{ entries: any[]; total: number }> {
-  const { limit = 50, offset = 0, status } = options;
-
-  const filters: any[] = [
-    eq(deadLetterQueue.tenantId, tenantId),
-    eq(deadLetterQueue.jobType, 'webhook'),
-  ];
-
-  if (status) {
-    filters.push(eq(deadLetterQueue.status, status));
-  }
-
-  const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
-    .from(deadLetterQueue)
-    .where(and(...filters));
-
-  const entries = await db.select({
-    id: deadLetterQueue.id,
-    jobType: deadLetterQueue.jobType,
-    jobId: deadLetterQueue.jobId,
-    queue: deadLetterQueue.queue,
-    payload: deadLetterQueue.payload,
-    errorMessage: deadLetterQueue.errorMessage,
-    errorStack: deadLetterQueue.errorStack,
-    attempts: deadLetterQueue.attempts,
-    maxAttempts: deadLetterQueue.maxAttempts,
-    status: deadLetterQueue.status,
-    failedAt: deadLetterQueue.failedAt,
-    resolvedAt: deadLetterQueue.resolvedAt,
-    resolution: deadLetterQueue.resolution,
-    createdAt: deadLetterQueue.createdAt,
-  })
-    .from(deadLetterQueue)
-    .where(and(...filters))
-    .orderBy(desc(deadLetterQueue.failedAt))
-    .limit(limit)
-    .offset(offset);
-
-  return {
-    entries,
-    total: countResult?.count || 0,
-  };
-}
-
-/**
- * Permanently delete a DLQ entry.
- */
-export async function purgeDLQEntry(dlqEntryId: string, tenantId: string): Promise<boolean> {
-  const result = await db.delete(deadLetterQueue)
-    .where(and(
-      eq(deadLetterQueue.id, dlqEntryId),
-      eq(deadLetterQueue.tenantId, tenantId),
-      eq(deadLetterQueue.jobType, 'webhook'),
-    ));
-
-  return (result.rowCount || 0) > 0;
+  const result = await db
+    .delete(deadLetterQueue)
+    .where(lt(deadLetterQueue.createdAt, cutoff))
+    .returning({ id: deadLetterQueue.id });
+  return result.length;
 }
 
 export default {

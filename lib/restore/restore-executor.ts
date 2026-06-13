@@ -152,6 +152,7 @@ export async function createPreRestoreSnapshot(
       snapshotData[table] = result.rows;
       totalRecords += result.rows.length;
     } catch {
+      // Silently skip during migration/setup when tables may not exist yet
       snapshotData[table] = [];
     }
   }
@@ -358,6 +359,7 @@ export async function countExistingRecords(
       ));
       counts[table] = (result.rows[0] as any)?.cnt ?? 0;
     } catch {
+      // Silently skip during migration/setup when tables may not exist yet
       counts[table] = 0;
     }
   }

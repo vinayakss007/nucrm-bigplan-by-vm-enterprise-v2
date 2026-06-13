@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Package, Plus, Users, Archive, FileText, Edit, Copy, UserPlus } from 'lucide-react';
+import { Package, Plus, Users, FileText, Edit, Copy, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -26,7 +26,7 @@ export default function SuperAdminTemplatesPage() {
       const res = await fetch('/api/superadmin/templates');
       const d = await res.json();
       setTemplates(d.data ?? []);
-    } catch (e) {
+    } catch {
       toast.error('Failed to load templates');
     }
     setLoading(false);
@@ -54,7 +54,7 @@ export default function SuperAdminTemplatesPage() {
       const d = await res.json();
       toast.success('Template created');
       load();
-    } catch (e) {
+    } catch {
       toast.error('Failed to create template');
     }
   };

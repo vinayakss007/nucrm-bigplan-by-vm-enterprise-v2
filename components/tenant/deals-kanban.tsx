@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useMemo, useRef } from 'react'
-import { Plus, MoreHorizontal, Edit, DollarSign, User, Building, Calendar, GripVertical, Trash2, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { Plus, MoreHorizontal, Edit, User, Building, Calendar, GripVertical, Trash2 } from 'lucide-react'
 import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -123,7 +123,7 @@ export default function DealsKanban({ initialDeals, stages, contacts, companies,
       const refreshRes = await fetch('/api/tenant/deals?limit=200')
       const refreshData = await refreshRes.json()
       setDeals((refreshData.data ?? []).map((d: any) => toSnakeCase(d)))
-    } catch (error) {
+    } catch {
       toast.error('Failed to create deal')
     }
     setSaving(false)
@@ -145,7 +145,7 @@ export default function DealsKanban({ initialDeals, stages, contacts, companies,
       const newStage = stages.find(s => s.name.toLowerCase() === newStageName.toLowerCase())
       setDeals((prev: any[]) => prev.map((d: any) => d.id === dealId ? { ...d, stageId: newStage?.id, stage_name: newStage?.name } : d))
       toast.success(`Deal moved to ${newStageName}`)
-    } catch (error) {
+    } catch {
       toast.error('Failed to update deal stage')
     }
   }, [stages])
@@ -160,7 +160,7 @@ export default function DealsKanban({ initialDeals, stages, contacts, companies,
       } else {
         toast.error('Failed to delete')
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete deal')
     }
   }, [])
@@ -179,7 +179,7 @@ export default function DealsKanban({ initialDeals, stages, contacts, companies,
     }
   }
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = (_e: React.DragEvent) => {
     setDragOverStage(null)
   }
 

@@ -160,7 +160,7 @@ export function trackDatabaseQuery(
 export function trackAuthEvent(
   event: string,
   success: boolean,
-  userId?: string
+  _userId?: string
 ) {
   metrics.increment('auth_events_total', 1, {
     event,

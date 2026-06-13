@@ -12,7 +12,7 @@ export default function PortalKBPage() {
   useEffect(() => {
     fetch('/api/public/kb/articles?status=published').then(r => r.json()).then(d => {
       setArticles(d.data || []); setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch((err) => { console.error('[portal/kb] fetch failed', err); setLoading(false); });
   }, []);
 
   const filtered = articles.filter(a =>

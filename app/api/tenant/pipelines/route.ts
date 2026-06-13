@@ -5,7 +5,7 @@ import { validateBody } from '@/lib/api/validate';
 import { createPipelineSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { pipelines, dealStages, deals } from '@/drizzle/schema';
-import { eq, and, asc, desc, sql } from 'drizzle-orm';
+import { eq, asc, desc, sql } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   try {
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 
       const stagesToCreate = (stages || defaultStages).map((s: any, idx: number) => ({
         tenantId: ctx.tenantId,
-        pipelineId: (newPipeline as any)[0].id,
+        pipelineId: newPipeline!.id,
         name: s.name || s.label || s.id,
         order: s.order ?? idx
       }));

@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { selectiveRestoreLogs, selectiveRestoreAuditLog, superAdminBackups } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { selectiveRestoreLogs, selectiveRestoreAuditLog } from '@/drizzle/schema';
+import { eq, sql } from 'drizzle-orm';
 import { rollbackToSnapshot } from '@/lib/restore/restore-executor';
 
 const schema = z.object({ restore_log_id: z.string().min(1) });
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     try {
       // For now, use db.execute to get pre_restore_snapshot_id if not in schema
       const res = await db.execute(sql`SELECT pre_restore_snapshot_id FROM public.selective_restore_logs WHERE id = ${restore_log_id}`);
-      const snapshotId = (res.rows[0] as any)?.pre_restore_snapshot_id;
+      const snapshotId = (res.rows[0] as Record<string, unknown>)?.['pre_restore_snapshot_id'] as string;
 
       if (!snapshotId) {
         throw new Error('No pre-restore snapshot available for rollback');

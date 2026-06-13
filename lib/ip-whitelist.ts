@@ -25,6 +25,7 @@ async function getTenantWhitelist(tenantId: string): Promise<string[]> {
   try {
     return JSON.parse(String(setting.value));
   } catch {
+    // Fallback to default on corrupted storage data
     return [];
   }
 }

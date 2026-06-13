@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { buildInsert, buildUpdate, countRows, dbCache, invalidateCache } from '@/lib/db/client';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { buildInsert, buildUpdate, dbCache, invalidateCache } from '@/lib/db/client';
 
 describe('buildInsert', () => {
   it('generates correct INSERT query', () => {

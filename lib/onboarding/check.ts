@@ -29,7 +29,7 @@ export async function hasCompletedOnboarding(tenantId: string, userId: string): 
 
     return !!result;
   } catch {
-    // If table doesn't exist or query fails, don't block the user
+    // Silently skip during migration/setup when tables may not exist yet
     return true;
   }
 }

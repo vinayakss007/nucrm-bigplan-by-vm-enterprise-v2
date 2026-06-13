@@ -2,7 +2,7 @@ import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
-import { eq, isNull, and } from 'drizzle-orm';
+import { isNull } from 'drizzle-orm';
 import { getAtRiskDeals, AtRiskResult } from '@/lib/ai/at-risk';
 import { sendEmail } from '@/lib/email/service';
 import { formatCurrency } from '@/lib/utils';

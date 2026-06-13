@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
     const { startDate, endDate } = getDateRange(period, start, end);
 
     // Build aggregation query based on metric
-    let data: Array<{ userId: string; name: string; value: number; rank: number }> = [];
+    let data: Array<{ userId: string; name: string; value: number }> = [];
 
     try {
       switch (metric) {
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
             GROUP BY u.id, u.full_name, u.email
             ORDER BY value DESC
             LIMIT 50
-          `) as any;
+          `) as unknown as Array<{ userId: string; name: string; value: number }>;
           break;
         case 'revenue':
           data = await db.execute(sql`
@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
             GROUP BY u.id, u.full_name, u.email
             ORDER BY value DESC
             LIMIT 50
-          `) as any;
+          `) as unknown as Array<{ userId: string; name: string; value: number }>;
           break;
         case 'activities':
           data = await db.execute(sql`
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
             GROUP BY u.id, u.full_name, u.email
             ORDER BY value DESC
             LIMIT 50
-          `) as any;
+          `) as unknown as Array<{ userId: string; name: string; value: number }>;
           break;
         case 'conversion':
           data = await db.execute(sql`
@@ -131,7 +131,7 @@ export async function GET(req: NextRequest) {
             GROUP BY u.id, u.full_name, u.email
             ORDER BY value DESC
             LIMIT 50
-          `) as any;
+          `) as unknown as Array<{ userId: string; name: string; value: number }>;
           break;
       }
     } catch {
@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Add rank
-    const ranked = (Array.isArray(data) ? data : []).map((item: any, idx: number) => ({
+    const ranked = (Array.isArray(data) ? data : []).map((item: { userId: string; name: string; value: number }, idx: number) => ({
       userId: item.userId,
       name: item.name,
       value: Number(item.value) || 0,

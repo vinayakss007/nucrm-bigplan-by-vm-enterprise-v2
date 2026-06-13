@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { query, queryOne, queryMany } from '../../lib/db/client';
+import { query, queryOne } from '../../lib/db/client';
 import { syncCalculatedFields } from '../../lib/formula/sync';
 
 describe('Calculated Fields Integration', () => {

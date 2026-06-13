@@ -7,7 +7,7 @@ import { requireAuth, can } from '@/lib/auth/middleware';
 import { apiError } from '@/lib/api-error';
 import { db } from '@/drizzle/db';
 import { leadWarmingEvents } from '@/drizzle/schema/lead-warming';
-import { eq, and, or, isNull, desc } from 'drizzle-orm';
+import { eq, and, or, isNull } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   try {

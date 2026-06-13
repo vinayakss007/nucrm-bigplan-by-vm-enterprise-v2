@@ -32,7 +32,7 @@ function ModuleLoadingSkeleton() {
   );
 }
 
-function ModuleDisabledPlaceholder({ moduleId }: { moduleId: string }) {
+function ModuleDisabledPlaceholder({ _moduleId }: { _moduleId: string }) {
   // Render nothing — the sidebar/nav should already hide the link
   return null;
 }
@@ -75,7 +75,7 @@ export function lazyModule<P extends Record<string, any> = Record<string, never>
     const isActive = useHasModule(moduleId);
 
     if (!isActive) {
-      return <>{options?.disabledFallback ?? <ModuleDisabledPlaceholder moduleId={moduleId} />}</>;
+      return <>{options?.disabledFallback ?? <ModuleDisabledPlaceholder _moduleId={moduleId} />}</>;
     }
 
     return <DynamicComponent {...props} />;
@@ -98,36 +98,36 @@ export function lazyModule<P extends Record<string, any> = Record<string, never>
 
 export const LazyWorkflowBuilder = lazyModule(
   'automation-pro',
-  () => import('@/components/tenant/automation/workflow-builder' as any).catch(() => ({ default: () => null })),
+  () => import('@/components/tenant/automation/workflow-builder').catch(() => ({ default: () => null })),
   { loading: <ModuleLoadingSkeleton /> }
 );
 
 export const LazyEmailSequenceBuilder = lazyModule(
   'automation-pro',
-  () => import('@/components/tenant/sequences/sequence-builder' as any).catch(() => ({ default: () => null })),
+  () => import('@/components/tenant/sequences/sequence-builder').catch(() => ({ default: () => null })),
   { loading: <ModuleLoadingSkeleton /> }
 );
 
 export const LazyFormsBuilder = lazyModule(
   'forms-builder',
-  () => import('@/components/tenant/forms/form-builder' as any).catch(() => ({ default: () => null })),
+  () => import('@/components/tenant/forms/form-builder').catch(() => ({ default: () => null })),
   { loading: <ModuleLoadingSkeleton /> }
 );
 
 export const LazyAnalyticsPro = lazyModule(
   'analytics-pro',
-  () => import('@/components/tenant/analytics/analytics-pro' as any).catch(() => ({ default: () => null })),
+  () => import('@/components/tenant/analytics/analytics-pro').catch(() => ({ default: () => null })),
   { loading: <ModuleLoadingSkeleton /> }
 );
 
 export const LazyWhatsAppPanel = lazyModule(
   'whatsapp-bot',
-  () => import('@/components/tenant/integrations/whatsapp-panel' as any).catch(() => ({ default: () => null })),
+  () => import('@/components/tenant/integrations/whatsapp-panel').catch(() => ({ default: () => null })),
   { loading: <ModuleLoadingSkeleton /> }
 );
 
 export const LazyAIAssistant = lazyModule(
   'ai-assistant',
-  () => import('@/components/tenant/ai/ai-assistant' as any).catch(() => ({ default: () => null })),
+  () => import('@/components/tenant/ai/ai-assistant').catch(() => ({ default: () => null })),
   { loading: <ModuleLoadingSkeleton /> }
 );

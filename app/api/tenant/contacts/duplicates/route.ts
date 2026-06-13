@@ -73,26 +73,26 @@ export async function GET(request: NextRequest) {
       LIMIT ${limit}
     `);
 
-    const rows = (res.rows as any[]) || [];
+    const rows = (res.rows as Array<Record<string, unknown>>) || [];
 
     // The original code had a different mapping logic in the comments vs actual code.
     // Let's stick to the mapping logic that makes sense for the returned rows.
-    const duplicates = rows.map(row => ({
+    const duplicates = rows.map((row: Record<string, unknown>) => ({
       contact1: {
-        id: row.contact_1_id || row.contact_id,
-        first_name: row.contact_1_first_name || row.first_name,
-        last_name: row.contact_1_last_name || row.last_name,
-        email: row.contact_1_email || row.email,
-        phone: row.contact_1_phone || row.phone,
+        id: row['contact_1_id'] || row['contact_id'],
+        first_name: row['contact_1_first_name'] || row['first_name'],
+        last_name: row['contact_1_last_name'] || row['last_name'],
+        email: row['contact_1_email'] || row['email'],
+        phone: row['contact_1_phone'] || row['phone'],
       },
       contact2: {
-        id: row.contact_2_id || row.duplicate_id,
-        first_name: row.contact_2_first_name || row.dup_first_name,
-        last_name: row.contact_2_last_name || row.dup_last_name,
-        email: row.contact_2_email || row.dup_email,
-        phone: row.contact_2_phone || row.dup_phone,
+        id: row['contact_2_id'] || row['duplicate_id'],
+        first_name: row['contact_2_first_name'] || row['dup_first_name'],
+        last_name: row['contact_2_last_name'] || row['dup_last_name'],
+        email: row['contact_2_email'] || row['dup_email'],
+        phone: row['contact_2_phone'] || row['dup_phone'],
       },
-      matchType: row.match_type || row.match_fields,
+      matchType: row['match_type'] || row['match_fields'],
     }));
 
     return NextResponse.json({
