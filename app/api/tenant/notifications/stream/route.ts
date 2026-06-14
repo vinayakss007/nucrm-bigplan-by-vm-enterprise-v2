@@ -16,7 +16,9 @@ export async function GET(request: NextRequest) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        // Send initial unread count
+        let interval: ReturnType<typeof setInterval> | undefined;
+        let keepalive: ReturnType<typeof setInterval> | undefined;
+
         const sendUnread = async () => {
           try {
             const [row] = await db.select({
@@ -32,23 +34,32 @@ export async function GET(request: NextRequest) {
 
             const data = JSON.stringify({ type: 'unread', count: row?.count ?? 0 });
             controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-          } catch { /* client disconnected */ }
+          } catch {
+            console.error('[notifications-stream] Failed to send unread count');
+            controller.close();
+            if (interval) clearInterval(interval);
+            if (keepalive) clearInterval(keepalive);
+          }
         };
+
+        // Poll every 30 seconds
+        interval = setInterval(sendUnread, 30000);
+
+        // Keep-alive every 10 seconds
+        keepalive = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode(': keepalive\n\n'));
+          } catch {
+            // client disconnected
+          }
+        }, 10000);
 
         // Send initial count
         await sendUnread();
 
-        // Poll every 30 seconds
-        const interval = setInterval(sendUnread, 30000);
-
-        // Keep-alive every 10 seconds
-        const keepalive = setInterval(() => {
-          controller.enqueue(encoder.encode(': keepalive\n\n'));
-        }, 10000);
-
         request.signal.addEventListener('abort', () => {
-          clearInterval(interval);
-          clearInterval(keepalive);
+          if (interval) clearInterval(interval);
+          if (keepalive) clearInterval(keepalive);
         });
       },
     });
@@ -60,7 +71,8 @@ export async function GET(request: NextRequest) {
         'Connection': 'keep-alive',
       },
     });
-  } catch {
+  } catch (err) {
+    console.error('[notifications-stream] Auth failed', err);
     return new Response('Unauthorized', { status: 401 });
   }
 }
