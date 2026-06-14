@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
       columns: { notificationPrefs: true },
     });
 
-    const stored = ((row?.notificationPrefs as Record<string, unknown>)?.['matrix'] ?? {}) as Record<string, Record<string, boolean>>;
+    const stored = ((row?.notificationPrefs as Record<string, unknown>)?.matrix ?? {}) as Record<string, Record<Channel, boolean>>;
 
     // Merge defaults <- stored, restricted to known keys
     const matrix: Record<string, Record<Channel, boolean>> = {};
@@ -93,7 +93,8 @@ export async function PATCH(req: NextRequest) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json().catch((err) => { console.error('[notifications/matrix] JSON parse failed', err); return {}; });
+    let body;
+    try { body = await req.json(); } catch (err) { console.error('[notifications/matrix] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const incoming = body.matrix;
     if (!incoming || typeof incoming !== 'object')
       return NextResponse.json({ error: 'matrix object required' }, { status: 400 });

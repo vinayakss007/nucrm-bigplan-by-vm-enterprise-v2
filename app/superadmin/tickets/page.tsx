@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { MessageSquare, CheckCircle, ChevronDown, Search } from 'lucide-react';
-import { cn, formatDate, formatRelativeTime } from '@/lib/utils';
+import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 const PRI_CFG: Record<string,string> = { critical:'text-red-400 bg-red-500/15', high:'text-amber-400 bg-amber-500/15', normal:'text-blue-400 bg-blue-500/15', low:'text-white/40 bg-white/5' };

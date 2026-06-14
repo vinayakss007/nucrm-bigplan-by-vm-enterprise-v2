@@ -72,7 +72,8 @@ export async function POST(req: NextRequest) {
       }, { status: 403 });
     }
 
-    const body = (await req.json().catch(() => ({}))) as PostBody;
+    let body: PostBody;
+    try { body = await req.json() as PostBody; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     if (!isEntityType(body.entity_type)) {
       return NextResponse.json({ error: 'entity_type must be contact, deal, company, lead or ticket' }, { status: 400 });
     }

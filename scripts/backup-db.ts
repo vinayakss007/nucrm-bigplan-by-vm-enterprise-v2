@@ -27,7 +27,6 @@ import {
   readdirSync,
   unlinkSync,
   statSync,
-  writeFileSync,
 } from 'fs';
 import { join } from 'path';
 

@@ -58,6 +58,8 @@ interface Props {
   initialOffset?: number;
   initialQ?: string;
   initialStatus?: string;
+  _tenantId?: string;
+  _userId?: string;
 }
 
 function AddContactModal({ companies, teamMembers, onClose, onSuccess }: any) {
@@ -160,7 +162,7 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: any) {
   );
 }
 
-export default function TenantContactsClient({ initialContacts, companies, teamMembers, permissions, tenantId, userId, totalCount, initialOffset, initialQ, initialStatus }: Props) {
+export default function TenantContactsClient({ initialContacts, companies, teamMembers, permissions, _tenantId, _userId, totalCount, initialOffset, initialQ, initialStatus }: Props) {
   const normalize = (data: any[]) => (data || []).map((c: any) => toSnakeCase(c));
   const [contacts, setContacts] = useState(normalize(initialContacts));
   const [total, setTotal]       = useState(totalCount ?? initialContacts.length);

@@ -188,7 +188,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ 
       ok: true, 
-      message: (form.settings as Record<string, unknown>)?.['success_message'] as string || 'Thank you! Your submission has been received.' 
+      message: (form.settings as Record<string, unknown>)?.success_message as string || 'Thank you! Your submission has been received.' 
     });
 
   } catch (err: any) {

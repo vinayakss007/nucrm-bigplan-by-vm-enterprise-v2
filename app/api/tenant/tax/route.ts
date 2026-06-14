@@ -108,10 +108,10 @@ export async function PUT(req: NextRequest) {
     const { id, ...updates } = parsed.data;
 
     const updateData = { ...updates } as Record<string, unknown>;
-    if (updateData['rate'] !== undefined) {
-      updateData['rate'] = String(updateData['rate']);
+    if (updateData.rate !== undefined) {
+      updateData.rate = String(updateData.rate);
     }
-    delete updateData['id'];
+    delete updateData.id;
 
     const [row] = await db.update(taxRates)
       .set(updateData as typeof taxRates.$inferInsert)

@@ -1,8 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, Users, Building2, Zap } from 'lucide-react';
-import { cn, formatCurrency, formatDate, formatRelativeTime } from '@/lib/utils';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const TICK  = { fill:'rgba(255,255,255,0.3)', fontSize:10 };
 const TIP   = { background:'hsl(222,32%,9%)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, fontSize:11 };

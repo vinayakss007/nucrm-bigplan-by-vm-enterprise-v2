@@ -51,9 +51,11 @@ interface Props {
   permissions: { canEdit: boolean; canDelete: boolean; canViewValue: boolean };
   tenantId: string;
   userId: string;
+  _tenantId?: string;
+  _userId?: string;
 }
 
-export default function DealDetailClient({ deal, tasks, activities, permissions, tenantId, userId }: Props) {
+export default function DealDetailClient({ deal, tasks, activities, permissions, _tenantId, _userId }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'activities' | 'documents'>('overview');
   const [showEdit, setShowEdit] = useState(false);

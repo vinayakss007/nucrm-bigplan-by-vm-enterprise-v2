@@ -71,9 +71,11 @@ export async function POST(req: NextRequest) {
         })
         .returning();
 
+      if (!newPipeline) throw new Error('Failed to create pipeline');
+
       const stagesToCreate = (stages || defaultStages).map((s: any, idx: number) => ({
         tenantId: ctx.tenantId,
-        pipelineId: newPipeline!.id,
+        pipelineId: newPipeline.id,
         name: s.name || s.label || s.id,
         order: s.order ?? idx
       }));

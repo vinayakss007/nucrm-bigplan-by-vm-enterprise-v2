@@ -13,7 +13,7 @@
 import { create, all, type MathJsInstance } from 'mathjs';
 
 // Create a restricted mathjs instance — no dangerous functions
-const math = create(all as unknown as any);
+const math = create(all as any);
 
 // Remove dangerous functions that could be abused
 const BLOCKED_FUNCTIONS = [
@@ -26,7 +26,7 @@ for (const fn of BLOCKED_FUNCTIONS) {
   try {
     delete (math as unknown as Record<string, unknown>)[fn];
   } catch {
-    // Fallback to default on corrupted storage data
+    // Some may not exist, that's fine
   }
 }
 

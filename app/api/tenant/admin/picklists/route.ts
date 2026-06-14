@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
 
     const [t] = await db.select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1);
-    const stored = (((t?.settings as Record<string, unknown>) ?? {})['picklists'] ?? {}) as Record<string, unknown>;
+    const stored = (((t?.settings as Record<string, unknown>) ?? {}).picklists ?? {}) as Record<string, unknown>;
 
     const result: Record<PicklistCategory, PicklistEntry[]> = { ...DEFAULTS };
     for (const cat of CATEGORIES) {
@@ -115,7 +115,8 @@ export async function PATCH(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const body = await req.json().catch(() => ({}));
+    let body;
+    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const incoming = body.picklists;
     if (!incoming || typeof incoming !== 'object')
       return NextResponse.json({ error: 'picklists object required' }, { status: 400 });

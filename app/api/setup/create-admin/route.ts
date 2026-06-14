@@ -9,8 +9,8 @@ import { logError } from '@/lib/errors-server';
 
 export async function POST(request: NextRequest) {
   try {
-    // Parse body once
-    const body = await request.json().catch(() => ({}));
+    let body;
+    try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const { full_name, email, password, workspace_name, setup_key } = body;
 
     // Only works if zero super admin users exist
