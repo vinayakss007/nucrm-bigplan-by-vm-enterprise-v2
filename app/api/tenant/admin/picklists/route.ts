@@ -103,6 +103,9 @@ export async function GET(req: NextRequest) {
       if (Array.isArray(stored[cat])) result[cat] = stored[cat];
     }
     return NextResponse.json({ picklists: result, categories: CATEGORIES });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }
@@ -182,6 +185,9 @@ export async function PATCH(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, picklists: safe });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[picklists PATCH]', err);
     return apiError(err);

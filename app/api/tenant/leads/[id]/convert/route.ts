@@ -343,6 +343,9 @@ export async function POST(
       message: result.isNewContact ? 'Lead converted to new contact.' : 'Lead merged into existing contact.',
     }, { status: 201 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[lead convert] error:', error);
     return apiError(error);

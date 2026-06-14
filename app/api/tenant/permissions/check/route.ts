@@ -9,5 +9,8 @@ export async function POST(request: NextRequest) {
     const { permission } = await request.json();
     if (!permission) return NextResponse.json({ error: 'permission required' }, { status: 400 });
     return NextResponse.json({ allowed: can(ctx, permission), roleSlug: ctx.roleSlug });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }

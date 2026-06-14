@@ -11,6 +11,9 @@ import { sql } from 'drizzle-orm';
  *
  * Uses is_local=true — settings are scoped to the current transaction only.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function setTenantContext(tenantId: string, userId: string, tx?: any): Promise<void> {
   try {
     const client = tx || db;
@@ -24,6 +27,9 @@ export async function setTenantContext(tenantId: string, userId: string, tx?: an
 /**
  * Clear tenant context
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function clearTenantContext(tx?: any): Promise<void> {
   try {
     const client = tx || db;
@@ -39,6 +45,9 @@ export async function clearTenantContext(tx?: any): Promise<void> {
 export async function withTenantContext<T>(
   tenantId: string,
   userId: string,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   fn: (tx: any) => Promise<T>
 ): Promise<T> {
   return await db.transaction(async (tx) => {

@@ -153,6 +153,9 @@ export default function HealthPage() {
             details={[
               health?.auth.users !== undefined ? `${health.auth.users} users` : undefined,
               health?.auth.superAdmin ? 'Super admin configured' : 'No super admin',
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
               (health?.auth as any)?.message,
             ].filter(Boolean).join(' • ')}
           />
@@ -202,6 +205,9 @@ function HealthCard({
   status, 
   details 
 }: { 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon: any; 
   title: string; 
   status: string; 

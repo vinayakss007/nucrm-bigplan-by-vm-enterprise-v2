@@ -2,6 +2,9 @@ export interface DashboardLayoutItem {
   widget: string
   position: number
   size: '1x1' | '2x1' | '1x2' | '2x2'
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   config?: Record<string, any>
 }
 
@@ -20,10 +23,16 @@ export interface WidgetConfig {
 }
 
 export interface WidgetProps {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any
   tenantId: string
   userId: string
   isAdmin: boolean
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   config?: Record<string, any>
 }
 

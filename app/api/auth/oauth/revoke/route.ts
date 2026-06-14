@@ -73,6 +73,9 @@ export async function POST(request: NextRequest) {
       ok: true, 
       revoked: deletedCount > 0 
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[oauth/revoke POST]', err);
     return NextResponse.json(

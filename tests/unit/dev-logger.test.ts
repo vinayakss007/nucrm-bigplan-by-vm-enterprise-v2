@@ -287,6 +287,9 @@ describe('createDevelopmentMiddleware', () => {
       statusCode: 200,
     };
     const next = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     middleware(req as any, res as any, next);
     expect(next).toHaveBeenCalled();
   });

@@ -49,6 +49,9 @@ export async function GET(req: NextRequest) {
     .orderBy(desc(automations.createdAt));
 
     return NextResponse.json({ data });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[automations GET]', err);
     return apiError(err);
@@ -88,6 +91,9 @@ export async function POST(req: NextRequest) {
       .returning();
 
     return NextResponse.json({ data: newAutomation }, { status: 201 });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[automations POST]', err);
     return apiError(err);

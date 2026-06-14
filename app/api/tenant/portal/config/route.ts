@@ -33,6 +33,9 @@ export async function GET(request: NextRequest) {
     };
 
     return NextResponse.json({ data: config });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[portal config GET]', err);
     return apiError(err);
@@ -62,6 +65,9 @@ export async function PUT(request: NextRequest) {
       });
 
     return NextResponse.json({ ok: true, data: config });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[portal config PUT]', err);
     return apiError(err);

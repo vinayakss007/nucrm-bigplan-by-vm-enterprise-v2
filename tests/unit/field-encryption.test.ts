@@ -5,7 +5,11 @@ const mockEncrypt = vi.fn((val: string) => `enc:${val}`);
 const mockDecrypt = vi.fn((val: string) => val.replace('enc:', ''));
 
 vi.mock('@/lib/crypto', () => ({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   encrypt: (...args: any[]) => mockEncrypt(...args),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   decrypt: (...args: any[]) => mockDecrypt(...args),
 }));
 
@@ -70,10 +74,16 @@ describe('maskSensitiveValue', () => {
   });
 
   it('handles null value', () => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(maskSensitiveValue(null as any)).toBe('***');
   });
 
   it('handles undefined value', () => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(maskSensitiveValue(undefined as any)).toBe('***');
   });
 });

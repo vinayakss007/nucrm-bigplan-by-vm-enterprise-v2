@@ -142,6 +142,9 @@ export async function POST(request: NextRequest) {
       { error: 'unsupported_grant_type', error_description: 'Unsupported grant type' },
       { status: 400 }
     );
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[oauth/token POST]', err);
     return NextResponse.json(

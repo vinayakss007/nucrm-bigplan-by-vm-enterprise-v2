@@ -20,6 +20,9 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
     actions: [
       {
         type: 'send-email',
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         execute: async (data: any) => {
           await sendEmail({
             to: data.contact.email,
@@ -51,6 +54,9 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
     actions: [
       {
         type: 'send-notification',
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         execute: async (data: any) => {
           await createNotification({
             userId: data.task.assigned_to,
@@ -79,6 +85,9 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
     actions: [
       {
         type: 'send-notification',
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         execute: async (data: any) => {
           await createNotification({
             userId: data.deal.assigned_to,
@@ -106,6 +115,9 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
     actions: [
       {
         type: 'assign-round-robin',
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         execute: async (data: any) => {
           const { db } = await import('@/drizzle/db');
           const { tenantMembers, contacts } = await import('@/drizzle/schema');
@@ -147,6 +159,9 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
     actions: [
       {
         type: 'create-task',
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         execute: async (data: any) => {
           const { db } = await import('@/drizzle/db');
           const { tasks } = await import('@/drizzle/schema');

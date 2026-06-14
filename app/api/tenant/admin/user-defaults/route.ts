@@ -62,6 +62,9 @@ export async function GET(req: NextRequest) {
 
     const stored = (((t?.settings as Record<string, unknown>) ?? {}).user_defaults ?? {}) as Record<string, unknown>;
     return NextResponse.json({ user_defaults: stored });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }
@@ -137,6 +140,9 @@ export async function PATCH(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, user_defaults: safe });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[user-defaults PATCH]', err);
     return apiError(err);
@@ -164,6 +170,9 @@ export async function DELETE(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }

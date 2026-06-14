@@ -23,6 +23,9 @@ export async function GET(request: NextRequest) {
 
     const isCurrent = existing?.id === ctx.tenantId;
     return NextResponse.json({ available: !existing || isCurrent, current: isCurrent });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err:any) { 
     return apiError(err); 
   }

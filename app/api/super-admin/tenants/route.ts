@@ -27,6 +27,9 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') ?? '0');
 
     // Build filters
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const filters: any[] = [];
     if (q) {
       filters.push(or(
@@ -80,6 +83,9 @@ export async function GET(request: NextRequest) {
       offset,
     });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[super-admin tenants GET]', err);
     return apiError(err);

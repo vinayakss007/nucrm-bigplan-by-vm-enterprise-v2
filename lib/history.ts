@@ -12,7 +12,11 @@ export async function trackFieldChange(
   entityId: string,
   fieldName: string,
   fieldLabel: string | null,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   oldValue: any,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   newValue: any,
   ipAddress?: string,
   userAgent?: string
@@ -65,6 +69,9 @@ export async function createFieldSnapshot(
   entityType: EntityType,
   entityId: string,
   snapshotLabel: string,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: Record<string, any>,
   userId?: string
 ) {

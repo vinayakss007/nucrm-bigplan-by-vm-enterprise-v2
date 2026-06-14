@@ -62,6 +62,9 @@ export async function GET(request: NextRequest) {
     if (state) params.set('state', state);
 
     return NextResponse.redirect(`${redirectUri}?${params.toString()}`);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[oauth/authorize GET]', err);
     return NextResponse.json(

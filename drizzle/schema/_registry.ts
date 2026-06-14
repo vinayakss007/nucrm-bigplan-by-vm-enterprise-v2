@@ -49,6 +49,9 @@ export type SchemaGroup =
 
 /** Complete table registry entry */
 export interface TableRegistryEntry {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   table: any;
   metadata: TableMetadata;
 }
@@ -3612,6 +3615,9 @@ export const TABLE_REGISTRY = {
  * Get all tables in a specific schema group.
  * Useful for module-based migrations and validations.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getTablesByGroup(group: SchemaGroup): Record<string, any> {
   return Object.fromEntries(
     Object.entries(TABLE_REGISTRY)

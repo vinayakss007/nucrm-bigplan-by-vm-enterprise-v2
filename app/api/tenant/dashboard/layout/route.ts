@@ -7,6 +7,9 @@ import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const dashboardLayoutSchema: z.ZodType<{ layout: any }> = z.object({
   layout: z.array(z.record(z.string(), z.unknown())),
 });

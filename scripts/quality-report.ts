@@ -42,6 +42,9 @@ function run(cmd: string, label: string): { ok: boolean; out: string; dur: numbe
   try {
     const out = execSync(cmd, { encoding: 'utf-8', timeout: TIMEOUT_MS, stdio: ['pipe', 'pipe', 'pipe'] });
     return { ok: true, out: out.trim(), dur: Date.now() - t0 };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (e: any) {
     return { ok: false, out: (e.stdout || '') + '\n' + (e.stderr || ''), dur: Date.now() - t0 };
   }

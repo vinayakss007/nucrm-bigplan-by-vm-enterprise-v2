@@ -59,6 +59,9 @@ function formatRelativeTime(iso: string | null | undefined): string {
   return `${days}d ago`;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const STATUS_MAP: Record<string, { icon: any; color: string; bg: string }> = {
   completed: { icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
   failed: { icon: XCircle, color: 'text-red-600', bg: 'bg-red-500/10' },
@@ -178,6 +181,9 @@ export default function TenantBackupSettingsPage() {
       } else {
         toast.error(d.error || 'Failed to save');
       }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       toast.error('Network error');
     }

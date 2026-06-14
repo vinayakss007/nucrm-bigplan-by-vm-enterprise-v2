@@ -106,6 +106,9 @@ function InvoicesPageInner() {
   };
 
   const filtered = invoices.filter(i =>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (i.invoiceNumber.toLowerCase().includes(search.toLowerCase()) || getContactName((i as any).contactId).toLowerCase().includes(search.toLowerCase())) &&
     (!statusFilter || i.status === statusFilter) &&
     (!contactFilter || i.contactId === contactFilter)

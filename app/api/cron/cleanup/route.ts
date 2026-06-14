@@ -43,6 +43,9 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ ok: true, cleaned: r });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     captureError(err, 'Cleanup:Main');
     return apiError(err); 

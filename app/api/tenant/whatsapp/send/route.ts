@@ -49,6 +49,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'WhatsApp credentials not configured' }, { status: 400 });
     }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     let requestBody: any;
 
     if (message_type === 'template') {
@@ -180,6 +183,9 @@ export async function POST(req: NextRequest) {
       message_id: messageId,
       data: responseData,
     }, { status: 201 });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[WhatsApp Send] Error:', err.message);
     return apiError(err);

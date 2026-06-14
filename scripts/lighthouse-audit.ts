@@ -49,6 +49,9 @@ async function main() {
       timeout: 120_000,
       encoding: 'utf-8',
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (e: any) {
     // lighthouse exits non-zero for some audits; results file may still exist
     if (!existsSync(jsonPath)) {

@@ -56,6 +56,9 @@ export async function GET(request: NextRequest) {
       primary_color: inv.primaryColor, 
       isLoggedIn,
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }

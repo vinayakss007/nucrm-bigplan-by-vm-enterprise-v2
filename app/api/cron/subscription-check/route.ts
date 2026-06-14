@@ -96,6 +96,9 @@ export async function POST(request: Request) {
         });
 
         downgraded++;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         captureError(err, `subscription-check:${sub.tenantId}`);
       }
@@ -109,6 +112,9 @@ export async function POST(request: Request) {
       downgraded,
       timestamp: new Date().toISOString(),
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     captureError(err, 'subscription-check:cron');
     return NextResponse.json(

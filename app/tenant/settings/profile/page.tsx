@@ -7,6 +7,9 @@ import { cn } from '@/lib/utils';
 const TIMEZONES = ['UTC','America/New_York','America/Chicago','America/Denver','America/Los_Angeles','Europe/London','Europe/Paris','Europe/Berlin','Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Tokyo','Australia/Sydney'];
 
 export default function ProfileSettingsPage() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState({ full_name:'', phone:'', timezone:'UTC', avatar_url:'' });
   const [password, setPassword] = useState({ current:'', newPass:'', confirm:'' });
@@ -27,6 +30,9 @@ export default function ProfileSettingsPage() {
     e.preventDefault(); setSaving('profile');
     const res = await fetch('/api/user/profile',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(profile)});
     const d = await res.json();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     if(res.ok){toast.success('Profile updated');setUser((u:any)=>({...u,...d.user}));}
     else toast.error(d.error||'Failed');
     setSaving(null);

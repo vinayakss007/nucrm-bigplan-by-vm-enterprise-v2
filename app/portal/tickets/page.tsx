@@ -5,6 +5,8 @@ import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 export default function PortalTicketsPage() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);

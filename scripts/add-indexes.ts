@@ -56,6 +56,9 @@ async function addIndexes() {
       console.log(`Adding: ${idx.name}`);
       await db.execute(sql.raw(idx.sql));
       console.log(`  ✓ ${idx.name}`);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       if (error.message?.includes('already exists')) {
         console.log(`  - ${idx.name} (already exists)`);

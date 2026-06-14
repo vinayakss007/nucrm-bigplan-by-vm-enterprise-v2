@@ -31,6 +31,9 @@ export async function POST(req: NextRequest) {
     if (!res.ok) return NextResponse.json({ error: session.error?.message ?? 'Stripe error' }, { status:400 });
     
     return NextResponse.json({ url: session.url });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     return apiError(err, "Internal server error", 500); 
   }

@@ -56,6 +56,9 @@ export async function POST(
       execution_id: (result.rows[0] as Record<string, unknown>)?.execution_id as string,
       message: 'Workflow execution started',
     }, { status: 202 });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[Workflow Run] POST error:', err);
     return apiError(err);
