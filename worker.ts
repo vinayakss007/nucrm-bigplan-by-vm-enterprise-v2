@@ -349,7 +349,7 @@ const heartbeatInterval = setInterval(async () => {
     };
     await connection.set('worker:heartbeat', JSON.stringify(info), 'EX', 60);
   } catch {
-    // heartbeat write failure is non-fatal
+    console.error('[worker] Heartbeat write failed');
   }
 }, 30_000);
 
