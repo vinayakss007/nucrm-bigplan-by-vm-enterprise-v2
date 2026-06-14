@@ -2,8 +2,8 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { tenants, plans, errorLogs, healthChecks, backupRecords, selectiveRestoreLogs, superAdminBackups } from '@/drizzle/schema';
-import { eq, and, sql, desc, gt, inArray, isNull } from 'drizzle-orm';
+import { tenants, plans, errorLogs, backupRecords, selectiveRestoreLogs, superAdminBackups } from '@/drizzle/schema';
+import { eq, and, sql, desc, gt, inArray } from 'drizzle-orm';
 import { captureError } from '@/lib/capture-error';
 
 export async function GET(request: NextRequest) {
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     let stats: any = {};
     try {
       const statsRes = await db.execute(sql`SELECT public.platform_stats() as data`).catch(() => ({ rows: [{ data: {} }] }));
-      stats = (statsRes.rows[0] as any)?.data ?? {};
+      stats = (statsRes.rows[0] as Record<string, unknown>)?.data as Record<string, unknown> ?? {};
       // Fill in missing fields computed from query data
       if (stats.mrr === undefined) stats.mrr = planDist.reduce((s: number, p: any) => s + (p.priceMonthly || 0) * (p.tenantCount || 0), 0);
       if (stats.trialing === undefined) stats.trialing = 0;
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
         FROM public.health_checks 
         ORDER BY service, checked_at DESC
       `);
-      return res.rows as any[];
+      return res.rows as unknown[];
     }, []);
 
     // Get backup status

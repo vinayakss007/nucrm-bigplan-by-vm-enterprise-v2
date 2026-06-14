@@ -43,12 +43,12 @@ export async function GET(req: NextRequest) {
       .limit(1);
 
     const tSettings = (t?.settings ?? {}) as Record<string, unknown>;
-    const uPrefs = ((u?.metadata ?? {}) as Record<string, unknown>)['prefs'] ?? {};
+    const uPrefs = ((u?.metadata ?? {}) as Record<string, unknown>).prefs ?? {};
     const mSettings = (m?.settings ?? {}) as Record<string, unknown>;
     const mNotif = (m?.notificationPrefs ?? {}) as Record<string, unknown>;
 
     const has = (obj: unknown) => obj !== null && typeof obj === 'object' && Object.keys(obj as Record<string, unknown>).length > 0;
-    const lp = (tSettings['login_policy'] ?? {}) as Record<string, any>;
+    const lp = tSettings.login_policy ?? {};
 
     // Derive a status per route. Pages we don't measure return 'unknown'.
     const statuses: Record<string, StatusEntry> = {};
@@ -89,10 +89,11 @@ export async function GET(req: NextRequest) {
       statuses['/tenant/settings/billing']      = { status: 'configured' };
 
       // Login policy — derive from password / 2fa / IP / signup flags
-      const minLen = Number((lp?.['password'] as Record<string, unknown>)?.['min_length'] ?? 12);
-      const tfa = (lp?.['two_factor'] as Record<string, unknown>)?.['enforcement'] ?? 'optional';
-      const ipOn = (lp?.['network'] as Record<string, unknown>)?.['ip_allowlist_enabled'] === true;
-      const signup = (lp?.['login'] as Record<string, unknown>)?.['allow_self_signup'] === true;
+      const lpRec = (lp ?? {}) as Record<string, any>;
+      const minLen = Number((lpRec['password'] as Record<string, unknown>)?.['min_length'] ?? 12);
+      const tfa = (lpRec['two_factor'] as Record<string, unknown>)?.['enforcement'] ?? 'optional';
+      const ipOn = (lpRec['network'] as Record<string, unknown>)?.['ip_allowlist_enabled'] === true;
+      const signup = (lpRec['login'] as Record<string, unknown>)?.['allow_self_signup'] === true;
       const concerns: string[] = [];
       if (minLen < 12) concerns.push(`pwd min ${minLen}`);
       if (tfa === 'off') concerns.push('2FA off');

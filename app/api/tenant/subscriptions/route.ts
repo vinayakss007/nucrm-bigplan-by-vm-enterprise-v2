@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       last4: null,
       trialEndDate: trialEndDate ? new Date(trialEndDate) : null,
       createdBy: userId,
-    } as unknown as typeof serviceSubscriptions.$inferInsert).returning();
+    } as any).returning();
 
     return NextResponse.json({ subscription }, { status: 201 });
   } catch (error) {

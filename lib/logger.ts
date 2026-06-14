@@ -13,9 +13,33 @@ import { getCurrentRequestId } from '@/lib/tenant/request-context';
  */
 
 const LOG_FILE = path.join(process.cwd(), 'nucrm.log');
+const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_LOG_FILES = 5;
+
+function rotateLogs() {
+  try {
+    if (!fs.existsSync(LOG_FILE)) return;
+    const stats = fs.statSync(LOG_FILE);
+    if (stats.size < MAX_LOG_SIZE) return;
+
+    const oldest = LOG_FILE + '.' + MAX_LOG_FILES;
+    if (fs.existsSync(oldest)) fs.unlinkSync(oldest);
+
+    for (let i = MAX_LOG_FILES - 1; i >= 1; i--) {
+      const oldName = LOG_FILE + '.' + i;
+      const newName = LOG_FILE + '.' + (i + 1);
+      if (fs.existsSync(oldName)) fs.renameSync(oldName, newName);
+    }
+
+    fs.renameSync(LOG_FILE, LOG_FILE + '.1');
+  } catch (err) {
+    console.error('Failed to rotate log file:', err);
+  }
+}
 
 function writeToFile(logEntry: any) {
   try {
+    rotateLogs();
     fs.appendFileSync(LOG_FILE, JSON.stringify(logEntry) + '\n');
   } catch (err) {
     console.error('Failed to write to log file:', err);

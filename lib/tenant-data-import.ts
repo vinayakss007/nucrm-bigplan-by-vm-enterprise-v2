@@ -160,14 +160,13 @@ export class TenantDataImporter {
           try {
             // Use tx.execute for bulk delete with tenant_id filter
             await tx.execute(sql`DELETE FROM ${sql.identifier(table)} WHERE tenant_id = ${this.tenantId}`);
-          } catch {
+          } catch (e) {
+            console.warn('[Import] Primary delete failed for table:', table, e);
             try {
               // Fallback for tables where tenant_id might be named differently or need subquery
-              // (This is mostly a safety net from the original code)
               await tx.execute(sql`DELETE FROM ${sql.identifier(table)} WHERE id IN (SELECT id FROM ${sql.identifier(table)} WHERE tenant_id = ${this.tenantId})`);
-            } catch (e) {
-              // Silently skip during migration/setup when tables may not exist yet
-              console.warn('[Import] Failed to delete table', table, (e as Error).message);
+            } catch (e2) {
+              console.warn('[Import] Fallback delete also failed for table:', table, e2);
             }
           }
         }

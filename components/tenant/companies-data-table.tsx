@@ -34,9 +34,11 @@ interface Props {
   tenantId: string
   userId: string
   teamMembers?: { user_id: string; full_name: string }[]
+  _tenantId?: string
+  _userId?: string
 }
 
-export default function CompaniesDataTable({ initialCompanies, permissions, tenantId, userId, teamMembers = [] }: Props) {
+export default function CompaniesDataTable({ initialCompanies, permissions, _tenantId, _userId, teamMembers = [] }: Props) {
   const [companies, setCompanies] = useState(initialCompanies)
   const [total, setTotal] = useState(initialCompanies.length)
   const [loading, setLoading] = useState(false)

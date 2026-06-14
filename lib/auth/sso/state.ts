@@ -61,7 +61,7 @@ export async function readSsoState(): Promise<SsoStatePayload | null> {
       redirectTo: payload['redirectTo'] ? String(payload['redirectTo']) : undefined,
     };
   } catch (e) {
-    console.error('[SsoState] Failed to read SSO state', e);
+    console.error('[SSO] Failed to read SSO state cookie:', e);
     return null;
   }
 }

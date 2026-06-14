@@ -76,15 +76,18 @@ interface Props {
   totalCount: number;
   tenantId: string;
   userId: string;
+  _teamMembers?: any[];
+  _permissions?: Record<string, boolean>;
+  _tenantId?: string;
 }
 
 export default function LeadsClient({
   initialLeads,
   companies,
-  teamMembers,
-  permissions,
+  _teamMembers,
+  _permissions,
   totalCount,
-  tenantId,
+  _tenantId,
   userId,
 }: Props) {
   const router = useRouter();
@@ -115,20 +118,15 @@ export default function LeadsClient({
     try {
       const res = await fetch('/api/tenant/contacts?' + q, { signal });
       const data = await res.json();
-      if (!signal?.aborted) setLeads(data.data ?? []);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      if (!signal?.aborted) toast.error('Failed to load leads');
+      setLeads(data.data ?? []);
+    } catch {
+      toast.error('Failed to load leads');
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
   }, [activeStatus, search]);
 
-  useEffect(() => {
-    const abort = new AbortController();
-    load(abort.signal);
-    return () => abort.abort();
-  }, [load]);
+  useEffect(() => { load(); }, [activeStatus, search, load]);
 
   // Pipeline statistics
   const stats = Object.entries(PIPELINE_CONFIG).map(([id, config]) => {

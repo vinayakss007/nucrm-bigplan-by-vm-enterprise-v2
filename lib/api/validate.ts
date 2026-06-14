@@ -76,15 +76,18 @@ export function withValidation<T>(
     try {
       body = await request.json();
     } catch (e) {
-      console.error('[Validate] Invalid JSON body', e);
-      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+      console.error('[Validate] Failed to parse request body:', e);
+      return NextResponse.json(
+        { error: 'Invalid request body' },
+        { status: 400 }
+      );
     }
 
     const result = validateBody(schema, body);
     if (result instanceof NextResponse) return result;
 
     // Extract auth context from request (set by middleware or requireAuth)
-    const ctx = (request as any).ctx;
+    const ctx = (request as unknown as { ctx: Record<string, unknown> }).ctx;
 
     return handler(request, ctx, result.data);
   };
@@ -98,7 +101,7 @@ export async function safeJson(request: Request): Promise<{ data: any } | NextRe
     const data = await request.json();
     return { data };
   } catch (e) {
-    console.error('[Validate] Invalid JSON body', e);
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    console.error('[Validate] JSON parse failed:', e);
+    return { data: null } as any;
   }
 }

@@ -3,10 +3,10 @@
  * Tests the core SQL parsing logic without needing a database
  */
 
-const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
+import assert from 'node:assert';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 
 // We'll test the parsing logic directly since we can't import TypeScript
 // These tests mirror the logic in lib/restore/backup-parser.ts

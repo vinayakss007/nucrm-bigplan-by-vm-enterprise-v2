@@ -57,7 +57,7 @@ export async function GET(
       status: run.status,
       trigger_type: run.triggerEvent,
       actions_run: run.stepsCompleted,
-      duration_ms: (run.metadata as Record<string, unknown>)?.['duration_ms'] as number || 0,
+      duration_ms: (run.metadata as Record<string, unknown>)?.duration_ms as number || 0,
       error: run.errorMessage,
       created_at: run.createdAt
     }));
@@ -66,7 +66,7 @@ export async function GET(
     return NextResponse.json({ 
       data: { 
         ...automation, 
-        created_by_name: createdName,
+        created_by_name: automation.createdBy?.fullName,
         recent_runs: recentRuns 
       } 
     });

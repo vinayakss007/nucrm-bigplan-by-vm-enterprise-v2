@@ -118,12 +118,12 @@ export async function GET(req: NextRequest) {
       .select({ locale: users.locale, theme: users.theme, metadata: users.metadata })
       .from(users).where(eq(users.id, ctx.userId)).limit(1);
 
-    const userPrefs = ((u?.metadata as Record<string, unknown>)?.['prefs'] ?? {}) as Record<string, unknown>;
+    const userPrefs = ((u?.metadata as Record<string, unknown>)?.prefs ?? {}) as Record<string, unknown>;
 
     // Workspace defaults (admin-set overrides for fields the user hasn't customised)
     const [t] = await db
       .select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1);
-    const workspaceDefaults = (((t?.settings as Record<string, unknown>) ?? {})['user_defaults'] ?? {}) as Record<string, unknown>;
+    const workspaceDefaults = (((t?.settings as Record<string, unknown>) ?? {}).user_defaults ?? {}) as Record<string, unknown>;
 
     const resolved: Record<string, any> = { ...DEFAULTS, ...workspaceDefaults, ...userPrefs };
     if (u?.locale) resolved['locale'] = u.locale;
@@ -144,7 +144,8 @@ export async function PATCH(req: NextRequest) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json().catch((err) => { console.error('[preferences] JSON parse failed', err); return {}; });
+    let body;
+    try { body = await req.json(); } catch (err) { console.error('[preferences] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     // Validate strings
     for (const k of STRING_VALIDATED) {
@@ -166,8 +167,8 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'email_signature too long (max 5000)' }, { status: 400 });
 
     const update: Record<string, unknown> = { updatedAt: new Date() };
-    if (typeof body.locale === 'string') update['locale'] = body.locale;
-    if (typeof body.theme === 'string')  update['theme'] = body.theme;
+    if (typeof body.locale === 'string') update.locale = body.locale;
+    if (typeof body.theme === 'string')  update.theme = body.theme;
 
     // Build the metadata.prefs patch (everything else)
     const patch: Record<string, any> = {};

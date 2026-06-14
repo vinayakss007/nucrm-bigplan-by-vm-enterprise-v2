@@ -55,7 +55,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ quo
       }, { status: 409 });
     }
 
-    const body = (await req.json().catch(() => ({}))) as SendBody;
+    let body: SendBody;
+    try { body = await req.json() as SendBody; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const meta = readOfferMetadata(quote);
     const publicToken = meta.public_token || generatePublicToken();
 

@@ -19,14 +19,20 @@ import {
   index
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-// =============================================================================
-// CORE COLUMN FACTORIES
-// =============================================================================
+
+let _tenantsRef: any;
+let _usersRef: any;
+
+export function _registerFkRefs(tenants: any, users: any) {
+  _tenantsRef = tenants;
+  _usersRef = users;
+}
 
 export const pk = () => uuid('id').primaryKey().defaultRandom();
 
 export const tenantId = () => uuid('tenant_id')
-  .notNull();
+  .notNull()
+  .references(() => _tenantsRef?.id ?? sql`tenants.id`, { onDelete: 'cascade' });
 
 export const createdAt = () => timestamp('created_at', { withTimezone: true }).defaultNow().notNull();
 export const updatedAt = () => timestamp('updated_at', { withTimezone: true }).defaultNow();
@@ -34,7 +40,7 @@ export const deletedAt = () => timestamp('deleted_at', { withTimezone: true });
 
 export const metadata = () => jsonb('metadata').default({});
 
-export const createdBy = (): any => uuid('created_by');
+export const createdBy = (): any => uuid('created_by').references(() => _usersRef?.id ?? sql`users.id`, { onDelete: 'set null' });
 export const updatedBy = (): any => uuid('updated_by');
 export const deletedBy = (): any => uuid('deleted_by');
 

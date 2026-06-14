@@ -22,7 +22,8 @@ export async function PATCH(
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const { id } = await params;
-    const body = await req.json().catch(() => ({}));
+    let body;
+    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const { factor, weight, condition, active } = body;
 
     const [row] = await db

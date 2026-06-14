@@ -19,6 +19,7 @@ interface OptimizedImageProps {
   priority?: boolean;
   sizes?: string;
   fallback?: string;
+  _fallback?: string;
 }
 
 export function OptimizedImage({
@@ -30,7 +31,7 @@ export function OptimizedImage({
   fill,
   priority,
   sizes = '100vw',
-  fallback = '/placeholder.png',
+  _fallback = '/placeholder.png',
 }: OptimizedImageProps) {
   const [error, setError] = useState(false);
 

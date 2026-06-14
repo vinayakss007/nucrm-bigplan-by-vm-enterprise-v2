@@ -165,9 +165,11 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
       return
     }
 
+    const abort = new AbortController();
+
     const loadWorkflow = async () => {
       try {
-        const res = await fetch(`/api/tenant/workflows/${workflowId}`)
+        const res = await fetch(`/api/tenant/workflows/${workflowId}`, { signal: abort.signal })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error)
 

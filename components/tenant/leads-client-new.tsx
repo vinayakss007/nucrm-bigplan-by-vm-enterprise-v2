@@ -194,6 +194,9 @@ interface Props {
   sources: any[];
   tenantId: string;
   userId: string;
+  _sources?: any[];
+  _tenantId?: string;
+  _userId?: string;
 }
 
 interface Lead {
@@ -205,7 +208,7 @@ interface Lead {
   tags?: string[];
 }
 
-export default function LeadsClientNew({ permissions, teamMembers, companies, stats, sources, tenantId, userId }: Props) {
+export default function LeadsClientNew({ permissions, teamMembers, companies, stats, _sources, _tenantId, _userId }: Props) {
   const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -228,7 +231,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
   const totalLeads = useMemo(()=>Object.values(statsMap).reduce((a,b)=>a+b,0),[statsMap]);
   const conversionRate = totalLeads>0?Math.round(((statsMap['converted']||0)/totalLeads)*100):0;
 
-  const load = useCallback(async(newOffset=0,status=activeStatus,q=debouncedSearch)=>{
+  const load = useCallback(async(newOffset=0,status=activeStatus,q=debouncedSearch, signal?: AbortSignal)=>{
     const requestTime = Date.now();
     lastRequestTime.current = requestTime;
     setLoading(true);
@@ -237,7 +240,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
       if(status!=='all')params.set('lead_status',status);
       if(q)params.set('q',q);
       
-      const res=await fetch('/api/tenant/leads?'+params);
+      const res=await fetch('/api/tenant/leads?'+params, { signal });
       if (!res.ok) throw new Error('Failed to fetch');
       
       const data=await res.json();
@@ -255,6 +258,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
         }, 250);
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       console.error('[Leads load error]', err);
       setLoading(false);
     }

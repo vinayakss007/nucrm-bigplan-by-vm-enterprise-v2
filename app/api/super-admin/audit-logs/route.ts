@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
     `);
 
     return NextResponse.json({
-      data: (logsResult as { rows: unknown[] })?.rows || [],
+      data: (logsResult as unknown as { rows: unknown[] })?.rows || [],
       total: ((countResult as unknown as { rows: Array<{ total: unknown }> })?.rows?.[0]?.total as number) ?? 0,
       limit,
       offset,

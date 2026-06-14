@@ -27,8 +27,8 @@ export async function getFileStats(path: string): Promise<{ size: number } | nul
     const fs = await import('fs');
     const stats = fs.statSync(path);
     return { size: stats.size };
-  } catch {
-    // Fallback to default on corrupted storage data
+  } catch (e) {
+    console.error('[BackupFS] Failed to get file stats:', e);
     return null;
   }
 }

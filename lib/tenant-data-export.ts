@@ -187,7 +187,7 @@ export class TenantDataExporter {
         sql`SELECT name FROM tenants WHERE id = ${this.tenantId}`
       );
       if (tenantInfo.rows.length > 0) {
-        result.tenantName = (tenantInfo.rows[0] as any)?.name;
+        result.tenantName = (tenantInfo.rows[0] as { name?: string })?.name;
       }
 
       // Determine which tables to export
@@ -237,7 +237,7 @@ export class TenantDataExporter {
     if (table) {
       // Use Drizzle select if table is registered
       result = await db.select()
-        .from(table.table as any)
+        .from(table.table)
         .where(sql`${sql.identifier(tableDef.filterColumn)} = ${this.tenantId}`);
     } else {
       // Fallback to raw SQL for unregistered tables
@@ -328,15 +328,15 @@ export class TenantDataExporter {
         const result = await db.execute(
           sql`SELECT COUNT(*)::int as count FROM ${sql.identifier(tableDef.table)} WHERE ${sql.identifier(tableDef.filterColumn)} = ${this.tenantId}`
         );
-        const rowCount = (result.rows[0] as any)?.count || 0;
+        const rowCount = (result.rows[0] as { count?: number })?.count || 0;
         if (rowCount > 0) {
           stats.push({
             table: tableDef.table,
             rowCount,
           });
         }
-      } catch {
-        // Silently skip during migration/setup when tables may not exist yet
+      } catch (e) {
+        console.warn('[Export] Table check failed (may not exist):', tableDef.table, e);
       }
     }
 

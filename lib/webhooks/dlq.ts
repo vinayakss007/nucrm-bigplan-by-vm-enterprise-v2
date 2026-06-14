@@ -15,7 +15,7 @@
 
 import { db } from '@/drizzle/db';
 import { deadLetterQueue, webhookDeliveries } from '@/drizzle/schema/automation';
-import { eq, and, sql, gt, isNull, desc, inArray, lt } from 'drizzle-orm';
+import { eq, and, sql, gt, desc, lt } from 'drizzle-orm';
 import { devLogger } from '@/lib/dev-logger';
 
 export interface DLQEntry {
@@ -54,7 +54,7 @@ export async function moveToDeadLetterQueue(deliveryId: string): Promise<string 
     return null; // Only failed deliveries go to DLQ
   }
 
-  const metadata = (delivery.metadata as any) || {};
+  const metadata = (delivery.metadata as Record<string, unknown>) || {};
   const url = metadata.url || '';
 
   // Insert into the dead_letter_queue table
@@ -78,7 +78,7 @@ export async function moveToDeadLetterQueue(deliveryId: string): Promise<string 
       status: 'pending',
       originalRunAt: delivery.createdAt,
       failedAt: new Date(),
-    })
+    } as any)
     .returning({ id: deadLetterQueue.id });
 
   devLogger.queue('dlq', `Webhook ${deliveryId} moved to dead letter queue as ${dlqEntry?.id}`);
@@ -103,7 +103,7 @@ export async function retryFromDLQ(dlqEntryId: string): Promise<boolean> {
     throw new Error(`DLQ entry ${dlqEntryId} is not retryable (status: ${entry.status})`);
   }
 
-  const payload = entry.payload as any;
+  const payload = entry.payload as { deliveryId?: string; url?: string; headers?: Record<string, unknown> };
   if (!payload || !payload.deliveryId) {
     throw new Error('Invalid DLQ payload — missing deliveryId');
   }
@@ -143,7 +143,7 @@ export async function retryFromDLQ(dlqEntryId: string): Promise<boolean> {
     await processWebhookDelivery(payload.deliveryId, payload.url);
     return true;
   } catch (e) {
-    console.error('[DLQ] Retry from DLQ failed', e);
+    console.error('[DLQ] Retry delivery failed:', e);
     return false;
   }
 }
@@ -184,9 +184,11 @@ export async function bulkRetryDLQ(ids: string[]): Promise<{ succeeded: number; 
   let failed = 0;
   for (const id of ids) {
     try {
-      await retryFromDLQ(id);
-      succeeded++;
-    } catch {
+      const result = await retryFromDLQ(id);
+      if (result) succeeded++;
+      else failed++;
+    } catch (e) {
+      console.error('[DLQ] Bulk retry failed for entry:', id, e);
       failed++;
     }
   }
@@ -210,7 +212,6 @@ export async function purgeOldDLQEntries(daysOld: number): Promise<number> {
     .returning({ id: deadLetterQueue.id });
   return result.length;
 }
-
 export default {
   moveToDeadLetterQueue,
   retryFromDLQ,

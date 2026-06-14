@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       .where(eq(tenants.id, ctx.tenantId))
       .limit(1);
 
-    const stored = (((t?.settings as Record<string, unknown>) ?? {})['localization'] ?? {}) as Record<string, unknown>;
+    const stored = (((t?.settings as Record<string, unknown>) ?? {}).localization ?? {}) as Record<string, unknown>;
     return NextResponse.json({ localization: { ...DEFAULTS, ...stored } });
   } catch (err: any) {
     return apiError(err);
@@ -71,7 +71,8 @@ export async function PATCH(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const body = await req.json().catch(() => ({}));
+    let body;
+    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const incoming = body.localization;
     if (!incoming || typeof incoming !== 'object')
       return NextResponse.json({ error: 'localization object required' }, { status: 400 });
@@ -124,12 +125,12 @@ export async function PATCH(req: NextRequest) {
     }
 
     const safe: Record<string, unknown> = {};
-    if (incoming.timezone !== undefined) safe['timezone'] = String(incoming.timezone).slice(0, 100);
-    if (incoming.currency !== undefined) safe['currency'] = String(incoming.currency).toUpperCase();
-    if (incoming.fiscal_year_start_month !== undefined) safe['fiscal_year_start_month'] = Number(incoming.fiscal_year_start_month);
-    if (incoming.week_start !== undefined) safe['week_start'] = incoming.week_start;
-    if (incoming.weekend_days !== undefined) safe['weekend_days'] = incoming.weekend_days;
-    if (incoming.number_format !== undefined) safe['number_format'] = incoming.number_format;
+    if (incoming.timezone !== undefined) safe.timezone = String(incoming.timezone).slice(0, 100);
+    if (incoming.currency !== undefined) safe.currency = String(incoming.currency).toUpperCase();
+    if (incoming.fiscal_year_start_month !== undefined) safe.fiscal_year_start_month = Number(incoming.fiscal_year_start_month);
+    if (incoming.week_start !== undefined) safe.week_start = incoming.week_start;
+    if (incoming.weekend_days !== undefined) safe.weekend_days = incoming.weekend_days;
+    if (incoming.number_format !== undefined) safe.number_format = incoming.number_format;
     if (bh !== undefined) {
       safe['business_hours'] = {
         enabled: bh.enabled === true,
@@ -139,7 +140,7 @@ export async function PATCH(req: NextRequest) {
       };
     }
     if (holidays !== undefined) {
-      safe['holidays'] = (holidays as { date: string; name: string }[]).map(h => ({ date: h.date, name: String(h.name).trim().slice(0, 200) }));
+      safe.holidays = (holidays as { date: string; name: string }[]).map(h => ({ date: h.date, name: String(h.name).trim().slice(0, 200) }));
     }
 
     // Merge into tenants.settings.localization without touching siblings
