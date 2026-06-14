@@ -29,7 +29,7 @@ for (const fn of BLOCKED_FUNCTIONS) {
   try {
     delete (math as unknown as Record<string, unknown>)[fn];
   } catch {
-    // Some may not exist, that's fine
+    console.error('[formula] Failed to delete blocked function', fn);
   }
 }
 

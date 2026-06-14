@@ -373,6 +373,7 @@ export async function countExistingRecords(
       const row = result.rows[0] as { cnt?: number } | undefined;
       counts[table] = row?.cnt ?? 0;
     } catch {
+      console.error('[restore] Failed to count table', table);
       counts[table] = 0;
     }
   }
