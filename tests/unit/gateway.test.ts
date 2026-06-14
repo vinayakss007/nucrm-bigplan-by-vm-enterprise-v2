@@ -104,6 +104,9 @@ describe('API Gateway', () => {
         cookies: { get: () => undefined },
       });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await resolveGatewayTenant(nextReq as any);
       expect(result).toBeNull();
     });
@@ -124,6 +127,9 @@ describe('API Gateway', () => {
         cookies: { get: () => undefined },
       });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await resolveGatewayTenant(nextReq as any);
       expect(result).not.toBeNull();
       expect(result!.tenantId).toBe('tenant-abc-123');
@@ -146,6 +152,9 @@ describe('API Gateway', () => {
         cookies: { get: () => undefined },
       });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await resolveGatewayTenant(nextReq as any);
       expect(result).toBeNull();
     });

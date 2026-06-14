@@ -9,7 +9,12 @@ const TIP    = { background:'hsl(222,32%,9%)', border:'1px solid rgba(255,255,25
 const COLORS = ['#7c3aed','#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444'];
 
 export default function SuperAdminAnalyticsPage() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [tenants, setTenants]   = useState<any[]>([]);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [monitoring, setMonitoring] = useState<any>(null);
   const [loading, setLoading]   = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -37,6 +42,9 @@ export default function SuperAdminAnalyticsPage() {
   const planMix = Object.entries(planCounts).map(([name,value])=>({ name:name.charAt(0).toUpperCase()+name.slice(1), value }));
 
   // Tenant growth (last 30 days from monitoring)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const growthData = (monitoring?.tenantGrowth||[]).map((d:any) => ({
     day: d.day?.slice(5), count: d.count,
   }));

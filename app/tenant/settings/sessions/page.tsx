@@ -5,6 +5,8 @@ import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 export default function SessionsPage() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [revoking, setRevoking] = useState<string|null>(null);

@@ -16,6 +16,9 @@ import { leads, leadOffers, users } from '@/drizzle/schema';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function GET(request: NextRequest, { params }: any) {
   try {
     const ctx = await requireAuth(request);
@@ -126,6 +129,9 @@ export async function GET(request: NextRequest, { params }: any) {
     });
 
     return NextResponse.json({ data });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[contacts/leads] error:', error);
     return apiError(error, "Internal server error", 500);

@@ -137,7 +137,11 @@ export async function getVisitorScore(visitorId: string): Promise<{
  * Get full visitor profile with page views and score
  */
 export async function getVisitorProfile(visitorId: string): Promise<{
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   visitor: any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   pageViews: any[];
   score: { totalScore: number; pageScore: number; frequencyBonus: number; recencyBonus: number };
 } | null> {

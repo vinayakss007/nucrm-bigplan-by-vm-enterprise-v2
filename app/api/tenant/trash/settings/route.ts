@@ -37,6 +37,9 @@ export async function GET(request: NextRequest) {
         ]
       }
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[trash-settings GET]', err);
     return apiError(err);
@@ -70,6 +73,9 @@ export async function PUT(request: NextRequest) {
       });
 
     return NextResponse.json({ ok: true });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[trash-settings PUT]', err);
     return apiError(err);

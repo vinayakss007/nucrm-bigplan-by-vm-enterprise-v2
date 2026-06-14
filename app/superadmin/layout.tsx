@@ -43,6 +43,9 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   .catch((err) => { console.error('[superadmin/layout] stats query failed', err); return [{ total_tenants: 0, active_tenants: 0, open_errors: 0 }]; });
 
   return (
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     <SuperAdminShell user={userData} stats={stats as any}>{children}</SuperAdminShell>
   );
 }

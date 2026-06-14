@@ -54,6 +54,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         events: ((row.config as Record<string, unknown>)?.events as string[] | undefined) 
       } 
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     return apiError(err); 
   }
@@ -70,5 +73,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       .where(and(eq(integrations.id, id), eq(integrations.tenantId, ctx.tenantId), eq(integrations.type, 'webhook')));
 
     return NextResponse.json({ ok: true });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }

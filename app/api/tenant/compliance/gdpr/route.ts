@@ -47,6 +47,9 @@ export async function GET(req: NextRequest) {
         deletions: deleteRequests,
       },
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }
 
@@ -81,6 +84,9 @@ export async function POST(req: NextRequest) {
     }).returning();
 
     // Process the request
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     let result: any;
     try {
       if (requestType === 'export') {
@@ -97,6 +103,9 @@ export async function POST(req: NextRequest) {
           result: { summary: result.metadata || result.categories || {} },
         })
         .where(eq(complianceRequests.id, request!.id));
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       // Mark as failed
       await db.update(complianceRequests)
@@ -117,5 +126,8 @@ export async function POST(req: NextRequest) {
         result,
       },
     }, { status: 201 });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }

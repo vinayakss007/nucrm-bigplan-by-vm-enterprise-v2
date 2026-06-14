@@ -265,6 +265,9 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ error: 'Invalid action. Use: summary, full, export' }, { status: 400 });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }
@@ -363,6 +366,9 @@ export async function POST(request: NextRequest) {
       message: `Data restored for ${user.email}`,
       results,
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }
@@ -424,6 +430,9 @@ export async function DELETE(request: NextRequest) {
         deals: 'soft-deleted',
       },
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }

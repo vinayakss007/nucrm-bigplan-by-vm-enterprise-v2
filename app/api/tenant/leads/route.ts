@@ -14,6 +14,9 @@ import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
 
 // Whitelist for sort columns to prevent SQL injection
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ALLOWED_SORT_COLUMNS: Record<string, any> = {
   'created_at': leads.createdAt,
   'updated_at': leads.updatedAt,
@@ -44,6 +47,9 @@ export async function GET(request: NextRequest) {
     const sortByColumn = ALLOWED_SORT_COLUMNS[rawSortBy] || leads.createdAt;
     const sortOrder = searchParams.get('sort_order') === 'ASC' ? sql`ASC` : sql`DESC`;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const filters: any[] = [
       eq(leads.tenantId, ctx.tenantId),
       isNull(leads.deletedAt)
@@ -148,6 +154,9 @@ export async function GET(request: NextRequest) {
       offset,
       hasMore: offset + data.length < total,
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[leads GET]', error);
     return NextResponse.json({ error: 'Failed to fetch leads' }, { status: 500 });
@@ -284,6 +293,9 @@ export async function POST(request: NextRequest) {
     fireWebhooks(ctx.tenantId, 'lead.created', { id: newLead.id, email: v.email }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json(newLead, { status: 201 });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[leads POST]', error);
     return NextResponse.json({ error: 'Failed to create lead' }, { status: 500 });

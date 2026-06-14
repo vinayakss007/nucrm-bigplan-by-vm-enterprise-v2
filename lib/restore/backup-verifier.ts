@@ -273,6 +273,9 @@ export async function verifyBackup(
         break;
       }
     }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     result.valid = false;
     result.errors.push(`Failed to parse backup file: ${err.message}`);

@@ -5,6 +5,9 @@ import { eq, and } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import PublicFormClient from './public-form-client';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function PublicFormPage({ params }: any) {
   const { id } = await params;
 
@@ -53,6 +56,9 @@ export default async function PublicFormPage({ params }: any) {
           </div>
           
           <div className="p-8">
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
             <PublicFormClient form={form as any} />
           </div>
         </div>

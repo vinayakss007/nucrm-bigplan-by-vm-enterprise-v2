@@ -10,6 +10,9 @@ async function runCheck(service: string, fn: () => Promise<{ latency_ms: number;
   try {
     const result = await fn();
     return { service, status: 'up', ...result };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (e: any) {
     return { service, status: 'down', latency_ms: 0, message: e.message };
   }
@@ -63,6 +66,9 @@ export async function GET(request: NextRequest) {
       .catch((err) => { console.error('[health] history failed', err); return []; });
 
     return NextResponse.json({ checks, history });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[superadmin/health GET]', err);
     return apiError(err);

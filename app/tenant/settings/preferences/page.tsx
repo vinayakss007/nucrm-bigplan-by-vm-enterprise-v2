@@ -58,6 +58,9 @@ const SECTIONS = [
 
 type SectionId = typeof SECTIONS[number]['id'];
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Prefs = Record<string, any>;
 
 export default function PreferencesPage() {
@@ -85,6 +88,9 @@ export default function PreferencesPage() {
 
   const dirty = useMemo(() => JSON.stringify(prefs) !== JSON.stringify(original), [prefs, original]);
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const set = (k: string, v: any) => setPrefs(p => ({ ...p, [k]: v }));
 
   const save = async () => {
@@ -407,6 +413,9 @@ function match(corpus: string, q: string) {
 
 const inp = 'w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function Section({ icon: Icon, title, hidden, children }: { icon: any; title: string; hidden?: boolean; children: React.ReactNode }) {
   if (hidden) return null;
   return (

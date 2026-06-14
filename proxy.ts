@@ -36,17 +36,17 @@ const PUBLIC_PATHS = [
   '/api/auth/forgot-password', '/api/auth/reset-password', '/api/auth/verify-email',
   '/api/auth/resend-verification', '/api/auth/accept-invite', '/api/auth/invite-details',
   '/api/auth/2fa/setup', '/api/auth/2fa/verify', '/api/auth/2fa/disable',
-  '/api/auth/sso',
+  '/api/auth/csrf-token', '/api/auth/sso',
   '/api/forms/submit', '/api/leads/public',
   '/api/webhooks/stripe', '/api/webhooks/resend', '/api/webhooks/whatsapp', '/api/webhooks/inbound',
   '/api/health', '/api/track/click', '/api/track/open', '/api/unsubscribe',
   '/api/keepalive', '/api/test-email', '/api/cron', '/api/metrics', '/api/embed', '/api/emergency',
   '/api/setup/check', '/api/setup/create-admin', '/api/lead-capture', '/api/lead-capture/submit',
   '/api/public/tickets', '/api/public/invoices', '/api/public/kb', '/api/public/offers',
-  '/sw.js', '/manifest.json',
+  '/sw.js', '/manifest.json', '/robots.txt', '/sitemap.xml',
 ];
 
-const PUBLIC_PREFIXES = ['/_next', '/favicon', '/images', '/static', '/icons', '/api/v2'];
+const PUBLIC_PREFIXES = ['/_next', '/favicon', '/images', '/static', '/icons', '/api/v2', '/fonts', '/sounds', '/videos'];
 
 const ALLOWED_ORIGINS = (process.env['ALLOWED_ORIGINS'] || 'http://localhost:3000').split(',').map(s => s.trim());
 if (ALLOWED_ORIGINS.includes('*') && process.env['NODE_ENV'] === 'production') {
@@ -66,7 +66,9 @@ function setCORS(response: NextResponse, origin: string | null, pathname: string
     if (ao.startsWith('*.')) return origin.endsWith(ao.slice(1));
     return ao === origin;
   });
-  response.headers.set('Access-Control-Allow-Origin', allowed ? origin : (ALLOWED_ORIGINS[0] || '*'));
+  if (allowed && origin) {
+    response.headers.set('Access-Control-Allow-Origin', origin);
+  }
   response.headers.set('Access-Control-Allow-Credentials', 'true');
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token, X-Requested-With, x-cron-secret, x-auth-method');

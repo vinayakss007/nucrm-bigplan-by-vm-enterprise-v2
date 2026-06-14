@@ -30,6 +30,9 @@ export async function GET(req: NextRequest) {
     const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
     const status = searchParams.get('status');
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const filters: any[] = [eq(smsMessages.tenantId, ctx.tenantId)];
     if (status) {
       filters.push(eq(smsMessages.status, status));

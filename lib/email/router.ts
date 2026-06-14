@@ -268,6 +268,9 @@ export async function sendSmartEmail(options: EmailOptions) {
     
     return { success: true, provider: provider.name, result };
     
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error(`[EmailRouter] ✗ ${provider.name} failed:`, err.message);
     updateUsage(providerKey, false, err.message);

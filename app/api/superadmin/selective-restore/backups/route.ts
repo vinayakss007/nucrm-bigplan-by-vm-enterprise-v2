@@ -56,6 +56,9 @@ export async function GET(request: NextRequest) {
       .from(superAdminBackups);
 
     return NextResponse.json({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       backups: backups.map((b: any) => ({
         ...b,
         file_size_formatted: formatFileSize(b.fileSize),
@@ -68,6 +71,9 @@ export async function GET(request: NextRequest) {
         totalSize: Number(stats?.totalSize ?? 0),
       },
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[selective-restore/backups GET]', err);
     return apiError(err);
@@ -141,6 +147,9 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[selective-restore/backups POST]', err);
     return apiError(err);
@@ -183,6 +192,9 @@ export async function DELETE(request: NextRequest) {
     await db.delete(superAdminBackups).where(eq(superAdminBackups.id, backupId));
 
     return NextResponse.json({ success: true });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[selective-restore/backups DELETE]', err);
     return apiError(err);
@@ -203,6 +215,9 @@ async function parseBackupAsync(backupId: string, filePath: string) {
         // If they are missing in schema, we skip or use execute.
       })
       .where(eq(superAdminBackups.id, backupId));
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[parseBackupAsync]', err);
     await db

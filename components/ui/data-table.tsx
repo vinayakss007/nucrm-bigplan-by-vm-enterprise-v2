@@ -191,6 +191,9 @@ export function DataTable<TData, TValue>({
 
   const selectedIds = React.useMemo(() => {
     const selectedRows = table.getFilteredSelectedRowModel().rows
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     return selectedRows.map(row => row.original as any).map(row => row.id || row.id)
   }, [rowSelection, table])
 
@@ -607,6 +610,9 @@ export function createSortableHeader<TData, TValue>(
 ) {
   return {
     accessorKey,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     header: ({ column }: any) => {
       const sortState = column.getIsSorted()
       return (

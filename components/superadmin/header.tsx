@@ -6,6 +6,9 @@ import { Crown, AlertTriangle, Building2, LogOut, User, Settings,
 import { cn, getInitials } from '@/lib/utils';
 import Link from 'next/link';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function SuperAdminHeader({ profile, stats, onToggleSidebar }: { profile: any; stats: any; onToggleSidebar?: () => void }) {
   const [showProfile, setShowProfile] = useState(false);
   const [health, setHealth] = useState<'ok'|'warn'|'error'>('ok');

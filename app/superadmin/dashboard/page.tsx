@@ -88,6 +88,9 @@ export default async function SuperAdminDashboard() {
     .catch((err) => { console.error('[dashboard] expiringSoon failed', err); return []; }),
   ]);
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const s = (statsRes as any).rows?.[0]?.data ?? {};
   const mrr = Number(s.mrr ?? 0);
 

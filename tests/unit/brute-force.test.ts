@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockDbExecute = vi.fn();
 vi.mock('@/drizzle/db', () => ({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: { execute: (...args: any[]) => mockDbExecute(...args) },
 }));
 

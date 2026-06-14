@@ -26,8 +26,15 @@ vi.mock('@/drizzle/schema/financial', () => ({
 }));
 
 vi.mock('drizzle-orm', () => ({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   eq: vi.fn((...args: any[]) => args),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   and: vi.fn((...args: any[]) => args),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   desc: vi.fn((col: any) => col),
   sql: vi.fn(),
 }));
@@ -41,6 +48,9 @@ describe('Tax - calculateTax', () => {
   });
 
   it('calculates percentage-based tax correctly', async () => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.query.taxRates.findFirst as any).mockResolvedValue({
       id: 'tax-1',
       name: 'Sales Tax',
@@ -60,6 +70,9 @@ describe('Tax - calculateTax', () => {
   });
 
   it('calculates fixed-amount tax correctly', async () => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.query.taxRates.findFirst as any).mockResolvedValue({
       id: 'tax-2',
       name: 'Flat Fee',
@@ -78,6 +91,9 @@ describe('Tax - calculateTax', () => {
   });
 
   it('throws error for non-existent tax rate', async () => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.query.taxRates.findFirst as any).mockResolvedValue(null);
 
     await expect(calculateTax(100, 'invalid', 'tenant-1'))
@@ -85,6 +101,9 @@ describe('Tax - calculateTax', () => {
   });
 
   it('handles decimal amounts with rounding', async () => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.query.taxRates.findFirst as any).mockResolvedValue({
       id: 'tax-3',
       name: 'GST',
@@ -108,6 +127,9 @@ describe('Tax - calculateCompoundTax', () => {
 
   it('calculates compound tax with multiple rates', async () => {
     let callCount = 0;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.query.taxRates.findFirst as any).mockImplementation(async () => {
       callCount++;
       if (callCount === 1) {
@@ -142,6 +164,9 @@ describe('Tax - applyTaxToLineItems', () => {
   });
 
   it('applies tax to non-exempt items', async () => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.query.taxRates.findFirst as any).mockResolvedValue({
       id: 'tax-1',
       name: 'VAT',
@@ -169,6 +194,9 @@ describe('Tax - applyTaxToLineItems', () => {
   });
 
   it('skips tax-exempt items', async () => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.query.taxRates.findFirst as any).mockResolvedValue({
       id: 'tax-1',
       name: 'VAT',

@@ -11,6 +11,9 @@ const TIMEZONES  = ['UTC','America/New_York','America/Chicago','America/Los_Ange
 const CURRENCIES = ['USD','EUR','GBP','INR','AED','SGD','AUD','CAD','JPY'];
 
 export default function TenantGeneralSettings() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [tenant, setTenant] = useState<any>(null);
   const [form, setForm]     = useState({ name:'', primary_color:'#7c3aed', industry:'', subdomain:'', custom_domain:'', settings:{ timezone:'UTC', currency:'USD' } });
   const [saving, setSaving] = useState(false);

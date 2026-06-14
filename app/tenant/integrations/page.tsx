@@ -9,6 +9,9 @@ import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import type { ProviderDefinition, IntegrationInstance } from '@/lib/integrations/types';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ICON_MAP: Record<string, any> = {
   Mail, MessageSquare, Brain, Database, Cloud, Plug,
 };

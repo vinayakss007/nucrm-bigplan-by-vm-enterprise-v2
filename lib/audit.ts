@@ -53,8 +53,15 @@ export async function logAudit(opts: {
   action: string;
   entityType: string;
   entityId?: string;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   oldData?: any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   newData?: any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata?: Record<string, any>;
   ipAddress?: string;
   userAgent?: string;

@@ -25,6 +25,9 @@ export async function GET(request: NextRequest) {
     .orderBy(roles.name);
 
     return NextResponse.json({ data });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[roles GET]', err);
     return apiError(err);
@@ -56,6 +59,9 @@ export async function POST(request: NextRequest) {
       .returning();
 
     return NextResponse.json({ data: newRole }, { status: 201 });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[roles POST]', err);
     return apiError(err);

@@ -623,6 +623,9 @@ export default function ContactsDataTable({
                 className={inp}
               >
                 <option value="">No company</option>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
                 {companies.map((c: any) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}

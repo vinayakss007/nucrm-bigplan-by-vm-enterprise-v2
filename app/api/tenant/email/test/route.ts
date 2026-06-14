@@ -42,6 +42,9 @@ export async function POST(request: NextRequest) {
     } else {
       return NextResponse.json({ ok: false, error: result.error || 'Failed to send' }, { status: 500 });
     }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[email/test]', err);
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });

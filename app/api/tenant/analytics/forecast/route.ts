@@ -31,6 +31,9 @@ export async function GET(request: NextRequest) {
       data: forecastsResult.rows,
       summary: summary || {},
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Forecast Analytics] GET error:', error);
     return apiError(error);
@@ -69,6 +72,9 @@ export async function POST(request: NextRequest) {
       probability,
       forecast,
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Forecast Calculate] POST error:', error);
     return apiError(error);

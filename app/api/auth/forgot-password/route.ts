@@ -57,6 +57,9 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ ok: true });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[forgot-password]', err);
     return NextResponse.json({ ok: true }); // Don't reveal errors

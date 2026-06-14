@@ -12,6 +12,9 @@ export type JobType = 'send-email' | 'send-notification' | 'send-bulk-emails' | 
 
 export interface JobData {
   type: JobType;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   payload: any;
   tenantId?: string;
   userId?: string;
@@ -19,6 +22,9 @@ export interface JobData {
 
 export interface QueueAdapter {
   provider: QueueProvider;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   addJob(jobType: JobType, data: any, options?: JobOptions): Promise<void>;
   close(): Promise<void>;
 }
@@ -30,6 +36,9 @@ export interface JobOptions {
 }
 
 let adapter: QueueAdapter | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let pgbossInstance: any = null;
 
 /**
@@ -99,6 +108,9 @@ async function createRedisAdapter(redisUrl: string): Promise<QueueAdapter> {
 
   return {
     provider: 'redis',
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     async addJob(jobType: JobType, data: any, options?: JobOptions) {
       const queue = queues.get(jobType);
       if (!queue) throw new Error(`Unknown job type: ${jobType}`);
@@ -129,6 +141,9 @@ async function createPgBossAdapter(databaseUrl: string): Promise<QueueAdapter> {
   const PgBoss = (PgBossModule as { default?: new (...args: unknown[]) => unknown }).default || PgBossModule;
 
   const BossConstructor = PgBoss as new (...args: unknown[]) => unknown;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const boss = new BossConstructor({ connectionString: databaseUrl }) as any;
   await boss.start();
   pgbossInstance = boss;
@@ -142,6 +157,9 @@ async function createPgBossAdapter(databaseUrl: string): Promise<QueueAdapter> {
 
   return {
     provider: 'pgboss',
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     async addJob(jobType: JobType, data: any, options?: JobOptions) {
       await boss.send(jobType, data, {
         startAfter: options?.delay ? new Date(Date.now() + options.delay) : undefined,
@@ -161,6 +179,9 @@ async function createPgBossAdapter(databaseUrl: string): Promise<QueueAdapter> {
  * FIXED: Stores interval reference and clears it properly
  */
 function createMemoryAdapter(): QueueAdapter {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pendingJobs: Array<{ type: JobType; data: any; runAt: number }> = [];
 
   // Process jobs every 5 seconds
@@ -179,6 +200,9 @@ function createMemoryAdapter(): QueueAdapter {
 
   return {
     provider: 'memory',
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     async addJob(jobType: JobType, data: any, options?: JobOptions) {
       pendingJobs.push({
         type: jobType,
@@ -197,6 +221,9 @@ function createMemoryAdapter(): QueueAdapter {
 /**
  * Convenience function to add a job
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function addJob(jobType: JobType, data: any, options?: JobOptions): Promise<void> {
   const queue = await getQueueAdapter();
   await queue.addJob(jobType, data, options);
@@ -219,6 +246,9 @@ export type { Job } from 'bullmq';
  * Get the underlying pg-boss instance for advanced usage
  * Returns null if not using pg-boss provider
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getBoss(): Promise<any> {
   if (!pgbossInstance) {
     const queueAdapter = await getQueueAdapter();

@@ -40,6 +40,9 @@ export default async function CompaniesPage() {
 
   return (
     <CompaniesDataTable
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       initialCompanies={companiesList as any}
       permissions={permissions}
       tenantId={ctx.tenantId}

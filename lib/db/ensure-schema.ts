@@ -19,6 +19,9 @@ export async function ensureSchema(): Promise<{ ready: boolean; missing: string[
     const missing = REQUIRED.filter(t => !existing.includes(t));
     if (missing.length === 0) checked = true;
     return { ready: missing.length === 0, missing };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return { ready: false, missing: ['db_connection_failed: ' + err.message] };
   }

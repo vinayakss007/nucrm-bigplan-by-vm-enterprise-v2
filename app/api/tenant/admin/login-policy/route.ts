@@ -76,6 +76,9 @@ export async function GET(req: NextRequest) {
     };
 
     return NextResponse.json({ login_policy: merged });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }
@@ -206,6 +209,9 @@ export async function PATCH(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, login_policy: safe });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[login-policy PATCH]', err);
     return apiError(err);

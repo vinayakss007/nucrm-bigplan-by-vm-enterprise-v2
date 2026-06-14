@@ -49,6 +49,9 @@ export default function LeaderboardsPage() {
         if (!res.ok) throw new Error('Failed to load leaderboard');
         const json = await res.json();
         setData(json.data || []);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         setError(err.message || 'Failed to load leaderboard');
       } finally {

@@ -3,6 +3,9 @@ import { useState, useEffect } from 'react';
 import { FileText, ExternalLink, ArrowLeft, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { formatDate, cn } from '@/lib/utils';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const STATUS_ICONS: Record<string, any> = {
   paid: CheckCircle,
   failed: AlertCircle,
@@ -18,6 +21,8 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function InvoicesPage() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 

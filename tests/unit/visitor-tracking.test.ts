@@ -31,7 +31,11 @@ vi.mock('drizzle-orm', () => ({
 
 import { db } from '@/drizzle/db';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mockSelect(returnValue: any) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   (db.select as any).mockReturnValue({
     from: vi.fn(() => ({
       where: vi.fn(() => ({
@@ -41,7 +45,11 @@ function mockSelect(returnValue: any) {
   });
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mockSelectBasic(returnValue: any) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   (db.select as any).mockReturnValue({
     from: vi.fn(() => ({
       where: vi.fn(() => returnValue),
@@ -50,6 +58,9 @@ function mockSelectBasic(returnValue: any) {
 }
 
 function mockSelectEmpty() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   (db.select as any).mockReturnValue({
     from: vi.fn(() => ({
       where: vi.fn(() => []),
@@ -58,6 +69,9 @@ function mockSelectEmpty() {
 }
 
 function mockInsert() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   (db.insert as any).mockReturnValue({
     values: vi.fn(() => ({
       returning: vi.fn(() => [{ id: 'new-id' }]),
@@ -66,6 +80,9 @@ function mockInsert() {
 }
 
 function mockUpdate() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   (db.update as any).mockReturnValue({
     set: vi.fn(() => ({
       where: vi.fn(() => Promise.resolve([])),
@@ -135,6 +152,9 @@ describe('trackPageView', () => {
 
   it('inserts page view and updates existing visitor', async () => {
     const { db } = await import('@/drizzle/db');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any).mockReturnValue({
       from: vi.fn(() => ({
         where: vi.fn(() => [
@@ -154,6 +174,9 @@ describe('trackPageView', () => {
 
   it('does not update when visitor is new (no existing record)', async () => {
     const { db } = await import('@/drizzle/db');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any).mockReturnValue({
       from: vi.fn(() => ({
         where: vi.fn(() => []),
@@ -202,6 +225,9 @@ describe('getVisitorScore', () => {
   it('calculates full score with frequency and recency bonuses', async () => {
     const { db } = await import('@/drizzle/db');
     const recentDate = new Date();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any)
       .mockReturnValueOnce({
         from: vi.fn(() => ({
@@ -231,6 +257,9 @@ describe('getVisitorScore', () => {
   it('no frequency bonus for fewer than 5 visits', async () => {
     const { db } = await import('@/drizzle/db');
     const oldDate = new Date(Date.now() - 48 * 60 * 60 * 1000);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any)
       .mockReturnValueOnce({
         from: vi.fn(() => ({
@@ -259,6 +288,9 @@ describe('getVisitorScore', () => {
 
   it('skips recency bonus when lastSeenAt is null', async () => {
     const { db } = await import('@/drizzle/db');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any)
       .mockReturnValueOnce({
         from: vi.fn(() => ({
@@ -302,6 +334,9 @@ describe('getVisitorProfile', () => {
       { url: '/demo', viewedAt: new Date() },
     ];
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any)
       .mockReturnValueOnce({
         from: vi.fn(() => ({

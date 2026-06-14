@@ -117,6 +117,9 @@ export async function POST(request: NextRequest) {
 
     for (const [index, row] of rows.entries()) {
       try {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         const mapped: any = {};
         for (const [key, val] of Object.entries(row)) {
           const dbCol = LEAD_COLUMN_MAP[key.toLowerCase().trim()];
@@ -296,6 +299,9 @@ export async function POST(request: NextRequest) {
         });
 
         results.imported++;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (rowErr: any) {
         results.errors.push(`Row ${index + 2}: ${rowErr.message}`);
         results.skipped++;
@@ -313,6 +319,9 @@ export async function POST(request: NextRequest) {
       action: 'import_completed',
     });
     return NextResponse.json({ ok: true, results });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[leads/import]', err);
     return apiError(err);

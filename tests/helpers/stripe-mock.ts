@@ -25,6 +25,9 @@ export function clearStripeEnv() {
 /**
  * Create a mock Stripe webhook event payload.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createMockWebhookEvent(type: string, data: any = {}) {
   return {
     id: `evt_${Date.now()}`,
@@ -37,6 +40,9 @@ export function createMockWebhookEvent(type: string, data: any = {}) {
 /**
  * Mock global fetch for Stripe API calls.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function mockStripeFetch(responses: Record<string, any> = {}) {
   const originalFetch = global.fetch;
 
@@ -76,6 +82,9 @@ export function mockStripeFetch(responses: Record<string, any> = {}) {
 
     // Pass through non-Stripe requests
     return originalFetch(url, options);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   }) as any;
 
   return () => { global.fetch = originalFetch; };

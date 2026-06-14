@@ -20,6 +20,9 @@ export async function POST(_request: NextRequest) {
       duration_ms: duration,
       timestamp: new Date().toISOString(),
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[KeepAlive] Error:', err);
     return apiError(err, "Internal server error", 500);

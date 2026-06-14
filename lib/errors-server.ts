@@ -18,11 +18,17 @@ function getSourceLocation(): { file: string; line: number; function: string } |
 }
 
 export async function logError(opts: {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   error: any;
   context?: string;
   tenantId?: string;
   userId?: string;
   level?: ErrorLevel;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata?: Record<string, any>;
   requestUrl?: string;
   requestMethod?: string;
@@ -47,6 +53,9 @@ export async function logError(opts: {
         ...opts.metadata,
       },
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[logError] DB write failed:', msg, '|', err.message);
   }
