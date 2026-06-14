@@ -97,7 +97,8 @@ export async function DELETE(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await request.json().catch(() => ({}));
+    let body;
+    try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     if (body.id) {
       await db.update(notifications)

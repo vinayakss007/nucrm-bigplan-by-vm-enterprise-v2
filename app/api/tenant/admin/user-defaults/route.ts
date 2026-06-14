@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
     const [t] = await db
       .select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1);
 
-    const stored = (((t?.settings as Record<string, unknown>) ?? {})['user_defaults'] ?? {}) as Record<string, unknown>;
+    const stored = (((t?.settings as Record<string, unknown>) ?? {}).user_defaults ?? {}) as Record<string, unknown>;
     return NextResponse.json({ user_defaults: stored });
   } catch (err: any) {
     return apiError(err);
@@ -74,7 +74,8 @@ export async function PATCH(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const body = await req.json().catch(() => ({}));
+    let body;
+    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const incoming = body.user_defaults;
     if (!incoming || typeof incoming !== 'object')
       return NextResponse.json({ error: 'user_defaults object required' }, { status: 400 });

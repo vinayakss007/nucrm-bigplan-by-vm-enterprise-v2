@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
       columns: { settings: true },
     });
 
-    const stored = (((row?.settings as Record<string, unknown>) ?? {})['out_of_office'] ?? {}) as Record<string, unknown>;
+    const stored = (((row?.settings as Record<string, unknown>) ?? {}).out_of_office ?? {}) as Record<string, unknown>;
     return NextResponse.json({ out_of_office: { ...DEFAULT_OOO, ...stored } });
   } catch (err: any) {
     return apiError(err);
@@ -64,7 +64,8 @@ export async function PATCH(req: NextRequest) {
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json().catch(() => ({}));
+    let body;
+    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const ooo = body.out_of_office;
     if (!ooo || typeof ooo !== 'object')
       return NextResponse.json({ error: 'out_of_office object required' }, { status: 400 });

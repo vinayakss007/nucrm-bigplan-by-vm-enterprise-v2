@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     }).from(modules);
 
     const savedPricing = Object.fromEntries(
-      dbModules.map(m => [m.id, (m.manifest as Record<string, unknown>)?.['pricing'] || null])
+      dbModules.map(m => [m.id, (m.manifest as Record<string, unknown>)?.pricing || null])
     );
 
     const data = BUILTIN_MODULES.map(m => ({

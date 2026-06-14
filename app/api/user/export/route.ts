@@ -50,7 +50,14 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(activities.createdAt))
       .limit(500),
 
-      db.select().from(notifications)
+      db.select({
+        type: notifications.type,
+        title: notifications.title,
+        body: notifications.body,
+        readAt: notifications.readAt,
+        createdAt: notifications.createdAt
+      })
+      .from(notifications)
       .where(eq(notifications.userId, ctx.userId))
       .orderBy(desc(notifications.createdAt))
       .limit(200)

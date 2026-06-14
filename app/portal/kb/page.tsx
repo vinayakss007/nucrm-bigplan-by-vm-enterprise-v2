@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Book, Search, ChevronRight, Clock, Eye } from 'lucide-react';
-import { cn, formatDate } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 
 export default function PortalKBPage() {
   const [articles, setArticles] = useState<any[]>([]);

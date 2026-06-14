@@ -222,7 +222,7 @@ export function ContactMergeModal({ duplicates, loading, onMerge, onClose }: Con
                   { key: 'last_name', label: 'Last Name', icon: User },
                   { key: 'email', label: 'Email', icon: Mail },
                   { key: 'phone', label: 'Phone', icon: Phone },
-                ].map(({ key, label, icon: Icon }) => (
+                ].map(({ key, label: _label, icon: Icon }) => (
                   <div key={key} className="grid grid-cols-3 gap-4 items-center p-3 rounded-lg border border-border">
                     <div className="text-center">
                       <div className="flex items-center justify-center gap-1.5 text-sm">

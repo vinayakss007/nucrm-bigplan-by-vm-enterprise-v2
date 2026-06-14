@@ -132,7 +132,8 @@ export async function PATCH(req: NextRequest) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json().catch(() => ({}));
+    let body;
+    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const id = typeof body.id === 'string' ? body.id : null;
     const accepted = typeof body.accepted === 'boolean' ? body.accepted : null;
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });

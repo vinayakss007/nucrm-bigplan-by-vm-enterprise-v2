@@ -26,6 +26,8 @@ interface SequencesClientProps {
   permissions: { canView: boolean; canManage: boolean }
   tenantId: string
   userId: string
+  _tenantId?: string
+  _userId?: string
 }
 
 const STATUS_CONFIG = {
@@ -35,7 +37,7 @@ const STATUS_CONFIG = {
   archived: { label: 'Archived', color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' },
 }
 
-export default function SequencesClient({ sequences, permissions, tenantId, userId }: SequencesClientProps) {
+export default function SequencesClient({ sequences, permissions, _tenantId, _userId }: SequencesClientProps) {
   const [showBuilder, setShowBuilder] = useState(false)
   const [editingSequence, setEditingSequence] = useState<any>(null)
   const [sequencesList, setSequencesList] = useState(sequences)

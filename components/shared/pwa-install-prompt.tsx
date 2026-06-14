@@ -12,7 +12,7 @@ export default function PWAInstallPrompt() {
       setDeferredPrompt(e);
       const dismissed = sessionStorage.getItem('pwa-install-dismissed');
       if (!dismissed) {
-        setTimeout(() => setShowPrompt(true), 3000);
+        setShowPrompt(true);
       }
     };
     window.addEventListener('beforeinstallprompt', handler);

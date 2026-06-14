@@ -42,7 +42,7 @@ export default function SettingsIndex() {
     fetch('/api/tenant/settings-status').then(r => r.ok ? r.json() : null)
       .then(d => { if (d) { setStatuses(d.statuses ?? {}); setSummary(d.summary ?? summary); } })
       .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     return () => { ignore = true; };
 }, [, summary]);
 

@@ -12,9 +12,10 @@ const PRIORITY_CFG = {
   low:    { label:'Low',    dot:'bg-slate-400', badge:'text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400' },
 };
 
-export default function TenantTasksClient({ initialTasks, contacts, deals, teamMembers, permissions }: {
+export default function TenantTasksClient({ initialTasks, contacts, _deals, teamMembers, permissions }: {
   initialTasks: any[]; contacts: any[]; deals: any[]; teamMembers: any[];
   permissions: { canCreate:boolean; canEdit:boolean; canDelete:boolean; canAssign:boolean };
+  _deals?: any[];
 }) {
   const router = useRouter();
   const [tasks, setTasks]       = useState(initialTasks);

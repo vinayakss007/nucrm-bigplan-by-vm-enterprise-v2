@@ -28,8 +28,8 @@ export async function hasCompletedOnboarding(tenantId: string, userId: string): 
     });
 
     return !!result;
-  } catch {
-    // Silently skip during migration/setup when tables may not exist yet
+  } catch (e) {
+    console.error('[Onboarding] Check failed, defaulting to complete:', e);
     return true;
   }
 }

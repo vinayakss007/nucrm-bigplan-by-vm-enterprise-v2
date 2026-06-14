@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       notes: description,
       documentUrl: null,
       createdBy: userId,
-    } as unknown as typeof contracts.$inferInsert).returning();
+    } as any).returning();
 
     return NextResponse.json({ contract }, { status: 201 });
   } catch (error) {

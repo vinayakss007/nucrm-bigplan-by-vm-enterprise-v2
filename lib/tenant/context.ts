@@ -5,7 +5,7 @@ import { db } from '@/drizzle/db';
 import { tenants, users, plans, tenantMembers, roles } from '@/drizzle/schema';
 import { eq, and, or, sql, desc } from 'drizzle-orm';
 import { setTenantContext } from '@/lib/db/rls';
-import type { TenantContext } from '@/types';
+import type { TenantContext, TenantStatus, TenantSettings } from '@/types';
 
 export async function requireTenantCtx(): Promise<TenantContext> {
   const cookieStore = await cookies();
@@ -43,12 +43,12 @@ export async function requireTenantCtx(): Promise<TenantContext> {
         isSuperAdmin: false,
         tenant: {
           id: demoTenant.id,
-          status: (demoTenant.status as any) || 'active',
+          status: (demoTenant.status as TenantStatus) || 'active',
           trial_ends_at: demoTenant.trialEndsAt?.toISOString() ?? null,
           name: demoTenant.name || 'Demo Workspace',
           plan_id: demoTenant.planId || 'free',
           primary_color: demoTenant.primaryColor || '#7c3aed',
-          settings: (demoTenant.settings as any) || {},
+          settings: (demoTenant.settings as TenantSettings) || {} as TenantSettings,
           current_users: demoTenant.currentUsers || 1,
           current_contacts: demoTenant.currentContacts || 0,
         },
@@ -126,8 +126,8 @@ export async function requireTenantCtx(): Promise<TenantContext> {
       const pathname = headersList.get('x-invoke-path') ?? headersList.get('next-url') ?? '';
       const isExempt = pathname.startsWith('/tenant/settings') || pathname.startsWith('/tenant/trial-expired') || pathname.startsWith('/api/');
       if (!isExempt) redirect('/tenant/trial-expired');
-    } catch {
-      // Fallback to default on corrupted storage data
+    } catch (e) {
+      console.warn('[TenantCtx] Trial check failed, redirecting:', e);
       redirect('/tenant/trial-expired');
     }
   }
@@ -141,12 +141,12 @@ export async function requireTenantCtx(): Promise<TenantContext> {
     isSuperAdmin: row.is_super_admin ?? false,
     tenant: {
       id: row.tenant_id,
-      status: (row.tenant_status as any),
+      status: (row.tenant_status as TenantStatus),
       trial_ends_at: row.trial_ends_at?.toISOString() ?? null,
       name: row.tenant_name,
       plan_id: row.plan_id || 'free',
       primary_color: row.primary_color ?? '#7c3aed',
-      settings: (row.tenant_settings as any) ?? {},
+      settings: (row.tenant_settings as TenantSettings) ?? {} as TenantSettings,
       current_users: row.current_users ?? 0,
       current_contacts: row.current_contacts ?? 0,
     },

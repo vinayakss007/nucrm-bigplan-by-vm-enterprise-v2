@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Shield, Plus, Edit, Trash2, Save, Lock, ChevronDown, Check, Crown, Users, X, Loader2 } from 'lucide-react';
+import { ArrowLeft, Shield, Plus, Edit, Trash2, Save, Lock, ChevronDown, Check, Crown, X, Loader2 } from 'lucide-react';
 import { PERMISSIONS, PERMISSION_CATEGORIES } from '@/lib/permissions/definitions';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';

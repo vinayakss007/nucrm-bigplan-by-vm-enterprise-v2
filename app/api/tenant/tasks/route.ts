@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
     .where(eq(tenants.id, ctx.tenantId));
 
     const features = tenantWithPlan?.features as Record<string, unknown> | null;
-    const maxTasks = (features?.['max_tasks'] ?? 0) as number;
+    const maxTasks = (features?.max_tasks ?? 0) as number;
     
     if (maxTasks > 0) {
       const [taskCount] = await db.select({ 
@@ -130,6 +130,8 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
+    if (!newTask) throw new Error('Failed to create task');
+
     // Activity log
     await db.insert(activities)
       .values({
@@ -138,7 +140,7 @@ export async function POST(request: NextRequest) {
         contactId: v.contact_id || null,
         dealId: v.deal_id || null,
         entityType: 'task',
-        entityId: newTask!.id,
+        entityId: newTask.id,
         eventType: 'task_created',
         action: 'create',
         description: `Created task: ${v.title}`,
@@ -157,7 +159,7 @@ export async function POST(request: NextRequest) {
       }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     }
 
-    fireWebhooks(ctx.tenantId, 'task.created', { id: newTask!.id, title: v.title }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    fireWebhooks(ctx.tenantId, 'task.created', { id: newTask.id, title: v.title }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({ data: newTask }, { status: 201 });
   } catch (err: any) {

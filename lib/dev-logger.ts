@@ -87,6 +87,15 @@ class DevelopmentLogger {
    * ⚠️ Console logging only in development
    * ✅ External monitoring (Sentry/Grafana) in production
    */
+  warn(message: string, options?: LogOptions) {
+    this.log(message, 'warn', { ...options, color: this.colors.yellow, icon: '⚠️' });
+  }
+
+  /**
+   * Log with custom styling
+   * ⚠️ Console logging only in development
+   * ✅ External monitoring (Sentry/Grafana) in production
+   */
   log(message: string, level: LogLevel = 'info', options: LogOptions = {}) {
     const {
       color = this.colors.blue,

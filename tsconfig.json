@@ -28,8 +28,7 @@
       ]
     },
     "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-    "noPropertyAccessFromIndexSignature": true
+    "noImplicitOverride": true
   },
   "include": [
     "next-env.d.ts",

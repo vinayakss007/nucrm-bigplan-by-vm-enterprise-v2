@@ -35,9 +35,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     };
     
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
-    if (name !== undefined) updateData['name'] = name;
-    if (is_active !== undefined) updateData['isActive'] = is_active;
-    if (url !== undefined || events !== undefined) updateData['config'] = newConfig;
+    if (name !== undefined) updateData.name = name;
+    if (is_active !== undefined) updateData.isActive = is_active;
+    if (url !== undefined || events !== undefined) updateData.config = newConfig;
     
     const [row] = await db
       .update(integrations)
@@ -50,8 +50,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ 
       data: { 
         ...row, 
-        url: ((row.config as Record<string, unknown>)?.['url'] as string | undefined),
-        events: ((row.config as Record<string, unknown>)?.['events'] as string[] | undefined) 
+        url: ((row.config as Record<string, unknown>)?.url as string | undefined),
+        events: ((row.config as Record<string, unknown>)?.events as string[] | undefined) 
       } 
     });
   } catch (err: any) { 

@@ -30,7 +30,7 @@ function getRedisClient(): Redis {
     if (!redisUrl) {
       // Fallback to in-memory cache if Redis not available
       console.warn('[Cache] Redis not configured, using in-memory cache');
-      return null as any;
+      return null as unknown as Redis;
     }
 
     redis = new Redis(redisUrl, {
@@ -149,10 +149,10 @@ async function acquireLock(key: string): Promise<boolean> {
   const redis = getRedisClient();
   if (!redis) return true;
   try {
-    const result = await (redis.set as any)(`nucrm:lock:${key}`, '1', 'EX', LOCK_TTL, 'NX');
+    const result = await redis.call('SET', `nucrm:lock:${key}`, '1', 'EX', LOCK_TTL, 'NX');
     return result === 'OK';
   } catch (e) {
-    console.error('[Cache] acquireLock failed', e);
+    console.error('[Cache] Failed to acquire lock:', key, e);
     return false;
   }
 }
@@ -162,7 +162,9 @@ async function releaseLock(key: string): Promise<void> {
   if (!redis) return;
   try {
     await redis.del(`nucrm:lock:${key}`);
-  } catch { /* Fallback to default on corrupted storage data */ }
+  } catch (e) {
+    console.warn('[Cache] Failed to release lock:', key, e);
+  }
 }
 
 /**
@@ -443,7 +445,7 @@ export async function health(): Promise<{ status: string; latency?: number }> {
       status: latency < 10 ? 'healthy' : 'slow',
       latency,
     };
-  } catch (error) {
+  } catch {
     return { status: 'unhealthy', latency: 0 };
   }
 }

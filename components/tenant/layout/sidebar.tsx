@@ -135,13 +135,15 @@ interface Props {
   tenant:any; profile:any; roleSlug:string;
   permissions:Record<string,boolean>; isAdmin:boolean; isSuperAdmin:boolean;
   collapsed?: boolean; onToggle?: () => void; onMobileClose?: () => void;
+  _profile?: any;
+  _roleSlug?: string;
 }
 
 const PIN_KEY = 'nucrm.sidebar.pinned';
 const FILTER_KEY = 'nucrm.sidebar.query';
 const SECTION_KEY = 'nucrm.sidebar.sections';
 
-export default function TenantSidebar({ tenant, profile, roleSlug, permissions, isAdmin, isSuperAdmin, collapsed=false, onToggle, onMobileClose }: Props) {
+export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions, isAdmin, isSuperAdmin, collapsed=false, onToggle, onMobileClose }: Props) {
   const pathname = usePathname();
   const [query, setQuery] = useState('');
   const [pinned, setPinned] = useState<string[]>([]);
@@ -399,7 +401,7 @@ export default function TenantSidebar({ tenant, profile, roleSlug, permissions, 
                 )}>
                 {!q && <ChevronDown className={cn('w-3 h-3 transition-transform', isOpen ? 'rotate-0' : '-rotate-90')} />}
                 <span className="flex-1 text-left">{section.label}</span>
-                <span suppressHydrationWarning className="text-sm text-foreground/80 font-bold normal-case">{section.items.length}</span>
+                <span className="text-sm text-foreground/80 font-bold normal-case">{section.items.length}</span>
               </button>
               {isOpen && (
                 <div className="space-y-0.5 mt-0.5">

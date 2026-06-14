@@ -79,8 +79,8 @@ async function getPreviousSuperAdminHash(): Promise<string | null> {
     ORDER BY created_at DESC
     LIMIT 1
   `);
-  const rows = (result as unknown as Array<Record<string, unknown>>);
-  return (rows?.[0] as Record<string, unknown>)?.['hash'] as string | null ?? null;
+  const rows = (result as unknown as Record<string, unknown>[]);
+  return (rows?.[0]?.hash as string | null) ?? null;
 }
 
 function computeSuperAdminHash(entry: {

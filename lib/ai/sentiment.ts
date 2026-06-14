@@ -68,8 +68,8 @@ function parseSentimentResponse(raw: string): SentimentResult {
       summary: String(parsed.summary ?? '').slice(0, 300),
     };
   } catch (e) {
-    console.error('[sentiment] Failed to parse AI response', e);
-    return fallbackSentiment(raw);
+    console.error('[Sentiment] Failed to parse AI response as JSON, using fallback:', e);
+    return fallbackSentiment(cleaned);
   }
 }
 

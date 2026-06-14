@@ -66,8 +66,10 @@ export async function POST(request: NextRequest) {
       status: 'trialing',
     }).returning();
 
+    if (!tenant) throw new Error('Failed to create workspace');
+
     await db.update(users)
-      .set({ lastTenantId: tenant!.id })
+      .set({ lastTenantId: tenant.id })
       .where(eq(users.id, ctx.userId));
 
     return NextResponse.json({ data: tenant }, { status: 201 });

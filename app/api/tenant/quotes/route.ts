@@ -89,9 +89,11 @@ export async function POST(request: NextRequest) {
       createdBy: userId,
     }).returning();
 
+    if (!quote) throw new Error('Failed to create quote');
+
     if (items?.length) {
       const lineItems = items.map((item: { description?: string; quantity?: string | number; unit_price?: string | number; tax_rate?: string | number }, idx: number) => ({
-        quoteId: quote!.id,
+        quoteId: quote.id,
         productId: null,
         description: item.description ?? '',
         quantity: String(item.quantity || 1),

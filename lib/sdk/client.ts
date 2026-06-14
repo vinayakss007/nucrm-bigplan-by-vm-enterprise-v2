@@ -318,8 +318,8 @@ export class NuCRMClient {
         let errorData: ApiError | undefined;
         try {
           errorData = (await response.json()) as ApiError;
-        } catch {
-          // Fallback to default on corrupted storage data
+        } catch (e) {
+          console.warn('[SDK Client] Error response body is not JSON:', e);
         }
 
         throw new NuCRMError(
