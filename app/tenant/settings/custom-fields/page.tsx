@@ -84,6 +84,11 @@ export default function TenantCustomFields() {
     }
   };
 
+  useEffect(() => {
+    loadFields();
+    loadFeatures();
+  }, [entityType, loadFields]);
+
   const handleCreate = async (fieldData: any) => {
     try {
       const res = await fetch('/api/tenant/custom-fields', {

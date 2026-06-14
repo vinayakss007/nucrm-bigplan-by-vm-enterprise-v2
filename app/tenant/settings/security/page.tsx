@@ -481,8 +481,8 @@ export default function SecuritySettingsPage() {
                     try {
                       // Extract the img src if it's an img tag
                       const imgMatch = totpQrCode.match(/<img[^>]+src="([^"]+)"/);
-                      if (imgMatch) {
-                        return <Image src={imgMatch[1]!} alt="QR Code for 2FA setup" className="w-48 h-48" />;
+                      if (imgMatch?.[1]) {
+                        return <Image src={imgMatch[1]} alt="QR Code for 2FA setup" className="w-48 h-48" />;
                       }
                       // If it's an SVG, render it directly (sanitized by checking it starts with <svg)
                       if (totpQrCode.startsWith('<svg')) {

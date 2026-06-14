@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
       .where(eq(tenants.id, ctx.tenantId))
       .limit(1);
 
-    const stored = (((t?.settings as Record<string, unknown>) ?? {})['login_policy'] ?? {}) as Record<string, unknown>;
+    const stored = (((t?.settings as Record<string, unknown>) ?? {}).login_policy ?? {}) as Record<string, unknown>;
 
     // Deep-merge defaults <- stored
     const merged = {
@@ -88,7 +88,8 @@ export async function PATCH(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const body = await req.json().catch(() => ({}));
+    let body;
+    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const incoming = body.login_policy;
     if (!incoming || typeof incoming !== 'object')
       return NextResponse.json({ error: 'login_policy object required' }, { status: 400 });

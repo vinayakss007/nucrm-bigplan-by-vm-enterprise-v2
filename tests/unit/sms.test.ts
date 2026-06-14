@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import crypto from 'node:crypto';
 
 vi.mock('@/drizzle/db', () => ({
   db: {
@@ -133,7 +134,6 @@ describe('SMS - Twilio Signature Validation', () => {
   });
 
   it('validates correct signature', () => {
-    const crypto = require('crypto');
     const url = 'https://example.com/webhook';
     const params = { Body: 'Hello', From: '+1234567890' };
     const sortedKeys = Object.keys(params).sort();
@@ -150,7 +150,6 @@ describe('SMS - Twilio Signature Validation', () => {
   });
 
   it('handles empty params object', () => {
-    const crypto = require('crypto');
     const url = 'https://example.com/webhook';
     const expected = crypto.createHmac('sha1', TWILIO_CONFIG.TWILIO_AUTH_TOKEN).update(url).digest('base64');
     expect(validateTwilioSignature(expected, url, {})).toBe(true);

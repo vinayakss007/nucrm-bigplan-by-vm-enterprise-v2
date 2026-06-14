@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { logError } from '@/lib/errors';
+import { sendCriticalErrorAlert } from '@/lib/critical-error-alert';
 
 /**
  * Centralized API error handler.
@@ -22,6 +23,7 @@ export function apiError(err: unknown, message = 'Internal server error', status
   // Report to Sentry for 5xx errors
   if (status >= 500) {
     Sentry.captureException(err);
+    sendCriticalErrorAlert({ error: err, level: 'fatal', context: `apiError:${status}` }).catch(() => {});
   }
 
   // NEVER expose internal error messages in production

@@ -1,18 +1,19 @@
-import { NextResponse } from 'next/server';
-import * as Sentry from '@sentry/nextjs';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
+import * as Sentry from '@sentry/nextjs';
+import pkg from '@/package.json';
 
-/**
- * GET /api/health
- * Health check endpoint with optional Sentry test
- */
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const testError = searchParams.get('test-sentry');
+function timeout(ms: number): Promise<never> {
+  return new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('db timeout')), ms)
+  );
+}
+
+export async function GET(request: NextRequest) {
+  const testErrorParam = request.nextUrl.searchParams.get('test_error');
 
   try {
-    // Check DB
     let dbStatus = 'disconnected';
     let schemaReady = false;
     try {
@@ -23,8 +24,7 @@ export async function GET(request: Request) {
       dbStatus = 'error';
     }
 
-    // Test Sentry if requested
-    if (testError === 'true') {
+    if (testErrorParam === 'true') {
       try {
         throw new Error('Sentry test error from NuCRM health endpoint');
       } catch (err) {

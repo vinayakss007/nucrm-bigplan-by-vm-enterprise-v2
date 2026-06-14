@@ -102,12 +102,12 @@ export async function GET(request: NextRequest) {
         (SELECT count(*)::int FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock') AS waiting,
         (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') AS max_conn
     `);
-    const poolRow = poolRes.rows[0] as Record<string, unknown>;
-    push(metrics, 'nucrm_db_active_connections', 'Active DB connections', 'gauge', parseInt(String(poolRow?.['active'] ?? '0')));
-    push(metrics, 'nucrm_db_active_queries', 'DB connections running a query', 'gauge', parseInt(String(poolRow?.['active_queries'] ?? '0')));
-    push(metrics, 'nucrm_db_waiting_queries', 'DB connections waiting on lock', 'gauge', parseInt(String(poolRow?.['waiting'] ?? '0')));
-    push(metrics, 'nucrm_db_max_connections', 'Max DB connections configured', 'gauge', parseInt(String(poolRow?.['max_conn'] ?? '100')));
-    push(metrics, 'nucrm_db_pool_available', 'Available DB connections (max - active)', 'gauge', parseInt(String(poolRow?.['max_conn'] ?? '100')) - parseInt(String(poolRow?.['active'] ?? '0')));
+    const poolRow = poolRes.rows[0] as Record<string, string> || {};
+    push(metrics, 'nucrm_db_active_connections', 'Active DB connections', 'gauge', parseInt(poolRow?.active || '0'));
+    push(metrics, 'nucrm_db_active_queries', 'DB connections running a query', 'gauge', parseInt(poolRow?.active_queries || '0'));
+    push(metrics, 'nucrm_db_waiting_queries', 'DB connections waiting on lock', 'gauge', parseInt(poolRow?.waiting || '0'));
+    push(metrics, 'nucrm_db_max_connections', 'Max DB connections configured', 'gauge', parseInt(poolRow?.max_conn || '100'));
+    push(metrics, 'nucrm_db_pool_available', 'Available DB connections (max - active)', 'gauge', parseInt(poolRow?.max_conn || '100') - parseInt(poolRow?.active || '0'));
 
     // ── Redis / Cache Metrics ──────────────────────────────────
     let redisConn: IORedis | null = null;

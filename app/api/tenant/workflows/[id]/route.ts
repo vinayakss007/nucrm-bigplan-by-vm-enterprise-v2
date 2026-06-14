@@ -207,7 +207,7 @@ export async function POST(
 
     return NextResponse.json({
       ok: true,
-      execution_id: (result.rows[0] as Record<string, unknown>)?.['execution_id'] as string,
+      execution_id: (result.rows[0] as Record<string, unknown>)?.execution_id as string,
       message: 'Workflow test started',
     });
   } catch (error: any) {

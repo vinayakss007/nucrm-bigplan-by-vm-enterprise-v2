@@ -29,9 +29,11 @@ interface ProductEntryClientProps {
   product: ProductEntry;
   tenantId: string;
   userId: string;
+  _tenantId?: string;
+  _userId?: string;
 }
 
-export default function ProductEntryClient({ product, tenantId, userId }: ProductEntryClientProps) {
+export default function ProductEntryClient({ product, _tenantId, _userId }: ProductEntryClientProps) {
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const template = INDUSTRY_TEMPLATES[product.templateId];
   const pipeline = template?.pipelines?.find(p => p.name === product.mainPipeline) ?? template?.pipelines?.[0];

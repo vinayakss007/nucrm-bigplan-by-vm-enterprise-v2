@@ -3,7 +3,6 @@ import { Pool } from 'pg';
 import { verifyCronSecret } from '@/lib/auth/cron';
 import { TenantDataExporter } from '@/lib/tenant-data-export';
 import { sendAlertEmail } from '@/lib/email/alerts';
-import { apiError } from '@/lib/api-error';
 import { captureError } from '@/lib/capture-error';
 
 /**

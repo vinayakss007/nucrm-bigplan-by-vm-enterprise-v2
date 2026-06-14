@@ -9,9 +9,11 @@ export default function PlanLimitBanner() {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    fetch('/api/tenant/usage-status').then(r => r.json()).then(d => {
-      if (d.data) setStatus(d.data);
+    const abort = new AbortController();
+    fetch('/api/tenant/usage-status', { signal: abort.signal }).then(r => r.json()).then(d => {
+      if (!abort.signal.aborted && d.data) setStatus(d.data);
     }).catch(() => {});
+    return () => abort.abort();
   }, []);
 
   if (dismissed || !status) return null;

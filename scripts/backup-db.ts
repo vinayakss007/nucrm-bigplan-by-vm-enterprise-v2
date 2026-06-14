@@ -20,15 +20,7 @@
  */
 
 import { execSync } from 'child_process';
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  unlinkSync,
-  statSync,
-  writeFileSync,
-} from 'fs';
+import { existsSync, readFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 
 const KEEP_DAYS = parseInt(process.env['BACKUP_KEEP_DAYS'] || '30', 10);

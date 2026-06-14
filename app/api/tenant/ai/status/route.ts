@@ -11,9 +11,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { tenants, atRiskRules, deals } from '@/drizzle/schema';
+import { tenants } from '@/drizzle/schema';
 import { aiActivity } from '@/drizzle/schema/ai';
-import { eq, sql, and, gte, isNull } from 'drizzle-orm';
+import { eq, sql, and, gte } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { listProviderKeyMeta, type AIProviderId } from '@/lib/ai/secrets';
 import { getAtRiskDeals } from '@/lib/ai/at-risk';
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
       const atRiskDeals = await getAtRiskDeals(ctx.tenantId);
       at_risk_count = atRiskDeals.length;
     } catch {
-      // Silently skip during migration/setup when tables may not exist yet
+      // Fallback if rules table missing or other error
     }
 
     return NextResponse.json({

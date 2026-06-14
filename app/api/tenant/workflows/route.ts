@@ -92,12 +92,14 @@ export async function POST(request: NextRequest) {
         triggerConfig: trigger_config,
         nodes: nodes,
         createdBy: ctx.userId,
-      }).returning();
+      })      .returning();
+
+      if (!newWorkflow) throw new Error('Failed to create workflow');
 
       // 2. Create actions if provided
       if (actions.length > 0) {
         const actionValues = actions.map((action: any, index: number) => ({
-          workflowId: newWorkflow!.id,
+          workflowId: newWorkflow.id,
           tenantId: ctx.tenantId,
           orderIndex: index + 1,
           actionType: action.action_type || 'email',

@@ -1,6 +1,6 @@
 # NuCRM Enterprise — Master Tracker
 
-**Last Updated:** 2026-06-13 (Session 8 — PRODUCTION READY: TS 0 errors, 1790 tests pass, lint 0 errors, build passes)
+**Last Updated:** 2026-06-11 (Session 6 — as any reduction + jsonb metadata fixes)
 **Rule:** Every fix/feature gets a GitHub issue → a branch → a PR → merge to main.
 **No direct commits to main.** Everything trackable.
 
@@ -104,49 +104,31 @@ Previously created issues and branches — all merged to main in Session 4.
 | Lint | 0 errors, 2456 warnings remaining |
 | Schema | Fixed circular dependency in `drizzle/schema/utils.ts` |
 
-## REMAINING WORK (Priority Order)
+## SESSION 9 PROGRESS (2026-06-13)
 
-### Critical Security
-| Issue | Title | Outcome |
-|-------|-------|--------|
-| #155 | 6 critical security issues | ✅ ALL 6 confirmed fixed in current code. Closed. |
-| #129 | .env.local secrets in git | ✅ `.env.local` never committed. Closed. |
+### Created as PRs (1790 tests passing each)
 
-### High Priority
-| Issue | Title | Branch | Est. | Status |
-|-------|-------|--------|------|--------|
-| #134 | useEffect cleanup 40+ components | `fix/useeffect-cleanup` | 2hr | 🔴 Not started (partial cleanup done in `fix/useeffect-cleanup-data-fetching`) |
-| #147 | 3067 ESLint warnings | `fix/eslint-warnings` | 4hr | 🔴 Not started (partial fix in `fix/batch-2-e2e-useEffect`) |
-| #158 | Notification system/hydration/pg | `fix/notification-system` | 3hr | 🔴 Not started |
+| PR | Issue | Title | Branch |
+|----|-------|-------|--------|
+| #222 | #166 | fix: replace json().catch with proper try/catch returning 400 on invalid JSON | `fix/json-parse-error-handling` 🟢 |
+| #223 | #134 | fix: add AbortController cleanup to 8 components | `fix/useeffect-cleanup` 🟢 |
+| #224 | #171 | fix: add log rotation to prevent unbounded log file growth | `fix/log-rotation` 🟢 |
+| #225 | #173 | feat: add critical error alert webhook for fatal errors | `feat/error-alerting-webhook` 🟢 |
+| #226 | #162 | fix: fix DB singleton type safety — export DbClient type | `fix/db-singleton-type-safety` 🟢 |
+| #227 | #158 | fix: fix notification system — mountedRef cleanup, stream import | `fix/notification-system` 🟢 |
+| #228 | — | feat: enhance PWA — fix install prompt timing, SW cleanup | `feat/pwa-enhancements` 🟢 |
+| #229 | — | fix: sidebar hydration, follow-ups widget date comparison | `fix/hydration-ui-fixes` 🟢 |
+| #230 | — | fix: sms test import, backup-parser .mjs conversion | `fix/test-consistency` 🟢 |
+| #231 | #176 | feat: simplify health check endpoint with db timeout + uptime | `feat/health-check-endpoint` 🟢 |
+| #232 | #160 | feat: add error boundary pages for all 24 superadmin routes | `feat/superadmin-error-pages` 🟢 |
+| #233 | — | chore: add CRITICAL_ERROR_WEBHOOK_URL env var | `chore/env-config-updates` 🟢 |
 
-### Medium Priority
-| Issue | Title | Branch | Est. | Status |
-|-------|-------|--------|------|--------|
-| #160 | Superadmin error boundaries | `fix/superadmin-error-boundaries` | 30min | 🔴 Not started |
-| #162 | DB singleton type safety | `fix/db-singleton-type-safety` | 10min | 🔴 Not started |
-| #166 | json().catch empty | `fix/json-parse-error-handling` | 20min | 🔴 Not started |
-| #170 | ESM/CJS mix | `fix/esm-cjs-consistency` | 30min | 🔴 Not started |
-| #171 | Log rotation | `fix/log-rotation` | 15min | 🔴 Not started |
-| #173 | Alerting webhook | `feat/error-alerting-webhook` | 30min | 🔴 Not started |
-| #176 | Health check endpoint | `feat/health-check-endpoint` | 30min | 🔴 Not started |
-| #177 | Filesystem warning | `fix/next-dev-filesystem` | 10min | 🔴 Not started |
-| #183 | OpenAPI/Swagger docs | `feat/openapi-swagger-docs` | 2hr | 🔴 Not started |
-
-### Low Priority
-| Issue | Title | Branch | Est. | Status |
-|-------|-------|--------|------|--------|
-| #184 | i18n support | `feat/i18n-support` | 4hr | 🔴 Not started |
-
-### Phase Features
-| Issue | Title | Branch | Status |
-|-------|-------|--------|--------|
-| #154 | Phase B: AI Auto-Follow-Up | `feat/ai-auto-followup` | 🔴 Not started |
-| #156 | Phase D: Deliverability Engine | `feat/deliverability-engine` | 🔴 Not started |
-
-### Test Coverage (Target: 100% lib/)
-| Issue | Title | Branch | Status |
-|-------|-------|--------|--------|
-| #153 | Follow-ups coverage | `test/coverage-follow-ups` | 🔴 Not started |
+### Remaining for Phase 4
+- **#147** ESLint warnings (3067 remaining) — not started
+- **#170** ESM/CJS mix — not started
+- **#177** Filesystem warning — not started
+- **#183** OpenAPI/Swagger docs — not started
+- **#184** i18n support — not started
 
 ---
 
@@ -154,7 +136,7 @@ Previously created issues and branches — all merged to main in Session 4.
 
 | PR | Issue | Title | Branch |
 |----|-------|-------|--------|
-| — | — | — All branches merged, PRs closed — | — ✅ |
+| #220 | #157 | fix: reduce as many assertions in lib/ and app/api/ routes (Session 6) | `fix/continue-as-any-fixes` 🟡 |
 
 ## RECENTLY MERGED
 

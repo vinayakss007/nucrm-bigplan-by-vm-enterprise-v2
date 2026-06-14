@@ -220,7 +220,6 @@ async function evaluateIntegrityControls(
     changeCount = (changes.rows[0] as { count?: number })?.count || 0;
   } catch { /* table may not exist */ }
 
-
   controls.push({
     id: 'PI1.2',
     name: 'Change Management',
@@ -301,7 +300,6 @@ async function evaluatePrivacyControls(
     );
     retentionConfigured = ((retention.rows[0] as { count?: number })?.count || 0) > 0;
   } catch { /* table may not exist */ }
-
 
   controls.push({
     id: 'P1.1',

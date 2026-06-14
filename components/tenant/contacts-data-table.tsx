@@ -59,6 +59,8 @@ interface Props {
   totalCount?: number
   tenantId: string
   userId: string
+  _tenantId?: string
+  _userId?: string
 }
 
 export default function ContactsDataTable({
@@ -67,8 +69,8 @@ export default function ContactsDataTable({
   teamMembers,
   permissions,
   totalCount = 0,
-  tenantId,
-  userId,
+  _tenantId,
+  _userId,
 }: Props) {
   const [contacts, setContacts] = useState(initialContacts)
   const [total, setTotal] = useState(totalCount)

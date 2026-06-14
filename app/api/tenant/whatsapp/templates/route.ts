@@ -29,8 +29,8 @@ export async function GET(req: NextRequest) {
     }
 
     const config = integration.config as Record<string, unknown>;
-    const accessToken = config?.['access_token'] as string | undefined;
-    const businessAccountId = config?.['business_account_id'] as string | undefined;
+    const accessToken = config?.access_token as string | undefined;
+    const businessAccountId = config?.business_account_id as string | undefined;
 
     if (!accessToken || !businessAccountId) {
       return NextResponse.json({ error: 'WhatsApp credentials incomplete' }, { status: 400 });
@@ -78,8 +78,8 @@ export async function POST(req: NextRequest) {
     }
 
     const config = integration.config as Record<string, unknown>;
-    const accessToken = config?.['access_token'] as string | undefined;
-    const businessAccountId = config?.['business_account_id'] as string | undefined;
+    const accessToken = config?.access_token as string | undefined;
+    const businessAccountId = config?.business_account_id as string | undefined;
 
     if (!accessToken || !businessAccountId) {
       return NextResponse.json({ error: 'WhatsApp credentials incomplete' }, { status: 400 });

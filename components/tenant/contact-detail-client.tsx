@@ -213,24 +213,28 @@ export default function ContactDetailClient({
   // Fetch history when tab changes
   useEffect(() => {
     if (activeTab === 'history' && history.length === 0) {
+      const abort = new AbortController();
       setLoadingHistory(true);
-      fetch(`/api/tenant/history/contact?entity_id=${contact.id}&limit=50`)
+      fetch(`/api/tenant/history/contact?entity_id=${contact.id}&limit=50`, { signal: abort.signal })
         .then(res => res.json())
-        .then(data => setHistory(data.data || []))
-        .catch(err => console.error('Failed to load history', err))
-        .finally(() => setLoadingHistory(false));
+        .then(data => { if (!abort.signal.aborted) setHistory(data.data || []); })
+        .catch(err => { if (!abort.signal.aborted) console.error('Failed to load history', err); })
+        .finally(() => { if (!abort.signal.aborted) setLoadingHistory(false); });
+      return () => abort.abort();
     }
   }, [activeTab, contact.id]);
 
   // Fetch the contact's leads (one contact, many leads) on first open
   useEffect(() => {
     if (activeTab === 'leads' && contactLeads.length === 0 && !loadingContactLeads) {
+      const abort = new AbortController();
       setLoadingContactLeads(true);
-      fetch(`/api/tenant/contacts/${contact.id}/leads`)
+      fetch(`/api/tenant/contacts/${contact.id}/leads`, { signal: abort.signal })
         .then(res => res.json())
-        .then(data => setContactLeads(data.data || []))
-        .catch(err => console.error('Failed to load contact leads', err))
-        .finally(() => setLoadingContactLeads(false));
+        .then(data => { if (!abort.signal.aborted) setContactLeads(data.data || []); })
+        .catch(err => { if (!abort.signal.aborted) console.error('Failed to load contact leads', err); })
+        .finally(() => { if (!abort.signal.aborted) setLoadingContactLeads(false); });
+      return () => abort.abort();
     }
   }, [activeTab, contact.id]);
 

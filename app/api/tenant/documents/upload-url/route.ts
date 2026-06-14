@@ -37,7 +37,8 @@ export async function POST(request: NextRequest) {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
 
-  const raw = await request.json().catch(() => null);
+  let raw;
+  try { raw = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
   const parsed = validateBody(uploadUrlSchema, raw);
   if (parsed instanceof NextResponse) return parsed;
   const { name: nameRaw, mime_type: mimeType, size_bytes: sizeBytes } = parsed.data;

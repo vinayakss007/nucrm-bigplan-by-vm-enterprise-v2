@@ -126,12 +126,15 @@ export async function POST(request: NextRequest) {
     let tempFileCreated = false;
 
     // Download from S3 if needed
-    if (['s3', 's3_r2'].includes(backup.storageType ?? '')) {
-      localPath = await downloadFromS3({ storagePath: backup.storagePath!, id: backup.id }, {
+    if (['s3', 's3_r2'].includes(backup.storageType || '')) {
+      if (!backup.storagePath) throw new Error('Backup storage path is missing');
+      const downloadedPath = await downloadFromS3({ storagePath: backup.storagePath, id: backup.id }, {
         bucket: process.env.BACKUP_BUCKET || '',
         region: process.env.AWS_REGION,
         endpoint: process.env.AWS_ENDPOINT_URL,
       });
+      if (!downloadedPath) throw new Error('Failed to download backup from S3');
+      localPath = downloadedPath;
       tempFileCreated = true;
     }
 

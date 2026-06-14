@@ -352,8 +352,11 @@ export const featureRegistry = pgTable('feature_registry', {
   requiresTables: jsonb('requires_tables').default([]),
   registeredAt: timestamp('registered_at', { withTimezone: true }).defaultNow(),
   ...utils.lifecycle(),
-}, (table) => {
-  return {
-    enabledIdx: index('idx_feature_registry_enabled').on(table.enabled),
-  };
-});
+  }, (table) => {
+    return {
+      enabledIdx: index('idx_feature_registry_enabled').on(table.enabled),
+    };
+  });
+
+// Register FK table references (lazy, broken after circular dep init)
+utils._registerFkRefs(tenants, users);

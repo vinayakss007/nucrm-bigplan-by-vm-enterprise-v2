@@ -73,11 +73,11 @@ export async function GET(request: NextRequest) {
       LIMIT ${limit}
     `);
 
-    const rows = (res.rows as Array<Record<string, unknown>>) || [];
+    const rows = (res.rows as unknown[]) || [];
 
     // The original code had a different mapping logic in the comments vs actual code.
     // Let's stick to the mapping logic that makes sense for the returned rows.
-    const duplicates = rows.map((row: Record<string, unknown>) => ({
+    const duplicates = (rows as Record<string, unknown>[]).map(row => ({
       contact1: {
         id: row['contact_1_id'] || row['contact_id'],
         first_name: row['contact_1_first_name'] || row['first_name'],

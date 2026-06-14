@@ -37,6 +37,17 @@ interface AutomationAction {
   config: Record<string, unknown>;
 }
 
+interface AutomationCondition {
+  field?: string;
+  operator?: string;
+  value?: unknown;
+}
+
+interface AutomationAction {
+  type: string;
+  config: Record<string, unknown>;
+}
+
 export type TriggerEvent =
   | 'contact.created' | 'contact.updated'
   | 'deal.created'    | 'deal.updated' | 'deal.won' | 'deal.lost'

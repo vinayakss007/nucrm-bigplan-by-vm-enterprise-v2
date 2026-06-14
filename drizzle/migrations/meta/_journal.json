@@ -134,6 +134,13 @@
       "when": 1779574618000,
       "tag": "0018_add_fk_references",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1779900000000,
+      "tag": "0019_add_stage_entered_at",
+      "breakpoints": true
     }
   ]
 }
