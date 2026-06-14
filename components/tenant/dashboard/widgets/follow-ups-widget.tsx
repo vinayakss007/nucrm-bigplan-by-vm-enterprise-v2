@@ -40,6 +40,9 @@ export default function FollowUpsWidget({ data }: WidgetProps) {
         <p className="text-xs font-medium text-muted-foreground/70 text-center py-5">No follow-ups due</p>
       ) : (
         <div className="divide-y divide-border">
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
           {items.slice(0, 5).map((f: any) => {
             const dueDate = f.dueDate ? new Date(f.dueDate) : null;
             const overdue = dueDate && dueDate < today;

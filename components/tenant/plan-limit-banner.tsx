@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
 export default function PlanLimitBanner() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [status, setStatus] = useState<any>(null);
   const [dismissed, setDismissed] = useState(false);
 

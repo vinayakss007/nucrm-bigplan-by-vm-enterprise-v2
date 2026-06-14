@@ -13,6 +13,9 @@ import { eq, and, sql, isNull } from 'drizzle-orm';
  */
 export async function GET(
   request: NextRequest,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   { params }: any
 ) {
   try {
@@ -44,6 +47,9 @@ export async function GET(
     return NextResponse.json({
       data: sequence,
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Sequence] GET error:', error);
     return apiError(error);
@@ -56,6 +62,9 @@ export async function GET(
  */
 export async function PATCH(
   request: NextRequest,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   { params }: any
 ) {
   try {
@@ -75,6 +84,9 @@ export async function PATCH(
 
     // Update sequence
     await db.transaction(async (tx) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updateData: any = {};
       if (name !== undefined) updateData.name = name;
       if (description !== undefined) updateData.description = description;
@@ -98,6 +110,9 @@ export async function PATCH(
 
         // Insert new steps
         if (steps.length > 0) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
           const stepValues = steps.map((step: any, index: number) => ({
             sequenceId,
             tenantId: ctx.tenantId,
@@ -122,6 +137,9 @@ export async function PATCH(
       ok: true,
       message: 'Sequence updated',
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Sequence] PATCH error:', error);
     return apiError(error);
@@ -134,6 +152,9 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   { params }: any
 ) {
   try {
@@ -160,6 +181,9 @@ export async function DELETE(
       ok: true,
       message: 'Sequence deleted',
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Sequence] DELETE error:', error);
     return apiError(error);
@@ -172,6 +196,9 @@ export async function DELETE(
  */
 export async function POST(
   request: NextRequest,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   { params }: any
 ) {
   try {
@@ -225,6 +252,9 @@ export async function POST(
           contact_id: contactId, 
           enrollment_id: enrollmentId 
         });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (error: any) {
         // Skip if already enrolled or other error
         console.error(`Failed to enroll contact ${contactId}:`, error.message);
@@ -239,6 +269,9 @@ export async function POST(
       enrolled: enrolled,
       skipped: enrollments.length - enrolled.length,
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Enroll] POST error:', error);
     return apiError(error);

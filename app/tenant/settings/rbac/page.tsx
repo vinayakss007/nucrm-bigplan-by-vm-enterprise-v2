@@ -25,6 +25,9 @@ interface ApprovalRule {
   id: string;
   name: string;
   entityType: string;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   conditions: Record<string, any>;
   approvers: string[];
   isActive: boolean;

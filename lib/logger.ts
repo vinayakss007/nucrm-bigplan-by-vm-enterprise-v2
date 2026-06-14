@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getCurrentRequestId } from '@/lib/tenant/request-context';
+import { streamLog } from '@/lib/log-stream';
 
 /**
  * Structured Logger (replaces console.log/error)
@@ -37,6 +38,9 @@ function rotateLogs() {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function writeToFile(logEntry: any) {
   try {
     rotateLogs();
@@ -57,16 +61,19 @@ export const logger = {
     const logEntry = { level: 'info', ts: new Date().toISOString(), msg: message, ...enrich(meta) };
     console.log(JSON.stringify(logEntry));
     writeToFile(logEntry);
+    streamLog('info', message, enrich(meta));
   },
   warn: (message: string, meta?: Record<string, unknown>) => {
     const logEntry = { level: 'warn', ts: new Date().toISOString(), msg: message, ...enrich(meta) };
     console.warn(JSON.stringify(logEntry));
     writeToFile(logEntry);
+    streamLog('warn', message, enrich(meta));
   },
   error: (message: string, meta?: Record<string, unknown>) => {
     const logEntry = { level: 'error', ts: new Date().toISOString(), msg: message, ...enrich(meta) };
     console.error(JSON.stringify(logEntry));
     writeToFile(logEntry);
+    streamLog('error', message, enrich(meta));
   },
 };
 

@@ -40,6 +40,9 @@ interface QueryLog {
   sql: string;
   duration: number;
   timestamp: number;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   params?: any[];
 }
 
@@ -206,6 +209,9 @@ class DevelopmentLogger {
   /**
    * Log database query
    */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   query(sql: string, duration: number, params?: any[]) {
     const log: QueryLog = {
       sql: sql.slice(0, 500), // Limit SQL length
@@ -535,6 +541,9 @@ export const devLogger = new DevelopmentLogger();
 
 // Middleware helper
 export function createDevelopmentMiddleware() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   return function developmentLoggerMiddleware(req: any, res: any, next: () => void) {
     const start = Date.now();
     

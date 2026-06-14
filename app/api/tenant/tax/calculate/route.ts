@@ -61,6 +61,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ data: result });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }

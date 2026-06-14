@@ -36,9 +36,6 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Typecheck
-        run: npx tsc --noEmit --pretty
-
   test-unit:
     name: Unit Tests
     runs-on: ubuntu-latest

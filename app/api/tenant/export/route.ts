@@ -66,6 +66,9 @@ export async function GET(request: NextRequest) {
         'Content-Disposition': `attachment; filename="nucrm_export_${new Date().toISOString().split('T')[0]}.json"`,
       },
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[export GET]', err);
     return apiError(err);

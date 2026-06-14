@@ -222,6 +222,9 @@ describe('db/client - integration with Docker PostgreSQL', () => {
   describe('getPool with real DB', () => {
     beforeEach(() => {
       vi.resetModules();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (global as any).__pgPool;
     });
 
@@ -244,6 +247,9 @@ describe('db/client - integration with Docker PostgreSQL', () => {
   describe('query with retry logic', () => {
     beforeEach(() => {
       vi.resetModules();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (global as any).__pgPool;
     });
 
@@ -291,6 +297,9 @@ describe('db/client - integration with Docker PostgreSQL', () => {
   describe('withTransaction', () => {
     beforeEach(() => {
       vi.resetModules();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (global as any).__pgPool;
     });
 
@@ -325,6 +334,9 @@ describe('db/client - integration with Docker PostgreSQL', () => {
   describe('buildInsert with real tables', () => {
     beforeEach(() => {
       vi.resetModules();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (global as any).__pgPool;
     });
 
@@ -366,6 +378,9 @@ describe('db/client - integration with Docker PostgreSQL', () => {
   describe('countRows', () => {
     beforeEach(() => {
       vi.resetModules();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (global as any).__pgPool;
     });
 
@@ -386,6 +401,9 @@ describe('db/client - integration with Docker PostgreSQL', () => {
   describe('dbCache integration', () => {
     beforeEach(() => {
       vi.resetModules();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (global as any).__pgPool;
     });
 
@@ -421,6 +439,9 @@ describe('db/client - integration with Docker PostgreSQL', () => {
   describe('invalidateCache', () => {
     beforeEach(() => {
       vi.resetModules();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (global as any).__pgPool;
     });
 

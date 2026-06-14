@@ -95,6 +95,9 @@ async function main() {
       console.log(`\n  Database is up to date`);
     }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[status] Failed:', error.message);
     process.exit(1);

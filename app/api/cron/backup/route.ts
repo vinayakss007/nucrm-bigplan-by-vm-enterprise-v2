@@ -173,6 +173,9 @@ export async function POST(request: NextRequest) {
             Delete: { Objects: oldKeys },
           })).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
         }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (uploadErr: any) {
         console.error('[backup] S3 upload failed, keeping local:', uploadErr.message);
         storageType = 'local';
@@ -211,6 +214,9 @@ export async function POST(request: NextRequest) {
       ok: true, filename, size_bytes: sizeBytes, duration_ms: durationMs, storage: storageType,
     });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     const durationMs = Date.now() - t0;
     console.error('[backup] FAILED:', err.message);

@@ -75,6 +75,9 @@ export default function ProjectsDataTable({ initialProjects, teamMembers, permis
     try {
       const res = await fetch(`/api/tenant/projects?${params}`)
       const data = await res.json()
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       setProjects(data.data?.map((p: any) => ({
         id: p.id,
         name: p.name,

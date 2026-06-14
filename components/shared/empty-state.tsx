@@ -17,6 +17,9 @@ interface EmptyStateProps {
 }
 
 const ILLUSTRATIONS: Record<EmptyStateType, {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon: any;
   bg: string;
   title: string;

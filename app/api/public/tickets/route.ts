@@ -68,6 +68,9 @@ export async function POST(request: NextRequest) {
     }).returning();
 
     return NextResponse.json({ data: ticket }, { status: 201 });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }

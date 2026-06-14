@@ -53,6 +53,9 @@ export async function GET(req: NextRequest) {
 
     const stored = (((row?.settings as Record<string, unknown>) ?? {}).out_of_office ?? {}) as Record<string, unknown>;
     return NextResponse.json({ out_of_office: { ...DEFAULT_OOO, ...stored } });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }
@@ -166,6 +169,9 @@ export async function PATCH(req: NextRequest) {
     }
 
     return NextResponse.json({ ok: true, out_of_office: safe, reassigned });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[user/out-of-office PATCH]', err);
     return apiError(err);

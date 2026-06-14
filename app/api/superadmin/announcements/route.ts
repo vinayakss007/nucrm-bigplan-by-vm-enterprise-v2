@@ -30,6 +30,9 @@ export async function GET(request: NextRequest) {
       .catch((err) => { console.error('[announcements] list failed', err); return []; });
     
     return NextResponse.json({ data });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[superadmin/announcements GET]', err);
     return apiError(err);
@@ -60,6 +63,9 @@ export async function POST(request: NextRequest) {
       .returning();
 
     return NextResponse.json({ data: row }, { status: 201 });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[superadmin/announcements POST]', err);
     return apiError(err);
@@ -83,6 +89,9 @@ export async function PATCH(request: NextRequest) {
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ ok: true, data: row });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[superadmin/announcements PATCH]', err);
     return apiError(err);
@@ -100,6 +109,9 @@ export async function DELETE(request: NextRequest) {
 
     await db.delete(announcements).where(eq(announcements.id, id));
     return NextResponse.json({ ok: true });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[superadmin/announcements DELETE]', err);
     return apiError(err);

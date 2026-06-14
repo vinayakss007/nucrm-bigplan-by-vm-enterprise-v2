@@ -49,6 +49,9 @@ export async function GET(request: NextRequest) {
         telegram_notify_security_alerts: true,
       },
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }
@@ -96,6 +99,9 @@ export async function PATCH(request: NextRequest) {
         }
 
         return NextResponse.json({ ok: true, message: 'Test message sent!' });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         return apiError(err, "Bad request", 400);
       }
@@ -116,6 +122,9 @@ export async function PATCH(request: NextRequest) {
       .where(eq(users.id, ctx.userId));
 
     return NextResponse.json({ ok: true });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }

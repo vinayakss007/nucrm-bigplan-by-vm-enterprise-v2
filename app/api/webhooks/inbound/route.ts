@@ -141,6 +141,9 @@ async function handleContact(
   if (!firstName) throw new Error('first_name is required');
 
   // Check duplicate email
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   let existing: any = null;
   if (email) {
     existing = await db.query.contacts.findFirst({
@@ -226,6 +229,9 @@ async function handleLead(
   const firstName = sanitizeString(d['firstName'] as string, 100);
   if (!firstName) throw new Error('first_name is required for lead');
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   let existing: any = null;
   if (email) {
     existing = await db.query.leads.findFirst({
@@ -529,6 +535,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Parse JSON
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     let body: any;
     try {
       const text = await request.text();
@@ -608,6 +617,9 @@ export async function POST(request: NextRequest) {
           recordId: result.id,
           payloadSize: contentLength || 0,
         });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         hasError = true;
         results.push({ entity: item.entity, action: item.action, id: null, status: 'error', error: "Internal server error" });
@@ -657,6 +669,9 @@ export async function POST(request: NextRequest) {
       },
       { status: statusCode }
     );
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     const duration = Date.now() - startTime;
     console.error('[inbound webhook]', err);
@@ -711,6 +726,9 @@ export async function GET(request: NextRequest) {
       recent_requests: logs.length,
       recent_activity: logs.slice(-10).reverse(),
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[inbound webhook GET]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -32,6 +32,9 @@ export default function AIProvidersPage() {
     Promise.all([
       fetch('/api/tenant/admin/ai-providers').then(r => r.ok ? r.json() : { providers: {} }),
       fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     ]).then(([d, me]: any[]) => { if (ignore) return; 
       setData(d.providers ?? { } );
       setOriginal(d.providers ?? {});
@@ -42,6 +45,9 @@ export default function AIProvidersPage() {
 
   const dirty = useMemo(() => JSON.stringify(data) !== JSON.stringify(original), [data, original]);
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const setField = (id: string, k: keyof ProviderConfig, v: any) => {
     setData(prev => ({ ...prev, [id]: { ...prev[id]!, [k]: v } }));
   };

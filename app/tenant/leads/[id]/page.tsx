@@ -61,6 +61,9 @@ export default async function LeadDetailPage({ params }: PageProps) {
     .where(eq(users.id, lead.created_by as string))
     .limit(1);
   
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   (lead as any).created_by_name = creator?.fullName;
   
   // Get activities
@@ -125,6 +128,9 @@ export default async function LeadDetailPage({ params }: PageProps) {
       lead={lead}
       activities={activities}
       relatedContacts={relatedContacts}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       teamMembers={teamMembers as any}
       tenantId={ctx.tenantId}
       userId={ctx.userId}

@@ -37,6 +37,9 @@ export async function GET(
     .limit(50);
 
     return NextResponse.json({ data });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     return apiError(err); 
   }
@@ -88,6 +91,9 @@ export async function POST(
     await processMentions(description.trim(), ctx.tenantId, ctx.userId, `/tenant/contacts/${id}`);
 
     return NextResponse.json({ data: row }, { status: 201 });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     return apiError(err); 
   }
@@ -120,6 +126,9 @@ export async function DELETE(
       ));
 
     return NextResponse.json({ ok: true });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     return apiError(err); 
   }

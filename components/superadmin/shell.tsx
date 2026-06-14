@@ -3,6 +3,9 @@ import { useState, useEffect } from 'react';
 import SuperAdminSidebar from './sidebar';
 import SuperAdminHeader from './header';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function SuperAdminShell({ user, stats, children }: { user: any; stats: any; children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);

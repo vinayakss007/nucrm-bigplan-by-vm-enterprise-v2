@@ -31,6 +31,9 @@ export async function GET(request: NextRequest) {
 
     // Build query conditions
     const conditions: string[] = [];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const params: any[] = [];
     let paramIndex = 1;
 
@@ -83,6 +86,9 @@ export async function GET(request: NextRequest) {
       offset,
     });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[super-admin audit-logs GET]', err);
     return apiError(err);

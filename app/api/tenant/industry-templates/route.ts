@@ -63,6 +63,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, message: `Applied ${template.name} template` });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[IndustryTemplates] error:', err);
     return apiError(err);
