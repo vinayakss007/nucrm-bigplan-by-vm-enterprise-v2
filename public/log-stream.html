@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NuCRM Live Log Stream</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0d1117; color: #c9d1d9; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; }
+header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: #161b22; border-bottom: 1px solid #30363d; position: sticky; top: 0; z-index: 10; }
+h1 { font-size: 16px; font-weight: 600; color: #58a6ff; }
+#status { font-size: 12px; padding: 3px 10px; border-radius: 12px; }
+#status.connected { background: #1b4721; color: #7ee787; }
+#status.disconnected { background: #49242a; color: #ff7b72; }
+#count { font-size: 12px; color: #8b949e; margin-left: auto; }
+.controls { display: flex; gap: 8px; }
+button { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+button:hover { background: #30363d; }
+#log { padding: 8px 0; }
+.entry { display: flex; gap: 12px; padding: 2px 20px; font-size: 12px; line-height: 1.6; border-bottom: 1px solid #21262d; }
+.entry:hover { background: #161b22; }
+.entry .ts { color: #484f58; min-width: 170px; }
+.entry .level { min-width: 50px; font-weight: 600; }
+.entry .level.info { color: #58a6ff; }
+.entry .level.warn { color: #d29922; }
+.entry .level.error { color: #ff7b72; }
+.entry .level.debug { color: #8b949e; }
+.entry .level.success { color: #7ee787; }
+.entry .msg { flex: 1; white-space: pre-wrap; word-break: break-all; }
+.entry .meta { color: #8b949e; font-size: 11px; }
+.entry.error { background: #2d1215; }
+.entry.warn { background: #1d1b10; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⬡ Log Stream</h1>
+  <span id="status" class="disconnected">disconnected</span>
+  <span id="count">0 entries</span>
+  <div class="controls">
+    <button id="clearBtn">Clear</button>
+    <button id="filterBtn">Filter: All</button>
+  </div>
+</header>
+<div id="log"></div>
+
+<script>
+const logEl = document.getElementById('log');
+const statusEl = document.getElementById('status');
+const countEl = document.getElementById('count');
+const clearBtn = document.getElementById('clearBtn');
+const filterBtn = document.getElementById('filterBtn');
+let entries = 0;
+let filterLevel = null;
+
+function connect() {
+  const es = new EventSource('/api/logs/stream');
+  statusEl.textContent = 'connecting...';
+  statusEl.className = 'disconnected';
+
+  es.onopen = () => {
+    statusEl.textContent = 'connected';
+    statusEl.className = 'connected';
+  };
+
+  es.addEventListener('connected', (e) => {
+    const data = JSON.parse(e.data);
+    statusEl.textContent = `connected (client: ${data.clientId})`;
+  });
+
+  es.onmessage = (e) => {
+    try {
+      const entry = JSON.parse(e.data);
+      addEntry(entry);
+    } catch {}
+  };
+
+  es.onerror = () => {
+    statusEl.textContent = 'disconnected (reconnecting...)';
+    statusEl.className = 'disconnected';
+    es.close();
+    setTimeout(connect, 2000);
+  };
+}
+
+function addEntry(entry) {
+  if (filterLevel && entry.level !== filterLevel) return;
+
+  const div = document.createElement('div');
+  div.className = `entry ${entry.level}`;
+
+  const ts = document.createElement('span');
+  ts.className = 'ts';
+  ts.textContent = new Date(entry.ts).toLocaleTimeString();
+  div.appendChild(ts);
+
+  const level = document.createElement('span');
+  level.className = `level ${entry.level}`;
+  level.textContent = entry.level.toUpperCase();
+  div.appendChild(level);
+
+  const msg = document.createElement('span');
+  msg.className = 'msg';
+  msg.textContent = entry.msg;
+  div.appendChild(msg);
+
+  if (entry.meta && Object.keys(entry.meta).length) {
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    meta.textContent = JSON.stringify(entry.meta);
+    div.appendChild(meta);
+  }
+
+  logEl.appendChild(div);
+  entries++;
+  countEl.textContent = `${entries} entries`;
+
+  if (entries > 500) {
+    logEl.removeChild(logEl.firstChild);
+  }
+}
+
+clearBtn.onclick = () => {
+  logEl.innerHTML = '';
+  entries = 0;
+  countEl.textContent = '0 entries';
+};
+
+filterBtn.onclick = () => {
+  const levels = [null, 'error', 'warn', 'info', 'success'];
+  const labels = ['All', 'Errors', 'Warnings', 'Info', 'Success'];
+  const idx = levels.indexOf(filterLevel);
+  const next = (idx + 1) % levels.length;
+  filterLevel = levels[next];
+  filterBtn.textContent = `Filter: ${labels[next]}`;
+};
+
+connect();
+</script>
+</body>
+</html>
