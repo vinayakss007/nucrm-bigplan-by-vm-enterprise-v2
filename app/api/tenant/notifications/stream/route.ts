@@ -16,9 +16,6 @@ export async function GET(request: NextRequest) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        let interval: ReturnType<typeof setInterval> | undefined;
-        let keepalive: ReturnType<typeof setInterval> | undefined;
-
         const sendUnread = async () => {
           try {
             const [row] = await db.select({
@@ -36,17 +33,11 @@ export async function GET(request: NextRequest) {
             controller.enqueue(encoder.encode(`data: ${data}\n\n`));
           } catch {
             console.error('[notifications-stream] Failed to send unread count');
-            controller.close();
-            if (interval) clearInterval(interval);
-            if (keepalive) clearInterval(keepalive);
           }
         };
 
-        // Poll every 30 seconds
-        interval = setInterval(sendUnread, 30000);
-
-        // Keep-alive every 10 seconds
-        keepalive = setInterval(() => {
+        const interval = setInterval(sendUnread, 30000);
+        const keepalive = setInterval(() => {
           try {
             controller.enqueue(encoder.encode(': keepalive\n\n'));
           } catch {
@@ -54,12 +45,11 @@ export async function GET(request: NextRequest) {
           }
         }, 10000);
 
-        // Send initial count
         await sendUnread();
 
         request.signal.addEventListener('abort', () => {
-          if (interval) clearInterval(interval);
-          if (keepalive) clearInterval(keepalive);
+          clearInterval(interval);
+          clearInterval(keepalive);
         });
       },
     });
