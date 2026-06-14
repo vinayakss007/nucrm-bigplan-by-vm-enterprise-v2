@@ -52,8 +52,15 @@ import { db } from '@/drizzle/db';
 import { logger } from '@/lib/logger';
 
 describe('notifications', () => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   let createNotification: any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   let notifyTenantMembers: any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   let processMentions: any;
 
   beforeEach(() => {
@@ -69,6 +76,9 @@ describe('notifications', () => {
 
     it('inserts a notification with all fields', async () => {
       const valuesFn = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
 
       await createNotification({
@@ -93,6 +103,9 @@ describe('notifications', () => {
 
     it('auto-derives link from entity_type and entity_id', async () => {
       const valuesFn = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
 
       await createNotification({
@@ -113,6 +126,9 @@ describe('notifications', () => {
 
     it('stores entity ref in metadata', async () => {
       const valuesFn = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
 
       await createNotification({
@@ -136,6 +152,9 @@ describe('notifications', () => {
 
     it('truncates title to 200 chars', async () => {
       const valuesFn = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
       const longTitle = 'x'.repeat(300);
 
@@ -155,6 +174,9 @@ describe('notifications', () => {
 
     it('truncates body to 500 chars', async () => {
       const valuesFn = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
       const longBody = 'x'.repeat(600);
 
@@ -175,6 +197,9 @@ describe('notifications', () => {
 
     it('defaults body to empty string when not provided', async () => {
       const valuesFn = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
 
       await createNotification({
@@ -219,6 +244,9 @@ describe('notifications', () => {
         'lead_warming', 'system',
       ] as const;
       const valuesFn = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
 
       for (const type of types) {
@@ -249,9 +277,15 @@ describe('notifications', () => {
             { userId: 'member-3' },
           ]),
         })),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
       const valuesFn = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
 
       await notifyTenantMembers({
@@ -278,9 +312,15 @@ describe('notifications', () => {
         from: vi.fn(() => ({
           where: whereFn,
         })),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
       const valuesFn = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
 
       await notifyTenantMembers({
@@ -298,9 +338,15 @@ describe('notifications', () => {
         from: vi.fn(() => ({
           where: vi.fn().mockResolvedValue([]),
         })),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
       const valuesFn = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
 
       await notifyTenantMembers({
@@ -319,9 +365,15 @@ describe('notifications', () => {
             { userId: 'member-1' },
           ]),
         })),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
       const valuesFn = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
 
       await notifyTenantMembers({
@@ -377,9 +429,15 @@ describe('notifications', () => {
             })),
           })),
         })),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
       const valuesFn = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
 
       await processMentions(
@@ -400,6 +458,9 @@ describe('notifications', () => {
 
     it('returns early when no mentions in text', async () => {
       const valuesFn = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
 
       await processMentions(
@@ -421,9 +482,15 @@ describe('notifications', () => {
             })),
           })),
         })),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
       const valuesFn = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
 
       await processMentions(
@@ -451,9 +518,15 @@ describe('notifications', () => {
             })),
           })),
         })),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
       const valuesFn = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
 
       await processMentions(
@@ -474,9 +547,15 @@ describe('notifications', () => {
             })),
           })),
         })),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
       const valuesFn = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
 
       await expect(

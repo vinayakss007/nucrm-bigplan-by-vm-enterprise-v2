@@ -30,6 +30,9 @@ export async function GET(req: NextRequest) {
       .orderBy(leadWarmingEvents.eventMonth, leadWarmingEvents.eventDay);
 
     return NextResponse.json({ data: events });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }
@@ -83,6 +86,9 @@ export async function POST(req: NextRequest) {
       .returning();
 
     return NextResponse.json({ ok: true, data: event }, { status: 201 });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }

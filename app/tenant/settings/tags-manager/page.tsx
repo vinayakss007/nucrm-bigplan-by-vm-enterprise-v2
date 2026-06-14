@@ -313,6 +313,9 @@ export default function TagsManagerPage() {
 const inp = 'w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500';
 
 function Modal({ title, onClose, icon: Icon, variant, children }: {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   title: string; onClose: () => void; icon: any; variant?: 'danger'; children: React.ReactNode;
 }) {
   return (

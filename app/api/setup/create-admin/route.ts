@@ -178,6 +178,9 @@ export async function POST(request: NextRequest) {
       user: { id: user.id, email: user.email, full_name: user.fullName, is_super_admin: true },
       tenant: { id: tenant.id, name: tenant.name },
     }, { status: 201 });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[setup/create-admin]', err);
     return apiError(err);

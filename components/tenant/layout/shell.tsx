@@ -11,6 +11,9 @@ import { ShortcutsModal } from '@/components/shared/shortcuts-modal';
 import UserPreferencesApplier from '@/components/shared/user-preferences-applier';
 
 interface Props {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   tenant:any; profile:any; roleSlug:string;
   permissions:Record<string,boolean>; isAdmin:boolean; isSuperAdmin:boolean;
   emailVerified:boolean; email:string; children:React.ReactNode;

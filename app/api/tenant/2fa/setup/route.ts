@@ -47,6 +47,9 @@ export async function POST(request: NextRequest) {
       qr_code: `<img src="${qrCode}" alt="QR Code" class="w-48 h-48" />`,
       backup_codes: backupCodes,
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }

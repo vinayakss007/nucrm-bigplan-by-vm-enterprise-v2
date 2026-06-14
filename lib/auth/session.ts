@@ -88,6 +88,8 @@ export async function clearSessionCookie() {
 }
 
 // ── Get current user from session ────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getCurrentUser(): Promise<any | null> {
   const token = await getSessionToken();
   if (!token) return null;

@@ -55,6 +55,9 @@ export async function POST(request: NextRequest) {
       message: `Super admin transferred to ${target.fullName || target.email}. You are now a regular user.`,
       target: { id: target.id, email: target.email, fullName: target.fullName },
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[superadmin/transfer-admin POST]', err);
     return apiError(err);

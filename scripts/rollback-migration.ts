@@ -93,6 +93,9 @@ async function main() {
     `);
     console.log('[rollback] Migration record removed from history');
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[rollback] Rollback failed:', error.message);
     process.exit(1);

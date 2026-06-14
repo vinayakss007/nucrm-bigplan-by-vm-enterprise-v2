@@ -35,6 +35,9 @@ export const sentryConfig = {
   ],
   
   // Only track meaningful requests
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   beforeSendTransaction(event: any) {
     // Ignore health check endpoints
     if (event.transaction === '/api/health') {

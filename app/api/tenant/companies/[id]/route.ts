@@ -10,6 +10,9 @@ import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function GET(req: NextRequest, { params }: any) {
   try {
     const ctx = await requireAuth(req);
@@ -42,12 +45,18 @@ export async function GET(req: NextRequest, { params }: any) {
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     
     return NextResponse.json({ data: row });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     console.error('[company GET]', err);
     return apiError(err); 
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function PATCH(req: NextRequest, { params }: any) {
   try {
     const ctx = await requireAuth(req);
@@ -61,6 +70,9 @@ export async function PATCH(req: NextRequest, { params }: any) {
     const validated = validateBody(updateCompanySchema, body);
     if (validated instanceof NextResponse) return validated;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = {
       updatedAt: new Date(),
     };
@@ -96,12 +108,18 @@ export async function PATCH(req: NextRequest, { params }: any) {
     fireWebhooks(ctx.tenantId, 'company.updated', { id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({ data: row });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     console.error('[company PATCH]', err);
     return apiError(err); 
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function DELETE(req: NextRequest, { params }: any) {
   try {
     const ctx = await requireAuth(req);
@@ -137,6 +155,9 @@ export async function DELETE(req: NextRequest, { params }: any) {
     fireWebhooks(ctx.tenantId, 'company.deleted', { id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     console.error('[company DELETE]', err);
     return apiError(err); 

@@ -33,6 +33,9 @@ export function ConfirmPolyfill({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const original = window.confirm;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).confirm = (msg: string) => {
       confirm(msg);
       return true; // Prevent native — modal handles it

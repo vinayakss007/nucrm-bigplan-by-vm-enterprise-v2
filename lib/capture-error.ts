@@ -2,6 +2,9 @@
 
 import { useEffect, useRef } from 'react';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let sentryPromise: Promise<any> | null = null;
 
 function getSentry() {

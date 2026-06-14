@@ -210,6 +210,9 @@ export default rateLimiter;
 
 // Backwards compatibility - old checkRateLimit function
 export async function checkRateLimit(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   request: any,
   options: { action?: string; max?: number; windowMinutes?: number } = {}
 ) {

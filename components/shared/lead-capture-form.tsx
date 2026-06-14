@@ -77,6 +77,9 @@ export default function LeadCaptureForm({
           window.location.href = redirectUrl;
         }, 2000);
       }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setError(err.message);
       if (onError) {

@@ -52,6 +52,9 @@ export async function GET(req: NextRequest) {
     const rates = await db.select().from(taxRates).where(and(...filters));
 
     return NextResponse.json({ data: rates, total: rates.length });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }
@@ -85,6 +88,9 @@ export async function POST(req: NextRequest) {
     }).returning();
 
     return NextResponse.json({ data: row }, { status: 201 });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }
@@ -123,6 +129,9 @@ export async function PUT(req: NextRequest) {
     }
 
     return NextResponse.json({ data: row });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }
@@ -157,6 +166,9 @@ export async function DELETE(req: NextRequest) {
     }
 
     return NextResponse.json({ data: { id: row.id, deleted: true } });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }

@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockDbSelectResult: any[] = [];
 
 vi.mock('@/drizzle/db', () => ({
@@ -27,6 +30,9 @@ vi.mock('@/drizzle/schema', () => ({
 }));
 
 vi.mock('drizzle-orm', () => ({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   eq: vi.fn((a: any, b: any) => ({ a, b })),
 }));
 
@@ -164,7 +170,11 @@ describe('Branding Engine', () => {
     it('rejects null/undefined', async () => {
       const { validateCustomDomain } = await import('@/lib/branding');
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect(validateCustomDomain(null as any).valid).toBe(false);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect(validateCustomDomain(undefined as any).valid).toBe(false);
     });
 

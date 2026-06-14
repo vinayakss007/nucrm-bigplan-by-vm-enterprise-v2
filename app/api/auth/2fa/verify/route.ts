@@ -85,6 +85,9 @@ export async function POST(req: NextRequest) {
       backup_codes: plain, 
       note: 'Save these backup codes — each can only be used once.' 
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     return apiError(err); 
   }

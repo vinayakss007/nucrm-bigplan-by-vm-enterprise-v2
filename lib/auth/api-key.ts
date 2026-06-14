@@ -173,6 +173,9 @@ export async function rotateApiKey(
 export async function getApiKeyUsage(
   keyId: string,
   days: number = 7
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<{ total: number; byEndpoint: any[]; byStatus: any[] }> {
   const totalResults = await db.select({
     count: sql<number>`count(*)::int`

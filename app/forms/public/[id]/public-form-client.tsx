@@ -3,10 +3,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function PublicFormClient({ form }: { form: any }) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [formData, setFormData] = useState<Record<string, any>>({});
   const containerRef = useRef<HTMLFormElement>(null);
 
@@ -55,6 +61,9 @@ export default function PublicFormClient({ form }: { form: any }) {
       if (window.parent !== window) {
         window.parent.postMessage({ type: 'nucrm-submit-success', formId: form.id }, '*');
       }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -62,6 +71,9 @@ export default function PublicFormClient({ form }: { form: any }) {
     }
   };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleChange = (key: string, value: any) => {
     setFormData(prev => ({ ...prev, [key]: value }));
   };
@@ -88,6 +100,9 @@ export default function PublicFormClient({ form }: { form: any }) {
 
   return (
     <form ref={containerRef} onSubmit={handleSubmit} className="space-y-5">
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       {fields.map((field: any) => (
         <div key={field.id}>
           <label className="block text-sm font-semibold mb-1.5">

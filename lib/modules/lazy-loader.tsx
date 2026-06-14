@@ -39,6 +39,9 @@ function ModuleDisabledPlaceholder({ _moduleId }: { _moduleId: string }) {
 
 // ── Lazy Module Factory ──────────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ComponentImport = () => Promise<{ default: React.ComponentType<any> }>;
 
 /**
@@ -52,6 +55,9 @@ type ComponentImport = () => Promise<{ default: React.ComponentType<any> }>;
  * @param importFn - Dynamic import function: () => import('./MyComponent')
  * @param options  - Optional configuration
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function lazyModule<P extends Record<string, any> = Record<string, never>>(
   moduleId: string,
   importFn: ComponentImport,

@@ -18,6 +18,9 @@ vi.mock('next/navigation', () => ({
 // Suppress console errors during tests
 const originalError = console.error;
 beforeAll(() => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   console.error = (...args: any[]) => {
     if (
       typeof args[0] === 'string' &&

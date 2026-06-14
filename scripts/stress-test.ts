@@ -69,6 +69,9 @@ async function cleanup(tid: string) {
       const col = 'tenantId' in t.table ? t.table.tenantId : undefined;
       if (col) {
         const deleted = await db.delete(t.table)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
           .where(and(eq(col as any, tid), sql`metadata->>'stress' = ${STRESS_TAG}`));
         console.log(`  cleaned ${t.name}`);
       }
@@ -76,6 +79,9 @@ async function cleanup(tid: string) {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function insertRows(tableName: string, table: any, values: () => Record<string, any>, refs: Awaited<ReturnType<typeof getExistingRefs>>) {
   if (DRY_RUN) {
     console.log(`[dry-run] would insert ${BATCH} into ${tableName}`);
@@ -90,6 +96,9 @@ async function insertRows(tableName: string, table: any, values: () => Record<st
       const row = { ...values(), metadata: { stress: STRESS_TAG, batch: i } };
       await db.insert(table).values(row);
       inserted++;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       errors.push(`row ${i}: ${err.message?.slice(0, 120)}`);
       console.error(`[stress] ${tableName}[${i}] failed: ${err.message?.slice(0, 120)}`);

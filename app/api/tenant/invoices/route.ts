@@ -116,6 +116,9 @@ export async function POST(request: NextRequest) {
 
     // Add line items
     if (items?.length) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const lineItems = items.map((item: any, idx: number) => ({
         invoiceId: invoice.id,
         productId: null,

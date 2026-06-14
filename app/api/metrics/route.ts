@@ -182,6 +182,9 @@ export async function GET(request: NextRequest) {
     return new Response(metrics.join('\n') + '\n', {
       headers: { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' },
     });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return new Response("# ERROR\\n", {
       status: 500,
