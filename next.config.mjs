@@ -3,8 +3,8 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 let nextConfig = {
-  allowedDevOrigins: ['34.55.131.136', '34.29.235.190', '136.119.162.223', 'localhost:3000', '4bc0-34-58-30-100.ngrok-free.app', '34.170.154.229', '34.30.91.246', '34.41.169.28'],
-  typescript: { ignoreBuildErrors: process.env.CI === 'true' },
+  allowedDevOrigins: ['localhost:3000'],
+  typescript: { ignoreBuildErrors: false },
   devIndicators: { buildActivity: false },
   cacheMaxMemorySize: 50 * 1024 * 1024,
   experimental: {
