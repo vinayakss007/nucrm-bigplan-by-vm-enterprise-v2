@@ -34,8 +34,8 @@ export async function POST(request: NextRequest) {
       .where(eq(users.id, ctx.userId));
 
     return NextResponse.json({ ok: true, message: 'Impersonation ended' });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[Impersonation Stop] Error:', err);
@@ -61,8 +61,8 @@ export async function GET(request: NextRequest) {
     `);
 
     return NextResponse.json({ data: res.rows });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[Impersonation List] Error:', err);

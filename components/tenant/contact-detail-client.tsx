@@ -44,16 +44,12 @@ const ACTIVITY_COLORS: Record<string,string> = {
   contact_created:'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30',
 };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ACTIVITY_ICONS: Record<string,any> = {
   note:MessageSquare, call:PhoneCall, email:AtSign, meeting:Calendar,
   task:CheckCircle, deal_update:Briefcase, contact_created:Star,
 };
 
 // ── QuickAdd: Task inline ──────────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function QuickAddTask({ contactId, _contactName, teamMembers, onAdded }: any) {
   const [open, setOpen] = useState(false);
@@ -104,8 +100,6 @@ function QuickAddTask({ contactId, _contactName, teamMembers, onAdded }: any) {
 
 // ── QuickAdd: Deal inline ──────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function QuickAddDeal({ contactId, _companies, onAdded }: any) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title:'', value:'', stage:'lead', close_date:'' });
@@ -148,8 +142,6 @@ function QuickAddDeal({ contactId, _companies, onAdded }: any) {
 }
 
 // ── QuickAdd: Meeting inline ───────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function QuickAddMeeting({ contactId, onAdded }: any) {
   const [open, setOpen] = useState(false);
@@ -198,13 +190,9 @@ export default function ContactDetailClient({
   invoices=[], orders=[], contracts=[], subscriptions=[], quotes=[],
 }: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   contact: any; initialActivities: any[]; deals: any[]; tasks: any[];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   companies: any[]; teamMembers: any[]; permissions: any; userId: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   invoices?: any[]; orders?: any[]; contracts?: any[]; subscriptions?: any[]; quotes?: any[];
 }) {
@@ -214,10 +202,8 @@ export default function ContactDetailClient({
   const [tasks, setTasks]           = useState(initialTasks);
   const [activeTab, setActiveTab]   = useState('activity'); // 'activity' | 'tasks' | 'deals' | 'history' | 'billing'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [history, setHistory]           = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [contactLeads, setContactLeads]            = useState<any[]>([]);
   const [loadingContactLeads, setLoadingContactLeads] = useState(false);
@@ -303,8 +289,6 @@ export default function ContactDetailClient({
     });
     const data = await res.json();
     if (!res.ok) { toast.error(data.error); return; }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     setContact((c: any) => ({ ...c, lead_status: newStatus }));
     const desc = `Status changed: ${contact.lead_status} → ${newStatus}${statusReason ? ` — ${statusReason}` : ''}`;
@@ -598,8 +582,6 @@ export default function ContactDetailClient({
                     rows={3}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-muted/20 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
                     onKeyDown={e => { if (e.key==='Enter' && (e.metaKey||e.ctrlKey) && noteText.trim()) { e.preventDefault(); addNote(e as any); }}}
                   />
                   <div className="flex items-center justify-between mt-2">
@@ -710,8 +692,6 @@ export default function ContactDetailClient({
                     if (!a.due_date) return 1;
                     if (!b.due_date) return -1;
                     return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   }).map((t: any) => {
                     const today = new Date().toISOString().split('T')[0] || '';
@@ -983,25 +963,17 @@ export default function ContactDetailClient({
                 {/* Build unified timeline */}
                 {(() => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
                   type BillingItem = { type: string; item: any; date: Date; label: string; amount: number; status: string; number: string; };
                   const items: BillingItem[] = [];
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   invoices.forEach((i: any) => items.push({ type: 'invoice', item: i, date: new Date(i.createdAt), label: i.title || i.invoiceNumber, amount: parseFloat(i.totalAmount || 0), status: i.status, number: i.invoiceNumber || '' }));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   orders.forEach((o: any) => items.push({ type: 'order', item: o, date: new Date(o.createdAt), label: o.title || o.orderNumber, amount: parseFloat(o.totalAmount || 0), status: o.status, number: o.orderNumber || '' }));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
                   contracts.forEach((c: any) => items.push({ type: 'contract', item: c, date: new Date(c.createdAt), label: c.title, amount: parseFloat(c.totalValue || 0), status: c.status, number: c.contractNumber || '' }));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   subscriptions.forEach((s: any) => items.push({ type: 'subscription', item: s, date: new Date(s.createdAt), label: s.name, amount: parseFloat(s.amount || 0), status: s.status, number: '' }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   quotes.forEach((q: any) => items.push({ type: 'quote', item: q, date: new Date(q.createdAt), label: q.title, amount: parseFloat(q.totalAmount || 0), status: q.status, number: q.quoteNumber || '' }));
 
@@ -1014,8 +986,6 @@ export default function ContactDetailClient({
                   return (
                     <div className="divide-y divide-border">
                       {items.map((entry, idx) => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const typeIcons: Record<string, any> = {
                           invoice: FileText, order: ShoppingCart, contract: FileSignature,

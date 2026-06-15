@@ -50,8 +50,8 @@ export async function POST(request: NextRequest) {
       .where(eq(integrations.id, instance.id));
 
     return NextResponse.json(result);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

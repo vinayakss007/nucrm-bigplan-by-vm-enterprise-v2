@@ -100,8 +100,8 @@ export async function GET(req: NextRequest) {
         'Content-Disposition': `attachment; filename="nucrm-data-export-${new Date().toISOString().split('T')[0]}.json"`,
       },
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[UserExport] Error:', err);

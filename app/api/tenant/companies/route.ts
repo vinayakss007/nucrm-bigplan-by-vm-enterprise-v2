@@ -78,8 +78,8 @@ export async function GET(request: NextRequest) {
     ]);
 
     return NextResponse.json({ data, total: totalResult[0]?.count ?? 0, limit, offset });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[companies GET]', err);
@@ -123,8 +123,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ data: row }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[companies POST]', err);

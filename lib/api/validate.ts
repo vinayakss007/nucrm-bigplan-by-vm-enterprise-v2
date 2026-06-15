@@ -67,8 +67,8 @@ export function withValidation<T>(
   schema: ZodSchema<T>,
   handler: (
     request: Request,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ctx: any,
     body: T
@@ -99,8 +99,8 @@ export function withValidation<T>(
 /**
  * Safe JSON parser with error handling.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function safeJson(request: Request): Promise<{ data: any } | NextResponse> {
   try {
@@ -108,8 +108,8 @@ export async function safeJson(request: Request): Promise<{ data: any } | NextRe
     return { data };
   } catch (e) {
     console.error('[Validate] JSON parse failed:', e);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return { data: null } as any;
   }

@@ -57,8 +57,6 @@ interface CriticalBackup {
   table_name: string;
   record_id: string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   backup_data: Record<string, any>;
   operation: 'insert' | 'update' | 'delete';
   backed_up_at: string;

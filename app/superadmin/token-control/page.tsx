@@ -23,11 +23,9 @@ import {
 export default function SuperAdminTokenControl() {
   const [activeTab, setActiveTab] = useState<'budgets' | 'tenants' | 'keys' | 'alerts'>('budgets');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [budgets, setBudgets] = useState<any[]>([]);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [topTenants, setTopTenants] = useState<any[]>([]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [alerts, setAlerts] = useState<any[]>([]);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

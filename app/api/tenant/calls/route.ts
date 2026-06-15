@@ -65,8 +65,8 @@ export async function POST(req: NextRequest) {
     }).returning();
 
     return NextResponse.json({ data: call }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -138,8 +138,8 @@ export async function GET(req: NextRequest) {
     .offset(offset);
 
     return NextResponse.json({ data: calls });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

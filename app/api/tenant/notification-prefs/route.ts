@@ -22,8 +22,8 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ data: row?.notificationPrefs ?? {} });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }
@@ -36,8 +36,8 @@ export async function PATCH(req: NextRequest) {
     const validated = validateBody(updateNotificationPrefsSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const safe: Record<string, any> = {};
     if (v['email_notifications'] !== undefined) safe['email_notifications'] = v['email_notifications'];
@@ -57,8 +57,8 @@ export async function PATCH(req: NextRequest) {
       ));
 
     return NextResponse.json({ ok: true, data: safe });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }

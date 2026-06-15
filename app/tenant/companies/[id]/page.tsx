@@ -64,8 +64,6 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
       (SELECT COALESCE(sum(amount),0)::numeric FROM deals d LEFT JOIN deal_stages ds ON ds.id = d.stage_id WHERE d.company_id = ${company.id} AND ds.name NOT IN ('Lost', 'lost') AND d.deleted_at IS NULL) AS pipeline_value
   `);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const counts = (result as any).rows?.[0] ?? { contact_count: 0, lead_count: 0, deal_count: 0, pipeline_value: 0 };
 
   const [contacts, leads, deals] = await Promise.all([

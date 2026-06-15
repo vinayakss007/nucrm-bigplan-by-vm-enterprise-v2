@@ -33,8 +33,8 @@ export async function GET(request: NextRequest) {
     .orderBy(asc(emailTemplates.category), asc(emailTemplates.name));
 
     return NextResponse.json({ data });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -69,8 +69,8 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ data: row }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

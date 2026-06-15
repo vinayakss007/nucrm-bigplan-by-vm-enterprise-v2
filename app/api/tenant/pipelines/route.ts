@@ -35,8 +35,8 @@ export async function GET(req: NextRequest) {
     }));
 
     return NextResponse.json({ data: pipelinesWithStages });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -76,8 +76,8 @@ export async function POST(req: NextRequest) {
 
       if (!newPipeline) throw new Error('Failed to create pipeline');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const stagesToCreate = (stages || defaultStages).map((s: any, idx: number) => ({
         tenantId: ctx.tenantId,
@@ -94,8 +94,8 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ data: result }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
         last_used_at: integrations.lastUsedAt,
         created_at: integrations.createdAt,
         url: sql<string>`${integrations.config}->>'url'`,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         events: sql<any[]>`${integrations.config}->'events'`,
         delivered_count: sql<number>`(SELECT count(*)::int FROM ${webhookQueue} WHERE webhook_id = ${integrations.id} AND status = 'delivered')`,
@@ -57,8 +57,8 @@ export async function GET(req: NextRequest) {
       limit,
       offset,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }
@@ -92,8 +92,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ 
       data: { ...row, signing_secret: signingSecret, note: 'Save this secret — shown once.' } 
     }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }

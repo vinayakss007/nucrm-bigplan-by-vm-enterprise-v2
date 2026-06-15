@@ -133,8 +133,6 @@ export default function ServicesPage() {
       resetForm();
       fetchServices();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       toast.error(error.message || 'Failed to save service');
     }
@@ -175,8 +173,6 @@ export default function ServicesPage() {
       setShowContactModal(false);
       setContactForm({ firstName: '', lastName: '', email: '', phone: '', jobTitle: '' });
       fetchContacts();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       toast.error(error.message || 'Failed to create contact');

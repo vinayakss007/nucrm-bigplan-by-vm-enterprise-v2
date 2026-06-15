@@ -24,8 +24,8 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50')));
     const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const filters: any[] = [eq(signingRequests.tenantId, ctx.tenantId)];
     if (status) {
@@ -40,8 +40,8 @@ export async function GET(req: NextRequest) {
       .offset(offset);
 
     return NextResponse.json({ data, total: data.length });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -95,8 +95,8 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ data: request }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

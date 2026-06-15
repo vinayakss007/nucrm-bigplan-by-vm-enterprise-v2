@@ -5,8 +5,6 @@ const mockDbTransaction = vi.fn();
 const mockDbTransactionThrow = vi.fn();
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 mockDbTransaction.mockImplementation((cb: any) => cb({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   execute: (...args: any[]) => mockTxExecute(...args),
@@ -17,8 +15,6 @@ const mockSqlJoin = vi.fn();
 const mockSqlRaw = vi.fn();
 const mockSql = Object.assign(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   (strings: TemplateStringsArray, ...values: any[]) => ({
     query: strings.reduce((acc, str, i) => acc + str + (values[i] !== undefined ? `$${i + 1}` : ''), ''),
     strings, values,
@@ -28,8 +24,6 @@ const mockSql = Object.assign(
 
 vi.mock('@/drizzle/db', () => ({
   db: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     transaction: (cb: any) => mockDbTransaction(cb),
     execute: vi.fn(),
@@ -42,8 +36,6 @@ describe('TenantDataImporter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockDbTransaction.mockImplementation((cb: any) => cb({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       execute: (...args: any[]) => mockTxExecute(...args),
@@ -54,8 +46,6 @@ describe('TenantDataImporter', () => {
     it('stores tenant id', async () => {
       const { TenantDataImporter } = await import('@/lib/tenant-data-import');
       const importer = new TenantDataImporter('tenant-1');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect((importer as any).tenantId).toBe('tenant-1');
     });

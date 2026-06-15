@@ -143,7 +143,7 @@ export async function createPreRestoreSnapshot(
   tenantId: string,
   tables: string[]
 ): Promise<string> {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const snapshotData: Record<string, any[]> = {};
   let totalRecords = 0;
@@ -183,7 +183,7 @@ export async function rollbackToSnapshot(snapshotId: string, tenantId: string): 
     throw new Error('Snapshot not found');
   }
   
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const snapshotData = snapshot.snapshotData as Record<string, any[]>;
   
@@ -288,8 +288,8 @@ export async function executeSelectiveRestore(
               await tx.execute(sql.raw(statement));
               newCount++;
             }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } catch (err: any) {
             console.error(`[restore] Failed to restore row in ${table}:`, err.message);
@@ -324,8 +324,8 @@ export async function executeSelectiveRestore(
     
     return { success: true, recordsAffected, recordsPerTable, durationMs };
     
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     const durationMs = Date.now() - startTime;
@@ -347,8 +347,8 @@ export async function executeSelectiveRestore(
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatSQLValue(value: any): string {
   if (value === null || value === undefined) return 'NULL';
@@ -383,8 +383,8 @@ export async function countExistingRecords(
 
 export async function validateTenant(tenantId: string): Promise<{
   valid: boolean;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tenant?: any;
   error?: string;

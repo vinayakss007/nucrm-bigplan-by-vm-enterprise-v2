@@ -18,8 +18,6 @@ const ACTION_CFG: Record<string, { color: string; bg: string }> = {
 const RESOURCE_TYPES = ['contact','deal','task','company','member','role','api_key','integration','workspace'];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function AuditLogClient({ logs }: { logs: any[] }) {
   const [search, setSearch]   = useState('');
   const [actionF, setActionF] = useState('');

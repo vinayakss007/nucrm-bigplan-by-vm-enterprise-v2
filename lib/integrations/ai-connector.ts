@@ -19,8 +19,8 @@ import type { IntegrationInstance, ActionResult } from './types';
 export async function aiConnector(
   instance: IntegrationInstance,
   action: string,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params: Record<string, any>
 ): Promise<ActionResult> {
@@ -60,8 +60,8 @@ export async function aiConnector(
       if (res.status === 401 || res.status === 403) {
         return { success: false, error: `Authentication failed: ${data.error?.message || data.message || JSON.stringify(data)}` };
       }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       continue; // Try next pattern
@@ -102,14 +102,14 @@ function guessBaseUrl(providerId: string): string {
 function guessApiPatterns(
   providerId: string,
   action: string,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params: Record<string, any>
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): { url: string; method: string; headers: Record<string, string>; body: any; authType: string }[] {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const patterns: { url: string; method: string; headers: Record<string, string>; body: any; authType: string }[] = [];
 

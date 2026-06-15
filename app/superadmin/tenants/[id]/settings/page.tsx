@@ -11,8 +11,6 @@ import { cn } from '@/lib/utils';
 export default function TenantSettingsAuditPage() {
   const params = useParams<{ id: string }>();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -191,8 +189,6 @@ export default function TenantSettingsAuditPage() {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function Stat({ label, value }: { label: string; value: any }) {
   return (
     <div className="rounded-lg border border-border bg-card p-3">
@@ -202,8 +198,6 @@ function Stat({ label, value }: { label: string; value: any }) {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function Section({ title, icon: Icon, children }: { title: string; icon: any; children: React.ReactNode }) {
   return (
@@ -216,8 +210,6 @@ function Section({ title, icon: Icon, children }: { title: string; icon: any; ch
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function SubBlock({ title, icon: Icon, children }: { title: string; icon: any; children: React.ReactNode }) {
   return (
@@ -234,8 +226,6 @@ function Grid({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-2 md:grid-cols-3 gap-2">{children}</div>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function KV({ k, v }: { k: string; v: any }) {
   return (

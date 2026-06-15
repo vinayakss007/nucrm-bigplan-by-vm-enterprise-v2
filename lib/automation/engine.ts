@@ -57,8 +57,8 @@ export interface TriggerPayload {
   tenantId: string;
   userId?: string;
   event: TriggerEvent;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: Record<string, any>;
   contactId?: string;
@@ -105,8 +105,8 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
           metadata: enrichedData,
         }).catch((err) => captureError(err, 'automation:log-run'));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         captureError(err, `automation:${automation.name}`);
@@ -122,16 +122,16 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
         }).catch((err) => captureError(err, 'automation:log-failed-run'));
       }
     }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     captureError(err, 'automation:evaluate');
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function meetsConditions(conditions: any[], data: Record<string, any>): boolean {
   if (!Array.isArray(conditions) || conditions.length === 0) return true;
@@ -152,15 +152,15 @@ function meetsConditions(conditions: any[], data: Record<string, any>): boolean 
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getNestedValue(obj: Record<string, any>, path: string): any {
   return path.split('.').reduce((acc, key) => acc?.[key], obj);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function executeAction(action: any, payload: TriggerPayload, enrichedData: Record<string, any>): Promise<void> {
   const { type, config = {} } = action;
@@ -245,8 +245,8 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
             ${payload.userId || null}::uuid
           )
         `);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         captureError(err, 'automation:sequence-enrollment');
@@ -308,8 +308,8 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
           }),
           signal: AbortSignal.timeout(10_000),
         });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         captureError(err, 'automation:whatsapp-send');
@@ -333,8 +333,8 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
           }),
           signal: AbortSignal.timeout(10_000),
         });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         console.error(`[automation] Webhook failed for ${config.url}:`, err.message);
@@ -347,8 +347,8 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function interpolate(template: string, data: Record<string, any>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(data[key] ?? ''));

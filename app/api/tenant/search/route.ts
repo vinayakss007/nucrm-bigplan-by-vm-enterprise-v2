@@ -167,8 +167,8 @@ export async function GET(request: NextRequest) {
         : Promise.resolve([] as unknown as Awaited<ReturnType<typeof db.select>>),
     ]);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const total = (contactResults as any[]).length + (leadResults as any[]).length + (dealResults as any[]).length + (companyResults as any[]).length + (taskResults as any[]).length;
     return NextResponse.json({ 
@@ -180,8 +180,8 @@ export async function GET(request: NextRequest) {
       total, 
       query: q 
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[search GET]', err);

@@ -130,8 +130,8 @@ export async function POST_login(request: NextRequest) {
     });
     response.headers.append('Set-Cookie', setCsrfCookie(csrfToken, process.env.NODE_ENV === 'production'));
     return response;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err:any) {
     devLogger.error(err as Error, '[auth/login]');
@@ -354,8 +354,8 @@ export async function POST_signup(request: NextRequest) {
     }
 
     return signupResponse;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err:any) {
     devLogger.error(err as Error, '[auth/signup]');

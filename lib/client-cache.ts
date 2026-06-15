@@ -282,8 +282,8 @@ export const CacheKeys = {
   tenantInfo: (tenantId: string) => `tenant:${tenantId}:info`,
   
   // Contacts
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contactsList: (tenantId: string, filters?: Record<string, any>) => 
     `tenant:${tenantId}:contacts:${JSON.stringify(filters || {})}`,
@@ -306,8 +306,8 @@ export const CacheKeys = {
     `tenant:${tenantId}:activities:${limit}`,
   
   // Tasks
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tasks: (tenantId: string, filters?: Record<string, any>) => 
     `tenant:${tenantId}:tasks:${JSON.stringify(filters || {})}`,
@@ -332,18 +332,18 @@ export const CacheKeys = {
   
   // Super Admin
   platformStats: () => 'superadmin:platform:stats',
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tenantsList: (filters?: Record<string, any>) => `superadmin:tenants:${JSON.stringify(filters || {})}`,
   tenantById: (tenantId: string) => `superadmin:tenant:${tenantId}`,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   usersList: (filters?: Record<string, any>) => `superadmin:users:${JSON.stringify(filters || {})}`,
   revenue: () => 'superadmin:revenue',
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   errors: (filters?: Record<string, any>) => `superadmin:errors:${JSON.stringify(filters || {})}`,
   usage: () => 'superadmin:usage',

@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
       .orderBy(desc(scheduledReports.createdAt));
 
     return NextResponse.json({ data: reports });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[scheduled reports GET]', err);
@@ -62,8 +62,8 @@ export async function POST(request: NextRequest) {
     }).returning();
 
     return NextResponse.json({ data: report }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[scheduled reports POST]', err);
@@ -87,8 +87,8 @@ export async function PATCH(request: NextRequest) {
       ));
 
     return NextResponse.json({ success: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -109,8 +109,8 @@ export async function DELETE(request: NextRequest) {
       ));
 
     return NextResponse.json({ success: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

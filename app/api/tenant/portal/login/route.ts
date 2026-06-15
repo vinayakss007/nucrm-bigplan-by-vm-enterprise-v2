@@ -77,8 +77,8 @@ export async function POST(request: NextRequest) {
         cases: config.allow_cases,
       },
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[portal login]', err);
@@ -105,8 +105,8 @@ export async function GET(request: NextRequest) {
         cases: config.allow_cases,
       },
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[portal status]', err);

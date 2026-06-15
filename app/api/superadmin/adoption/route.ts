@@ -93,8 +93,8 @@ export async function GET(req: NextRequest) {
         out_of_office_now: Number(row['users_ooo'])        || 0,
       },
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[superadmin adoption]', err);

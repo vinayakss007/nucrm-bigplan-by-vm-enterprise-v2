@@ -18,8 +18,6 @@ export default function ImportExportPage() {
   const [csvText, setCsvText] = useState('');
   const [importing, setImporting] = useState(false);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [result, setResult] = useState<any>(null);
   const [dragOver, setDragOver] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -60,8 +58,6 @@ export default function ImportExportPage() {
       setResult({ type: 'success', data });
       toast.success('Import completed');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setResult({ type: 'error', message: err.message });
       toast.error(err.message);
@@ -83,8 +79,6 @@ export default function ImportExportPage() {
       a.click();
       URL.revokeObjectURL(url);
       toast.success('Export downloaded');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       toast.error(err.message || 'Export failed');

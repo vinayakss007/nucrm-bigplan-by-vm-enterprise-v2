@@ -29,8 +29,8 @@ export class CriticalDataCapture {
 
         if (result.rows.length === 0) continue;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rowData = result.rows[0] as Record<string, any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,8 +54,8 @@ export class CriticalDataCapture {
         });
 
         captured++;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         console.error(`[CriticalDataCapture] Failed to capture ${tableName}:${recordId}:`, err.message);
@@ -75,8 +75,8 @@ export class CriticalDataCapture {
 
       if (result.rows.length === 0) return;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rowData = result.rows[0] as Record<string, any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,8 +97,8 @@ export class CriticalDataCapture {
         operation: 'update',
         retainedUntil: new Date(Date.now() + RETENTION_DAYS * 24 * 60 * 60 * 1000),
       });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error(`[CriticalDataCapture] Failed to capture update for ${tableName}:${recordId}:`, err.message);
@@ -114,8 +114,8 @@ export class CriticalDataCapture {
     canRestore?: boolean;
     page?: number;
     limit?: number;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }): Promise<{ backups: any[]; total: number }> {
     const whereFilters = [];
@@ -148,8 +148,8 @@ export class CriticalDataCapture {
     };
   }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async restoreFromBackup(backupId: string): Promise<{ success: boolean; message: string; data?: any }> {
     try {
@@ -162,8 +162,8 @@ export class CriticalDataCapture {
           return { success: false, message: 'Backup not found or already restored' };
         }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data = backup.backupData as Record<string, any>;
         const columns = Object.keys(data);
@@ -186,16 +186,16 @@ export class CriticalDataCapture {
           data,
         };
       });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       return { success: false, message: `Restore failed: ${err.message}` };
     }
   }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getStats(tenantId?: string): Promise<any> {
     const whereFilters = [];

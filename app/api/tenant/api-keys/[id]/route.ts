@@ -12,8 +12,8 @@ import { eq, and } from 'drizzle-orm';
  */
 export async function GET(
   request: NextRequest,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   { params }: any
 ) {
@@ -58,8 +58,8 @@ export async function GET(
         usage,
       },
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[API Keys] GET error:', error);
@@ -73,8 +73,8 @@ export async function GET(
  */
 export async function DELETE(
   request: NextRequest,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   { params }: any
 ) {
@@ -92,8 +92,8 @@ export async function DELETE(
     }
 
     return NextResponse.json({ ok: true, message: 'API key revoked' });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[API Keys] DELETE error:', error);
@@ -107,8 +107,8 @@ export async function DELETE(
  */
 export async function POST(
   request: NextRequest,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   { params }: any
 ) {
@@ -149,8 +149,8 @@ export async function POST(
       prefix: result.prefix,
       warning: 'Store this key securely. It will not be shown again. The old key is now invalid.',
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[API Keys] ROTATE error:', error);

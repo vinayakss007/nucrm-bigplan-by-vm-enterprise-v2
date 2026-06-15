@@ -47,8 +47,8 @@ export async function GET(req: NextRequest) {
         deletions: deleteRequests,
       },
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }
@@ -84,8 +84,8 @@ export async function POST(req: NextRequest) {
     }).returning();
 
     // Process the request
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let result: any;
     try {
@@ -103,19 +103,20 @@ export async function POST(req: NextRequest) {
           result: { summary: result.metadata || result.categories || {} },
         })
         .where(eq(complianceRequests.id, request!.id));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      // Mark as failed
+ 
+ 
+ 
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('[compliance/gdpr]', msg);
       await db.update(complianceRequests)
         .set({
           status: 'failed',
-          errorMessage: err.message,
+          errorMessage: msg,
         })
         .where(eq(complianceRequests.id, request!.id));
 
-      return NextResponse.json({ error: 'Request processing failed', detail: err.message }, { status: 500 });
+      return NextResponse.json({ error: 'Request processing failed' }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -126,8 +127,8 @@ export async function POST(req: NextRequest) {
         result,
       },
     }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }

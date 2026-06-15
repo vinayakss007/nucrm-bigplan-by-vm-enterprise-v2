@@ -8,7 +8,6 @@ const SCOPES = ['contacts:read','contacts:write','deals:read','deals:write','tas
 
 export default function APIKeysPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [keys, setKeys]       = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);

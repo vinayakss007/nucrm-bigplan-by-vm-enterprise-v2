@@ -154,8 +154,8 @@ export async function GET(req: NextRequest) {
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

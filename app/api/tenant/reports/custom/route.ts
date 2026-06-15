@@ -13,8 +13,8 @@ interface ReportConfig {
   name: string;
   description: string;
   type: 'contacts' | 'companies' | 'deals' | 'tasks' | 'leads' | 'pipeline' | 'revenue';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   filters: Record<string, any>;
   columns: string[];
@@ -40,8 +40,8 @@ export async function GET(request: NextRequest) {
     const reports: ReportConfig[] = setting?.value ? JSON.parse(String(setting.value)) : [];
 
     return NextResponse.json({ data: reports });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[custom reports GET]', err);
@@ -100,8 +100,8 @@ export async function POST(request: NextRequest) {
       });
 
     return NextResponse.json({ ok: true, data: newReport });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[custom reports POST]', err);
@@ -137,8 +137,8 @@ export async function DELETE(request: NextRequest) {
       ));
 
     return NextResponse.json({ ok: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[custom reports DELETE]', err);

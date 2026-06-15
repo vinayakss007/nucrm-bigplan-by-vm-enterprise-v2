@@ -47,8 +47,6 @@ async function main() {
 
     console.log('[migrate] All migrations applied successfully');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[migrate] Migration failed:', error);
     process.exit(1);

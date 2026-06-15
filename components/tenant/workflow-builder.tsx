@@ -33,8 +33,6 @@ interface CustomNodeData extends Record<string, unknown> {
   nodeType: string;
   description?: string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   config: Record<string, any>;
   configPreview?: string;
 }
@@ -151,8 +149,6 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
   const [showPalette, setShowPalette] = useState(true)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [nodeConfig, setNodeConfig] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(!!workflowId)
 
@@ -190,8 +186,6 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
         } else if (wf.actions && wf.actions.length > 0) {
           // Convert actions to nodes
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           const actionNodes: CustomNode[] = wf.actions.map((action: any, i: number) => ({
             id: `action-${i + 1}`,
             type: 'workflowNode',
@@ -228,8 +222,6 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
           }
           setNodes([triggerNode])
         }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         toast.error(err.message || 'Failed to load workflow')
@@ -299,8 +291,6 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
         }))
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const body: any = {
         name: workflowName.trim(),
         description: workflowDescription,
@@ -323,8 +313,6 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
 
       toast.success(workflowId ? 'Workflow updated' : 'Workflow created')
       onSave?.()
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       toast.error(err.message || 'Failed to save workflow')
@@ -352,8 +340,6 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       toast.success(`Test execution started: ${data.execution_id}`)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       toast.error(err.message || 'Test failed')
@@ -537,8 +523,6 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
                 const node = nodes.find(n => n.id === selectedNode)
                 if (!node) return null
                 const palette = NODE_PALETTE.find(p => p.type === node.data.nodeType)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const cfg = node.data.config as any
 

@@ -142,13 +142,14 @@ export async function POST(request: NextRequest) {
       { error: 'unsupported_grant_type', error_description: 'Unsupported grant type' },
       { status: 400 }
     );
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    console.error('[oauth/token POST]', err);
+ 
+ 
+ 
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[oauth/token POST]', msg);
     return NextResponse.json(
-      { error: 'server_error', error_description: err.message },
+      { error: 'server_error', error_description: 'Token exchange failed' },
       { status: 500 }
     );
   }

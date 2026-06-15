@@ -76,8 +76,8 @@ async function _GET(request: NextRequest) {
     const data = await query;
 
     return NextResponse.json({ data, total: countResult?.count ?? 0, limit, offset });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[tenant tickets GET]', err);
@@ -115,8 +115,8 @@ export async function POST(request: NextRequest) {
       .returning();
 
     return NextResponse.json({ data: row }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[tenant tickets POST]', err);

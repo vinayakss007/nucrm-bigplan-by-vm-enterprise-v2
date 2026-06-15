@@ -62,8 +62,6 @@ describe('WidgetShell', () => {
     data: { items: [] },
     onRefresh: vi.fn(),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     children: vi.fn(({ data }: any) => <div>Content: {JSON.stringify(data)}</div>),
   };
 

@@ -68,8 +68,6 @@ export function createTestRequest(
   options: {
     method?: string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     body?: any;
     searchParams?: Record<string, string>;
     headers?: Record<string, string>;

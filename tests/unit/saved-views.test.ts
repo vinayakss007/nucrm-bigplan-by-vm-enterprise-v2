@@ -4,16 +4,12 @@ describe('Saved Views validation', () => {
   it('requires name for view creation', () => {
     const body = { entity_type: 'contacts' };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const isValid = !!(body as any).name && !!body.entity_type;
     expect(isValid).toBe(false);
   });
 
   it('requires entity_type for view creation', () => {
     const body = { name: 'My View' };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const isValid = !!(body as any).name && !!(body as any).entity_type;
     expect(isValid).toBe(false);

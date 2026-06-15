@@ -13,8 +13,8 @@ export async function GET(request: NextRequest) {
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     // Helper function for safe queries
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const safeQuery = async (fn: () => Promise<any>, fallback: any) => {
       try {
@@ -52,16 +52,16 @@ export async function GET(request: NextRequest) {
     }, []);
 
     // Get stats
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let stats: any = {};
     try {
       const statsRes = await db.execute(sql`SELECT public.platform_stats() as data`).catch(() => ({ rows: [{ data: {} }] }));
       stats = (statsRes.rows[0] as Record<string, unknown>)?.data as Record<string, unknown> ?? {};
       // Fill in missing fields computed from query data
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (stats.mrr === undefined) stats.mrr = planDist.reduce((s: number, p: any) => s + (p.priceMonthly || 0) * (p.tenantCount || 0), 0);
       if (stats.trialing === undefined) stats.trialing = 0;
@@ -179,8 +179,8 @@ export async function GET(request: NextRequest) {
       activeTenants: activeTenants[0]?.count || 0,
       dbSize: dbSize[0]?.size || '0 B',
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     captureError(err, 'Monitoring:GET');

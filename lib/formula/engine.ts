@@ -13,8 +13,8 @@
 import { create, all, type MathJsInstance } from 'mathjs';
 
 // Create a restricted mathjs instance — no dangerous functions
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const math = create(all as any);
 
@@ -41,16 +41,16 @@ export class FormulaEngine {
    * @param data The entity record (Contact, Deal, etc.)
    * @returns The computed value (number or string) or null on error
    */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluate(formula: string, data: Record<string, any>): any {
     if (!formula) return null;
 
     try {
       // 1. Pre-process: replace {{field}} with clean variable names
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const variables: Record<string, any> = {};
       let cleanFormula = formula;
@@ -108,8 +108,8 @@ export class FormulaEngine {
     }
   }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private getNestedValue(obj: Record<string, any>, path: string): any {
     return path.split('.').reduce((acc, key) => acc?.[key], obj);

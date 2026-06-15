@@ -81,8 +81,8 @@ export async function PATCH(req: NextRequest) {
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = {
       updatedAt: new Date(),

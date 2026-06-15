@@ -11,8 +11,6 @@ describe('Call Logging', () => {
     it('requires contact_id for call creation', () => {
       const body = { direction: 'outbound', duration: 120 };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const isValid = !!(body as any).contact_id;
       expect(isValid).toBe(false);
     });
@@ -25,8 +23,6 @@ describe('Call Logging', () => {
 
     it('defaults direction to outbound', () => {
       const body = { contact_id: 'uuid-123' };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const direction = (body as any).direction || 'outbound';
       expect(direction).toBe('outbound');

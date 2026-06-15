@@ -38,8 +38,8 @@ function rotateLogs() {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function writeToFile(logEntry: any) {
   try {

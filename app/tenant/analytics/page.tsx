@@ -20,11 +20,9 @@ const TIP_STYLE   = { background:'hsl(var(--card))', border:'1px solid hsl(var(-
 
 export default function TenantAnalyticsPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [deals, setDeals]       = useState<any[]>([]);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [contacts, setContacts] = useState<any[]>([]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [tasks, setTasks]       = useState<any[]>([]);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,8 +43,6 @@ export default function TenantAnalyticsPage() {
       setTasks(t.data||[]); 
       // Flatten stages from all pipelines
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const allStages = (p.data||[]).flatMap((pl: any) => (pl.stages||[]));
       setStages(allStages);
       setLoading(false);
@@ -55,8 +51,6 @@ export default function TenantAnalyticsPage() {
 }, []);
 
   const since = new Date(Date.now() - range * 86400000);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const inRange = (d: any) => new Date(d.created_at) >= since;
 

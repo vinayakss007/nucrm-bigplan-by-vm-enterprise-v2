@@ -98,8 +98,8 @@ export async function GET(request: NextRequest) {
         anomalies
       }
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[api/token-control] GET error:', err.message);
@@ -207,8 +207,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ error: `Invalid action: ${action}` }, { status: 400 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[api/token-control] POST error:', err.message);

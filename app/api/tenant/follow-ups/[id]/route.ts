@@ -7,8 +7,8 @@ import { db } from '@/drizzle/db';
 import { followUps } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function PATCH(req: NextRequest, { params }: any) {
   try {
@@ -21,8 +21,8 @@ export async function PATCH(req: NextRequest, { params }: any) {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = {
       updatedAt: new Date(),
@@ -55,8 +55,8 @@ export async function PATCH(req: NextRequest, { params }: any) {
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     return NextResponse.json({ data: row });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[follow-up PATCH]', err);
@@ -64,8 +64,8 @@ export async function PATCH(req: NextRequest, { params }: any) {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function DELETE(req: NextRequest, { params }: any) {
   try {
@@ -89,8 +89,8 @@ export async function DELETE(req: NextRequest, { params }: any) {
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     return NextResponse.json({ ok: true, message: 'Follow-up deleted.' });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[follow-up DELETE]', err);

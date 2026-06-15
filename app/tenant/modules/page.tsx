@@ -21,17 +21,11 @@ interface ModuleData {
   id: string; name: string; description: string; icon: string;
   category: string; features: string[];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   pricing: Record<string, any>;
   status: 'active' | 'disabled' | 'available';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   settings: Record<string, any>;
   is_free: boolean; price_monthly: number;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   settings_schema?: any[];
 }

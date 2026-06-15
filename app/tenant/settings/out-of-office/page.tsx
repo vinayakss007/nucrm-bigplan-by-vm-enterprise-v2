@@ -37,13 +37,9 @@ export default function OutOfOfficePage() {
       fetch('/api/tenant/members').then(r => r.ok ? r.json() : { data: [] }),
       fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     ]).then(([oooRes, members, me]: any[]) => { if (ignore) return; 
       setOoo(oooRes.out_of_office ?? DEFAULT);
       setOriginal(oooRes.out_of_office ?? DEFAULT);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mapped = (members.data ?? []).map((m: any) => ({
         user_id: m.userId, full_name: m.fullName ?? m.email, email: m.email,
@@ -70,8 +66,6 @@ export default function OutOfOfficePage() {
     const d = await res.json();
     if (res.ok) {
       const total = ooo.auto_reassign && d.reassigned
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ? Object.values(d.reassigned).reduce((a: number, b: any) => a + Number(b ?? 0), 0)
         : 0;
@@ -241,8 +235,6 @@ export default function OutOfOfficePage() {
 
 const inp = 'w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function Section({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
   return (

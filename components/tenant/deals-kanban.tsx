@@ -51,13 +51,9 @@ interface Props {
   initialDeals: Deal[]
   stages: Stage[]
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   contacts: any[]
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   companies: any[]
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   teamMembers: any[]
   permissions: { canCreate: boolean; canEdit: boolean; canDelete: boolean }
@@ -96,8 +92,6 @@ export default function DealsKanban({ initialDeals, stages, contacts, companies,
       name: stage.name,
       order: stage.order,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       deals: deals.filter((d: any) => d.stageId === stage.id),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       totalValue: deals.filter((d: any) => d.stageId === stage.id).reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0),
@@ -134,8 +128,6 @@ export default function DealsKanban({ initialDeals, stages, contacts, companies,
       const refreshRes = await fetch('/api/tenant/deals?limit=200')
       const refreshData = await refreshRes.json()
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       setDeals((refreshData.data ?? []).map((d: any) => toSnakeCase(d)))
     } catch {
       toast.error('Failed to create deal')
@@ -158,8 +150,6 @@ export default function DealsKanban({ initialDeals, stages, contacts, companies,
       // Optimistic update - update stageId to match the new stage
       const newStage = stages.find(s => s.name.toLowerCase() === newStageName.toLowerCase())
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       setDeals((prev: any[]) => prev.map((d: any) => d.id === dealId ? { ...d, stageId: newStage?.id, stage_name: newStage?.name } : d))
       toast.success(`Deal moved to ${newStageName}`)
     } catch {
@@ -173,8 +163,6 @@ export default function DealsKanban({ initialDeals, stages, contacts, companies,
       const res = await fetch(`/api/tenant/deals/${dealId}`, { method: 'DELETE' })
       if (res.ok) {
         toast.success('Deal deleted')
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setDeals((prev: any[]) => prev.filter((d: any) => d.id !== dealId))
       } else {

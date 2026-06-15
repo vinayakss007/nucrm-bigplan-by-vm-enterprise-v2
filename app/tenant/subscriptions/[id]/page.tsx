@@ -96,8 +96,6 @@ export default function SubscriptionDetailPage() {
     if (action === 'cancel' && !confirm('Are you sure you want to cancel this subscription?')) return;
     try {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const body: Record<string, any> = { status: newStatus };
       if (action === 'cancel') body['cancelledAt'] = new Date().toISOString();
       const res = await fetch(`/api/tenant/subscriptions/${id}`, {

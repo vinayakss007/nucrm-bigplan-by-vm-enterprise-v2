@@ -13,8 +13,6 @@ const TIP_STYLE   = { background:'hsl(222,32%,9%)', border:'1px solid rgba(255,2
 
 export default function MonitoringPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData]         = useState<any>(null);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [health, setHealth]     = useState<any>(null);
@@ -41,8 +39,6 @@ export default function MonitoringPage() {
   const hs = health ?? {};
   const allUp = hs.status==='ok';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const Metric = ({ label, value, icon:Icon, color, sub }:any) => (
     <div className="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -71,8 +67,6 @@ export default function MonitoringPage() {
 
   // Plan distribution
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const planDist = (data?.planDist||[]).map((p:any) => ({
     name: p.name, count: p.tenant_count,
     revenue: Number(p.price_monthly) * Number(p.tenant_count),
@@ -80,8 +74,6 @@ export default function MonitoringPage() {
 
   // Tenant growth — fill missing days
   const growthMap: Record<string,number> = {};
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (data?.tenantGrowth||[]).forEach((d:any) => { growthMap[d.day] = d.count; });
   const last30 = Array.from({length:30},(_,i)=>{

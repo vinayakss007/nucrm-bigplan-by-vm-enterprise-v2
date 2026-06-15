@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const listeners = new Map<string, Set<(...args: any[]) => void>>();
 
 beforeEach(() => {
@@ -10,21 +8,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal('window', {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     addEventListener: vi.fn((event: string, handler: (...args: any[]) => void) => {
       if (!listeners.has(event)) listeners.set(event, new Set());
       listeners.get(event)!.add(handler);
     }),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     removeEventListener: vi.fn((event: string, handler: (...args: any[]) => void) => {
       listeners.get(event)?.delete(handler);
     }),
   });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let currentTarget: any = null;
   vi.stubGlobal('KeyboardEvent', class {
@@ -32,8 +24,6 @@ beforeEach(() => {
     metaKey: boolean;
     ctrlKey: boolean;
     preventDefault: ReturnType<typeof vi.fn>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     target: any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,14 +35,10 @@ beforeEach(() => {
       this.target = currentTarget;
     }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     static setCurrentTarget(el: any) { currentTarget = el; }
   });
   vi.stubGlobal('document', {
     createElement: (tag: string) => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const elListeners = new Map<string, Set<(...args: any[]) => void>>();
       const dataAttrs: Record<string, string> = {};
@@ -67,8 +53,6 @@ beforeEach(() => {
         get dataset() { return dataAttrs; },
         parentElement: null,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         appendChild: vi.fn((child: any) => { child.parentElement = self; }),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         dispatchEvent: vi.fn((event: any) => {
@@ -78,8 +62,6 @@ beforeEach(() => {
         focus: vi.fn(),
         click: vi.fn(),
         querySelector: vi.fn(),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         addEventListener: vi.fn((event: string, handler: (...args: any[]) => void) => {
           if (!elListeners.has(event)) elListeners.set(event, new Set());
@@ -103,8 +85,6 @@ vi.mock('react', () => ({
       const event = 'cleanup';
       if (!listeners.has(event)) listeners.set(event, new Set());
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       listeners.get(event)!.add(cleanup as any);
     }
   },
@@ -114,18 +94,12 @@ vi.mock('react', () => ({
 
 function triggerKey(key: string, metaKey = false, ctrlKey = false) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { KeyboardEvent: KE } = globalThis as any;
   const event = new KE('keydown', { key, metaKey, ctrlKey });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   listeners.get('keydown')?.forEach((h: any) => h(event));
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function triggerKeyOnElement(el: any, key: string) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

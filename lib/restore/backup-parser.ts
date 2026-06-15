@@ -596,8 +596,8 @@ export async function validateBackupFile(filePath: string): Promise<{
       format,
       statement_count: statementCount,
     };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return {

@@ -56,8 +56,8 @@ export async function POST(request: NextRequest) {
       message: 'Onboarding complete! Your workspace is ready.',
       modules_installed: modules.length,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[Onboarding Complete] Error:', err);
@@ -78,8 +78,8 @@ export async function GET(request: NextRequest) {
     const completed = await hasCompletedOnboarding(ctx.tenantId, ctx.userId);
 
     return NextResponse.json({ completed });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return NextResponse.json({ completed: true }); // Don't block on error

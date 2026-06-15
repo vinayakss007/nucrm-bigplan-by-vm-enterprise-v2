@@ -43,8 +43,6 @@ function run(cmd: string, label: string): { ok: boolean; out: string; dur: numbe
     const out = execSync(cmd, { encoding: 'utf-8', timeout: TIMEOUT_MS, stdio: ['pipe', 'pipe', 'pipe'] });
     return { ok: true, out: out.trim(), dur: Date.now() - t0 };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (e: any) {
     return { ok: false, out: (e.stdout || '') + '\n' + (e.stderr || ''), dur: Date.now() - t0 };
   }
@@ -118,7 +116,7 @@ async function checkLighthouse(): Promise<CheckResult> {
       bp = Math.round(report.categories?.['best-practices']?.score * 100 || 0);
       seo = Math.round(report.categories?.seo?.score * 100 || 0);
     }
-  } catch {}
+  } catch (e) { console.error('[quality-report] lighthouse audit read failed:', e); }
 
   const avgScore = Math.round((perf + a11y + bp + seo) / 4);
   console.log(`  Perf: ${perf} | A11y: ${a11y} | BestPractices: ${bp} | SEO: ${seo}`);

@@ -16,8 +16,6 @@ const STAGES = [
 
 export default function TenantDealsClient({ initialDeals, contacts, companies, teamMembers, permissions }: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialDeals: any[]; contacts: any[]; companies: any[]; teamMembers: any[];
   permissions: { canCreate:boolean; canEdit:boolean; canDelete:boolean };
 }) {
