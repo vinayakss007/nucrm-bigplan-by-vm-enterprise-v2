@@ -10,7 +10,7 @@
  * Uses the AI Gateway (lib/ai/gateway.ts) for multi-provider LLM support.
  */
 
-import { chat, type GatewayResponse } from '@/lib/ai/gateway';
+import { chat } from '@/lib/ai/gateway';
 import { db } from '@/drizzle/db';
 import { leadWarmingReplies, leadWarmingCampaigns, leadWarmingMessages } from '@/drizzle/schema/lead-warming';
 import { contacts, tasks } from '@/drizzle/schema';

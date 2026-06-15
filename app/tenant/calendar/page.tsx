@@ -3,8 +3,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ChevronLeft, ChevronRight, Plus, Calendar, Clock, MapPin, CheckSquare,
-  Users, TrendingUp, FileText, MoreHorizontal, Edit, Trash2, ExternalLink
+  ChevronLeft, ChevronRight, Plus, Calendar, Clock, CheckSquare,
+  Users, TrendingUp, ExternalLink
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, addMonths, subMonths, getDay, startOfWeek, endOfWeek, addWeeks, subWeeks, addDays, subDays } from 'date-fns';
@@ -26,7 +26,7 @@ interface CalEvent {
 }
 
 export default function CalendarPage() {
-  const router = useRouter();
+  const _router = useRouter();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
   const [events, setEvents] = useState<CalEvent[]>([]);

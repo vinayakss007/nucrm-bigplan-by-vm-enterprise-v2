@@ -21,7 +21,7 @@ export async function GET(req: NextRequest, { params }: any) {
     const id = (await params).id;
 
     // Subquery for contact count
-    const contactCountQuery = db.select({
+    const _contactCountQuery = db.select({
       count: sql<number>`count(*)::int`.as('count')
     })
     .from(contacts)

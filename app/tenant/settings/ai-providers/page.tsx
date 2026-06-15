@@ -1,12 +1,11 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  BrainCircuit, Save, Loader2, ShieldX, ExternalLink, KeyRound, Check,
-  AlertTriangle, ArrowUpDown, Eye, EyeOff,
+  BrainCircuit, Save, Loader2, ShieldX, ExternalLink, ArrowUpDown, Eye, EyeOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { AI_PROVIDERS, type AIProviderId } from '@/components/tenant/ai/ai-config';
+import { AI_PROVIDERS } from '@/components/tenant/ai/ai-config';
 
 type ProviderConfig = {
   enabled: boolean;

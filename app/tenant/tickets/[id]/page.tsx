@@ -1,9 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import {
-  LifeBuoy, ArrowLeft, User, Clock, MessageSquare, Trash2,
-  CheckCircle2, AlertCircle, Send, MoreHorizontal
+import { ArrowLeft, User, Clock, MessageSquare, Trash2, Send
 } from 'lucide-react';
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';

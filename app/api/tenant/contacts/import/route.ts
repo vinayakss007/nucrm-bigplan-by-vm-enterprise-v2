@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.json();
     const validated = validateBody(importSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
-    const v = validated.data;
+    const _v = validated.data;
     const { csv, skipDuplicates = true, updateExisting = false } = { ...rawBody, csv: rawBody.csv };
     if (!csv) return NextResponse.json({ error:'csv field required' }, { status:400 });
 

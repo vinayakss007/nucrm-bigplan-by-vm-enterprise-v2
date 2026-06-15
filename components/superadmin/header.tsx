@@ -1,8 +1,8 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Crown, AlertTriangle, Building2, LogOut, User, Settings,
-  ChevronDown, ArrowLeft, Bell, RefreshCw, Menu } from 'lucide-react';
+import { Crown, LogOut, Settings,
+  ChevronDown, ArrowLeft, Bell, Menu } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import Link from 'next/link';
 

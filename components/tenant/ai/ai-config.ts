@@ -7,7 +7,7 @@
  */
 import {
   Sparkles, FileEdit, Target, AlertTriangle, Activity,
-  BrainCircuit, MessageSquare, ArrowUpRight, Bot,
+  BrainCircuit, MessageSquare,
 } from 'lucide-react';
 
 export type AICapability = {

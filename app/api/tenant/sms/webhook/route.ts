@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
         AccountSid: params['AccountSid'],
         NumMedia: params['NumMedia'],
       };
-      const result = await handleIncomingSMS(payload, tenantId);
+      const _result = await handleIncomingSMS(payload, tenantId);
       // Return TwiML empty response
       return new NextResponse(
         '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',

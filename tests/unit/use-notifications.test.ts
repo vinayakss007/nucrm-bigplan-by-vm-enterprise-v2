@@ -22,8 +22,8 @@ vi.mock('react', () => ({
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let mockEventSourceInstance: any;
-let onOpenCallback: (() => void) | null = null;
-let onErrorCallback: (() => void) | null = null;
+let _onOpenCallback: (() => void) | null = null;
+let _onErrorCallback: (() => void) | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let messageHandlers: Map<string, ((event: any) => void)[]> = new Map();
 
@@ -56,8 +56,8 @@ beforeEach(() => {
   cleanupRegistry = [];
   messageHandlers = new Map();
   mockEventSourceInstance = null;
-  onOpenCallback = null;
-  onErrorCallback = null;
+  _onOpenCallback = null;
+  _onErrorCallback = null;
   mockSetState = null;
   vi.clearAllMocks();
   vi.stubGlobal('EventSource', MockEventSource);

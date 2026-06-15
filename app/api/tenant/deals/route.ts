@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       q: searchParams.get('q') ?? undefined,
     });
     if (query instanceof NextResponse) return query;
-    const { offset, limit, stage_id, stage, pipeline_id, q } = query.data;
+    const { offset, limit, stage_id, stage: _stage, pipeline_id, q } = query.data;
 
     const filters = [
       eq(deals.tenantId, ctx.tenantId),

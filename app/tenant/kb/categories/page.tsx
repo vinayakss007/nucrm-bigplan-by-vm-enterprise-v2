@@ -9,7 +9,7 @@ export default function KBCategoriesPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [editing, setEditing] = useState<string | null>(null);
+  const [_editing, setEditing] = useState<string | null>(null);
 
   const load = async () => {
     try {
@@ -23,7 +23,7 @@ export default function KBCategoriesPage() {
   useEffect(() => { load(); }, []);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const create = async (data: any) => {
+  const _create = async (data: any) => {
     try {
       const res = await fetch('/api/tenant/kb/categories', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),

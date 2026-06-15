@@ -2,7 +2,7 @@ import { db } from '@/drizzle/db';
 import { dashboardLayouts } from '@/drizzle/schema/dashboard';
 import { eq, and, desc } from 'drizzle-orm';
 import { getPlanDefaultLayout, getIndustryDefaultLayout } from '@/lib/dashboard/layout-defaults';
-import type { DashboardLayout, DashboardLayoutItem, LayoutSource } from '@/types/dashboard';
+import type { DashboardLayout, LayoutSource } from '@/types/dashboard';
 
 export async function getSavedLayout(
   tenantId: string,

@@ -12,7 +12,6 @@ import {
   AlertTriangle,
   X,
   Search,
-  Download,
   RotateCcw,
   BarChart3,
   Settings,
@@ -81,8 +80,8 @@ export default function SuperAdminBackups() {
   const [backups, setBackups] = useState<BackupRecord[]>([]);
   const [deletedData, setDeletedData] = useState<CriticalBackup[]>([]);
   const [criticalStats, setCriticalStats] = useState<CriticalStats | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [_loading, _setLoading] = useState(false);
+  const [_showScheduleModal, setShowScheduleModal] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [selectedBackup, setSelectedBackup] = useState<CriticalBackup | null>(null);
   const [searchQuery, setSearchQuery] = useState('');

@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
 // ── Run Due Backups ──────────────────────────────────────────────────────────
 
 async function runScheduledBackups(pool: Pool) {
-  const now = new Date();
+  const _now = new Date();
   let backupsRun = 0;
   let errors = 0;
 

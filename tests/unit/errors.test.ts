@@ -188,7 +188,7 @@ describe('errors', () => {
     });
 
     it('creates with field and details', async () => {
-      const { ValidationError, ErrorCode } = await import('@/lib/errors');
+      const { ValidationError, ErrorCode: _ErrorCode } = await import('@/lib/errors');
       const error = new ValidationError('Invalid email', 'email', 'Must be valid format');
 
       expect(error.field).toBe('email');
@@ -366,7 +366,7 @@ describe('errors', () => {
     });
 
     it('returns DatabaseError for database-related errors', async () => {
-      const { handleError, ErrorCode } = await import('@/lib/errors');
+      const { handleError, ErrorCode: _ErrorCode } = await import('@/lib/errors');
 
       const error = new Error('database connection failed');
       const response = handleError(error);
@@ -375,7 +375,7 @@ describe('errors', () => {
     });
 
     it('returns ValidationError for validation-related errors', async () => {
-      const { handleError, ErrorCode } = await import('@/lib/errors');
+      const { handleError, ErrorCode: _ErrorCode } = await import('@/lib/errors');
 
       const error = new Error('validation error in input');
       const response = handleError(error);
@@ -384,7 +384,7 @@ describe('errors', () => {
     });
 
     it('returns generic 500 for unknown errors', async () => {
-      const { handleError, ErrorCode } = await import('@/lib/errors');
+      const { handleError, ErrorCode: _ErrorCode } = await import('@/lib/errors');
 
       const response = handleError(null);
       expect(response).toBeDefined();

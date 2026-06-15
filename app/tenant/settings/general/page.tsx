@@ -1,10 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { Save, Globe, Palette, Crown, Download, Loader2, ArrowUpRight,
-  Link2, CheckCircle, AlertTriangle, Copy, ExternalLink } from 'lucide-react';
+import { Save, Globe, Palette, Download, Loader2,
+  Link2, CheckCircle, AlertTriangle, Copy } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { cn } from '@/lib/utils';
 
 const INDUSTRIES = ['','Technology','Healthcare','Finance','Education','Retail','Manufacturing','Real Estate','Consulting','Marketing','Legal','Other'];
 const TIMEZONES  = ['UTC','America/New_York','America/Chicago','America/Los_Angeles','Europe/London','Europe/Paris','Europe/Berlin','Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Tokyo','Australia/Sydney'];
@@ -74,7 +73,7 @@ export default function TenantGeneralSettings() {
     toast.success('Copied!');
   };
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.nucrm.io';
+  const _baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.nucrm.io';
 
   return (
     <div className="space-y-5 animate-fade-in">

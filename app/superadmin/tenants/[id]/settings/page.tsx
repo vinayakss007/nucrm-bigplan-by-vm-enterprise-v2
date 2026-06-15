@@ -3,8 +3,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  Crown, Loader2, Building2, Globe, Lock, ListChecks, ArrowLeft,
-  Calendar, Clock, ShieldCheck, KeyRound, AlertCircle, Eye,
+  Crown, Loader2, Globe, Lock, ListChecks, ArrowLeft, Clock, ShieldCheck, KeyRound, AlertCircle, Eye,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

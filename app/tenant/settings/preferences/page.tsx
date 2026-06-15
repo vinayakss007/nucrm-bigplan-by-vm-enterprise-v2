@@ -1,10 +1,8 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import {
-  Save, Globe, Palette, Calendar, Clock, LayoutDashboard, Loader2, RotateCcw,
-  Type, Eye, Sparkles, Keyboard, Bell, Mail, Lock, EyeOff, Zap, Search,
-  PanelLeftClose, MousePointerClick, Filter, Lightbulb, ShieldCheck, AlertCircle,
-  Hash, FileText,
+  Save, Palette, Calendar, Clock, Loader2, RotateCcw, Mail, Lock, Zap, Search,
+  PanelLeftClose, ShieldCheck,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import toast from 'react-hot-toast';

@@ -88,7 +88,7 @@ describe('export - comprehensive', () => {
     });
 
     it('throws ImportLimitError when exceeding 1000 contacts', async () => {
-      const { enqueueContactImport, ImportLimitError, MAX_IMPORT_CONTACTS } = await import('@/lib/export');
+      const { enqueueContactImport, ImportLimitError, MAX_IMPORT_CONTACTS: _MAX_IMPORT_CONTACTS } = await import('@/lib/export');
       
       await expect(enqueueContactImport(
         'tenant-1',

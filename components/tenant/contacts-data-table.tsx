@@ -297,9 +297,9 @@ export default function ContactsDataTable({
     },
   ], [pagination.pageIndex, loadData, router])
 
-  const [bulkActionLoading, setBulkActionLoading] = useState(false)
-  const [showBulkAction, setShowBulkAction] = useState<string | null>(null)
-  const [bulkPayload, setBulkPayload] = useState<Record<string, string>>({})
+  const [_bulkActionLoading, setBulkActionLoading] = useState(false)
+  const [_showBulkAction, _setShowBulkAction] = useState<string | null>(null)
+  const [_bulkPayload, _setBulkPayload] = useState<Record<string, string>>({})
 
   const bulkActions = useMemo(() => [
     {

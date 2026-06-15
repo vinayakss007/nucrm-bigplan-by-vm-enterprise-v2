@@ -23,7 +23,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   const ctx = await requireTenantCtx();
   const { id: contactId } = await params;
 
-  const [contactResult, activities, deals, tasks, notes, companies, teamMembers, billingData] = await Promise.all([
+  const [contactResult, activities, deals, tasks, _notes, companies, teamMembers, billingData] = await Promise.all([
     db.select({
       contact: contactsTable,
       company_name: companiesTable.name,

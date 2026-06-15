@@ -5,7 +5,7 @@ dotenv.config({ path: path.resolve(__dirname, '..', '.env.local') });
 
 import { db } from '../drizzle/db';
 import * as schema from '../drizzle/schema';
-import { eq, and, like, inArray, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 
 const BATCH = parseInt(process.env['STRESS_BATCH'] || '100', 10);
@@ -68,7 +68,7 @@ async function cleanup(tid: string) {
     try {
       const col = 'tenantId' in t.table ? t.table.tenantId : undefined;
       if (col) {
-        const deleted = await db.delete(t.table)
+        const _deleted = await db.delete(t.table)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           .where(and(eq(col as any, tid), sql`metadata->>'stress' = ${STRESS_TAG}`));
         console.log(`  cleaned ${t.name}`);
@@ -78,7 +78,7 @@ async function cleanup(tid: string) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function insertRows(tableName: string, table: any, values: () => Record<string, any>, refs: Awaited<ReturnType<typeof getExistingRefs>>) {
+async function insertRows(tableName: string, table: any, values: () => Record<string, any>, _refs: Awaited<ReturnType<typeof getExistingRefs>>) {
   if (DRY_RUN) {
     console.log(`[dry-run] would insert ${BATCH} into ${tableName}`);
     return;

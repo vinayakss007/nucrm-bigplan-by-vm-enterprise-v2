@@ -5,7 +5,7 @@ import { eq, and } from 'drizzle-orm';
 
 const IP_WHITELIST_KEY = 'ip_whitelist';
 
-interface ClientInfo {
+interface _ClientInfo {
   ip: string;
   tenantId: string;
 }

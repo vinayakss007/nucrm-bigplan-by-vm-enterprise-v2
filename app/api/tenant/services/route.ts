@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    const { tenantId, userId, isSuperAdmin } = ctx;
+    const { tenantId, userId: _userId, isSuperAdmin } = ctx;
 
     // Superadmin without tenant needs to use a real tenant
     if (isSuperAdmin && (!tenantId || tenantId === '__superadmin_no_tenant__')) {
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     const validated = validateBody(createServiceSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
-    const { name, description, category, hourly_rate: hourlyRate, monthly_rate: monthlyPrice, yearly_rate: yearlyPrice, is_active: isActive } = v;
+    const { name, description, category, hourly_rate: hourlyRate, monthly_rate: monthlyPrice, yearly_rate: yearlyPrice, is_active: _isActive } = v;
 
     if (!name) {
       return NextResponse.json({ error: 'Service name is required' }, { status: 400 });

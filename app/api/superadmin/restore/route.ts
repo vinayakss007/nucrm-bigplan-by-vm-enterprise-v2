@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = validateBody(restoreSchema, body);
     if (validated instanceof NextResponse) return validated;
-    const { backup_id, confirm_restore } = validated.data;
+    const { backup_id, confirm_restore: _confirm_restore } = validated.data;
 
     const [backup] = await db
       .select()

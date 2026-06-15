@@ -194,7 +194,7 @@ describe('RBAC - Record Permissions', () => {
   describe('getRecordAccessFilter', () => {
     it('returns a SQL expression', async () => {
       const { getRecordAccessFilter } = await import('@/lib/rbac/record-permissions');
-      const filter = getRecordAccessFilter('tenant-1', 'user-1', 'role-1', 'contact');
+      const _filter = getRecordAccessFilter('tenant-1', 'user-1', 'role-1', 'contact');
       // When sql is mocked, it returns whatever the mock returns (could be undefined)
       // The important thing is the function doesn't throw
       expect(typeof getRecordAccessFilter).toBe('function');

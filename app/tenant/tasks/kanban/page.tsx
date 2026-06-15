@@ -7,7 +7,7 @@ import {
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  GripVertical, ArrowLeft, CheckSquare, User, Clock, Calendar, LinkIcon
+  GripVertical, ArrowLeft, CheckSquare, User, Calendar, LinkIcon
 } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';

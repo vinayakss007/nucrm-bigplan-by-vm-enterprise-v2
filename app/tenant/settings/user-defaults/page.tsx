@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Settings as SettingsIcon, Save, Loader2, RotateCcw, ShieldX, AlertCircle,
-  Palette, Calendar, Zap, Mail, Lock, Check, X,
+  Palette, Calendar, Zap, Mail, Lock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';

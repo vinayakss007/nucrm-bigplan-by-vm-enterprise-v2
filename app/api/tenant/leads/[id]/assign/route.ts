@@ -20,7 +20,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { logAudit } from '@/lib/audit';
-import { createNotification, type NotificationType } from '@/lib/notifications';
+import { createNotification } from '@/lib/notifications';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 

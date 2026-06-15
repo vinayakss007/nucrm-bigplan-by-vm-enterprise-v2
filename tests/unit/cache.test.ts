@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const STORAGE: Record<string, string> = {};
-let storageListeners: Array<() => void> = [];
+let _storageListeners: Array<() => void> = [];
 
 function createMockStorage() {
   const store: Record<string, string> = {};
@@ -21,7 +21,7 @@ let mockStorage: ReturnType<typeof createMockStorage>;
 beforeEach(() => {
   mockStorage = createMockStorage();
   Object.keys(STORAGE).forEach(k => delete STORAGE[k]);
-  storageListeners = [];
+  _storageListeners = [];
 
   Object.defineProperty(global, 'localStorage', {
     value: mockStorage,

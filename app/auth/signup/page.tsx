@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  Zap, Loader2, Eye, EyeOff, Mail, Lock, User, Building2,
+import { Loader2, Eye, EyeOff, Mail, Lock, User, Building2,
   Cpu, CheckCircle, ArrowRight, Shield, Rocket, Target
 } from 'lucide-react';
 import toast from 'react-hot-toast';

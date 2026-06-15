@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     for (const t of expiringSoon) {
       if (!t.trialEndsAt) continue;
       warned++;
-      const daysLeft = Math.max(1, Math.ceil((new Date(t.trialEndsAt).getTime()-Date.now())/86400000));
+      const _daysLeft = Math.max(1, Math.ceil((new Date(t.trialEndsAt).getTime()-Date.now())/86400000));
       const to = t.billingEmail || t.ownerEmail;
       if (to) {
         await sendEmail({

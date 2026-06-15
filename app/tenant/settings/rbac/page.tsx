@@ -37,7 +37,7 @@ export default function RBACSettingsPage() {
   const [recordPermissions, setRecordPermissions] = useState<RecordPermission[]>([]);
   const [approvalRules, setApprovalRules] = useState<ApprovalRule[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, _setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     loadData();

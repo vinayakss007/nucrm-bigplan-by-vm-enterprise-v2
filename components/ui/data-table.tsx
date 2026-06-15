@@ -45,7 +45,6 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  MoreHorizontal,
   Settings2,
   Search,
   X,
@@ -127,7 +126,7 @@ export function DataTable<TData, TValue>({
   const [globalFilter, setGlobalFilter] = React.useState(externalGlobalFilter || "")
   const [columnVisibility, setColumnVisibility] = React.useState({})
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
-  const [internalPageIndex, setInternalPageIndex] = React.useState(0)
+  const [internalPageIndex, _setInternalPageIndex] = React.useState(0)
   const [internalPageSize, setInternalPageSize] = React.useState(pageSize)
   const [focusedRow, setFocusedRow] = React.useState(-1)
   const [bulkActionInput, setBulkActionInput] = React.useState<Record<string, string>>({})
@@ -602,7 +601,7 @@ export function DataTable<TData, TValue>({
 }
 
 // Helper to create sortable column headers
-export function createSortableHeader<TData, TValue>(
+export function createSortableHeader<_TData, _TValue>(
   label: string,
   accessorKey: string
 ) {
