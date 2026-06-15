@@ -92,7 +92,7 @@ export async function PATCH(request: NextRequest) {
         });
 
         if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
+          const data = await res.json().catch((err) => { console.error('[telegram] response parse failed', err); return {}; });
           return NextResponse.json({
             error: `Telegram error: ${data.description || res.status}`,
           }, { status: 400 });
