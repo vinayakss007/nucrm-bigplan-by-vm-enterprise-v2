@@ -31,8 +31,8 @@ export async function POST(req: NextRequest) {
       ok: true,
       total_missed: totalMissed,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[detect-missed-followups]', err);

@@ -5,8 +5,8 @@ import { db } from '@/drizzle/db';
 import { invitations } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function DELETE(request: NextRequest, { params }: any) {
   try {
@@ -24,8 +24,8 @@ export async function DELETE(request: NextRequest, { params }: any) {
       
     if (result.rowCount === 0) return NextResponse.json({ error: 'Invitation not found' }, { status: 404 });
     return NextResponse.json({ ok: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[Invitation] DELETE error:', err);

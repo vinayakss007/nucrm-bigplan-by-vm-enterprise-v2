@@ -18,8 +18,8 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const conditions: any[] = [eq(serviceSubscriptions.tenantId, tenantId)];
     if (status) conditions.push(eq(serviceSubscriptions.status, status));
@@ -70,8 +70,8 @@ export async function POST(request: NextRequest) {
       last4: null,
       trialEndDate: trialEndDate ? new Date(trialEndDate) : null,
       createdBy: userId,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 

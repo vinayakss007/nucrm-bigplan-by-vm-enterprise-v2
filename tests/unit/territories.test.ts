@@ -30,8 +30,6 @@ vi.mock('drizzle-orm', () => ({
 import { db } from '@/drizzle/db';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mockSelect(returnValue: any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (db.select as any).mockReturnValue({
@@ -42,8 +40,6 @@ function mockSelect(returnValue: any) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mockInsert(returnValue: any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (db.insert as any).mockReturnValue({
@@ -53,8 +49,6 @@ function mockInsert(returnValue: any) {
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mockUpdate(returnValue: any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -255,8 +249,6 @@ describe('resolveOwner', () => {
   it('looks up owner from assignments table when no direct assignedTo', async () => {
     const { db } = await import('@/drizzle/db');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any)
       .mockReturnValueOnce({
         from: vi.fn(() => ({
@@ -281,8 +273,6 @@ describe('resolveOwner', () => {
 
   it('returns null when no owner assignment found', async () => {
     const { db } = await import('@/drizzle/db');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any)
       .mockReturnValueOnce({

@@ -217,8 +217,6 @@ describe('auth/api-key - generateApiKey', () => {
   beforeEach(() => {
     vi.resetModules();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mockChain: any = {
       values: vi.fn().mockResolvedValue(undefined),
     };
@@ -238,8 +236,6 @@ describe('auth/api-key - generateApiKey', () => {
 describe('webhooks - fireWebhooks', () => {
   beforeEach(() => {
     vi.resetModules();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mockChain: any = {
       from: vi.fn().mockReturnThis(),

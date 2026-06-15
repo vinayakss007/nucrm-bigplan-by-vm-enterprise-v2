@@ -21,8 +21,8 @@ export async function POST(request: NextRequest) {
     if (!tenantId) return NextResponse.json({ error: 'tenantId required' }, { status: 400 });
 
     let targetUserId = userId;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let targetUser: any;
 
@@ -117,8 +117,8 @@ export async function POST(request: NextRequest) {
     
     await setSessionCookie(token);
     return response;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     console.error('[Impersonation] Error:', err);

@@ -68,8 +68,6 @@ export function ModuleProvider({ children, initialModules }: ModuleProviderProps
       if (!res.ok) return;
       const json = await res.json();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data: ModuleInfo[] = (json.data ?? []).map((m: any) => ({
         id: m.id,
         name: m.name,

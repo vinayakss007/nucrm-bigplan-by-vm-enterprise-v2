@@ -105,8 +105,8 @@ export async function POST(request: NextRequest) {
         merge_strategy,
       },
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Merge] POST error:', error);
@@ -158,8 +158,8 @@ export async function GET(request: NextRequest) {
       limit,
       offset,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Merge History] GET error:', error);

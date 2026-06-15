@@ -47,8 +47,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Get contact data
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let contactData: any = null;
     if (contact_id) {
@@ -67,8 +67,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Get deal data
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let dealData: any = null;
     if (deal_id) {
@@ -217,8 +217,8 @@ Best,
         sender_company: '[Your Company]',
       },
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[AI Email Draft] POST error:', error);
@@ -275,8 +275,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       data: flattenedDrafts,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[AI Email Drafts] GET error:', error);

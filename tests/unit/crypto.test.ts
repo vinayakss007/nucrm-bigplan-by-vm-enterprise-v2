@@ -154,8 +154,6 @@ describe('hashPassword/verifyPassword', () => {
 
   it('returns false for null/undefined hash', async () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(await verifyPassword('password', null as any)).toBe(false);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(await verifyPassword('password', undefined as any)).toBe(false);

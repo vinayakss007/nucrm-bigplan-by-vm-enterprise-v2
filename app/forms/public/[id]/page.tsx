@@ -6,8 +6,6 @@ import { notFound } from 'next/navigation';
 import PublicFormClient from './public-form-client';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function PublicFormPage({ params }: any) {
   const { id } = await params;
 

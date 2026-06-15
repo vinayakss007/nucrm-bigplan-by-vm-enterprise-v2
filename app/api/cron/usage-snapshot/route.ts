@@ -12,8 +12,8 @@ export async function POST(request: NextRequest) {
     const result = await db.execute(sql`SELECT public.snapshot_tenant_usage() as count`);
     const count = (result.rows[0] as { count: number })?.count;
     return NextResponse.json({ ok: true, snapshots: count });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     console.error('[UsageSnapshot] Error:', err);

@@ -6,8 +6,8 @@
  * instead of O(n log n) sort on every eviction.
  */
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface CacheEntry { data: any; expires: number; }
 const _cache = new Map<string, CacheEntry>();

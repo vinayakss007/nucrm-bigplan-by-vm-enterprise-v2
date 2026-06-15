@@ -102,8 +102,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ ok:true, due_today: dueToday.length, overdue: overdue.length, notified });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err:any) {
     console.error('[TaskReminders] Error:', err);

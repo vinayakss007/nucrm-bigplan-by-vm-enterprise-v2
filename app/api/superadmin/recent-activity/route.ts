@@ -71,8 +71,8 @@ export async function GET(req: NextRequest) {
       settings_changes:  settingsChanges.rows ?? [],
       critical:          critical.rows        ?? [],
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[superadmin recent-activity]', err);

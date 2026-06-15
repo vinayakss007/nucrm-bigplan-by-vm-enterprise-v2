@@ -35,8 +35,6 @@ const STATUS_CFG: Record<string, { label: string; bg: string }> = {
 
 interface Props {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   task: any;
   permissions: { canEdit: boolean; canDelete: boolean; canAssign: boolean };
   tenantId: string;

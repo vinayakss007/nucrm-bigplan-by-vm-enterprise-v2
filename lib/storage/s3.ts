@@ -103,8 +103,8 @@ export async function uploadFileToS3(
 export async function getSignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
   const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
   const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return getSignedUrl(s3Client as any, command, { expiresIn });
 }
@@ -128,8 +128,8 @@ export async function getSignedPutUrl(args: {
     ContentType: args.contentType,
     ...(args.contentLengthBytes ? { ContentLength: args.contentLengthBytes } : {}),
   });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return getSignedUrl(s3Client as any, command, {
     expiresIn: args.expiresInSeconds ?? 600, // 10 minutes

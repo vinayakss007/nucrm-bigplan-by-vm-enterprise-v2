@@ -1,14 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let mockSetState: any;
 let cleanupRegistry: (() => void)[] = [];
 
 vi.mock('react', () => ({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useState: (initial: any) => {
     mockSetState = vi.fn();
@@ -19,21 +15,15 @@ vi.mock('react', () => ({
     if (cleanup) cleanupRegistry.push(cleanup);
   },
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   useCallback: (fn: any) => fn,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useRef: (initial: any) => ({ current: initial }),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let mockEventSourceInstance: any;
 let onOpenCallback: (() => void) | null = null;
 let onErrorCallback: (() => void) | null = null;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let messageHandlers: Map<string, ((event: any) => void)[]> = new Map();
 
@@ -50,16 +40,12 @@ class MockEventSource {
   }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   addEventListener(type: string, handler: (event: any) => void) {
     if (!messageHandlers.has(type)) messageHandlers.set(type, []);
     messageHandlers.get(type)!.push(handler);
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function triggerSSEMessage(data: any) {
   const handlers = messageHandlers.get('message') || [];

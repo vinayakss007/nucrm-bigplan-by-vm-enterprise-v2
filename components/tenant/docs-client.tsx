@@ -1785,8 +1785,6 @@ export default function DocsClient() {
 
     Object.entries(DOCS_STRUCTURE).forEach(([category, data]: [string, any]) => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       data.items.forEach((item: any) => {
         docs.push({
           ...item,

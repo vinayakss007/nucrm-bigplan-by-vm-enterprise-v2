@@ -31,7 +31,6 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
   const [sending, setSending] = useState(false)
   const [sendingTemplate, setSendingTemplate] = useState(false)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [templates, setTemplates] = useState<any[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [showTemplates, setShowTemplates] = useState(false)
@@ -43,8 +42,6 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
       if (!res.ok) throw new Error('Failed to load messages')
       const data = await res.json()
       if (!signal?.aborted) setMessages(data.data || [])
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err instanceof DOMException && err.name === 'AbortError') return
@@ -97,8 +94,6 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
       toast.success('Message sent')
       loadMessages()
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       toast.error(err.message)
     } finally {
@@ -125,8 +120,6 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
       setSelectedTemplate(null)
       toast.success('Template sent')
       loadMessages()
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       toast.error(err.message)

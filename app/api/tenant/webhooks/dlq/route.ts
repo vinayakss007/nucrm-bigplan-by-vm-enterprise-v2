@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
       hasMore: offset + entries.length < total,
       stats,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -59,8 +59,8 @@ export async function POST(request: NextRequest) {
 
       case 'retry_all': {
         const { entries } = await dlq.listDLQEntries(ctx.tenantId, { limit: 1000, offset: 0, status: 'pending' });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const entryIds = entries.map((e: any) => e.id);
         if (entryIds.length === 0) {
@@ -91,8 +91,8 @@ export async function POST(request: NextRequest) {
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

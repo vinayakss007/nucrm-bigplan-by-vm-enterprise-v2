@@ -99,8 +99,6 @@ export default function ReportBuilder() {
 
     try {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const body: any = {
         entity: selectedEntity,
         metric: selectedMetric,
@@ -137,8 +135,6 @@ export default function ReportBuilder() {
         else if (selectedGroupBy.includes('month') || selectedGroupBy.includes('week')) setChartType('line');
         else setChartType('bar');
       }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setError(err.message || 'Network error');

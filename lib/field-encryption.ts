@@ -20,8 +20,8 @@ export function isSensitiveField(fieldName: string): boolean {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function encryptSensitiveFields<T extends Record<string, any>>(
   data: T,
@@ -40,8 +40,8 @@ export function encryptSensitiveFields<T extends Record<string, any>>(
   return result;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function decryptSensitiveFields<T extends Record<string, any>>(
   data: T,

@@ -17,8 +17,6 @@ if (SENTRY_DSN) {
       'ResizeObserver loop limit exceeded',
     ],
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     beforeSendTransaction(event: any) {
       if (event.transaction === '/api/health') return null;
       return event;

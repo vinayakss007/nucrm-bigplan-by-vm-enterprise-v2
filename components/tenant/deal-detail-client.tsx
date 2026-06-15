@@ -46,13 +46,9 @@ const STATUS_CFG: Record<string, { label: string; color: string }> = {
 
 interface Props {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   deal: any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tasks: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   activities: any[];
   permissions: { canEdit: boolean; canDelete: boolean; canViewValue: boolean };

@@ -55,8 +55,6 @@ describe('db/cache (server-side LRU)', () => {
     const mod = await import('@/lib/db/cache');
     const { dbCache } = mod;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const getCacheSize = (mod as any).getCacheSize;
     // Skip if not exported
     if (typeof getCacheSize !== 'function') return;

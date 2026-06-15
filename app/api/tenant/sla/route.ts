@@ -36,8 +36,8 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(slaPolicies.createdAt));
 
     return NextResponse.json({ data: policies });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }
@@ -73,8 +73,8 @@ export async function POST(req: NextRequest) {
     }).returning();
 
     return NextResponse.json({ data: policy }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }
@@ -114,8 +114,8 @@ export async function PUT(req: NextRequest) {
     }
 
     return NextResponse.json({ data: updated });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }

@@ -25,8 +25,6 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   override componentDidCatch(error: Error, errorInfo: any) {
     console.error('[ErrorBoundary] Caught error:', error, errorInfo);
     Sentry.captureException(error, { extra: { errorInfo }, tags: { context: 'ErrorBoundary' } });

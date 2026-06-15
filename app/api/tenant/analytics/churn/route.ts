@@ -52,8 +52,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       data: predictions,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Churn Analytics] GET error:', error);
@@ -93,8 +93,8 @@ export async function POST(request: NextRequest) {
       probability,
       prediction,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Churn Calculate] POST error:', error);
@@ -133,8 +133,8 @@ export async function PATCH(
       ok: true,
       message: 'Marked as actioned',
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Churn Action] PATCH error:', error);

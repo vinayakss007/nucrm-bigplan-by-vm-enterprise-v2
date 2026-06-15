@@ -14,12 +14,8 @@ const PRIORITY_CFG = {
 
 export default function TenantTasksClient({ initialTasks, contacts, _deals, teamMembers, permissions }: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialTasks: any[]; contacts: any[]; deals: any[]; teamMembers: any[];
   permissions: { canCreate:boolean; canEdit:boolean; canDelete:boolean; canAssign:boolean };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _deals?: any[];
 }) {
@@ -117,8 +113,6 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
       {/* Filter tabs */}
       <div className="flex gap-1 flex-wrap bg-muted/30 rounded-xl p-1 w-fit">
         {TABS.map(t => (
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           <button key={t.id} onClick={() => setFilter(t.id as any)}
             className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition-all',

@@ -5,8 +5,6 @@ import { cn } from '@/lib/utils';
 interface BulkAction {
   label: string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon: any;
   variant?: 'default' | 'danger';
   onClick: () => void;

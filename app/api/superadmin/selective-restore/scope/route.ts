@@ -147,8 +147,8 @@ export async function POST(request: NextRequest) {
       warnings: generateWarnings(tables, existingCounts, restore_mode),
     });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[selective-restore/scope POST]', err);

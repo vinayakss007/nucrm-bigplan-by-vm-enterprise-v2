@@ -6,7 +6,6 @@ import { confirmThen } from '@/components/ui/confirm-dialog';
 
 export default function KBCategoriesPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -23,8 +22,6 @@ export default function KBCategoriesPage() {
 
   useEffect(() => { load(); }, []);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const create = async (data: any) => {
     try {

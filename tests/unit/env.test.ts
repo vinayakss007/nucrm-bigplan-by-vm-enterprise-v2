@@ -186,8 +186,6 @@ describe('validateEnv', () => {
     try {
       validateEnv();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       expect(err.message).toContain('DATABASE_URL');
       expect(err.message).toContain('JWT_SECRET');

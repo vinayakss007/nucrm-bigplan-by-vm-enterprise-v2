@@ -49,8 +49,6 @@ describe('Integrations API - GET (list integrations)', () => {
 
     const { GET } = await import('@/app/api/tenant/integrations/route');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response = await GET({ headers: new Headers() } as any);
     const data = await response.json();
 
@@ -71,8 +69,6 @@ describe('Integrations API - GET (list integrations)', () => {
 
     const { GET } = await import('@/app/api/tenant/integrations/route');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response = await GET({ headers: new Headers() } as any);
     const data = await response.json();
 
@@ -86,8 +82,6 @@ describe('Integrations API - GET (list integrations)', () => {
     );
 
     const { GET } = await import('@/app/api/tenant/integrations/route');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response = await GET({ headers: new Headers() } as any);
 
@@ -105,8 +99,6 @@ describe('Integrations API - GET (list integrations)', () => {
     mockFindMany.mockRejectedValue(new Error('DB connection failed'));
 
     const { GET } = await import('@/app/api/tenant/integrations/route');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response = await GET({ headers: new Headers() } as any);
 
@@ -137,8 +129,6 @@ describe('Integrations API - POST (create integration)', () => {
       headers: new Headers(),
       json: () => Promise.resolve({ type: 'webhook', name: 'My Webhook', config: { url: 'https://example.com' } }),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
     const response = await POST(mockRequest);
     const data = await response.json();
@@ -165,8 +155,6 @@ describe('Integrations API - POST (create integration)', () => {
       headers: new Headers(),
       json: () => Promise.resolve({ type: 'zapier', name: 'Zapier' }),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
     const response = await POST(mockRequest);
 
@@ -190,8 +178,6 @@ describe('Integrations API - POST (create integration)', () => {
       headers: new Headers(),
       json: () => Promise.resolve({ type: 'n8n', name: 'n8n' }),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
     const response = await POST(mockRequest);
 
@@ -211,8 +197,6 @@ describe('Integrations API - POST (create integration)', () => {
     const mockRequest = {
       headers: new Headers(),
       json: () => Promise.resolve({ name: 'Test' }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
     const response = await POST(mockRequest);
@@ -234,8 +218,6 @@ describe('Integrations API - POST (create integration)', () => {
       headers: new Headers(),
       json: () => Promise.resolve({ type: 'webhook' }),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
     const response = await POST(mockRequest);
 
@@ -256,8 +238,6 @@ describe('Integrations API - POST (create integration)', () => {
       headers: new Headers(),
       json: () => Promise.resolve({ type: 'webhook', name: 'Test' }),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
     const response = await POST(mockRequest);
 
@@ -271,8 +251,6 @@ describe('Integrations API - POST (create integration)', () => {
     );
 
     const { POST } = await import('@/app/api/tenant/integrations/route');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response = await POST({ headers: new Headers(), json: () => Promise.resolve({ type: 'webhook', name: 'Test' }) } as any);
 
@@ -292,8 +270,6 @@ describe('Integrations API - POST (create integration)', () => {
     mockInsertChain.mockReturnValue({ values: mockValues });
 
     const { POST } = await import('@/app/api/tenant/integrations/route');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response = await POST({ headers: new Headers(), json: () => Promise.resolve({ type: 'webhook', name: 'Test' }) } as any);
 

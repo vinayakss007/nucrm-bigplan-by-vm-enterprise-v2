@@ -19,8 +19,6 @@ vi.mock('@/lib/rate-limit', () => ({
 
 vi.mock('@/lib/api-error', () => ({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   apiError: vi.fn((err: any, _msg?: string, status = 500) =>
     NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status })
   ),
@@ -46,8 +44,6 @@ vi.mock('@/drizzle/schema', () => ({
   activities: { tenantId: 'tenant_id' },
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function testRequest(path: string, options: { method?: string; body?: any } = {}) {
   const url = new URL(path, 'http://localhost:3000');
@@ -107,8 +103,6 @@ describe('POST /api/tenant/reports/builder', () => {
     const json = await response.json();
 
     expect(json.total).toBe(28);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const totalPct = json.data.reduce((s: number, d: any) => s + d.percentage, 0);
     expect(totalPct).toBeCloseTo(100, 0);
@@ -215,8 +209,6 @@ describe('GET /api/tenant/reports/builder', () => {
     expect(json.entities).toBeInstanceOf(Array);
     expect(json.entities.length).toBeGreaterThan(0);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const contacts = json.entities.find((e: any) => e.id === 'contacts');
     expect(contacts).toBeDefined();

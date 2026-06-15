@@ -39,8 +39,8 @@ export type WebhookEvent =
 export async function fireWebhooks(
   tenantId: string,
   event: WebhookEvent,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: Record<string, any>
 ) {
@@ -132,15 +132,15 @@ export async function fireWebhooks(
           .where(eq(integrations.id, hook.id))
           .catch((e) => console.warn('[Webhook] Failed to update last used timestamp', e));
           
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         logger.warn(`[webhook] ${hook.name} delivery error: ${err.message}`);
       }
     }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     logger.error(`[webhooks] ${err.message}`);
@@ -196,8 +196,8 @@ export async function retryFailedWebhooks(): Promise<number> {
             })
             .where(eq(webhookQueue.id, item.id));
         }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         const nextAttempt = item.attempt + 1;

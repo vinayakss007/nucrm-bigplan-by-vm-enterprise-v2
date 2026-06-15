@@ -112,8 +112,6 @@ describe('lib/stripe', () => {
       });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const call = (global.fetch as any).mock.calls[0];
       const body = call[1].body;
       expect(body).toContain('subscription_data');
@@ -130,8 +128,6 @@ describe('lib/stripe', () => {
 
       expect(result).toHaveProperty('id');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const call = (global.fetch as any).mock.calls[0];
       expect(call[1].body).toContain('cancel_at_period_end');
     });
@@ -142,8 +138,6 @@ describe('lib/stripe', () => {
 
       await cancelSubscription('sub_123', false);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const call = (global.fetch as any).mock.calls[0];
       expect(call[1].method).toBe('DELETE');

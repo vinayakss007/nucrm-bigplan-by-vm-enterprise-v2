@@ -22,7 +22,6 @@ const CAT_COLORS: Record<string, string> = {
 
 export default function SuperAdminModulesPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [modules, setModules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
@@ -31,8 +30,6 @@ export default function SuperAdminModulesPage() {
   const load = async () => {
     const res = await fetch('/api/superadmin/modules');
     const d = await res.json();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     setModules((d.data ?? []).map((m: any) => ({
       ...m,

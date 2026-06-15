@@ -8,8 +8,6 @@ interface Props {
   title?: string;
   message?: string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon?: any;
 }
 

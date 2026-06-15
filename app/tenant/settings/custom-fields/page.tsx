@@ -90,8 +90,6 @@ export default function TenantCustomFields() {
   }, [entityType, loadFields]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleCreate = async (fieldData: any) => {
     try {
       const res = await fetch('/api/tenant/custom-fields', {
@@ -109,8 +107,6 @@ export default function TenantCustomFields() {
     }
   };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleUpdate = async (fieldData: any) => {
     if (!editingField) return;
@@ -439,8 +435,6 @@ function FieldFormModal({ mode, field, fieldTypes, onClose, onSubmit }: {
   field?: CustomField;
   fieldTypes: { value: string; label: string; example: string }[];
   onClose: () => void;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onSubmit: (data: any) => void;
 }) {

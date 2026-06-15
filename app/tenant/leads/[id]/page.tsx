@@ -62,8 +62,6 @@ export default async function LeadDetailPage({ params }: PageProps) {
     .limit(1);
   
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   (lead as any).created_by_name = creator?.fullName;
   
   // Get activities
@@ -128,8 +126,6 @@ export default async function LeadDetailPage({ params }: PageProps) {
       lead={lead}
       activities={activities}
       relatedContacts={relatedContacts}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       teamMembers={teamMembers as any}
       tenantId={ctx.tenantId}

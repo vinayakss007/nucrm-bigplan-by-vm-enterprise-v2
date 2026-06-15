@@ -40,8 +40,8 @@ export async function GET(request: NextRequest) {
       .orderBy(desc(sequences.createdAt));
 
     return NextResponse.json({ data });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[sequences GET]', error);
@@ -86,8 +86,8 @@ export async function POST(request: NextRequest) {
 
     // Create steps in sequence_steps table
     if (steps.length > 0) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const stepValues = steps.map((step: any, index: number) => ({
         sequenceId: newSequence.id,
@@ -108,8 +108,8 @@ export async function POST(request: NextRequest) {
       ok: true,
       data: newSequence,
     }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[sequences POST]', error);

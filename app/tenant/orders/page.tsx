@@ -112,8 +112,6 @@ function OrdersPageInner() {
 
   const filtered = orders.filter(o =>
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (o.orderNumber.toLowerCase().includes(search.toLowerCase()) || getContactName((o as any).contactId).toLowerCase().includes(search.toLowerCase())) &&
     (!statusFilter || o.status === statusFilter) &&
     (!contactFilter || o.contactId === contactFilter)

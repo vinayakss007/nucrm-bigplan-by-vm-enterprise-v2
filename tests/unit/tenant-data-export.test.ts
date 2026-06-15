@@ -3,21 +3,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockFrom = vi.fn();
 const mockWhere = vi.fn();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockDbSelect = vi.fn(() => ({ from: (...args: any[]) => mockFrom(...args) }));
 const mockDbExecute = vi.fn();
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 mockFrom.mockReturnValue({ where: (...args: any[]) => mockWhere(...args) });
 mockWhere.mockResolvedValue([]);
 
 const mockSqlIdentifier = vi.fn((name: string) => ({ type: 'identifier', name }));
 const mockSql = Object.assign(
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (strings: TemplateStringsArray, ...values: any[]) => ({
     query: strings.reduce((acc, str, i) => acc + str + (values[i] !== undefined ? `$${i + 1}` : ''), ''),
@@ -28,8 +22,6 @@ const mockSql = Object.assign(
 
 vi.mock('@/drizzle/db', () => ({
   db: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     execute: (...args: any[]) => mockDbExecute(...args),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,8 +48,6 @@ describe('TenantDataExporter', () => {
     it('stores tenant id', async () => {
       const { TenantDataExporter } = await import('@/lib/tenant-data-export');
       const exporter = new TenantDataExporter('tenant-1');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect((exporter as any).tenantId).toBe('tenant-1');
     });

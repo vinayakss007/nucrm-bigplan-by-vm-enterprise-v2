@@ -19,8 +19,8 @@ interface LogEntry {
   message: string;
   timestamp: number;
   labels: Record<string, string>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   context?: Record<string, any>;
 }
@@ -133,8 +133,8 @@ class GrafanaOTLPClient extends EventEmitter {
   /**
    * Log an error to Loki
    */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   logError(error: Error, context: Record<string, any> = {}) {
     this.log('error', error.message, {
@@ -147,8 +147,8 @@ class GrafanaOTLPClient extends EventEmitter {
   /**
    * Log a message to Loki
    */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   log(level: 'info' | 'warn' | 'error' | 'debug', message: string, context: Record<string, any> = {}) {
     if (!this.enabled) {
@@ -365,14 +365,14 @@ export const metrics = {
   histogram: (metric: string, value: number, labels?: Record<string, string>) =>
     getGrafanaClient().histogram(metric, value, labels),
   
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   log: (level: 'info' | 'warn' | 'error' | 'debug', message: string, context?: Record<string, any>) =>
     getGrafanaClient().log(level, message, context),
   
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   logError: (error: Error, context?: Record<string, any>) =>
     getGrafanaClient().logError(error, context),

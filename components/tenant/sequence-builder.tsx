@@ -122,8 +122,6 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
       })
       toast.success('Sequence saved!')
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       toast.error(error.message || 'Failed to save sequence')
     }
@@ -205,8 +203,6 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
                 variant="outline"
                 size="sm"
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
                 onClick={() => addStep(value as any)}
                 className="text-xs"
               >
@@ -232,8 +228,6 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
                   key={value}
                   variant="outline"
                   size="sm"
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   onClick={() => addStep(value as any)}
                   className="text-xs"

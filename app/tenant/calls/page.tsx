@@ -27,7 +27,6 @@ export default function CallsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [contacts, setContacts] = useState<any[]>([]);
 
   useEffect(() => {
@@ -127,8 +126,6 @@ export default function CallsPage() {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function LogCallModal({ contacts, onSaved, onClose }: { contacts: any[]; onSaved: (c: any) => void; onClose: () => void }) {
   const [form, setForm] = useState({

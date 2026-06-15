@@ -148,8 +148,6 @@ export interface ModuleManifest {
   icon: string;         // emoji or URL
   minCrmVersion: string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   pricing: Record<string, { enabled: boolean; price?: number; [key: string]: any }>;
   features: string[];
   permissions: string[];       // permissions this module needs
@@ -175,8 +173,6 @@ export interface TenantModule {
   tenant_id: string;
   module_id: string;
   status: ModuleStatus;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   settings: Record<string, any>;
   installed_at: string;
@@ -204,15 +200,11 @@ export type ActionType =
 export interface AutomationTrigger {
   type: TriggerType;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   conditions?: { field: string; operator: string; value: any }[];
 }
 
 export interface AutomationAction {
   type: ActionType;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   config: Record<string, any>;
   delay_minutes?: number;
@@ -241,8 +233,6 @@ export interface Integration {
   type: string;
   name: string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   config: Record<string, any>;
   is_active: boolean;
   last_used_at: string | null;
@@ -254,8 +244,6 @@ export interface WebhookDelivery {
   tenant_id: string;
   integration_id: string;
   event: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   payload: Record<string, any>;
   status: 'pending' | 'delivered' | 'failed';

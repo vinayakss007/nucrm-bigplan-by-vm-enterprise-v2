@@ -7,7 +7,6 @@ import toast from 'react-hot-toast';
 
 export default function KBPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [articles, setArticles] = useState<any[]>([]);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [categories, setCategories] = useState<any[]>([]);
@@ -124,8 +123,6 @@ export default function KBPage() {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function CreateArticleModal({ categories, onClose, onCreated }: { categories: any[]; onClose: () => void; onCreated: () => void }) {
   const [form, setForm] = useState({ title: '', content: '', excerpt: '', category_id: '', status: 'draft' });

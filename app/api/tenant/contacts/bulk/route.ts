@@ -18,8 +18,8 @@ import { logError } from '@/lib/errors-server';
 const MAX_BULK = 500;
 
 export async function POST(req: NextRequest) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let ctx: any;
   try {
@@ -217,8 +217,8 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, affected, action });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[contacts bulk POST]', err);

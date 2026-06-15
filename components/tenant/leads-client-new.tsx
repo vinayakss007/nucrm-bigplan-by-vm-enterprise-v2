@@ -68,8 +68,6 @@ function ScoreBadge({ score }: { score: number }) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function KanbanColumn({ status, leads, onNavigate }: any) {
   const cfg = PIPELINE_CONFIG[status as keyof typeof PIPELINE_CONFIG];
   const Icon = cfg.icon;
@@ -105,8 +103,6 @@ function KanbanColumn({ status, leads, onNavigate }: any) {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function QuickAddModal({ companies, teamMembers, onClose, onSuccess }: any) {
   const [data,setData]=useState({first_name:'',last_name:'',email:'',phone:'',title:'',company_name:'',lead_source:'website',budget:'',timeline:'',authority_level:'unknown',assigned_to:'',tags:''});
@@ -204,21 +200,15 @@ function QuickAddModal({ companies, teamMembers, onClose, onSuccess }: any) {
 interface Props {
   permissions: Record<string,boolean>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   teamMembers: any[];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   companies: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   stats: any[];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   sources: any[];
   tenantId: string;
   userId: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _sources?: any[];
   _tenantId?: string;

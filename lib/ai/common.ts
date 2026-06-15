@@ -168,8 +168,8 @@ export async function recordUsage(
   service: string,
   actualCostCents: number,
   tokensUsed: number = 0,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   responseData?: any
 ) {
@@ -372,8 +372,8 @@ async function getTenantUsage(tenantId: string, module: string) {
   } : { monthly_count: 0, monthly_cost_cents: 0 };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getLimitForModule(limits: any, module: string): number {
   const map: Record<string, number> = {

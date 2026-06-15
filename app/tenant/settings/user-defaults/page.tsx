@@ -19,8 +19,6 @@ const ACCENT_COLORS = [
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Defaults = Record<string, any>;
 
 export default function UserDefaultsPage() {
@@ -36,8 +34,6 @@ export default function UserDefaultsPage() {
       fetch('/api/tenant/admin/user-defaults').then(r => r.ok ? r.json() : { user_defaults: {} }),
       fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     ]).then(([d, me]: any[]) => { if (ignore) return; 
       setDefaults(d.user_defaults ?? { } );
       setOriginal(d.user_defaults ?? {});
@@ -47,8 +43,6 @@ export default function UserDefaultsPage() {
 }, []);
 
   const dirty = useMemo(() => JSON.stringify(defaults) !== JSON.stringify(original), [defaults, original]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const setVal = (k: string, v: any) => setDefaults(p => {
     const next = { ...p };
@@ -282,8 +276,6 @@ export default function UserDefaultsPage() {
 const inp = 'w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function Section({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-card p-5 space-y-3">
@@ -316,8 +308,6 @@ function SelectOrUnset({ value, onChange, options }: { value: string | undefined
 }
 
 function BoolDefault({ label, k, defaults, setVal }: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   label: string; k: string; defaults: Defaults; setVal: (k: string, v: any) => void;
 }) {

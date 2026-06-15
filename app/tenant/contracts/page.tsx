@@ -89,8 +89,6 @@ function ContractsPageInner() {
 
   const filtered = contracts.filter(c =>
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (c.title?.toLowerCase().includes(search.toLowerCase()) || getContactName((c as any).contactId).toLowerCase().includes(search.toLowerCase())) &&
     (!statusFilter || c.status === statusFilter) &&
     (!contactFilter || c.contactId === contactFilter)

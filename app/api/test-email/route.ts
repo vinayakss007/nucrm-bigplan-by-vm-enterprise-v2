@@ -62,14 +62,13 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
     
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    console.error('[TestEmail] Error:', err.message);
-    return NextResponse.json({ 
-      error: err.message,
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+ 
+ 
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[TestEmail] Error:', msg);
+    return NextResponse.json({
+      error: 'Email test failed',
     }, { status: 500 });
   }
 }

@@ -11,8 +11,6 @@ type Channel = 'in_app' | 'email' | 'telegram';
 type Matrix = Record<string, Record<Channel, boolean>>;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CHANNEL_META: Record<Channel, { label: string; icon: any }> = {
   in_app:   { label: 'In-app',   icon: Bell },
   email:    { label: 'Email',    icon: Mail },
@@ -20,8 +18,6 @@ const CHANNEL_META: Record<Channel, { label: string; icon: any }> = {
 };
 
 type EventDef = { key: string; label: string; desc: string };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Group = { label: string; icon: any; events: EventDef[] };
 
@@ -102,8 +98,6 @@ export default function NotificationsPage() {
   let ignore = false;
     fetch('/api/tenant/notifications/matrix')
       .then(r => r.ok ? r.json() : { matrix: {} })
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .then((d: any) => {
         setMatrix(d.matrix ?? {});
