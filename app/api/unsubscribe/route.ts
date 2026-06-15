@@ -12,7 +12,7 @@ import { logError } from '@/lib/errors-server';
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const contactId  = searchParams.get('contact');
-  const sequenceId = searchParams.get('seq');
+  const _sequenceId = searchParams.get('seq');
 
   if (!contactId) {
     return new NextResponse('Missing contact parameter', { status: 400 });

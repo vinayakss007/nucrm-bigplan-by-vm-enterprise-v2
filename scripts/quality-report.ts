@@ -37,7 +37,7 @@ const TIMEOUT_MS = 120_000;
 
 const results: CheckResult[] = [];
 
-function run(cmd: string, label: string): { ok: boolean; out: string; dur: number } {
+function run(cmd: string, _label: string): { ok: boolean; out: string; dur: number } {
   const t0 = Date.now();
   try {
     const out = execSync(cmd, { encoding: 'utf-8', timeout: TIMEOUT_MS, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -85,7 +85,7 @@ function runTests(type: 'unit' | 'integration'): CheckResult {
 
 function checkBuild(): CheckResult {
   console.log('\n── Build ──');
-  const { ok, out, dur } = run('npm run build 2>&1', 'build');
+  const { ok, out: _out, dur } = run('npm run build 2>&1', 'build');
   const score = ok ? 100 : 0;
   console.log(`  ${ok ? '✓' : '✗'} build ${ok ? 'succeeded' : 'failed'} (score: ${score}/100) [${dur}ms]`);
   return { category: 'build', label: 'Next.js Build', passed: ok, score, weight: 15, details: ok ? 'Build succeeded' : 'Build failed', durationMs: dur };
@@ -104,7 +104,7 @@ async function checkLighthouse(): Promise<CheckResult> {
   mkdirSync(REPORT_DIR, { recursive: true });
 
   const cmd = `npx lighthouse ${BASE_URL} --output=json --output-path=${reportPath} --chrome-flags="--headless --no-sandbox" --only-categories=performance,accessibility,best-practices,seo 2>/dev/null`;
-  const { ok, out } = run(cmd, 'lighthouse');
+  const { ok: _ok, out: _out } = run(cmd, 'lighthouse');
   const dur = Date.now() - t0;
 
   let perf = 0, a11y = 0, bp = 0, seo = 0;
@@ -147,7 +147,7 @@ async function main() {
   const totalWeight = results.reduce((s, r) => s + r.weight, 0);
   const weightedScore = Math.round(results.reduce((s, r) => s + (r.score * r.weight) / totalWeight, 0));
 
-  const passedAll = results.every(r => r.passed);
+  const _passedAll = results.every(r => r.passed);
   const categories = results.map(r => `${r.category}: ${r.score}`).join(', ');
 
   console.log('\n══════════════════════════════════════════════');

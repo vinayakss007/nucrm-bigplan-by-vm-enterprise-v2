@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { defineSLA, checkSLABreach, getEscalationChain, DEFAULT_SLA_TIMES } from '@/lib/sla';
-import type { SLADefinition, EscalationRule } from '@/lib/sla';
+import type { EscalationRule } from '@/lib/sla';
 
 describe('SLA Engine - defineSLA', () => {
   it('creates SLA with default times for critical priority', () => {

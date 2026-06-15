@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { 
-  Plus, X, GripVertical, Settings, Save, Eye, Copy, Check, 
+  Plus, GripVertical, Settings, Save, Eye, 
   Trash2, ChevronLeft, Layout, Type, Mail, Phone, Hash, 
   Calendar, CheckSquare, List
 } from 'lucide-react';

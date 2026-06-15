@@ -179,7 +179,7 @@ export default function ServicesPage() {
     }
   };
 
-  const linkContactToService = async (serviceId: string, contactId: string) => {
+  const _linkContactToService = async (serviceId: string, contactId: string) => {
     try {
       await fetch(`/api/tenant/services/${serviceId}`, {
         method: 'PATCH',

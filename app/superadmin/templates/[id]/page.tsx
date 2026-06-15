@@ -1,7 +1,6 @@
 'use client';
 import { useState, useEffect, use } from 'react';
-import {
-  Package, Save, ArrowLeft, Plus, Trash2, GripVertical, Zap, Users, ChevronDown, ChevronUp,
+import { Save, ArrowLeft, Plus, Trash2, GripVertical, Zap, Users, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';

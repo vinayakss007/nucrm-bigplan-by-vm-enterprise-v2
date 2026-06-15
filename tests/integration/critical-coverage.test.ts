@@ -302,7 +302,7 @@ describe('db/client - integration with Docker PostgreSQL', () => {
       process.env.DATABASE_SSL = 'false';
       process.env.DATABASE_POOL_SIZE = '5';
       
-      const { withTransaction, query } = await import('@/lib/db/client');
+      const { withTransaction, query: _query } = await import('@/lib/db/client');
       
       const result = await withTransaction(async (client) => {
         await client.query('SELECT 1');
@@ -337,7 +337,7 @@ describe('db/client - integration with Docker PostgreSQL', () => {
       process.env.DATABASE_SSL = 'false';
       process.env.DATABASE_POOL_SIZE = '5';
       
-      const { buildInsert, query } = await import('@/lib/db/client');
+      const { buildInsert, query: _query } = await import('@/lib/db/client');
       
       const stmt = buildInsert('notes', {
         tenant_id: '00000000-0000-0000-0000-000000000001',
@@ -419,7 +419,7 @@ describe('db/client - integration with Docker PostgreSQL', () => {
       expect(fetchCount).toBe(1); // Still 1!
       
       // Different key - fetches again
-      const result3 = await dbCache('other-key', 5000, fetcher);
+      const _result3 = await dbCache('other-key', 5000, fetcher);
       expect(fetchCount).toBe(2);
     });
   });

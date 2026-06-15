@@ -21,7 +21,7 @@ export default function TenantModulesPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [modules, setModules] = useState<any[]>([]);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [tenant, setTenant] = useState<any>(null);
+  const [_tenant, _setTenant] = useState<any>(null);
   const [plan, setPlan] = useState('');
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);

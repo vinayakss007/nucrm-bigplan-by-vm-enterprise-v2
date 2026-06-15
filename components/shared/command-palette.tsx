@@ -22,7 +22,6 @@ import {
   Plus,
   FileText,
   Settings,
-  Mail,
   Bell,
   FolderOpen,
   Trash2,
@@ -31,7 +30,6 @@ import {
   Keyboard,
   X,
   ChevronRight,
-  Star,
   Clock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -238,7 +236,7 @@ const CREATE_ITEMS: CommandItem[] = [
 ]
 
 // Keyboard shortcuts
-const SHORTCUT_ITEMS: CommandItem[] = [
+const _SHORTCUT_ITEMS: CommandItem[] = [
   {
     id: 'shortcuts',
     label: 'Keyboard Shortcuts',
@@ -277,7 +275,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const [search, setSearch] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [recentItems, setRecentItems] = useState<RecentItem[]>([])
-  const router = useRouter()
+  const _router = useRouter()
 
   // Load recent items from localStorage
   useEffect(() => {

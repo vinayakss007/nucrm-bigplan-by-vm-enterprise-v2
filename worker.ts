@@ -45,7 +45,7 @@ const startTime = Date.now();
 const emailWorker = new Worker(
   'send-email',
   async (job) => {
-    const { to, subject, body, html, tenantId } = job.data;
+    const { to, subject, body, html, tenantId: _tenantId } = job.data;
     console.log(`[Email Worker] Processing job: ${job.id} - Sending email to ${to}`);
     
     try {
@@ -103,7 +103,7 @@ const BULK_BATCH_SIZE = 10;
 const bulkEmailWorker = new Worker(
   'send-bulk-emails',
   async (job) => {
-    const { recipients, subject, body, tenantId } = job.data;
+    const { recipients, subject, body, tenantId: _tenantId } = job.data;
     console.log(`[Bulk Email Worker] Processing job: ${job.id} - Sending to ${recipients.length} recipients`);
     
     const results: Array<{ email: string; success: boolean; error?: string }> = [];
@@ -278,7 +278,7 @@ const leadWarmingWorker = new Worker(
 const webhookWorker = new Worker(
   'webhooks',
   async (job) => {
-    const { url, payload, headers, webhookId, deliveryId } = job.data;
+    const { url, payload, headers, webhookId: _webhookId, deliveryId } = job.data;
     console.log(`[Webhook Worker] Processing job: ${job.id} - Delivering to ${url}`);
     
     try {

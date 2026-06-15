@@ -3,8 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Search,
-  Filter,
-  Eye,
   Trash2,
   Edit2,
   RefreshCw,
@@ -15,16 +13,12 @@ import {
   Building2,
   Target,
   Briefcase,
-  FileText,
   Loader2,
-  AlertTriangle,
   CheckCircle,
   X,
   Copy,
   ArrowUpDown,
-  Table,
   BarChart3,
-  Download,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────────

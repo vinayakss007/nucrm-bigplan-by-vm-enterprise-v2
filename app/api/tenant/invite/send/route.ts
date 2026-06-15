@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     const emailLower = email.toLowerCase();
 
     // 1. Check if already a member
-    const existingMember = await db.query.tenantMembers.findFirst({
+    const _existingMember = await db.query.tenantMembers.findFirst({
       where: and(
         eq(tenantMembers.tenantId, ctx.tenantId),
         eq(tenantMembers.status, 'active')

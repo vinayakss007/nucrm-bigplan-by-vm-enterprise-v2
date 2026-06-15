@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, FileText, ExternalLink, Copy, Check, ToggleLeft, ToggleRight,
-  Trash2, Loader2, X, Eye, Settings, ChevronRight } from 'lucide-react';
+  Trash2, Loader2, X, Eye, ChevronRight } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -20,7 +20,7 @@ export default function FormsPage() {
   const [loading, setLoading]   = useState(true);
   const [showCreate, setShowCreate] = useState(false);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [selected, setSelected] = useState<any|null>(null);
+  const [_selected, _setSelected] = useState<any|null>(null);
   const [saving, setSaving]     = useState(false);
   const [copiedId, setCopiedId] = useState<string|null>(null);
   const [form, setForm] = useState({

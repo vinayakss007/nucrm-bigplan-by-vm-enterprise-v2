@@ -28,7 +28,7 @@ export async function executeAction(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params: Record<string, any>
 ): Promise<ActionResult> {
-  const provider = getProviderDef(instance.providerId);
+  const _provider = getProviderDef(instance.providerId);
 
   // Built-in handler exists?
   const handler = getHandler(instance.providerId);

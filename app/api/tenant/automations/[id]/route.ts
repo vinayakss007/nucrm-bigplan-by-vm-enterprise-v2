@@ -62,7 +62,7 @@ export async function GET(
       created_at: run.createdAt
     }));
 
-    const createdName = createdByName;
+    const _createdName = createdByName;
     return NextResponse.json({ 
       data: { 
         ...automation, 

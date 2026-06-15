@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Users, Plus, Filter, Download, Upload, Search, MoreHorizontal, Edit, Trash2,
-  Phone, Mail, Building2, TrendingUp, Calendar, User, Star, Archive, RotateCcw,
-  ChevronDown, CheckCircle, XCircle, Clock, ArrowRight, Zap, Target, Eye, Activity
+  Users, Plus, Download, Upload, Search, MoreHorizontal, Trash2,
+  Phone, Building2, Calendar, User, Star, Archive,
+  ChevronDown, CheckCircle, XCircle, Zap, Target, Eye, Activity
 } from 'lucide-react';
 import { cn, formatDate, getInitials } from '@/lib/utils';
 

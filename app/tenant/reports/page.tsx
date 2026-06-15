@@ -3,7 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import {
   BarChart3, Download, RefreshCw, FileText, TrendingUp, Users, CheckSquare,
-  Mail, DollarSign, Calendar, Building2, Target, Zap, FilePlus, Clock
+  Mail, Building2, Target, Zap, FilePlus, Clock
 } from 'lucide-react';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';

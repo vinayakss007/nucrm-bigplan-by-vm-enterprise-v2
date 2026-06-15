@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Plus, Zap, ToggleLeft, ToggleRight, Play, Trash2, ChevronRight,
-  Mail, Bell, Users, Calendar, TrendingUp, Activity, X, Loader2, Edit2, Workflow } from 'lucide-react';
+import { Plus, Zap, ToggleLeft, ToggleRight, Trash2,
+  Mail, Users, Calendar, TrendingUp, X, Loader2, Workflow } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 

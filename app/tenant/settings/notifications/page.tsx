@@ -95,7 +95,7 @@ export default function NotificationsPage() {
   const [query, setQuery] = useState('');
 
   useEffect(() => {
-  let ignore = false;
+  let _ignore = false;
     fetch('/api/tenant/notifications/matrix')
       .then(r => r.ok ? r.json() : { matrix: {} })
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,7 +104,7 @@ export default function NotificationsPage() {
         setOriginal(d.matrix ?? {});
       })
       .finally(() => setLoading(false));
-    return () => { ignore = true; };
+    return () => { _ignore = true; };
 }, []);
 
   const dirty = JSON.stringify(matrix) !== JSON.stringify(original);

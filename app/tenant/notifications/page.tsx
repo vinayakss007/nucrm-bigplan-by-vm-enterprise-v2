@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Bell, BellOff, CheckCheck, Trash2, CheckCircle, TrendingUp,
-  AtSign, AlertTriangle, Zap, Clock, Users, MessageSquare } from 'lucide-react';
+  AtSign, AlertTriangle, Zap, Clock, Users } from 'lucide-react';
 import { cn, formatRelativeTime, toSnakeCase } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';

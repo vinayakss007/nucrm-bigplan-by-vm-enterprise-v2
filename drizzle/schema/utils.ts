@@ -12,9 +12,7 @@
 
 import { 
   uuid, 
-  text, 
   timestamp, 
-  boolean, 
   jsonb,
   index
 } from 'drizzle-orm/pg-core';

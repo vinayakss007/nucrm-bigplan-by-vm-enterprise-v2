@@ -117,7 +117,7 @@ describe('encryptSensitiveFields', () => {
   it('works without ENCRYPTION_KEY', () => {
     delete process.env.ENCRYPTION_KEY;
     const data = { apiKey: 'sk-123' };
-    const result = encryptSensitiveFields(data);
+    const _result = encryptSensitiveFields(data);
     expect(mockEncrypt).toHaveBeenCalledWith('sk-123', '');
   });
 });

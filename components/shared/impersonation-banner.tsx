@@ -5,7 +5,7 @@ import { X, ArrowLeft, ShieldAlert } from 'lucide-react';
 
 export default function ImpersonationBanner() {
   const [visible, setVisible] = useState(false);
-  const router = useRouter();
+  const _router = useRouter();
 
   useEffect(() => {
     // Check if we're impersonating

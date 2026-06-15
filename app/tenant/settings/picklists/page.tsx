@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import {
-  ListChecks, Save, Loader2, Plus, X, Tag, ShieldX, GripVertical, RotateCcw,
+  ListChecks, Save, Loader2, Plus, X, ShieldX, RotateCcw,
   UserCheck, ThumbsDown, Trophy, ListTodo, Layers, Briefcase,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';

@@ -10,7 +10,7 @@
  * (GHSA-8gw3-rxh4-v6jx, GHSA-jc85-fpwf-qm7x) with NO fix available.
  */
 
-import { create, all, type MathJsInstance } from 'mathjs';
+import { create, all } from 'mathjs';
 
 // Create a restricted mathjs instance — no dangerous functions
  

@@ -15,20 +15,20 @@ export async function GET(request: NextRequest) {
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let dateFilter: any;
+    let _dateFilter: any;
     const now = new Date();
     switch (period) {
       case '7d':
-        dateFilter = gte(contacts.createdAt, new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
+        _dateFilter = gte(contacts.createdAt, new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
         break;
       case '30d':
-        dateFilter = gte(contacts.createdAt, new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+        _dateFilter = gte(contacts.createdAt, new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
         break;
       case '90d':
-        dateFilter = gte(contacts.createdAt, new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000));
+        _dateFilter = gte(contacts.createdAt, new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000));
         break;
       case '12m':
-        dateFilter = gte(contacts.createdAt, new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000));
+        _dateFilter = gte(contacts.createdAt, new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000));
         break;
     }
 

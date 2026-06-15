@@ -127,7 +127,7 @@ export const CacheTTL = {
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function cachedQuery<T extends any[], R = any>(options: {
+export function cachedQuery<T extends any[], _R = any>(options: {
   key: (...args: T) => string;
   ttl?: number;
 }) {

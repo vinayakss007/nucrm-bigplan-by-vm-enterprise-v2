@@ -4,7 +4,7 @@ import { Plus, Trash2, GripVertical, Save, Loader2, X, Check } from 'lucide-reac
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-const DEFAULT_STAGES = [
+const _DEFAULT_STAGES = [
   { id:'lead',        label:'Lead',        order:0, probability:10  },
   { id:'qualified',   label:'Qualified',   order:1, probability:30  },
   { id:'proposal',    label:'Proposal',    order:2, probability:60  },

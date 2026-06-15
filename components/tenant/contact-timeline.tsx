@@ -10,14 +10,12 @@ import {
   CheckCircle, 
   TrendingUp,
   User,
-  Clock,
   AlertCircle,
   MailOpen,
   Link as LinkIcon,
   FormInput as FormSubmit,
   Zap,
   MoreHorizontal,
-  ChevronDown,
   Filter,
 } from 'lucide-react'
 import { cn, formatRelativeTime } from '@/lib/utils'

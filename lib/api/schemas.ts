@@ -2,10 +2,10 @@ import { z } from 'zod';
 
 // ── Common helpers ──
 const uuid = z.string().uuid().optional().nullable().or(z.literal(''));
-const optionalString = z.string().trim();
+const _optionalString = z.string().trim();
 const requiredString = z.string().trim().min(1);
-const optionalDate = z.string().datetime().optional().nullable();
-const optionalNumber = z.number().optional().nullable();
+const _optionalDate = z.string().datetime().optional().nullable();
+const _optionalNumber = z.number().optional().nullable();
 
 // Accept URLs with or without protocol — auto-prepend https://
 const urlField = z.string().max(500).optional().nullable().or(z.literal('')).transform(v => {

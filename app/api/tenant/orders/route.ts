@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     const validated = validateBody(createOrderSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
-    const { contact_id: contactId, company_id: companyId, line_items: items, shipping_address: shippingAddress, tracking_number: trackingNumber, notes, status } = v;
+    const { contact_id: contactId, company_id: companyId, line_items: items, shipping_address: shippingAddress, tracking_number: _trackingNumber, notes, status } = v;
 
     if (!items?.length) {
       return NextResponse.json({ error: 'At least one line item is required' }, { status: 400 });

@@ -42,7 +42,7 @@ async function main() {
       console.log('[status] Migration history table does not exist — no migrations applied yet');
     }
 
-    const appliedNames = new Set(appliedMigrations.map(m => m.name));
+    const _appliedNames = new Set(appliedMigrations.map(m => m.name));
 
     // Get migration files
     const migrationsDir = './drizzle/migrations';

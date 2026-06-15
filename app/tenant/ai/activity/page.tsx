@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, useMemo } from 'react';
 import {
-  Activity, RefreshCw, ChevronLeft, ChevronRight, AlertCircle, CheckCircle2,
+  Activity, RefreshCw, ChevronLeft, ChevronRight, AlertCircle,
   Clock, Sparkles, ThumbsUp, ThumbsDown, Filter,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';

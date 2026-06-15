@@ -3,11 +3,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Target, Plus, Filter, Download, Upload, Search, MoreHorizontal, Edit, Trash2,
-  Phone, Mail, Building2, TrendingUp, Calendar, User, Star, Archive, RotateCcw,
-  ChevronDown, CheckCircle, XCircle, Clock, ArrowRight, Zap, Eye, Activity,
-  RefreshCcw, MapPin, Globe, Linkedin, DollarSign, Briefcase, AlertCircle,
-  BarChart3, Users, X, SlidersHorizontal, Kanban, List, Flame
+  Target, Plus, Filter, Upload, Search, MoreHorizontal, Trash2,
+  Phone, Mail, Building2, TrendingUp, User, Star, Archive, RotateCcw,
+  ChevronDown, CheckCircle, XCircle, Clock, Zap, Eye, Activity, Globe, Linkedin, DollarSign,
+  BarChart3, Users, X, Kanban, List, Flame
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -70,7 +69,7 @@ function ScoreBadge({ score }: { score: number }) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function KanbanColumn({ status, leads, onNavigate }: any) {
   const cfg = PIPELINE_CONFIG[status as keyof typeof PIPELINE_CONFIG];
-  const Icon = cfg.icon;
+  const _Icon = cfg.icon;
   return (
     <div className="flex-1 min-w-[220px] max-w-[280px]">
       <div className="flex items-center gap-2 mb-3 px-1">
