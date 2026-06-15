@@ -18,9 +18,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import {
-  Plus, Save, Play, Trash2, Settings2, Mail, Bell, Users, Calendar,
-  TrendingUp, Zap, Tag, Phone, Clock, FileText, DollarSign, GitBranch,
-  ArrowRight, Loader2, X
+  Plus, Save, Play, Trash2, Mail, Bell, Users, Calendar, Zap, Tag, Clock, DollarSign, GitBranch, Loader2, X
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -41,7 +39,7 @@ type CustomNode = Node<CustomNodeData>
 
 // ─── Node Type Definitions ─────────────────────────────────────────────────────
 
-const NODE_TYPES = {
+const _NODE_TYPES = {
   trigger: 'trigger',
   action_send_email: 'action_send_email',
   action_create_task: 'action_create_task',
@@ -149,7 +147,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
   const [showPalette, setShowPalette] = useState(true)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [nodeConfig, setNodeConfig] = useState<Record<string, any>>({})
+  const [_nodeConfig, _setNodeConfig] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(!!workflowId)
 
   // Load existing workflow
@@ -522,7 +520,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
               {(() => {
                 const node = nodes.find(n => n.id === selectedNode)
                 if (!node) return null
-                const palette = NODE_PALETTE.find(p => p.type === node.data.nodeType)
+                const _palette = NODE_PALETTE.find(p => p.type === node.data.nodeType)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const cfg = node.data.config as any
 

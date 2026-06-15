@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
-import { Plus, MoreHorizontal, Edit, Trash2, DollarSign, Tag, UserPlus, ArrowRightLeft, Trophy, X as XIcon, Layers } from 'lucide-react'
+import { Plus, MoreHorizontal, Edit, Trash2, DollarSign, Tag, UserPlus, ArrowRightLeft, Trophy, Layers } from 'lucide-react'
 import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
@@ -261,7 +261,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
   ], [pagination.pageIndex, loadData])
 
   // ── Bulk actions ──────────────────────────────────────────
-  const [bulkBusy, setBulkBusy] = useState(false)
+  const [_bulkBusy, setBulkBusy] = useState(false)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, any> = {}) => {
     setBulkBusy(true)

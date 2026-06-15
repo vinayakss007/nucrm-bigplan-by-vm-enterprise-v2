@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     const validated = validateBody(createQuoteSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
-    const { contact_id: contactId, company_id: companyId, title, line_items: items, notes, terms, discount, status, issue_date: issueDate, expiry_date: expiryDate } = v;
+    const { contact_id: contactId, company_id: _companyId, title, line_items: items, notes, terms, discount, status, issue_date: _issueDate, expiry_date: expiryDate } = v;
     const tax = 0;
 
     if (!title) {

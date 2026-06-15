@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import {
-  Zap, Loader2, Eye, EyeOff, Mail, Lock, Shield, BarChart3,
+import { Loader2, Eye, EyeOff, Mail, Lock, Shield, BarChart3,
   Users, Cpu, CheckCircle, ArrowRight, X
 } from 'lucide-react';
 import toast from 'react-hot-toast';

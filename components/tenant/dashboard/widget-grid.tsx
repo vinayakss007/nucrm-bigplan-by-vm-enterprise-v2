@@ -1,5 +1,5 @@
 'use client';
-import type { WidgetProps, DashboardLayoutItem, WidgetConfig } from '@/types/dashboard';
+import type { WidgetProps, DashboardLayoutItem } from '@/types/dashboard';
 import { LazyWidget } from './widget-wrapper';
 import { getWidget } from './widget-registry';
 import type { FC } from 'react';

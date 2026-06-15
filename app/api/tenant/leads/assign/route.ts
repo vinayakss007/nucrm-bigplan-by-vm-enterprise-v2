@@ -5,7 +5,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, tenantMembers, users } from '@/drizzle/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
-import { createNotification, type NotificationType } from '@/lib/notifications';
+import { createNotification } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';
 import { apiError } from '@/lib/api-error';
 

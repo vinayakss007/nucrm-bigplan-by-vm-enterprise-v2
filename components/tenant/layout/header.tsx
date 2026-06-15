@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, Sun, Moon, Search, LogOut, X, Users, TrendingUp,
   Building2, Menu, ChevronDown, User, Settings, Crown, KeyRound, RefreshCw, UserCheck, CheckSquare,
-  Mail, Zap, AlertCircle, Info } from 'lucide-react';
+  Mail, AlertCircle, Info } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { cn, formatCurrency, getInitials, formatRelativeTime, toSnakeCase } from '@/lib/utils';
@@ -23,7 +23,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const { theme, setTheme }       = useTheme();
-  const [mounted, setMounted]     = useState(false);
+  const [_mounted, setMounted]     = useState(false);
   const router                    = useRouter();
   const inputRef                  = useRef<HTMLInputElement>(null);
   const timerRef                  = useRef<NodeJS.Timeout>(undefined);

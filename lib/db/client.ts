@@ -45,7 +45,7 @@ export async function query<T extends QueryResultRow = any>(sql: string, params?
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   catch (err: any) {
-    const duration = Date.now() - startTime;
+    const _duration = Date.now() - startTime;
     // Only retry if NOT in a transaction
     if (!clientFromStorage && retries > 0 && isRetryable(err)) { 
       await sleep(150 * Math.pow(2, 2-retries)); 

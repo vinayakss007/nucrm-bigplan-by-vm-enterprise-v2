@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import * as Sentry from '@sentry/nextjs';
-import pkg from '@/package.json';
 
-function timeout(ms: number): Promise<never> {
+function _timeout(ms: number): Promise<never> {
   return new Promise((_, reject) =>
     setTimeout(() => reject(new Error('db timeout')), ms)
   );

@@ -1849,7 +1849,7 @@ export default function DocsClient() {
     setViewMode('home');
   };
 
-  const handleBack = () => {
+  const _handleBack = () => {
     if (viewMode === 'document') {
       setSelectedDoc(null);
       setViewMode(selectedCategory ? 'category' : 'index');

@@ -185,7 +185,7 @@ export async function GET(request: NextRequest) {
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (_err: any) {
     return new Response("# ERROR\\n", {
       status: 500,
       headers: { 'Content-Type': 'text/plain' },

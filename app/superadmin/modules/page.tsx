@@ -73,7 +73,7 @@ export default function SuperAdminModulesPage() {
     toast.success('Plan configurations saved');
   };
 
-  const totalInstalls = modules.reduce((s, m) => s + (m.total_installs || 0), 0);
+  const _totalInstalls = modules.reduce((s, m) => s + (m.total_installs || 0), 0);
 
   return (
     <div className="space-y-5 max-w-6xl">

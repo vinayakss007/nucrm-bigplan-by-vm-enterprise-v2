@@ -8,15 +8,15 @@ import { cn } from '@/lib/utils';
 import { sanitizeHTML } from '@/lib/sanitize';
 
 export default function SecuritySettingsPage() {
-  const router = useRouter();
+  const _router = useRouter();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [user, setUser] = useState<any>(null);
+  const [_user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
   // 2FA states
   const [totpEnabled, setTotpEnabled] = useState(false);
   const [showTotpSetup, setShowTotpSetup] = useState(false);
-  const [totpSecret, setTotpSecret] = useState('');
+  const [_totpSecret, setTotpSecret] = useState('');
   const [totpQrCode, setTotpQrCode] = useState('');
   const [totpCode, setTotpCode] = useState('');
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
@@ -37,14 +37,14 @@ export default function SecuritySettingsPage() {
   const [retentionDays, setRetentionDays] = useState(30);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [pendingDeletion, setPendingDeletion] = useState<any>(null);
-  const [loadingRetention, setLoadingRetention] = useState(true);
+  const [_loadingRetention, setLoadingRetention] = useState(true);
   const [savingRetention, setSavingRetention] = useState(false);
 
   // IP whitelist states
   const [ipWhitelist, setIpWhitelist] = useState<string[]>([]);
   const [ipEnabled, setIpEnabled] = useState(false);
   const [newIp, setNewIp] = useState('');
-  const [loadingIp, setLoadingIp] = useState(true);
+  const [_loadingIp, setLoadingIp] = useState(true);
   const [savingIp, setSavingIp] = useState(false);
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
@@ -59,7 +59,7 @@ export default function SecuritySettingsPage() {
       const data = await res.json();
       setUser(data.user);
       setTotpEnabled(data.user?.totp_enabled ?? false);
-    } catch (err) {
+    } catch (_err) {
       toast.error('Failed to load user data');
     } finally {
       setLoading(false);
@@ -94,7 +94,7 @@ export default function SecuritySettingsPage() {
       if (!res.ok) throw new Error('Failed to save');
       setRetentionDays(days);
       toast.success('Trash retention updated');
-    } catch (err) {
+    } catch (_err) {
       toast.error('Failed to save retention settings');
     } finally {
       setSavingRetention(false);
@@ -126,7 +126,7 @@ export default function SecuritySettingsPage() {
       setIpWhitelist(ips);
       setIpEnabled(enabled);
       toast.success('IP whitelist updated');
-    } catch (err) {
+    } catch (_err) {
       toast.error('Failed to save IP whitelist');
     } finally {
       setSavingIp(false);

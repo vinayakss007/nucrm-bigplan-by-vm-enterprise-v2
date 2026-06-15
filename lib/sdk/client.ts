@@ -1,4 +1,4 @@
-import type { ApiError, RequestFn } from './types';
+import type { ApiError } from './types';
 import { ContactsResource } from './resources/contacts';
 import { DealsResource } from './resources/deals';
 import { LeadsResource } from './resources/leads';

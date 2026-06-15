@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockTxExecute = vi.fn();
 const mockDbTransaction = vi.fn();
-const mockDbTransactionThrow = vi.fn();
+const _mockDbTransactionThrow = vi.fn();
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 mockDbTransaction.mockImplementation((cb: any) => cb({

@@ -3,9 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { 
-  Building2, Users, CreditCard, Activity, Shield, 
-  Search, Filter, Eye, AlertTriangle, CheckCircle,
-  Clock, TrendingUp, Database, Server, ArrowUpRight
+  Building2, Users, Activity, Shield, 
+  Search, Eye, CheckCircle, TrendingUp
 } from 'lucide-react';
 
 interface Tenant {

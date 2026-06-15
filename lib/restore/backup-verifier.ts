@@ -232,14 +232,14 @@ export async function verifyBackup(
   let totalStatements = 0;
   let recordsWithTenantId = 0;
   let recordsWithoutTenantId = 0;
-  let lineCount = 0;
+  let _lineCount = 0;
 
   try {
     const stream = getFileStream(backupPath);
     const rl = createInterface({ input: stream, crlfDelay: Infinity });
 
     for await (const line of rl) {
-      lineCount++;
+      _lineCount++;
       const trimmed = line.trim();
       if (!trimmed.startsWith('INSERT ')) continue;
 

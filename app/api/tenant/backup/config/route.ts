@@ -126,10 +126,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ data: null });
     }
 
-    let decryptedSecret = '';
+    let _decryptedSecret = '';
     if (raw.secret_key_encrypted) {
       try {
-        decryptedSecret = decrypt(raw.secret_key_encrypted);
+        _decryptedSecret = decrypt(raw.secret_key_encrypted);
       } catch {
         // If decryption fails, leave it empty
       }

@@ -24,7 +24,7 @@ export async function aiConnector(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params: Record<string, any>
 ): Promise<ActionResult> {
-  const baseUrl = instance.config['base_url'] || instance.config['baseUrl'] || guessBaseUrl(instance.providerId);
+  const _baseUrl = instance.config['base_url'] || instance.config['baseUrl'] || guessBaseUrl(instance.providerId);
   const apiKey = instance.config['api_key'] || instance.config['token'] || instance.config['apiKey'] || '';
   const providerName = instance.providerId;
 
@@ -63,7 +63,7 @@ export async function aiConnector(
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (_err: any) {
       continue; // Try next pattern
     }
   }

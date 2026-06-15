@@ -32,7 +32,7 @@ vi.mock('drizzle-orm', () => ({
 import { db } from '@/drizzle/db';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mockSelect(returnValue: any) {
+function _mockSelect(returnValue: any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (db.select as any).mockReturnValue({
     from: vi.fn(() => ({
@@ -53,7 +53,7 @@ function mockSelectBasic(returnValue: any) {
   });
 }
 
-function mockSelectEmpty() {
+function _mockSelectEmpty() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (db.select as any).mockReturnValue({
     from: vi.fn(() => ({

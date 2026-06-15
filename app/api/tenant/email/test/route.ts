@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.json();
     const validated = validateBody(testEmailSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
-    const { to, provider, config } = validated.data;
+    const { to, provider, config: _config } = validated.data;
     if (!to) return NextResponse.json({ error: 'Recipient email required' }, { status: 400 });
 
     // Override env vars with provided config for this test

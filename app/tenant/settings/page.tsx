@@ -3,12 +3,11 @@ import { logError } from '@/lib/errors';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  Search, X, Settings as SettingsIcon, ArrowRight, ShieldAlert,
-  CheckCircle2, CircleDashed, AlertTriangle, Sparkles, User, Building2, Crown,
+  Search, X, Settings as SettingsIcon, ArrowRight,
+  CheckCircle2, CircleDashed, AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  GROUPS, SCOPES, visibleForRole,
+import { SCOPES, visibleForRole,
   type SettingsScope, type SettingsGroup, type SettingsItem,
 } from '@/components/tenant/settings/settings-config';
 
@@ -37,14 +36,14 @@ export default function SettingsIndex() {
   const [summary, setSummary] = useState<{ configured: number; default: number; attention: number; unknown: number }>({ configured: 0, default: 0, attention: 0, unknown: 0 });
 
   useEffect(() => {
-  let ignore = false;
+  let _ignore = false;
     fetch('/api/tenant/me').then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setIsAdmin(d.is_admin ?? false)).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     fetch('/api/tenant/settings-status').then(r => r.ok ? r.json() : null)
       .then(d => { if (d) { setStatuses(d.statuses ?? {}); setSummary(d.summary ?? summary); } })
       .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
      
-    return () => { ignore = true; };
+    return () => { _ignore = true; };
 }, [, summary]);
 
   const q = query.trim().toLowerCase();

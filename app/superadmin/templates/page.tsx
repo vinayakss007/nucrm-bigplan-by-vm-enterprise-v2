@@ -51,7 +51,7 @@ export default function SuperAdminTemplatesPage() {
         }),
       });
       if (!res.ok) throw new Error('Create failed');
-      const d = await res.json();
+      const _d = await res.json();
       toast.success('Template created');
       load();
     } catch {

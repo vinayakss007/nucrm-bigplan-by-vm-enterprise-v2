@@ -4,8 +4,8 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Mail, Phone, Globe, Linkedin, Building2, Edit, Save,
   MessageSquare, PhoneCall, AtSign, Calendar, Briefcase, X, Trash2,
-  CheckCircle, Plus, ChevronDown, Star, TrendingUp, Hash,
-  Clock, User, Tag, AlertCircle, RotateCcw, History,
+  CheckCircle, Plus, ChevronDown, Star,
+  Clock, User, History,
   FileText, ShoppingCart, FileSignature, RefreshCw, DollarSign,
 } from 'lucide-react';
 import { cn, formatCurrency, formatDateTimeShort, formatDate, formatRelativeTime } from '@/lib/utils';
@@ -999,7 +999,7 @@ export default function ContactDetailClient({
                           quote: 'bg-emerald-100 text-emerald-600',
                         };
                         const Icon = typeIcons[entry.type] || FileText;
-                        const statusBadgeColors: Record<string, string> = {
+                        const _statusBadgeColors: Record<string, string> = {
                           draft: 'bg-slate-100 text-slate-600', sent: 'bg-blue-100 text-blue-700',
                           paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-700',
                           active: 'bg-green-100 text-green-700', accepted: 'bg-green-100 text-green-700',

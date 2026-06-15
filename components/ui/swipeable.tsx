@@ -35,7 +35,7 @@ export function Swipeable({ children, leftActions = [], rightActions = [], onSwi
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const allActions = [...leftActions.map((a: SwipeAction, i: number) => ({ ...a, side: 'left' as const, index: i })), ...rightActions.map((a: SwipeAction, i: number) => ({ ...a, side: 'right' as const, index: i }))];
+  const _allActions = [...leftActions.map((a: SwipeAction, i: number) => ({ ...a, side: 'left' as const, index: i })), ...rightActions.map((a: SwipeAction, i: number) => ({ ...a, side: 'right' as const, index: i }))];
 
   const resetPosition = useCallback((animate = true) => {
     setIsAnimating(animate);

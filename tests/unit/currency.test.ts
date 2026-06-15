@@ -6,7 +6,6 @@ import {
   getExchangeRate,
   setRateCache,
   clearRateCache,
-  SUPPORTED_CURRENCIES,
 } from '@/lib/currency';
 
 describe('Currency - getSupportedCurrencies', () => {

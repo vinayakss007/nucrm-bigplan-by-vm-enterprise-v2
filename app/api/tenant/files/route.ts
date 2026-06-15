@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Storage limit (${maxGb} GB) reached. Upgrade your plan.` }, { status: 403 });
     }
 
-    const storageType = 'local';
+    const _storageType = 'local';
 
     const ext = extname(file.name).toLowerCase() || '.bin';
     const filename = `${randomBytes(16).toString('hex')}${ext}`;

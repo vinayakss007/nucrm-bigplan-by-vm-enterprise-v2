@@ -17,7 +17,7 @@ export interface EnvConfig {
   encryptionKey?: string;
 }
 
-function getRequiredEnv(name: string, example?: string): string {
+function _getRequiredEnv(name: string, example?: string): string {
   const value = process.env[name];
   if (!value) {
     const exampleCmd = example || `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`;

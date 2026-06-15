@@ -26,7 +26,7 @@ export async function POST(
     const rawBody = await request.json();
     const validated = validateBody(updateContactSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
-    const v = validated.data;
+    const _v = validated.data;
     const lifecycle_stage = rawBody.lifecycle_stage;
     const reason = rawBody.reason;
 

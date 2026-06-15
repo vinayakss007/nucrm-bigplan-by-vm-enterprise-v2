@@ -16,7 +16,7 @@ interface UndoAction {
 }
 
 const MAX_UNDO = 20;
-const UNDO_TIMEOUT = 10000;
+const _UNDO_TIMEOUT = 10000;
 const undoStack: UndoAction[] = [];
 
 export function pushUndo(
@@ -48,7 +48,7 @@ export function showUndoToast(
   undoFn: () => Promise<void>,
   duration = 10000
 ): void {
-  const toastId = toast(
+  const _toastId = toast(
     (t) => (
       <div className="flex items-center gap-3">
         <span className="text-sm">{message}</span>

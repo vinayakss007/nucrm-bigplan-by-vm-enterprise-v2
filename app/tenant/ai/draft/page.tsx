@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import {
-  FileEdit, Send, Wand2, AlertCircle, Loader2, Check, ChevronDown, Settings as SettingsIcon,
-  Copy, RefreshCw, Sparkles, ExternalLink,
+  FileEdit, Wand2, AlertCircle, Loader2, Check, Settings as SettingsIcon,
+  Copy, Sparkles, ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';

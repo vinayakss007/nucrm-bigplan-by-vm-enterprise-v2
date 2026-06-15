@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import {
   AlertTriangle, Loader2, Search, Filter, ArrowUpRight, 
-  MessageSquare, Clock, Zap, Target, ExternalLink, RefreshCcw
+  MessageSquare, Zap, Target, ExternalLink, RefreshCcw
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
@@ -26,7 +26,7 @@ type AtRiskDeal = {
 export default function AIAtRiskPage() {
   const [deals, setDeals] = useState<AtRiskDeal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [_error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
 
   function load() {

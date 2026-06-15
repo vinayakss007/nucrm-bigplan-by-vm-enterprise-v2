@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
-    const contactId = searchParams.get('contactId');
+    const _contactId = searchParams.get('contactId');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
 
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     const validated = validateBody(createSubscriptionSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
-    const { contact_id: contactId, company_id: companyId, status, start_date: startDate, end_date: endDate, trial_end_date: trialEndDate, billing_frequency: billingFrequency, auto_renew: autoRenew, quantity } = v;
+    const { contact_id: contactId, company_id: companyId, status, start_date: startDate, end_date: endDate, trial_end_date: trialEndDate, billing_frequency: billingFrequency, auto_renew: autoRenew, quantity: _quantity } = v;
 
     if (!startDate || !billingFrequency) {
       return NextResponse.json({ error: 'Start date and billing frequency are required' }, { status: 400 });

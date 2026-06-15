@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Target, Mail, Phone, Building2, MapPin, Globe, Linkedin, Calendar,
+  Target, Mail, Phone, Building2, MapPin, Globe, Linkedin,
   User, Clock, DollarSign, Briefcase, TrendingUp, Star, Edit, Trash2,
   MoreHorizontal, ChevronDown, CheckCircle, XCircle, RotateCcw, Zap, Archive,
   ArrowLeft, Activity, FileText, MessageSquare, BarChart3, Award,
-  Copy, ExternalLink, Share2, Download, Plus, X
+  Copy, ExternalLink, Plus
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -64,8 +64,8 @@ interface Props {
 export default function LeadDetailClient({ lead, activities, relatedContacts, teamMembers }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'overview' | 'activities' | 'notes'>('overview');
-  const [showEdit, setShowEdit] = useState(false);
-  const [editData, setEditData] = useState(lead);
+  const [_showEdit, setShowEdit] = useState(false);
+  const [_editData, _setEditData] = useState(lead);
   const [editingBant, setEditingBant] = useState(false);
   const [bantSaving, setBantSaving] = useState(false);
   const [bantDraft, setBantDraft] = useState({
@@ -175,7 +175,7 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
     toast.success(`${label} copied to clipboard`);
   };
 
-  const ScoreBadge = ({ score }: { score: number }) => {
+  const _ScoreBadge = ({ score }: { score: number }) => {
     const color = score >= 70 ? 'text-emerald-600 bg-emerald-50' : score >= 40 ? 'text-amber-600 bg-amber-50' : 'text-gray-600 bg-gray-50';
     return (
       <div className={cn('flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold', color)}>

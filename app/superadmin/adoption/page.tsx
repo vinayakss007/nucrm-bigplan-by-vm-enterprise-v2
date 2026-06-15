@@ -4,7 +4,7 @@ import Link from 'next/link';
 import {
   Crown, Loader2, Globe, Lock, ListChecks, Settings as SettingsIcon,
   ShieldCheck, ShieldX, ShieldAlert, Users, Plane, Sparkles, AlertTriangle,
-  Activity, ArrowRightLeft, Tag, History, RefreshCw, Building2,
+  Activity, ArrowRightLeft, History, RefreshCw, Building2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

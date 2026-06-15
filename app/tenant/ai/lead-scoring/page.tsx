@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import {
-  Target, RefreshCw, Sparkles, AlertCircle, Loader2, ChevronRight, User, TrendingUp,
-  History, Settings, Play, CheckCircle2, TrendingDown, Minus,
+  Target, RefreshCw, Sparkles, AlertCircle, Loader2, TrendingUp,
+  History, Play, TrendingDown, Minus,
   Building2, Mail, ExternalLink, Wand2
 } from 'lucide-react';
 import Link from 'next/link';

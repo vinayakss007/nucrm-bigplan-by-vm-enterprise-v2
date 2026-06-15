@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let dealData: any = null;
+    let _dealData: any = null;
     if (deal_id) {
       const dealResults = await db.select({
         id: deals.id,
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       .leftJoin(companies, eq(companies.id, deals.companyId))
       .where(and(eq(deals.id, deal_id), eq(deals.tenantId, ctx.tenantId)));
       
-      dealData = dealResults[0];
+      _dealData = dealResults[0];
     }
 
     // Generate email based on purpose

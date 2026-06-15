@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   HardDrive, Database, Play, CheckCircle, XCircle, Clock, RefreshCw,
-  Save, Loader2, Eye, EyeOff, AlertTriangle, Settings, Trash2
+  Save, Loader2, Eye, EyeOff, AlertTriangle, Settings
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -180,7 +180,7 @@ export default function TenantBackupSettingsPage() {
         toast.error(d.error || 'Failed to save');
       }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (_err: any) {
       toast.error('Network error');
     }
     setSaving(false);

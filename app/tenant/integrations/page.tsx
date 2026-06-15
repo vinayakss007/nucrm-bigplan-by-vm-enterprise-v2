@@ -1,8 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import {
-  Plug, Plus, Settings, Trash2, CheckCircle, XCircle, ExternalLink,
-  Mail, MessageSquare, Brain, Database, Cloud, RefreshCw, Power,
+  Plug, Plus, Trash2, CheckCircle, XCircle, ExternalLink,
+  Mail, MessageSquare, Brain, Database, Cloud, Power,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';

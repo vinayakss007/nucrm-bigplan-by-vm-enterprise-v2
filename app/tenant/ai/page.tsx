@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   Sparkles, BrainCircuit, FileEdit, Target, AlertTriangle, Activity,
-  ArrowRight, Loader2, Zap, MessageSquare, CheckCircle2, AlertCircle,
+  ArrowRight, Loader2, MessageSquare, CheckCircle2, AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AI_CAPABILITIES, AI_PROVIDERS } from '@/components/tenant/ai/ai-config';

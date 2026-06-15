@@ -7,8 +7,8 @@ import {
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { 
-  Plus, GripVertical, X, MoreHorizontal, Calendar, DollarSign, 
-  User, Clock, CheckCircle, AlertCircle, ChevronRight, TrendingUp, Building2
+  Plus, GripVertical, 
+  User, Clock, TrendingUp
 } from 'lucide-react';
 import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';

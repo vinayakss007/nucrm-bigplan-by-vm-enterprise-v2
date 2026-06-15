@@ -4,7 +4,6 @@ import { requireAuth } from '@/lib/auth/middleware';
 import {
   getSupportedCurrencies,
   getExchangeRate,
-  setRateCache,
   SUPPORTED_CURRENCIES,
 } from '@/lib/currency';
 import { z } from 'zod';

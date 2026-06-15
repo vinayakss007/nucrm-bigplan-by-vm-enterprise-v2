@@ -28,8 +28,8 @@ export default function TenantRolesPage() {
   const [loading, setLoading] = useState(true);
   const [editRole, setEditRole] = useState<Role | null>(null);
   const [showEditor, setShowEditor] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [openCat, setOpenCat] = useState<string | null>(PERMISSION_CATEGORIES[0] ?? null);
+  const [_saving, setSaving] = useState(false);
+  const [_openCat, _setOpenCat] = useState<string | null>(PERMISSION_CATEGORIES[0] ?? null);
 
   const load = useCallback(async () => {
     try {

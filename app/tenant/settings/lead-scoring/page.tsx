@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import {
   Target, Plus, Save, X, AlertCircle, Loader2, Trash2, Edit2, RefreshCw, Play,
-  CheckCircle2, HelpCircle, Sparkles, GripVertical
+  CheckCircle2, HelpCircle, Sparkles
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

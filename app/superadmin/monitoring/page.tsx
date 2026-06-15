@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import {
   Activity, AlertTriangle, CheckCircle, RefreshCw, Building2, Users,
-  DollarSign, Database, Clock, TrendingUp, Zap, Server, Book,
+  DollarSign, Database, Server, Book,
 } from 'lucide-react';
 import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
