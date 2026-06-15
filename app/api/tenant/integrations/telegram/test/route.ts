@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, message: 'Test message sent successfully' });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error('[telegram/test]', msg);

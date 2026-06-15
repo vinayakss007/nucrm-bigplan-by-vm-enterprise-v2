@@ -35,7 +35,7 @@ export async function GET() {
     }, { status: allRunning ? 200 : 200 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error('[health/worker]', msg);

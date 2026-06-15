@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
         .where(eq(complianceRequests.id, request!.id));
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       console.error('[compliance/soc2]', msg);
