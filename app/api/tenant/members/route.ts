@@ -7,7 +7,7 @@ import { db } from '@/drizzle/db';
 import { 
   tenantMembers, users, roles, invitations, 
   contacts, deals, tasks, userDepartures, 
-  tenants, leadAssignments, activities 
+  tenants, leadAssignments 
 } from '@/drizzle/schema';
 import { eq, and, or, sql, desc, asc, isNull } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
@@ -172,7 +172,7 @@ export async function PATCH(request: NextRequest) {
     const patchValidated = validateBody(updateMemberSchema, rawPatch);
     if (patchValidated instanceof NextResponse) return patchValidated;
     const pv = patchValidated.data;
-    const { email, role_slug: roleSlug } = pv;
+    const { email: _email, role_slug: roleSlug } = pv;
     const { memberId, action, reassignTo, reason } = rawPatch;
     if (!memberId || !action) return NextResponse.json({ error: 'memberId and action required' }, { status: 400 });
 

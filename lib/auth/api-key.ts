@@ -140,7 +140,7 @@ export async function generateApiKey(
  * Revoke an API key
  */
 export async function revokeApiKey(keyId: string, tenantId: string): Promise<boolean> {
-  const result = await db.update(apiKeys)
+  const _result = await db.update(apiKeys)
     .set({ isActive: false })
     .where(and(
       eq(apiKeys.id, keyId),

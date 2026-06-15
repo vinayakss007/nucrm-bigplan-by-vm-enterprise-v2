@@ -7,7 +7,7 @@ const mockDbQuery = vi.fn();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let dbUpdateChain: any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let mockUpdateWhere: any;
+let _mockUpdateWhere: any;
 
 vi.mock('@/lib/ai/gateway', () => ({
   chat: mockChat,

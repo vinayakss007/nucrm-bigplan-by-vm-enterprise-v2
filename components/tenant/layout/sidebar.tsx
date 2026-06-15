@@ -3,12 +3,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Building2, TrendingUp, CheckSquare,
-  BarChart3, Settings, Bell, Calendar, FileBarChart,
+  BarChart3, Settings, Calendar, FileBarChart,
   Crown, ChevronDown, UserCheck, Trash2, Search, X, Menu, Zap, Book,
   LifeBuoy, Package, FileText, ShoppingCart, FileSignature, RefreshCw, Library,
-  Command, Star, StarOff, Database, Upload, Workflow, Mail, MessageSquare,
-  Trophy, Wrench, Boxes, Sparkles, ListChecks, ArrowRightLeft, Tag, Globe, Filter,
-  BrainCircuit, EyeOff, Send, ShieldCheck, FolderKanban,
+  Command, Star, Database, Upload, Workflow, Mail, MessageSquare,
+  Trophy, Wrench, Boxes, Sparkles, ListChecks, ArrowRightLeft, Tag, Filter, Send, ShieldCheck, FolderKanban,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect, useMemo, useCallback } from 'react';

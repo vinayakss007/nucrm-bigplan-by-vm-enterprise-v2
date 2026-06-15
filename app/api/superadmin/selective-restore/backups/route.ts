@@ -203,7 +203,7 @@ export async function DELETE(request: NextRequest) {
 
 async function parseBackupAsync(backupId: string, filePath: string) {
   try {
-    const metadata = await parseBackupFile(filePath);
+    const _metadata = await parseBackupFile(filePath);
 
     await db
       .update(superAdminBackups)

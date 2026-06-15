@@ -1,9 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, CheckSquare, DollarSign, Target } from 'lucide-react';
-import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line,
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from 'recharts';
 import { formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -52,7 +51,7 @@ export default function TenantAnalyticsPage() {
 
   const since = new Date(Date.now() - range * 86400000);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const inRange = (d: any) => new Date(d.created_at) >= since;
+  const _inRange = (d: any) => new Date(d.created_at) >= since;
 
   // Get stage name from stageId
   const getStageName = (stageId: string): string => {

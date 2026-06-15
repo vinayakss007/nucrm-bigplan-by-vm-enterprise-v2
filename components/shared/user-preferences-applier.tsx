@@ -8,7 +8,7 @@
  */
 import { useEffect } from 'react';
 
-const KEYS = ['font_size', 'ui_density', 'accent_color', 'reduce_motion', 'high_contrast', 'sidebar_default'] as const;
+const _KEYS = ['font_size', 'ui_density', 'accent_color', 'reduce_motion', 'high_contrast', 'sidebar_default'] as const;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyToHtml(prefs: any) {

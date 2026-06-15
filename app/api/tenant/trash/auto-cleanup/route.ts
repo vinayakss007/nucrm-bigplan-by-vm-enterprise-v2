@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
-    const deletedCount = {
+    const _deletedCount = {
       contacts: 0,
       companies: 0,
       deals: 0,

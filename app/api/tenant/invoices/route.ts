@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       : qValidated.data;
     const status = searchParams.get('status');
     const contactId = searchParams.get('contactId');
-    const search = searchParams.get('search');
+    const _search = searchParams.get('search');
     const page = Math.floor(q.offset / q.limit) + 1;
     const limit = q.limit;
 

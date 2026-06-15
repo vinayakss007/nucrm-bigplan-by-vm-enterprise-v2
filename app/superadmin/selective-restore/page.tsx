@@ -9,8 +9,6 @@ import {
   ChevronRight,
   CheckCircle,
   AlertTriangle,
-  X,
-  RefreshCw,
   Trash2,
   Eye,
   ArrowRight,
@@ -208,7 +206,7 @@ export default function SelectiveRestorePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ backup_id: backup.id }),
       });
-      const data = await res.json();
+      const _data = await res.json();
       setSelectedBackup(backup);
       setSelectedTenant(null);
       setSelectedTables([]);

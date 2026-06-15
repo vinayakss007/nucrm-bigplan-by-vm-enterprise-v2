@@ -1,10 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { 
-  LifeBuoy, Plus, Search, Filter, 
+  LifeBuoy, Plus, Search, 
   Clock, CheckCircle2, AlertCircle, 
-  User, MessageSquare, ChevronRight,
-  MoreVertical, Inbox, X, Columns
+  User, MessageSquare, ChevronRight, Inbox, Columns
 } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';

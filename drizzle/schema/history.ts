@@ -1,5 +1,4 @@
 import { pgTable, uuid, text, timestamp, index } from 'drizzle-orm/pg-core';
-import * as utils from './utils';
 
 export const editHistory = pgTable('edit_history', {
   id: uuid('id').defaultRandom().primaryKey(),

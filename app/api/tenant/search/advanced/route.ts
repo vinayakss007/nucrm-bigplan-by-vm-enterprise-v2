@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       query: q,
       type = 'contacts',
       filters = {},
-      sort,
+      _sort,
       page = 1,
       limit: rawLimit = 25,
     } = body;

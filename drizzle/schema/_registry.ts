@@ -5,8 +5,6 @@
  * This file serves as the single source of truth for all database tables.
  */
 
-import type { PgTableWithColumns, TableConfig } from 'drizzle-orm/pg-core';
-import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 // =============================================================================
 // TABLE DEFINITION TYPES
@@ -89,7 +87,6 @@ import {
   dealStages,
   deals,
   customFieldDefs,
-  customFields,
   forms,
   products,
   quotes,
@@ -154,7 +151,6 @@ import {
   webhookDeliveries,
   aiInsights,
   aiUsageLogs,
-  aiUsage,
   aiEmailDrafts as aiEmailDraftsAutomation,
   contentGenerations,
   revenueOpportunities,

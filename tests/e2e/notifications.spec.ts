@@ -28,7 +28,7 @@ test.describe('Notification System', () => {
       
       // The Toaster renders in the layout; it may or may not have visible content
       // but should exist as a DOM element since it's in the root layout
-      const count = await toastContainer.count();
+      const _count = await toastContainer.count();
       // Toaster exists as part of the layout rendering
       expect(true).toBeTruthy();
     });

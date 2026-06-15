@@ -5,7 +5,7 @@ const mockDbInsert = vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue
 const mockFindMany = vi.fn().mockResolvedValue([]);
 const mockFindFirst = vi.fn();
 const mockTxExecute = vi.fn();
-const mockTxUpdate = vi.fn().mockReturnValue({ set: vi.fn().mockResolvedValue(undefined) });
+const _mockTxUpdate = vi.fn().mockReturnValue({ set: vi.fn().mockResolvedValue(undefined) });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockTransaction = vi.fn((cb: (tx: any) => any) => {
   const mockTx = {

@@ -10,9 +10,7 @@ import {
   Building2, Globe, DollarSign, Users, Workflow, ListChecks,
   Tag, Library, ShieldUser, Crown, Receipt, Lock, ShieldCheck, KeyRound,
   Network, MapPin, Repeat, Timer, Mail, Webhook, History,
-  Scale, Shield, Save, ArrowRightLeft, Upload, Send,
-  // AI-related icons
-  Sparkles, BrainCircuit, FileEdit, Target, AlertTriangle, Activity,
+  Scale, Shield, Save, ArrowRightLeft, Upload, Send, BrainCircuit, FileEdit, Target, AlertTriangle, Activity,
 } from 'lucide-react';
 
 export type SettingsItem = {

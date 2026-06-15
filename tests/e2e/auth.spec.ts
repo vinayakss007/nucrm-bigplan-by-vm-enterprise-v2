@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const TEST_USER = {
+const _TEST_USER = {
   email: 'superadmin@nucrm.com',
   password: 'admin123',
 };

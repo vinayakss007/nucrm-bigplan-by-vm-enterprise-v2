@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.json();
     const validated = validateBody(inviteMemberSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
-    const iv = validated.data;
+    const _iv = validated.data;
     const { email, full_name, password } = rawBody;
     if (!email?.trim() || !password) return NextResponse.json({ error: 'email and password required' }, { status: 400 });
 

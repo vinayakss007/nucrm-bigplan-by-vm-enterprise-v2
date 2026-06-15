@@ -1,7 +1,7 @@
 'use client';
 import { useMemo } from 'react';
 import {
-  PanelLeftClose, RotateCcw, Eye, EyeOff, Briefcase, UserCheck, Users, Crown, Wrench,
+  PanelLeftClose, Eye, EyeOff, Briefcase, UserCheck, Users, Crown, Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

@@ -1,5 +1,4 @@
 'use client';
-import { useCaptureError } from '@/lib/capture-error';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 export default function ContactsError({ _error, reset }: { _error: Error; reset: () => void }) {

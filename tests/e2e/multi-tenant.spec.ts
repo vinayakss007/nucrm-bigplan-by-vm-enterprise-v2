@@ -20,7 +20,7 @@ test.describe('Multi-Tenant Isolation', () => {
     ]);
 
     await page.goto('/tenant/contacts');
-    const initialContactCount = await page.locator('[class*="contact"]').count();
+    const _initialContactCount = await page.locator('[class*="contact"]').count();
 
     await context.clearCookies();
     

@@ -9,10 +9,8 @@ import {
   X,
   Check,
   Eye,
-  Copy,
   Loader2,
   Search,
-  ArrowUpDown,
   Tag,
   Database,
   Lightbulb,
@@ -445,7 +443,7 @@ function FieldFormModal({ mode, field, fieldTypes, onClose, onSubmit }: {
   const [isSearchable, setIsSearchable] = useState(field?.is_searchable !== false);
   const [isCalculated, setIsCalculated] = useState(field?.is_calculated || false);
   const [formula, setFormula] = useState(field?.formula || '');
-  const [defaultValue, setDefaultValue] = useState(field?.default_value || '');
+  const [defaultValue, _setDefaultValue] = useState(field?.default_value || '');
   const [displayOrder, setDisplayOrder] = useState(field?.display_order || 0);
   const [optionsText, setOptionsText] = useState(
     field?.field_options ? field.field_options.join('\n') : ''

@@ -34,7 +34,7 @@ export function createAuthenticatedRequest(
   url: string,
   options: RequestInit & { authContext?: Partial<MockAuthContext> } = {}
 ): NextRequest {
-  const { authContext, ...reqOptions } = options;
+  const { authContext: _authContext, ...reqOptions } = options;
 
   const headers = new Headers(reqOptions.headers);
   headers.set('cookie', 'nucrm_session=mock-jwt-token');

@@ -9,7 +9,7 @@ vi.mock('@/drizzle/db', () => ({
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn() } }));
 vi.mock('@/lib/dev-logger', () => ({ devLogger: { error: vi.fn() } }));
 
-const DEFAULT_CONFIG = { maxAttempts: 5, windowMinutes: 15, blockMinutes: 30 };
+const _DEFAULT_CONFIG = { maxAttempts: 5, windowMinutes: 15, blockMinutes: 30 };
 
 describe('isBlocked', () => {
   beforeEach(() => { vi.clearAllMocks(); });

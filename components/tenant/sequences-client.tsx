@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { SequenceBuilder } from './sequence-builder'
 import toast from 'react-hot-toast'
 
-interface Sequence {
+interface _Sequence {
   id: string
   name: string
   description: string

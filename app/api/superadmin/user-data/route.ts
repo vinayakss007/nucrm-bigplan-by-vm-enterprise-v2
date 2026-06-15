@@ -403,7 +403,7 @@ export async function DELETE(request: NextRequest) {
     const now = new Date();
 
     // Soft-delete contacts
-    const contactResult = await db.update(contacts)
+    const _contactResult = await db.update(contacts)
       .set({ deletedAt: now })
       .where(and(
         eq(contacts.tenantId, tenantId),
@@ -412,7 +412,7 @@ export async function DELETE(request: NextRequest) {
       ));
 
     // Soft-delete deals
-    const dealResult = await db.update(deals)
+    const _dealResult = await db.update(deals)
       .set({ deletedAt: now })
       .where(and(
         eq(deals.tenantId, tenantId),

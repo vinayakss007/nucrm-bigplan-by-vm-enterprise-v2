@@ -4,9 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Plus, Search, Grid, List, Trash2, ChevronRight, Download, Upload,
-  Users, AlertCircle, X, Mail, Phone, Building2, User, Tag,
-  MoreHorizontal, Filter, ChevronDown, Star, Zap, Eye, Activity,
-  CheckCircle, XCircle, RotateCcw, Archive, Globe, Edit, UserPlus,
+  Users, AlertCircle, X, Mail, Phone, Building2, User, Tag, Star, Zap, Activity,
+  CheckCircle, XCircle, Archive, Globe, Edit, UserPlus,
   CircleDot,
 } from 'lucide-react';
 import { cn, formatDate, getInitials, toSnakeCase } from '@/lib/utils';
@@ -18,10 +17,8 @@ import { confirmThen } from '@/components/ui/confirm-dialog';
 import { showUndoToast } from '@/lib/undo';
 import { BulkActionBar } from '@/components/ui/bulk-action-bar';
 import { Swipeable } from '@/components/ui/swipeable';
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel,
-} from '@/components/ui/dropdown-menu';
+
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -195,7 +192,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
   const [showAdd, setShowAdd]   = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [loading, setLoading]   = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [_exporting, setExporting] = useState(false);
   const router = useRouter();
 
   const load = useCallback(async (newOffset=0, q=search, status=statusFilter) => {
@@ -234,7 +231,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
     });
   };
 
-  const exportCSV = async () => {
+  const _exportCSV = async () => {
     setExporting(true);
     const q = new URLSearchParams();
     if (search) q.set('q', search);
@@ -563,7 +560,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
         )}
         {contacts.map(c=>{
           const status=STATUS_CONFIG[c['lead_status']]||STATUS_CONFIG['new'];
-          const StatusIcon=status!.icon;
+          const _StatusIcon=status!.icon;
           return (
             <Swipeable
               key={c['id']}
@@ -623,7 +620,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {contacts.map(c=>{
               const status=STATUS_CONFIG[c['lead_status']]||STATUS_CONFIG['new'];
-              const StatusIcon=status!.icon;
+              const _StatusIcon=status!.icon;
               return (
                 <Link key={c['id']} href={`/tenant/contacts/${c['id']}`} className="group bg-card border border-border rounded-xl p-4 hover:border-violet-400/50 hover:shadow-sm transition-all block">
                   <div className="flex items-start justify-between mb-3">

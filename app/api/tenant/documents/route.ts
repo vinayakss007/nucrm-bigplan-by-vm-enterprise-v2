@@ -7,7 +7,6 @@ import { documents, documentFolders } from '@/drizzle/schema/documents';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { Client } from '@aws-sdk/types';
 
 const s3 = new S3Client({
   region: process.env['AWS_REGION'] || 'us-east-1',

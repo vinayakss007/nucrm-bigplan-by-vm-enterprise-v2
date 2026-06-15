@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import {
-  AlertTriangle, Plus, Save, X, AlertCircle, Loader2, Trash2, Edit2, 
+  AlertTriangle, Plus, Save, AlertCircle, Loader2, Trash2, Edit2, 
   Clock, Zap, MessageSquare, Info
 } from 'lucide-react';
 import { cn } from '@/lib/utils';

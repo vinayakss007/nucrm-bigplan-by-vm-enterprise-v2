@@ -39,9 +39,9 @@ export default function SearchPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [filters, setFilters] = useState<Record<string, any>>({});
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [advancedResults, setAdvancedResults] = useState<any>(null);
-  const [advancedTotal, setAdvancedTotal] = useState(0);
-  const [page, setPage] = useState(1);
+  const [_advancedResults, setAdvancedResults] = useState<any>(null);
+  const [_advancedTotal, setAdvancedTotal] = useState(0);
+  const [page, _setPage] = useState(1);
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | undefined>(undefined);
 

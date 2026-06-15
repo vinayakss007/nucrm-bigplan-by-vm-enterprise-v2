@@ -78,7 +78,7 @@ export default function DealsKanban({ initialDeals, stages, contacts, companies,
 
   // Touch drag state for mobile
   const [touchDragging, setTouchDragging] = useState<string | null>(null)
-  const [touchDragPos, setTouchDragPos] = useState<{ x: number; y: number } | null>(null)
+  const [_touchDragPos, setTouchDragPos] = useState<{ x: number; y: number } | null>(null)
   const [touchOverStage, setTouchOverStage] = useState<string | null>(null)
   const [showMobileStagePicker, setShowMobileStagePicker] = useState<{ dealId: string; dealTitle: string } | null>(null)
   const kanbanScrollRef = useRef<HTMLDivElement>(null)
