@@ -86,9 +86,10 @@ describe('Super admin API fixes', () => {
 });
 
 describe('next.config fixes', () => {
-  it('ignoreBuildErrors is not hardcoded true', async () => {
+  it('ignoreBuildErrors is false (never skip type checks)', async () => {
     const content = await import('fs').then(fs => fs.readFileSync('next.config.mjs', 'utf-8'));
     expect(content).not.toContain('ignoreBuildErrors: true');
-    expect(content).toContain('ignoreBuildErrors: process.env.CI');
+    expect(content).not.toContain('ignoreBuildErrors: process.env.CI');
+    expect(content).toContain('ignoreBuildErrors: false');
   });
 });

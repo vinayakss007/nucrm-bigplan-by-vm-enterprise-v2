@@ -48,7 +48,7 @@
     "db:seed": "npx tsx scripts/seed-advanced.ts",
     "db:demo": "npx tsx scripts/seed-massive-data.ts",
     "db:studio": "node -e \"console.log('Use DBeaver or pgAdmin to connect: ' + process.env.DATABASE_URL)\"",
-    "setup": "cp -n .env.local.example .env.local && npm run db:migrate && echo '\n✅ Run: npm run dev\n'",
+    "setup": "cp -n .env.example .env.local && npm run db:migrate && echo '\n✅ Run: npm run dev\n'",
     "prod:launch": "bash scripts/production-launch.sh",
     "prod:preflight": "npx tsx scripts/production-preflight.ts",
     "prod:start": "bash scripts/start-production.sh",
