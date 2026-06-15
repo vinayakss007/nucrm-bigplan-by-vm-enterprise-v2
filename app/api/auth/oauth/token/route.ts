@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
     );
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error('[oauth/token POST]', msg);
