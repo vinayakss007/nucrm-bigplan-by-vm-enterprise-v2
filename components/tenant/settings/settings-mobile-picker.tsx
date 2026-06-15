@@ -21,7 +21,7 @@ export default function SettingsMobilePicker() {
 
   useEffect(() => {
     fetch('/api/tenant/me').then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => setIsAdmin(d.is_admin ?? false)).catch(() => {});
+      .then(d => setIsAdmin(d.is_admin ?? false)).catch((e) => console.error('[mobile-picker] admin check failed:', e));
   }, []);
 
   // Close sheet on route change

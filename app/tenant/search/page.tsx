@@ -33,13 +33,9 @@ export default function SearchPage() {
   const router = useRouter();
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [results, setResults] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [activeType, setActiveType] = useState('all');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [filters, setFilters] = useState<Record<string, any>>({});
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

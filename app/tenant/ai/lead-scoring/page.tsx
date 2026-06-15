@@ -158,8 +158,6 @@ export default function AILeadScoringPage() {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function StatCard({ icon: Icon, label, value, sub }: { icon: any, label: string, value: string | number, sub: string }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4">

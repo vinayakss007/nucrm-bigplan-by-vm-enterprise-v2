@@ -66,8 +66,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, message: `Successfully applied ${template.name} setup.` });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[IndustrySetup] error:', err);

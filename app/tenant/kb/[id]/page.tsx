@@ -13,8 +13,6 @@ export default function KBArticlePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [article, setArticle] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [voted, setVoted] = useState<'helpful' | 'not_helpful' | null>(null);
@@ -42,8 +40,6 @@ export default function KBArticlePage() {
       if (res.ok) {
         setVoted(action);
         const d = await res.json();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setArticle((prev: any) => ({ ...prev, helpful: d.data.helpful, notHelpful: d.data.notHelpful }));
       }
@@ -130,8 +126,6 @@ export default function KBArticlePage() {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function EditArticleModal({ article, onClose, onSaved }: { article: any; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({ title: article.title, content: article.content, excerpt: article.excerpt || '', category_id: article.categoryId || '', status: article.status });

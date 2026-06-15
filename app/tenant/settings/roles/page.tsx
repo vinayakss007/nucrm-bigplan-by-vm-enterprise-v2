@@ -8,8 +8,6 @@ import toast from 'react-hot-toast';
 const DANGER_COLORS = { safe:'text-emerald-500', moderate:'text-amber-500', danger:'text-red-500' };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function RoleEditor({ role, onSave, onClose }: any) {
   const [name, setName] = useState(role?.name||'');
   const [description, setDescription] = useState(role?.description||'');
@@ -89,11 +87,8 @@ function RoleEditor({ role, onSave, onClose }: any) {
 
 export default function RolesPermissionsPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editRole, setEditRole] = useState<any>(null);
   const [showEditor, setShowEditor] = useState(false);

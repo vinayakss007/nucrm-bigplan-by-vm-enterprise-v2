@@ -86,8 +86,8 @@ export async function POST(request: NextRequest) {
   }
 
   // 3. Parse and validate body
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let body: any;
   try {
@@ -149,8 +149,8 @@ export async function POST(request: NextRequest) {
   // 7. Reset password
   const hashedPassword = await bcrypt.hash(new_password, 12);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateFields: any = {
     passwordHash: hashedPassword,

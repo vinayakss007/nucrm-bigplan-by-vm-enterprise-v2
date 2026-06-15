@@ -55,8 +55,8 @@ export async function GET(
     ));
 
     return NextResponse.json({ data });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[project-tasks GET]', err);
@@ -127,8 +127,8 @@ export async function POST(
     }
 
     return NextResponse.json({ data: link }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[project-tasks POST]', err);
@@ -183,8 +183,8 @@ export async function DELETE(
     }
 
     return NextResponse.json({ data: { id: deleted.id, deleted: true } });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[project-tasks DELETE]', err);

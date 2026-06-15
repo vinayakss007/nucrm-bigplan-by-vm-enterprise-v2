@@ -8,8 +8,8 @@ import { contacts, sequences, sequenceSteps, sequenceEnrollments } from '@/drizz
 import { eq, and, asc, sql } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function POST(req: NextRequest, { params }: any) {
   try {
@@ -91,16 +91,16 @@ export async function POST(req: NextRequest, { params }: any) {
       .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({ data: enrollment }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     return apiError(err); 
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function DELETE(req: NextRequest, { params }: any) {
   try {
@@ -127,8 +127,8 @@ export async function DELETE(req: NextRequest, { params }: any) {
       ));
 
     return NextResponse.json({ ok: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     return apiError(err); 

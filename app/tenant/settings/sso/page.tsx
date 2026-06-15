@@ -7,8 +7,6 @@ interface SSOProvider {
   providerType: 'saml' | 'oidc';
   name: string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   config: Record<string, any>;
   isActive: boolean;
 }
@@ -78,8 +76,6 @@ export default function SSOSettingsPage() {
     setSaving(true);
     setMessage(null);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const config: Record<string, any> = {};
     if (providerType === 'saml') {

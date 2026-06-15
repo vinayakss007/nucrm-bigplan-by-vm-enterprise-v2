@@ -9,8 +9,6 @@ describe('notifications - comprehensive', () => {
   beforeEach(() => {
     vi.resetModules();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mockChain: any = {
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
@@ -343,8 +341,6 @@ describe('metrics - comprehensive', () => {
 describe('webhooks - comprehensive', () => {
   beforeEach(() => {
     vi.resetModules();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mockChain: any = {
       from: vi.fn().mockReturnThis(),

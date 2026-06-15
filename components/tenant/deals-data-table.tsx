@@ -42,13 +42,9 @@ interface Deal {
 
 interface Props {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialDeals: any[]
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contacts: any[]
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   companies: any[]
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -87,8 +83,6 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
       const res = await fetch(`/api/tenant/deals?${params}`)
       const data = await res.json()
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       setDeals((data.data ?? []).map((d: any) => toSnakeCase(d)))
       setTotal(data.total ?? 0)
     } catch (error) {
@@ -117,8 +111,6 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
     fetch('/api/tenant/pipelines')
       .then(r => r.ok ? r.json() : { data: [] })
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       .then((d: any) => {
         if (cancelled) return
         const flat: { id: string; name: string; pipeline: string }[] = []
@@ -129,7 +121,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
         }
         setStages(flat)
       })
-      .catch(() => {})
+      .catch((e) => console.error('[deals-data-table] stages fetch failed:', e))
     return () => { cancelled = true }
   }, [])
 
@@ -271,8 +263,6 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
   // ── Bulk actions ──────────────────────────────────────────
   const [bulkBusy, setBulkBusy] = useState(false)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, any> = {}) => {
     setBulkBusy(true)
     try {
@@ -300,8 +290,6 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
       icon: <UserPlus className="w-3.5 h-3.5" />,
       requiresSelect: true,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       selectOptions: teamMembers.map((m: any) => ({ value: m.user_id, label: m.full_name })),
       onClick: async (ids: string[], input?: string) => {
         if (!input) return toast.error('Pick a teammate')
@@ -313,8 +301,6 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
       label: 'Transfer',
       icon: <ArrowRightLeft className="w-3.5 h-3.5" />,
       requiresSelect: true,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       selectOptions: teamMembers.map((m: any) => ({ value: m.user_id, label: m.full_name })),
       onClick: async (ids: string[], input?: string) => {

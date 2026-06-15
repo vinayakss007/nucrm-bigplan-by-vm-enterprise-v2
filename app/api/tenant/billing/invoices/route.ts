@@ -43,8 +43,8 @@ export async function GET(request: NextRequest) {
     }));
 
     return NextResponse.json({ data: formatted });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[billing invoices GET]', err);

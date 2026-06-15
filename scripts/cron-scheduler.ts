@@ -66,8 +66,6 @@ async function runJob(job: CronJob): Promise<void> {
       console.error(`[cron] ✗ ${job.name} — HTTP ${res.status}: ${text.slice(0, 200)}`);
     }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error(`[cron] ✗ ${job.name} — ${err.message}`);
   }
@@ -95,7 +93,7 @@ const tickInterval = setInterval(async () => {
   for (const job of JOBS) {
     if (shouldRun(job)) {
       // Fire and forget — don't block other jobs
-      runJob(job).catch(() => {});
+      runJob(job).catch((e) => console.error('[cron-scheduler] job failed:', job.name, e));
     }
   }
 }, TICK_INTERVAL);

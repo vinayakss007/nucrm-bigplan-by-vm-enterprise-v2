@@ -40,13 +40,9 @@ interface Task {
 
 interface Props {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialTasks: any[]
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contacts: any[]
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   deals: any[]
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -290,8 +286,6 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
 
   // ── Bulk actions ──────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, any> = {}) => {
     const res = await fetch('/api/tenant/tasks/bulk', {
       method: 'POST',
@@ -341,8 +335,6 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
       label: 'Assign',
       icon: <UserPlus className="w-3.5 h-3.5" />,
       requiresSelect: true,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       selectOptions: teamMembers.map((m: any) => ({ value: m.user_id, label: m.full_name })),
       onClick: async (ids: string[], input?: string) => {

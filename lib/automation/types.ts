@@ -12,8 +12,8 @@ export interface WorkflowTrigger {
 
 export interface WorkflowAction {
   type: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   execute: (data: any) => Promise<void>;
 }
@@ -28,8 +28,8 @@ export interface Workflow {
   category: string;
   last_run_at?: string;
   run_count?: number;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   config?: Record<string, any>;
 }

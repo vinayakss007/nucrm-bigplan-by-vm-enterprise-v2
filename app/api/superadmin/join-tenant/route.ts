@@ -79,8 +79,8 @@ export async function POST(request: NextRequest) {
       message: 'Added to tenant successfully',
       tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug }
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[superadmin/join-tenant POST]', err);
@@ -120,8 +120,8 @@ export async function GET(request: NextRequest) {
       memberships: memberTenantIds,
       currentTenant: ctx.tenantId === '__superadmin_no_tenant__' ? null : ctx.tenantId
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[superadmin/join-tenant GET]', err);

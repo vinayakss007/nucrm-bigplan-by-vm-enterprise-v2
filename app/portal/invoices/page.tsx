@@ -5,7 +5,6 @@ import { cn, formatDate, formatCurrency } from '@/lib/utils';
 
 export default function PortalInvoicesPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 

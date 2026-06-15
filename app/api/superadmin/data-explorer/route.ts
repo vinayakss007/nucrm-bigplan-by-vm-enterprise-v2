@@ -94,8 +94,8 @@ async function handleSummary(searchParams: URLSearchParams) {
     `);
 
     return NextResponse.json({ summary: summaryRes.rows[0] });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -151,8 +151,8 @@ async function handleSchemaInfo() {
     }
 
     return NextResponse.json({ tables: tableDetails });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -178,8 +178,8 @@ async function handleSearch(searchParams: URLSearchParams) {
     const safeSort = allowedSortColumns.includes(sort) ? sort : 'created_at';
     const safeOrder = order === 'ASC' ? 'ASC' : 'DESC';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const results: any = {};
     let totalAcrossAll = 0;
@@ -355,8 +355,8 @@ async function handleSearch(searchParams: URLSearchParams) {
       query: q,
       filters: { type, tenantId, page, limit },
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[Superadmin Data Explorer] Search error:', err);
@@ -422,8 +422,8 @@ export async function PUT(req: NextRequest) {
       message: 'Record updated',
       data: result.rows[0],
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -478,8 +478,8 @@ export async function DELETE(req: NextRequest) {
     }
 
     return NextResponse.json({ message: 'Record deleted', id });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

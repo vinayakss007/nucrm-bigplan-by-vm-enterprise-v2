@@ -127,8 +127,8 @@ export async function createBackup(options: BackupOptions): Promise<BackupResult
         
         // Delete local after successful upload
         fs.unlinkSync(localPath);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (uploadErr: any) {
         console.error('[backup-service] S3 upload failed, keeping local:', uploadErr.message);
@@ -161,8 +161,8 @@ export async function createBackup(options: BackupOptions): Promise<BackupResult
       storageType,
     };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     const durationMs = Date.now() - t0;

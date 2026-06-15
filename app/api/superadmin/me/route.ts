@@ -67,8 +67,8 @@ export async function GET(request: NextRequest) {
       currentTenant,
       isImpersonating: currentTenant?.id !== ownTenant?.id && !!currentTenant,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[superadmin/me GET]', err);

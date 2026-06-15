@@ -10,8 +10,6 @@ import { sanitizeHTML } from '@/lib/sanitize';
 export default function SecuritySettingsPage() {
   const router = useRouter();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
@@ -37,8 +35,6 @@ export default function SecuritySettingsPage() {
   
   // Trash retention states
   const [retentionDays, setRetentionDays] = useState(30);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [pendingDeletion, setPendingDeletion] = useState<any>(null);
   const [loadingRetention, setLoadingRetention] = useState(true);

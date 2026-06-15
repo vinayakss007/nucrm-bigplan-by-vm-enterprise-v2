@@ -314,8 +314,6 @@ const inp = 'w-full px-3 py-2 rounded-lg border border-border bg-transparent tex
 
 function Modal({ title, onClose, icon: Icon, variant, children }: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   title: string; onClose: () => void; icon: any; variant?: 'danger'; children: React.ReactNode;
 }) {
   return (

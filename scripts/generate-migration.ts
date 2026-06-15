@@ -50,8 +50,6 @@ function main() {
     console.log(`[generate] Migration generated successfully`);
     console.log(`[generate] Review the files in ./drizzle/migrations/ before deploying`);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[generate] Migration generation failed:', error.message);
     process.exit(1);

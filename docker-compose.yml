@@ -41,7 +41,7 @@ services:
       - CRON_SECRET=${CRON_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
-      - DATABASE_SSL=${DATABASE_SSL:-false}
+      - DATABASE_SSL=${DATABASE_SSL:-true}
       - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-10}
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost}
       - NODE_OPTIONS=--max-old-space-size=2048
@@ -84,7 +84,7 @@ services:
       - SETUP_KEY=${SETUP_KEY}
       - CRON_SECRET=${CRON_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - DATABASE_SSL=${DATABASE_SSL:-false}
+      - DATABASE_SSL=${DATABASE_SSL:-true}
     deploy:
       replicas: 1
       resources:

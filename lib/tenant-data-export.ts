@@ -152,8 +152,8 @@ const TENANT_TABLES = [
 ];
 
 export interface TenantExportResult {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tables: Record<string, { columns: string[]; rows: Record<string, any>[] }>;
   dataSize: number;
@@ -206,8 +206,8 @@ export class TenantDataExporter {
             result.totalRecords += tableData.rows.length;
           }
           result.tableCount++;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (err: any) {
           // Table might not exist yet (migrations not run) — skip gracefully
@@ -222,8 +222,8 @@ export class TenantDataExporter {
       // Calculate data size
       result.dataSize = Buffer.byteLength(JSON.stringify(result.tables), 'utf8');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('[Export] Critical error during export:', err);
@@ -238,15 +238,15 @@ export class TenantDataExporter {
    */
   private async exportTable(
     tableDef: { table: string; filterColumn: string }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<{ columns: string[]; rows: Record<string, any>[] }> {
     // Get Drizzle table object if it exists in registry
     const table = TABLE_REGISTRY[tableDef.table as TableName];
     
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let result: any;
     if (table) {
@@ -263,8 +263,8 @@ export class TenantDataExporter {
     }
 
     // Convert BigInt and Date to serializable formats
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows = result.map((row: any) => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

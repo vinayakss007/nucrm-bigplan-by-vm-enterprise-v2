@@ -14,8 +14,6 @@ const EVENT_COLORS: Record<string,string> = {
 
 export default function RevenuePage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData]     = useState<any>(null);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [tenants, setTenants] = useState<any[]>([]);

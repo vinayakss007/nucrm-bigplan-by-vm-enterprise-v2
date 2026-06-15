@@ -105,8 +105,8 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, data: result }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[members POST]', err);
@@ -153,8 +153,8 @@ export async function GET(request: NextRequest) {
     ]);
 
     return NextResponse.json({ data: members, invitations: invites, tenantId: ctx.tenantId });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[members GET]', err);
@@ -280,8 +280,8 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({ ok: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[members PATCH]', err);

@@ -5,15 +5,11 @@ import { cn, formatRelativeTime } from '@/lib/utils';
 import { logError } from '@/lib/errors';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const STATUS_CFG: Record<string,{icon:any;color:string;bg:string}> = {
   up:       { icon:CheckCircle,  color:'text-emerald-400', bg:'border-emerald-500/20 bg-emerald-500/5' },
   degraded: { icon:AlertTriangle,color:'text-amber-400',   bg:'border-amber-500/20 bg-amber-500/5' },
   down:     { icon:XCircle,      color:'text-red-400',     bg:'border-red-500/20 bg-red-500/5' },
 };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const SERVICE_ICONS: Record<string,any> = {
   database:Database, app:Server, email:Mail, storage:Database, schema:Database,
@@ -21,10 +17,7 @@ const SERVICE_ICONS: Record<string,any> = {
 
 export default function HealthPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [checks, setChecks] = useState<any[]>([]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [appHealth, setAppHealth] = useState<any>(null);
   const [loading, setLoading] = useState(false);

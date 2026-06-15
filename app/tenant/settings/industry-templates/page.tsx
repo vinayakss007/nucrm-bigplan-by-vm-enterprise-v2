@@ -34,8 +34,6 @@ export default function IndustryTemplatesPage() {
       toast.success('Template applied successfully!');
       router.push('/tenant/dashboard');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       toast.error(err.message);
     } finally {

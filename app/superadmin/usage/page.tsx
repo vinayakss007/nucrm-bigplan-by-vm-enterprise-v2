@@ -18,8 +18,6 @@ function UsageBar({ pct, _danger }: { pct: number; _danger?: boolean }) {
 
 export default function UsagePage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -43,8 +41,6 @@ export default function UsagePage() {
 
   const tenants = (data?.tenantUsage ?? [])
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     .filter((t:any) => !search || t.name.toLowerCase().includes(search.toLowerCase()))
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .sort((a:any, b:any) => {
@@ -53,8 +49,6 @@ export default function UsagePage() {
       return sortDir === 'desc' ? bv - av : av - bv;
     });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nearLimit = tenants.filter((t:any) => t.contact_pct >= 80 || t.user_pct >= 80);
 

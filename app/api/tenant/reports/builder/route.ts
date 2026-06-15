@@ -95,8 +95,8 @@ export async function POST(request: NextRequest) {
         tenantId: tid,
       },
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -111,8 +111,8 @@ interface ReportParams {
   metricField?: string;
   groupBy: string;
   dateRange?: { from: string; to: string };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   filters: Record<string, any>;
   tenantId: string;
@@ -174,8 +174,8 @@ async function executeReport(params: ReportParams): Promise<ReportResult> {
   const tableName = tableMap[entity]!;
 
   let dateFilter = '';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const queryParams: any[] = [tenantId];
   let paramIndex = 2;
@@ -248,8 +248,8 @@ function buildMetricExpression(metric: string, metricField?: string): string {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildParameterizedQuery(query: string, params: any[]): string {
   // For raw SQL execution with drizzle, we need to inline the parameters safely
@@ -348,8 +348,8 @@ export async function GET(request: NextRequest) {
         },
       ],
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

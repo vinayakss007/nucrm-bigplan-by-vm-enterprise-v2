@@ -15,10 +15,8 @@ const DEFAULT_STAGES = [
 
 export default function PipelinesSettingsPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [pipelines, setPipelines] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selected, setSelected] = useState<any|null>(null);
   const [saving, setSaving] = useState(false);
@@ -71,16 +69,12 @@ export default function PipelinesSettingsPage() {
 
   const removeStage = (idx: number) => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const stages = selected.stages.filter((_: any, i: number) => i !== idx)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((s: any, i: number) => ({ ...s, order: i }));
     setSelected({ ...selected, stages });
   };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateStage = (idx: number, field: string, val: any) => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -47,8 +47,8 @@ Rules:
     });
 
     return parseSentimentResponse(resp.text);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[sentiment] AI analysis failed:', err.message);

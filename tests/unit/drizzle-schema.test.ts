@@ -22,8 +22,6 @@ describe('Drizzle Schema - Table Exports', () => {
   it('all required tables are accessible from schema index', () => {
     for (const name of TABLE_NAMES) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect((schema as any)[name]).toBeDefined();
     }
   });

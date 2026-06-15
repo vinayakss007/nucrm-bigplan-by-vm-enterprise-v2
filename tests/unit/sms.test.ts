@@ -39,8 +39,6 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn((...args: unknown[]) => args),
   and: vi.fn((...args: unknown[]) => args),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   desc: vi.fn((col: any) => col),
   sql: vi.fn(),
 }));
@@ -61,8 +59,6 @@ beforeEach(() => {
 });
 
 describe('SMS - Template Interpolation', () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let interpolateTemplate: any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -129,8 +125,6 @@ describe('SMS - Template Interpolation', () => {
 
 describe('SMS - Twilio Signature Validation', () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   let validateTwilioSignature: any;
 
   beforeEach(async () => {
@@ -149,8 +143,6 @@ describe('SMS - Twilio Signature Validation', () => {
     const sortedKeys = Object.keys(params).sort();
     let data = url;
     for (const key of sortedKeys) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       data += key + (params as any)[key];
     }
@@ -171,8 +163,6 @@ describe('SMS - Twilio Signature Validation', () => {
 
 describe('SMS - sendSMS', () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   let sendSMS: any;
 
   beforeEach(async () => {
@@ -189,8 +179,6 @@ describe('SMS - sendSMS', () => {
       values: vi.fn(() => ({
         returning: vi.fn().mockResolvedValue([{ id: 'msg-1' }]),
       })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
@@ -223,8 +211,6 @@ describe('SMS - sendSMS', () => {
         returning: vi.fn().mockResolvedValue([{ id: 'msg-2' }]),
       })),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     const mockFetch = vi.fn().mockResolvedValue({
@@ -252,8 +238,6 @@ describe('SMS - sendSMS', () => {
         returning: vi.fn().mockResolvedValue([{ id: 'msg-3' }]),
       })),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     const mockFetch = vi.fn().mockResolvedValue({
@@ -263,8 +247,6 @@ describe('SMS - sendSMS', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     const setFn = vi.fn(() => ({ where: vi.fn() }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(db.update).mockReturnValue({ set: setFn } as any);
 
@@ -288,15 +270,11 @@ describe('SMS - sendSMS', () => {
         returning: vi.fn().mockResolvedValue([{ id: 'msg-4' }]),
       })),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network failure')));
 
     const setFn = vi.fn(() => ({ where: vi.fn() }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(db.update).mockReturnValue({ set: setFn } as any);
 
@@ -317,13 +295,9 @@ describe('SMS - sendSMS', () => {
   it('accepts optional contactId', async () => {
     vi.mocked(db.insert).mockReturnValue({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       values: vi.fn((_vals: any) => ({
         returning: vi.fn().mockResolvedValue([{ id: 'msg-5' }]),
       })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
@@ -348,8 +322,6 @@ describe('SMS - sendSMS', () => {
 
 describe('SMS - sendTemplateSMS', () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   let sendTemplateSMS: any;
 
   beforeEach(async () => {
@@ -367,16 +339,12 @@ describe('SMS - sendTemplateSMS', () => {
       body: 'Hi {{contact.name}}, your invoice of {{amount}} is due.',
       tenantId: 'tenant-1',
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     vi.mocked(db.insert).mockReturnValue({
       values: vi.fn(() => ({
         returning: vi.fn().mockResolvedValue([{ id: 'msg-t1' }]),
       })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
@@ -419,16 +387,12 @@ describe('SMS - sendTemplateSMS', () => {
       body: 'Hello {{name}}!',
       tenantId: 'tenant-1',
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     vi.mocked(db.insert).mockReturnValue({
       values: vi.fn(() => ({
         returning: vi.fn().mockResolvedValue([{ id: 'msg-t2' }]),
       })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
@@ -456,16 +420,12 @@ describe('SMS - sendTemplateSMS', () => {
       body: 'Test {{key}}',
       tenantId: 'tenant-1',
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     vi.mocked(db.insert).mockReturnValue({
       values: vi.fn(() => ({
         returning: vi.fn().mockResolvedValue([{ id: 'msg-t3' }]),
       })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
@@ -487,8 +447,6 @@ describe('SMS - sendTemplateSMS', () => {
 
 describe('SMS - handleIncomingSMS', () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   let handleIncomingSMS: any;
 
   beforeEach(async () => {
@@ -502,16 +460,12 @@ describe('SMS - handleIncomingSMS', () => {
 
   it('creates inbound message record and links to existing contact', async () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(db.query.contacts.findFirst).mockResolvedValue({ id: 'contact-5' } as any);
 
     vi.mocked(db.insert).mockReturnValue({
       values: vi.fn(() => ({
         returning: vi.fn().mockResolvedValue([{ id: 'msg-in-1' }]),
       })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
@@ -534,8 +488,6 @@ describe('SMS - handleIncomingSMS', () => {
         returning: vi.fn().mockResolvedValue([{ id: 'msg-in-2' }]),
       })),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     const result = await handleIncomingSMS({
@@ -551,8 +503,6 @@ describe('SMS - handleIncomingSMS', () => {
 
 describe('SMS - updateDeliveryStatus', () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   let updateDeliveryStatus: any;
 
   beforeEach(async () => {
@@ -563,8 +513,6 @@ describe('SMS - updateDeliveryStatus', () => {
 
   it('updates status to delivered', async () => {
     const setFn = vi.fn(() => ({ where: vi.fn() }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(db.update).mockReturnValue({ set: setFn } as any);
 
@@ -579,8 +527,6 @@ describe('SMS - updateDeliveryStatus', () => {
 
   it('maps undelivered to failed', async () => {
     const setFn = vi.fn(() => ({ where: vi.fn() }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(db.update).mockReturnValue({ set: setFn } as any);
 
@@ -598,8 +544,6 @@ describe('SMS - updateDeliveryStatus', () => {
 
   it('maps queued and sent statuses', async () => {
     const setFn = vi.fn(() => ({ where: vi.fn() }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(db.update).mockReturnValue({ set: setFn } as any);
 
@@ -619,8 +563,6 @@ describe('SMS - updateDeliveryStatus', () => {
   it('passes through unknown statuses', async () => {
     const setFn = vi.fn(() => ({ where: vi.fn() }));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(db.update).mockReturnValue({ set: setFn } as any);
 
     const result = await updateDeliveryStatus({
@@ -633,8 +575,6 @@ describe('SMS - updateDeliveryStatus', () => {
 });
 
 describe('SMS - getDeliveryStatus', () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let getDeliveryStatus: any;
 
@@ -651,8 +591,6 @@ describe('SMS - getDeliveryStatus', () => {
       twilioSid: 'SM-sid',
       errorCode: null,
       createdAt: new Date(),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 

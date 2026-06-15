@@ -83,8 +83,8 @@ export async function POST(request: NextRequest) {
         duration_ms: durationMs,
       });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('[rollback]', err);
@@ -103,8 +103,8 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[selective-restore/rollback POST]', err);

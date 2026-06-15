@@ -70,8 +70,8 @@ export async function POST(
       },
       message: `Lifecycle updated from "${oldStage}" to "${lifecycle_stage}"`,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Lifecycle] POST error:', error);
@@ -117,8 +117,8 @@ export async function GET(
     return NextResponse.json({
       data: history,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Lifecycle] GET error:', error);

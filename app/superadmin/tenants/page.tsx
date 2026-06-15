@@ -28,8 +28,6 @@ const STATUSES = ['trialing','active','suspended','cancelled','past_due','trial_
 const BILLING_TYPES = ['trial','stripe','manual','lifetime','complimentary'];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function EditModal({ tenant, onSave, onClose }: any) {
   const [f, setF] = useState({
     plan_id: tenant.plan_id||'free',
@@ -110,21 +108,16 @@ function EditModal({ tenant, onSave, onClose }: any) {
 
 export default function SuperAdminTenantsPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [tenants, setTenants]     = useState<any[]>([]);
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [showCreate, setShowCreate] = useState(false);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editTenant, setEditTenant] = useState<any>(null);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [modulesTenant, setModulesTenant] = useState<any>(null);
   const [impersonating, setImpersonating] = useState<string|null>(null);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [meInfo, setMeInfo]       = useState<any>(null);
   const [form, setForm]           = useState({name:'',plan_id:'free',status:'trialing',billing_email:'',primary_color:'#7c3aed',owner_email:'',owner_name:'',owner_password:'',trial_days:'14',billing_type:'trial'});
@@ -401,8 +394,6 @@ export default function SuperAdminTenantsPage() {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ModulesModal({ tenant, onClose, _onSaved }: { tenant: any; onClose: () => void; _onSaved: () => void }) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [modules, setModules] = useState<any[]>([]);
@@ -419,8 +410,6 @@ function ModulesModal({ tenant, onClose, _onSaved }: { tenant: any; onClose: () 
   };
   useEffect(() => { load(); }, [, load]);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toggleModule = async (mod: any) => {
     setToggling(mod.id);

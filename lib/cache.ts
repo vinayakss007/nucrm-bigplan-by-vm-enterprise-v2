@@ -170,8 +170,8 @@ export function clearExpiredCache(): void {
         const item = localStorage.getItem(key);
         if (!item) continue;
         
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const entry = JSON.parse(item) as CacheEntry<any>;
         if (isStale(entry)) {
@@ -226,8 +226,8 @@ export function getCacheStats(): { total: number; size: number; entries: Array<{
     if (item) {
       totalSize += item.length;
       try {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const entry = JSON.parse(item) as CacheEntry<any>;
         entries.push({

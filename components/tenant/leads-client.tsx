@@ -70,21 +70,15 @@ const PIPELINE_CONFIG = {
 
 interface Props {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialLeads: any[];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   companies: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   teamMembers: any[];
   permissions: Record<string, boolean>;
   totalCount: number;
   tenantId: string;
   userId: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _teamMembers?: any[];
   _permissions?: Record<string, boolean>;
@@ -192,8 +186,6 @@ export default function LeadsClient({
       setShowQuickAdd(false);
       setQuickAddData({ first_name: '', last_name: '', email: '', phone: '', company_id: '', lead_source: '', tags: '' });
       load();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       toast.error(err.message || 'Failed to add lead');

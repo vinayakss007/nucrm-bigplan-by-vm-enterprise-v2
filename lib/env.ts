@@ -69,8 +69,8 @@ export function validateEnv(): EnvConfig {
   } else if (jwtSecret.length < 32) {
     errors.push('JWT_SECRET must be at least 32 characters long');
   } else {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     try { validateNotWeak('JWT_SECRET', jwtSecret); } catch (e: any) { errors.push(e.message); }
   }
@@ -82,8 +82,8 @@ export function validateEnv(): EnvConfig {
   } else if (sessionSecret.length < 32) {
     errors.push('SESSION_SECRET must be at least 32 characters long');
   } else {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     try { validateNotWeak('SESSION_SECRET', sessionSecret); } catch (e: any) { errors.push(e.message); }
   }
@@ -123,8 +123,8 @@ export function validateEnv(): EnvConfig {
   } else if (cronSecret.length < 32) {
     errors.push('CRON_SECRET must be at least 32 characters long (was 16, increased for security)');
   } else {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     try { validateNotWeak('CRON_SECRET', cronSecret); } catch (e: any) { errors.push(e.message); }
   }

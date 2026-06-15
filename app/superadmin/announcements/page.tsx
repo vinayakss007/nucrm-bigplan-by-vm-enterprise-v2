@@ -13,7 +13,6 @@ const TYPE_CFG: Record<string,{badge:string;border:string}> = {
 
 export default function AnnouncementsPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [items, setItems]   = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);

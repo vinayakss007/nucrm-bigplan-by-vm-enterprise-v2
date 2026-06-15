@@ -30,8 +30,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Get entity data
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let entityData: any;
     if (entity_type === 'contact') {
@@ -67,8 +67,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate insights based on data
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const insightsToSave: any[] = [];
 
@@ -142,8 +142,8 @@ export async function POST(request: NextRequest) {
       insights: savedInsights,
       entity: entityData,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[AI Insights] POST error:', error);
@@ -193,8 +193,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       data: insights,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[AI Insights] GET error:', error);

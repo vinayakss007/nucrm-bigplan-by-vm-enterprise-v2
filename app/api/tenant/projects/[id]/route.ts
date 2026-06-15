@@ -65,8 +65,8 @@ export async function GET(
     return NextResponse.json({
       data: { ...project, milestones: projectMilestones, tasks: linkedTasks },
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[projects/[id] GET]', err);
@@ -119,8 +119,8 @@ export async function PATCH(
     }
 
     return NextResponse.json({ data: updated });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[projects/[id] PATCH]', err);
@@ -162,8 +162,8 @@ export async function DELETE(
     }
 
     return NextResponse.json({ data: { id: deleted.id, deleted: true } });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[projects/[id] DELETE]', err);

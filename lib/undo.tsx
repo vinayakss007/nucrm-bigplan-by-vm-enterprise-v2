@@ -10,8 +10,6 @@ interface UndoAction {
   entityType: string;
   entityId: string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   previousState: any;
   timestamp: number;
   undo: () => Promise<void>;
@@ -25,8 +23,6 @@ export function pushUndo(
   label: string,
   entityType: string,
   entityId: string,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   previousState: any,
   undoFn: () => Promise<void>

@@ -14,13 +14,13 @@ function sleep(ms: number) {
   return new Promise<void>(r => { const t = setTimeout(r, ms); if (t.unref) t.unref(); });
 }
 const RETRYABLE = ['ECONNREFUSED','ECONNRESET','ETIMEDOUT','EPIPE','40001','40P01','08006','08001'];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isRetryable(e: any) { return RETRYABLE.some(c => e?.message?.includes(c) || e?.code===c); }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function query<T extends QueryResultRow = any>(sql: string, params?: any[], retries = 2): Promise<QueryResult<T>> {
   // Check if we are inside a withTransaction block
@@ -41,8 +41,8 @@ export async function query<T extends QueryResultRow = any>(sql: string, params?
     
     return result;
   }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   catch (err: any) {
     const duration = Date.now() - startTime;
@@ -61,14 +61,14 @@ export async function query<T extends QueryResultRow = any>(sql: string, params?
     throw err;
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function queryOne<T extends QueryResultRow = any>(sql: string, params?: any[]): Promise<T|null> {
   return (await query<T>(sql, params)).rows[0] ?? null;
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function queryMany<T extends QueryResultRow = any>(sql: string, params?: any[]): Promise<T[]> {
   return (await query<T>(sql, params)).rows;
@@ -100,8 +100,8 @@ export async function withTransaction<T>(fn: (c: PoolClient) => Promise<T>): Pro
 // ── In-process LRU cache for hot read-only data ──────────────
 // FIXED: O(1) eviction using insertion-order Map iteration
 // instead of O(n log n) sort on every eviction.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface CacheEntry { data: any; expires: number; }
 const _cache = new Map<string, CacheEntry>();
@@ -160,8 +160,8 @@ function validateTableName(table: string): string {
   return table;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function buildInsert(table: string, data: Record<string,any>) {
   const validTable = validateTableName(table);
@@ -173,8 +173,8 @@ export function buildInsert(table: string, data: Record<string,any>) {
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function buildUpdate(table: string, data: Record<string,any>, where: Record<string,any>) {
   const validTable = validateTableName(table);
@@ -187,8 +187,8 @@ export function buildUpdate(table: string, data: Record<string,any>, where: Reco
     values: [...dk.map(k=>data[k]), ...wk.map(k=>where[k])],
   };
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function countRows(table: string, where: Record<string,any>): Promise<number> {
   // FIX CRITICAL-06: Add table name validation (was missing unlike buildInsert/buildUpdate)

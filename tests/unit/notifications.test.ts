@@ -26,13 +26,9 @@ import { logger } from '@/lib/logger';
 
 describe('notifications', () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   let createNotification: any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let notifyTenantMembers: any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let processMentions: any;
 
@@ -236,8 +232,6 @@ describe('notifications', () => {
           ]),
         })),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
       const valuesFn = vi.fn();
@@ -269,8 +263,6 @@ describe('notifications', () => {
           where: whereFn,
         })),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
       const valuesFn = vi.fn();
@@ -292,8 +284,6 @@ describe('notifications', () => {
         from: vi.fn(() => ({
           where: vi.fn().mockResolvedValue([]),
         })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
@@ -317,8 +307,6 @@ describe('notifications', () => {
             { userId: 'member-1' },
           ]),
         })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
@@ -380,8 +368,6 @@ describe('notifications', () => {
           })),
         })),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
       const valuesFn = vi.fn();
@@ -429,8 +415,6 @@ describe('notifications', () => {
           })),
         })),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
       const valuesFn = vi.fn();
@@ -463,8 +447,6 @@ describe('notifications', () => {
           })),
         })),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
       const valuesFn = vi.fn();
@@ -489,8 +471,6 @@ describe('notifications', () => {
             })),
           })),
         })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 

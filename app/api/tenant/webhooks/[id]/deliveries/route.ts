@@ -6,8 +6,8 @@ import { webhookQueue } from '@/drizzle/schema/support';
 import { webhooks } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function GET(req: NextRequest, { params }: any) {
   try {
@@ -33,8 +33,8 @@ export async function GET(req: NextRequest, { params }: any) {
       .limit(50);
 
     return NextResponse.json({ data });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }

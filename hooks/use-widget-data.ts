@@ -8,8 +8,6 @@ interface UseWidgetDataOptions {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useWidgetData<T = any>(
   endpoint: string,
   options?: UseWidgetDataOptions

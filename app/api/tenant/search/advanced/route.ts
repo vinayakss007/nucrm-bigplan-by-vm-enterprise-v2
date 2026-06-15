@@ -54,16 +54,16 @@ export async function POST(request: NextRequest) {
     const tid = ctx.tenantId;
     const pattern = q ? `%${q}%` : null;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let data: any[] = [];
     let total = 0;
 
     switch (type) {
       case 'contacts': {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const conditions: any[] = [
           eq(contacts.tenantId, tid),
@@ -132,8 +132,8 @@ export async function POST(request: NextRequest) {
       }
 
       case 'deals': {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const conditions: any[] = [
           eq(deals.tenantId, tid),
@@ -195,8 +195,8 @@ export async function POST(request: NextRequest) {
       }
 
       case 'companies': {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const conditions: any[] = [
           eq(companies.tenantId, tid),
@@ -252,8 +252,8 @@ export async function POST(request: NextRequest) {
       }
 
       case 'tasks': {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const conditions: any[] = [
           eq(tasks.tenantId, tid),
@@ -319,8 +319,8 @@ export async function POST(request: NextRequest) {
         hasMore: offset + data.length < total,
       },
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

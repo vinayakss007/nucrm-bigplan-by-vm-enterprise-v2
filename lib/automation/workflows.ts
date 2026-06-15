@@ -20,8 +20,8 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
     actions: [
       {
         type: 'send-email',
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         execute: async (data: any) => {
           await sendEmail({
@@ -54,8 +54,8 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
     actions: [
       {
         type: 'send-notification',
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         execute: async (data: any) => {
           await createNotification({
@@ -85,8 +85,8 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
     actions: [
       {
         type: 'send-notification',
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         execute: async (data: any) => {
           await createNotification({
@@ -115,8 +115,8 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
     actions: [
       {
         type: 'assign-round-robin',
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         execute: async (data: any) => {
           const { db } = await import('@/drizzle/db');
@@ -159,8 +159,8 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
     actions: [
       {
         type: 'create-task',
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         execute: async (data: any) => {
           const { db } = await import('@/drizzle/db');

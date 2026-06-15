@@ -158,8 +158,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       await createNotification({
         userId: newAssignee,
         tenantId: ctx.tenantId,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         type: 'contact_assigned' as any,
         title: `Lead handed off to you${lead.leadOid ? `: ${lead.leadOid}` : ''}`,
@@ -169,8 +169,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     return NextResponse.json({ ok: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[leads/assign] error:', error);

@@ -39,8 +39,8 @@ export async function GET(req: NextRequest) {
       .where(eq(ssoProviders.tenantId, ctx.tenantId));
 
     return NextResponse.json({ data: providers });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }
@@ -65,8 +65,8 @@ export async function POST(req: NextRequest) {
     }).returning();
 
     return NextResponse.json({ data: provider }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }
@@ -84,8 +84,8 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Provider id is required' }, { status: 400 });
     }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: Record<string, any> = { updatedAt: new Date() };
     if (updateFields.name !== undefined) updateData['name'] = updateFields.name;
@@ -108,8 +108,8 @@ export async function PUT(req: NextRequest) {
     }
 
     return NextResponse.json({ data: updated });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }

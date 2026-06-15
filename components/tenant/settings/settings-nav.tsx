@@ -19,12 +19,12 @@ export default function SettingsNav() {
     fetch('/api/tenant/me')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setIsAdmin(d.is_admin ?? false))
-      .catch(() => { /* Fallback to default on corrupted storage data */ });
+      .catch((e) => console.error('[settings-nav] admin check failed:', e));
 
     try {
       const q = sessionStorage.getItem('nucrm.settings.query');
       if (q) setQuery(q);
-    } catch {}
+    } catch (e) { console.error('[settings-nav] sessionStorage read failed:', e); }
   }, []);
 
   useEffect(() => {

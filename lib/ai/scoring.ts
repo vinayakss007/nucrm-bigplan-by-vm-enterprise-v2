@@ -67,8 +67,8 @@ Output ONLY a JSON object: { "score": number, "reason": string, "factors": { "fa
   });
 
   // 5. Parse response
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let parsed: any;
   try {

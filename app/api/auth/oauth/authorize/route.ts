@@ -62,13 +62,14 @@ export async function GET(request: NextRequest) {
     if (state) params.set('state', state);
 
     return NextResponse.redirect(`${redirectUri}?${params.toString()}`);
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    console.error('[oauth/authorize GET]', err);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[oauth/authorize GET]', msg);
     return NextResponse.json(
-      { error: 'server_error', error_description: err.message },
+      { error: 'server_error', error_description: 'Authorization failed' },
       { status: 500 }
     );
   }

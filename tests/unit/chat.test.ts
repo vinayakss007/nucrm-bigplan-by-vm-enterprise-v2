@@ -8,18 +8,12 @@ const mockFindFirst = vi.fn();
 vi.mock('@/drizzle/db', () => ({
   db: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     insert: (...args: any[]) => mockInsert(...args),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     update: (...args: any[]) => mockUpdate(...args),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     select: (...args: any[]) => mockSelect(...args),
     query: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       chatSessions: { findFirst: (...args: any[]) => mockFindFirst(...args) },
     },
@@ -44,13 +38,9 @@ vi.mock('@/drizzle/schema', () => ({
 
 vi.mock('drizzle-orm', () => ({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   eq: vi.fn((...args: any[]) => ['eq', ...args]),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   and: vi.fn((...args: any[]) => ['and', ...args]),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   desc: vi.fn((col: any) => ['desc', col]),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -99,8 +99,8 @@ export async function POST(request: NextRequest) {
       deals_flagged: totalDealsFlagged,
       emails_sent: totalEmailsSent
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Cron At-Risk] Error:', error);

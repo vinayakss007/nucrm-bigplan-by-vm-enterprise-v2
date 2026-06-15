@@ -27,8 +27,8 @@ export interface IndustryTemplate {
     name: string;
     trigger: string;
     action: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     config: any;
   }>;
@@ -36,8 +36,8 @@ export interface IndustryTemplate {
     widget: string;
     position: number;
     size: '1x1' | '2x1' | '1x2' | '2x2';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     config?: Record<string, any>;
   }>;

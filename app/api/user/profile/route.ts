@@ -17,8 +17,8 @@ export async function PATCH(request: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updates: any = {
       updatedAt: new Date()
@@ -48,8 +48,8 @@ export async function PATCH(request: NextRequest) {
       });
 
     return NextResponse.json({ user });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     return apiError(err); 

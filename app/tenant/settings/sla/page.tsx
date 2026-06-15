@@ -20,8 +20,6 @@ interface SlaPolicy {
   responseTimeMinutes: number;
   resolutionTimeMinutes: number;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   escalationRules: any[];
   isActive: boolean;
   createdAt: string;
@@ -81,8 +79,6 @@ export default function SlaPage() {
     e.preventDefault();
     setSaving(true);
     try {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let escalationRules: any[];
       try {

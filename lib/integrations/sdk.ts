@@ -27,8 +27,8 @@ export interface ContactInput {
   lead_status?: string;
   tags?: string[];
   notes?: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   custom_fields?: Record<string, any>;
 }
@@ -78,25 +78,25 @@ class NuCRMClient {
   readonly contacts = {
     list: (params?: { limit?: number; offset?: number; q?: string; lead_status?: string }) => {
       const q = new URLSearchParams(params as Record<string, string>).toString();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return this.req<{ data: any[]; total: number }>(`/api/tenant/contacts?${q}`);
     },
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     get: (id: string) => this.req<{ data: any }>(`/api/tenant/contacts/${id}`),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     create: (body: ContactInput) => this.req<{ data: any }>('/api/tenant/contacts', { method:'POST', body:JSON.stringify(body) }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     update: (id: string, body: Partial<ContactInput>) => this.req<{ data: any }>(`/api/tenant/contacts/${id}`, { method:'PATCH', body:JSON.stringify(body) }),
     delete: (id: string) => this.req<{ ok: boolean }>(`/api/tenant/contacts/${id}`, { method:'DELETE' }),
     addNote: (id: string, description: string, type = 'note') =>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.req<{ data: any }>(`/api/tenant/contacts/${id}/notes`, { method:'POST', body:JSON.stringify({ description, type }) }),
   };
@@ -105,19 +105,19 @@ class NuCRMClient {
   readonly deals = {
     list: (params?: { limit?: number; stage?: string }) => {
       const q = new URLSearchParams(params as Record<string, string>).toString();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return this.req<{ data: any[]; total: number }>(`/api/tenant/deals?${q}`);
     },
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     get: (id: string) => this.req<{ data: any }>(`/api/tenant/deals/${id}`),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     create: (body: DealInput) => this.req<{ data: any }>('/api/tenant/deals', { method:'POST', body:JSON.stringify(body) }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     update: (id: string, body: Partial<DealInput> & { stage?: string }) => this.req<{ data: any }>(`/api/tenant/deals/${id}`, { method:'PATCH', body:JSON.stringify(body) }),
     delete: (id: string) => this.req<{ ok: boolean }>(`/api/tenant/deals/${id}`, { method:'DELETE' }),
@@ -127,13 +127,13 @@ class NuCRMClient {
   readonly tasks = {
     list: (params?: { limit?: number }) => {
       const q = new URLSearchParams(params as Record<string, string>).toString();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return this.req<{ data: any[] }>(`/api/tenant/tasks?${q}`);
     },
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     create: (body: TaskInput) => this.req<{ data: any }>('/api/tenant/tasks', { method:'POST', body:JSON.stringify(body) }),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -145,14 +145,14 @@ class NuCRMClient {
   readonly companies = {
     list: (params?: { q?: string }) => {
       const q = new URLSearchParams(params as Record<string, string>).toString();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return this.req<{ data: any[] }>(`/api/tenant/companies?${q}`);
     },
     create: (body: { name: string; industry?: string; website?: string; phone?: string }) =>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.req<{ data: any }>('/api/tenant/companies', { method:'POST', body:JSON.stringify(body) }),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -162,21 +162,21 @@ class NuCRMClient {
   // ── Search ──────────────────────────────────────────────────
   readonly search = {
     global: (query: string, type = 'all') =>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.req<{ contacts:any[]; deals:any[]; companies:any[]; tasks:any[]; total:number }>(`/api/tenant/search?q=${encodeURIComponent(query)}&type=${type}`),
   };
 
   // ── Webhooks ────────────────────────────────────────────────
   readonly webhooks = {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     list: () => this.req<{ data: any[] }>('/api/tenant/webhooks'),
     create: (name: string, url: string, events: string[]) =>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.req<{ data: any }>('/api/tenant/webhooks', { method:'POST', body:JSON.stringify({ name, url, events }) }),
     delete: (id: string) => this.req<{ ok: boolean }>(`/api/tenant/webhooks/${id}`, { method:'DELETE' }),
@@ -184,8 +184,8 @@ class NuCRMClient {
 
   // ── Forms ───────────────────────────────────────────────────
   readonly forms = {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     list: () => this.req<{ data: any[] }>('/api/tenant/forms'),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -198,19 +198,19 @@ class NuCRMClient {
 
   // ── Automation ──────────────────────────────────────────────
   readonly automation = {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     list: () => this.req<{ data: any[] }>('/api/tenant/automations'),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     create: (body: { name:string; trigger_type:string; actions:any[]; is_active?:boolean }) =>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.req<{ data: any }>('/api/tenant/automations', { method:'POST', body:JSON.stringify(body) }),
     toggle: (id: string, is_active: boolean) =>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.req<{ data: any }>(`/api/tenant/automations/${id}`, { method:'PATCH', body:JSON.stringify({ is_active }) }),
   };
@@ -218,13 +218,13 @@ class NuCRMClient {
   // ── Test connection ─────────────────────────────────────────
   async ping(): Promise<{ ok: boolean; tenant?: string; error?: string }> {
     try {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = await this.req<any>('/api/tenant/me');
       return { ok: true, tenant: data.tenant_id };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       return { ok: false, error: err.message };

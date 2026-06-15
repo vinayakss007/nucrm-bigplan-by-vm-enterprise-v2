@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mockRequest(ip: string | null): any {
   return {
     headers: { get: (name: string) => {
@@ -14,8 +12,6 @@ function mockRequest(ip: string | null): any {
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mockRequestRealIp(ip: string): any {
   return {
@@ -80,8 +76,6 @@ describe('checkPublicRateLimit', () => {
   it('falls back to unknown IP when no headers', () => {
     const req = { headers: { get: () => null } };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = checkPublicRateLimit(req as any, { max: 100, windowMs: 60000 });
     expect(result).toBeNull();
   });
@@ -115,8 +109,6 @@ describe('checkPublicRateLimit', () => {
   it('handles x-forwarded-for with multiple IPs', () => {
     const req = { headers: { get: (_name: string) => '172.31.0.1, 172.31.0.2, 172.31.0.3' } };
     const opts = { max: 1, windowMs: 60000 };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(checkPublicRateLimit(req as any, opts)).toBeNull();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

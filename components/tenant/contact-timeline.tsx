@@ -96,8 +96,6 @@ interface TimelineEvent {
   event_type: string
   description: string
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata: any
   created_at: string
   user_name: string | null

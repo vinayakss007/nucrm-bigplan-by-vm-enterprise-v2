@@ -46,8 +46,8 @@ async function sendViaResend(payload: EmailPayload): Promise<SendResult> {
       return { success: true, provider: 'resend', messageId: data.id };
     }
     return { success: false, error: data.message ?? `HTTP ${res.status}` };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -55,8 +55,8 @@ async function sendViaResend(payload: EmailPayload): Promise<SendResult> {
 }
 
 // FIX MEDIUM-09: Cache transporter to avoid recreating it on every email send
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let smtpTransporter: any = null;
 let smtpConfig: string | null = null;
@@ -97,8 +97,8 @@ async function sendViaSMTP(payload: EmailPayload): Promise<SendResult> {
     });
 
     return { success: true, provider: 'smtp', messageId: info.messageId };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return { success: false, error: err.message };

@@ -6,8 +6,6 @@ import { cn } from '@/lib/utils';
 
 export default function PlanLimitBanner() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [status, setStatus] = useState<any>(null);
   const [dismissed, setDismissed] = useState(false);
 
@@ -15,7 +13,7 @@ export default function PlanLimitBanner() {
     const abort = new AbortController();
     fetch('/api/tenant/usage-status', { signal: abort.signal }).then(r => r.json()).then(d => {
       if (!abort.signal.aborted && d.data) setStatus(d.data);
-    }).catch(() => {});
+    }).catch((e) => console.error('[plan-limit-banner] usage fetch failed:', e));
     return () => abort.abort();
   }, []);
 

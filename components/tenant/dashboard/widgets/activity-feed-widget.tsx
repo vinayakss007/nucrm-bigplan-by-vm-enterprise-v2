@@ -5,8 +5,6 @@ import { formatRelativeTime } from '@/lib/utils';
 import Link from 'next/link';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ACTIVITY_ICONS: Record<string, any> = {
   note: Activity, call: Target, email: Activity,
   meeting: Calendar, created: Zap, task_completed: CheckSquare,
