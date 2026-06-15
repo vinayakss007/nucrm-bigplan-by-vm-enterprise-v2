@@ -75,8 +75,6 @@ export default async function LeadsPage() {
       limit: 100,
       columns: { id: true, name: true, industry: true, website: true }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     }).then(c => c.map((company: any) => ({
       id: company.id,
       name: company.name,
@@ -105,13 +103,9 @@ export default async function LeadsPage() {
       <LeadsClient
         permissions={permissions}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         teamMembers={teamMembers as any}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         companies={companiesList as any}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         stats={stats as any}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

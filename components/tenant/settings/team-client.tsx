@@ -22,13 +22,9 @@ const ROLE_DESCRIPTIONS: Record<string,string> = {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function RemoveMemberModal({ member, members, onConfirm, onClose }: any) {
   const [reassignTo, setReassignTo] = useState('');
   const [reason, setReason] = useState('');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const otherMembers = members.filter((m:any) => m.user_id !== member.user_id && m.role_slug !== 'viewer');
   const hasData = (member.contact_count||0)+(member.deal_count||0)+(member.task_count||0) > 0;
@@ -95,8 +91,6 @@ function RemoveMemberModal({ member, members, onConfirm, onClose }: any) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function TeamSettingsClient({ members: initialMembers, invitations: initialInvitations, roles, _tenantId, currentUserId }: any) {
   const [members, setMembers]         = useState(initialMembers ?? []);
   const [invitations, setInvitations] = useState(initialInvitations ?? []);
@@ -107,8 +101,6 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
   const [fullName, setFullName]       = useState('');
   const [password, setPassword]       = useState('');
   const [inviting, setInviting]       = useState(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [removeModal, setRemoveModal] = useState<any>(null);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";

@@ -17,8 +17,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // Get tenant's installed modules
     const installed = await ModuleRegistry.getTenantModules(tenantId);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const installedMap = new Map(installed.map((i: any) => [i.module_id, i]));
 
@@ -44,8 +44,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     });
 
     return NextResponse.json({ data: allModules, plan });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -95,8 +95,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

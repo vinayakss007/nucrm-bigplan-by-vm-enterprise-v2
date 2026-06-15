@@ -60,8 +60,6 @@ const emailWorker = new Worker(
       console.log(`[Email Worker] Email sent successfully to ${to}`);
       return { sent: true, to, messageId: result?.messageId };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error(`[Email Worker] Failed to send email to ${to}:`, error.message);
       throw error;
@@ -90,8 +88,6 @@ const notificationWorker = new Worker(
       console.log(`[Notification Worker] Notification sent to user ${userId}`);
       return { sent: true, userId };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error(`[Notification Worker] Failed to send notification:`, error.message);
       throw error;
@@ -117,8 +113,6 @@ const bulkEmailWorker = new Worker(
     for (let i = 0; i < recipients.length; i += BULK_BATCH_SIZE) {
       const batch = recipients.slice(i, i + BULK_BATCH_SIZE);
       const batchResults = await Promise.allSettled(
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         batch.map(async (recipient: any) => {
           await sendEmail({
@@ -169,8 +163,6 @@ const automationWorker = new Worker(
       console.log(`[Automation Worker] Automation ${automationId} completed successfully`);
       return { success: true, automationId };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error(`[Automation Worker] Failed:`, error.message);
       throw error;
@@ -216,8 +208,6 @@ const leadWarmingWorker = new Worker(
           return { sent: false, error: 'WhatsApp not configured' };
         }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const config = integration.config as any;
         const phoneNumberId = config?.phone_number_id;
@@ -276,8 +266,6 @@ const leadWarmingWorker = new Worker(
       // For email type, it's already handled by send-email queue
       return { sent: true };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error(`[Lead Warming Worker] Failed:`, error.message);
       throw error;
@@ -317,8 +305,6 @@ const webhookWorker = new Worker(
       }
       
       return { delivered: true, url, status: response.status };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error(`[Webhook Worker] Failed to deliver webhook:`, error.message);

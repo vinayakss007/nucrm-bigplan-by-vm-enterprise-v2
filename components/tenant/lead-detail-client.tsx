@@ -50,13 +50,9 @@ const AUTHORITY_LEVELS = {
 
 interface Props {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   lead: any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   activities: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   relatedContacts: any[];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -777,8 +773,6 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
                   <option value="">Select team member…</option>
                   {teamMembers
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
                     .filter((m: any) => m.user_id !== lead.assigned_to)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     .map((m: any) => (
@@ -826,8 +820,6 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getInitials(contact: any) {
   return (contact.first_name?.charAt(0) || '') + (contact.last_name?.charAt(0) || '');

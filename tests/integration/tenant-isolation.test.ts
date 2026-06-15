@@ -36,8 +36,6 @@ const dbAvailable = await isDatabaseAvailable();
 describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
   let pool: Pool;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   let db: any;
   let tenantAId: string;
   let tenantBId: string;
@@ -162,8 +160,6 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
       .where(sql`${schema.contacts.tenantId} IN (${tenantAId}, ${tenantBId})`);
 
     // Verify each contact belongs to exactly one tenant
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tenantAContacts = allContacts.filter((c: any) => c.tenantId === tenantAId);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -311,8 +307,6 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
     `);
 
     // Document which tables have RLS enabled
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rlsRows = Array.isArray(rlsResult) ? rlsResult : (rlsResult as any)?.rows ?? [];
     const rlsStatus: Record<string, boolean> = {};

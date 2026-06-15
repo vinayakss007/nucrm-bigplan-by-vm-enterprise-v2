@@ -16,11 +16,9 @@ const FIELD_TYPES = [
 export default function FormsPage() {
   const router = useRouter();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [forms, setForms]       = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selected, setSelected] = useState<any|null>(null);
   const [saving, setSaving]     = useState(false);
@@ -56,8 +54,6 @@ export default function FormsPage() {
   };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toggle = async (f: any) => {
     await fetch(`/api/tenant/forms/${f.id}`, {
       method:'PATCH', headers:{'Content-Type':'application/json'},
@@ -73,14 +69,11 @@ export default function FormsPage() {
   };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [viewingSubmissions, setViewingSubmissions] = useState<any|null>(null);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const viewSubmissions = async (form: any) => {
     setViewingSubmissions(form);
@@ -120,8 +113,6 @@ export default function FormsPage() {
 
   const addField = () => setForm(f => ({...f, fields:[...f.fields, { key:`field_${Date.now()}`, label:'New Field', type:'text', required:false }]}));
   const removeField = (i: number) => setForm(f => ({...f, fields:f.fields.filter((_,idx) => idx !== i)}));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateField = (i: number, key: string, val: any) =>
     setForm(f => ({...f, fields:f.fields.map((x,idx) => idx === i ? {...x, [key]:val} : x)}));

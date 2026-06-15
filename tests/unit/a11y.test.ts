@@ -40,8 +40,6 @@ describe('focusElement', () => {
   it('calls focus and sets tabindex on element', async () => {
     const { focusElement } = await import('@/lib/a11y');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const el = { focus: vi.fn(), setAttribute: vi.fn() } as any;
     focusElement(el);
     expect(el.focus).toHaveBeenCalledOnce();
@@ -55,8 +53,6 @@ describe('focusElement', () => {
 
   it('does nothing when element is undefined', async () => {
     const { focusElement } = await import('@/lib/a11y');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(() => focusElement(undefined as any)).not.toThrow();
   });

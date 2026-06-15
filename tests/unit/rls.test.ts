@@ -8,8 +8,6 @@ vi.mock('@/drizzle/db', () => ({
     select: vi.fn().mockReturnThis(),
     from: vi.fn().mockReturnThis(),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     transaction: vi.fn(async (cb: any) => {
       const tx = { execute: vi.fn() };
       return cb(tx);

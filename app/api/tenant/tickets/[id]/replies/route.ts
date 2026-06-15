@@ -25,8 +25,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
     return NextResponse.json({ success: true }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[ticket reply POST]', err);

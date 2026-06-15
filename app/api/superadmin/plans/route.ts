@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
       .orderBy(asc(plans.sortOrder));
     
     return NextResponse.json({ data });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[superadmin/plans GET]', err);
@@ -65,8 +65,8 @@ export async function POST(request: NextRequest) {
       .returning();
 
     return NextResponse.json({ data: row }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     if (err.code === '23505' || err.message?.includes('unique constraint')) {
@@ -90,8 +90,8 @@ export async function PATCH(request: NextRequest) {
     const { id } = v;
     if (!id) return NextResponse.json({ error: 'Plan ID required' }, { status: 400 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = { updatedAt: new Date() };
     
@@ -127,8 +127,8 @@ export async function PATCH(request: NextRequest) {
 
     if (!row) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
     return NextResponse.json({ data: row });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     if (err.code === '23505' || err.message?.includes('unique constraint')) {
@@ -160,8 +160,8 @@ export async function DELETE(request: NextRequest) {
 
     await db.delete(plans).where(eq(plans.id, id));
     return NextResponse.json({ ok: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[superadmin/plans DELETE]', err);

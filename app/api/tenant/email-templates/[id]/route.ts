@@ -12,8 +12,8 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { validateBody } from '@/lib/api/validate';
 import { updateEmailTemplateSchema } from '@/lib/api/schemas';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function GET(request: NextRequest, { params }: any) {
   try {
@@ -40,16 +40,16 @@ export async function GET(request: NextRequest, { params }: any) {
 
     if (!row) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     return NextResponse.json({ data: row });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function PATCH(request: NextRequest, { params }: any) {
   try {
@@ -61,8 +61,8 @@ export async function PATCH(request: NextRequest, { params }: any) {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = { updatedAt: new Date() };
     if (v.name     !== undefined) updateData.name = v.name.trim();
@@ -92,16 +92,16 @@ export async function PATCH(request: NextRequest, { params }: any) {
 
     if (!row) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     return NextResponse.json({ data: row });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function DELETE(request: NextRequest, { params }: any) {
   try {
@@ -120,8 +120,8 @@ export async function DELETE(request: NextRequest, { params }: any) {
 
     if (!row) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     return NextResponse.json({ ok: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

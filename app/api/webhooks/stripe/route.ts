@@ -28,8 +28,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing stripe-signature header' }, { status: 400 });
   }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let event: any;
 
@@ -81,8 +81,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ received: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error(`[Stripe Webhook] Error processing ${eventType}:`, err.message);
@@ -93,8 +93,8 @@ export async function POST(request: NextRequest) {
 
 // ── Event Handlers ───────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleCheckoutCompleted(session: any) {
   const tenantId = session.metadata?.tenant_id;
@@ -123,8 +123,8 @@ async function handleCheckoutCompleted(session: any) {
   console.log(`[Stripe] Tenant ${tenantId} activated with plan ${planId}`);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleSubscriptionUpdated(subscription: any) {
   const tenantId = subscription.metadata?.tenant_id;
@@ -152,8 +152,8 @@ async function handleSubscriptionUpdated(subscription: any) {
   console.log(`[Stripe] Tenant ${tenantId} subscription updated: status=${nuCrmStatus}, plan=${planId}`);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleSubscriptionDeleted(subscription: any) {
   const tenantId = subscription.metadata?.tenant_id;
@@ -173,8 +173,8 @@ async function handleSubscriptionDeleted(subscription: any) {
   console.log(`[Stripe] Tenant ${tenantId} subscription cancelled — downgraded to free`);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handlePaymentSucceeded(invoice: any) {
   const customerId = invoice.customer;
@@ -196,8 +196,8 @@ async function handlePaymentSucceeded(invoice: any) {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handlePaymentFailed(invoice: any) {
   const customerId = invoice.customer;
@@ -219,8 +219,8 @@ async function handlePaymentFailed(invoice: any) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function determinePlanFromSession(session: any): string | null {
   // Try to extract from line items metadata or price lookup
@@ -233,8 +233,8 @@ function determinePlanFromSession(session: any): string | null {
   return 'enterprise';
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function determinePlanFromSubscription(subscription: any): string | null {
   const priceId = subscription.items?.data?.[0]?.price?.id;

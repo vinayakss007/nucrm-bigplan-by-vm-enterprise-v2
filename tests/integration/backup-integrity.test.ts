@@ -161,8 +161,6 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
       try {
         const result = await sourceDb.execute(sql`SELECT count(*)::int FROM ${sql.identifier(table)}`);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rows = Array.isArray(result) ? result : (result as any)?.rows ?? [];
         sourceCounts[table] = rows[0]?.count ?? 0;
       } catch {

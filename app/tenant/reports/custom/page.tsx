@@ -23,12 +23,10 @@ const FILTER_OPS = [
 
 export default function CustomReportBuilder() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [savedReports, setSavedReports] = useState<any[]>([]);
   const [reportType, setReportType] = useState('contacts');
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [filters, setFilters] = useState<{ column: string; op: string; value: string }[]>([]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -72,16 +70,12 @@ export default function CustomReportBuilder() {
         body: JSON.stringify({
           report_type: reportType,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           filters: filters.reduce((acc, f) => { if (f.value) acc[f.column] = f.value; return acc; }, {} as Record<string, any>),
           limit: 500,
         }),
       });
       const d = await res.json();
       if (!res.ok) { toast.error(d.error || 'Failed'); setLoading(false); return; }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = (d.data || []).map((row: any) => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -91,8 +85,6 @@ export default function CustomReportBuilder() {
       });
       setResults(data);
       if (!data.length) toast('No data found', { icon: '📊' });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) { toast.error(err.message); }
     setLoading(false);
@@ -116,8 +108,6 @@ export default function CustomReportBuilder() {
     } catch { toast.error('Failed'); }
   };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const loadReport = (r: any) => {
     setReportType(r.type);

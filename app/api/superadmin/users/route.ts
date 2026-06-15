@@ -60,8 +60,8 @@ export async function GET(request: NextRequest) {
       .limit(200);
 
     return NextResponse.json({ data });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[superadmin/users GET]', err);
@@ -105,8 +105,8 @@ export async function POST(request: NextRequest) {
       });
 
     return NextResponse.json({ data: newUser }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     if (err.code === '23505' || err.message?.includes('unique constraint')) {

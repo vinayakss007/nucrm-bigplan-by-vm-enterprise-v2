@@ -15,8 +15,8 @@ const s3 = new S3Client({
     accessKeyId: process.env['AWS_ACCESS_KEY_ID'],
     secretAccessKey: process.env['AWS_SECRET_ACCESS_KEY'] || '',
   } : undefined,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 }) as any;
 
@@ -35,8 +35,8 @@ export async function GET(req: NextRequest) {
     const entityId = searchParams.get('entityId');
     const folderId = searchParams.get('folderId');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const filters: any[] = [eq(documents.tenantId, ctx.tenantId)];
 
@@ -55,8 +55,8 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(documents.createdAt));
 
     // Also get folders at the same level
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const folderFilters: any[] = [eq(documentFolders.tenantId, ctx.tenantId)];
     if (folderId) {
@@ -72,8 +72,8 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(documentFolders.createdAt));
 
     return NextResponse.json({ data: { documents: docs, folders } });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }
@@ -141,8 +141,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       data: { document: doc, uploadUrl },
     }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }
@@ -173,8 +173,8 @@ export async function DELETE(req: NextRequest) {
     }
 
     return NextResponse.json({ data: { id, deleted: true } });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }

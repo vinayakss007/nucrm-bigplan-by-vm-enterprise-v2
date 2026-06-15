@@ -10,17 +10,12 @@ import { cn, formatCurrency, getInitials, formatRelativeTime, toSnakeCase } from
 
 export default function TenantHeader({ tenant, profile, roleSlug, onToggleSidebar }: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   tenant: any; profile: any; roleSlug: string; onToggleSidebar?: () => void;
 }) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unread, setUnread]       = useState(0);
   const [query, setQuery]         = useState('');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [results, setResults]     = useState<any>(null);
   const [searching, setSearching] = useState(false);
@@ -61,8 +56,6 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
         notifRes.json(),
       ]);
       setUnread(unreadData.count ?? 0);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setNotifications((notifData.data ?? []).slice(0, 8).map((n: any) => toSnakeCase(n)));
     } catch (error) {
@@ -112,7 +105,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
 
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
-    try { new BroadcastChannel('nucrm_auth').postMessage('logout'); } catch {}
+    try { new BroadcastChannel('nucrm_auth').postMessage('logout'); } catch (e) { console.error('[header] broadcast failed:', e); }
     router.push('/auth/login');
     router.refresh();
   };

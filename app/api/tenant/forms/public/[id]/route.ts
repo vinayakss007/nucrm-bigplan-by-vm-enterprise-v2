@@ -36,8 +36,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       },
       { headers: {'Access-Control-Allow-Origin':'*'} }
     );
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: {'Access-Control-Allow-Origin':'*'} });

@@ -42,7 +42,5 @@ export const mockDb = {
     webhooks: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
   },
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   transaction: vi.fn(async (cb: any) => cb(mockDb)),
 };

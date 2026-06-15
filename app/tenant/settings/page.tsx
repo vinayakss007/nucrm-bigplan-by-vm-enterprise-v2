@@ -23,8 +23,6 @@ type StatusValue = 'configured' | 'default' | 'attention' | 'unknown';
 type StatusEntry = { status: StatusValue; hint?: string };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const STATUS_META: Record<StatusValue, { color: string; label: string; icon: any }> = {
   configured: { color: 'text-emerald-600 dark:text-emerald-400', label: 'Configured', icon: CheckCircle2 },
   default:    { color: 'text-muted-foreground/70',                label: 'Default',     icon: CircleDashed },

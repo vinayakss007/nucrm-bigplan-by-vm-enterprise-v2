@@ -74,8 +74,8 @@ export async function POST(request: NextRequest) {
     }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({ ok: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

@@ -7,8 +7,6 @@ interface Props {
   children: React.ReactNode;
   fallback?: React.ReactNode;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   onError?: (error: Error, errorInfo: any) => void;
 }
 
@@ -27,8 +25,6 @@ export class AppErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   override componentDidCatch(error: Error, errorInfo: any) {
     console.error('[Global Error Boundary]', error, errorInfo);

@@ -69,13 +69,9 @@ export function WidgetShell({
   userId: string
   isAdmin: boolean
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   config?: Record<string, any>
   loading: boolean
   error: string | null
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any
   onRefresh: () => void
@@ -102,8 +98,6 @@ export function LazyWidget({
   tenantId: string
   userId: string
   isAdmin: boolean
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   config?: Record<string, any>
   children: (props: WidgetProps) => React.ReactNode

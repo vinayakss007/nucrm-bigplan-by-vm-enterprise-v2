@@ -6,6 +6,10 @@ let nextConfig = {
   allowedDevOrigins: ['34.55.131.136', '34.29.235.190', '136.119.162.223', 'localhost:3000', '4bc0-34-58-30-100.ngrok-free.app', '34.170.154.229', '34.30.91.246', '34.41.169.28'],
   typescript: { ignoreBuildErrors: process.env.CI === 'true' },
   devIndicators: { buildActivity: false },
+  cacheMaxMemorySize: 50 * 1024 * 1024,
+  experimental: {
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-*', '@dnd-kit/core', '@dnd-kit/sortable'],
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '**.gravatar.com' },
@@ -24,9 +28,6 @@ let nextConfig = {
   productionBrowserSourceMaps: false,
   serverExternalPackages: ['pg', 'nodemailer'],
   transpilePackages: ['@xyflow/react'],
-  experimental: {
-    optimizePackageImports: ['lucide-react', '@radix-ui/react-*', '@dnd-kit/core', '@dnd-kit/sortable'],
-  },
   async headers() {
     return [{
       source: '/:path*',
@@ -55,6 +56,6 @@ if (process.env.SENTRY_ORG && process.env.SENTRY_PROJECT && process.env.SENTRY_A
   try {
     const { withSentryConfig } = await import('@sentry/nextjs');
     nextConfig = withSentryConfig(nextConfig, { org: process.env.SENTRY_ORG, project: process.env.SENTRY_PROJECT, authToken: process.env.SENTRY_AUTH_TOKEN, silent: true, widenClientFileUpload: true, hideSourceMaps: true });
-  } catch {}
+  } catch (e) { console.error('[next.config] Sentry config failed:', e); }
 }
 export default nextConfig;

@@ -20,8 +20,6 @@ vi.mock('@/drizzle/schema', () => ({
 
 vi.mock('drizzle-orm', () => ({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   eq: vi.fn((...args: any[]) => ['eq', ...args]),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   and: vi.fn((...args: any[]) => ['and', ...args]),
@@ -29,8 +27,6 @@ vi.mock('drizzle-orm', () => ({
 
 import { db } from '@/drizzle/db';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mockRequest(ip: string | null): any {
   return {
@@ -49,8 +45,6 @@ describe('checkIpWhitelist', () => {
 
   it('returns null when whitelist is empty (no IP restriction)', async () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any).mockReturnValue({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
@@ -67,8 +61,6 @@ describe('checkIpWhitelist', () => {
   });
 
   it('returns null when whitelist value is empty array', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any).mockReturnValue({
       from: vi.fn(() => ({
@@ -87,8 +79,6 @@ describe('checkIpWhitelist', () => {
 
   it('allows access when client IP is in whitelist', async () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any).mockReturnValue({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
@@ -105,8 +95,6 @@ describe('checkIpWhitelist', () => {
   });
 
   it('blocks access when client IP is not in whitelist', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any).mockReturnValue({
       from: vi.fn(() => ({
@@ -125,8 +113,6 @@ describe('checkIpWhitelist', () => {
   });
 
   it('returns 403 with error message for blocked IPs', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any).mockReturnValue({
       from: vi.fn(() => ({
@@ -147,8 +133,6 @@ describe('checkIpWhitelist', () => {
 
   it('supports CIDR notation in whitelist', async () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any).mockReturnValue({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
@@ -165,8 +149,6 @@ describe('checkIpWhitelist', () => {
   });
 
   it('blocks CIDR range mismatches', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any).mockReturnValue({
       from: vi.fn(() => ({
@@ -186,8 +168,6 @@ describe('checkIpWhitelist', () => {
 
   it('falls back to unknown IP when no headers present', async () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any).mockReturnValue({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
@@ -199,8 +179,6 @@ describe('checkIpWhitelist', () => {
     const { checkIpWhitelist } = await import('@/lib/ip-whitelist');
     const req = { headers: { get: () => null } };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await checkIpWhitelist(req as any, 'tenant-1');
 
     expect(result).not.toBeNull();
@@ -208,8 +186,6 @@ describe('checkIpWhitelist', () => {
   });
 
   it('handles malformed whitelist JSON gracefully returns empty array', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any).mockReturnValue({
       from: vi.fn(() => ({
@@ -228,8 +204,6 @@ describe('checkIpWhitelist', () => {
 
   it('handles x-real-ip fallback when x-forwarded-for is missing', async () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any).mockReturnValue({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
@@ -240,8 +214,6 @@ describe('checkIpWhitelist', () => {
 
     const { checkIpWhitelist } = await import('@/lib/ip-whitelist');
     const req = { headers: { get: (name: string) => name === 'x-real-ip' ? '192.168.1.1' : null } };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await checkIpWhitelist(req as any, 'tenant-1');
 
@@ -255,8 +227,6 @@ describe('getIpWhitelistEnabled', () => {
   });
 
   it('returns false when no whitelist configured', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any).mockReturnValue({
       from: vi.fn(() => ({
@@ -273,8 +243,6 @@ describe('getIpWhitelistEnabled', () => {
   });
 
   it('returns true when whitelist has entries', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.select as any).mockReturnValue({
       from: vi.fn(() => ({

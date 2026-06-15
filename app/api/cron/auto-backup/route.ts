@@ -102,8 +102,8 @@ async function runScheduledBackups(pool: Pool) {
       );
 
       backupsRun++;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error(`[Auto Backup] Schedule ${schedule.id} failed:`, err);
@@ -119,8 +119,8 @@ async function runScheduledBackups(pool: Pool) {
 async function backupSingleTenant(
   pool: Pool,
   tenantId: string,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   schedule: any
 ) {
@@ -155,8 +155,8 @@ async function backupSingleTenant(
     );
 
     console.log(`[Auto Backup] Tenant ${tenantId}: ${result.tableCount} tables, ${result.totalRecords} records backed up`);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     await pool.query(

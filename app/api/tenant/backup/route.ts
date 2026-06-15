@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ backups });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -75,8 +75,8 @@ export async function POST(request: NextRequest) {
       const cronError = await cronRes.json().catch((err) => { console.error('[backup] cron response parse failed', err); return {}; });
       return NextResponse.json({ error: cronError.error || 'Backup failed' }, { status: 500 });
     }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     const errorMsg = err.name === 'AbortError' 

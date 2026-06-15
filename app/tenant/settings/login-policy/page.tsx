@@ -61,8 +61,6 @@ export default function LoginPolicyPage() {
       fetch('/api/tenant/admin/login-policy').then(r => r.ok ? r.json() : { login_policy: DEFAULTS }),
       fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     ]).then(([d, me]: any[]) => { if (ignore) return; 
       const p = d.login_policy ?? DEFAULTS;
       setPol(p); setOriginal(p);
@@ -317,8 +315,6 @@ export default function LoginPolicyPage() {
 
 const inp = 'w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function Section({ icon: Icon, title, extra, children }: { icon: any; title: string; extra?: React.ReactNode; children: React.ReactNode }) {
   return (

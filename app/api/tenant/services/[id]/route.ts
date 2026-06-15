@@ -24,8 +24,8 @@ export async function GET(
     }
 
     return NextResponse.json({ service });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[services/[id]/GET]', error);
@@ -82,8 +82,8 @@ export async function PATCH(
     }
 
     return NextResponse.json({ service });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[services/[id]/PATCH]', error);
@@ -110,8 +110,8 @@ export async function DELETE(
     }
 
     return NextResponse.json({ success: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[services/[id]/DELETE]', error);

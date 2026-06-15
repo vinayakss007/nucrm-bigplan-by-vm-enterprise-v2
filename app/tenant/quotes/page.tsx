@@ -102,8 +102,6 @@ function QuotesPageInner() {
 
   const filtered = quotes.filter(q =>
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (q.title.toLowerCase().includes(search.toLowerCase()) || getContactName((q as any).contactId).toLowerCase().includes(search.toLowerCase())) &&
     (!statusFilter || q.status === statusFilter) &&
     (!contactFilter || q.contactId === contactFilter)

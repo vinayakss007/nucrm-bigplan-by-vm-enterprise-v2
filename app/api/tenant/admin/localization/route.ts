@@ -59,8 +59,8 @@ export async function GET(req: NextRequest) {
 
     const stored = (((t?.settings as Record<string, unknown>) ?? {}).localization ?? {}) as Record<string, unknown>;
     return NextResponse.json({ localization: { ...DEFAULTS, ...stored } });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -89,8 +89,8 @@ export async function PATCH(req: NextRequest) {
     if (incoming.week_start && !VALID.week_start.includes(incoming.week_start))
       return NextResponse.json({ error: `week_start must be one of ${VALID.week_start.join(', ')}` }, { status: 400 });
     if (incoming.weekend_days && (!Array.isArray(incoming.weekend_days) ||
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         incoming.weekend_days.some((d: any) => !VALID.weekend_days.includes(d))))
       return NextResponse.json({ error: 'weekend_days must be a subset of weekday names' }, { status: 400 });
@@ -109,8 +109,8 @@ export async function PATCH(req: NextRequest) {
       if (bh.end_time && !/^\d{2}:\d{2}$/.test(bh.end_time))
         return NextResponse.json({ error: 'business_hours.end_time must be HH:MM' }, { status: 400 });
       if (bh.working_days && (!Array.isArray(bh.working_days) ||
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           bh.working_days.some((d: any) => !VALID.weekend_days.includes(d))))
         return NextResponse.json({ error: 'business_hours.working_days invalid' }, { status: 400 });
@@ -174,8 +174,8 @@ export async function PATCH(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, localization: { ...DEFAULTS, ...safe } });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[localization PATCH]', err);

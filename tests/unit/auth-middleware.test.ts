@@ -47,16 +47,12 @@ describe('auth/middleware', () => {
     it('returns true for super admin', async () => {
       const { can } = await import('@/lib/auth/middleware');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ctx = { isSuperAdmin: true, isAdmin: false, permissions: {} } as any;
       expect(can(ctx, 'contacts.view')).toBe(true);
     });
 
     it('returns true for admin', async () => {
       const { can } = await import('@/lib/auth/middleware');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ctx = { isSuperAdmin: false, isAdmin: true, permissions: {} } as any;
       expect(can(ctx, 'contacts.edit')).toBe(true);
@@ -68,8 +64,6 @@ describe('auth/middleware', () => {
         isSuperAdmin: false,
         isAdmin: false,
         permissions: { 'contacts.view': true, 'contacts.edit': false },
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any;
       expect(can(ctx, 'contacts.view')).toBe(true);
@@ -83,8 +77,6 @@ describe('auth/middleware', () => {
         isAdmin: false,
         permissions: { all: true },
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any;
       expect(can(ctx, 'anything')).toBe(true);
     });
@@ -93,8 +85,6 @@ describe('auth/middleware', () => {
   describe('requirePerm', () => {
     it('returns null when user has permission', async () => {
       const { requirePerm } = await import('@/lib/auth/middleware');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ctx = { isSuperAdmin: true, isAdmin: false, permissions: {} } as any;
       expect(requirePerm(ctx, 'contacts.view')).toBeNull();
@@ -106,8 +96,6 @@ describe('auth/middleware', () => {
         isSuperAdmin: false,
         isAdmin: false,
         permissions: { 'contacts.view': false },
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any;
       const response = requirePerm(ctx, 'contacts.edit');

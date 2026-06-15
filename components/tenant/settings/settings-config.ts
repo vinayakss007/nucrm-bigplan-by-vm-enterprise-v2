@@ -19,8 +19,6 @@ export type SettingsItem = {
   href: string;
   label: string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon: any;
   desc?: string;
   adminOnly?: boolean;
@@ -39,8 +37,6 @@ export type SettingsScope = {
   id: 'personal' | 'workspace' | 'admin';
   label: string;
   desc: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon: any;
   adminOnly?: boolean;

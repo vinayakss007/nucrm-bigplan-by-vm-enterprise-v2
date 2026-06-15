@@ -38,8 +38,8 @@ export async function GET(request: NextRequest) {
       stats,
       pool,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -95,8 +95,8 @@ export async function POST(request: NextRequest) {
 
     // Add participants to pool
     if (Array.isArray(participants) && participants.length > 0) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const poolValues = participants.map((p: any) => ({
         configId: configId!,
@@ -113,8 +113,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ ok: true, message: 'Warm-up configured' }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -143,8 +143,8 @@ export async function PATCH(request: NextRequest) {
       .where(eq(emailWarmupConfigs.tenantId, ctx.tenantId));
 
     return NextResponse.json({ ok: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

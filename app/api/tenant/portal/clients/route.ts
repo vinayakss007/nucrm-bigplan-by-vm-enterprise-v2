@@ -23,8 +23,8 @@ export async function GET(request: NextRequest) {
       .orderBy(desc(portalClients.createdAt));
 
     return NextResponse.json({ data: clients });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[portal clients GET]', err);
@@ -83,8 +83,8 @@ export async function POST(request: NextRequest) {
         login_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/portal/login?token=${accessToken}&email=${email}`,
       },
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[portal clients POST]', err);
@@ -107,8 +107,8 @@ export async function DELETE(request: NextRequest) {
       .where(and(eq(portalClients.id, id), eq(portalClients.tenantId, ctx.tenantId)));
 
     return NextResponse.json({ ok: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[portal clients DELETE]', err);

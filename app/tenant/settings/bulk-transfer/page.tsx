@@ -11,8 +11,6 @@ type Member = { user_id: string; full_name: string; email: string; role_slug: st
 type Counts = { leads: number; contacts: number; deals: number; tasks: number; tickets: number };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const RESOURCE_META: { key: keyof Counts; label: string; icon: any }[] = [
   { key: 'leads',    label: 'Leads',    icon: UserCheck },
   { key: 'contacts', label: 'Contacts', icon: Users },
@@ -44,8 +42,6 @@ export default function BulkTransferPage() {
     Promise.all([
       fetch('/api/tenant/members').then(r => r.ok ? r.json() : { data: [] }),
       fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ]).then(([mem, me]: any[]) => { if (ignore) return; 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

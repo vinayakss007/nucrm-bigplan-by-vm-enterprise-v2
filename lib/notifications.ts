@@ -23,15 +23,15 @@ export async function createNotification(opts: {
   /** Structured entity reference — enables deep-linking from notification list */
   entity_type?: 'contact' | 'deal' | 'task' | 'company' | 'lead' | 'sequence';
   entity_id?: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata?: Record<string, any>;
 }) {
   try {
     // Build enriched metadata that includes entity reference for deep links
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const meta: Record<string, any> = opts.metadata ?? {};
     if (opts.entity_type) meta['entity_type'] = opts.entity_type;
@@ -103,8 +103,8 @@ export async function notifyTenantMembers(opts: {
     if (!members.length) return;
 
     // Build entity metadata
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const meta: Record<string, any> = {};
     if (opts.entity_type) meta['entity_type'] = opts.entity_type;

@@ -49,8 +49,8 @@ export async function GET(
     );
 
     return NextResponse.json({ data: history });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[history GET]', err);

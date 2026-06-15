@@ -66,8 +66,8 @@ export async function GET(req: NextRequest) {
 
     const tags = await aggregateTags(ctx.tenantId);
     return NextResponse.json({ tags, total: tags.length });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -142,8 +142,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'merge') {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sources: string[] = Array.isArray(body.tags) ? body.tags.map((s: any) => String(s).trim()).filter(Boolean) : [];
       const target = String(body.new_tag ?? '').trim();
@@ -174,8 +174,8 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ error: `unknown action: ${action}` }, { status: 400 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[tags POST]', err);

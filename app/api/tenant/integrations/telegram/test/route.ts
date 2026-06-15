@@ -39,10 +39,12 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ ok: true, message: 'Test message sent successfully' });
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Failed to send test message' }, { status: 500 });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[telegram/test]', msg);
+    return NextResponse.json({ error: 'Failed to send test message' }, { status: 500 });
   }
 }

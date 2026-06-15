@@ -31,8 +31,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     await db.update(kbArticles).set({ views: (article.views || 0) + 1 }).where(eq(kbArticles.id, id));
 
     return NextResponse.json({ data: article });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -45,8 +45,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;
     const body = await request.json();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updates: Record<string, any> = {};
     if (body['title']) updates['title'] = body['title'];
@@ -61,8 +61,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     await db.update(kbArticles).set(updates).where(and(eq(kbArticles.tenantId, ctx.tenantId), eq(kbArticles.id, id)));
     return NextResponse.json({ success: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -77,8 +77,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     await db.update(kbArticles).set({ deletedAt: new Date() })
       .where(and(eq(kbArticles.tenantId, ctx.tenantId), eq(kbArticles.id, id)));
     return NextResponse.json({ success: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -110,8 +110,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .limit(1);
 
     return NextResponse.json({ success: true, data: updated });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

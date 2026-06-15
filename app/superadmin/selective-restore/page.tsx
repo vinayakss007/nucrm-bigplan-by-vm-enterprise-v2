@@ -34,8 +34,6 @@ interface BackupFile {
   backup_type: string;
   parse_status: 'pending' | 'completed' | 'failed';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   tenants_included?: any[];
   total_record_count?: number;
   tables_available?: string[];
@@ -53,8 +51,6 @@ interface TenantInfo {
 }
 
 interface ScopePreview {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tenant: any;
   backup_file: string;
@@ -78,13 +74,9 @@ interface RestoreLog {
   status: string;
   restore_mode: string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   tables_selected: any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   records_affected?: any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   records_per_table?: any;
   started_at: string;
@@ -117,8 +109,6 @@ export default function SelectiveRestorePage() {
   const [selectedTables, setSelectedTables] = useState<string[]>([]);
   const [restoreMode, setRestoreMode] = useState<'insert_only' | 'upsert' | 'replace'>('insert_only');
   const [scopePreview, setScopePreview] = useState<ScopePreview | null>(null);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [restoreProgress, setRestoreProgress] = useState<any>(null);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -180,8 +170,6 @@ export default function SelectiveRestorePage() {
         alert('Upload failed: ' + data.error);
       }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       alert('Upload failed: ' + err.message);
     } finally {
@@ -196,8 +184,6 @@ export default function SelectiveRestorePage() {
       try {
         const res = await fetch('/api/superadmin/selective-restore/backups');
         const data = await res.json();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const backup = data.backups?.find((b: any) => b.id === backupId);
         if (backup?.parse_status === 'completed') {
@@ -227,8 +213,6 @@ export default function SelectiveRestorePage() {
       setSelectedTenant(null);
       setSelectedTables([]);
       setStep('preview');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       alert('Preview failed: ' + err.message);
@@ -297,8 +281,6 @@ export default function SelectiveRestorePage() {
       setScopePreview(data);
       setStep('scope');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       alert('Scope preview failed: ' + err.message);
     } finally {
@@ -363,8 +345,6 @@ export default function SelectiveRestorePage() {
           }
         }
       }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setRestoreProgress({ step: 'failed', status: 'failed', message: err.message });

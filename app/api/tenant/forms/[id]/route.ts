@@ -7,8 +7,8 @@ import { db } from '@/drizzle/db';
 import { forms, formSubmissions, contacts } from '@/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function GET(req: NextRequest, { params }: any) {
   try {
@@ -40,14 +40,14 @@ export async function GET(req: NextRequest, { params }: any) {
     .limit(50);
 
     return NextResponse.json({ data: { ...form, submissions } });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function PATCH(req: NextRequest, { params }: any) {
   try {
@@ -60,8 +60,8 @@ export async function PATCH(req: NextRequest, { params }: any) {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
     
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = { updatedAt: new Date(), updatedBy: ctx.userId };
     if (v.name !== undefined) updateData.name = v.name;
@@ -78,14 +78,14 @@ export async function PATCH(req: NextRequest, { params }: any) {
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ data: row });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function DELETE(req: NextRequest, { params }: any) {
   try {
@@ -96,8 +96,8 @@ export async function DELETE(req: NextRequest, { params }: any) {
 
     await db.delete(forms).where(and(eq(forms.id, id), eq(forms.tenantId, ctx.tenantId)));
     return NextResponse.json({ ok: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }

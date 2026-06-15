@@ -15,8 +15,8 @@ import { logError } from '@/lib/errors-server';
  */
 export async function GET(
   request: NextRequest, 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   { params }: any
 ) {
@@ -81,8 +81,8 @@ export async function GET(
       created_by_name: creator?.fullName,
       activities,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('Error fetching lead:', error);
@@ -99,8 +99,8 @@ export async function GET(
  */
 export async function PATCH(
   request: NextRequest, 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   { params }: any
 ) {
@@ -131,8 +131,8 @@ export async function PATCH(
     }
     
     // Update mapping (snake_case from body to camelCase for Drizzle)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = {
       updatedAt: new Date(),
@@ -193,8 +193,8 @@ export async function PATCH(
     fireWebhooks(ctx.tenantId, 'lead.updated', { id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     
     return NextResponse.json(updatedLead);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('Error updating lead:', error);
@@ -211,8 +211,8 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest, 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   { params }: any
 ) {
@@ -250,8 +250,8 @@ export async function DELETE(
     fireWebhooks(ctx.tenantId, 'lead.deleted', { id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({ success: true, message: 'Moved to trash. Restore within 30 days.' });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('Error deleting lead:', error);

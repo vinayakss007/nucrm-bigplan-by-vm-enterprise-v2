@@ -183,8 +183,6 @@ export default function AIHubPage() {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function Stat({ icon: Icon, label, value, sub, accent }: { icon: any; label: string; value: number | string; sub?: string; accent?: 'amber' }) {
   return (
     <div className={cn(
@@ -201,8 +199,6 @@ function Stat({ icon: Icon, label, value, sub, accent }: { icon: any; label: str
 }
 
 function ActionCard({ href, icon: Icon, title, desc, tone }: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   href: string; icon: any; title: string; desc: string; tone: 'violet' | 'blue' | 'amber' | 'emerald';
 }) {

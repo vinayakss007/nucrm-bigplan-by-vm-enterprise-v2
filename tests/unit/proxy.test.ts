@@ -5,16 +5,12 @@ type MockHeaders = Map<string, string> & { set: ReturnType<typeof vi.fn>; get: R
 function makeHeaders(): MockHeaders {
   const map = new Map<string, string>() as MockHeaders;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   map.set = vi.fn((k: string, v: string) => { Map.prototype.set.call(map, k, v); return map; }) as any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   map.get = vi.fn((k: string) => Map.prototype.get.call(map, k) || null) as any;
   return map;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function makeResponse(overrides: Record<string, any> = {}) {
   const headers = makeHeaders();
@@ -26,8 +22,6 @@ function makeResponse(overrides: Record<string, any> = {}) {
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function NextResponse(this: any, body: any, init?: { status?: number; headers?: Record<string, string> }) {
   const headers = makeHeaders();
@@ -43,8 +37,6 @@ function NextResponse(this: any, body: any, init?: { status?: number; headers?: 
 }
 
 NextResponse.next = () => makeResponse({ _isNext: true });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 NextResponse.json = (body: any, init?: any) => makeResponse({ ...init, body, _isJson: true });
 NextResponse.redirect = (url: string) => ({ url, _isRedirect: true, headers: makeHeaders() });
@@ -69,8 +61,6 @@ vi.mock('@/lib/rate-limit-edge', () => ({
     clear: vi.fn(),
     size: 0,
   },
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getRateLimitHeaders: vi.fn((r: any) => ({
     'X-RateLimit-Limit': String(r.limit),

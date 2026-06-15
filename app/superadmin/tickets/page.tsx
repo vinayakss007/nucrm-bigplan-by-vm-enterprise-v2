@@ -9,8 +9,6 @@ const STATUS_CFG: Record<string,string> = { open:'text-amber-400 bg-amber-500/15
 
 export default function TicketsPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData]       = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [status, setStatus]   = useState('open');
@@ -27,8 +25,6 @@ export default function TicketsPage() {
   useEffect(() => { load(); }, [status, load]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const update = async (id: string, updates: any) => {
     await fetch('/api/superadmin/tickets',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,...updates}) });
     toast.success('Updated'); load();
@@ -42,8 +38,6 @@ export default function TicketsPage() {
   };
 
   const c = data?.counts ?? {};
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tickets = (data?.tickets ?? []).filter((t:any) => !search || t.subject?.toLowerCase()?.includes(search.toLowerCase()) || t.tenant_name?.toLowerCase()?.includes(search.toLowerCase()));
 
@@ -89,8 +83,6 @@ export default function TicketsPage() {
             <CheckCircle className="w-10 h-10 text-emerald-500/30 mx-auto mb-3"/>
             <p className="text-white/30 text-sm">No tickets found</p>
           </div>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ) : tickets.map((t:any) => {
           const isOpen = expanded===t.id;

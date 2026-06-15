@@ -69,8 +69,8 @@ export async function GET(request: NextRequest) {
       offset,
       hasMore: offset + data.length < (countResult?.count ?? 0),
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     return apiError(err); 
@@ -104,8 +104,8 @@ export async function POST(request: NextRequest) {
     }).returning();
 
     return NextResponse.json({ data: row }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     return apiError(err); 

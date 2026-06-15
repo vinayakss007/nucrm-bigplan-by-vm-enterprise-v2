@@ -43,8 +43,8 @@ export async function GET(request: NextRequest) {
     ]);
 
     return NextResponse.json({ mrr: mrrRes, events });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[superadmin/revenue GET]', err);

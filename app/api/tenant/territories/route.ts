@@ -34,8 +34,8 @@ export async function GET(req: NextRequest) {
 
     const tree = await getTerritoryTree(ctx.tenantId);
     return NextResponse.json({ data: tree });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -63,8 +63,8 @@ export async function POST(req: NextRequest) {
     }).returning();
 
     return NextResponse.json({ data: row }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -101,8 +101,8 @@ export async function PUT(req: NextRequest) {
     }
 
     return NextResponse.json({ data: row });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
@@ -135,8 +135,8 @@ export async function DELETE(req: NextRequest) {
     }
 
     return NextResponse.json({ data: { id, deleted: true } });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

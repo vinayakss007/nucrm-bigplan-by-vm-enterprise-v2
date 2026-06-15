@@ -146,8 +146,6 @@ export default function SuperAdminDataExplorer() {
   const [page, setPage] = useState(1);
   const [showEditModal, setShowEditModal] = useState(false);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editTarget, setEditTarget] = useState<{ table: string; id: string; field: string; value: any } | null>(null);
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState(true);
@@ -189,8 +187,6 @@ export default function SuperAdminDataExplorer() {
     }
   }, [query, searchType, tenantFilter, page]);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleEdit = (table: string, id: string, field: string, currentValue: any) => {
     setEditTarget({ table, id, field, value: currentValue });
@@ -367,8 +363,6 @@ export default function SuperAdminDataExplorer() {
               onToggle={() => setExpandedTable(expandedTable === 'tenants' ? null : 'tenants')}
               columns={['ID', 'Name', 'Subdomain', 'Plan', 'Status', 'Contacts', 'Created', 'Actions']}
               data={results.results.tenants.data.slice(0, expandedTable === 'tenants' ? undefined : 5)}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
               renderRow={(item: any) => (
                 <>
@@ -697,8 +691,6 @@ function DataTable({ title, icon, count, isExpanded, onToggle, columns, data, re
   isExpanded: boolean;
   onToggle: () => void;
   columns: string[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any[];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

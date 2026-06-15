@@ -20,8 +20,8 @@ export async function cacheGet<T>(key: string): Promise<T | null> {
 /**
  * Set a cached value with TTL
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function cacheSet(key: string, data: any, ttl = DEFAULT_TTL): Promise<void> {
   await cache.set(key, data, ttl);

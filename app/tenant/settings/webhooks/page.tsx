@@ -12,17 +12,13 @@ const WEBHOOK_EVENTS = [
 
 export default function WebhooksPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [webhooks, setWebhooks]   = useState<any[]>([]);
   const [loading, setLoading]     = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit]   = useState(false);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editingWebhook, setEditingWebhook] = useState<any>(null);
   const [expanded, setExpanded]   = useState<string|null>(null);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [deliveries, setDeliveries] = useState<Record<string,any[]>>({});
   const [saving, setSaving]       = useState(false);
@@ -81,8 +77,6 @@ export default function WebhooksPage() {
     setSaving(false);
   };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const startEdit = (wh: any) => {
     setEditingWebhook(wh);

@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
       data: rows,
       count: rows.length,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Duplicates] POST error:', error);
@@ -102,8 +102,8 @@ export async function GET(request: NextRequest) {
       data: duplicates,
       count: duplicates.length,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Duplicates] GET error:', error);

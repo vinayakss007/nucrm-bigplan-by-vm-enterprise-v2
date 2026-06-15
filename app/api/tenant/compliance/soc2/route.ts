@@ -28,8 +28,8 @@ export async function GET(req: NextRequest) {
       .limit(50);
 
     return NextResponse.json({ data: reports });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }
@@ -68,18 +68,20 @@ export async function POST(req: NextRequest) {
           result: report as unknown as Record<string, unknown>,
         })
         .where(eq(complianceRequests.id, request!.id));
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('[compliance/soc2]', msg);
       await db.update(complianceRequests)
         .set({
           status: 'failed',
-          errorMessage: err.message,
+          errorMessage: msg,
         })
         .where(eq(complianceRequests.id, request!.id));
 
-      return NextResponse.json({ error: 'Report generation failed', detail: err.message }, { status: 500 });
+      return NextResponse.json({ error: 'Report generation failed' }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -90,8 +92,8 @@ export async function POST(req: NextRequest) {
         report,
       },
     }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }

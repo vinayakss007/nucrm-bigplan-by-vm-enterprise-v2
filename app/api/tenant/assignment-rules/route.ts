@@ -26,8 +26,8 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(assignmentRules.priority));
 
     return NextResponse.json({ data: rules });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }
@@ -66,8 +66,8 @@ export async function POST(req: NextRequest) {
     }).returning();
 
     return NextResponse.json({ data: rule }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }
@@ -106,8 +106,8 @@ export async function PUT(req: NextRequest) {
     }
 
     return NextResponse.json({ data: updated });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }
@@ -139,8 +139,8 @@ export async function DELETE(req: NextRequest) {
     }
 
     return NextResponse.json({ data: { id, deleted: true } });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
 }

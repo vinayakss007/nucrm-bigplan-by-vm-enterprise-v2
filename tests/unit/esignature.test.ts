@@ -18,8 +18,6 @@ vi.mock('@/drizzle/schema/esignature', () => ({
 
 vi.mock('drizzle-orm', () => ({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   eq: vi.fn((...args: any[]) => ['eq', ...args]),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   and: vi.fn((...args: any[]) => ['and', ...args]),
@@ -60,8 +58,6 @@ describe('E-Signature - Provider Adapter Factory', () => {
 
   it('throws for unknown provider', async () => {
     const { getProviderAdapter } = await import('@/lib/esignature');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(() => getProviderAdapter('unknown' as any)).toThrow('Unsupported signing provider');
   });
@@ -263,8 +259,6 @@ describe('E-Signature - createSigningRequest', () => {
 
   it('creates a signing request and returns structured result', async () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.insert as any).mockReturnValue({
       values: vi.fn().mockReturnValue({
         returning: vi.fn().mockResolvedValue([{
@@ -290,8 +284,6 @@ describe('E-Signature - createSigningRequest', () => {
   });
 
   it('handles multiple signers', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.insert as any).mockReturnValue({
       values: vi.fn().mockReturnValue({
@@ -322,8 +314,6 @@ describe('E-Signature - getSigningStatus', () => {
 
   it('returns signing request when found', async () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.query.signingRequests.findFirst as any).mockResolvedValue({
       id: 'req-1', tenantId: 'tenant-1', documentId: 'doc-1',
       provider: 'internal', status: 'signed', externalId: 'ext-1',
@@ -340,8 +330,6 @@ describe('E-Signature - getSigningStatus', () => {
 
   it('returns null when request not found', async () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.query.signingRequests.findFirst as any).mockResolvedValue(null);
 
     const { getSigningStatus } = await import('@/lib/esignature');
@@ -351,8 +339,6 @@ describe('E-Signature - getSigningStatus', () => {
   });
 
   it('handles null signers gracefully', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.query.signingRequests.findFirst as any).mockResolvedValue({
       id: 'req-1', tenantId: 'tenant-1', documentId: 'doc-1',
@@ -376,8 +362,6 @@ describe('E-Signature - handleSigningWebhook', () => {
 
   it('returns updated:false when request not found', async () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.query.signingRequests.findFirst as any).mockResolvedValue(null);
 
     const { handleSigningWebhook } = await import('@/lib/esignature');
@@ -391,21 +375,15 @@ describe('E-Signature - handleSigningWebhook', () => {
 
   it('updates status when request found and records event', async () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.query.signingRequests.findFirst as any).mockResolvedValue({
       id: 'req-1', tenantId: 'tenant-1', status: 'sent',
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.update as any).mockReturnValue({
       set: vi.fn().mockReturnValue({
         where: vi.fn().mockResolvedValue([{ id: 'req-1' }]),
       }),
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.insert as any).mockReturnValue({
       values: vi.fn().mockReturnValue({
@@ -426,19 +404,13 @@ describe('E-Signature - handleSigningWebhook', () => {
 
   it('handles viewed webhook event', async () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.query.signingRequests.findFirst as any).mockResolvedValue({
       id: 'req-1', tenantId: 'tenant-1', status: 'sent',
     });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.update as any).mockReturnValue({
       set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([]) }),
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.insert as any).mockReturnValue({
       values: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'ev-1' }]) }),
@@ -455,19 +427,13 @@ describe('E-Signature - handleSigningWebhook', () => {
 
   it('handles declined webhook event', async () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.query.signingRequests.findFirst as any).mockResolvedValue({
       id: 'req-1', tenantId: 'tenant-1', status: 'sent',
     });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.update as any).mockReturnValue({
       set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([]) }),
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.insert as any).mockReturnValue({
       values: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'ev-2' }]) }),

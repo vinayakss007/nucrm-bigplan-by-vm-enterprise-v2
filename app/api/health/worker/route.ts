@@ -33,13 +33,14 @@ export async function GET() {
       all_workers_running: allRunning,
       timestamp: new Date().toISOString(),
     }, { status: allRunning ? 200 : 200 });
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[health/worker]', msg);
     return NextResponse.json({
       status: 'error',
-      message: err.message,
       timestamp: new Date().toISOString(),
     }, { status: 503 });
   } finally {

@@ -30,8 +30,6 @@ interface DataTableProps<T> {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function DataTableInner<T extends Record<string, any>>({
   data,
   columns,

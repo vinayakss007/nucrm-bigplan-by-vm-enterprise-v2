@@ -199,8 +199,8 @@ export async function POST(request: NextRequest) {
       message: 'Thank you! We will be in touch.',
     }, { status: 201 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     logError({ error: err, context: 'leads/public' }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));

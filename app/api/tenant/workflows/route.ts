@@ -43,8 +43,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       data,
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Workflows] GET error:', error);
@@ -101,8 +101,8 @@ export async function POST(request: NextRequest) {
 
       // 2. Create actions if provided
       if (actions.length > 0) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const actionValues = actions.map((action: any, index: number) => ({
           workflowId: newWorkflow.id,
@@ -123,8 +123,8 @@ export async function POST(request: NextRequest) {
       ok: true,
       data: result,
     }, { status: 201 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[Workflows] POST error:', error);

@@ -9,8 +9,6 @@ function AcceptInviteContent() {
   const token = params.get('token');
   const router = useRouter();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [invitation, setInvitation] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

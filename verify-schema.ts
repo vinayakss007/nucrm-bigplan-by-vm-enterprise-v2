@@ -5,15 +5,11 @@ async function verify() {
   console.log('🚀 Starting Schema Validation Scan...');
   
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tables = Object.keys(schema).filter(key => typeof (schema as any)[key] === 'object');
   console.log(`📊 Found ${tables.length} exported schema entities.`);
 
   // Basic check for table definitions
   for (const tableName of tables) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const table = (schema as any)[tableName];
     if (table && typeof table.getColumns === 'function') {

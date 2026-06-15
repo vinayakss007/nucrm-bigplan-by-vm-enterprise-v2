@@ -26,8 +26,6 @@ interface ApprovalRule {
   name: string;
   entityType: string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   conditions: Record<string, any>;
   approvers: string[];
   isActive: boolean;
@@ -49,9 +47,9 @@ export default function RBACSettingsPage() {
     setLoading(true);
     try {
       const [fpRes, rpRes, arRes] = await Promise.all([
-        fetch('/api/tenant/rbac/field-permissions').catch(() => null),
-        fetch('/api/tenant/rbac/record-permissions').catch(() => null),
-        fetch('/api/tenant/rbac/approval-rules').catch(() => null),
+        fetch('/api/tenant/rbac/field-permissions').catch((e) => { console.error('[rbac] field-permissions fetch failed:', e); return null; }),
+        fetch('/api/tenant/rbac/record-permissions').catch((e) => { console.error('[rbac] record-permissions fetch failed:', e); return null; }),
+        fetch('/api/tenant/rbac/approval-rules').catch((e) => { console.error('[rbac] approval-rules fetch failed:', e); return null; }),
       ]);
 
       if (fpRes?.ok) {
