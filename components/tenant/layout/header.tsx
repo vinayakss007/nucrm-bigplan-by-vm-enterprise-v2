@@ -207,7 +207,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
               <div className="px-4 py-5 text-center text-sm text-muted-foreground">No results for "{query}"</div>
             ) : (
               <>
-                {results?.leads?.length>0 && <>
+                {((results?.leads?.length ?? 0) > 0) && <>
                   <div className="px-4 py-1.5 bg-muted/30 border-b border-border text-[10px] font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><UserCheck className="w-3 h-3"/>Leads</div>
                   {results?.leads?.map((l) => (
                     <Link key={l.id} href={`/tenant/leads/${l.id}`} onClick={()=>{setShowDrop(false);setQuery('');setResults(null);}}
@@ -217,7 +217,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
                     </Link>
                   ))}
                 </>}
-                {results?.contacts?.length>0 && <>
+                {((results?.contacts?.length ?? 0) > 0) && <>
                   <div className="px-4 py-1.5 bg-muted/30 border-b border-border text-[10px] font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><Users className="w-3 h-3"/>Contacts</div>
                   {results?.contacts?.map((c) => (
                     <Link key={c.id} href={`/tenant/contacts/${c.id}`} onClick={()=>{setShowDrop(false);setQuery('');setResults(null);}}
@@ -227,7 +227,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
                     </Link>
                   ))}
                 </>}
-                {results?.deals?.length>0 && <>
+                {((results?.deals?.length ?? 0) > 0) && <>
                   <div className="px-4 py-1.5 bg-muted/30 border-b border-border text-[10px] font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><TrendingUp className="w-3 h-3"/>Deals</div>
                   {results?.deals?.map((d) => (
                     <Link key={d.id} href="/tenant/deals" onClick={()=>{setShowDrop(false);setQuery('');setResults(null);}}
@@ -238,7 +238,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
                     </Link>
                   ))}
                 </>}
-                {results?.companies?.length>0 && <>
+                {((results?.companies?.length ?? 0) > 0) && <>
                   <div className="px-4 py-1.5 bg-muted/30 border-b border-border text-[10px] font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><Building2 className="w-3 h-3"/>Companies</div>
                   {results?.companies?.map((c) => (
                     <Link key={c.id} href={`/tenant/companies/${c.id}`} onClick={()=>{setShowDrop(false);setQuery('');setResults(null);}}
@@ -248,7 +248,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
                     </Link>
                   ))}
                 </>}
-                {results?.tasks?.length>0 && <>
+                {((results?.tasks?.length ?? 0) > 0) && <>
                   <div className="px-4 py-1.5 bg-muted/30 border-b border-border text-[10px] font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><CheckSquare className="w-3 h-3"/>Tasks</div>
                   {results?.tasks?.map((t) => (
                     <Link key={t.id} href="/tenant/tasks" onClick={()=>{setShowDrop(false);setQuery('');setResults(null);}}

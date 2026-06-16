@@ -219,7 +219,7 @@ export default function SearchPage() {
       {results && !loading && total > 0 && (
         <div className="space-y-5">
           {/* Contacts */}
-          {(activeType === 'all' || activeType === 'contacts') && results.contacts?.length > 0 && (
+          {(activeType === 'all' || activeType === 'contacts') && (results.contacts?.length ?? 0) > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <Users className="w-4 h-4 text-muted-foreground" />
@@ -252,7 +252,7 @@ export default function SearchPage() {
           )}
 
           {/* Leads (separate table) */}
-          {(activeType === 'all' || activeType === 'leads') && results.leads?.length > 0 && (
+          {(activeType === 'all' || activeType === 'leads') && (results.leads?.length ?? 0) > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <Target className="w-4 h-4 text-muted-foreground" />
@@ -285,7 +285,7 @@ export default function SearchPage() {
           )}
 
           {/* Deals */}
-          {(activeType === 'all' || activeType === 'deals') && results.deals?.length > 0 && (
+          {(activeType === 'all' || activeType === 'deals') && (results.deals?.length ?? 0) > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <TrendingUp className="w-4 h-4 text-muted-foreground" />
@@ -316,7 +316,7 @@ export default function SearchPage() {
           )}
 
           {/* Companies */}
-          {(activeType === 'all' || activeType === 'companies') && results.companies?.length > 0 && (
+          {(activeType === 'all' || activeType === 'companies') && (results.companies?.length ?? 0) > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <Building2 className="w-4 h-4 text-muted-foreground" />
@@ -342,7 +342,7 @@ export default function SearchPage() {
           )}
 
           {/* Tasks */}
-          {(activeType === 'all' || activeType === 'tasks') && results.tasks?.length > 0 && (
+          {(activeType === 'all' || activeType === 'tasks') && (results.tasks?.length ?? 0) > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <CheckSquare className="w-4 h-4 text-muted-foreground" />

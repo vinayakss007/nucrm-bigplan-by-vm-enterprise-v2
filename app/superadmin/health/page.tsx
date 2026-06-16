@@ -129,7 +129,7 @@ export default function HealthPage() {
                   <p className="text-sm font-semibold text-white capitalize">{c.service}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {c.latency_ms > 0 && <span className="text-[10px] text-white/30">{c.latency_ms}ms</span>}
+                  {(c.latency_ms ?? 0) > 0 && <span className="text-[10px] text-white/30">{c.latency_ms}ms</span>}
                   <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full uppercase', c.status==='up'?'bg-emerald-500/15 text-emerald-400':'bg-red-500/15 text-red-400')}>
                     {c.status}
                   </span>
@@ -141,14 +141,14 @@ export default function HealthPage() {
         })}
 
         {/* Schema check */}
-        {appHealth?.missing_tables?.length > 0 && (
+        {(appHealth?.missing_tables?.length ?? 0) > 0 && (
           <div className={cn('rounded-xl border p-4 sm:col-span-2', STATUS_CFG['down']!.bg)}>
             <div className="flex items-center gap-2 mb-2">
               <XCircle className="w-4 h-4 text-red-400"/>
               <p className="text-sm font-semibold text-white">Missing Database Tables</p>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {appHealth.missing_tables.map((t:string) => (
+              {appHealth?.missing_tables?.map((t:string) => (
                 <span key={t} className="text-[10px] font-mono bg-red-500/10 text-red-400 px-2 py-0.5 rounded">{t}</span>
               ))}
             </div>

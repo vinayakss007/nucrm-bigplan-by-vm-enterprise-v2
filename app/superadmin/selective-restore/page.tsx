@@ -900,7 +900,7 @@ export default function SelectiveRestorePage() {
               </div>
 
               {/* Progress Bar */}
-              {restoreProgress.totalCount > 0 && (
+              {(restoreProgress.totalCount ?? 0) > 0 && (
                 <div className="w-full bg-gray-800 rounded-full h-3 overflow-hidden">
                   <div
                     className={`h-full transition-all duration-300 ${
@@ -908,14 +908,14 @@ export default function SelectiveRestorePage() {
                       restoreProgress.status === 'failed' ? 'bg-red-500' :
                       'bg-blue-500'
                     }`}
-                    style={{ width: `${(restoreProgress.currentCount / restoreProgress.totalCount) * 100}%` }}
+                    style={{ width: `${((restoreProgress.currentCount ?? 0) / (restoreProgress.totalCount ?? 1)) * 100}%` }}
                   />
                 </div>
               )}
 
-              {restoreProgress.totalCount > 0 && (
+              {(restoreProgress.totalCount ?? 0) > 0 && (
                 <p className="text-gray-500 text-sm mt-2">
-                  {restoreProgress.currentCount.toLocaleString()} / {restoreProgress.totalCount.toLocaleString()} statements
+                  {(restoreProgress.currentCount ?? 0).toLocaleString()} / {(restoreProgress.totalCount ?? 0).toLocaleString()} statements
                   {restoreProgress.currentTable && ` (${restoreProgress.currentTable})`}
                 </p>
               )}
@@ -930,7 +930,7 @@ export default function SelectiveRestorePage() {
                   <div>
                     <p className="text-green-300 font-medium">Restore completed successfully</p>
                     <p className="text-green-400/80 text-sm mt-1">
-                      Duration: {(restoreResult.duration_ms / 1000).toFixed(1)}s
+                      Duration: {((restoreResult.duration_ms ?? 0) / 1000).toFixed(1)}s
                     </p>
                     {restoreResult.records_per_table && (
                       <div className="mt-3">

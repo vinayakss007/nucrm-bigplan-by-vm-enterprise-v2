@@ -56,7 +56,7 @@ export default function TenantSettingsAuditPage() {
     fetch(`/api/superadmin/tenant-settings?tenant_id=${params.id}`)
       .then(r => r.ok ? r.json() : Promise.reject(r))
       .then(setData)
-      .catch((err) => { console.error('[tenant-settings] fetch failed', err); setData({ error: true }); })
+      .catch((err) => { console.error('[tenant-settings] fetch failed', err); setData({ error: true } as unknown as PageData | null); })
       .finally(() => setLoading(false));
   }, [params?.id]);
 
@@ -212,10 +212,10 @@ export default function TenantSettingsAuditPage() {
       </Section>
 
       {/* Other keys */}
-      {s.other_keys?.length > 0 && (
+      {(s.other_keys?.length ?? 0) > 0 && (
         <div className="rounded-xl border border-dashed border-border p-4 text-xs">
           <p className="font-semibold text-muted-foreground mb-1">Other settings keys present:</p>
-          <p className="font-mono text-muted-foreground/80">{s.other_keys.join(', ')}</p>
+          <p className="font-mono text-muted-foreground/80">{s.other_keys?.join(', ')}</p>
         </div>
       )}
     </div>

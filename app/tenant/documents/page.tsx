@@ -47,7 +47,6 @@ export default function DocumentsPage() {
       console.error('[documents] failed to load', err);
     }
     setLoading(false);
-    }
   }, [currentFolder]);
 
   useEffect(() => { loadDocuments(); }, [loadDocuments]);
