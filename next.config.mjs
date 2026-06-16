@@ -3,7 +3,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 let nextConfig = {
-  allowedDevOrigins: ['localhost:3000'],
+  allowedDevOrigins: ['localhost:3000', '34.58.9.237'],
   typescript: { ignoreBuildErrors: false },
   devIndicators: { buildActivity: false },
   cacheMaxMemorySize: 50 * 1024 * 1024,
