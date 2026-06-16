@@ -89,11 +89,7 @@ export default function PipelinesSettingsPage() {
   const updateStage = (idx: number, field: string, val: unknown) => {
     if (!selected) return;
     const stages = selected.stages.map((s: Stage, i: number) =>
-<<<<<<< HEAD
       i === idx ? { ...s, [field]: field === 'probability' ? parseInt(String(val))||0 : val } : s
-=======
-      i === idx ? { ...s, [field]: field === 'probability' ? parseInt(val)||0 : val } : s
->>>>>>> bc1f7c6 (fix: type safety & error handling polish across 82 pages and components)
     );
     setSelected({ ...selected, stages });
   };
