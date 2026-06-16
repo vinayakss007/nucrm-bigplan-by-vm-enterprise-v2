@@ -117,8 +117,8 @@ export default function TenantBackupSettingsPage() {
           setBkType(d.data.backup_type || 'full');
         }
       }
-    } catch {
-      // silently fail – user can configure fresh
+    } catch (err) {
+      console.error('[backup] failed to load config', err);
     }
     setLoaded(true);
   }, []);
@@ -131,8 +131,8 @@ export default function TenantBackupSettingsPage() {
         const d = await res.json();
         setBackups(d.backups || []);
       }
-    } catch {
-      // silently fail
+    } catch (err) {
+      console.error('[backup] failed to load backups', err);
     }
     setLoadingBackups(false);
   }, []);

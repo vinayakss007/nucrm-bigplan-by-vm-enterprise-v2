@@ -64,8 +64,8 @@ export default function SSOSettingsPage() {
           });
         }
       }
-    } catch {
-      // Use defaults
+    } catch (err) {
+      console.error('[sso] failed to load SSO config', err);
     } finally {
       setLoading(false);
     }

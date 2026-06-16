@@ -130,8 +130,8 @@ export async function GET(request: NextRequest) {
     if (raw.secret_key_encrypted) {
       try {
         _decryptedSecret = decrypt(raw.secret_key_encrypted);
-      } catch {
-        // If decryption fails, leave it empty
+      } catch (err) {
+        console.error('[backup] decryption failed', err);
       }
     }
 

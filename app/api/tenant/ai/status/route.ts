@@ -91,8 +91,8 @@ export async function GET(req: NextRequest) {
     try {
       const atRiskDeals = await getAtRiskDeals(ctx.tenantId);
       at_risk_count = atRiskDeals.length;
-    } catch {
-      // Fallback if rules table missing or other error
+    } catch (err) {
+      console.error('[ai] status rules fetch error', err);
     }
 
     return NextResponse.json({

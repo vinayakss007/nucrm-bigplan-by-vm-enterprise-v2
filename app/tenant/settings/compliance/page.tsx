@@ -58,8 +58,8 @@ export default function ComplianceSettingsPage() {
         const { data } = await soc2Res.json();
         setSoc2Reports(data || []);
       }
-    } catch {
-      // Defaults on error
+    } catch (err) {
+      console.error('[compliance] failed to load data', err);
     } finally {
       setLoading(false);
     }
