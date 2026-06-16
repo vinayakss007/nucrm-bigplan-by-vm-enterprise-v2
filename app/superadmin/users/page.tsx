@@ -196,7 +196,11 @@ export default function SuperAdminUsersPage() {
                   </div>
                 </td>
                 <td className="px-4 py-3">
+<<<<<<< HEAD
                   {(u.memberships??[]).slice(0,3).map((m,i)=>(
+=======
+                  {(u.memberships||[]).slice(0,3).map((m,i)=>(
+>>>>>>> bc1f7c6 (fix: type safety & error handling polish across 82 pages and components)
                     <div key={i} className="text-xs text-muted-foreground">{m.tenant_name} <span className="text-muted-foreground/50">({m.plan})</span></div>
                   ))}
                   {((u.memberships??[]).length)>3&&<p className="text-[10px] text-muted-foreground/40">+{(u.memberships??[]).length-3} more</p>}
