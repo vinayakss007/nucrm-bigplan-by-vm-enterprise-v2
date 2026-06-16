@@ -98,7 +98,7 @@ export default function TenantModulesPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-white">{mod.name}</p>
-                      <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full capitalize', CAT_COLORS[mod.category] || CAT_COLORS['utility'])}>
+                      <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full capitalize', CAT_COLORS[mod.category ?? 'utility'] || CAT_COLORS['utility'])}>
                         {mod.category}
                       </span>
                     </div>
@@ -107,7 +107,7 @@ export default function TenantModulesPage() {
                       {mod.features?.slice(0, 4).map((f: string) => (
                         <span key={f} className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-white/30">{f}</span>
                       ))}
-                      {mod.features?.length > 4 && (
+                      {mod.features && mod.features.length > 4 && (
                         <span className="text-[9px] text-white/20">+{mod.features.length - 4} more</span>
                       )}
                     </div>

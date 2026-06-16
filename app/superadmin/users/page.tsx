@@ -196,11 +196,11 @@ export default function SuperAdminUsersPage() {
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  {(u.memberships||[]).slice(0,3).map((m,i)=>(
+                  {(u.memberships??[]).slice(0,3).map((m,i)=>(
                     <div key={i} className="text-xs text-muted-foreground">{m.tenant_name} <span className="text-muted-foreground/50">({m.plan})</span></div>
                   ))}
-                  {(u.memberships||[]).length>3&&<p className="text-[10px] text-muted-foreground/40">+{u.memberships.length-3} more</p>}
-                  {!u.memberships?.length&&<p className="text-xs text-muted-foreground/30">No workspaces</p>}
+                  {((u.memberships??[]).length)>3&&<p className="text-[10px] text-muted-foreground/40">+{(u.memberships??[]).length-3} more</p>}
+                  {!(u.memberships??[]).length&&<p className="text-xs text-muted-foreground/30">No workspaces</p>}
                 </td>
                 <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(u.created_at)}</td>
                 <td className="px-4 py-3">

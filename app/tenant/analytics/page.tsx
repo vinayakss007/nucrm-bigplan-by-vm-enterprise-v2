@@ -56,7 +56,7 @@ export default function TenantAnalyticsPage() {
   // Add stage name to deals for easy filtering
   const dealsWithStage = deals.map(d => ({
     ...d,
-    stageName: d.stage_name || getStageName(d.stageId) || '',
+    stageName: d.stage_name || getStageName(d.stageId ?? '') || '',
     value: d.amount || d.value || 0, // Support both field names
   }));
 

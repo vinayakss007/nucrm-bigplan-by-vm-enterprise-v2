@@ -61,8 +61,13 @@ export default function UsagePage() {
   const tenants = (data?.tenantUsage ?? [])
     .filter((t) => !search || t.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
-      const av = a['current_'+sortBy] || 0;
-      const bv = b['current_'+sortBy] || 0;
+      const getVal = (t: TenantUsage, key: typeof sortBy) => {
+        if (key === 'contacts') return t.current_contacts ?? 0;
+        if (key === 'deals') return t.current_deals ?? 0;
+        return t.current_users ?? 0;
+      };
+      const av = getVal(a, sortBy);
+      const bv = getVal(b, sortBy);
       return sortDir === 'desc' ? bv - av : av - bv;
     });
 
@@ -98,7 +103,7 @@ export default function UsagePage() {
       )}
 
       {/* Growth chart */}
-      {(data?.growth??[]).length > 0 && (
+      {data?.growth && data.growth.length > 0 && (
         <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
           <p className="text-sm font-semibold text-white mb-4">Platform-wide Growth (30 days)</p>
           <ResponsiveContainer width="100%" height={140}>
