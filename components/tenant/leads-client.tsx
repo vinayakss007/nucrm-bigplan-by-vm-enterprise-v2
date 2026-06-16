@@ -405,10 +405,7 @@ export default function LeadsClient({
                 className="w-full px-3 py-2 rounded-lg border border-border bg-card"
               >
                 <option value="">Select company (optional)</option>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {companies.map((c: any) => (
+                {companies.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>

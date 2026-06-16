@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, Calendar, DollarSign, FileText, User } from 'lucide-react';
@@ -42,7 +42,7 @@ export default function ContractDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Contract>>({});
 
-  const fetchContract = async () => {
+  const fetchContract = useCallback(async () => {
     try {
       const res = await fetch(`/api/tenant/contracts/${id}`);
       if (!res.ok) throw new Error('Not found');
@@ -53,9 +53,9 @@ export default function ContractDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  useEffect(() => { fetchContract(); }, [id, fetchContract]);
+  useEffect(() => { fetchContract(); }, [fetchContract]);
 
   const handleEdit = () => {
     if (contract) {

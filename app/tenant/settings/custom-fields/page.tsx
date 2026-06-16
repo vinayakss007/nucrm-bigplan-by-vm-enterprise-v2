@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Plus,
   Trash2,
@@ -47,6 +47,20 @@ interface Feature {
   registered_at: string;
 }
 
+interface FieldFormData {
+  fieldId?: string;
+  fieldKey: string;
+  fieldLabel: string;
+  fieldType: string;
+  fieldOptions?: string[];
+  isRequired: boolean;
+  isSearchable: boolean;
+  isCalculated: boolean;
+  formula?: string;
+  defaultValue?: string;
+  displayOrder: number;
+}
+
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 export default function TenantCustomFields() {
@@ -59,7 +73,7 @@ export default function TenantCustomFields() {
   const [editingField, setEditingField] = useState<CustomField | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  const loadFields = async () => {
+  const loadFields = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/tenant/custom-fields?entityType=${entityType}`);
@@ -70,9 +84,9 @@ export default function TenantCustomFields() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [entityType]);
 
-  const loadFeatures = async () => {
+  const loadFeatures = useCallback(async () => {
     try {
       const res = await fetch('/api/tenant/custom-fields?action=features');
       const data = await res.json();
@@ -80,15 +94,14 @@ export default function TenantCustomFields() {
     } catch (err) {
       console.error('Failed to load features:', err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadFields();
     loadFeatures();
-  }, [entityType, loadFields]);
+  }, [entityType, loadFields, loadFeatures]);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleCreate = async (fieldData: any) => {
+  const handleCreate = async (fieldData: FieldFormData) => {
     try {
       const res = await fetch('/api/tenant/custom-fields', {
         method: 'POST',
@@ -105,8 +118,7 @@ export default function TenantCustomFields() {
     }
   };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleUpdate = async (fieldData: any) => {
+  const handleUpdate = async (fieldData: FieldFormData) => {
     if (!editingField) return;
     try {
       const res = await fetch('/api/tenant/custom-fields', {
@@ -137,7 +149,7 @@ export default function TenantCustomFields() {
   useEffect(() => {
     loadFields();
     loadFeatures();
-  }, [entityType, loadFields]);
+  }, [entityType, loadFields, loadFeatures]);
 
   const ENTITY_TYPES = [
     { value: 'contact', label: 'Contacts', icon: '👤' },
@@ -433,8 +445,7 @@ function FieldFormModal({ mode, field, fieldTypes, onClose, onSubmit }: {
   field?: CustomField;
   fieldTypes: { value: string; label: string; example: string }[];
   onClose: () => void;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onSubmit: (data: any) => void;
+  onSubmit: (data: FieldFormData) => void;
 }) {
   const [fieldKey, setFieldKey] = useState(field?.field_key || '');
   const [fieldLabel, setFieldLabel] = useState(field?.field_label || '');

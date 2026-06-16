@@ -60,11 +60,11 @@ async function main() {
   }
 
   const report = JSON.parse(readFileSync(jsonPath, 'utf-8'));
-  const cats = report.categories;
+  const cats = report.categories as Record<string, { score: number }>;
   const scores: Record<string, number> = {};
 
   console.log('──────────────────────────────────────────────');
-  for (const [key, cat] of Object.entries(cats) as [string, any][]) {
+  for (const [key, cat] of Object.entries(cats)) {
     const score = Math.round(cat.score * 100);
     scores[key] = score;
     const bar = '█'.repeat(Math.round(score / 10)) + '░'.repeat(10 - Math.round(score / 10));

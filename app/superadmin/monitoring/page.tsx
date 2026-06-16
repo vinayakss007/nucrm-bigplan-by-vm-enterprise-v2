@@ -7,15 +7,38 @@ import {
 import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
+interface HealthData {
+  status?: string;
+  db?: string;
+  db_latency_ms?: number;
+  schema_ready?: boolean;
+  uptime_s?: number;
+  node?: string;
+  missing_tables?: string[];
+}
+
+interface MonitoringData {
+  stats?: {
+    mrr?: number;
+    active_tenants?: number;
+    total_users?: number;
+    unresolved_errors?: number;
+  };
+  planDist?: Array<{ name: string; tenant_count: number; price_monthly: number }>;
+  tenantGrowth?: Array<{ day: string; count: number }>;
+  backupStatus?: { total?: number; completed?: number; failed?: number; running?: number };
+  restoreStatus?: { total?: number; pending?: number; running?: number; completed?: number; failed?: number };
+  recentBackups?: Array<{ id: string; status: string; backup_name?: string; size_bytes?: number; created_at: string }>;
+  recentErrors?: Array<{ id: string; level: string; message: string; created_at: string }>;
+}
+
 const CHART_STYLE = { background:'transparent' };
 const TICK_STYLE  = { fill:'rgba(255,255,255,0.3)', fontSize:10 };
 const TIP_STYLE   = { background:'hsl(222,32%,9%)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, fontSize:11 };
 
 export default function MonitoringPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [data, setData]         = useState<any>(null);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [health, setHealth]     = useState<any>(null);
+  const [data, setData]         = useState<MonitoringData | null>(null);
+  const [health, setHealth]     = useState<HealthData | null>(null);
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
@@ -39,8 +62,7 @@ export default function MonitoringPage() {
   const hs = health ?? {};
   const allUp = hs.status==='ok';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const Metric = ({ label, value, icon:Icon, color, sub }:any) => (
+  const Metric = ({ label, value, icon:Icon, color, sub }: { label: string; value: string | number; icon: React.ComponentType<{ className?: string }>; color: string; sub?: string }) => (
     <div className="rounded-xl border border-white/10 bg-white/5 p-4">
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs text-white/40">{label}</p>
@@ -66,16 +88,14 @@ export default function MonitoringPage() {
   );
 
   // Plan distribution
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const planDist = (data?.planDist||[]).map((p:any) => ({
+  const planDist = (data?.planDist||[]).map((p) => ({
     name: p.name, count: p.tenant_count,
     revenue: Number(p.price_monthly) * Number(p.tenant_count),
   }));
 
   // Tenant growth — fill missing days
   const growthMap: Record<string,number> = {};
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (data?.tenantGrowth||[]).forEach((d:any) => { growthMap[d.day] = d.count; });
+  (data?.tenantGrowth||[]).forEach((d) => { growthMap[d.day] = d.count; });
   const last30 = Array.from({length:30},(_,i)=>{
     const d = new Date(); d.setDate(d.getDate()-29+i);
     const key: string = d.toISOString().split('T')[0] ?? '';
@@ -193,10 +213,7 @@ export default function MonitoringPage() {
         <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
           <p className="text-sm font-semibold text-white mb-4">Recent Backups</p>
           <div className="space-y-2">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            {(data.recentBackups || []).slice(0,5).map((b: any) => (
+            {(data?.recentBackups || []).slice(0,5).map((b) => (
               <div key={b.id} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-3">
                   <span className={cn(
@@ -266,10 +283,7 @@ export default function MonitoringPage() {
             <a href="/superadmin/docs" className="flex items-center gap-1 text-[10px] text-white/30 hover:text-white transition-colors"><Book className="w-3 h-3"/>DB Security</a>
           </div>
           <div className="space-y-2">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            {(data.recentErrors||[]).slice(0,5).map((e:any)=>(
+            {(data?.recentErrors||[]).slice(0,5).map((e)=>(
               <div key={e.id} className="flex items-start gap-3 text-xs">
                 <span className={cn('px-1.5 py-0.5 rounded font-bold shrink-0 uppercase',e.level==='fatal'?'bg-red-500/20 text-red-400':'bg-amber-500/20 text-amber-400')}>{e.level}</span>
                 <span className="text-white/60 flex-1 truncate">{e.message}</span>

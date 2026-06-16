@@ -103,7 +103,7 @@ export default function BackupsDataTable({ initialBackups }: Props) {
     }
   }
 
-  const deleteBackup = async (id: string) => {
+  const deleteBackup = useCallback(async (id: string) => {
     const res = await fetch(`/api/superadmin/backups/${id}`, {
       method: 'DELETE',
     })
@@ -113,7 +113,7 @@ export default function BackupsDataTable({ initialBackups }: Props) {
     } else {
       toast.error('Failed to delete')
     }
-  }
+  }, [loadData, pagination.pageIndex])
 
   const downloadBackup = async (id: string, _filePath: string) => {
     toast.success('Download started')
@@ -229,7 +229,7 @@ export default function BackupsDataTable({ initialBackups }: Props) {
         )
       },
     },
-  ], [pagination.pageIndex, loadData])
+  ], [deleteBackup])
 
   return (
     <div className="space-y-4 animate-fade-in">

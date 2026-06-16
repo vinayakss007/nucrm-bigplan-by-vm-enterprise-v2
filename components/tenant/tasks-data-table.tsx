@@ -38,15 +38,15 @@ interface Task {
   created_at: string
 }
 
+interface ContactOpt { id: string; first_name: string; last_name: string }
+interface DealOpt { id: string; title: string }
+interface TeamMemberOpt { user_id: string; full_name: string }
+
 interface Props {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  initialTasks: any[]
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  contacts: any[]
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  deals: any[]
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  teamMembers: any[]
+  initialTasks: Task[]
+  contacts: ContactOpt[]
+  deals: DealOpt[]
+  teamMembers: TeamMemberOpt[]
   permissions: { canCreate: boolean; canEdit: boolean; canDelete: boolean; canAssign: boolean }
 }
 
@@ -282,11 +282,10 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
         )
       },
     },
-  ], [pagination.pageIndex, loadData])
+  ], [pagination.pageIndex, loadData, today])
 
   // ── Bulk actions ──────────────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, any> = {}) => {
+  const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, unknown> = {}) => {
     const res = await fetch('/api/tenant/tasks/bulk', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -335,8 +334,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
       label: 'Assign',
       icon: <UserPlus className="w-3.5 h-3.5" />,
       requiresSelect: true,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      selectOptions: teamMembers.map((m: any) => ({ value: m.user_id, label: m.full_name })),
+      selectOptions: teamMembers.map((m) => ({ value: m.user_id, label: m.full_name })),
       onClick: async (ids: string[], input?: string) => {
         if (!input) return toast.error('Pick a teammate')
         await callBulk('assign', ids, { assigned_to: input })
@@ -441,10 +439,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
                 className={inp}
               >
                 <option value="">No contact</option>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {(contacts || []).map((c: any) => (
+                {(contacts || []).map((c) => (
                   <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
                 ))}
               </select>
@@ -457,10 +452,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
                 className={inp}
               >
                 <option value="">No deal</option>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {(deals || []).map((d: any) => (
+                {(deals || []).map((d) => (
                   <option key={d.id} value={d.id}>{d.title}</option>
                 ))}
               </select>
@@ -473,10 +465,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
                 className={inp}
               >
                 <option value="">Unassigned</option>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {(teamMembers || []).map((m: any) => (
+                {(teamMembers || []).map((m) => (
                   <option key={m.user_id} value={m.user_id}>{m.full_name}</option>
                 ))}
               </select>

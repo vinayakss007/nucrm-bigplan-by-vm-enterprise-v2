@@ -10,17 +10,32 @@ const WEBHOOK_EVENTS = [
   'task.created','task.completed','form.submitted',
 ];
 
+interface Webhook {
+  id: string;
+  name: string;
+  url: string;
+  is_active: boolean;
+  events: string[];
+  delivered_count?: number;
+  failed_count?: number;
+}
+
+interface Delivery {
+  id: string;
+  event: string;
+  status: string;
+  response_code?: number;
+  created_at: string;
+}
+
 export default function WebhooksPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [webhooks, setWebhooks]   = useState<any[]>([]);
+  const [webhooks, setWebhooks]   = useState<Webhook[]>([]);
   const [loading, setLoading]     = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit]   = useState(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [editingWebhook, setEditingWebhook] = useState<any>(null);
+  const [editingWebhook, setEditingWebhook] = useState<Webhook|null>(null);
   const [expanded, setExpanded]   = useState<string|null>(null);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [deliveries, setDeliveries] = useState<Record<string,any[]>>({});
+  const [deliveries, setDeliveries] = useState<Record<string,Delivery[]>>({});
   const [saving, setSaving]       = useState(false);
   const [form, setForm]           = useState({ name:'', url:'', events:[] as string[] });
   const [secretVisible, setSecretVisible] = useState<Record<string,string>>({});
@@ -64,7 +79,7 @@ export default function WebhooksPage() {
   };
 
   const edit = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true);
+    e.preventDefault(); if (!editingWebhook) return; setSaving(true);
     const res = await fetch(`/api/tenant/webhooks/${editingWebhook.id}`, {
       method:'PATCH', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(form),
@@ -77,8 +92,7 @@ export default function WebhooksPage() {
     setSaving(false);
   };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const startEdit = (wh: any) => {
+  const startEdit = (wh: Webhook) => {
     setEditingWebhook(wh);
     setForm({ name: wh.name, url: wh.url, events: wh.events || [] });
     setShowEdit(true);
@@ -281,10 +295,7 @@ export default function WebhooksPage() {
                       if (dels.length === 0) return <p className="text-xs text-muted-foreground py-2">No deliveries yet</p>;
                       return (
                         <div className="space-y-1.5">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          {dels.map((d: any) => (
+                          {dels.map((d: Delivery) => (
                           <div key={d.id} className="flex items-center gap-3 text-xs">
                             {d.status === 'delivered'
                               ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />

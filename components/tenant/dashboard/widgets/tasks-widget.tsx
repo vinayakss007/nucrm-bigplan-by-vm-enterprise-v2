@@ -17,9 +17,6 @@ export default function TasksWidget({ data }: WidgetProps) {
         <p className="text-xs font-medium text-muted-foreground/70 text-center py-5">No open tasks</p>
       ) : (
         <div className="divide-y divide-border">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           {items.slice(0, 5).map((t: any) => {
             const overdue = t.due_date && t.due_date < today;
             return (

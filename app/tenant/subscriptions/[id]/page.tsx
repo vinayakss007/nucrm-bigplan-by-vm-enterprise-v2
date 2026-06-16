@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, Calendar, DollarSign, CreditCard, RefreshCw, Pause, Play } from 'lucide-react';
@@ -44,7 +44,7 @@ export default function SubscriptionDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Subscription>>({});
 
-  const fetchSubscription = async () => {
+  const fetchSubscription = useCallback(async () => {
     try {
       const res = await fetch(`/api/tenant/subscriptions/${id}`);
       if (!res.ok) throw new Error('Not found');
@@ -55,7 +55,7 @@ export default function SubscriptionDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => { fetchSubscription(); }, [id, fetchSubscription]);
 
@@ -95,8 +95,7 @@ export default function SubscriptionDetailPage() {
     const newStatus = statusMap[action];
     if (action === 'cancel' && !confirm('Are you sure you want to cancel this subscription?')) return;
     try {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const body: Record<string, any> = { status: newStatus };
+      const body: Record<string, unknown> = { status: newStatus };
       if (action === 'cancel') body['cancelledAt'] = new Date().toISOString();
       const res = await fetch(`/api/tenant/subscriptions/${id}`, {
         method: 'PUT',

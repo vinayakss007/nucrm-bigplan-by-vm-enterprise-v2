@@ -13,12 +13,24 @@ const _DEFAULT_STAGES = [
   { id:'lost',        label:'Lost',        order:5, probability:0   },
 ];
 
+interface Stage {
+  id: string;
+  label: string;
+  order: number;
+  probability: number;
+}
+
+interface Pipeline {
+  id: string;
+  name: string;
+  is_default?: boolean;
+  stages: Stage[];
+}
+
 export default function PipelinesSettingsPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [pipelines, setPipelines] = useState<any[]>([]);
+  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [loading, setLoading] = useState(true);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [selected, setSelected] = useState<any|null>(null);
+  const [selected, setSelected] = useState<Pipeline|null>(null);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
@@ -68,17 +80,15 @@ export default function PipelinesSettingsPage() {
   };
 
   const removeStage = (idx: number) => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const stages = selected.stages.filter((_: any, i: number) => i !== idx)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((s: any, i: number) => ({ ...s, order: i }));
+    if (!selected) return;
+    const stages = selected.stages.filter((_: Stage, i: number) => i !== idx)
+      .map((s: Stage, i: number) => ({ ...s, order: i }));
     setSelected({ ...selected, stages });
   };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const updateStage = (idx: number, field: string, val: any) => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const stages = selected.stages.map((s: any, i: number) =>
+  const updateStage = (idx: number, field: string, val: unknown) => {
+    if (!selected) return;
+    const stages = selected.stages.map((s: Stage, i: number) =>
       i === idx ? { ...s, [field]: field === 'probability' ? parseInt(val)||0 : val } : s
     );
     setSelected({ ...selected, stages });
@@ -143,10 +153,7 @@ export default function PipelinesSettingsPage() {
                 </button>
               </div>
               <div className="space-y-2">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {(selected.stages ?? []).map((stage: any, i: number) => (
+                {(selected.stages ?? []).map((stage: Stage, i: number) => (
                   <div key={i} className="flex items-center gap-3">
                     <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
                     <input value={stage.label} onChange={e=>updateStage(i,'label',e.target.value)}

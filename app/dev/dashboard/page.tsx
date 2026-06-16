@@ -159,10 +159,7 @@ export default function DevelopmentDashboard() {
           <div className="text-right">
             <div className="flex items-center gap-2">
               <span className="px-3 py-1 bg-green-600 rounded-full text-sm font-bold">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {(data?.environment as any)?.['nodeEnv'] || 'development'}
+                {data?.environment?.['nodeEnv'] || 'development'}
               </span>
               <span className="px-3 py-1 bg-purple-600 rounded-full text-sm font-bold">
                 Super Admin Access
@@ -443,10 +440,7 @@ export default function DevelopmentDashboard() {
             </div>
             <div className="text-right">
               <div className="text-sm text-gray-400">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                Environment: <span className="text-green-400 font-mono">{(data?.environment as any)?.['nodeEnv']}</span>
+                Environment: <span className="text-green-400 font-mono">{data?.environment?.['nodeEnv']}</span>
               </div>
               <div className="text-xs text-gray-500 mt-1">
                 Production Access: <span className="text-red-400">Disabled</span>

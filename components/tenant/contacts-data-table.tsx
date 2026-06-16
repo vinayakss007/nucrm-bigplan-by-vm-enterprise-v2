@@ -150,7 +150,7 @@ export default function ContactsDataTable({
     }
     loadDataWithAbort()
     return () => abortController.abort()
-  }, [, globalFilter])
+  }, [pagination.pageSize, globalFilter])
 
   const columns: ColumnDef<Contact>[] = useMemo(() => [
     {
@@ -623,10 +623,7 @@ export default function ContactsDataTable({
                 className={inp}
               >
                 <option value="">No company</option>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {companies.map((c: any) => (
+                {companies.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>

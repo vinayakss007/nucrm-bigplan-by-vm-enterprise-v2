@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { MessageSquare, Plus, X, Loader2, Send, ArrowUpRight, ArrowDownLeft, FileText } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -48,7 +48,7 @@ export default function SmsPage() {
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -61,7 +61,7 @@ export default function SmsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
 
   const loadTemplates = async () => {
     try {

@@ -192,7 +192,7 @@ export function DataTable<TData, TValue>({
     const selectedRows = table.getFilteredSelectedRowModel().rows
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return selectedRows.map(row => row.original as any).map(row => row.id || row.id)
-  }, [rowSelection, table])
+  }, [table])
 
   const handleBulkAction = async (action: BulkAction) => {
     if (action.requiresConfirmation) {

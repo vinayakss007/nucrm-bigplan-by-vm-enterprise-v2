@@ -165,7 +165,7 @@ export default function ProjectsDataTable({ initialProjects, teamMembers, permis
     setSaving(false)
   }
 
-  const handleDelete = async (project: Project) => {
+  const handleDelete = useCallback(async (project: Project) => {
     await confirmThen(`Delete "${project.name}"?`, async () => {
       const res = await fetch(`/api/tenant/projects/${project.id}`, { method: 'DELETE' })
       if (res.ok) {
@@ -175,7 +175,7 @@ export default function ProjectsDataTable({ initialProjects, teamMembers, permis
         toast.error('Failed to delete project')
       }
     })
-  }
+  }, [loadData, pagination.pageIndex])
 
   const columns: ColumnDef<Project>[] = useMemo(() => [
     {
@@ -288,7 +288,7 @@ export default function ProjectsDataTable({ initialProjects, teamMembers, permis
         )
       },
     },
-  ], [permissions])
+  ], [permissions, handleDelete])
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
 

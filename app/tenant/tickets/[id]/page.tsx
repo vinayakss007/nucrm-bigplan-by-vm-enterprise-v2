@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, User, Clock, MessageSquare, Trash2, Send
 } from 'lucide-react';
@@ -29,16 +29,16 @@ export default function TicketDetailPage() {
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
 
-  const loadTicket = async () => {
+  const loadTicket = useCallback(async () => {
     try {
       const res = await fetch(`/api/tenant/tickets/${params['id']}`);
       if (!res.ok) { toast.error('Failed to load ticket'); router.push('/tenant/tickets'); return; }
       const d = await res.json();
       setTicket(d.data);
     } catch { toast.error('Failed to load'); } finally { setLoading(false); }
-  };
+  }, [params, router]);
 
-  useEffect(() => { loadTicket(); }, [params['id'], loadTicket]);
+  useEffect(() => { loadTicket(); }, [loadTicket]);
 
   const sendReply = async () => {
     if (!replyText.trim()) return;

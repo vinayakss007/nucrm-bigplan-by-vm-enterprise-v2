@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, FileText, Send, CheckCircle, XCircle, Calendar, ShoppingCart } from 'lucide-react';
@@ -45,7 +45,7 @@ export default function QuoteDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Quote>>({});
 
-  const fetchQuote = async () => {
+  const fetchQuote = useCallback(async () => {
     try {
       const res = await fetch(`/api/tenant/quotes/${id}`);
       if (!res.ok) throw new Error('Not found');
@@ -56,9 +56,9 @@ export default function QuoteDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  useEffect(() => { fetchQuote(); }, [id, fetchQuote]);
+  useEffect(() => { fetchQuote(); }, [fetchQuote]);
 
   const handleEdit = () => {
     if (quote) {
