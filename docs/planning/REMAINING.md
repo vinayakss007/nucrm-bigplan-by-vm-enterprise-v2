@@ -16,7 +16,7 @@ Last updated: 2026-06-16
 
 ### MEDIUM PRIORITY
 - [x] **Email sentiment to deals** - wired via `createEmailTracking()` (PR #248)
-- [ ] **63 TypeScript errors** - resolve (currently suppressed via CI=true)
+- [x] **35 TypeScript errors** - resolved across 11 files (2a7bb60)
 - [ ] **Integration tests** - fix backup-integrity + tenant-isolation (2 failing)
 - [ ] **E2E tests** - fix 5 failing tests (seed data fixtures)
 
