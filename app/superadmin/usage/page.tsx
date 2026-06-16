@@ -61,7 +61,6 @@ export default function UsagePage() {
   const tenants = (data?.tenantUsage ?? [])
     .filter((t) => !search || t.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
-<<<<<<< HEAD
       const getVal = (t: TenantUsage, key: typeof sortBy) => {
         if (key === 'contacts') return t.current_contacts ?? 0;
         if (key === 'deals') return t.current_deals ?? 0;
@@ -69,10 +68,6 @@ export default function UsagePage() {
       };
       const av = getVal(a, sortBy);
       const bv = getVal(b, sortBy);
-=======
-      const av = a['current_'+sortBy] || 0;
-      const bv = b['current_'+sortBy] || 0;
->>>>>>> bc1f7c6 (fix: type safety & error handling polish across 82 pages and components)
       return sortDir === 'desc' ? bv - av : av - bv;
     });
 
