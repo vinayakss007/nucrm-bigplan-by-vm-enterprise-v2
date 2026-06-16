@@ -51,8 +51,8 @@ export default function BrandingSettingsPage() {
             headerLayout: data.headerLayout || 'default',
           });
         }
-      } catch {
-        // Use defaults on error
+      } catch (err) {
+        console.error('[branding] failed to load branding', err);
       } finally {
         setLoading(false);
       }
