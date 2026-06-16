@@ -24,9 +24,6 @@ export default function ActivityFeedWidget({ data }: WidgetProps) {
         <p className="text-xs font-medium text-muted-foreground/70 text-center py-6">No activity yet &mdash; start by adding contacts</p>
       ) : (
         <div className="divide-y divide-border">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           {items.map((a: any) => {
             const Icon = ACTIVITY_ICONS[a.type] ?? Activity;
             return (

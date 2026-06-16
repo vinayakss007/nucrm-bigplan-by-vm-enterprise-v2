@@ -55,8 +55,7 @@ interface CriticalBackup {
   tenant_id: string;
   table_name: string;
   record_id: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  backup_data: Record<string, any>;
+  backup_data: Record<string, unknown>;
   operation: 'insert' | 'update' | 'delete';
   backed_up_at: string;
   retained_until: string;
@@ -392,16 +391,9 @@ export default function SuperAdminBackups() {
                       <td className="px-4 py-3 text-sm text-gray-300">{formatSize(backup.data_size || 0)}</td>
                       <td className="px-4 py-3 text-xs text-gray-500">{timeAgo(backup.created_at)}</td>
                       <td className="px-4 py-3 text-xs">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        {(backup as any).expires_at ? (
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          <span className={daysUntilExpiry((backup as any).expires_at) < 7 ? 'text-red-400' : 'text-gray-500'}>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            {daysUntilExpiry((backup as any).expires_at)}d left
+                        {backup.expires_at ? (
+                          <span className={daysUntilExpiry(backup.expires_at) < 7 ? 'text-red-400' : 'text-gray-500'}>
+                            {daysUntilExpiry(backup.expires_at)}d left
                           </span>
                         ) : '—'}
                       </td>
@@ -503,16 +495,9 @@ export default function SuperAdminBackups() {
                         </td>
                         <td className="px-4 py-3 text-xs text-gray-500">{timeAgo(backup.backed_up_at)}</td>
                         <td className="px-4 py-3 text-xs">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          {daysUntilExpiry((backup as any).retained_until) > 0 ? (
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            <span className={daysUntilExpiry((backup as any).retained_until) < 7 ? 'text-red-400' : 'text-gray-500'}>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                              {daysUntilExpiry((backup as any).retained_until)} days
+                          {daysUntilExpiry(backup.retained_until) > 0 ? (
+                            <span className={daysUntilExpiry(backup.retained_until) < 7 ? 'text-red-400' : 'text-gray-500'}>
+                              {daysUntilExpiry(backup.retained_until)} days
                             </span>
                           ) : (
                             <span className="text-red-400">Expired</span>

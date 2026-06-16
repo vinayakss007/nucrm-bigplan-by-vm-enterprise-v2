@@ -218,7 +218,7 @@ async function evaluateIntegrityControls(
           AND created_at >= ${periodStart.toISOString()}::timestamptz`
     );
     changeCount = (changes.rows[0] as { count?: number })?.count || 0;
-  } catch { /* table may not exist */ }
+  } catch (err) { console.error('[soc2] audit log count error', err); }
 
   controls.push({
     id: 'PI1.2',
@@ -299,7 +299,7 @@ async function evaluatePrivacyControls(
           WHERE tenant_id = ${tenantId} AND is_active = true`
     );
     retentionConfigured = ((retention.rows[0] as { count?: number })?.count || 0) > 0;
-  } catch { /* table may not exist */ }
+  } catch (err) { console.error('[soc2] retention policy error', err); }
 
   controls.push({
     id: 'P1.1',

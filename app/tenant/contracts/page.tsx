@@ -88,8 +88,7 @@ function ContractsPageInner() {
   };
 
   const filtered = contracts.filter(c =>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (c.title?.toLowerCase().includes(search.toLowerCase()) || getContactName((c as any).contactId).toLowerCase().includes(search.toLowerCase())) &&
+    (c.title?.toLowerCase().includes(search.toLowerCase()) || getContactName(c.contactId).toLowerCase().includes(search.toLowerCase())) &&
     (!statusFilter || c.status === statusFilter) &&
     (!contactFilter || c.contactId === contactFilter)
   );
@@ -112,16 +111,13 @@ function ContractsPageInner() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[
-          { label: 'Total', value: contracts.length },
+          { label: 'Total', value: contracts.length, color: '' },
           { label: 'Active', value: contracts.filter(c => c.status === 'active').length, color: 'text-green-600' },
           { label: 'Total Value', value: `$${activeValue.toFixed(2)}`, color: 'text-violet-600' },
         ].map(s => (
           <div key={s.label} className="admin-card p-3">
             <p className="text-xs text-muted-foreground">{s.label}</p>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            <p className={cn('text-lg sm:text-xl font-bold', (s as any).color)}>{s.value}</p>
+            <p className={cn('text-lg sm:text-xl font-bold', s.color)}>{s.value}</p>
           </div>
         ))}
       </div>

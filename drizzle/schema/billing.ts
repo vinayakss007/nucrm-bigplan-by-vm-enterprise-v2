@@ -1,12 +1,9 @@
 import { uniqueIndex, pgTable, uuid, text, timestamp, jsonb, decimal, integer, boolean, index, date } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import * as utils from './utils';
-import { tenants as _tenants, users as _users } from './core';
 import { companies as _companies, contacts as _contacts } from './crm';
 
 // Aliases to match existing references in table definitions
-const tenants = _tenants;
-const users = _users;
 const companies = _companies;
 const contacts = _contacts;
 

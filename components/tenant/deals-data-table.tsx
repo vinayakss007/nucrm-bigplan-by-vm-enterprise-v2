@@ -40,15 +40,15 @@ interface Deal {
   created_at: string
 }
 
+interface ContactOpt { id: string; first_name: string; last_name: string }
+interface CompanyOpt { id: string; name: string }
+interface TeamMemberOpt { user_id: string; full_name: string }
+
 interface Props {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  initialDeals: any[]
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  contacts: any[]
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  companies: any[]
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  teamMembers: any[]
+  initialDeals: Deal[]
+  contacts: ContactOpt[]
+  companies: CompanyOpt[]
+  teamMembers: TeamMemberOpt[]
   permissions: { canCreate: boolean; canEdit: boolean; canDelete: boolean }
 }
 
@@ -82,8 +82,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
     try {
       const res = await fetch(`/api/tenant/deals?${params}`)
       const data = await res.json()
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setDeals((data.data ?? []).map((d: any) => toSnakeCase(d)))
+      setDeals((data.data ?? []).map((d: Record<string, unknown>) => toSnakeCase(d)))
       setTotal(data.total ?? 0)
     } catch (error) {
       console.error('Failed to load deals:', error)
@@ -110,8 +109,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
     let cancelled = false
     fetch('/api/tenant/pipelines')
       .then(r => r.ok ? r.json() : { data: [] })
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .then((d: any) => {
+      .then((d: { data?: { id: string; name: string; stages: { id: string; name: string }[] }[] }) => {
         if (cancelled) return
         const flat: { id: string; name: string; pipeline: string }[] = []
         for (const p of d.data ?? []) {
@@ -262,8 +260,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
 
   // ── Bulk actions ──────────────────────────────────────────
   const [_bulkBusy, setBulkBusy] = useState(false)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, any> = {}) => {
+  const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, unknown> = {}) => {
     setBulkBusy(true)
     try {
       const res = await fetch('/api/tenant/deals/bulk', {
@@ -289,8 +286,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
       label: 'Assign',
       icon: <UserPlus className="w-3.5 h-3.5" />,
       requiresSelect: true,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      selectOptions: teamMembers.map((m: any) => ({ value: m.user_id, label: m.full_name })),
+      selectOptions: teamMembers.map((m) => ({ value: m.user_id, label: m.full_name })),
       onClick: async (ids: string[], input?: string) => {
         if (!input) return toast.error('Pick a teammate')
         await callBulk('assign', ids, { assigned_to: input })
@@ -301,8 +297,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
       label: 'Transfer',
       icon: <ArrowRightLeft className="w-3.5 h-3.5" />,
       requiresSelect: true,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      selectOptions: teamMembers.map((m: any) => ({ value: m.user_id, label: m.full_name })),
+      selectOptions: teamMembers.map((m) => ({ value: m.user_id, label: m.full_name })),
       onClick: async (ids: string[], input?: string) => {
         if (!input) return toast.error('Pick a teammate')
         await callBulk('transfer', ids, { assigned_to: input })
@@ -430,10 +425,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
                 className={inp}
               >
                 <option value="">No contact</option>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {(contacts || []).map((c: any) => (
+                {(contacts || []).map((c) => (
                   <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
                 ))}
               </select>
@@ -446,10 +438,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
                 className={inp}
               >
                 <option value="">No company</option>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {(companies || []).map((c: any) => (
+                {(companies || []).map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
@@ -462,10 +451,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
                 className={inp}
               >
                 <option value="">Unassigned</option>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {(teamMembers || []).map((m: any) => (
+                {(teamMembers || []).map((m) => (
                   <option key={m.user_id} value={m.user_id}>{m.full_name}</option>
                 ))}
               </select>

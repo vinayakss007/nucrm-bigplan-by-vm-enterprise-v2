@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -12,22 +12,21 @@ import { logError } from '@/lib/errors';
 export default function KBArticlePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [article, setArticle] = useState<any>(null);
+  const [article, setArticle] = useState<Record<string, any> | null>(null);
   const [loading, setLoading] = useState(true);
   const [voted, setVoted] = useState<'helpful' | 'not_helpful' | null>(null);
   const [showEdit, setShowEdit] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const res = await fetch(`/api/tenant/kb/articles/${params.id}`);
       if (!res.ok) { router.push('/tenant/kb'); return; }
       const d = await res.json();
-      setArticle(d.data);
+      setArticle(d.data as Record<string, any>);
     } catch (err) { logError({ error: err, context: "catch:[context]" }); } finally { setLoading(false); }
-  };
+  }, [params.id, router]);
 
-  useEffect(() => { load(); }, [params.id, load]);
+  useEffect(() => { load(); }, [load]);
 
   const vote = async (action: 'helpful' | 'not_helpful') => {
     if (voted) return;
@@ -40,8 +39,7 @@ export default function KBArticlePage() {
       if (res.ok) {
         setVoted(action);
         const d = await res.json();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setArticle((prev: any) => ({ ...prev, helpful: d.data.helpful, notHelpful: d.data.notHelpful }));
+        setArticle((prev: Record<string, any> | null) => ({ ...prev, helpful: d.data.helpful, notHelpful: d.data.notHelpful }));
       }
     } catch (err) { logError({ error: err, context: "catch:[context]" }); }
   };
@@ -127,7 +125,7 @@ export default function KBArticlePage() {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function EditArticleModal({ article, onClose, onSaved }: { article: any; onClose: () => void; onSaved: () => void }) {
+function EditArticleModal({ article, onClose, onSaved }: { article: Record<string, any>; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({ title: article.title, content: article.content, excerpt: article.excerpt || '', category_id: article.categoryId || '', status: article.status });
   const [saving, setSaving] = useState(false);
 

@@ -18,14 +18,10 @@ const TICK_STYLE  = { fontSize:10, fill:'hsl(var(--muted-foreground))' };
 const TIP_STYLE   = { background:'hsl(var(--card))', border:'1px solid hsl(var(--border))', borderRadius:8, fontSize:12 };
 
 export default function TenantAnalyticsPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [deals, setDeals]       = useState<any[]>([]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [contacts, setContacts] = useState<any[]>([]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [tasks, setTasks]       = useState<any[]>([]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [stages, setStages]     = useState<any[]>([]);
+  const [deals, setDeals]       = useState<{ created_at?: string; stageId?: string; stage_name?: string; amount?: string; value?: string }[]>([]);
+  const [contacts, setContacts] = useState<{ created_at?: string; lead_source?: string; lead_status?: string }[]>([]);
+  const [tasks, setTasks]       = useState<{ created_at?: string; completed?: boolean; due_date?: string }[]>([]);
+  const [stages, setStages]     = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading]   = useState(true);
   const [range, setRange]       = useState(30);
 
@@ -41,8 +37,7 @@ export default function TenantAnalyticsPage() {
       setContacts(c.data||[]); 
       setTasks(t.data||[]); 
       // Flatten stages from all pipelines
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const allStages = (p.data||[]).flatMap((pl: any) => (pl.stages||[]));
+      const allStages = (p.data||[]).flatMap((pl: { stages?: { id: string; name: string }[] }) => (pl.stages||[]));
       setStages(allStages);
       setLoading(false);
      } );
@@ -50,8 +45,7 @@ export default function TenantAnalyticsPage() {
 }, []);
 
   const since = new Date(Date.now() - range * 86400000);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const _inRange = (d: any) => new Date(d.created_at) >= since;
+  const _inRange = (d: { created_at: string }) => new Date(d.created_at) >= since;
 
   // Get stage name from stageId
   const getStageName = (stageId: string): string => {
@@ -62,7 +56,7 @@ export default function TenantAnalyticsPage() {
   // Add stage name to deals for easy filtering
   const dealsWithStage = deals.map(d => ({
     ...d,
-    stageName: d.stage_name || getStageName(d.stageId) || '',
+    stageName: d.stage_name || getStageName(d.stageId ?? '') || '',
     value: d.amount || d.value || 0, // Support both field names
   }));
 
@@ -114,8 +108,8 @@ export default function TenantAnalyticsPage() {
     const weekEnd   = new Date(Date.now()-(6-i)*7*86400000);
     return {
       week: weekStart.toLocaleDateString('en-US',{month:'short',day:'numeric'}),
-      contacts: contacts.filter(c=>{const d=new Date(c.created_at);return d>=weekStart&&d<weekEnd;}).length,
-      deals: dealsWithStage.filter(d=>{const dt=new Date(d.created_at);return dt>=weekStart&&dt<weekEnd;}).length,
+      contacts: contacts.filter(c=>{const d=new Date(c.created_at??'');return d>=weekStart&&d<weekEnd;}).length,
+      deals: dealsWithStage.filter(d=>{const dt=new Date(d.created_at??'');return dt>=weekStart&&dt<weekEnd;}).length,
     };
   });
 
@@ -186,10 +180,7 @@ export default function TenantAnalyticsPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false}/>
               <XAxis type="number" tick={TICK_STYLE} tickLine={false} axisLine={false}/>
               <YAxis type="category" dataKey="stage" tick={TICK_STYLE} tickLine={false} axisLine={false} width={90}/>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-              <Tooltip contentStyle={TIP_STYLE} formatter={(v:any,n:string)=>[n==='value'?formatCurrency(v):v,n==='value'?'Value':'Count']}/>
+              <Tooltip contentStyle={TIP_STYLE} formatter={(v: unknown, n: string)=>[n==='value'?formatCurrency(v as number):String(v),n==='value'?'Value':'Count']}/>
               <Bar dataKey="count" name="Count" radius={[0,3,3,0]}>
                 {byStage.map((s,i) => <Cell key={i} fill={STAGE_COLORS[s.stage.toLowerCase()]||'#7c3aed'}/>)}
               </Bar>

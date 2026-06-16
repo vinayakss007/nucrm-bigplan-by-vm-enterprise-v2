@@ -90,8 +90,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     let body: unknown = rawBody;
     try {
       body = JSON.parse(rawBody);
-    } catch {
-      // Leave as raw text
+    } catch (err) {
+      console.error('[plugins] webhook parse error', err);
     }
 
     // Extract relevant headers

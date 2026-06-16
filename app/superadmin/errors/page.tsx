@@ -4,6 +4,29 @@ import { AlertTriangle, CheckCheck, RefreshCw, X, ChevronDown, ChevronRight, Sea
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
+interface ErrorData {
+  id: string;
+  level: string;
+  code?: string;
+  message: string;
+  created_at: string;
+  resolved: boolean;
+  stack?: string;
+  context?: Record<string, unknown>;
+  tenant_name?: string;
+}
+
+interface ErrorsApiData {
+  summary: {
+    fatal_unresolved?: number;
+    error_unresolved?: number;
+    warn_unresolved?: number;
+    last_hour?: number;
+    last_day?: number;
+  };
+  errors: ErrorData[];
+}
+
 const LEVEL_CFG: Record<string,{badge:string;dot:string;label:string;desc:string}> = {
   fatal: { badge:'bg-red-500/20 text-red-400', dot:'bg-red-500', label:'FATAL', desc:'App crash or unrecoverable error — needs immediate attention' },
   error: { badge:'bg-orange-500/20 text-orange-400', dot:'bg-orange-500', label:'ERROR', desc:'Operation failed — API/db/network error' },
@@ -27,8 +50,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export default function ErrorsPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [data, setData]     = useState<any>(null);
+  const [data, setData]     = useState<ErrorsApiData | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string|null>(null);
   const [level, setLevel]   = useState('');
@@ -50,9 +72,8 @@ export default function ErrorsPage() {
       }
       const d = await res.json();
       setData(d);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      setFetchError(err.message || 'Failed to load errors');
+    } catch (err: unknown) {
+      setFetchError(err instanceof Error ? err.message : 'Failed to load errors');
       setData(null);
     } finally {
       setLoading(false);
@@ -70,17 +91,15 @@ export default function ErrorsPage() {
       if (!res.ok) throw new Error((await res.json().catch((err) => { console.error('[errors] parse resolve failed', err); return {}; })).error || 'Resolve failed');
       toast.success(resolveAll ? 'All resolved' : 'Marked resolved');
       load();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to resolve');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to resolve');
     } finally {
       setResolving(null);
     }
   };
 
   const s = data?.summary ?? {};
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const errors = (data?.errors ?? []).filter((e: any) =>
+  const errors = (data?.errors ?? []).filter((e) =>
     !search || e.message?.toLowerCase()?.includes(search.toLowerCase()) || e.code?.toLowerCase()?.includes(search.toLowerCase())
   );
 
@@ -158,10 +177,7 @@ export default function ErrorsPage() {
           </div>
         ) : (
           <div className="divide-y divide-white/5">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            {errors.map((e: any) => {
+            {errors.map((e) => {
               const cfg = LEVEL_CFG[e.level] || LEVEL_CFG['info'];
               if (!cfg) return null;
               const isExpanded = expanded === e.id;
@@ -194,16 +210,16 @@ export default function ErrorsPage() {
                     <div className="px-5 pb-4 space-y-3">
                       {/* Source / Request metadata */}
                       {(() => {
-                        const ctx = e.context || {};
+                        const ctx = (e.context || {}) as Record<string, string | undefined>;
                         const source = ctx.source || ctx.context;
                         const method = ctx.requestMethod;
                         const url = ctx.requestUrl;
                         if (!source && !method && !url) return null;
                         return (
                           <div className="flex flex-wrap gap-2">
-                            {source && <span className="text-[10px] font-mono text-cyan-400/70 bg-cyan-500/5 rounded-md px-2 py-1">source: {source}</span>}
-                            {method && <span className="text-[10px] font-mono text-violet-400/70 bg-violet-500/5 rounded-md px-2 py-1">{method}</span>}
-                            {url && <span className="text-[10px] font-mono text-white/40 bg-white/5 rounded-md px-2 py-1 truncate max-w-[400px]">{url}</span>}
+                            {source && <span className="text-[10px] font-mono text-cyan-400/70 bg-cyan-500/5 rounded-md px-2 py-1">source: {String(source)}</span>}
+                            {method && <span className="text-[10px] font-mono text-violet-400/70 bg-violet-500/5 rounded-md px-2 py-1">{String(method)}</span>}
+                            {url && <span className="text-[10px] font-mono text-white/40 bg-white/5 rounded-md px-2 py-1 truncate max-w-[400px]">{String(url)}</span>}
                           </div>
                         );
                       })()}

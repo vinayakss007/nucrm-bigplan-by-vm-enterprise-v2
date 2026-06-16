@@ -13,11 +13,9 @@ const PRIORITY_CFG = {
 };
 
 export default function TenantTasksClient({ initialTasks, contacts, _deals, teamMembers, permissions }: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  initialTasks: any[]; contacts: any[]; deals: any[]; teamMembers: any[];
+  initialTasks: Record<string, any>[]; contacts: Record<string, any>[]; deals: Record<string, any>[]; teamMembers: Record<string, any>[];
   permissions: { canCreate:boolean; canEdit:boolean; canDelete:boolean; canAssign:boolean };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  _deals?: any[];
+  _deals?: Record<string, any>[];
 }) {
   const router = useRouter();
   const [tasks, setTasks]       = useState(initialTasks);
@@ -113,8 +111,7 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
       {/* Filter tabs */}
       <div className="flex gap-1 flex-wrap bg-muted/30 rounded-xl p-1 w-fit">
         {TABS.map(t => (
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          <button key={t.id} onClick={() => setFilter(t.id as any)}
+          <button key={t.id} onClick={() => setFilter(t.id as 'all'|'open'|'overdue'|'today'|'done')}
             className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
               filter===t.id ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground',
               t.urgent && filter!==t.id && 'text-red-500')}>
@@ -148,19 +145,13 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
             <div><label className="block text-sm font-bold text-foreground/80 mb-1">Contact</label>
               <select value={form.contact_id} onChange={e=>setForm(f=>({...f,contact_id:e.target.value}))} className={inp}>
                 <option value="">None</option>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {contacts.map((c:any)=><option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>)}
+                {contacts.map((c)=><option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>)}
               </select>
             </div>
             <div><label className="block text-sm font-bold text-foreground/80 mb-1">Assigned To</label>
               <select value={form.assigned_to} onChange={e=>setForm(f=>({...f,assigned_to:e.target.value}))} className={inp}>
                 <option value="">Unassigned</option>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {teamMembers.map((m:any)=><option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
+                {teamMembers.map((m)=><option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
               </select>
             </div>
           </div>

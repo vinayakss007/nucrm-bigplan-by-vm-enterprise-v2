@@ -111,8 +111,7 @@ function OrdersPageInner() {
   };
 
   const filtered = orders.filter(o =>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (o.orderNumber.toLowerCase().includes(search.toLowerCase()) || getContactName((o as any).contactId).toLowerCase().includes(search.toLowerCase())) &&
+    (o.orderNumber.toLowerCase().includes(search.toLowerCase()) || getContactName(o.contactId).toLowerCase().includes(search.toLowerCase())) &&
     (!statusFilter || o.status === statusFilter) &&
     (!contactFilter || o.contactId === contactFilter)
   );
@@ -135,7 +134,7 @@ function OrdersPageInner() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
-          { label: 'Total', value: orders.length },
+          { label: 'Total', value: orders.length, color: '' },
           { label: 'Processing', value: orders.filter(o => o.status === 'processing').length, color: 'text-indigo-600' },
           { label: 'Shipped', value: orders.filter(o => o.status === 'shipped').length, color: 'text-violet-600' },
           { label: 'Delivered', value: orders.filter(o => o.status === 'delivered').length, color: 'text-green-600' },
@@ -143,10 +142,7 @@ function OrdersPageInner() {
         ].map(s => (
           <div key={s.label} className="admin-card p-3">
             <p className="text-xs text-muted-foreground">{s.label}</p>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            <p className={cn('text-lg sm:text-xl font-bold', (s as any).color)}>{s.value}</p>
+            <p className={cn('text-lg sm:text-xl font-bold', s.color)}>{s.value}</p>
           </div>
         ))}
       </div>
