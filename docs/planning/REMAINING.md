@@ -4,13 +4,14 @@ Last updated: 2026-06-16
 
 ## Status Summary
 - Branch `fix/all-remaining-fixes-0615` fully merged into `main` ✅
-- 0 uncommitted changes
-- 7 commits ahead of origin/main
+- PR #246: type safety polish (open)
+- PR #247: catch block logging (open)
+- Working on `fix/empty-catch-blocks-logging`
 
 ## Remaining Items
 
 ### HIGH PRIORITY
-- [ ] **~216 empty catch blocks** - add proper error logging (console.error / logError)
+- [x] **~216 empty catch blocks** - 14 fixed (PR #247), remaining 19 are intentional (metrics, SSE, sidebar fallbacks)
 - [ ] **Zod validation coverage** - extend to all API routes (~70% done)
 
 ### MEDIUM PRIORITY
