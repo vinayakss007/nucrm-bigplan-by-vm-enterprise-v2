@@ -54,10 +54,7 @@ export default async function PublicFormPage({ params }: any) {
           </div>
           
           <div className="p-8">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            <PublicFormClient form={form as any} />
+            <PublicFormClient form={form} />
           </div>
         </div>
         

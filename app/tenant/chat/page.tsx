@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { MessageCircle, Loader2, User, Bot, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -47,7 +47,7 @@ export default function ChatPage() {
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -60,7 +60,7 @@ export default function ChatPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
 
   const loadMessages = async (session: ChatSession) => {
     setSelectedSession(session);

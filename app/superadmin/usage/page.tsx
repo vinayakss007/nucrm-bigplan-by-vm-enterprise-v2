@@ -4,6 +4,26 @@ import { BarChart3, RefreshCw, Search, AlertTriangle, ChevronDown, ChevronUp } f
 import { cn } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
+interface TenantUsage {
+  id: string;
+  name: string;
+  status: string;
+  plan_id: string;
+  current_contacts: number;
+  current_deals: number;
+  current_users: number;
+  max_contacts: number;
+  max_deals: number;
+  max_users: number;
+  contact_pct: number;
+  user_pct: number;
+}
+
+interface UsageData {
+  tenantUsage: TenantUsage[];
+  growth?: Array<Record<string, unknown>>;
+}
+
 const TICK = { fill:'rgba(255,255,255,0.3)', fontSize:10 };
 const TIP  = { background:'hsl(222,32%,9%)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, fontSize:11 };
 
@@ -17,8 +37,7 @@ function UsageBar({ pct, _danger }: { pct: number; _danger?: boolean }) {
 }
 
 export default function UsagePage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'contacts'|'deals'|'users'>('contacts');
@@ -40,17 +59,14 @@ export default function UsagePage() {
   const PLAN_COLORS: Record<string,string> = { free:'text-white/30', starter:'text-blue-400', pro:'text-violet-400', enterprise:'text-amber-400' };
 
   const tenants = (data?.tenantUsage ?? [])
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .filter((t:any) => !search || t.name.toLowerCase().includes(search.toLowerCase()))
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .sort((a:any, b:any) => {
+    .filter((t) => !search || t.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => {
       const av = a['current_'+sortBy] || 0;
       const bv = b['current_'+sortBy] || 0;
       return sortDir === 'desc' ? bv - av : av - bv;
     });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const nearLimit = tenants.filter((t:any) => t.contact_pct >= 80 || t.user_pct >= 80);
+  const nearLimit = tenants.filter((t) => t.contact_pct >= 80 || t.user_pct >= 80);
 
   const SortHeader = ({ col, label }: { col: typeof sortBy; label: string }) => (
     <th className="px-4 py-2.5 text-left cursor-pointer group" onClick={()=>toggleSort(col)}>
@@ -118,10 +134,7 @@ export default function UsagePage() {
           <tbody>
             {loading && <tr><td colSpan={5} className="text-center py-8 text-white/30 text-sm">Loading...</td></tr>}
             {!loading && !tenants.length && <tr><td colSpan={5} className="text-center py-8 text-white/30 text-sm">No tenants found</td></tr>}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            {tenants.map((t:any) => (
+            {tenants.map((t) => (
               <tr key={t.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors">
                 <td className="px-4 py-3">
                   <p className="text-sm font-medium text-white">{t.name}</p>

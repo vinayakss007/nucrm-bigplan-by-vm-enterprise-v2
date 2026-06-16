@@ -1781,11 +1781,12 @@ export default function DocsClient() {
       time: string;
       category: string;
       badge?: string;
+      icon: React.ComponentType<{ className?: string }>;
+      color: string;
     }> = [];
 
-    Object.entries(DOCS_STRUCTURE).forEach(([category, data]: [string, any]) => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      data.items.forEach((item: any) => {
+    Object.entries(DOCS_STRUCTURE).forEach(([category, data]) => {
+      data.items.forEach((item) => {
         docs.push({
           ...item,
           category,
@@ -1814,7 +1815,7 @@ export default function DocsClient() {
   const currentCategoryDocs = useMemo(() => {
     if (!selectedCategory) return [];
     const category = DOCS_STRUCTURE[selectedCategory as keyof typeof DOCS_STRUCTURE];
-    return category ? category.items : [];
+    return category ? (category.items as Array<{ title: string; slug: string; description: string; time: string; badge?: string }>) : [];
   }, [selectedCategory]);
 
   // Current doc content
@@ -1941,7 +1942,7 @@ export default function DocsClient() {
                 <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mt-4 mb-2">
                   Categories
                 </div>
-                {Object.entries(DOCS_STRUCTURE).map(([category, data]: [string, any]) => {
+                {Object.entries(DOCS_STRUCTURE).map(([category, data]) => {
                   const Icon = data.icon;
                   return (
                     <Button
@@ -1972,10 +1973,7 @@ export default function DocsClient() {
                   <ChevronRight className="w-4 h-4 mr-2 rotate-180" />
                   Back to Categories
                 </Button>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {currentCategoryDocs.map((doc: any) => (
+                {currentCategoryDocs.map((doc) => (
                   <Button
                     key={doc.slug}
                     variant="ghost"
@@ -2052,7 +2050,7 @@ export default function DocsClient() {
 
                   {/* Category Cards */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {Object.entries(DOCS_STRUCTURE).map(([category, data]: [string, any]) => {
+                {Object.entries(DOCS_STRUCTURE).map(([category, data]) => {
                       const Icon = data.icon;
                       return (
                         <button
@@ -2070,10 +2068,7 @@ export default function DocsClient() {
                             {data.items.length} documents
                           </p>
                           <div className="space-y-1">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            {data.items.slice(0, 3).map((item: any) => (
+                            {data.items.slice(0, 3).map((item) => (
                               <div key={item.slug} className="text-xs text-muted-foreground flex items-center justify-between">
                                 <span className="truncate">{item.title}</span>
                                 <span className="text-[10px] bg-muted px-1 rounded">{item.time}</span>
@@ -2104,10 +2099,7 @@ export default function DocsClient() {
                     <h2 className="text-2xl font-bold">{selectedCategory}</h2>
                   </div>
                   <div className="space-y-2">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    {currentCategoryDocs.map((doc: any) => (
+                    {currentCategoryDocs.map((doc) => (
                       <button
                         key={doc.slug}
                         onClick={() => handleDocClick(doc.slug)}
@@ -2174,7 +2166,7 @@ export default function DocsClient() {
                   </div>
 
                   {/* All Documents by Category */}
-                  {Object.entries(DOCS_STRUCTURE).map(([category, data]: [string, any]) => {
+                {Object.entries(DOCS_STRUCTURE).map(([category, data]) => {
                     const Icon = data.icon;
                     return (
                       <div key={category} className="admin-card">
@@ -2188,10 +2180,7 @@ export default function DocsClient() {
                           </Badge>
                         </div>
                         <div className="divide-y divide-border">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          {data.items.map((doc: any) => (
+                          {(data.items as Array<{ title: string; slug: string; description: string; time: string; badge?: string }>).map((doc) => (
                             <button
                               key={doc.slug}
                               onClick={() => handleDocClick(doc.slug)}

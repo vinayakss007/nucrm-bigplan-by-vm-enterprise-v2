@@ -31,8 +31,7 @@ interface BackupFile {
   file_size_formatted: string;
   backup_type: string;
   parse_status: 'pending' | 'completed' | 'failed';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tenants_included?: any[];
+  tenants_included?: TenantInfo[];
   total_record_count?: number;
   tables_available?: string[];
   backup_date_range?: { earliest: string; latest: string };
@@ -49,8 +48,7 @@ interface TenantInfo {
 }
 
 interface ScopePreview {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tenant: any;
+  tenant: TenantInfo;
   backup_file: string;
   restore_mode: string;
   tables_selected: string[];
@@ -71,12 +69,9 @@ interface RestoreLog {
   target_tenant_id: string;
   status: string;
   restore_mode: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tables_selected: any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  records_affected?: any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  records_per_table?: any;
+  tables_selected: string[] | number;
+  records_affected?: Record<string, number>;
+  records_per_table?: Record<string, number>;
   started_at: string;
   completed_at?: string;
   duration_ms?: number;
@@ -107,10 +102,24 @@ export default function SelectiveRestorePage() {
   const [selectedTables, setSelectedTables] = useState<string[]>([]);
   const [restoreMode, setRestoreMode] = useState<'insert_only' | 'upsert' | 'replace'>('insert_only');
   const [scopePreview, setScopePreview] = useState<ScopePreview | null>(null);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [restoreProgress, setRestoreProgress] = useState<any>(null);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [restoreResult, setRestoreResult] = useState<any>(null);
+  interface RestoreProgressData {
+    step?: string;
+    status?: string;
+    message?: string;
+    totalCount?: number;
+    currentCount?: number;
+    currentTable?: string;
+  }
+
+  interface RestoreResultData {
+    success?: boolean;
+    error?: string;
+    duration_ms?: number;
+    records_per_table?: Record<string, { new: number; updated: number }>;
+  }
+
+  const [restoreProgress, setRestoreProgress] = useState<RestoreProgressData | null>(null);
+  const [restoreResult, setRestoreResult] = useState<RestoreResultData | null>(null);
   const [restoreLogs, setRestoreLogs] = useState<RestoreLog[]>([]);
   const [showLogs, setShowLogs] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -167,9 +176,8 @@ export default function SelectiveRestorePage() {
       } else {
         alert('Upload failed: ' + data.error);
       }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      alert('Upload failed: ' + err.message);
+    } catch (err: unknown) {
+      alert('Upload failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -182,8 +190,7 @@ export default function SelectiveRestorePage() {
       try {
         const res = await fetch('/api/superadmin/selective-restore/backups');
         const data = await res.json();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const backup = data.backups?.find((b: any) => b.id === backupId);
+        const backup = data.backups?.find((b: BackupFile) => b.id === backupId);
         if (backup?.parse_status === 'completed') {
           setSelectedBackup(backup);
           setStep('preview');
@@ -211,9 +218,8 @@ export default function SelectiveRestorePage() {
       setSelectedTenant(null);
       setSelectedTables([]);
       setStep('preview');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      alert('Preview failed: ' + err.message);
+    } catch (err: unknown) {
+      alert('Preview failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -278,9 +284,8 @@ export default function SelectiveRestorePage() {
       const data = await res.json();
       setScopePreview(data);
       setStep('scope');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      alert('Scope preview failed: ' + err.message);
+    } catch (err: unknown) {
+      alert('Scope preview failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -343,10 +348,10 @@ export default function SelectiveRestorePage() {
           }
         }
       }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      setRestoreProgress({ step: 'failed', status: 'failed', message: err.message });
-      setRestoreResult({ success: false, error: err.message });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setRestoreProgress({ step: 'failed', status: 'failed', message: msg });
+      setRestoreResult({ success: false, error: msg });
       setStep('done');
     } finally {
       setLoading(false);
@@ -931,7 +936,7 @@ export default function SelectiveRestorePage() {
                       <div className="mt-3">
                         <h4 className="text-sm font-medium text-green-300 mb-2">Records by Table</h4>
                         <div className="flex flex-wrap gap-2">
-                          {Object.entries(restoreResult.records_per_table).map(([table, data]: [string, any]) => (
+                          {Object.entries(restoreResult.records_per_table).map(([table, data]) => (
                             <span key={table} className="px-3 py-1 bg-green-900/50 rounded text-sm text-green-300">
                               {table}: {data.new + data.updated}
                             </span>

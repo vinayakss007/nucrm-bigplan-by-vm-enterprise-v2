@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { FileText, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -8,31 +8,28 @@ export default function PublicFormPage() {
   const params = useParams();
   const formId = params['id'] as string;
   
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [form, setForm] = useState<any>(null);
+  const [form, setForm] = useState<Record<string, any> | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [values, setValues] = useState<Record<string, any>>({});
 
-  const loadForm = async () => {
+  const loadForm = useCallback(async () => {
     try {
       const res = await fetch(`/api/tenant/forms/public/${formId}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setForm(data);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to load form');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load form');
     } finally {
       setLoading(false);
     }
-  };
+  }, [formId]);
 
   useEffect(() => {
     loadForm();
-  }, [formId, loadForm]);
+  }, [loadForm]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,15 +47,14 @@ export default function PublicFormPage() {
       
       setSubmitted(true);
       toast.success('Form submitted successfully!');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to submit form');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to submit form');
     } finally {
       setSubmitting(false);
     }
   };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateValue = (key: string, value: any) => {
     setValues(v => ({ ...v, [key]: value }));
   };
@@ -114,10 +110,8 @@ export default function PublicFormPage() {
 
         {/* Form */}
         <form onSubmit={submit} className="space-y-4">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          {form.fields?.map((field: any, index: number) => (
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {form.fields?.map((field: Record<string, any>, index: number) => (
             <div key={index}>
               <label className="block text-sm font-medium mb-1">
                 {field.label}

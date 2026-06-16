@@ -16,7 +16,7 @@ export default async function TeamPage() {
   if (!ctx) redirect('/auth/login');
   if (!ctx.isAdmin) redirect('/tenant/dashboard');
 
-  const [members, activeInvitations, roles] = await Promise.all([
+  const [rawMembers, rawInvitations, roles] = await Promise.all([
     db.select({
       id: tenantMembers.id,
       user_id: tenantMembers.userId,
@@ -67,12 +67,27 @@ export default async function TeamPage() {
     .orderBy(asc(rolesTable.name)),
   ]);
 
+  const members = rawMembers.map(m => ({
+    ...m,
+    full_name: m.full_name ?? undefined,
+    avatar_url: m.avatar_url ?? undefined,
+    role_name: m.role_name ?? undefined,
+    joined_at: m.joined_at?.toISOString() ?? undefined,
+  }));
+
+  const activeInvitations = rawInvitations.map(inv => ({
+    id: inv.id,
+    email: inv.email,
+    role_slug: inv.role_slug,
+    expires_at: inv.expires_at.toISOString(),
+  }));
+
   return (
     <TeamSettingsClient
       members={members ?? []}
       invitations={activeInvitations ?? []}
       roles={roles ?? []}
-      tenantId={ctx.tenantId}
+      _tenantId={ctx.tenantId}
       currentUserId={ctx.userId}
     />
   );

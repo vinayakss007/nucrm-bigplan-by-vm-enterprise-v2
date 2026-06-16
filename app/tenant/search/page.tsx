@@ -6,6 +6,49 @@ import { Search, Users, TrendingUp, Building2, CheckSquare, Loader2, X, Target }
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { AdvancedSearchFilters } from '@/components/tenant/advanced-search';
 
+interface SearchFilters {
+  status?: string[];
+  stage?: string[];
+  source?: string[];
+  industry?: string[];
+  priority?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+  valueMin?: number;
+  valueMax?: number;
+  tags?: string[];
+}
+
+interface SearchResultContact {
+  id: string; first_name: string; last_name: string;
+  email?: string; company_name?: string; lead_status: string;
+}
+interface SearchResultLead {
+  id: string; first_name: string; last_name: string;
+  email?: string; company_name?: string; lead_status: string;
+}
+interface SearchResultDeal {
+  id: string; title: string;
+  first_name?: string; last_name?: string;
+  value: number; stage: string;
+}
+interface SearchResultCompany {
+  id: string; name: string;
+  industry?: string; contact_count: number;
+}
+interface SearchResultTask {
+  id: string; title: string;
+  first_name?: string; last_name?: string;
+  due_date?: string; completed: boolean; priority: string;
+}
+interface SearchResults {
+  contacts?: SearchResultContact[];
+  leads?: SearchResultLead[];
+  deals?: SearchResultDeal[];
+  companies?: SearchResultCompany[];
+  tasks?: SearchResultTask[];
+}
+
 const STATUS_COLORS: Record<string,string> = {
   new:'bg-slate-100 text-slate-600', contacted:'bg-blue-100 text-blue-700',
   qualified:'bg-violet-100 text-violet-700', converted:'bg-emerald-100 text-emerald-700',
@@ -32,14 +75,11 @@ export default function SearchPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [results, setResults] = useState<any>(null);
+  const [results, setResults] = useState<SearchResults | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeType, setActiveType] = useState('all');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [filters, setFilters] = useState<Record<string, any>>({});
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [_advancedResults, setAdvancedResults] = useState<any>(null);
+  const [filters, setFilters] = useState<SearchFilters>({});
+  const [_advancedResults, setAdvancedResults] = useState<unknown[] | null>(null);
   const [_advancedTotal, setAdvancedTotal] = useState(0);
   const [page, _setPage] = useState(1);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -59,7 +99,7 @@ export default function SearchPage() {
     const q = searchParams.get('q');
     if (q) { setQuery(q); search(q); }
     inputRef.current?.focus();
-  }, [, search]);
+  }, [search, searchParams]);
 
   const handleInput = (val: string) => {
     setQuery(val);
@@ -184,13 +224,10 @@ export default function SearchPage() {
               <div className="flex items-center gap-2 mb-3">
                 <Users className="w-4 h-4 text-muted-foreground" />
                 <h2 className="text-sm font-semibold">Contacts</h2>
-                <span className="text-xs text-muted-foreground">({results.contacts.length})</span>
+                <span className="text-xs text-muted-foreground">({results.contacts?.length})</span>
               </div>
               <div className="admin-card divide-y divide-border overflow-hidden">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {results.contacts.map((c: any) => (
+                {results.contacts?.map((c: SearchResultContact) => (
                   <Link key={c.id} href={`/tenant/contacts/${c.id}`}
                     className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors">
                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
@@ -220,13 +257,10 @@ export default function SearchPage() {
               <div className="flex items-center gap-2 mb-3">
                 <Target className="w-4 h-4 text-muted-foreground" />
                 <h2 className="text-sm font-semibold">Leads</h2>
-                <span className="text-xs text-muted-foreground">({results.leads.length})</span>
+                <span className="text-xs text-muted-foreground">({results.leads?.length})</span>
               </div>
               <div className="admin-card divide-y divide-border overflow-hidden">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {results.leads.map((l: any) => (
+                {results.leads?.map((l: SearchResultLead) => (
                   <Link key={l.id} href={`/tenant/leads/${l.id}`}
                     className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors">
                     <div className="w-9 h-9 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center text-violet-600 text-sm font-bold shrink-0">
@@ -256,13 +290,10 @@ export default function SearchPage() {
               <div className="flex items-center gap-2 mb-3">
                 <TrendingUp className="w-4 h-4 text-muted-foreground" />
                 <h2 className="text-sm font-semibold">Deals</h2>
-                <span className="text-xs text-muted-foreground">({results.deals.length})</span>
+                <span className="text-xs text-muted-foreground">({results.deals?.length})</span>
               </div>
               <div className="admin-card divide-y divide-border overflow-hidden">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {results.deals.map((d: any) => (
+                {results.deals?.map((d: SearchResultDeal) => (
                   <Link key={d.id} href="/tenant/deals"
                     className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors">
                     <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center shrink-0">
@@ -290,13 +321,10 @@ export default function SearchPage() {
               <div className="flex items-center gap-2 mb-3">
                 <Building2 className="w-4 h-4 text-muted-foreground" />
                 <h2 className="text-sm font-semibold">Companies</h2>
-                <span className="text-xs text-muted-foreground">({results.companies.length})</span>
+                <span className="text-xs text-muted-foreground">({results.companies?.length})</span>
               </div>
               <div className="admin-card divide-y divide-border overflow-hidden">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {results.companies.map((c: any) => (
+                {results.companies?.map((c: SearchResultCompany) => (
                   <Link key={c.id} href={`/tenant/companies/${c.id}`}
                     className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors">
                     <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 font-bold text-sm shrink-0">
@@ -319,13 +347,10 @@ export default function SearchPage() {
               <div className="flex items-center gap-2 mb-3">
                 <CheckSquare className="w-4 h-4 text-muted-foreground" />
                 <h2 className="text-sm font-semibold">Tasks</h2>
-                <span className="text-xs text-muted-foreground">({results.tasks.length})</span>
+                <span className="text-xs text-muted-foreground">({results.tasks?.length})</span>
               </div>
               <div className="admin-card divide-y divide-border overflow-hidden">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {results.tasks.map((t: any) => {
+                {results.tasks?.map((t: SearchResultTask) => {
                   const overdue = !t.completed && t.due_date && t.due_date < new Date().toLocaleDateString('en-CA');
                   return (
                     <Link key={t.id} href="/tenant/tasks"

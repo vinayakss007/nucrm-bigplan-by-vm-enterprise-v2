@@ -63,7 +63,7 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
   let sourcePool: Pool;
   let restorePool: Pool;
   let sourceDb: ReturnType<typeof drizzle>;
-  let restoreDb: ReturnType<typeof drizzle>;
+  let _restoreDb: ReturnType<typeof drizzle>;
   let backupFile: string;
 
   beforeAll(async () => {

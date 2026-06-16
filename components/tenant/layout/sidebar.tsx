@@ -238,12 +238,12 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
     });
   }, []);
 
-  const hasPerm = (item: NavItem) => {
+  const hasPerm = useCallback((item: NavItem) => {
     if (item.adminOnly && !isAdmin) return false;
     if (hiddenItems.includes(item.href)) return false;
     if (!item.perm) return true;
     return isAdmin || permissions?.['all'] || permissions?.[item.perm];
-  };
+  }, [isAdmin, hiddenItems, permissions]);
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : href !== '/tenant/dashboard' && pathname.startsWith(href);
@@ -251,23 +251,21 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
 
   // ── Apply filter ────────────────────────────────────────────
   const q = query.trim().toLowerCase();
-  const matches = (item: NavItem) =>
-    !q || item.label.toLowerCase().includes(q) || (item.keywords ?? '').toLowerCase().includes(q);
 
   const visibleSections = useMemo(() =>
     NAV_SECTIONS.map(sec => ({
       ...sec,
-      items: sec.items.filter(i => hasPerm(i) && matches(i)),
+      items: sec.items.filter(i => hasPerm(i) && (!q || i.label.toLowerCase().includes(q) || (i.keywords ?? '').toLowerCase().includes(q))),
     })).filter(sec => sec.items.length > 0)
-  , [q, isAdmin, permissions, hiddenItems, hasPerm]);
+  , [q, hasPerm]);
 
   // ── Resolve pinned items ────────────────────────────────────
   const pinnedItems = useMemo(() => {
     const all = NAV_SECTIONS.flatMap(s => s.items);
     return pinned
       .map(href => all.find(i => i.href === href))
-      .filter((i): i is NavItem => !!(i && hasPerm(i) && matches(i)));
-  }, [pinned, q, isAdmin, permissions, hiddenItems, hasPerm]);
+      .filter((i): i is NavItem => !!(i && hasPerm(i) && (!q || i.label.toLowerCase().includes(q) || (i.keywords ?? '').toLowerCase().includes(q))));
+  }, [pinned, q, hasPerm]);
 
   // ── Collapsed mini sidebar ──────────────────────────────────
   if (collapsed) {

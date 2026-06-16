@@ -4,22 +4,34 @@ import { CheckCircle, XCircle, AlertTriangle, RefreshCw, Activity, Database, Mai
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { logError } from '@/lib/errors';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const STATUS_CFG: Record<string,{icon:any;color:string;bg:string}> = {
+interface HealthCheck {
+  service: string;
+  status: string;
+  latency_ms?: number;
+  message?: string;
+}
+
+interface AppHealthData {
+  status?: string;
+  node?: string;
+  db_latency_ms?: number;
+  uptime_s?: number;
+  schema_ready?: boolean;
+  missing_tables?: string[];
+}
+
+const STATUS_CFG: Record<string,{icon:React.ComponentType<{ className?: string }>;color:string;bg:string}> = {
   up:       { icon:CheckCircle,  color:'text-emerald-400', bg:'border-emerald-500/20 bg-emerald-500/5' },
   degraded: { icon:AlertTriangle,color:'text-amber-400',   bg:'border-amber-500/20 bg-amber-500/5' },
   down:     { icon:XCircle,      color:'text-red-400',     bg:'border-red-500/20 bg-red-500/5' },
 };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const SERVICE_ICONS: Record<string,any> = {
+const SERVICE_ICONS: Record<string,React.ComponentType<{ className?: string }>> = {
   database:Database, app:Server, email:Mail, storage:Database, schema:Database,
 };
 
 export default function HealthPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [checks, setChecks] = useState<any[]>([]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [appHealth, setAppHealth] = useState<any>(null);
+  const [checks, setChecks] = useState<HealthCheck[]>([]);
+  const [appHealth, setAppHealth] = useState<AppHealthData | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastRun, setLastRun] = useState<Date|null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -105,10 +117,7 @@ export default function HealthPage() {
         )}
 
         {/* Service checks from superadmin/health */}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        {checks.map((c:any) => {
+        {checks.map((c) => {
           const s = STATUS_CFG[c.status] || STATUS_CFG['up'];
           if (!s) return null;
           const Icon = SERVICE_ICONS[c.service] || Wifi;

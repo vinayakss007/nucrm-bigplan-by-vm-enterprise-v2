@@ -81,17 +81,14 @@ export default function SubscriptionsPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total', value: subscriptions.length },
+          { label: 'Total', value: subscriptions.length, color: '' },
           { label: 'Active', value: subscriptions.filter(s => s.status === 'active').length, color: 'text-green-600' },
           { label: 'MRR', value: `$${mrr.toFixed(2)}`, color: 'text-violet-600' },
           { label: 'ARR', value: `$${arr.toFixed(2)}`, color: 'text-indigo-600' },
         ].map(s => (
           <div key={s.label} className="admin-card p-3">
             <p className="text-xs text-muted-foreground">{s.label}</p>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            <p className={cn('text-lg sm:text-xl font-bold', (s as any).color)}>{s.value}</p>
+            <p className={cn('text-lg sm:text-xl font-bold', s.color)}>{s.value}</p>
           </div>
         ))}
       </div>

@@ -48,15 +48,13 @@ const AUTHORITY_LEVELS = {
   unknown: { label: 'Unknown', color: 'text-muted-foreground' },
 };
 
+interface TeamMemberOpt { user_id: string; full_name: string; email?: string }
+
 interface Props {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  lead: any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  activities: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  relatedContacts: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  teamMembers: any[];
+  lead: Record<string, any>;
+  activities: Record<string, any>[];
+  relatedContacts: Record<string, any>[];
+  teamMembers: TeamMemberOpt[];
   tenantId: string;
   userId: string;
 }
@@ -667,10 +665,7 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
               </div>
             ) : (
               <div className="space-y-4">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {activities.map((activity: any) => (
+                {activities.map((activity) => (
                   <div key={activity.id} className="flex items-start gap-3">
                     <div className="p-2 rounded-full bg-muted">
                       <Activity className="w-4 h-4 text-muted-foreground" />
@@ -716,10 +711,7 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
         <div className="admin-card p-4">
           <h3 className="font-semibold mb-4">Related Contacts</h3>
           <div className="space-y-2">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            {relatedContacts.map((contact: any) => (
+            {relatedContacts.map((contact) => (
               <div
                 key={contact.id}
                 className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-accent cursor-pointer"
@@ -772,10 +764,8 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
                 >
                   <option value="">Select team member…</option>
                   {teamMembers
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    .filter((m: any) => m.user_id !== lead.assigned_to)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    .map((m: any) => (
+                    .filter((m) => m.user_id !== lead.assigned_to)
+                    .map((m) => (
                       <option key={m.user_id} value={m.user_id}>
                         {m.full_name || m.email}
                       </option>
@@ -820,7 +810,6 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getInitials(contact: any) {
+function getInitials(contact: { first_name?: string; last_name?: string }) {
   return (contact.first_name?.charAt(0) || '') + (contact.last_name?.charAt(0) || '');
 }

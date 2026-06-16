@@ -26,8 +26,7 @@ export default function CallsPage() {
   const [calls, setCalls] = useState<CallLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [contacts, setContacts] = useState<any[]>([]);
+  const [contacts, setContacts] = useState<{ id: string; firstName?: string; first_name?: string; lastName?: string; last_name?: string }[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -126,8 +125,7 @@ export default function CallsPage() {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function LogCallModal({ contacts, onSaved, onClose }: { contacts: any[]; onSaved: (c: any) => void; onClose: () => void }) {
+function LogCallModal({ contacts, onSaved, onClose }: { contacts: { id: string; firstName?: string; first_name?: string; lastName?: string; last_name?: string }[]; onSaved: (c: CallLog) => void; onClose: () => void }) {
   const [form, setForm] = useState({
     contact_id: '',
     direction: 'outbound',
@@ -173,10 +171,7 @@ function LogCallModal({ contacts, onSaved, onClose }: { contacts: any[]; onSaved
             <label className="block text-xs font-medium text-muted-foreground mb-1">Contact *</label>
             <select required value={form.contact_id} onChange={e => setForm(p => ({ ...p, contact_id: e.target.value }))} className={inp}>
               <option value="">Select contact</option>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-              {contacts.map((c: any) => <option key={c.id} value={c.id}>{c.firstName || c.first_name} {c.lastName || c.last_name}</option>)}
+              {contacts.map(c => <option key={c.id} value={c.id}>{c.firstName || c.first_name} {c.lastName || c.last_name}</option>)}
             </select>
           </div>
           <div>

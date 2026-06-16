@@ -139,8 +139,7 @@ export default function SuperAdminDataExplorer() {
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [showEditModal, setShowEditModal] = useState(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [editTarget, setEditTarget] = useState<{ table: string; id: string; field: string; value: any } | null>(null);
+  const [editTarget, setEditTarget] = useState<{ table: string; id: string; field: string; value: unknown } | null>(null);
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState(true);
 
@@ -181,8 +180,7 @@ export default function SuperAdminDataExplorer() {
     }
   }, [query, searchType, tenantFilter, page]);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleEdit = (table: string, id: string, field: string, currentValue: any) => {
+  const handleEdit = (table: string, id: string, field: string, currentValue: unknown) => {
     setEditTarget({ table, id, field, value: currentValue });
     setShowEditModal(true);
   };
@@ -357,8 +355,7 @@ export default function SuperAdminDataExplorer() {
               onToggle={() => setExpandedTable(expandedTable === 'tenants' ? null : 'tenants')}
               columns={['ID', 'Name', 'Subdomain', 'Plan', 'Status', 'Contacts', 'Created', 'Actions']}
               data={results.results.tenants.data.slice(0, expandedTable === 'tenants' ? undefined : 5)}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-              renderRow={(item: any) => (
+              renderRow={(item: TenantData) => (
                 <>
                   <td className="px-4 py-3 text-xs text-gray-500 font-mono">{item.id.slice(0, 8)}…</td>
                   <td className="px-4 py-3 text-sm font-medium text-white">{item.name}</td>
@@ -619,7 +616,7 @@ export default function SuperAdminDataExplorer() {
                 <label className="text-xs text-gray-500 uppercase">New Value</label>
                 <input
                   type="text"
-                  value={editTarget.value ?? ''}
+                   value={String(editTarget.value ?? '')}
                   onChange={(e) => setEditTarget({ ...editTarget, value: e.target.value })}
                   className="w-full mt-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
@@ -685,9 +682,7 @@ function DataTable({ title, icon, count, isExpanded, onToggle, columns, data, re
   isExpanded: boolean;
   onToggle: () => void;
   columns: string[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   renderRow: (item: any) => React.ReactNode;
 }) {
   return (
@@ -715,10 +710,7 @@ function DataTable({ title, icon, count, isExpanded, onToggle, columns, data, re
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800/50">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-              {data.map((item: any, i: number) => (
+              {data.map((item, i) => (
                 <tr key={i} className="hover:bg-gray-800/30 transition-colors">
                   {renderRow(item)}
                 </tr>

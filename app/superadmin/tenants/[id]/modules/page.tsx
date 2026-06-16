@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useCallback } from 'react';
 import { ArrowLeft, Zap, ToggleRight, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -18,26 +19,34 @@ export default function TenantModulesPage() {
   const params = useParams();
   const router = useRouter();
   const tenantId = params['id'] as string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [modules, setModules] = useState<any[]>([]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [_tenant, _setTenant] = useState<any>(null);
+  const [modules, setModules] = useState<ModuleData[]>([]);
+  const [_tenant, _setTenant] = useState<Record<string, unknown> | null>(null);
   const [plan, setPlan] = useState('');
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const res = await fetch(`/api/superadmin/tenants/${tenantId}/modules`);
     const d = await res.json();
     setModules(d.data || []);
     setPlan(d.plan || 'free');
     setLoading(false);
-  };
+  }, [tenantId]);
 
-  useEffect(() => { load(); }, [, load]);
+  useEffect(() => { load(); }, [load]);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const toggleModule = async (mod: any) => {
+  interface ModuleData {
+    id: string;
+    status: string;
+    planAllowed: boolean;
+    name: string;
+    icon?: string;
+    description?: string;
+    category?: string;
+    features?: string[];
+  }
+
+  const toggleModule = async (mod: ModuleData) => {
     setToggling(mod.id);
     const action = mod.status === 'active' ? 'disable' : 'install';
     const res = await fetch(`/api/superadmin/tenants/${tenantId}/modules`, {

@@ -7,10 +7,48 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+interface TenantData {
+  name: string;
+  slug: string;
+  plan_id: string;
+  status: string;
+  active_members?: number;
+  current_users?: number;
+  current_contacts?: number;
+  current_deals?: number;
+}
+
+interface SettingsData {
+  localization?: {
+    timezone?: string;
+    currency?: string;
+    fiscal_year_start_month?: string;
+    week_start?: string;
+    number_format?: string;
+    weekend_days?: string[];
+    business_hours?: { enabled: boolean; start_time: string; end_time: string; working_days: string[] };
+    holidays?: unknown[];
+  };
+  login_policy?: {
+    password?: { min_length?: number; max_age_days?: number; prevent_reuse_count?: number; require_uppercase?: boolean; require_number?: boolean; require_symbol?: boolean };
+    two_factor?: { enforcement?: string; grace_period_days?: number };
+    session?: { idle_timeout_minutes?: number; max_lifetime_hours?: number; max_concurrent?: number };
+    network?: { ip_allowlist_enabled?: boolean; ip_allowlist?: string[] };
+    login?: { allow_self_signup?: boolean; allowed_email_domains?: string[]; blocked_email_domains?: string[] };
+  };
+  picklists?: Record<string, Array<{ value: string; label: string }>>;
+  other_keys?: string[];
+}
+
+interface PageData {
+  tenant: TenantData;
+  settings: SettingsData;
+  error?: boolean;
+}
+
 export default function TenantSettingsAuditPage() {
   const params = useParams<{ id: string }>();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<PageData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -156,16 +194,13 @@ export default function TenantSettingsAuditPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            {Object.entries(pl).map(([cat, list]: any) => (
+            {Object.entries(pl).map(([cat, list]) => (
               <div key={cat} className="rounded-lg border border-border p-3">
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
                   {cat.replace(/_/g, ' ')} <span className="text-muted-foreground/50 font-normal">({list?.length ?? 0})</span>
                 </p>
                 <div className="flex flex-wrap gap-1">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  {(list ?? []).slice(0, 12).map((e: any) => (
+                  {(list ?? []).slice(0, 12).map((e) => (
                     <span key={e.value} className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono">{e.label}</span>
                   ))}
                   {(list?.length ?? 0) > 12 && <span className="text-[10px] text-muted-foreground">+{list.length - 12} more</span>}
@@ -187,8 +222,7 @@ export default function TenantSettingsAuditPage() {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function Stat({ label, value }: { label: string; value: any }) {
+function Stat({ label, value }: { label: string; value: number | string | undefined }) {
   return (
     <div className="rounded-lg border border-border bg-card p-3">
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
@@ -197,8 +231,7 @@ function Stat({ label, value }: { label: string; value: any }) {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function Section({ title, icon: Icon, children }: { title: string; icon: any; children: React.ReactNode }) {
+function Section({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 space-y-3">
       <p className="text-sm font-semibold flex items-center gap-2">
@@ -209,8 +242,7 @@ function Section({ title, icon: Icon, children }: { title: string; icon: any; ch
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function SubBlock({ title, icon: Icon, children }: { title: string; icon: any; children: React.ReactNode }) {
+function SubBlock({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-border/50 p-3 space-y-2">
       <p className="text-xs font-semibold flex items-center gap-1.5 text-muted-foreground">
@@ -225,8 +257,7 @@ function Grid({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-2 md:grid-cols-3 gap-2">{children}</div>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function KV({ k, v }: { k: string; v: any }) {
+function KV({ k, v }: { k: string; v: unknown }) {
   return (
     <div className="text-xs">
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{k}</p>

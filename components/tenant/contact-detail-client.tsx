@@ -83,10 +83,8 @@ function QuickAddTask({ contactId, _contactName, teamMembers, onAdded }: any) {
           </div>
           <select value={form.assigned_to} onChange={e=>setForm(f=>({...f,assigned_to:e.target.value}))} className={inp}>
             <option value="">Assign to...</option>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            {teamMembers.map((m:any) => <option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {teamMembers.map((m: any) => <option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
           </select>
           <div className="flex gap-2">
             <button type="submit" disabled={saving} className="flex-1 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold disabled:opacity-50 transition-colors">{saving?'Saving...':'Create Task'}</button>
@@ -234,7 +232,7 @@ export default function ContactDetailClient({
         .finally(() => { if (!abort.signal.aborted) setLoadingHistory(false); });
       return () => abort.abort();
     }
-  }, [activeTab, contact.id]);
+  }, [activeTab, contact.id, history.length]);
 
   // Fetch the contact's leads (one contact, many leads) on first open
   useEffect(() => {
@@ -248,7 +246,7 @@ export default function ContactDetailClient({
         .finally(() => { if (!abort.signal.aborted) setLoadingContactLeads(false); });
       return () => abort.abort();
     }
-  }, [activeTab, contact.id]);
+  }, [activeTab, contact.id, contactLeads.length, loadingContactLeads]);
 
   // ── Add activity / note ──────────────────────────────────────
   const addNote = async (e: React.FormEvent) => {
@@ -261,7 +259,8 @@ export default function ContactDetailClient({
     });
     const data = await res.json();
     if (!res.ok) { toast.error(data.error); setAddingNote(false); return; }
-    setActivities(prev => [{
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setActivities((prev: any) => [{
       ...data.data,
       full_name: 'You',
       created_at: new Date().toISOString(),
@@ -277,7 +276,8 @@ export default function ContactDetailClient({
       method:'DELETE', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ noteId }),
     });
-    setActivities(prev => prev.filter(a => a.id !== noteId));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setActivities((prev: any[]) => prev.filter((a: any) => a.id !== noteId));
     toast.success('Note deleted');
   };
 
@@ -292,7 +292,8 @@ export default function ContactDetailClient({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     setContact((c: any) => ({ ...c, lead_status: newStatus }));
     const desc = `Status changed: ${contact.lead_status} → ${newStatus}${statusReason ? ` — ${statusReason}` : ''}`;
-    setActivities(prev => [{
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setActivities((prev: any) => [{
       id: `tmp_${Date.now()}`, type:'note', description: desc,
       created_at: new Date().toISOString(), full_name: 'You',
       metadata: { status_change: true },
@@ -326,7 +327,8 @@ export default function ContactDetailClient({
       body: JSON.stringify({ completed }),
     });
     if (res.ok) {
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed } : t));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setTasks((prev: any[]) => prev.map((t: any) => t.id === taskId ? { ...t, completed } : t));
     }
   };
 
@@ -427,51 +429,32 @@ export default function ContactDetailClient({
               ].map(([f, lbl]) => (
                 <div key={f}>
                   <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">{lbl}</label>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  <input value={(editForm as any)[f as string]||''} onChange={e => setEditForm((prev: any) => ({ ...prev, [f as string]: e.target.value }))} className={inp} />
+                  <input value={editForm[f as string]||''} onChange={e => {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */ setEditForm((prev: any) => ({ ...prev, [f as string]: e.target.value }))}} className={inp} />
                 </div>
               ))}
               <div>
                 <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">Tags (comma separated)</label>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                <input value={editForm.tags||''} onChange={e => setEditForm((prev: any) => ({ ...prev, tags: e.target.value }))} className={inp} />
+                <input value={editForm.tags||''} onChange={e => {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */ setEditForm((prev: any) => ({ ...prev, tags: e.target.value }))}} className={inp} />
               </div>
               <div>
                 <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">Company</label>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                <select value={editForm.company_id||''} onChange={e => setEditForm((p: any) => ({...p, company_id: e.target.value||null}))} className={inp}>
+                <select value={editForm.company_id||''} onChange={e => {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */ setEditForm((p: any) => ({...p, company_id: e.target.value||null}))}} className={inp}>
                   <option value="">No company</option>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  {companies.map((c:any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">Assigned To</label>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                <select value={editForm.assigned_to||''} onChange={e => setEditForm((p: any) => ({...p, assigned_to: e.target.value||null}))} className={inp}>
+                <select value={editForm.assigned_to||''} onChange={e => {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */ setEditForm((p: any) => ({...p, assigned_to: e.target.value||null}))}} className={inp}>
                   <option value="">Unassigned</option>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  {teamMembers.map((m:any) => <option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {teamMembers.map((m: any) => <option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">Notes</label>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                <textarea value={editForm.notes||''} onChange={e => setEditForm((p: any) => ({...p, notes: e.target.value}))} rows={3} className={inp+' resize-none'} />
+                <textarea value={editForm.notes||''} onChange={e => {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */ setEditForm((p: any) => ({...p, notes: e.target.value}))}} rows={3} className={inp+' resize-none'} />
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={saveEdit} disabled={savingEdit} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 disabled:opacity-50 transition-colors">
@@ -523,17 +506,11 @@ export default function ContactDetailClient({
           {/* Quick actions */}
           <div className="admin-card p-4 space-y-1">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Quick Add</p>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            <QuickAddTask contactId={contact.id} contactName={`${contact.first_name} ${contact.last_name}`} teamMembers={teamMembers} onAdded={(t:any) => setTasks(prev => [t, ...prev])} />
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            <QuickAddDeal contactId={contact.id} companies={companies} onAdded={(d:any) => setDeals(prev => [d, ...prev])} />
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            <QuickAddMeeting contactId={contact.id} onAdded={(m:any) => {
-              setActivities(prev => [{ id:`tmp_${Date.now()}`, type:'meeting', description:`Meeting scheduled: ${m.title}`, created_at:new Date().toISOString(), full_name:'You' }, ...prev]);
+            <QuickAddTask contactId={contact.id} contactName={`${contact.first_name} ${contact.last_name}`} teamMembers={teamMembers} onAdded={(t: Record<string, any>) => {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */ setTasks((prev: any) => [t, ...prev])}} />
+            <QuickAddDeal contactId={contact.id} companies={companies} onAdded={(d: Record<string, any>) => {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */ setDeals((prev: any) => [d, ...prev])}} />
+            <QuickAddMeeting contactId={contact.id} onAdded={(m: Record<string, any>) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              setActivities((prev: any) => [{ id:`tmp_${Date.now()}`, type:'meeting', description:`Meeting scheduled: ${m.title}`, created_at:new Date().toISOString(), full_name:'You' }, ...prev]);
             }} />
           </div>
         </div>
@@ -606,9 +583,7 @@ export default function ContactDetailClient({
                   </div>
                 ) : (
                   <div className="divide-y divide-border">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     {activities.map((a: any, i: number) => {
                       const Icon = ACTIVITY_ICONS[a.type] ?? MessageSquare;
                       const colorCls = ACTIVITY_COLORS[a.type] ?? 'text-gray-600 bg-gray-100';
@@ -676,23 +651,19 @@ export default function ContactDetailClient({
             <div className="admin-card overflow-hidden">
               <div className="px-5 py-3 border-b border-border flex items-center justify-between">
                 <p className="text-sm font-semibold">Tasks</p>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                <QuickAddTask contactId={contact.id} contactName={`${contact.first_name} ${contact.last_name}`} teamMembers={teamMembers} onAdded={(t:any) => setTasks(prev => [t, ...prev])} />
+                <QuickAddTask contactId={contact.id} contactName={`${contact.first_name} ${contact.last_name}`} teamMembers={teamMembers} onAdded={(t: Record<string, any>) => {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */ setTasks((prev: any) => [t, ...prev])}} />
               </div>
               {!tasks.length ? (
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">No tasks yet — create one above</div>
               ) : (
                 <div className="divide-y divide-border">
-                  {[...tasks].sort((a,b) => {
+                  {[...tasks].sort((a: any, b: any) => {
                     if (a.completed && !b.completed) return 1;
                     if (!a.completed && b.completed) return -1;
                     if (!a.due_date && !b.due_date) return 0;
                     if (!a.due_date) return 1;
                     if (!b.due_date) return -1;
                     return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
                   }).map((t: any) => {
                     const today = new Date().toISOString().split('T')[0] || '';
                     const overdue = !t.completed && t.due_date && t.due_date < today;
@@ -734,18 +705,13 @@ export default function ContactDetailClient({
             <div className="admin-card overflow-hidden">
               <div className="px-5 py-3 border-b border-border flex items-center justify-between">
                 <p className="text-sm font-semibold">Deals</p>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                <QuickAddDeal contactId={contact.id} companies={companies} onAdded={(d:any) => setDeals(prev => [d, ...prev])} />
+                <QuickAddDeal contactId={contact.id} companies={companies} onAdded={(d: Record<string, any>) => {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */ setDeals((prev: any) => [d, ...prev])}} />
               </div>
               {!deals.length ? (
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">No deals yet — create one above</div>
               ) : (
                 <div className="divide-y divide-border">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {deals.map((d: any) => (
                     <div key={d.id} className="flex items-center gap-4 px-5 py-4 hover:bg-accent/20 transition-colors">
                       <div className="flex-1 min-w-0">
@@ -763,10 +729,8 @@ export default function ContactDetailClient({
                   ))}
                   <div className="px-5 py-3 bg-muted/20 flex items-center justify-between">
                     <span className="text-xs font-semibold text-muted-foreground">Total pipeline</span>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    <span className="text-sm font-bold">{formatCurrency(deals.filter((d:any)=>!['lost'].includes(d.stage)).reduce((s:number,d:any)=>s+Number(d.value),0))}</span>
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    <span className="text-sm font-bold">{formatCurrency(deals.filter((d: any)=>!['lost'].includes(d.stage)).reduce((s: any, d: any)=>s+Number(d.value),0))}</span>
                   </div>
                 </div>
               )}
@@ -790,9 +754,7 @@ export default function ContactDetailClient({
                 </div>
               ) : (
                 <div className="divide-y divide-border">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {contactLeads.map((l: any) => {
                     const status = LEAD_STATUSES.find(s => s.id === l.lead_status) ?? LEAD_STATUSES[0]!;
                     const offerLabel = l.offer_total > 0
@@ -891,9 +853,7 @@ export default function ContactDetailClient({
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">No edit history yet</div>
               ) : (
                 <div className="divide-y divide-border max-h-[500px] overflow-y-auto">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {history.map((h: any) => (
                     <div key={h.id} className="px-5 py-4 hover:bg-accent/10 transition-colors">
                       <div className="flex items-start justify-between gap-4">

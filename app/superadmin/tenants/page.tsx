@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Building2, Plus, Search, X, LogIn, Trash2, Loader2, Crown, Mail,
   DollarSign, Shield, RefreshCw, Edit, Save, Zap } from 'lucide-react';
+
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -26,17 +27,16 @@ const PLANS = ['free','starter','pro','enterprise'];
 const STATUSES = ['trialing','active','suspended','cancelled','past_due','trial_expired'];
 const BILLING_TYPES = ['trial','stripe','manual','lifetime','complimentary'];
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function EditModal({ tenant, onSave, onClose }: any) {
+function EditModal({ tenant, onSave, onClose }: { tenant: TenantInfo; onSave: () => void; onClose: () => void }) {
   const [f, setF] = useState({
-    plan_id: tenant.plan_id||'free',
-    status:  tenant.status||'trialing',
-    billing_email: tenant.billing_email||'',
-    billing_type:  tenant.billing_type||'trial',
-    manual_paid_until: tenant.manual_paid_until ? new Date(tenant.manual_paid_until).toISOString().split('T')[0] : '',
-    trial_ends_at: tenant.trial_ends_at ? new Date(tenant.trial_ends_at).toISOString().split('T')[0] : '',
-    admin_notes: tenant.admin_notes||'',
-    primary_color: tenant.primary_color||'#7c3aed',
+    plan_id: (tenant.plan_id as string)||'free',
+    status:  (tenant.status as string)||'trialing',
+    billing_email: (tenant.billing_email as string)||'',
+    billing_type:  (tenant.billing_type as string)||'trial',
+    manual_paid_until: tenant.manual_paid_until ? new Date(tenant.manual_paid_until as string).toISOString().split('T')[0] : '',
+    trial_ends_at: tenant.trial_ends_at ? new Date(tenant.trial_ends_at as string).toISOString().split('T')[0] : '',
+    admin_notes: (tenant.admin_notes as string)||'',
+    primary_color: (tenant.primary_color as string)||'#7c3aed',
   });
   const [saving, setSaving] = useState(false);
   const inp = "w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white focus:outline-none focus:border-violet-500";
@@ -105,20 +105,41 @@ function EditModal({ tenant, onSave, onClose }: any) {
   );
 }
 
+interface TenantInfo {
+  id: string;
+  name: string;
+  slug?: string;
+  plan_id: string;
+  plan_name?: string;
+  status: string;
+  billing_type?: string;
+  billing_email?: string;
+  stripe_customer_id?: string;
+  owner_name?: string;
+  owner_email?: string;
+  created_at: string;
+  trial_ends_at?: string;
+  manual_paid_until?: string;
+  primary_color?: string;
+  admin_notes?: string;
+  member_count?: number;
+}
+
+interface MeInfo {
+  userId: string;
+  ownTenantId?: string;
+}
+
 export default function SuperAdminTenantsPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [tenants, setTenants]     = useState<any[]>([]);
+  const [tenants, setTenants]     = useState<TenantInfo[]>([]);
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [showCreate, setShowCreate] = useState(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [editTenant, setEditTenant] = useState<any>(null);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [modulesTenant, setModulesTenant] = useState<any>(null);
+  const [editTenant, setEditTenant] = useState<TenantInfo | null>(null);
+  const [modulesTenant, setModulesTenant] = useState<TenantInfo | null>(null);
   const [impersonating, setImpersonating] = useState<string|null>(null);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [meInfo, setMeInfo]       = useState<any>(null);
+  const [meInfo, setMeInfo]       = useState<MeInfo | null>(null);
   const [form, setForm]           = useState({name:'',plan_id:'free',status:'trialing',billing_email:'',primary_color:'#7c3aed',owner_email:'',owner_name:'',owner_password:'',trial_days:'14',billing_type:'trial'});
   const [saving, setSaving]       = useState(false);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-muted/30 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500";
@@ -195,7 +216,7 @@ export default function SuperAdminTenantsPage() {
     } else toast.error(d.error);
     setImpersonating(null);
   };
-  const copyEmail = (email:string) => { navigator.clipboard.writeText(email); toast.success('Copied!'); };
+  const copyEmail = (email: string | undefined) => { if (email) { navigator.clipboard.writeText(email); toast.success('Copied!'); } };
 
   const counts = {
     total:tenants.length,
@@ -392,25 +413,33 @@ export default function SuperAdminTenantsPage() {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function ModulesModal({ tenant, onClose, _onSaved }: { tenant: any; onClose: () => void; _onSaved: () => void }) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [modules, setModules] = useState<any[]>([]);
+interface ModuleData {
+  id: string;
+  status: string;
+  planAllowed: boolean;
+  name: string;
+  icon?: string;
+  description?: string;
+  category?: string;
+  features?: string[];
+}
+
+function ModulesModal({ tenant, onClose, _onSaved }: { tenant: TenantInfo; onClose: () => void; _onSaved: () => void }) {
+  const [modules, setModules] = useState<ModuleData[]>([]);
   const [plan, setPlan] = useState('');
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const res = await fetch(`/api/superadmin/tenants/${tenant.id}/modules`);
     const d = await res.json();
     setModules(d.data || []);
     setPlan(d.plan || 'free');
     setLoading(false);
-  };
-  useEffect(() => { load(); }, [, load]);
+  }, [tenant.id]);
+  useEffect(() => { load(); }, [load]);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const toggleModule = async (mod: any) => {
+  const toggleModule = async (mod: ModuleData) => {
     setToggling(mod.id);
     const action = mod.status === 'active' ? 'disable' : 'install';
     const res = await fetch(`/api/superadmin/tenants/${tenant.id}/modules`, {
@@ -461,7 +490,7 @@ function ModulesModal({ tenant, onClose, _onSaved }: { tenant: any; onClose: () 
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-white">{mod.name}</p>
-                        <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full capitalize', CAT_COLORS[mod.category] || CAT_COLORS['utility'])}>
+                        <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full capitalize', CAT_COLORS[mod.category ?? ''] || CAT_COLORS['utility'])}>
                           {mod.category}
                         </span>
                       </div>
