@@ -6,6 +6,19 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 const TICK  = { fill:'rgba(255,255,255,0.3)', fontSize:10 };
 const TIP   = { background:'hsl(222,32%,9%)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, fontSize:11 };
+interface RevenueData {
+  mrr?: { mrr?: number; paying?: number; free_tier?: number; trialing?: number };
+  events?: Array<{ id: string; event_type: string; tenant_name?: string; amount: number; created_at: string }>;
+}
+
+interface TenantData {
+  id: string;
+  plan_id: string;
+  status: string;
+  created_at?: string;
+  name?: string;
+}
+
 const EVENT_COLORS: Record<string,string> = {
   'invoice.paid':'text-emerald-400', upgrade:'text-emerald-400',
   cancelled:'text-red-400', downgrade:'text-amber-400',
@@ -13,10 +26,8 @@ const EVENT_COLORS: Record<string,string> = {
 };
 
 export default function RevenuePage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [data, setData]     = useState<any>(null);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [tenants, setTenants] = useState<any[]>([]);
+  const [data, setData]     = useState<RevenueData | null>(null);
+  const [tenants, setTenants] = useState<TenantData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -96,10 +107,7 @@ export default function RevenuePage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)"/>
                 <XAxis dataKey="month" tick={TICK} tickLine={false} axisLine={false}/>
                 <YAxis tick={TICK} tickLine={false} axisLine={false} tickFormatter={v=>`$${v}`}/>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                <Tooltip contentStyle={TIP} formatter={(v:any)=>[formatCurrency(v),'MRR']}/>
+                <Tooltip contentStyle={TIP} formatter={(v: number)=>[formatCurrency(v),'MRR']}/>
                 <Area type="monotone" dataKey="value" stroke="#10b981" fill="url(#m)" strokeWidth={2}/>
               </AreaChart>
             </ResponsiveContainer>
@@ -150,10 +158,7 @@ export default function RevenuePage() {
           </div>
         ) : (
           <div className="divide-y divide-white/5">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            {(data.events||[]).map((e:any) => (
+            {(data?.events||[]).map((e) => (
               <div key={e.id} className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors">
                 <div className={cn('w-2 h-2 rounded-full shrink-0',
                   e.event_type.includes('paid')||e.event_type==='upgrade'?'bg-emerald-500':

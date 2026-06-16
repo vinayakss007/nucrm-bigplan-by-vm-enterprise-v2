@@ -28,10 +28,9 @@ const DATE_RANGES = [
   { label: 'All time', days: 0 },
 ];
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function downloadCSV(data: any[], filename: string) {
+function downloadCSV(data: Record<string, unknown>[], filename: string) {
   if (!data.length) { toast.error('No data to export'); return; }
-  const headers = Object.keys(data[0]);
+  const headers = Object.keys(data[0] ?? {});
   const rows = data.map(row =>
     headers.map(h => {
       const v = row[h];
@@ -58,8 +57,7 @@ export default function ReportsPage() {
   const [selectedType, setSelectedType] = useState('contacts');
   const [dateRange, setDateRange] = useState(30);
   const [loading, setLoading] = useState(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<Record<string, unknown>[]>([]);
   const [ran, setRan] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('All');
 
@@ -77,9 +75,8 @@ export default function ReportsPage() {
       if (!res.ok) { toast.error(data.error || 'Failed'); setLoading(false); return; }
       setResults(data.data || []);
       if (!data.data?.length) toast.success('No data found for this period');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      toast.error('Report failed: ' + err.message);
+    } catch (err: unknown) {
+      toast.error('Report failed: ' + (err instanceof Error ? err.message : String(err)));
     }
     setLoading(false);
   };
@@ -197,7 +194,7 @@ export default function ReportsPage() {
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10">
                       <tr>
-                        {Object.keys(results[0]).map(h => (
+                        {Object.keys(results[0] ?? {}).map(h => (
                           <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground capitalize whitespace-nowrap">
                             {h.replace(/_/g, ' ')}
                           </th>
@@ -207,14 +204,11 @@ export default function ReportsPage() {
                     <tbody>
                       {results.map((row, i) => (
                         <tr key={i} className="border-t border-border hover:bg-accent/30 transition-colors">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          {Object.values(row).map((v: any, j) => (
+                          {Object.values(row).map((v: unknown, j) => (
                             <td key={j} className="px-4 py-2 text-xs text-muted-foreground max-w-[200px] truncate">
                               {v === null || v === undefined ? '—' :
                                 typeof v === 'number' && v > 1000 ? formatCurrency(v) :
-                                String(v).includes('T') ? formatDate(v) :
+                                String(v).includes('T') ? formatDate(String(v)) :
                                 String(v)}
                             </td>
                           ))}

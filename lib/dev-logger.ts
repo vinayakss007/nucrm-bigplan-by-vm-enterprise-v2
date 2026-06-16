@@ -134,8 +134,8 @@ class DevelopmentLogger {
       try {
         const Sentry = await import('@sentry/nextjs');
         Sentry.captureMessage(message, { level: level === 'error' ? 'error' : 'info' });
-      } catch {
-        // Sentry not configured or failed
+      } catch (err) {
+        console.error('[dev-logger] Sentry capture failed', err);
       }
     }
 

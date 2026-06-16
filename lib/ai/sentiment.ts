@@ -153,6 +153,26 @@ export async function updateContactDealsSentiment(
   return contactDeals.length;
 }
 
+/**
+ * Analyze sentiment for a contact and update their open deals.
+ * Convenience wrapper around analyzeSentiment + updateContactDealsSentiment.
+ */
+export async function analyzeSentimentForContact(
+  contactId: string,
+  tenantId: string,
+  text: string,
+  userId?: string | null,
+): Promise<{ sentiment: SentimentResult; dealsUpdated: number } | null> {
+  try {
+    const sentiment = await analyzeSentiment(text, tenantId, userId);
+    const dealsUpdated = await updateContactDealsSentiment(contactId, tenantId, sentiment);
+    return { sentiment, dealsUpdated };
+  } catch (err) {
+    console.error('[sentiment] analyzeSentimentForContact failed:', err);
+    return null;
+  }
+}
+
 // ── Helpers ────────────────────────────────────────────────────────
 
 function validateLabel(raw: string): SentimentLabel {

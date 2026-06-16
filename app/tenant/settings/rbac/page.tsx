@@ -64,8 +64,8 @@ export default function RBACSettingsPage() {
         const { data } = await arRes.json();
         setApprovalRules(data || []);
       }
-    } catch {
-      // Defaults on error
+    } catch (err) {
+      console.error('[rbac] failed to load roles', err);
     } finally {
       setLoading(false);
     }

@@ -10,8 +10,7 @@ const TIMEZONES  = ['UTC','America/New_York','America/Chicago','America/Los_Ange
 const CURRENCIES = ['USD','EUR','GBP','INR','AED','SGD','AUD','CAD','JPY'];
 
 export default function TenantGeneralSettings() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [tenant, setTenant] = useState<any>(null);
+  const [tenant, setTenant] = useState<Record<string, unknown> | null>(null);
   const [form, setForm]     = useState({ name:'', primary_color:'#7c3aed', industry:'', subdomain:'', custom_domain:'', settings:{ timezone:'UTC', currency:'USD' } });
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -88,8 +87,8 @@ export default function TenantGeneralSettings() {
               <label className="block text-xs font-medium text-muted-foreground mb-2">Logo</label>
               <div className="flex items-center gap-3">
                 <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center border border-border overflow-hidden">
-                  {logoPreview || tenant?.logo_url ? (
-                    <img src={logoPreview || tenant?.logo_url} className="w-full h-full object-contain" alt="Logo" />
+                  {logoPreview || (tenant && typeof tenant.logo_url === 'string' && tenant.logo_url) ? (
+                    <Image src={logoPreview || (tenant && typeof tenant.logo_url === 'string' ? tenant.logo_url : '')} className="w-full h-full object-contain" alt="Logo" width={64} height={64} />
                   ) : (
                     <Globe className="w-6 h-6 text-muted-foreground" />
                   )}
@@ -115,7 +114,7 @@ export default function TenantGeneralSettings() {
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center border border-border overflow-hidden">
                   {faviconPreview || tenant?.favicon_url ? (
-                    <Image src={faviconPreview || tenant?.favicon_url} className="w-full h-full object-contain" alt="Favicon" />
+                    <Image src={faviconPreview || (tenant?.favicon_url as string) || ''} className="w-full h-full object-contain" alt="Favicon" width={40} height={40} />
                   ) : (
                     <Globe className="w-4 h-4 text-muted-foreground" />
                   )}

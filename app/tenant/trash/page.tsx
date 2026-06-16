@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Trash2, RotateCcw, AlertTriangle, X, Clock } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -11,26 +11,34 @@ const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
   company: { label: 'Company',  color: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400' },
 };
 
+interface TrashItem {
+  id: string;
+  name: string;
+  resource_type: string;
+  email?: string;
+  extra?: string;
+  deleted_at: string;
+  days_remaining: number;
+}
+
 export default function TrashPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<TrashItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [restoring, setRestoring] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     const q = filter !== 'all' ? `?type=${filter}` : '';
     const res = await fetch('/api/tenant/trash' + q);
     const data = await res.json();
     setItems(data.data ?? []);
     setLoading(false);
-  };
+  }, [filter]);
   useEffect(() => { load(); }, [filter, load]);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const restore = async (item: any) => {
+  const restore = async (item: TrashItem) => {
     setRestoring(item.id);
     const res = await fetch('/api/tenant/trash', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -42,8 +50,7 @@ export default function TrashPage() {
     setRestoring(null);
   };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const permanentDelete = async (item: any) => {
+  const permanentDelete = async (item: TrashItem) => {
     setDeleting(item.id);
     const res = await fetch('/api/tenant/trash', {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' },

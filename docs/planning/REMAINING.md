@@ -1,0 +1,28 @@
+# NuCRM Enterprise - Remaining Work Tracker
+
+Last updated: 2026-06-16
+
+## Status Summary
+- Branch `fix/all-remaining-fixes-0615` fully merged into `main` ✅
+- PR #246: type safety polish (open)
+- PR #247: catch block logging (open)
+- Working on `fix/empty-catch-blocks-logging`
+
+## Remaining Items
+
+### HIGH PRIORITY
+- [x] **~216 empty catch blocks** - 14 fixed (PR #247), remaining 19 are intentional (metrics, SSE, sidebar fallbacks)
+- [ ] **Zod validation coverage** - extend to all API routes (~70% done)
+
+### MEDIUM PRIORITY
+- [x] **Email sentiment to deals** - wired via `createEmailTracking()` (PR #248)
+- [x] **35 TypeScript errors** - resolved across 11 files (2a7bb60)
+- [ ] **Integration tests** - fix backup-integrity + tenant-isolation (2 failing)
+- [ ] **E2E tests** - fix 5 failing tests (seed data fixtures)
+
+### INFRASTRUCTURE (non-code)
+- [ ] K8s/Terraform manifests setup
+- [ ] Stripe/Twilio/DocuSign account config
+- [ ] PostgreSQL/Redis/S3 deployment
+- [ ] Domain configuration
+- [ ] Run db:push + seed

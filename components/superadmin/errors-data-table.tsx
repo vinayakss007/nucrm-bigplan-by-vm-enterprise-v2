@@ -87,7 +87,7 @@ export default function ErrorsDataTable({ initialErrors, summary }: Props) {
     loadData(0)
   }, [loadData])
 
-  const resolveError = async (id: string) => {
+  const resolveError = useCallback(async (id: string) => {
     const res = await fetch('/api/superadmin/errors', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -99,7 +99,7 @@ export default function ErrorsDataTable({ initialErrors, summary }: Props) {
     } else {
       toast.error('Failed to resolve')
     }
-  }
+  }, [loadData, pagination.pageIndex])
 
   const resolveAll = async () => {
     const res = await fetch('/api/superadmin/errors', {
@@ -225,7 +225,7 @@ export default function ErrorsDataTable({ initialErrors, summary }: Props) {
         )
       },
     },
-  ], [pagination.pageIndex, loadData])
+  ], [resolveError])
 
   return (
     <div className="space-y-4 animate-fade-in">

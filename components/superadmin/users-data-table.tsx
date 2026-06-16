@@ -160,7 +160,7 @@ export default function UsersDataTable({ initialUsers }: Props) {
         <div className="text-xs text-muted-foreground">{formatRelativeTime(row.original.created_at)}</div>
       ),
     },
-  ], [pagination.pageIndex, loadData])
+  ], [])
 
   const inp = "w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-violet-500"
 

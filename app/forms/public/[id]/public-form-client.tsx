@@ -92,9 +92,6 @@ export default function PublicFormClient({ form }: { form: any }) {
 
   return (
     <form ref={containerRef} onSubmit={handleSubmit} className="space-y-5">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       {fields.map((field: any) => (
         <div key={field.id}>
           <label className="block text-sm font-semibold mb-1.5">

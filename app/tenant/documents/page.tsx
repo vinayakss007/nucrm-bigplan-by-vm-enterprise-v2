@@ -43,11 +43,10 @@ export default function DocumentsPage() {
         setDocuments(data.documents ?? []);
         setFolders(data.folders ?? []);
       }
-    } catch {
-      // Handle error silently
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      console.error('[documents] failed to load', err);
     }
+    setLoading(false);
   }, [currentFolder]);
 
   useEffect(() => { loadDocuments(); }, [loadDocuments]);

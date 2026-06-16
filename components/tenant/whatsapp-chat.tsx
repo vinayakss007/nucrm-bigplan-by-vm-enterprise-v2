@@ -185,10 +185,7 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
         <div className="px-4 py-3 border-b border-border bg-muted/50">
           <p className="text-xs font-medium text-muted-foreground mb-2">Select a template:</p>
           <div className="flex flex-wrap gap-2">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            {templates.map((t: any) => (
+            {templates.map((t) => (
               <button
                 key={t.id}
                 onClick={() => sendTemplate(t.name)}

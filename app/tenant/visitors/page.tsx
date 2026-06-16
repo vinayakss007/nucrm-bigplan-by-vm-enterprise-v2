@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Users, Eye, UserCheck, UserX, BarChart3, ArrowUpDown } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -26,7 +26,7 @@ export default function VisitorsPage() {
   const [sortBy, setSortBy] = useState<SortField>('lastSeenAt');
   const [sortDesc, setSortDesc] = useState(true);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -43,7 +43,7 @@ export default function VisitorsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter, minScore, maxScore]);
 
   useEffect(() => { load(); }, [filter, minScore, maxScore, load]);
 

@@ -259,17 +259,14 @@ export default function DealsKanbanPage() {
       {/* Summary Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total Deals', value: deals.length },
+          { label: 'Total Deals', value: deals.length, color: '' },
           { label: 'Pipeline Value', value: formatCurrency(totalValue), color: 'text-violet-600' },
           { label: 'Won Deals', value: wonDeals.length, color: 'text-emerald-600' },
           { label: 'Won Value', value: formatCurrency(wonValue), color: 'text-emerald-600' },
         ].map(s => (
           <div key={s.label} className="admin-card p-3">
             <p className="text-xs text-muted-foreground">{s.label}</p>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            <p className={cn('text-lg sm:text-xl font-bold', (s as any).color)}>{s.value}</p>
+            <p className={cn('text-lg sm:text-xl font-bold', s.color)}>{s.value}</p>
           </div>
         ))}
       </div>

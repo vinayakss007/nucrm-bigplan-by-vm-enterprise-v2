@@ -20,14 +20,11 @@ const CATEGORY_COLORS: Record<string,string> = {
 interface ModuleData {
   id: string; name: string; description: string; icon: string;
   category: string; features: string[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  pricing: Record<string, any>;
+  pricing: Record<string, unknown>;
   status: 'active' | 'disabled' | 'available';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  settings: Record<string, any>;
+  settings: Record<string, unknown>;
   is_free: boolean; price_monthly: number;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  settings_schema?: any[];
+  settings_schema?: { key: string; label: string; required?: boolean; type?: string; placeholder?: string; help?: string; options?: { value: string; label: string }[] }[];
 }
 
 export default function ModulesPage() {
@@ -82,7 +79,7 @@ export default function ModulesPage() {
   // Open modal and pre-fill settings
   const openModule = (mod: ModuleData) => {
     setSelected(mod);
-    setSettingsForm(mod.settings ?? {});
+    setSettingsForm((mod.settings ?? {}) as Record<string, string>);
   };
 
   return (
@@ -210,10 +207,7 @@ export default function ModulesPage() {
                 <div>
                   <h4 className="text-sm font-semibold mb-3">Configuration</h4>
                   <div className="space-y-3">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    {selected.settings_schema.map((field: any) => (
+                    {selected.settings_schema.map((field) => (
                       <div key={field.key}>
                         <label className="block text-xs font-medium text-muted-foreground mb-1">
                           {field.label}{field.required && <span className="text-red-500 ml-0.5">*</span>}
@@ -222,10 +216,7 @@ export default function ModulesPage() {
                           <select value={settingsForm[field.key] ?? ''} onChange={e => setSettingsForm(p => ({...p, [field.key]: e.target.value}))}
                             className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
                             <option value="">Select...</option>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            {field.options?.map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            {field.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                           </select>
                         ) : (
                           <input type={field.type === 'password' ? 'password' : 'text'}

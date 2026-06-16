@@ -101,8 +101,7 @@ function QuotesPageInner() {
   };
 
   const filtered = quotes.filter(q =>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (q.title.toLowerCase().includes(search.toLowerCase()) || getContactName((q as any).contactId).toLowerCase().includes(search.toLowerCase())) &&
+    (q.title.toLowerCase().includes(search.toLowerCase()) || getContactName(q.contactId).toLowerCase().includes(search.toLowerCase())) &&
     (!statusFilter || q.status === statusFilter) &&
     (!contactFilter || q.contactId === contactFilter)
   );
@@ -123,17 +122,14 @@ function QuotesPageInner() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total', value: quotes.length },
+          { label: 'Total', value: quotes.length, color: '' },
           { label: 'Accepted', value: quotes.filter(q => q.status === 'accepted').length, color: 'text-green-600' },
           { label: 'Pending', value: quotes.filter(q => ['draft','sent','viewed'].includes(q.status)).length, color: 'text-blue-600' },
           { label: 'Lost', value: quotes.filter(q => ['expired','declined'].includes(q.status)).length, color: 'text-red-600' },
         ].map(s => (
           <div key={s.label} className="admin-card p-3">
             <p className="text-xs text-muted-foreground">{s.label}</p>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            <p className={cn('text-lg sm:text-xl font-bold', (s as any).color)}>{s.value}</p>
+            <p className={cn('text-lg sm:text-xl font-bold', s.color)}>{s.value}</p>
           </div>
         ))}
       </div>
@@ -194,10 +190,7 @@ function QuotesPageInner() {
                     <td className="px-4 py-3 font-mono text-xs">{quote.quoteNumber || '-'}</td>
                     <td className="px-4 py-3 text-xs">{getContactName(quote.contactId)}</td>
                     <td className="px-4 py-3 text-xs hidden sm:table-cell">{quote.title}</td>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    <td className="px-4 py-3 text-xs font-semibold">${parseFloat((quote as any)?.totalAmount || '0').toFixed(2)}</td>
+                    <td className="px-4 py-3 text-xs font-semibold">${parseFloat(quote.totalAmount || '0').toFixed(2)}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground hidden md:table-cell">{quote.expiresAt ? new Date(quote.expiresAt).toLocaleDateString() : '-'}</td>
                     <td className="px-4 py-3 hidden sm:table-cell">
                       <span className={`px-2 py-1 text-[10px] rounded-full font-medium ${statusColors[quote.status] || 'bg-slate-100'}`}>{quote.status}</span>

@@ -1,8 +1,23 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useCallback } from 'react';
 import { Users, Search, Crown, Plus, ArrowRight, AlertTriangle, Loader2 } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
+
+interface UserData {
+  id: string;
+  email: string;
+  full_name?: string;
+  is_super_admin: boolean;
+  created_at: string;
+  memberships?: Array<{ tenant_name: string; plan: string }>;
+}
+
+interface MeData {
+  userId: string;
+  ownTenantId?: string;
+}
 
 /**
  * Super Admin Users Page
@@ -15,10 +30,8 @@ import toast from 'react-hot-toast';
  * Transfer is the ONLY way to change super admin ownership.
  */
 export default function SuperAdminUsersPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [users, setUsers]   = useState<any[]>([]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [me, setMe]         = useState<any>(null);
+  const [users, setUsers]   = useState<UserData[]>([]);
+  const [me, setMe]         = useState<MeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -29,7 +42,7 @@ export default function SuperAdminUsersPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-muted/30 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500";
   const lbl = "block text-xs font-medium text-muted-foreground mb-1";
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const q = search ? `?q=${encodeURIComponent(search)}` : '';
     const [res, meRes] = await Promise.all([
       fetch('/api/superadmin/users' + q),
@@ -40,8 +53,8 @@ export default function SuperAdminUsersPage() {
     setUsers(d.data||[]);
     setMe(m);
     setLoading(false);
-  };
-  useEffect(() => { load(); }, [search, load]);
+  }, [search]);
+  useEffect(() => { load(); }, [load]);
 
   const transferSuperAdmin = async () => {
     if (!transferTarget) { toast.error('Select a target user'); return; }
@@ -183,14 +196,11 @@ export default function SuperAdminUsersPage() {
                   </div>
                 </td>
                 <td className="px-4 py-3">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  {(u.memberships||[]).slice(0,3).map((m:any,i:number)=>(
+                  {(u.memberships??[]).slice(0,3).map((m,i)=>(
                     <div key={i} className="text-xs text-muted-foreground">{m.tenant_name} <span className="text-muted-foreground/50">({m.plan})</span></div>
                   ))}
-                  {(u.memberships||[]).length>3&&<p className="text-[10px] text-muted-foreground/40">+{u.memberships.length-3} more</p>}
-                  {!u.memberships?.length&&<p className="text-xs text-muted-foreground/30">No workspaces</p>}
+                  {((u.memberships??[]).length)>3&&<p className="text-[10px] text-muted-foreground/40">+{(u.memberships??[]).length-3} more</p>}
+                  {!(u.memberships??[]).length&&<p className="text-xs text-muted-foreground/30">No workspaces</p>}
                 </td>
                 <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(u.created_at)}</td>
                 <td className="px-4 py-3">

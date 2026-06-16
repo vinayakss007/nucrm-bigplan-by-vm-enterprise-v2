@@ -101,9 +101,10 @@ export function LineChart({ data, height = 200, className }: ChartProps) {
   );
 }
 
+const CHART_COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#84cc16'];
+
 export function PieChart({ data, height = 200, className }: ChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#84cc16'];
   
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -134,7 +135,7 @@ export function PieChart({ data, height = 200, className }: ChartProps) {
       ctx.moveTo(cx, cy);
       ctx.arc(cx, cy, radius, startAngle, endAngle);
       ctx.closePath();
-      ctx.fillStyle = (item.color || COLORS[i % COLORS.length]) || '#8b5cf6';
+      ctx.fillStyle = (item.color || CHART_COLORS[i % CHART_COLORS.length]) || '#8b5cf6';
       ctx.fill();
       
       startAngle = endAngle;
@@ -144,7 +145,7 @@ export function PieChart({ data, height = 200, className }: ChartProps) {
     ctx.arc(cx, cy, radius * 0.5, 0, Math.PI * 2);
     ctx.fillStyle = 'hsl(var(--background))';
     ctx.fill();
-  }, [data, height, COLORS]);
+  }, [data, height]);
   
   return (
     <div className={cn('w-full flex items-center justify-center', className)} style={{ height }}>
@@ -155,7 +156,6 @@ export function PieChart({ data, height = 200, className }: ChartProps) {
 
 export function DonutChart({ data, height = 200, className }: ChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#84cc16'];
   
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -187,12 +187,12 @@ export function DonutChart({ data, height = 200, className }: ChartProps) {
       ctx.arc(cx, cy, outerRadius, startAngle, endAngle);
       ctx.arc(cx, cy, innerRadius, endAngle, startAngle, true);
       ctx.closePath();
-      ctx.fillStyle = (item.color || COLORS[i % COLORS.length]) || '#8b5cf6';
+      ctx.fillStyle = (item.color || CHART_COLORS[i % CHART_COLORS.length]) || '#8b5cf6';
       ctx.fill();
       
       startAngle = endAngle;
     });
-  }, [data, height, COLORS]);
+  }, [data, height]);
   
   const total = data.reduce((sum, d) => sum + d.value, 0);
   
@@ -202,7 +202,7 @@ export function DonutChart({ data, height = 200, className }: ChartProps) {
       <div className="flex flex-col gap-2 overflow-hidden">
         {data.map((item, i) => (
           <div key={i} className="flex items-center gap-2 text-xs">
-            <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+            <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
             <span className="truncate">{item.label}</span>
             <span className="font-semibold ml-auto pl-2">{total > 0 ? Math.round((item.value / total) * 100) : 0}%</span>
           </div>

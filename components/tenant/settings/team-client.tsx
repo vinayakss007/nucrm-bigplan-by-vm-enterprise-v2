@@ -4,6 +4,21 @@ import { Users, Plus, Mail, UserMinus, AlertTriangle, CheckCircle, Clock, Loader
 import { cn, formatDate, formatRelativeTime, getInitials } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
+interface TeamMember {
+  id: string; user_id: string;
+  full_name?: string; email: string;
+  role_slug: string; role_name?: string;
+  email_verified?: boolean;
+  contact_count?: number; deal_count?: number; task_count?: number;
+  joined_at?: string;
+}
+interface TeamInvitation {
+  id: string; email: string; role_slug: string; expires_at: string;
+}
+interface TeamRole {
+  id: string; slug: string; name: string;
+}
+
 const ROLE_COLORS: Record<string,string> = {
   admin:        'bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400',
   lead_manager: 'bg-violet-100 text-violet-700 dark:bg-violet-900/20 dark:text-violet-400',
@@ -20,8 +35,11 @@ const ROLE_DESCRIPTIONS: Record<string,string> = {
   viewer:       'Read-only access to all records.',
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function RemoveMemberModal({ member, members, onConfirm, onClose }: any) {
+function RemoveMemberModal({ member, members, onConfirm, onClose }: {
+  member: TeamMember; members: TeamMember[];
+  onConfirm: (reassignTo: string, reason: string) => void;
+  onClose: () => void;
+}) {
   const [reassignTo, setReassignTo] = useState('');
   const [reason, setReason] = useState('');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -47,19 +65,16 @@ function RemoveMemberModal({ member, members, onConfirm, onClose }: any) {
               <AlertTriangle className="w-3.5 h-3.5"/>This member owns data:
             </p>
             <div className="flex gap-3 text-xs text-amber-600">
-              {member.contact_count>0 && <span>{member.contact_count} contacts</span>}
-              {member.deal_count>0 && <span>{member.deal_count} deals</span>}
-              {member.task_count>0 && <span>{member.task_count} open tasks</span>}
+              {(member.contact_count??0) > 0 && <span>{member.contact_count??0} contacts</span>}
+              {(member.deal_count??0) > 0 && <span>{member.deal_count??0} deals</span>}
+              {(member.task_count??0) > 0 && <span>{member.task_count??0} open tasks</span>}
             </div>
             <div>
               <label className="block text-xs font-medium text-amber-700 dark:text-amber-400 mb-1">Reassign data to</label>
               <select value={reassignTo} onChange={e=>setReassignTo(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-white dark:bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                 <option value="">Reassign to me (admin)</option>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {otherMembers.map((m:any) => <option key={m.user_id} value={m.user_id}>{m.full_name||m.email} ({m.role_slug})</option>)}
+                {otherMembers.map((m: TeamMember) => <option key={m.user_id} value={m.user_id}>{m.full_name||m.email} ({m.role_slug})</option>)}
               </select>
             </div>
           </div>
@@ -89,8 +104,10 @@ function RemoveMemberModal({ member, members, onConfirm, onClose }: any) {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default function TeamSettingsClient({ members: initialMembers, invitations: initialInvitations, roles, _tenantId, currentUserId }: any) {
+export default function TeamSettingsClient({ members: initialMembers, invitations: initialInvitations, roles, _tenantId, currentUserId }: {
+  members: TeamMember[]; invitations: TeamInvitation[]; roles: TeamRole[];
+  _tenantId: string; currentUserId: string;
+}) {
   const [members, setMembers]         = useState(initialMembers ?? []);
   const [invitations, setInvitations] = useState(initialInvitations ?? []);
   const [showInvite, setShowInvite]   = useState(false);
@@ -100,8 +117,7 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
   const [fullName, setFullName]       = useState('');
   const [password, setPassword]       = useState('');
   const [inviting, setInviting]       = useState(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [removeModal, setRemoveModal] = useState<any>(null);
+  const [removeModal, setRemoveModal] = useState<TeamMember | null>(null);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   const reload = async () => {
@@ -165,6 +181,7 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
 
   const removeMember = async (reassignTo: string, reason: string) => {
     const m = removeModal;
+    if (!m) return;
     const res = await fetch('/api/tenant/members',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({memberId:m.id,action:'remove',reassignTo,reason}) });
     const d = await res.json();
     if (res.ok) { toast.success(`${m.full_name||m.email} removed. Data reassigned.`); setRemoveModal(null); reload(); }
@@ -229,10 +246,7 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
             <div className="col-span-2 sm:col-span-1">
               <label className="block text-xs font-medium text-muted-foreground mb-1.5">Role</label>
               <select value={inviteRole} onChange={e=>setInviteRole(e.target.value)} className={inp}>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {roles.filter((r:any)=>r.slug!=='admin').map((r:any)=>(
+                {roles.filter((r: TeamRole)=>r.slug!=='admin').map((r: TeamRole)=>(
                   <option key={r.id} value={r.slug}>{r.name}</option>
                 ))}
               </select>
@@ -272,10 +286,7 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
           <p className="text-sm font-semibold">Active Members ({members.length})</p>
         </div>
         <div className="divide-y divide-border">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          {members.map((m:any) => {
+          {members.map((m: TeamMember) => {
             const isMe = m.user_id === currentUserId;
             const isAdmin = m.role_slug === 'admin';
             return (
@@ -291,9 +302,9 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
                   </div>
                   <p className="text-xs text-muted-foreground">{m.email}</p>
                   <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
-                    {m.contact_count>0 && <span>{m.contact_count} contacts</span>}
-                    {m.deal_count>0 && <span>{m.deal_count} deals</span>}
-                    {m.task_count>0 && <span>{m.task_count} tasks</span>}
+                    {(m.contact_count??0) > 0 && <span>{m.contact_count??0} contacts</span>}
+                    {(m.deal_count??0) > 0 && <span>{m.deal_count??0} deals</span>}
+                    {(m.task_count??0) > 0 && <span>{m.task_count??0} tasks</span>}
                     {m.joined_at && <span>Joined {formatRelativeTime(m.joined_at)}</span>}
                   </div>
                 </div>
@@ -301,10 +312,7 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
                 {!isMe && (
                   <select value={m.role_slug} onChange={e=>changeRole(m.id, e.target.value)}
                     className={cn('text-xs px-2 py-1.5 rounded-lg border border-border bg-transparent focus:outline-none focus:ring-1 focus:ring-violet-500', ROLE_COLORS[m.role_slug]||ROLE_COLORS["viewer"])}>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    {roles.map((r:any)=>(
+                    {roles.map((r: TeamRole) =>(
                       <option key={r.id} value={r.slug} className="bg-card text-foreground">{r.name}</option>
                     ))}
                   </select>
@@ -334,10 +342,7 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
             <p className="text-sm font-semibold">Pending Invitations ({invitations.length})</p>
           </div>
           <div className="divide-y divide-border">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-            {invitations.map((inv:any) => (
+            {invitations.map((inv: TeamInvitation) => (
               <div key={inv.id} className="flex items-center gap-4 px-5 py-3.5">
                 <Clock className="w-4 h-4 text-muted-foreground shrink-0"/>
                 <div className="flex-1 min-w-0">
