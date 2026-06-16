@@ -320,6 +320,7 @@ export async function createEmailTracking(data: {
   recipient: string;
   subject: string;
   sequenceEnrollmentId?: string;
+  bodyText?: string;
 }): Promise<string | null> {
   try {
     const { db } = await import('@/drizzle/db');
@@ -334,6 +335,15 @@ export async function createEmailTracking(data: {
       subject: data.subject,
       sequenceEnrollmentId: data.sequenceEnrollmentId || null,
     });
+
+    // Analyze sentiment from email subject/body and update contact's deals
+    const textToAnalyze = data.bodyText ? `${data.subject}\n\n${data.bodyText}` : data.subject;
+    if (textToAnalyze.trim()) {
+      const { analyzeSentimentForContact } = await import('@/lib/ai/sentiment');
+      analyzeSentimentForContact(data.contactId, data.tenantId, textToAnalyze.slice(0, 2000)).catch((err: unknown) => {
+        console.error('[email] Sentiment analysis failed:', err);
+      });
+    }
     
     return trackingId;
   } catch (err) {
