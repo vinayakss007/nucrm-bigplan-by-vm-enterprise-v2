@@ -23,9 +23,9 @@ export async function GET(req: NextRequest) {
       const decoded = decodeURIComponent(rawUrl);
       // Only allow http/https URLs — prevent open redirect to javascript:
       if (/^https?:\/\//i.test(decoded)) destination = decoded;
-  } catch (err) {
-    console.error('[track] click error', err);
-  }
+    } catch (err) {
+      console.error('[track] click error', err);
+    }
   }
 
   if (trackId) {
