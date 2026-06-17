@@ -16,7 +16,6 @@ CREATE TABLE IF NOT EXISTS "follow_ups" (
   "created_by" uuid,
   "created_at" timestamp with time zone DEFAULT now(),
   "updated_at" timestamp with time zone DEFAULT now(),
-  "updated_by" uuid,
   "deleted_at" timestamp with time zone,
   "deleted_by" uuid
 );
