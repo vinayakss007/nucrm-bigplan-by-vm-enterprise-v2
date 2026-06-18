@@ -125,6 +125,7 @@ export const tasks = pgTable('tasks', {
     tenantIdx: utils.tenantIdx(table),
     tenantStatusIdx: index('idx_tasks_tenant_status').on(table.tenantId, table.status),
     assignedIdx: index('idx_tasks_assigned').on(table.assignedTo),
+    createdByIdx: index('idx_tasks_created_by').on(table.createdBy),
     dueIdx: index('idx_tasks_due').on(table.dueDate),
     contactIdx: index('idx_tasks_contact').on(table.contactId),
     dealIdx: index('idx_tasks_deal').on(table.dealId),
