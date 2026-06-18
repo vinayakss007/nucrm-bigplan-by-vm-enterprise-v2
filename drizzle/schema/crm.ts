@@ -121,6 +121,7 @@ export const contacts = pgTable('contacts', {
     assignedIdx: index('idx_contacts_assigned').on(table.assignedTo),
     tenantCreatedIdx: index('idx_contacts_tenant_created').on(table.tenantId, table.createdAt),
     tenantArchivedCreatedIdx: index('idx_contacts_tenant_archived_created').on(table.tenantId, table.isArchived, table.createdAt).where(sql`deleted_at IS NULL`),
+    createdByIdx: index('idx_contacts_created_by').on(table.createdBy),
     activeIdx: utils.activeIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
     searchIdx: index('idx_contacts_search').using('gin', sql`to_tsvector('english', ${table.firstName} || ' ' || COALESCE(${table.lastName}, '') || ' ' || COALESCE(${table.email}, ''))`),
