@@ -128,6 +128,7 @@ export const tasks = pgTable('tasks', {
     dueIdx: index('idx_tasks_due').on(table.dueDate),
     contactIdx: index('idx_tasks_contact').on(table.contactId),
     dealIdx: index('idx_tasks_deal').on(table.dealId),
+    tenantDueActiveIdx: index('idx_tasks_tenant_due_active').on(table.tenantId, table.dueDate, table.createdAt).where(sql`deleted_at IS NULL`),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
   };

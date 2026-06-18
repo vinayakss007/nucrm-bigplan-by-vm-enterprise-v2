@@ -13,6 +13,8 @@ import { logger } from '@/lib/logger';
 import { randomBytes, createHash, createHmac } from 'crypto';
 import { installDefaultModules } from '@/lib/modules/auto-install';
 import { isBlocked, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/security/brute-force';
+import { validateBody } from '@/lib/api/validate';
+import { loginSchema, signupSchema } from '@/lib/api/schemas';
 
 // ── Login ─────────────────────────────────────────────────────
 export async function POST_login(request: NextRequest) {
@@ -34,9 +36,9 @@ export async function POST_login(request: NextRequest) {
     if (limited) return limited;
 
     const body = await request.json();
-    const email = body.email?.trim().toLowerCase();
-    const password = body.password;
-    if (!email || !password) return NextResponse.json({ error:'Email and password required' }, { status:400 });
+    const parsed = validateBody(loginSchema, body);
+    if (parsed instanceof NextResponse) return parsed;
+    const { email, password } = parsed.data;
 
     // Check if email is blocked
     const emailBlockCheck = await isBlocked(email, 'email');
@@ -165,15 +167,12 @@ export async function POST_signup(request: NextRequest) {
     }
 
     const body = await request.json();
-    const email = body.email?.trim().toLowerCase();
-    const password = body.password;
-    const fullName = body.full_name?.trim();
-    const workspaceName = body.workspace_name?.trim();
+    const parsed = validateBody(signupSchema, body);
+    if (parsed instanceof NextResponse) return parsed;
+    const { email, password, full_name: fullName, workspace_name: workspaceName } = parsed.data;
 
-    if (!email || !password || !fullName || !workspaceName) return NextResponse.json({ error:'All fields are required' }, { status:400 });
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ error:'Invalid email address' }, { status:400 });
     const passwordError = validatePassword(password);
-    if (passwordError) return NextResponse.json({ error: passwordError }, { status:400 });
+    if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 });
 
     const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
     if (existing) return NextResponse.json({ error:'An account with this email already exists' }, { status:409 });

@@ -1003,3 +1003,75 @@ export const atRiskRuleSchema = z.object({
 });
 
 export const updateAtRiskRuleSchema = atRiskRuleSchema.partial();
+
+// ── Auth schemas ──
+export const signupSchema = z.object({
+  email: z.string().email().max(255).transform((v) => v.trim().toLowerCase()),
+  password: z.string().min(8).max(128),
+  full_name: z.string().trim().min(1).max(255),
+  workspace_name: z.string().trim().min(1).max(255),
+});
+
+export const loginSchema = z.object({
+  email: z.string().email().max(255).transform((v) => v.trim().toLowerCase()),
+  password: z.string().min(1),
+  totp_token: z.string().optional(),
+});
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email().max(255),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8).max(128),
+});
+
+export const tagActionSchema = z.object({
+  action: z.enum(['rename', 'merge', 'delete']),
+  tag: z.string().trim().min(1).max(40).regex(/^[\w \-./&]{1,40}$/).optional(),
+  new_tag: z.string().trim().min(1).max(40).regex(/^[\w \-./&]{1,40}$/).optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).optional(),
+});
+
+export const upsertPicklistSchema = z.object({
+  category: z.enum(['lead_sources', 'loss_reasons', 'win_reasons', 'activity_types', 'deal_types', 'industries']),
+  entries: z.array(z.object({
+    value: z.string().trim().min(1).max(60),
+    label: z.string().trim().min(1).max(80),
+    color: z.string().trim().max(7).optional(),
+  })).max(50),
+});
+
+export const preferencesPatchSchema = z.object({
+  locale: z.string().regex(/^[a-z]{2}(-[A-Z]{2})?$/).optional(),
+  theme: z.enum(['light', 'dark', 'system']).optional(),
+  font_size: z.enum(['small', 'normal', 'large', 'xl']).optional(),
+  ui_density: z.enum(['compact', 'cozy', 'comfy']).optional(),
+  accent_color: z.enum(['violet', 'indigo', 'blue', 'cyan', 'emerald', 'amber', 'rose', 'slate']).optional(),
+  sidebar_default: z.enum(['expanded', 'collapsed']).optional(),
+  date_format: z.enum(['MM/DD/YYYY', 'DD/MM/YYYY', 'YYYY-MM-DD']).optional(),
+  time_format: z.enum(['12h', '24h']).optional(),
+  week_start: z.enum(['sunday', 'monday']).optional(),
+  default_landing: z.string().optional(),
+  default_record_view: z.enum(['list', 'kanban', 'calendar', 'card']).optional(),
+  default_page_size: z.number().int().min(10).max(100).optional(),
+  confirm_destructive: z.enum(['always', 'danger_only', 'never']).optional(),
+  default_calendar_view: z.enum(['day', 'week', 'month', 'agenda']).optional(),
+  email_tracking_default: z.enum(['on', 'off', 'ask']).optional(),
+  default_meeting_duration: z.number().int().min(15).max(90).optional(),
+  online_status_visible: z.enum(['everyone', 'team', 'nobody']).optional(),
+  activity_visible_to: z.enum(['everyone', 'team', 'managers', 'nobody']).optional(),
+  reduce_motion: z.boolean().optional(),
+  high_contrast: z.boolean().optional(),
+  show_avatars: z.boolean().optional(),
+  links_open_new_tab: z.boolean().optional(),
+  keyboard_shortcuts_enabled: z.boolean().optional(),
+  sticky_filters: z.boolean().optional(),
+  show_tips: z.boolean().optional(),
+  autosave_drafts: z.boolean().optional(),
+  show_keyboard_hints: z.boolean().optional(),
+  email_signature: z.string().max(5000).optional(),
+  auto_cc_self: z.boolean().optional(),
+  hidden_nav_items: z.array(z.string().max(200)).max(200).optional(),
+});

@@ -17,6 +17,8 @@ import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
+import { validateBody } from '@/lib/api/validate';
+import { tagActionSchema } from '@/lib/api/schemas';
 
 type Counts = { leads: number; contacts: number; companies: number; total: number };
 
@@ -124,16 +126,14 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    let body;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
-    const action = body.action;
+    const body = await req.json();
+    const parsed = validateBody(tagActionSchema, body);
+    if (parsed instanceof NextResponse) return parsed;
+    const { action, tag: fromTag, new_tag: toTag, tags } = parsed.data;
 
     if (action === 'rename') {
-      const fromTag = String(body.tag ?? '').trim();
-      const toTag = String(body.new_tag ?? '').trim();
       if (!fromTag || !toTag) return NextResponse.json({ error: 'tag and new_tag required' }, { status: 400 });
       if (fromTag === toTag) return NextResponse.json({ error: 'old and new must differ' }, { status: 400 });
-      if (!TAG_RE.test(toTag)) return NextResponse.json({ error: 'new_tag invalid (alphanumeric, dash, dot, slash, ampersand, space; max 40 chars)' }, { status: 400 });
       const counts = await renameAcrossTables(ctx.tenantId, fromTag, toTag);
       const total = counts.leads + counts.contacts + counts.companies;
       await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'tag_rename', entityType: 'tag',
@@ -142,14 +142,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'merge') {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sources: string[] = Array.isArray(body.tags) ? body.tags.map((s: any) => String(s).trim()).filter(Boolean) : [];
-      const target = String(body.new_tag ?? '').trim();
+      const sources: string[] = (tags ?? []).filter(Boolean);
+      const target = toTag ?? '';
       if (sources.length < 2) return NextResponse.json({ error: 'pick at least 2 source tags' }, { status: 400 });
       if (!target) return NextResponse.json({ error: 'new_tag (target) required' }, { status: 400 });
-      if (!TAG_RE.test(target)) return NextResponse.json({ error: 'new_tag invalid' }, { status: 400 });
 
       const totalCounts = { leads: 0, contacts: 0, companies: 0 };
       for (const src of sources) {
@@ -164,9 +160,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'delete') {
-      const tag = String(body.tag ?? '').trim();
-      if (!tag) return NextResponse.json({ error: 'tag required' }, { status: 400 });
-      const counts = await deleteAcrossTables(ctx.tenantId, tag);
+      if (!fromTag) return NextResponse.json({ error: 'tag required' }, { status: 400 });
+      const counts = await deleteAcrossTables(ctx.tenantId, fromTag);
       const total = counts.leads + counts.contacts + counts.companies;
       await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'tag_delete', entityType: 'tag',
         newData: { tag, counts, total } });
