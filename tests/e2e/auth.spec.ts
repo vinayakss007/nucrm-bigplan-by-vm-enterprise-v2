@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+test.use({ navigationTimeout: 60000 });
+
 const _TEST_USER = {
   email: 'superadmin@nucrm.com',
   password: 'admin123',

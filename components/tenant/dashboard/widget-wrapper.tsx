@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { AppErrorBoundary as ErrorBoundary } from '@/components/shared/error-boundary';
 import { useWidgetData } from '@/hooks/use-widget-data';
 import type { WidgetConfig, WidgetProps } from '@/types/dashboard';
-import { RefreshCw, AlertCircle, Inbox } from 'lucide-react';
+import { AlertCircle, Inbox } from 'lucide-react';
 
 function WidgetSkeleton({ size }: { size: string }) {
   const h = size === '1x2' || size === '2x2' ? 'h-64' : 'h-32';
@@ -37,30 +37,8 @@ function WidgetEmpty({ message }: { message: string }) {
   );
 }
 
-function WidgetHeader({
-  widget, onRefresh, stale,
-}: {
-  widget: WidgetConfig; onRefresh: () => void; stale?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between mb-3">
-      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/80">{widget.name}</p>
-      <button
-        onClick={onRefresh}
-        className={cn(
-          'p-1 rounded-md hover:bg-accent/50 transition-colors',
-          stale && 'text-violet-500',
-        )}
-        title="Refresh"
-      >
-        <RefreshCw className={cn('w-3.5 h-3.5', stale && 'animate-spin')} />
-      </button>
-    </div>
-  );
-}
-
 export function WidgetShell({
-  widget, size, tenantId, userId, isAdmin, config,
+  widget: _widget, size, tenantId, userId, isAdmin, config,
   loading, error, data, onRefresh, children,
 }: {
   widget: WidgetConfig
@@ -82,8 +60,7 @@ export function WidgetShell({
   if (!data) return <WidgetEmpty message="No data available" />;
 
   return (
-    <div className="admin-card p-3">
-      <WidgetHeader widget={widget} onRefresh={onRefresh} stale={loading && !!data} />
+    <div className="admin-card h-full">
       {children({ data, tenantId, userId, isAdmin, config })}
     </div>
   );
