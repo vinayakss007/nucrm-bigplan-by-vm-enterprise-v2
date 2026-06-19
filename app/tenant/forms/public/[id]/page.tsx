@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { FileText, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -14,7 +14,7 @@ export default function PublicFormPage() {
   const [submitted, setSubmitted] = useState(false);
   const [values, setValues] = useState<Record<string, any>>({});
 
-  const loadForm = useCallback(async () => {
+  const loadForm = async () => {
     try {
       const res = await fetch(`/api/tenant/forms/public/${formId}`);
       const data = await res.json();
@@ -25,7 +25,7 @@ export default function PublicFormPage() {
     } finally {
       setLoading(false);
     }
-  }, [formId]);
+  }
 
   useEffect(() => {
     loadForm();

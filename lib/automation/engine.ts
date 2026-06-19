@@ -26,28 +26,6 @@ import { sendEmail } from '@/lib/email/service';
 import { createNotification } from '@/lib/notifications';
 import { captureError } from '@/lib/capture-error';
 
-interface AutomationCondition {
-  field?: string;
-  operator?: string;
-  value?: unknown;
-}
-
-interface AutomationAction {
-  type: string;
-  config: Record<string, unknown>;
-}
-
-interface AutomationCondition {
-  field?: string;
-  operator?: string;
-  value?: unknown;
-}
-
-interface AutomationAction {
-  type: string;
-  config: Record<string, unknown>;
-}
-
 export type TriggerEvent =
   | 'contact.created' | 'contact.updated'
   | 'deal.created'    | 'deal.updated' | 'deal.won' | 'deal.lost'
@@ -90,9 +68,9 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
           deal_id: payload.dealId ?? payload.data?.['deal_id'],
         };
 
-        if (!meetsConditions(automation.conditions as AutomationCondition[], enrichedData)) continue;
+        if (!meetsConditions(automation.conditions as any[], enrichedData)) continue;
 
-        for (const action of (automation.actions as AutomationAction[] ?? [])) {
+        for (const action of (automation.actions as any[] ?? [])) {
           await executeAction(action, payload, enrichedData);
         }
 

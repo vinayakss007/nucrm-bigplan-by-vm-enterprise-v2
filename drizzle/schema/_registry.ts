@@ -1068,7 +1068,7 @@ export const TABLE_REGISTRY = {
       dependencies: ['tenants', 'users', 'contacts', 'deals'],
       description: 'CRM meetings',
       isCore: false,
-      indexes: ['idx_meetings_tenant', 'idx_meetings_user', 'idx_meetings_contact', 'idx_meetings_deal', 'idx_meetings_status', 'idx_meetings_start_time', 'idx_meetings_active'],
+      indexes: ['idx_meetings_tenant', 'idx_meetings_user', 'idx_meetings_contact', 'idx_meetings_deal', 'idx_meetings_created_by', 'idx_meetings_status', 'idx_meetings_start_time', 'idx_meetings_active'],
     },
   },
   churnPredictions: {

@@ -136,7 +136,6 @@ interface Props {
   tenant:any; profile:any; roleSlug:string;
   permissions:Record<string,boolean>; isAdmin:boolean; isSuperAdmin:boolean;
   collapsed?: boolean; onToggle?: () => void; onMobileClose?: () => void;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   _profile?: any;
   _roleSlug?: string;
 }
@@ -151,8 +150,14 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
   const [pinned, setPinned] = useState<string[]>([]);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [hiddenItems, setHiddenItems] = useState<string[]>([]);
-  const color = tenant?.primary_color || '#7c3aed';
+  const initialHidden = (() => {
+    try {
+      const prefs = _profile?.metadata?.prefs;
+      if (Array.isArray(prefs?.hidden_nav_items)) return prefs.hidden_nav_items;
+    } catch { /* fallback */ }
+    return [];
+  })();
+  const [hiddenItems, setHiddenItems] = useState<string[]>(initialHidden);
 
   // ── Hydrate state from localStorage ─────────────────────────
   useEffect(() => {
@@ -169,7 +174,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
       }
 
       // Read hidden_nav_items from the resolved-prefs cache that
-      // <UserPreferencesApplier /> populates on mount.
+      // <UserPreferencesApplier /> populates on mount (overrides server value).
       const cached = sessionStorage.getItem('nucrm.prefs.cache');
       if (cached) {
         const prefs = JSON.parse(cached);
@@ -248,6 +253,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : href !== '/tenant/dashboard' && pathname.startsWith(href);
   const isExact = (href: string) => pathname === href;
+  const matches = (item: NavItem) => !q || item.label.toLowerCase().includes(q) || (item.keywords ?? '').toLowerCase().includes(q);
 
   // ── Apply filter ────────────────────────────────────────────
   const q = query.trim().toLowerCase();
@@ -257,15 +263,15 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
       ...sec,
       items: sec.items.filter(i => hasPerm(i) && (!q || i.label.toLowerCase().includes(q) || (i.keywords ?? '').toLowerCase().includes(q))),
     })).filter(sec => sec.items.length > 0)
-  , [q, hasPerm]);
+  , [q, isAdmin, permissions, hiddenItems, hasPerm]);
 
   // ── Resolve pinned items ────────────────────────────────────
   const pinnedItems = useMemo(() => {
     const all = NAV_SECTIONS.flatMap(s => s.items);
     return pinned
       .map(href => all.find(i => i.href === href))
-      .filter((i): i is NavItem => !!(i && hasPerm(i) && (!q || i.label.toLowerCase().includes(q) || (i.keywords ?? '').toLowerCase().includes(q))));
-  }, [pinned, q, hasPerm]);
+      .filter((i): i is NavItem => !!(i && hasPerm(i) && matches(i)));
+  }, [pinned, q, isAdmin, permissions, hiddenItems, hasPerm]);
 
   // ── Collapsed mini sidebar ──────────────────────────────────
   if (collapsed) {
@@ -335,7 +341,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
     <aside className="tenant-sidebar w-[14.375rem] shrink-0 h-full flex flex-col transition-all duration-300 border-r border-border">
       {/* Brand */}
       <div className="h-12 flex items-center gap-2.5 px-3 border-b border-border shrink-0">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm" style={{ background: color }}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm" style={{ background: tenant?.primary_color || '#7c3aed' }}>
           {tenant?.name?.charAt(0)?.toUpperCase() ?? 'W'}
         </div>
         <div className="min-w-0 flex-1">

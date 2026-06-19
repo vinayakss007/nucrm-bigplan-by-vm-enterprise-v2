@@ -1,6 +1,6 @@
 # NuCRM Enterprise — Master Tracker
 
-**Last Updated:** 2026-06-11 (Session 6 — as any reduction + jsonb metadata fixes)
+**Last Updated:** 2026-06-10 (Session 6 — Silent catch blocks, unused imports, ESLint error fixes)
 **Rule:** Every fix/feature gets a GitHub issue → a branch → a PR → merge to main.
 **No direct commits to main.** Everything trackable.
 
@@ -104,7 +104,16 @@ Previously created issues and branches — all merged to main in Session 4.
 | Lint | 0 errors, 2456 warnings remaining |
 | Schema | Fixed circular dependency in `drizzle/schema/utils.ts` |
 
-## SESSION 9 PROGRESS (2026-06-13)
+### High Priority
+| Issue | Title | Branch | Est. | Status |
+|-------|-------|--------|------|--------|
+| #147 | ~3067 ESLint warnings | `fix/eslint-warnings` | 4hr | 🔴 Not started |
+| #158 | Notification system/hydration/pg | `fix/notification-system` | 3hr | 🔴 Not started |
+| #134 | useEffect cleanup 40+ components | `fix/useeffect-cleanup` | 2hr | 🔴 Not started |
+| #133 | Silent catch blocks | `fix/silent-catch-blocks` | 30min | 🟡 Mostly done (21 files, check remaining `.json().catch()` patterns) |
+| #141 | 5 E2E tests failing | `fix/e2e-seed-data` | 30min | 🔴 Not started |
+| #148 | Missing FK references | `fix/missing-fk-references` | 1hr | 🔴 Not started |
+| #149 | Daily DB backups | `ops/daily-db-backups` | 1hr | 🔴 Not started |
 
 ### Created as PRs (1790 tests passing each)
 

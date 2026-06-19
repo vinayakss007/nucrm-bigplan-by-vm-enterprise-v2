@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Building2, Plus, Search, X, LogIn, Trash2, Loader2, Crown, Mail,
   DollarSign, Shield, RefreshCw, Edit, Save, Zap } from 'lucide-react';
-
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -413,19 +412,8 @@ export default function SuperAdminTenantsPage() {
   );
 }
 
-interface ModuleData {
-  id: string;
-  status: string;
-  planAllowed: boolean;
-  name: string;
-  icon?: string;
-  description?: string;
-  category?: string;
-  features?: string[];
-}
-
-function ModulesModal({ tenant, onClose, _onSaved }: { tenant: TenantInfo; onClose: () => void; _onSaved: () => void }) {
-  const [modules, setModules] = useState<ModuleData[]>([]);
+function ModulesModal({ tenant, onClose, _onSaved }: { tenant: any; onClose: () => void; _onSaved: () => void }) {
+  const [modules, setModules] = useState<any[]>([]);
   const [plan, setPlan] = useState('');
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
@@ -439,7 +427,7 @@ function ModulesModal({ tenant, onClose, _onSaved }: { tenant: TenantInfo; onClo
   }, [tenant.id]);
   useEffect(() => { load(); }, [load]);
 
-  const toggleModule = async (mod: ModuleData) => {
+  const toggleModule = async (mod: { id: string; status: string; planAllowed: boolean }) => {
     setToggling(mod.id);
     const action = mod.status === 'active' ? 'disable' : 'install';
     const res = await fetch(`/api/superadmin/tenants/${tenant.id}/modules`, {

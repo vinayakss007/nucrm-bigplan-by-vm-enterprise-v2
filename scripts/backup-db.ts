@@ -77,7 +77,6 @@ async function createBackup(): Promise<void> {
       // Cleanup old S3 backups (keep last KEEP_DAYS objects by count)
       await deleteOldBackups(KEEP_DAYS);
       console.log(`[Backup] S3 cleanup done, keeping last ${KEEP_DAYS}`);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('[Backup] S3 upload failed:', err.message);
     }

@@ -112,12 +112,7 @@ export async function POST(request: Request) {
       downgraded,
       timestamp: new Date().toISOString(),
     });
- 
- 
- 
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[subscription-check]', msg);
+  } catch (err: any) {
     captureError(err, 'subscription-check:cron');
     return NextResponse.json(
       { error: 'Internal error' },

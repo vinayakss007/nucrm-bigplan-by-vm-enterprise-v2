@@ -56,7 +56,7 @@ export function decryptSensitiveFields<T extends Record<string, any>>(
       try {
         result[k as keyof T] = decrypt(String(value), encKey) as T[keyof T];
       } catch {
-        console.error('[field-encryption] Decryption failed for field', k);
+        // Fallback to default on corrupted storage data
         result[k as keyof T] = value;
       }
     }

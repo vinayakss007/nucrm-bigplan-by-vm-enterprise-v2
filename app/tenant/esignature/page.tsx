@@ -66,7 +66,7 @@ export default function EsignaturePage() {
     }
   }, [filter]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [filter, load]);
 
   const openCreate = () => {
     setForm({ documentId: '', provider: 'internal', signers: [{ name: '', email: '' }] });

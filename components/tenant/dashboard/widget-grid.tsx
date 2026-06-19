@@ -49,7 +49,7 @@ export function WidgetGrid({ layout, tenantId, userId, isAdmin }: WidgetGridProp
   const sorted = [...layout].sort((a, b) => a.position - b.position);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 auto-rows-auto">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-[minmax(120px,auto)]">
       {sorted.map((item) => {
         const Component = WIDGET_MAP[item.widget];
         const widget = getWidget(item.widget);
@@ -58,7 +58,7 @@ export function WidgetGrid({ layout, tenantId, userId, isAdmin }: WidgetGridProp
         const sizeClass = SIZE_CLASSES[item.size] ?? SIZE_CLASSES['1x1'];
 
         return (
-          <div key={item.widget} className={sizeClass}>
+          <div key={item.widget} className={`${sizeClass} h-full`}>
             <LazyWidget
               widget={widget}
               size={item.size}

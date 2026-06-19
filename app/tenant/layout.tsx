@@ -17,6 +17,7 @@ export default async function TenantLayout({ children }: { children: React.React
     fullName: users.fullName,
     avatarUrl: users.avatarUrl,
     emailVerified: users.emailVerified,
+    metadata: users.metadata,
   })
   .from(users)
   .where(eq(users.id, ctx.userId))
@@ -33,7 +34,8 @@ export default async function TenantLayout({ children }: { children: React.React
     full_name: user?.fullName,
     avatar_url: user?.avatarUrl,
     email_verified: user?.emailVerified,
-    is_super_admin: ctx.isSuperAdmin 
+    is_super_admin: ctx.isSuperAdmin,
+    metadata: user?.metadata,
   };
 
   return (
