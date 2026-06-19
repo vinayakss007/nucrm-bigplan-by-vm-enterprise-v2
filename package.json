@@ -65,7 +65,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage tests/unit",
     "test:ui": "vitest --ui",
     "logs:watch": "node scripts/watch-logs.js",
     "logs:errors": "node scripts/watch-logs.js error",
