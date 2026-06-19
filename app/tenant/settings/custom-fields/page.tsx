@@ -73,7 +73,7 @@ export default function TenantCustomFields() {
   const [editingField, setEditingField] = useState<CustomField | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  const loadFields = useCallback(async () => {
+  const loadFields = async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/tenant/custom-fields?entityType=${entityType}`);
@@ -84,7 +84,7 @@ export default function TenantCustomFields() {
     } finally {
       setLoading(false);
     }
-  }, [entityType]);
+  }
 
   const loadFeatures = useCallback(async () => {
     try {
@@ -99,9 +99,9 @@ export default function TenantCustomFields() {
   useEffect(() => {
     loadFields();
     loadFeatures();
-  }, [entityType, loadFields, loadFeatures]);
+  }, [entityType, loadFields]);
 
-  const handleCreate = async (fieldData: FieldFormData) => {
+  const handleCreate = async (fieldData: any) => {
     try {
       const res = await fetch('/api/tenant/custom-fields', {
         method: 'POST',

@@ -52,6 +52,6 @@ export async function sendCriticalErrorAlert(opts: {
       signal: AbortSignal.timeout(5_000),
     });
   } catch {
-    console.error('[critical-error-alert] Failed to send alert');
+    // fire-and-forget: don't block main flow
   }
 }

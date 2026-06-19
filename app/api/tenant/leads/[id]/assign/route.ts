@@ -158,9 +158,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       await createNotification({
         userId: newAssignee,
         tenantId: ctx.tenantId,
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         type: 'contact_assigned' as any,
         title: `Lead handed off to you${lead.leadOid ? `: ${lead.leadOid}` : ''}`,
         body: `${lead.firstName} ${lead.lastName ?? ''}`.trim() + (reason ? ` — ${reason}` : ''),

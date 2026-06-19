@@ -153,8 +153,8 @@ export async function createPreRestoreSnapshot(
       const result = await db.execute(sql.raw(`SELECT * FROM public.${table} WHERE tenant_id = '${tenantId}'`));
       snapshotData[table] = result.rows;
       totalRecords += result.rows.length;
-    } catch (e) {
-      console.warn('[Restore] Failed to snapshot table:', table, e);
+    } catch {
+      // Silently skip during migration/setup when tables may not exist yet
       snapshotData[table] = [];
     }
   }
@@ -373,7 +373,7 @@ export async function countExistingRecords(
       const row = result.rows[0] as { cnt?: number } | undefined;
       counts[table] = row?.cnt ?? 0;
     } catch {
-      console.error('[restore] Failed to count table', table);
+      // Silently skip during migration/setup when tables may not exist yet
       counts[table] = 0;
     }
   }

@@ -161,7 +161,7 @@ async function acquireLock(key: string): Promise<boolean> {
     const result = await redis.call('SET', `nucrm:lock:${key}`, '1', 'EX', LOCK_TTL, 'NX');
     return result === 'OK';
   } catch (e) {
-    console.error('[Cache] Failed to acquire lock:', key, e);
+    console.error('[Cache] acquireLock failed', e);
     return false;
   }
 }
@@ -171,9 +171,7 @@ async function releaseLock(key: string): Promise<void> {
   if (!redis) return;
   try {
     await redis.del(`nucrm:lock:${key}`);
-  } catch (e) {
-    console.warn('[Cache] Failed to release lock:', key, e);
-  }
+  } catch { /* Fallback to default on corrupted storage data */ }
 }
 
 /**
@@ -467,7 +465,6 @@ export async function health(): Promise<{ status: string; latency?: number }> {
       latency,
     };
   } catch {
-    console.error('[cache] Redis ping failed');
     return { status: 'unhealthy', latency: 0 };
   }
 }

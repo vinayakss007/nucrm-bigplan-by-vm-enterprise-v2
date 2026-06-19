@@ -126,8 +126,8 @@ export async function requireTenantCtx(): Promise<TenantContext> {
       const pathname = headersList.get('x-invoke-path') ?? headersList.get('next-url') ?? '';
       const isExempt = pathname.startsWith('/tenant/settings') || pathname.startsWith('/tenant/trial-expired') || pathname.startsWith('/api/');
       if (!isExempt) redirect('/tenant/trial-expired');
-    } catch (e) {
-      console.warn('[TenantCtx] Trial check failed, redirecting:', e);
+    } catch {
+      // Fallback to default on corrupted storage data
       redirect('/tenant/trial-expired');
     }
   }

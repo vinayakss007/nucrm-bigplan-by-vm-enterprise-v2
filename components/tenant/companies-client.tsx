@@ -77,7 +77,6 @@ export default function TenantCompaniesClient({ initialCompanies, permissions, t
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function CompanyFormModal({ company, _tenantId, _userId, onSaved, onClose }: any) {
   const [form, setForm] = useState({ name: company?.name||'', industry: company?.industry||'', size: company?.size||'', website: company?.website||'', phone: company?.phone||'', address: company?.address||'', notes: company?.notes||'' });
   const [saving, setSaving] = useState(false);
