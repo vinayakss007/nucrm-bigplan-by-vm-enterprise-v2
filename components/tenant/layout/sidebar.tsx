@@ -151,8 +151,14 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
   const [pinned, setPinned] = useState<string[]>([]);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [hiddenItems, setHiddenItems] = useState<string[]>([]);
-  const color = tenant?.primary_color || '#7c3aed';
+  const initialHidden = (() => {
+    try {
+      const prefs = _profile?.metadata?.prefs;
+      if (Array.isArray(prefs?.hidden_nav_items)) return prefs.hidden_nav_items;
+    } catch { /* fallback */ }
+    return [];
+  })();
+  const [hiddenItems, setHiddenItems] = useState<string[]>(initialHidden);
 
   // ── Hydrate state from localStorage ─────────────────────────
   useEffect(() => {
@@ -169,7 +175,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
       }
 
       // Read hidden_nav_items from the resolved-prefs cache that
-      // <UserPreferencesApplier /> populates on mount.
+      // <UserPreferencesApplier /> populates on mount (overrides server value).
       const cached = sessionStorage.getItem('nucrm.prefs.cache');
       if (cached) {
         const prefs = JSON.parse(cached);
