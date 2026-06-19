@@ -14,8 +14,9 @@
 | Tenant Pages | 74 |
 | Super Admin Pages | 22 |
 | Library Modules | 154 files |
-| Drizzle Schema Tables | 221 |
-| Schema Files | 31 |
+| Drizzle Schema Tables | 210 |
+| Schema Files | 37 |
+| Migration Files | 54 |
 | Test Files | 58 |
 | Tests Passing | 380 |
 | SDK Files | 32 |
@@ -238,7 +239,7 @@ The product entry pages are CURATED views. Every tenant still has full CRM acces
 | Domain | NEEDS SETUP | Point domains to Vercel/Railway |
 | Sentry | NEEDS CONFIG | Add Sentry DSN to .env |
 | Deploy | NEEDS SETUP | `npm run build` + deploy to Vercel/Railway |
-| DB Migration | NEEDS RUN | `npm run db:push` after database is connected |
+| DB Migration | DONE | All 210 registry tables covered across 54 migration files (0000-0045) |
 | Seed Data | NEEDS RUN | `npm run db:seed` for plan limits + modules |
 
 **Estimated time to go live: 2-3 hours of configuration (no code changes needed)**
