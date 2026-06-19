@@ -29,7 +29,7 @@ const CRITICAL_TABLES = [
   'deal_stages',
   'pipelines',
   'tasks',
-  'tickets',
+  'support_tickets',
   'leads',
   'activities',
   'audit_logs',
@@ -38,7 +38,8 @@ const CRITICAL_TABLES = [
   'invoices',
   'invoice_line_items',
   'roles',
-  'permissions',
+  'field_permissions',
+  'record_permissions',
   'dead_letter_queue',
 ];
 
@@ -73,6 +74,7 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
     sourcePool = new Pool({ connectionString: sourceUrl });
     sourceDb = drizzle(sourcePool, { schema });
 
+    // restorePool/restoreDb kept for reference but unused in current tests
     restorePool = new Pool({ connectionString: restoreUrl });
     restoreDb = drizzle(restorePool, { schema });
 

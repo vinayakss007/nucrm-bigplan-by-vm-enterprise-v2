@@ -66,21 +66,12 @@ export async function POST(request: NextRequest) {
 
     if (filters) {
       if (filters.status && 'status' in reportConfig.table) {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         conditions.push(eq((reportConfig.table as any).status, filters.status));
       }
       if (filters.stage && 'stage' in reportConfig.table) {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         conditions.push(eq((reportConfig.table as any).stage, filters.stage));
       }
       if (filters.lead_status && 'leadStatus' in reportConfig.table) {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         conditions.push(eq((reportConfig.table as any).leadStatus, filters.lead_status));
       }
       if (filters.created_after) {

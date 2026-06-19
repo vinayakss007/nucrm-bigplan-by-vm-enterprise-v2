@@ -36,7 +36,7 @@ export function useNotifications(enabled = true) {
             if (data.type === 'unread') {
               setState(prev => ({ ...prev, unreadCount: data.count }));
             }
-          } catch (e) { console.warn('[Notifications] SSE parse error:', e); }
+          } catch { /* Fallback to default on corrupted storage data */ }
         });
 
         eventSource.onerror = () => {
@@ -48,7 +48,7 @@ export function useNotifications(enabled = true) {
           reconnectTimer = setTimeout(connect, delay);
           reconnectAttempts++;
         };
-      } catch (e) { console.warn('[Notifications] SSE not supported:', e); }
+      } catch { /* Fallback to default on corrupted storage data */ }
     };
 
     connect();

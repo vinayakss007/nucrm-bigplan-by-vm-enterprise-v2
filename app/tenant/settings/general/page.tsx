@@ -114,7 +114,7 @@ export default function TenantGeneralSettings() {
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center border border-border overflow-hidden">
                   {faviconPreview || tenant?.favicon_url ? (
-                    <Image src={faviconPreview || (tenant?.favicon_url as string) || ''} className="w-full h-full object-contain" alt="Favicon" width={40} height={40} />
+                    <Image src={faviconPreview || (tenant?.favicon_url as string) || ''} className="w-full h-full object-contain" alt="Favicon" />
                   ) : (
                     <Globe className="w-4 h-4 text-muted-foreground" />
                   )}

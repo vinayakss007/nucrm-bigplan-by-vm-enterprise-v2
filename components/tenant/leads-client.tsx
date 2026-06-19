@@ -79,7 +79,6 @@ interface Props {
   totalCount: number;
   tenantId: string;
   userId: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   _teamMembers?: any[];
   _permissions?: Record<string, boolean>;
   _tenantId?: string;

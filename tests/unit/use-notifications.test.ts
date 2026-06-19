@@ -16,7 +16,6 @@ vi.mock('react', () => ({
   },
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useCallback: (fn: any) => fn,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   useRef: (initial: any) => ({ current: initial }),
 }));
 

@@ -7,18 +7,15 @@ function makeQueryResult() {
     limit: vi.fn().mockReturnValue(Promise.resolve([])),
   });
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockWhere = vi.fn().mockImplementation((..._args: any[]) => ({
   orderBy: vi.fn().mockReturnValue(makeQueryResult()),
 }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockFrom = vi.fn().mockImplementation((..._args: any[]) => ({ where: mockWhere }));
 
 vi.mock('@/drizzle/db', () => ({
   db: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     insert: (...args: any[]) => mockDbInsert(...args),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     select: (..._args: any[]) => ({ from: mockFrom }),
   },
 }));

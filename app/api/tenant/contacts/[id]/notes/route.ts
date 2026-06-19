@@ -75,11 +75,13 @@ export async function POST(
       .values({
         tenantId: ctx.tenantId,
         userId: ctx.userId,
+        entityType: 'contact',
+        entityId: id,
         contactId: id,
         eventType: type,
         description: description.trim(),
         metadata: metadata || {},
-      } as typeof activities.$inferInsert)
+      })
       .returning();
 
     // Update contact last activity

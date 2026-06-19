@@ -13,6 +13,8 @@ import { logger } from '@/lib/logger';
 import { randomBytes, createHash, createHmac } from 'crypto';
 import { installDefaultModules } from '@/lib/modules/auto-install';
 import { isBlocked, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/security/brute-force';
+import { validateBody } from '@/lib/api/validate';
+import { loginSchema, signupSchema } from '@/lib/api/schemas';
 
 // ── Login ─────────────────────────────────────────────────────
 export async function POST_login(request: NextRequest) {
@@ -34,9 +36,9 @@ export async function POST_login(request: NextRequest) {
     if (limited) return limited;
 
     const body = await request.json();
-    const email = body.email?.trim().toLowerCase();
-    const password = body.password;
-    if (!email || !password) return NextResponse.json({ error:'Email and password required' }, { status:400 });
+    const parsed = validateBody(loginSchema, body);
+    if (parsed instanceof NextResponse) return parsed;
+    const { email, password } = parsed.data;
 
     // Check if email is blocked
     const emailBlockCheck = await isBlocked(email, 'email');
@@ -155,8 +157,8 @@ export async function POST_signup(request: NextRequest) {
         .where(and(eq(platformSettings.key, 'allow_signups'), isNull(platformSettings.tenantId)))
         .limit(1);
       allowSignups = allowSignupsSetting?.value !== 'false';
-    } catch (e) {
-      console.warn('[Auth] Failed to check signups setting, defaulting to allowed:', e);
+    } catch {
+      // Silently skip during migration/setup when tables may not exist yet
       allowSignups = true;
     }
     
@@ -165,15 +167,12 @@ export async function POST_signup(request: NextRequest) {
     }
 
     const body = await request.json();
-    const email = body.email?.trim().toLowerCase();
-    const password = body.password;
-    const fullName = body.full_name?.trim();
-    const workspaceName = body.workspace_name?.trim();
+    const parsed = validateBody(signupSchema, body);
+    if (parsed instanceof NextResponse) return parsed;
+    const { email, password, full_name: fullName, workspace_name: workspaceName } = parsed.data;
 
-    if (!email || !password || !fullName || !workspaceName) return NextResponse.json({ error:'All fields are required' }, { status:400 });
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ error:'Invalid email address' }, { status:400 });
     const passwordError = validatePassword(password);
-    if (passwordError) return NextResponse.json({ error: passwordError }, { status:400 });
+    if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 });
 
     const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
     if (existing) return NextResponse.json({ error:'An account with this email already exists' }, { status:409 });
@@ -320,7 +319,7 @@ export async function POST_signup(request: NextRequest) {
       message: `**${user.fullName}** (${user.email}) joined\nWorkspace: **${tenant.name}** (\`${tenant.slug}\`)`,
       color: '#10b981',
       url: `${process.env.NEXT_PUBLIC_APP_URL}/tenant`,
-    }).catch((e) => devLogger.warn('[Auth] Failed to send webhook notification', e));
+    }).catch((e) => { console.error('[auth/signup] Webhook notification failed', e); });
 
     // Send Telegram notification if user configured it (fire-and-forget)
     sendTelegram({
@@ -330,7 +329,7 @@ export async function POST_signup(request: NextRequest) {
       message: `${user.fullName} (${user.email}) joined\nWorkspace: ${tenant.name} (${tenant.slug})`,
       icon: '🟢',
       url: `${process.env.NEXT_PUBLIC_APP_URL}/tenant`,
-    }).catch((e) => devLogger.warn('[Auth] Failed to send Telegram notification', e));
+    }).catch((e) => { console.error('[auth/signup] Telegram notification failed', e); });
 
     // Send verification email (fire-and-forget)
     if (process.env.RESEND_API_KEY || process.env.SMTP_HOST) {
@@ -369,14 +368,14 @@ export async function POST_logout(request: NextRequest) {
     const token = request.cookies.get('nucrm_session')?.value;
     if (token) {
       const tokenHash = await hashToken(token);
-      await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash)).catch((e) => devLogger.warn('[Auth] Failed to delete session on logout', e));
+      await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash)).catch((e) => { console.error('[auth/logout] Failed to delete session', e); });
     }
     await clearSessionCookie();
     const logoutResponse = NextResponse.json({ ok:true });
     logoutResponse.headers.set('Set-Cookie', 'nucrm_csrf_token=; Path=/; SameSite=Strict; Max-Age=0');
     return logoutResponse;
   } catch (e) {
-    console.error('[Auth] Logout failed:', e);
+    console.error('[auth/logout] Logout error, clearing cookies anyway', e);
     await clearSessionCookie();
     const logoutResponse = NextResponse.json({ ok:true });
     logoutResponse.headers.set('Set-Cookie', 'nucrm_csrf_token=; Path=/; SameSite=Strict; Max-Age=0');

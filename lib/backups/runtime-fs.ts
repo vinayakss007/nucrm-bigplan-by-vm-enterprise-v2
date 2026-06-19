@@ -3,7 +3,7 @@ export async function checkDirExists(path: string): Promise<boolean> {
     const fs = await import('fs');
     return fs.existsSync(path);
   } catch {
-    console.error('[backups] Failed to check dir existence', path);
+    // Fallback to default on corrupted storage data
     return false;
   }
 }
@@ -27,8 +27,8 @@ export async function getFileStats(path: string): Promise<{ size: number } | nul
     const fs = await import('fs');
     const stats = fs.statSync(path);
     return { size: stats.size };
-  } catch (e) {
-    console.error('[BackupFS] Failed to get file stats:', e);
+  } catch {
+    // Fallback to default on corrupted storage data
     return null;
   }
 }

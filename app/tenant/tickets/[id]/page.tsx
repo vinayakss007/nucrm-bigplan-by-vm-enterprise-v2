@@ -38,7 +38,7 @@ export default function TicketDetailPage() {
     } catch { toast.error('Failed to load'); } finally { setLoading(false); }
   }, [params, router]);
 
-  useEffect(() => { loadTicket(); }, [loadTicket]);
+  useEffect(() => { loadTicket(); }, [params['id'], loadTicket]);
 
   const sendReply = async () => {
     if (!replyText.trim()) return;

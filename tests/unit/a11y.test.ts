@@ -27,7 +27,7 @@ beforeEach(() => {
     removeEventListener: vi.fn(),
     activeElement: null,
   });
-  vi.stubGlobal('requestAnimationFrame', vi.fn((cb: () => void) => cb()));
+  vi.stubGlobal('requestAnimationFrame', vi.fn((cb: (...args: any[]) => any) => cb()));
 });
 
 afterEach(() => {

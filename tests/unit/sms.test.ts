@@ -294,7 +294,6 @@ describe('SMS - sendSMS', () => {
 
   it('accepts optional contactId', async () => {
     vi.mocked(db.insert).mockReturnValue({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       values: vi.fn((_vals: any) => ({
         returning: vi.fn().mockResolvedValue([{ id: 'msg-5' }]),
       })),

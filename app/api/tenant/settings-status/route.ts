@@ -89,9 +89,6 @@ export async function GET(req: NextRequest) {
       statuses['/tenant/settings/billing']      = { status: 'configured' };
 
       // Login policy — derive from password / 2fa / IP / signup flags
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const lpRec = (lp ?? {}) as Record<string, any>;
       const minLen = Number((lpRec['password'] as Record<string, unknown>)?.['min_length'] ?? 12);
       const tfa = (lpRec['two_factor'] as Record<string, unknown>)?.['enforcement'] ?? 'optional';

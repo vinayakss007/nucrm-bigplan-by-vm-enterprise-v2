@@ -75,14 +75,8 @@ export async function POST(request: NextRequest) {
     // Notify assignee
     if (assign_to !== ctx.userId) {
       await createNotification({
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         userId: assign_to, tenantId: ctx.tenantId, type:'contact_assigned' as any,
         title: `${rowCount} lead${rowCount!==1?'s':''} assigned to you`,
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         body: reason||undefined, link:'/tenant/leads', entity_type: 'lead' as any,
       });
     }

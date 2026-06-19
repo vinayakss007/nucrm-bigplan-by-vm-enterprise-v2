@@ -26,7 +26,7 @@ export default function KBArticlePage() {
     } catch (err) { logError({ error: err, context: "catch:[context]" }); } finally { setLoading(false); }
   }, [params.id, router]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [params.id, load]);
 
   const vote = async (action: 'helpful' | 'not_helpful') => {
     if (voted) return;

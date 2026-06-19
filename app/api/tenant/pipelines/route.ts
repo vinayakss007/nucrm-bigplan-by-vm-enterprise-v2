@@ -76,9 +76,6 @@ export async function POST(req: NextRequest) {
 
       if (!newPipeline) throw new Error('Failed to create pipeline');
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const stagesToCreate = (stages || defaultStages).map((s: any, idx: number) => ({
         tenantId: ctx.tenantId,
         pipelineId: newPipeline.id,

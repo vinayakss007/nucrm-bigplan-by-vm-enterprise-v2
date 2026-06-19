@@ -120,6 +120,8 @@ export const contacts = pgTable('contacts', {
     tenantStatusIdx: index('idx_contacts_tenant_status').on(table.tenantId, table.leadStatus),
     assignedIdx: index('idx_contacts_assigned').on(table.assignedTo),
     tenantCreatedIdx: index('idx_contacts_tenant_created').on(table.tenantId, table.createdAt),
+    tenantArchivedCreatedIdx: index('idx_contacts_tenant_archived_created').on(table.tenantId, table.isArchived, table.createdAt).where(sql`deleted_at IS NULL`),
+    createdByIdx: index('idx_contacts_created_by').on(table.createdBy),
     activeIdx: utils.activeIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
     searchIdx: index('idx_contacts_search').using('gin', sql`to_tsvector('english', ${table.firstName} || ' ' || COALESCE(${table.lastName}, '') || ' ' || COALESCE(${table.email}, ''))`),
@@ -771,8 +773,10 @@ export const meetings = pgTable('meetings', {
     userIdx: index('idx_meetings_user').on(table.userId),
     contactIdx: index('idx_meetings_contact').on(table.contactId),
     dealIdx: index('idx_meetings_deal').on(table.dealId),
+    createdByIdx: index('idx_meetings_created_by').on(table.createdBy),
     statusIdx: index('idx_meetings_status').on(table.status),
     startTimeIdx: index('idx_meetings_start_time').on(table.startTime),
+    tenantStartActiveIdx: index('idx_meetings_tenant_start_active').on(table.tenantId, table.startTime).where(sql`deleted_at IS NULL`),
     activeIdx: utils.activeIdx(table),
   };
 });

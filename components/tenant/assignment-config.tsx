@@ -127,7 +127,6 @@ export default function AssignmentConfig({ teamMembers = [] }: { teamMembers?: {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function AssignmentRuleForm({ _teamMembers, onSaved, onClose }: any) {
   const [form, setForm] = useState({
     name: '',

@@ -103,7 +103,7 @@ export default function TenantsDataTable({ initialTenants }: Props) {
     }
   }
 
-  const suspendTenant = useCallback(async (tenantId: string, _name: string) => {
+  const suspendTenant = async (tenantId: string, _name: string) => {
     const res = await fetch('/api/superadmin/tenants', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -115,7 +115,7 @@ export default function TenantsDataTable({ initialTenants }: Props) {
     } else {
       toast.error('Failed to suspend')
     }
-  }, [loadData, pagination.pageIndex])
+  }
 
   const columns: ColumnDef<Tenant>[] = useMemo(() => [
     {

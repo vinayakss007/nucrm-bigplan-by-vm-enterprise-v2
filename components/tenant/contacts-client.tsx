@@ -163,7 +163,7 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: { compa
 }
 
 export default function TenantContactsClient({ initialContacts, companies, teamMembers, permissions, _tenantId, _userId, totalCount, initialOffset, initialQ, initialStatus }: Props) {
-  const normalize = (data: Record<string, unknown>[]) => (data || []).map((c) => toSnakeCase(c));
+  const normalize = (data: any[]) => (data || []).map((c: any) => toSnakeCase(c));
   const [contacts, setContacts] = useState(normalize(initialContacts));
   const [total, setTotal]       = useState(totalCount ?? initialContacts.length);
   const [offset, setOffset]     = useState(initialOffset ?? 0);
