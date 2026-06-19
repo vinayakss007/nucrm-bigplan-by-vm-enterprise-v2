@@ -61,7 +61,12 @@ export function WidgetShell({
 
   return (
     <div className="admin-card h-full">
-      {children({ data, tenantId, userId, isAdmin, config })}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border">
+        <h3 className="text-sm font-semibold">{_widget.name}</h3>
+      </div>
+      <div className="p-4">
+        {children({ data, tenantId, userId, isAdmin, config })}
+      </div>
     </div>
   );
 }
