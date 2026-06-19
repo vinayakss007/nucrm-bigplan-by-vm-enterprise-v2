@@ -773,6 +773,7 @@ export const meetings = pgTable('meetings', {
     userIdx: index('idx_meetings_user').on(table.userId),
     contactIdx: index('idx_meetings_contact').on(table.contactId),
     dealIdx: index('idx_meetings_deal').on(table.dealId),
+    createdByIdx: index('idx_meetings_created_by').on(table.createdBy),
     statusIdx: index('idx_meetings_status').on(table.status),
     startTimeIdx: index('idx_meetings_start_time').on(table.startTime),
     tenantStartActiveIdx: index('idx_meetings_tenant_start_active').on(table.tenantId, table.startTime).where(sql`deleted_at IS NULL`),
