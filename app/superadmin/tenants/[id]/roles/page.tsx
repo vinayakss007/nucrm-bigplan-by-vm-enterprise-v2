@@ -2,11 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-<<<<<<< HEAD
 import { ArrowLeft, Shield, Plus, Edit, Trash2, Save, Lock, ChevronDown, Check, Crown, X, Loader2 } from 'lucide-react';
-=======
-import { ArrowLeft, Shield, Plus, Edit, Trash2, Save, Lock, ChevronDown, Check, Crown, Users, X, Loader2 } from 'lucide-react';
->>>>>>> fix/batch-2-e2e-useEffect
 import { PERMISSIONS, PERMISSION_CATEGORIES } from '@/lib/permissions/definitions';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -26,14 +22,13 @@ interface Role {
 export default function TenantRolesPage() {
   const params = useParams();
   const tenantId = params['id'] as string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [tenant, setTenant] = useState<any>(null);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [editRole, setEditRole] = useState<Role | null>(null);
   const [showEditor, setShowEditor] = useState(false);
-  const [_saving, setSaving] = useState(false);
-  const [_openCat, _setOpenCat] = useState<string | null>(PERMISSION_CATEGORIES[0] ?? null);
+  const [saving, setSaving] = useState(false);
+  const [openCat, setOpenCat] = useState<string | null>(PERMISSION_CATEGORIES[0] ?? null);
 
   const load = useCallback(async () => {
     try {
@@ -65,7 +60,6 @@ export default function TenantRolesPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to save');
       toast.success('Permissions updated');
       load();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -85,7 +79,6 @@ export default function TenantRolesPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to create');
       toast.success('Role created');
       load();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -106,7 +99,6 @@ export default function TenantRolesPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to delete');
       toast.success('Role deleted');
       load();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       toast.error(error.message);
     } finally {

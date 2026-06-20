@@ -126,16 +126,11 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-<<<<<<< HEAD
-    const body = await req.json();
+    let body;
+    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const parsed = validateBody(tagActionSchema, body);
     if (parsed instanceof NextResponse) return parsed;
     const { action, tag: fromTag, new_tag: toTag, tags } = parsed.data;
-=======
-    let body;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
-    const action = body.action;
->>>>>>> fix/json-parse-error-handling
 
     if (action === 'rename') {
       if (!fromTag || !toTag) return NextResponse.json({ error: 'tag and new_tag required' }, { status: 400 });

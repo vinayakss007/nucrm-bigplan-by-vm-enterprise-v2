@@ -17,7 +17,7 @@ export default function TasksWidget({ data }: WidgetProps) {
         <p className="text-xs font-medium text-muted-foreground/70 text-center py-5">No open tasks</p>
       ) : (
         <div className="divide-y divide-border">
-          {items.slice(0, 5).map((t: Record<string, unknown>) => {
+          {items.slice(0, 5).map((t: Record<string, any>) => {
             const overdue = t.due_date && t.due_date < today;
             return (
               <Link key={t.id} href="/tenant/tasks" className="flex items-center gap-2 py-2 first:pt-0 last:pb-0 hover:bg-accent/20 transition-colors -mx-3 px-3 rounded">
