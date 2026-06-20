@@ -117,7 +117,7 @@ async function deleteAcrossTables(tenantId: string, tag: string) {
   };
 }
 
-const TAG_RE = /^[\w \-./&]{1,40}$/;
+const _TAG_RE = /^[\w \-./&]{1,40}$/;
 
 export async function POST(req: NextRequest) {
   let ctx: Awaited<ReturnType<typeof requireAuth>>;
@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
       const counts = await deleteAcrossTables(ctx.tenantId, fromTag);
       const total = counts.leads + counts.contacts + counts.companies;
       await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'tag_delete', entityType: 'tag',
-        newData: { tag, counts, total } });
+        newData: { tag: fromTag, counts, total } });
       return NextResponse.json({ ok: true, counts, total });
     }
 

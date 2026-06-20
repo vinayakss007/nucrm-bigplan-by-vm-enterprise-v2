@@ -42,10 +42,9 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
       if (!res.ok) throw new Error('Failed to load messages')
       const data = await res.json()
       if (!signal?.aborted) setMessages(data.data || [])
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      if (err instanceof DOMException && err.name === 'AbortError') return
-      if (!signal?.aborted) console.error('[whatsapp] loadMessages failed', err);
+      console.error('[whatsapp] loadMessages failed', err);
     } finally {
       if (!signal?.aborted) setLoading(false)
     }
@@ -56,10 +55,9 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
       const res = await fetch('/api/tenant/whatsapp/templates', { signal })
       if (!res.ok) return
       const data = await res.json()
-      if (!signal?.aborted) setTemplates(data.data || [])
+      setTemplates(data.data || [])
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return
-      if (!signal?.aborted) console.error('[whatsapp] loadTemplates failed', err);
+      console.error('[whatsapp] loadTemplates failed', err);
     }
   }, [])
 

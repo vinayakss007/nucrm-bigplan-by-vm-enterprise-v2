@@ -41,8 +41,7 @@ export default function PipelinesSettingsPage() {
     const r = await fetch('/api/tenant/pipelines');
     if (r.ok) { const d = await r.json(); setPipelines(d.data??[]); if (!selected && d.data?.length) setSelected(d.data[0]); }
     setLoading(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [selected]);
   useEffect(() => { load(); }, [load]);
 
   const createPipeline = async () => {

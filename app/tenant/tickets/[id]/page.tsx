@@ -29,14 +29,16 @@ export default function TicketDetailPage() {
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
 
+  const ticketId = params['id'] as string;
+
   const loadTicket = useCallback(async () => {
     try {
-      const res = await fetch(`/api/tenant/tickets/${params['id']}`);
+      const res = await fetch(`/api/tenant/tickets/${ticketId}`);
       if (!res.ok) { toast.error('Failed to load ticket'); router.push('/tenant/tickets'); return; }
       const d = await res.json();
       setTicket(d.data);
     } catch { toast.error('Failed to load'); } finally { setLoading(false); }
-  }, [params, router]);
+  }, [ticketId, router]);
 
   useEffect(() => { loadTicket(); }, [loadTicket]);
 

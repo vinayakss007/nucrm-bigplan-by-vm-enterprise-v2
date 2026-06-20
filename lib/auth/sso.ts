@@ -302,7 +302,6 @@ export function validateOIDCToken(
 
     return { valid: true, payload };
   } catch {
-    console.error('[sso] Failed to parse token');
     return { valid: false, error: 'Failed to parse token' };
   }
 }

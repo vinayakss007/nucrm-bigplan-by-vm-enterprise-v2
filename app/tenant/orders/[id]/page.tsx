@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, Package, Truck, CheckCircle, Clock, Calendar } from 'lucide-react';
@@ -55,20 +55,21 @@ export default function OrderDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Order>>({});
 
-  const fetchOrder = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/tenant/orders/${id}`);
-      if (!res.ok) throw new Error('Not found');
-      const data = await res.json();
-      setOrder(data.data);
-    } catch {
-      toast.error('Failed to load order');
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    const fetchOrder = async () => {
+      try {
+        const res = await fetch(`/api/tenant/orders/${id}`);
+        if (!res.ok) throw new Error('Not found');
+        const data = await res.json();
+        setOrder(data.data);
+      } catch {
+        toast.error('Failed to load order');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOrder();
   }, [id]);
-
-  useEffect(() => { fetchOrder(); }, [fetchOrder]);
 
   const handleEdit = () => {
     if (order) {

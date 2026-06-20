@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, Calendar, DollarSign, CreditCard, RefreshCw, Pause, Play } from 'lucide-react';
@@ -44,20 +44,21 @@ export default function SubscriptionDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Subscription>>({});
 
-  const fetchSubscription = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/tenant/subscriptions/${id}`);
-      if (!res.ok) throw new Error('Not found');
-      const data = await res.json();
-      setSubscription(data.data);
-    } catch {
-      toast.error('Failed to load subscription');
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      try {
+        const res = await fetch(`/api/tenant/subscriptions/${id}`);
+        if (!res.ok) throw new Error('Not found');
+        const data = await res.json();
+        setSubscription(data.data);
+      } catch {
+        toast.error('Failed to load subscription');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSubscription();
   }, [id]);
-
-  useEffect(() => { fetchSubscription(); }, [id, fetchSubscription]);
 
   const handleEdit = () => {
     if (subscription) {

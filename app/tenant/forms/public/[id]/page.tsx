@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { FileText, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -8,28 +8,27 @@ export default function PublicFormPage() {
   const params = useParams();
   const formId = params['id'] as string;
   
-  const [form, setForm] = useState<Record<string, any> | null>(null);
+  const [form, setForm] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [values, setValues] = useState<Record<string, any>>({});
-
-  const loadForm = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/tenant/forms/public/${formId}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setForm(data);
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load form');
-    } finally {
-      setLoading(false);
-    }
-  }, [formId]);
+  const [values, setValues] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
+    const loadForm = async () => {
+      try {
+        const res = await fetch(`/api/tenant/forms/public/${formId}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        setForm(data);
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : 'Failed to load form');
+      } finally {
+        setLoading(false);
+      }
+    };
     loadForm();
-  }, [loadForm]);
+  }, [formId]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

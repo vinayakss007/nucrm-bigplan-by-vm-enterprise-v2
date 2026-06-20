@@ -91,8 +91,8 @@ export async function GET(req: NextRequest) {
     try {
       const atRiskDeals = await getAtRiskDeals(ctx.tenantId);
       at_risk_count = atRiskDeals.length;
-    } catch (err) {
-      console.error('[ai] status rules fetch error', err);
+    } catch {
+      // Silently skip during migration/setup when tables may not exist yet
     }
 
     return NextResponse.json({

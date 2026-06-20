@@ -61,6 +61,9 @@ export function WidgetShell({
 
   return (
     <div className="admin-card h-full">
+      <div className="px-4 pt-3 pb-1">
+        <h3 className="text-sm font-semibold">{widget.name}</h3>
+      </div>
       {children({ data, tenantId, userId, isAdmin, config })}
     </div>
   );

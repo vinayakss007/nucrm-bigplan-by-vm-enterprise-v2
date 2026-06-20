@@ -196,7 +196,8 @@ interface Props {
   sources: Record<string, unknown>[];
   tenantId: string;
   userId: string;
-  _sources?: Record<string, unknown>[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  _sources?: any[];
   _tenantId?: string;
   _userId?: string;
 }

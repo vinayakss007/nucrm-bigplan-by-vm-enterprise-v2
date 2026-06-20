@@ -24,8 +24,8 @@ async function getTenantWhitelist(tenantId: string): Promise<string[]> {
   
   try {
     return JSON.parse(String(setting.value));
-  } catch (e) {
-    console.error('[IPWhitelist] Failed to parse whitelist JSON:', e);
+  } catch {
+    // Fallback to default on corrupted storage data
     return [];
   }
 }

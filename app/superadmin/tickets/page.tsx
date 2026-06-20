@@ -1,7 +1,6 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { MessageSquare, CheckCircle, ChevronDown, Search } from 'lucide-react';
-import { useCallback } from 'react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -45,7 +44,7 @@ export default function TicketsPage() {
     const res = await fetch('/api/superadmin/tickets' + q);
     const d = await res.json(); setData(d); setLoading(false);
   }, [status]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [status, load]);
 
   const update = async (id: string, updates: Partial<TicketData>) => {
     await fetch('/api/superadmin/tickets',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,...updates}) });

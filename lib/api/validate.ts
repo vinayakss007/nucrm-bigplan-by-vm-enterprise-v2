@@ -79,11 +79,8 @@ export function withValidation<T>(
     try {
       body = await request.json();
     } catch (e) {
-      console.error('[Validate] Failed to parse request body:', e);
-      return NextResponse.json(
-        { error: 'Invalid request body' },
-        { status: 400 }
-      );
+      console.error('[Validate] Invalid JSON body', e);
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
     const result = validateBody(schema, body);
@@ -107,10 +104,7 @@ export async function safeJson(request: Request): Promise<{ data: any } | NextRe
     const data = await request.json();
     return { data };
   } catch (e) {
-    console.error('[Validate] JSON parse failed:', e);
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return { data: null } as any;
+    console.error('[Validate] Invalid JSON body', e);
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 }

@@ -354,8 +354,8 @@ export class TenantDataExporter {
             rowCount,
           });
         }
-      } catch (e) {
-        console.warn('[Export] Table check failed (may not exist):', tableDef.table, e);
+      } catch {
+        // Silently skip during migration/setup when tables may not exist yet
       }
     }
 

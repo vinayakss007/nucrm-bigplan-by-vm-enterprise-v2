@@ -3,6 +3,7 @@ source ~/.nvm/nvm.sh
 nvm use 22.22.2
 export DATABASE_URL=postgresql://postgres:nucrm_pass_2026@localhost:5432/nucrm
 export NEXT_PUBLIC_APP_URL=http://localhost:3000
+export NODE_OPTIONS="--max-old-space-size=2048"
 
 # Install concurrently if missing
 if [ ! -f node_modules/.bin/concurrently ]; then
