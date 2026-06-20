@@ -48,7 +48,11 @@ export function useNotifications(enabled = true) {
           reconnectTimer = setTimeout(connect, delay);
           reconnectAttempts++;
         };
-      } catch { /* Fallback to default on corrupted storage data */ }
+      } catch {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[useNotifications] Failed to create EventSource');
+        }
+      }
     };
 
     connect();
