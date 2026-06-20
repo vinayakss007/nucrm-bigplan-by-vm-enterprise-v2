@@ -49,7 +49,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json().catch((err) => { console.error('[backup] JSON parse failed', err); return {}; });
+    let body;
+    try { body = await request.json(); } catch (err) { console.error('[backup] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const backupType = body.backup_type === 'schema' ? 'schema' : 'full';
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
