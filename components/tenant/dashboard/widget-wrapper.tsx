@@ -38,7 +38,7 @@ function WidgetEmpty({ message }: { message: string }) {
 }
 
 export function WidgetShell({
-  widget: _widget, size, tenantId, userId, isAdmin, config,
+  widget, size, tenantId, userId, isAdmin, config,
   loading, error, data, onRefresh, children,
 }: {
   widget: WidgetConfig
