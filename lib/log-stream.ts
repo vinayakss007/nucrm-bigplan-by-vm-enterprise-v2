@@ -43,7 +43,6 @@ export const logStream = {
       try {
         client.controller.enqueue(bytes);
       } catch {
-
         clients.delete(id);
       }
     }
