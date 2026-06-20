@@ -65,7 +65,7 @@ export async function queueWebhook(payload: WebhookPayload): Promise<string> {
   try {
     await processWebhookDelivery(result.id, payload.url, payload.headers);
   } catch {
-    // Will be retried
+    console.error('[webhooks] Initial delivery attempt failed', result.id);
   }
 
   devLogger.queue('webhook-delivery', 'queued');

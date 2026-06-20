@@ -465,6 +465,7 @@ export async function health(): Promise<{ status: string; latency?: number }> {
       latency,
     };
   } catch {
+    console.error('[cache] Redis ping failed');
     return { status: 'unhealthy', latency: 0 };
   }
 }
