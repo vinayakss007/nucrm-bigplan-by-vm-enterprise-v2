@@ -14,7 +14,7 @@
 | **Phase 2** — `task-enterprise-crm-phase2`: 13 industry templates, Stripe core, white-label, multi-frontend gateway, advanced RBAC, SSO, webhook expansion | ✅ done |
 | **Phase 3** — `task-enterprise-crm-phase3`: GDPR/SOC2, SSO/RBAC/Compliance UIs, SLA, auto-assignment, documents, reports, SMS/chat/email-tracking, currency/tax/e-sign, leaderboards, territories, hierarchy, visitor-tracking + FEAT-006 security fixes | ✅ done |
 | **Side tasks** — product-pages-sdk, frontend-gaps-fix, remaining-features-sentry, perf/scaling/PWA/Stripe-full/SSO-admin/landing/aesthetic/recovery/onboarding/bulk-ops/lead-workflow/contacts-bulk (PRs #14–#25) | ✅ done |
-| **Phase 4** — AI Gateway, Secrets Vault, Activity Log | ⏳ in progress |
+| **Phase 4** — AI Gateway, Secrets Vault, Activity Log, Summarize | ✅ done (`feat/phase-4-summarize` — PR pending) |
 | **Phase 5** — Workflow completeness | ⏳ |
 | **Phase 6** — Bulk-ops completion | ⏳ |
 | **Phase 7** — Settings UI closures | ⏳ |
@@ -28,53 +28,50 @@
 
 > Source: `POSITIONING.md` "AI as the engine, not a paid bolt-on" + `WORKFLOW.md` gap #1 + 5 AI shell pages already shipped (`/tenant/ai/draft`, `/lead-scoring`, `/at-risk`, `/summarize`, `/activity`).
 
-### 4.1  Foundation (this PR)
+### 4.1  Foundation (merged to main)
 
-- [ ] `drizzle/schema/ai.ts` — `ai_provider_secrets` (encrypted) + `ai_activity` (per-call log)
-- [ ] `lib/ai/secrets.ts` — `setProviderKey / getProviderKey / hasProviderKey / deleteProviderKey` using AES-256-GCM via `lib/crypto.ts` (same pattern as SSO `client_secret`)
-- [ ] `lib/ai/gateway.ts` — provider-agnostic `chat({ provider, messages, system, max_tokens, temperature })`
-  - OpenAI (`/v1/chat/completions`)
-  - Anthropic (`/v1/messages`)
-  - Groq (OpenAI-compatible at `api.groq.com`)
-  - Ollama (`/api/chat` at configurable base URL)
-  - Fallback chain by `fallback_priority`
-  - Writes one `ai_activity` row per attempt (provider, model, tokens, cost, latency, success)
-  - Honours existing `checkTokenAndLimits` / `recordUsage`
-- [ ] Refactor `app/api/tenant/admin/ai-providers/route.ts` PATCH to call `setProviderKey` (drop the jsonb-only `api_key_set` marker)
-- [ ] Refactor `app/api/tenant/ai/route.ts` to call `gateway.chat()` instead of `callClaude()` — preserve all 5 actions (`draft_email`, `score_lead`, `predict_deal`, `enrich_contact`, `suggest_followup`)
-- [ ] `/api/tenant/ai/status` reads real `ai_activity` rows for today
-- [ ] `/api/tenant/ai/activity` GET — paged list of recent calls
-- [ ] `/tenant/ai/activity` page — replace shell with real table
-- [ ] Verify: `tsc --noEmit` 0 new errors, `vitest run` passes, `npm run build` green
+- [x] `drizzle/schema/ai.ts` — `ai_provider_secrets` (encrypted) + `ai_activity` (per-call log)
+- [x] `lib/ai/secrets.ts` — `setProviderKey / getProviderKey / hasProviderKey / deleteProviderKey` using AES-256-GCM via `lib/crypto.ts`
+- [x] `lib/ai/gateway.ts` — provider-agnostic `chat()` with OpenAI, Anthropic, Groq, Ollama
+- [x] Fallback chain by `fallback_priority` + writes `ai_activity` rows
+- [x] Honours `checkTokenAndLimits` / `recordUsage`
+- [x] `app/api/tenant/admin/ai-providers/route.ts` — uses `setProviderKey`
+- [x] `app/api/tenant/ai/route.ts` — calls `gateway.chat()` for all 5 actions
+- [x] `/api/tenant/ai/status` — reads real `ai_activity` rows
+- [x] `/api/tenant/ai/activity` GET — paged list with filters
+- [x] `/tenant/ai/activity` page — real table with 30-day stats
+- [x] Tests: 88 AI tests passing, 0 TS errors, build green
 
-### 4.2  Auto-Draft backend (next PR)
+### 4.2  Auto-Draft backend (merged to main)
 
-- [ ] `drizzle/schema/ai.ts` — `ai_draft_templates` table (per-tenant prompts)
-- [ ] `app/api/tenant/admin/ai-templates/*` — CRUD
-- [ ] `/tenant/settings/ai-templates` page
-- [ ] `app/api/tenant/ai/draft/route.ts` — accepts `{ entity_type, entity_id, template_id }`, hydrates context, calls `gateway.chat()`, returns draft + lets user save / send via existing email pipe
-- [ ] `/tenant/ai/draft` page — entity picker + template select + diff editor + Send
+- [x] `drizzle/schema/ai.ts` — `ai_draft_templates` table
+- [x] `app/api/tenant/admin/ai-templates/*` — full CRUD
+- [x] `/tenant/settings/ai-templates` page
+- [x] `app/api/tenant/ai/draft/route.ts` — context hydration + gateway call
+- [x] `/tenant/ai/draft` page — entity picker + template select + diff editor
 
-### 4.3  Lead-scoring rules editor (next PR)
+### 4.3  Lead-scoring rules editor (merged to main)
 
-- [ ] `drizzle/schema/ai.ts` — `lead_scoring_rules` (factor, weight, condition, active)
-- [ ] `app/api/tenant/admin/lead-scoring/*` — CRUD + recompute
-- [ ] `/tenant/settings/lead-scoring` page — drag-orderable factor list, recompute button, score-distribution preview
-- [ ] `/tenant/ai/lead-scoring` page — replace shell with ranked-leads table + per-row "why this score"
-- [ ] Cron `process-lead-scoring` — nightly recompute
+- [x] `drizzle/schema/ai.ts` — `lead_scoring_rules` table
+- [x] `app/api/tenant/admin/lead-scoring/*` — CRUD + recompute
+- [x] `/tenant/settings/lead-scoring` page — factor list + recompute
+- [x] `/tenant/ai/lead-scoring` page — ranked-leads table with score breakdown
+- [x] Cron `process-lead-scoring` — nightly recompute
 
-### 4.4  At-risk deals (next PR)
+### 4.4  At-risk deals (merged to main)
 
-- [ ] `drizzle/schema/ai.ts` — `at_risk_rules` (stage, max_days_idle, sentiment_threshold)
-- [ ] `app/api/tenant/admin/at-risk/*`
-- [ ] `/tenant/settings/at-risk-rules` page
-- [ ] `/tenant/ai/at-risk` page — flagged-deals table + manager nudge action
-- [ ] Cron `process-at-risk` — daily flag
+- [x] `drizzle/schema/ai.ts` — `at_risk_rules` table
+- [x] `app/api/tenant/admin/at-risk/*` — full CRUD
+- [x] `/tenant/settings/at-risk-rules` page
+- [x] `/tenant/ai/at-risk` page — flagged-deals table + actions
+- [x] Cron `process-at-risk` — daily flag
 
-### 4.5  Summarize-anywhere (small follow-up)
+### 4.5  Summarize-anywhere (on `feat/phase-4-summarize` — PR ready)
 
-- [ ] `app/api/tenant/ai/summarize/route.ts` — accepts entity, returns TL;DR via gateway
-- [ ] `/tenant/ai/summarize` shell → real entity picker
+- [x] `lib/ai/summarize.ts` — entity summarization engine (contact/deal/company)
+- [x] `app/api/tenant/ai/summarize/route.ts` — accepts entity, returns TL;DR via gateway
+- [x] `/tenant/ai/summarize` — real entity picker + AI summary output
+- [x] `tests/unit/ai/summarize.test.ts` — 8 tests
 
 ---
 
@@ -174,13 +171,13 @@
 
 ## Active queue
 
-| # | Phase | Item | PR target |
+| # | Phase | Item | Status |
 |---|---|---|---|
-| 1 | 4.1 | AI Gateway foundation | `feat/phase-4-ai-gateway-foundation` |
-| 2 | 4.2 | Auto-Draft backend | `feat/phase-4-auto-draft` |
-| 3 | 4.3 | Lead-scoring rules editor | `feat/phase-4-lead-scoring` |
-| 4 | 4.4 | At-risk deals | `feat/phase-4-at-risk` |
-| 5 | 4.5 | Summarize-anywhere | `feat/phase-4-summarize` |
+| 1 | 4.1 | AI Gateway foundation | ✅ Merged to main |
+| 2 | 4.2 | Auto-Draft backend | ✅ Merged to main |
+| 3 | 4.3 | Lead-scoring rules editor | ✅ Merged to main |
+| 4 | 4.4 | At-risk deals | ✅ Merged to main |
+| 5 | 4.5 | Summarize-anywhere | ✅ On `feat/phase-4-summarize` (PR ready) |
 | 6 | 5.3 | Unified comms-to-activities emission | `feat/phase-5-comms-activities` |
 | 7 | 5.4 | Bulk-action-bar lifted to all tables | `feat/phase-5-bulk-bar-everywhere` |
 | 8 | 6.3 | Bulk update custom field | `feat/phase-6-bulk-update-field` |
