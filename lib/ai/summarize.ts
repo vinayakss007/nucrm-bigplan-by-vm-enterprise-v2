@@ -30,7 +30,7 @@ async function fetchEntityContext(
 ): Promise<EntityContext | null> {
   switch (entityType) {
     case 'contact': {
-      const [c] = await db
+      const rows = await db
         .select({
           id: contacts.id,
           firstName: contacts.firstName,
@@ -40,7 +40,6 @@ async function fetchEntityContext(
           jobTitle: contacts.jobTitle,
           lifecycleStage: contacts.lifecycleStage,
           leadStatus: contacts.leadStatus,
-          notes: contacts.notes,
           companyId: contacts.companyId,
           assignedTo: contacts.assignedTo,
           createdAt: contacts.createdAt,
@@ -49,94 +48,89 @@ async function fetchEntityContext(
         .from(contacts)
         .where(eq(contacts.id, entityId))
         .limit(1);
-      if (!c || c.length === 0) return null;
-      const contact = (Array.isArray(c) ? c[0] : c) as typeof c;
+      if (!rows || rows.length === 0) return null;
+      const c = rows[0]!;
       let companyName: string | undefined;
-      if (contact.companyId) {
+      if (c.companyId) {
         const [co] = await db
           .select({ name: companies.name })
           .from(companies)
-          .where(eq(companies.id, contact.companyId))
+          .where(eq(companies.id, c.companyId))
           .limit(1);
         if (co) companyName = co.name;
       }
       return {
         type: 'contact',
-        id: contact.id,
-        label: `${contact.firstName} ${contact.lastName ?? ''}`.trim(),
+        id: c.id,
+        label: `${c.firstName} ${c.lastName ?? ''}`.trim(),
         details: {
-          firstName: contact.firstName,
-          lastName: contact.lastName,
-          email: contact.email,
-          phone: contact.phone,
-          jobTitle: contact.jobTitle,
-          lifecycleStage: contact.lifecycleStage,
-          leadStatus: contact.leadStatus,
-          notes: contact.notes,
+          firstName: c.firstName,
+          lastName: c.lastName,
+          email: c.email,
+          phone: c.phone,
+          jobTitle: c.jobTitle,
+          lifecycleStage: c.lifecycleStage,
+          leadStatus: c.leadStatus,
           company: companyName,
-          createdAt: contact.createdAt,
-          updatedAt: contact.updatedAt,
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
         },
       };
     }
     case 'deal': {
-      const [d] = await db
+      const rows = await db
         .select({
           id: deals.id,
           title: deals.title,
           amount: deals.amount,
           stageId: deals.stageId,
-          status: deals.status,
           closeDate: deals.closeDate,
           contactId: deals.contactId,
           companyId: deals.companyId,
-          notes: deals.notes,
           createdAt: deals.createdAt,
           updatedAt: deals.updatedAt,
         })
         .from(deals)
         .where(eq(deals.id, entityId))
         .limit(1);
-      if (!d || d.length === 0) return null;
-      const deal = (Array.isArray(d) ? d[0] : d) as typeof d;
+      if (!rows || rows.length === 0) return null;
+      const d = rows[0]!;
       let contactName: string | undefined;
       let companyName: string | undefined;
-      if (deal.contactId) {
-        const [c] = await db
+      if (d.contactId) {
+        const cRows = await db
           .select({ firstName: contacts.firstName, lastName: contacts.lastName })
           .from(contacts)
-          .where(eq(contacts.id, deal.contactId))
+          .where(eq(contacts.id, d.contactId))
           .limit(1);
-        if (c) contactName = `${c.firstName} ${c.lastName ?? ''}`.trim();
+        if (cRows && cRows.length > 0) contactName = `${cRows[0]!.firstName} ${cRows[0]!.lastName ?? ''}`.trim();
       }
-      if (deal.companyId) {
-        const [co] = await db
+      if (d.companyId) {
+        const coRows = await db
           .select({ name: companies.name })
           .from(companies)
-          .where(eq(companies.id, deal.companyId))
+          .where(eq(companies.id, d.companyId))
           .limit(1);
-        if (co) companyName = co.name;
+        if (coRows && coRows.length > 0) companyName = coRows[0]!.name;
       }
       return {
         type: 'deal',
-        id: deal.id,
-        label: deal.title ?? 'Untitled deal',
+        id: d.id,
+        label: d.title ?? 'Untitled deal',
         details: {
-          title: deal.title,
-          amount: deal.amount,
-          stageId: deal.stageId,
-          status: deal.status,
-          closeDate: deal.closeDate,
+          title: d.title,
+          amount: d.amount,
+          stageId: d.stageId,
+          closeDate: d.closeDate,
           contact: contactName,
           company: companyName,
-          notes: deal.notes,
-          createdAt: deal.createdAt,
-          updatedAt: deal.updatedAt,
+          createdAt: d.createdAt,
+          updatedAt: d.updatedAt,
         },
       };
     }
     case 'company': {
-      const [co] = await db
+      const rows = await db
         .select({
           id: companies.id,
           name: companies.name,
@@ -149,35 +143,31 @@ async function fetchEntityContext(
           phone: companies.phone,
           city: companies.city,
           country: companies.country,
-          notes: companies.notes,
-          tags: companies.tags,
           createdAt: companies.createdAt,
           updatedAt: companies.updatedAt,
         })
         .from(companies)
         .where(eq(companies.id, entityId))
         .limit(1);
-      if (!co || co.length === 0) return null;
-      const company = (Array.isArray(co) ? co[0] : co) as typeof co;
+      if (!rows || rows.length === 0) return null;
+      const co = rows[0]!;
       return {
         type: 'company',
-        id: company.id,
-        label: company.name,
+        id: co.id,
+        label: co.name,
         details: {
-          name: company.name,
-          industry: company.industry,
-          website: company.website,
-          domain: company.domain,
-          description: company.description,
-          companySize: company.companySize,
-          annualRevenue: company.annualRevenue,
-          phone: company.phone,
-          city: company.city,
-          country: company.country,
-          notes: company.notes,
-          tags: company.tags,
-          createdAt: company.createdAt,
-          updatedAt: company.updatedAt,
+          name: co.name,
+          industry: co.industry,
+          website: co.website,
+          domain: co.domain,
+          description: co.description,
+          companySize: co.companySize,
+          annualRevenue: co.annualRevenue,
+          phone: co.phone,
+          city: co.city,
+          country: co.country,
+          createdAt: co.createdAt,
+          updatedAt: co.updatedAt,
         },
       };
     }

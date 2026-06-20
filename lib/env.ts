@@ -12,6 +12,7 @@ export interface EnvConfig {
   nodeEnv: string;
   databaseSsl: boolean;
   databasePoolSize: number;
+  pgBouncerEnabled: boolean;
   resendApiKey?: string;
   sentryDsn?: string;
   encryptionKey?: string;
@@ -143,6 +144,10 @@ export function validateEnv(): EnvConfig {
     errors.push('DATABASE_POOL_SIZE must be between 1 and 100');
   }
 
+  // Validate PGBOUNCER_ENABLED (optional)
+  const pgBouncerRaw = getOptionalEnv('PGBOUNCER_ENABLED');
+  const pgBouncerEnabled = pgBouncerRaw === 'true';
+
   // Throw if any validation failed
   if (errors.length > 0) {
     throw new Error(
@@ -160,6 +165,7 @@ export function validateEnv(): EnvConfig {
     nodeEnv: getOptionalEnv('NODE_ENV', 'development') ?? 'development',
     databaseSsl: getOptionalEnv('DATABASE_SSL', 'false') !== 'false',
     databasePoolSize: poolSize,
+    pgBouncerEnabled,
     resendApiKey: getOptionalEnv('RESEND_API_KEY'),
     sentryDsn: getOptionalEnv('SENTRY_DSN'),
     encryptionKey: encryptionKey,
