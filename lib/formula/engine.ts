@@ -27,7 +27,7 @@ for (const fn of BLOCKED_FUNCTIONS) {
   try {
     delete (math as unknown as Record<string, unknown>)[fn];
   } catch {
-    // Fallback to default on corrupted storage data
+    console.error('[formula] Failed to delete blocked function', fn);
   }
 }
 
