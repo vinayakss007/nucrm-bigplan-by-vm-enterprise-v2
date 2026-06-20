@@ -150,7 +150,8 @@ export async function PATCH(req: NextRequest) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json().catch((err) => { console.error('[preferences] JSON parse failed', err); return {}; });
+    let body;
+    try { body = await req.json(); } catch (err) { console.error('[preferences] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     // Validate strings
     for (const k of STRING_VALIDATED) {

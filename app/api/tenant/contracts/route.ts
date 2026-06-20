@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
       notes: description,
       documentUrl: null,
       createdBy: userId,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     return NextResponse.json({ contract }, { status: 201 });

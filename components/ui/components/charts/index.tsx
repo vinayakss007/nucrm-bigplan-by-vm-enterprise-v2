@@ -145,7 +145,7 @@ export function PieChart({ data, height = 200, className }: ChartProps) {
     ctx.arc(cx, cy, radius * 0.5, 0, Math.PI * 2);
     ctx.fillStyle = 'hsl(var(--background))';
     ctx.fill();
-  }, [data, height, CHART_COLORS]);
+  }, [data, height]);
   
   return (
     <div className={cn('w-full flex items-center justify-center', className)} style={{ height }}>
@@ -192,7 +192,7 @@ export function DonutChart({ data, height = 200, className }: ChartProps) {
       
       startAngle = endAngle;
     });
-  }, [data, height, CHART_COLORS]);
+  }, [data, height]);
   
   const total = data.reduce((sum, d) => sum + d.value, 0);
   

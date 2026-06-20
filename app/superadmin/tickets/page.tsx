@@ -1,37 +1,14 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { MessageSquare, CheckCircle, ChevronDown, Search } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
-
-interface TicketData {
-  id: string;
-  subject?: string;
-  message?: string;
-  status: string;
-  priority?: string;
-  tenant_name?: string;
-  user_name?: string;
-  user_email?: string;
-  admin_reply?: string;
-  created_at: string;
-}
-
-interface TicketsApiData {
-  counts: {
-    open?: number;
-    in_progress?: number;
-    resolved?: number;
-    critical?: number;
-  };
-  tickets: TicketData[];
-}
 
 const PRI_CFG: Record<string,string> = { critical:'text-red-400 bg-red-500/15', high:'text-amber-400 bg-amber-500/15', normal:'text-blue-400 bg-blue-500/15', low:'text-white/40 bg-white/5' };
 const STATUS_CFG: Record<string,string> = { open:'text-amber-400 bg-amber-500/15', in_progress:'text-blue-400 bg-blue-500/15', resolved:'text-emerald-400 bg-emerald-500/15', closed:'text-white/30 bg-white/5' };
 
 export default function TicketsPage() {
-  const [data, setData]       = useState<TicketsApiData | null>(null);
+  const [data, setData]       = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [status, setStatus]   = useState('open');
   const [search, setSearch]   = useState('');
@@ -39,14 +16,14 @@ export default function TicketsPage() {
   const [reply, setReply]     = useState('');
   const [replying, setReplying] = useState<string|null>(null);
 
-  const load = useCallback(async () => {
+  const load = async () => {
     const q = status ? `?status=${status}` : '';
     const res = await fetch('/api/superadmin/tickets' + q);
     const d = await res.json(); setData(d); setLoading(false);
-  }, [status]);
-  useEffect(() => { load(); }, [status, load]);
+  };
+  useEffect(() => { load(); }, [status]);
 
-  const update = async (id: string, updates: Partial<TicketData>) => {
+  const update = async (id: string, updates: any) => {
     await fetch('/api/superadmin/tickets',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,...updates}) });
     toast.success('Updated'); load();
   };
@@ -59,7 +36,7 @@ export default function TicketsPage() {
   };
 
   const c = data?.counts ?? {};
-  const tickets = (data?.tickets ?? []).filter((t) => !search || t.subject?.toLowerCase()?.includes(search.toLowerCase()) || t.tenant_name?.toLowerCase()?.includes(search.toLowerCase()));
+  const tickets = (data?.tickets ?? []).filter((t:any) => !search || t.subject?.toLowerCase()?.includes(search.toLowerCase()) || t.tenant_name?.toLowerCase()?.includes(search.toLowerCase()));
 
   return (
     <div className="space-y-5 max-w-5xl">
@@ -103,7 +80,7 @@ export default function TicketsPage() {
             <CheckCircle className="w-10 h-10 text-emerald-500/30 mx-auto mb-3"/>
             <p className="text-white/30 text-sm">No tickets found</p>
           </div>
-        ) : tickets.map((t) => {
+        ) : tickets.map((t:any) => {
           const isOpen = expanded===t.id;
           return (
             <div key={t.id} className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">

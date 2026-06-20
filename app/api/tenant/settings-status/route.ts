@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
       statuses['/tenant/settings/billing']      = { status: 'configured' };
 
       // Login policy — derive from password / 2fa / IP / signup flags
-      const lpRec = (lp ?? {}) as Record<string, any>;
+      const lpRec = (lp ?? {}) as Record<string, unknown>;
       const minLen = Number((lpRec['password'] as Record<string, unknown>)?.['min_length'] ?? 12);
       const tfa = (lpRec['two_factor'] as Record<string, unknown>)?.['enforcement'] ?? 'optional';
       const ipOn = (lpRec['network'] as Record<string, unknown>)?.['ip_allowlist_enabled'] === true;

@@ -38,7 +38,7 @@ function WidgetEmpty({ message }: { message: string }) {
 }
 
 export function WidgetShell({
-  widget: _widget, size, tenantId, userId, isAdmin, config,
+  widget, size, tenantId, userId, isAdmin, config,
   loading, error, data, onRefresh, children,
 }: {
   widget: WidgetConfig
@@ -61,12 +61,10 @@ export function WidgetShell({
 
   return (
     <div className="admin-card h-full">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-        <h3 className="text-sm font-semibold">{_widget.name}</h3>
+      <div className="px-4 pt-3 pb-1">
+        <h3 className="text-sm font-semibold">{widget.name}</h3>
       </div>
-      <div className="p-4">
-        {children({ data, tenantId, userId, isAdmin, config })}
-      </div>
+      {children({ data, tenantId, userId, isAdmin, config })}
     </div>
   );
 }

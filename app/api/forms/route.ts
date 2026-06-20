@@ -91,6 +91,7 @@ export async function POST(req: NextRequest) {
 
     await fireWebhooks(form.tenantId, 'contact.created', { form_id, contact_id, ...formData }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     return NextResponse.json({ ok: true, message: (form.settings as Record<string, unknown>)?.success_message as string ?? 'Thank you! We will be in touch.' });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[forms] Submission error:', err);
     return NextResponse.json({ ok: true, message: 'Thank you! Your submission has been received.' });

@@ -8,7 +8,7 @@ import { hashPassword, createToken, hashToken, setSessionCookie, validatePasswor
 import { installDefaultModules } from '@/lib/modules/auto-install';
 import { logError } from '@/lib/errors-server';
 
-const createAdminSchema = z.object({
+const _createAdminSchema = z.object({
   full_name: z.string().min(1, 'Full name is required'),
   email: z.string().email('Valid email is required'),
   password: z.string().min(8, 'Password must be at least 8 characters'),

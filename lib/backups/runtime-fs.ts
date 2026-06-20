@@ -3,7 +3,7 @@ export async function checkDirExists(path: string): Promise<boolean> {
     const fs = await import('fs');
     return fs.existsSync(path);
   } catch {
-    // Fallback to default on corrupted storage data
+    console.error('[backups] Failed to check dir existence', path);
     return false;
   }
 }

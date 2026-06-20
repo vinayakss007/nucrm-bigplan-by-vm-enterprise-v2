@@ -36,6 +36,8 @@ export function useWidgetData<T = any>(
       }
     } catch { /* Fallback to default on corrupted storage data */ }
 
+    if (abort.signal.aborted) return
+
     if (!isBackground) {
       setState(prev => ({ ...prev, loading: true }))
     } else {

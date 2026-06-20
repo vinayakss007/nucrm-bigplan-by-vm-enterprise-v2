@@ -17,6 +17,8 @@ import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
+import { validateBody } from '@/lib/api/validate';
+import { tagActionSchema } from '@/lib/api/schemas';
 
 type Counts = { leads: number; contacts: number; companies: number; total: number };
 
@@ -115,7 +117,7 @@ async function deleteAcrossTables(tenantId: string, tag: string) {
   };
 }
 
-const TAG_RE = /^[\w \-./&]{1,40}$/;
+const _TAG_RE = /^[\w \-./&]{1,40}$/;
 
 export async function POST(req: NextRequest) {
   let ctx: Awaited<ReturnType<typeof requireAuth>>;
@@ -126,11 +128,11 @@ export async function POST(req: NextRequest) {
 
     let body;
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
-    const action = body.action;
+    const parsed = validateBody(tagActionSchema, body);
+    if (parsed instanceof NextResponse) return parsed;
+    const { action, tag: fromTag, new_tag: toTag, tags } = parsed.data;
 
     if (action === 'rename') {
-      const fromTag = body.tag;
-      const toTag = body.new_tag;
       if (!fromTag || !toTag) return NextResponse.json({ error: 'tag and new_tag required' }, { status: 400 });
       if (fromTag === toTag) return NextResponse.json({ error: 'old and new must differ' }, { status: 400 });
       const counts = await renameAcrossTables(ctx.tenantId, fromTag, toTag);
@@ -141,8 +143,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'merge') {
-      const tags = body.tags;
-      const toTag = body.new_tag;
       const sources: string[] = (tags ?? []).filter(Boolean);
       const target = toTag ?? '';
       if (sources.length < 2) return NextResponse.json({ error: 'pick at least 2 source tags' }, { status: 400 });
@@ -161,7 +161,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'delete') {
-      const fromTag = body.tag;
       if (!fromTag) return NextResponse.json({ error: 'tag required' }, { status: 400 });
       const counts = await deleteAcrossTables(ctx.tenantId, fromTag);
       const total = counts.leads + counts.contacts + counts.companies;
