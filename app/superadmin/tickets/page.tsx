@@ -1,7 +1,13 @@
 'use client';
+<<<<<<< HEAD
 import { useState, useEffect, useCallback } from 'react';
 import { MessageSquare, CheckCircle, ChevronDown, Search } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
+=======
+import { useState, useEffect } from 'react';
+import { MessageSquare, CheckCircle, ChevronDown, Search } from 'lucide-react';
+import { cn, formatDate, formatRelativeTime } from '@/lib/utils';
+>>>>>>> fix/batch-2-e2e-useEffect
 import toast from 'react-hot-toast';
 
 interface TicketData {
