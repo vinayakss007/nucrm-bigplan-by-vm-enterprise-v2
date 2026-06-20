@@ -64,7 +64,7 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
   let sourcePool: Pool;
   let restorePool: Pool;
   let sourceDb: ReturnType<typeof drizzle>;
-  let restoreDb: ReturnType<typeof drizzle>;
+  let _restoreDb: ReturnType<typeof drizzle>;
   let backupFile: string;
 
   beforeAll(async () => {
@@ -76,7 +76,7 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
 
     // restorePool/restoreDb kept for reference but unused in current tests
     restorePool = new Pool({ connectionString: restoreUrl });
-    restoreDb = drizzle(restorePool, { schema });
+    _restoreDb = drizzle(restorePool, { schema });
 
     backupFile = path.join(__dirname, '../../tmp/backup-test.sql');
   });

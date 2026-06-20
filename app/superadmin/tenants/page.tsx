@@ -412,7 +412,8 @@ export default function SuperAdminTenantsPage() {
   );
 }
 
-function ModulesModal({ tenant, onClose, _onSaved }: { tenant: any; onClose: () => void; _onSaved: () => void }) {
+function ModulesModal({ tenant, onClose, _onSaved }: { tenant: Record<string, any>; onClose: () => void; _onSaved: () => void }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [modules, setModules] = useState<any[]>([]);
   const [plan, setPlan] = useState('');
   const [loading, setLoading] = useState(true);

@@ -196,6 +196,7 @@ interface Props {
   sources: Record<string, unknown>[];
   tenantId: string;
   userId: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _sources?: any[];
   _tenantId?: string;
   _userId?: string;
@@ -278,7 +279,9 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
   }, [search]);
 
   useEffect(()=>{
-    load(0, activeStatus, debouncedSearch);
+    const abort = new AbortController();
+    load(0, activeStatus, debouncedSearch, abort.signal);
+    return () => abort.abort();
   }, [debouncedSearch, activeStatus, sortBy, sortOrder, load]);
 
   const handleSearch=(q:string)=>{setSearch(q);};

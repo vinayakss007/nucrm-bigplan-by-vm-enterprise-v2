@@ -14,22 +14,21 @@ export default function PublicFormPage() {
   const [submitted, setSubmitted] = useState(false);
   const [values, setValues] = useState<Record<string, any>>({});
 
-  const loadForm = async () => {
-    try {
-      const res = await fetch(`/api/tenant/forms/public/${formId}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setForm(data);
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load form');
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
+    const loadForm = async () => {
+      try {
+        const res = await fetch(`/api/tenant/forms/public/${formId}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        setForm(data);
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : 'Failed to load form');
+      } finally {
+        setLoading(false);
+      }
+    };
     loadForm();
-  }, [loadForm]);
+  }, [formId]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

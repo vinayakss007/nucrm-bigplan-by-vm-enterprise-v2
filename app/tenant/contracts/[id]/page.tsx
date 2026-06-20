@@ -42,20 +42,21 @@ export default function ContractDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Contract>>({});
 
-  const fetchContract = async () => {
-    try {
-      const res = await fetch(`/api/tenant/contracts/${id}`);
-      if (!res.ok) throw new Error('Not found');
-      const data = await res.json();
-      setContract(data.data);
-    } catch {
-      toast.error('Failed to load contract');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { fetchContract(); }, [fetchContract]);
+  useEffect(() => {
+    const fetchContract = async () => {
+      try {
+        const res = await fetch(`/api/tenant/contracts/${id}`);
+        if (!res.ok) throw new Error('Not found');
+        const data = await res.json();
+        setContract(data.data);
+      } catch {
+        toast.error('Failed to load contract');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchContract();
+  }, [id]);
 
   const handleEdit = () => {
     if (contract) {

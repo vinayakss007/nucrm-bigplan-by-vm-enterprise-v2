@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
     let stats: any = {};
     try {
       const statsRes = await db.execute(sql`SELECT public.platform_stats() as data`).catch((err) => { console.error('[monitoring] platform_stats failed', err); return { rows: [{ data: {} }] }; });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       stats = (statsRes.rows[0] as any)?.data ?? {};
       // Fill in missing fields computed from query data
  

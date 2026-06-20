@@ -13,8 +13,10 @@ const PRIORITY_CFG = {
 };
 
 export default function TenantTasksClient({ initialTasks, contacts, _deals, teamMembers, permissions }: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialTasks: any[]; contacts: any[]; deals: any[]; teamMembers: any[];
   permissions: { canCreate:boolean; canEdit:boolean; canDelete:boolean; canAssign:boolean };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _deals?: any[];
 }) {
   const router = useRouter();

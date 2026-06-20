@@ -107,10 +107,9 @@ export default function FormsPage() {
   };
 
   const addField = () => setForm(f => ({...f, fields:[...f.fields, { key:`field_${Date.now()}`, label:'New Field', type:'text', required:false }]}));
-  const removeField = (i: number) => setForm(f => ({...f, fields:f.fields.filter((_,idx) => idx !== i)}));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const removeField = (i: number) => setForm((f: any) => ({...f, fields:f.fields.filter((_: any, idx: number) => idx !== i)}));
   const updateField = (i: number, key: string, val: any) =>
-    setForm(f => ({...f, fields:f.fields.map((x: any, idx) => idx === i ? {...x, [key]:val} : x)}));
+    setForm((f: any) => ({...f, fields:f.fields.map((x: Record<string, any>, idx: number) => idx === i ? {...x, [key]:val} : x)}));
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
@@ -232,6 +231,7 @@ export default function FormsPage() {
                 </p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                 <button onClick={() => viewSubmissions(f as any)} title="View submissions"
                   className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/60 text-xs font-medium transition-colors">
                   <FileText className="w-3.5 h-3.5" /> <span className="hidden md:inline">Submissions</span>
@@ -248,6 +248,7 @@ export default function FormsPage() {
                   className="hidden sm:flex p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
                   {copiedId === f.id ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                 </button>
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                 <button onClick={() => toggle(f as any)} title="Toggle active"
                   className="text-muted-foreground hover:text-violet-600 transition-colors">
                   {f.is_active ? <ToggleRight className="w-5 h-5 text-violet-600" /> : <ToggleLeft className="w-5 h-5" />}

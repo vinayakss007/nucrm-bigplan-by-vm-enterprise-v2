@@ -27,6 +27,7 @@ beforeEach(() => {
     removeEventListener: vi.fn(),
     activeElement: null,
   });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vi.stubGlobal('requestAnimationFrame', vi.fn((cb: (...args: any[]) => any) => cb()));
 });
 

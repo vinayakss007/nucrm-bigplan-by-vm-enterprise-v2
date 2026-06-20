@@ -18,9 +18,12 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _tenantsRef: any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _usersRef: any;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function _registerFkRefs(tenants: any, users: any) {
   _tenantsRef = tenants;
   _usersRef = users;
@@ -38,7 +41,9 @@ export const deletedAt = () => timestamp('deleted_at', { withTimezone: true });
 
 export const metadata = () => jsonb('metadata').default({});
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const createdBy = (): any => uuid('created_by').references(() => _usersRef?.id ?? sql`users.id`, { onDelete: 'set null' });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const updatedBy = (): any => uuid('updated_by');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const deletedBy = (): any => uuid('deleted_by');

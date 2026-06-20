@@ -45,20 +45,21 @@ export default function QuoteDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Quote>>({});
 
-  const fetchQuote = async () => {
-    try {
-      const res = await fetch(`/api/tenant/quotes/${id}`);
-      if (!res.ok) throw new Error('Not found');
-      const data = await res.json();
-      setQuote(data.data);
-    } catch {
-      toast.error('Failed to load quote');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { fetchQuote(); }, [fetchQuote]);
+  useEffect(() => {
+    const fetchQuote = async () => {
+      try {
+        const res = await fetch(`/api/tenant/quotes/${id}`);
+        if (!res.ok) throw new Error('Not found');
+        const data = await res.json();
+        setQuote(data.data);
+      } catch {
+        toast.error('Failed to load quote');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchQuote();
+  }, [id]);
 
   const handleEdit = () => {
     if (quote) {

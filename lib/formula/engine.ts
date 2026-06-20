@@ -13,6 +13,7 @@
 import { create, all } from 'mathjs';
 
 // Create a restricted mathjs instance — no dangerous functions
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const math = create(all as any);
 
 // Remove dangerous functions that could be abused
@@ -26,7 +27,7 @@ for (const fn of BLOCKED_FUNCTIONS) {
   try {
     delete (math as unknown as Record<string, unknown>)[fn];
   } catch {
-    // Fallback to default on corrupted storage data
+    console.error('[formula] Failed to delete blocked function', fn);
   }
 }
 

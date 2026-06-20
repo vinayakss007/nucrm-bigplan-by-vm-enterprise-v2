@@ -150,7 +150,7 @@ export default function ContactsDataTable({
     }
     loadDataWithAbort()
     return () => abortController.abort()
-  }, [, globalFilter])
+  }, [pagination.pageSize, globalFilter])
 
   const columns: ColumnDef<Contact>[] = useMemo(() => [
     {

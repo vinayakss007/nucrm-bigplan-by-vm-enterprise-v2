@@ -695,7 +695,7 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
           </div>
           <div className="p-4">
             {lead.notes ? (
-              <p className="text-sm whitespace-pre-wrap">{lead.notes}</p>
+              <p className="text-sm whitespace-pre-wrap">{String(lead.notes ?? '')}</p>
             ) : (
               <div className="text-center py-12 text-muted-foreground">
                 <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-30" />
@@ -713,7 +713,7 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
           <div className="space-y-2">
             {relatedContacts.map((contact) => (
               <div
-                key={contact.id}
+                key={String(contact.id)}
                 className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-accent cursor-pointer"
                 onClick={() => router.push(`/tenant/contacts/${contact.id}`)}
               >
@@ -722,8 +722,8 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
                     {getInitials(contact)}
                   </div>
                   <div>
-                    <p className="text-sm font-medium">{contact.first_name} {contact.last_name}</p>
-                    <p className="text-xs text-muted-foreground">{contact.email}</p>
+                    <p className="text-sm font-medium">{String(contact.first_name ?? '')} {String(contact.last_name ?? '')}</p>
+                    <p className="text-xs text-muted-foreground">{String(contact.email ?? '')}</p>
                   </div>
                 </div>
                 <ExternalLink className="w-4 h-4 text-muted-foreground" />

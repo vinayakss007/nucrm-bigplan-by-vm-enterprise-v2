@@ -68,8 +68,9 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
           deal_id: payload.dealId ?? payload.data?.['deal_id'],
         };
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (!meetsConditions(automation.conditions as any[], enrichedData)) continue;
-
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         for (const action of (automation.actions as any[] ?? [])) {
           await executeAction(action, payload, enrichedData);
         }
