@@ -136,7 +136,7 @@ interface Props {
   tenant:any; profile:any; roleSlug:string;
   permissions:Record<string,boolean>; isAdmin:boolean; isSuperAdmin:boolean;
   collapsed?: boolean; onToggle?: () => void; onMobileClose?: () => void;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _profile?: any;
   _roleSlug?: string;
 }
@@ -254,6 +254,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : href !== '/tenant/dashboard' && pathname.startsWith(href);
   const isExact = (href: string) => pathname === href;
+  const _matches = (item: NavItem) => !q || item.label.toLowerCase().includes(q) || (item.keywords ?? '').toLowerCase().includes(q);
 
   // ── Apply filter ────────────────────────────────────────────
   const q = query.trim().toLowerCase();
@@ -341,7 +342,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
     <aside className="tenant-sidebar w-[14.375rem] shrink-0 h-full flex flex-col transition-all duration-300 border-r border-border">
       {/* Brand */}
       <div className="h-12 flex items-center gap-2.5 px-3 border-b border-border shrink-0">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm" style={{ background: color }}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm" style={{ background: tenant?.primary_color || '#7c3aed' }}>
           {tenant?.name?.charAt(0)?.toUpperCase() ?? 'W'}
         </div>
         <div className="min-w-0 flex-1">

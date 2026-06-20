@@ -161,9 +161,9 @@ export async function DELETE(
       try {
         const body = await request.json();
         taskId = body.task_id;
-      } catch (err) {
-        console.error('[tasks] parse error', err);
-      }
+    } catch (err) {
+      console.error('[tasks] parse error', err);
+    }
     }
 
     if (!taskId) {

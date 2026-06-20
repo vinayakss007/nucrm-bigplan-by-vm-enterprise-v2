@@ -70,9 +70,7 @@ export async function POST(request: NextRequest) {
       last4: null,
       trialEndDate: trialEndDate ? new Date(trialEndDate) : null,
       createdBy: userId,
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     return NextResponse.json({ subscription }, { status: 201 });

@@ -3,10 +3,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { ContactTimeline } from '@/components/tenant/contact-timeline';
 
-const now = new Date().toISOString();
+const now = new Date();
 const mockEvents = [
-  { id: '1', event_type: 'note_added', description: 'Added a note', metadata: null, created_at: now, user_name: 'Alice', user_email: 'alice@test.com', user_avatar: null },
-  { id: '2', event_type: 'email_sent', description: 'Sent proposal', metadata: null, created_at: now, user_name: 'Bob', user_email: 'bob@test.com', user_avatar: null },
+  { id: '1', event_type: 'note_added', description: 'Added a note', metadata: null, created_at: now.toISOString(), user_name: 'Alice', user_email: 'alice@test.com', user_avatar: null },
+  { id: '2', event_type: 'email_sent', description: 'Sent proposal', metadata: null, created_at: new Date(now.getTime() - 60_000).toISOString(), user_name: 'Bob', user_email: 'bob@test.com', user_avatar: null },
 ];
 
 beforeEach(() => {

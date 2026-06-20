@@ -65,24 +65,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (filters) {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
       if (filters.status && 'status' in reportConfig.table) {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         conditions.push(eq((reportConfig.table as any).status, filters.status));
       }
       if (filters.stage && 'stage' in reportConfig.table) {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         conditions.push(eq((reportConfig.table as any).stage, filters.stage));
       }
       if (filters.lead_status && 'leadStatus' in reportConfig.table) {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         conditions.push(eq((reportConfig.table as any).leadStatus, filters.lead_status));
       }
+      /* eslint-enable @typescript-eslint/no-explicit-any */
       if (filters.created_after) {
         conditions.push(gt(reportConfig.table.createdAt, new Date(filters.created_after)));
       }

@@ -1,7 +1,6 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback } from 'react';
 import { ArrowLeft, Zap, ToggleRight, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -33,7 +32,7 @@ export default function TenantModulesPage() {
     setLoading(false);
   }, [tenantId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [, load]);
 
   interface ModuleData {
     id: string;

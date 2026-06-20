@@ -229,7 +229,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
     }
 
     loadWorkflow()
-  }, [workflowId, setNodes, setEdges])
+  }, [workflowId, setEdges, setNodes])
 
   const onConnect: OnConnect = useCallback(
     (connection) => {

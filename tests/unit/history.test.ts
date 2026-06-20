@@ -18,7 +18,7 @@ vi.mock('@/drizzle/db', () => ({
   db: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     insert: (...args: any[]) => mockDbInsert(...args),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     select: (..._args: any[]) => ({ from: mockFrom }),
   },
 }));

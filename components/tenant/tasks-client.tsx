@@ -13,9 +13,11 @@ const PRIORITY_CFG = {
 };
 
 export default function TenantTasksClient({ initialTasks, contacts, _deals, teamMembers, permissions }: {
-  initialTasks: Record<string, any>[]; contacts: Record<string, any>[]; deals: Record<string, any>[]; teamMembers: Record<string, any>[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  initialTasks: any[]; contacts: any[]; deals: any[]; teamMembers: any[];
   permissions: { canCreate:boolean; canEdit:boolean; canDelete:boolean; canAssign:boolean };
-  _deals?: Record<string, any>[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  _deals?: any[];
 }) {
   const router = useRouter();
   const [tasks, setTasks]       = useState(initialTasks);

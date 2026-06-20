@@ -98,8 +98,8 @@ export async function POST(request: Request) {
         downgraded++;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (err: any) {
         captureError(err, `subscription-check:${sub.tenantId}`);
       }
     }
@@ -112,12 +112,8 @@ export async function POST(request: Request) {
       downgraded,
       timestamp: new Date().toISOString(),
     });
- 
- 
- 
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[subscription-check]', msg);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (err: any) {
     captureError(err, 'subscription-check:cron');
     return NextResponse.json(
       { error: 'Internal error' },

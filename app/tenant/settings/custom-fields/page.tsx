@@ -84,7 +84,7 @@ export default function TenantCustomFields() {
     } finally {
       setLoading(false);
     }
-  }, [entityType]);
+  }, [entityType])
 
   const loadFeatures = useCallback(async () => {
     try {
@@ -101,7 +101,8 @@ export default function TenantCustomFields() {
     loadFeatures();
   }, [entityType, loadFields, loadFeatures]);
 
-  const handleCreate = async (fieldData: FieldFormData) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleCreate = async (fieldData: any) => {
     try {
       const res = await fetch('/api/tenant/custom-fields', {
         method: 'POST',

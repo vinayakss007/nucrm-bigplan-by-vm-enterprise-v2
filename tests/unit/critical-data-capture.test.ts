@@ -22,22 +22,22 @@ vi.mock('@/drizzle/db', () => ({
     execute: (...args: any[]) => mockDbExecute(...args),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     insert: (...args: any[]) => mockDbInsert(...args),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     select: (..._args: any[]) => ({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       from: (..._fargs: any[]) => ({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         where: (..._wargs: any[]) => Object.assign(
           Promise.resolve([{ total_backups: 0, restorable: 0, deleted_records: 0, updated_records: 0 }]),
           {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             groupBy: (..._gargs: any[]) => ({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               orderBy: (..._oargs: any[]) => Promise.resolve([]),
             }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             orderBy: (..._oargs: any[]) => Promise.resolve([]),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             limit: (..._largs: any[]) => Promise.resolve([]),
           }
         ),

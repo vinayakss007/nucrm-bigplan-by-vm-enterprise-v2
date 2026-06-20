@@ -104,10 +104,8 @@ function RemoveMemberModal({ member, members, onConfirm, onClose }: {
   );
 }
 
-export default function TeamSettingsClient({ members: initialMembers, invitations: initialInvitations, roles, _tenantId, currentUserId }: {
-  members: TeamMember[]; invitations: TeamInvitation[]; roles: TeamRole[];
-  _tenantId: string; currentUserId: string;
-}) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default function TeamSettingsClient({ members: initialMembers, invitations: initialInvitations, roles, _tenantId, currentUserId }: any) {
   const [members, setMembers]         = useState(initialMembers ?? []);
   const [invitations, setInvitations] = useState(initialInvitations ?? []);
   const [showInvite, setShowInvite]   = useState(false);

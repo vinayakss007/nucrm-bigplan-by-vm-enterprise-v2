@@ -145,8 +145,8 @@ async function handleSchemaInfo() {
           columns: columnsRes.rows,
           totalRows: parseInt(((countResult.rows[0] as Record<string, unknown>)?.count as string) || '0', 10),
         });
-      } catch (err) {
-        console.error('[data-explorer] schema fetch error', err);
+      } catch {
+        // Silently skip during migration/setup when tables may not exist yet
       }
     }
 

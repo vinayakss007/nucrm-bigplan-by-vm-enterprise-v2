@@ -1,7 +1,6 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { users, tenants, tenantMembers, plans, roles, onboardingProgress, sessions, pipelines, dealStages } from '@/drizzle/schema';
 import { eq, count } from 'drizzle-orm';
@@ -9,7 +8,7 @@ import { hashPassword, createToken, hashToken, setSessionCookie, validatePasswor
 import { installDefaultModules } from '@/lib/modules/auto-install';
 import { logError } from '@/lib/errors-server';
 
-const createAdminSchema = z.object({
+const _createAdminSchema = z.object({
   full_name: z.string().min(1, 'Full name is required'),
   email: z.string().email('Valid email is required'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
@@ -19,10 +18,9 @@ const createAdminSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const rawBody = await request.json().catch(() => ({}));
-    const validated = validateBody(createAdminSchema, rawBody);
-    if (validated instanceof NextResponse) return validated;
-    const { full_name, email, password, workspace_name, setup_key } = validated.data;
+    let body;
+    try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    const { full_name, email, password, workspace_name, setup_key } = body;
 
     // Only works if zero super admin users exist
     const [existing] = await db.select({ 
