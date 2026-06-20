@@ -23,6 +23,9 @@ declare namespace NodeJS {
     AWS_REGION?: string;
     AWS_ENDPOINT_URL?: string;
     BACKUP_RETENTION_DAYS?: string;
+    PGBOUNCER_ENABLED?: string;
+    DATABASE_POOL_SIZE?: string;
+    DATABASE_STATEMENT_TIMEOUT?: string;
     SETUP_KEY?: string;
     SUPER_ADMIN_EMAIL?: string;
     /** @deprecated Use AI provider secrets vault (ai_provider_secrets table) instead */
