@@ -138,7 +138,7 @@ export default function DealsKanban({ initialDeals, stages, contacts, companies,
       // Refresh by fetching again
       const refreshRes = await fetch('/api/tenant/deals?limit=200')
       const refreshData = await refreshRes.json()
-      setDeals((refreshData.data ?? []).map((d: any) => toSnakeCase(d)))
+      setDeals((refreshData.data ?? []).map((d: Record<string, unknown>) => toSnakeCase(d)))
     } catch {
       toast.error('Failed to create deal')
     }

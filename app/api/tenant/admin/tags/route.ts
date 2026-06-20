@@ -115,7 +115,7 @@ async function deleteAcrossTables(tenantId: string, tag: string) {
   };
 }
 
-const TAG_RE = /^[\w \-./&]{1,40}$/;
+const _TAG_RE = /^[\w \-./&]{1,40}$/;
 
 export async function POST(req: NextRequest) {
   let ctx: Awaited<ReturnType<typeof requireAuth>>;

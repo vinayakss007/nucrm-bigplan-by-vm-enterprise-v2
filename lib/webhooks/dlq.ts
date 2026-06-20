@@ -81,6 +81,7 @@ export async function moveToDeadLetterQueue(deliveryId: string): Promise<string 
       status: 'pending',
       originalRunAt: delivery.createdAt,
       failedAt: new Date(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
     .returning({ id: deadLetterQueue.id });
 

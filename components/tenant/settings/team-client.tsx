@@ -104,6 +104,7 @@ function RemoveMemberModal({ member, members, onConfirm, onClose }: {
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function TeamSettingsClient({ members: initialMembers, invitations: initialInvitations, roles, _tenantId, currentUserId }: any) {
   const [members, setMembers]         = useState(initialMembers ?? []);
   const [invitations, setInvitations] = useState(initialInvitations ?? []);

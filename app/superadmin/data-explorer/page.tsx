@@ -682,8 +682,8 @@ function DataTable({ title, icon, count, isExpanded, onToggle, columns, data, re
   isExpanded: boolean;
   onToggle: () => void;
   columns: string[];
-  data: any[];
-  renderRow: (item: any) => React.ReactNode;
+  data: Record<string, unknown>[];
+  renderRow: (item: Record<string, unknown>) => React.ReactNode;
 }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
