@@ -27,7 +27,10 @@ beforeEach(() => {
     removeEventListener: vi.fn(),
     activeElement: null,
   });
+<<<<<<< HEAD
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+=======
+>>>>>>> fix/batch-2-e2e-useEffect
   vi.stubGlobal('requestAnimationFrame', vi.fn((cb: (...args: any[]) => any) => cb()));
 });
 
