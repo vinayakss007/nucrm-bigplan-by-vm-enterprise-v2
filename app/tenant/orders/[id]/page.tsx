@@ -55,20 +55,21 @@ export default function OrderDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Order>>({});
 
-  const fetchOrder = async () => {
-    try {
-      const res = await fetch(`/api/tenant/orders/${id}`);
-      if (!res.ok) throw new Error('Not found');
-      const data = await res.json();
-      setOrder(data.data);
-    } catch {
-      toast.error('Failed to load order');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { fetchOrder(); }, [fetchOrder]);
+  useEffect(() => {
+    const fetchOrder = async () => {
+      try {
+        const res = await fetch(`/api/tenant/orders/${id}`);
+        if (!res.ok) throw new Error('Not found');
+        const data = await res.json();
+        setOrder(data.data);
+      } catch {
+        toast.error('Failed to load order');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOrder();
+  }, [id]);
 
   const handleEdit = () => {
     if (order) {

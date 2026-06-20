@@ -13,6 +13,7 @@
 import { create, all } from 'mathjs';
 
 // Create a restricted mathjs instance — no dangerous functions
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const math = create(all as any);
 
 // Remove dangerous functions that could be abused

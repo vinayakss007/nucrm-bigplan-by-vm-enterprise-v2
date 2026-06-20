@@ -44,20 +44,21 @@ export default function SubscriptionDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Subscription>>({});
 
-  const fetchSubscription = async () => {
-    try {
-      const res = await fetch(`/api/tenant/subscriptions/${id}`);
-      if (!res.ok) throw new Error('Not found');
-      const data = await res.json();
-      setSubscription(data.data);
-    } catch {
-      toast.error('Failed to load subscription');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { fetchSubscription(); }, [id, fetchSubscription]);
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      try {
+        const res = await fetch(`/api/tenant/subscriptions/${id}`);
+        if (!res.ok) throw new Error('Not found');
+        const data = await res.json();
+        setSubscription(data.data);
+      } catch {
+        toast.error('Failed to load subscription');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSubscription();
+  }, [id]);
 
   const handleEdit = () => {
     if (subscription) {

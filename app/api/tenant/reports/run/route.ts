@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (filters) {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
       if (filters.status && 'status' in reportConfig.table) {
         conditions.push(eq((reportConfig.table as any).status, filters.status));
       }
@@ -74,6 +75,7 @@ export async function POST(request: NextRequest) {
       if (filters.lead_status && 'leadStatus' in reportConfig.table) {
         conditions.push(eq((reportConfig.table as any).leadStatus, filters.lead_status));
       }
+      /* eslint-enable @typescript-eslint/no-explicit-any */
       if (filters.created_after) {
         conditions.push(gt(reportConfig.table.createdAt, new Date(filters.created_after)));
       }

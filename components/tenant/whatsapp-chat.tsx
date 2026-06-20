@@ -42,6 +42,7 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
       if (!res.ok) throw new Error('Failed to load messages')
       const data = await res.json()
       if (!signal?.aborted) setMessages(data.data || [])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('[whatsapp] loadMessages failed', err);
     } finally {

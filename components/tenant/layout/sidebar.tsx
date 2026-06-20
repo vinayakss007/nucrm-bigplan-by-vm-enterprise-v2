@@ -136,6 +136,7 @@ interface Props {
   tenant:any; profile:any; roleSlug:string;
   permissions:Record<string,boolean>; isAdmin:boolean; isSuperAdmin:boolean;
   collapsed?: boolean; onToggle?: () => void; onMobileClose?: () => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _profile?: any;
   _roleSlug?: string;
 }
@@ -253,7 +254,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : href !== '/tenant/dashboard' && pathname.startsWith(href);
   const isExact = (href: string) => pathname === href;
-  const matches = (item: NavItem) => !q || item.label.toLowerCase().includes(q) || (item.keywords ?? '').toLowerCase().includes(q);
+  const _matches = (item: NavItem) => !q || item.label.toLowerCase().includes(q) || (item.keywords ?? '').toLowerCase().includes(q);
 
   // ── Apply filter ────────────────────────────────────────────
   const q = query.trim().toLowerCase();
@@ -263,15 +264,15 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
       ...sec,
       items: sec.items.filter(i => hasPerm(i) && (!q || i.label.toLowerCase().includes(q) || (i.keywords ?? '').toLowerCase().includes(q))),
     })).filter(sec => sec.items.length > 0)
-  , [q, isAdmin, permissions, hiddenItems, hasPerm]);
+  , [q, hasPerm]);
 
   // ── Resolve pinned items ────────────────────────────────────
   const pinnedItems = useMemo(() => {
     const all = NAV_SECTIONS.flatMap(s => s.items);
     return pinned
       .map(href => all.find(i => i.href === href))
-      .filter((i): i is NavItem => !!(i && hasPerm(i) && matches(i)));
-  }, [pinned, q, isAdmin, permissions, hiddenItems, hasPerm]);
+      .filter((i): i is NavItem => !!(i && hasPerm(i) && (!q || i.label.toLowerCase().includes(q) || (i.keywords ?? '').toLowerCase().includes(q))));
+  }, [pinned, q, hasPerm]);
 
   // ── Collapsed mini sidebar ──────────────────────────────────
   if (collapsed) {

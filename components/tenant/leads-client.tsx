@@ -73,12 +73,13 @@ interface Props {
   initialLeads: any[];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   companies: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   teamMembers: any[];
   permissions: Record<string, boolean>;
   totalCount: number;
   tenantId: string;
   userId: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _teamMembers?: any[];
   _permissions?: Record<string, boolean>;
   _tenantId?: string;
