@@ -1,17 +1,12 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-<<<<<<< HEAD
 import { Book, ArrowLeft, ThumbsUp, ThumbsDown, Clock, Eye } from 'lucide-react';
-=======
-import { Book, ArrowLeft, ThumbsUp, ThumbsDown } from 'lucide-react';
->>>>>>> fix/batch-2-e2e-useEffect
 import { cn, formatDate } from '@/lib/utils';
 
 export default function PortalKBArticlePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [article, setArticle] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [helpful, setHelpful] = useState<boolean | null>(null);

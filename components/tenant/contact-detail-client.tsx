@@ -429,16 +429,16 @@ export default function ContactDetailClient({
               ].map(([f, lbl]) => (
                 <div key={f}>
                   <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">{lbl}</label>
-                  <input value={editForm[f as string]||''} onChange={e => {  setEditForm((prev: Record<string, unknown>) => ({ ...prev, [f as string]: e.target.value }))}} className={inp} />
+                  <input value={editForm[f as string]||''} onChange={e => {  setEditForm((prev: Record<string, any>) => ({ ...prev, [f as string]: e.target.value }))}} className={inp} />
                 </div>
               ))}
               <div>
                 <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">Tags (comma separated)</label>
-                <input value={editForm.tags||''} onChange={e => {  setEditForm((prev: Record<string, unknown>) => ({ ...prev, tags: e.target.value }))}} className={inp} />
+                <input value={editForm.tags||''} onChange={e => {  setEditForm((prev: Record<string, any>) => ({ ...prev, tags: e.target.value }))}} className={inp} />
               </div>
               <div>
                 <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">Company</label>
-                <select value={editForm.company_id||''} onChange={e => {  setEditForm((p: Record<string, unknown>) => ({...p, company_id: e.target.value||null}))}} className={inp}>
+                <select value={editForm.company_id||''} onChange={e => {  setEditForm((p: Record<string, any>) => ({...p, company_id: e.target.value||null}))}} className={inp}>
                   <option value="">No company</option>
                   {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -446,7 +446,7 @@ export default function ContactDetailClient({
               </div>
               <div>
                 <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">Assigned To</label>
-                <select value={editForm.assigned_to||''} onChange={e => {  setEditForm((p: Record<string, unknown>) => ({...p, assigned_to: e.target.value||null}))}} className={inp}>
+                <select value={editForm.assigned_to||''} onChange={e => {  setEditForm((p: Record<string, any>) => ({...p, assigned_to: e.target.value||null}))}} className={inp}>
                   <option value="">Unassigned</option>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {teamMembers.map((m: any) => <option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
@@ -454,7 +454,7 @@ export default function ContactDetailClient({
               </div>
               <div>
                 <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">Notes</label>
-                <textarea value={editForm.notes||''} onChange={e => {  setEditForm((p: Record<string, unknown>) => ({...p, notes: e.target.value}))}} rows={3} className={inp+' resize-none'} />
+                <textarea value={editForm.notes||''} onChange={e => {  setEditForm((p: Record<string, any>) => ({...p, notes: e.target.value}))}} rows={3} className={inp+' resize-none'} />
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={saveEdit} disabled={savingEdit} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 disabled:opacity-50 transition-colors">
@@ -506,9 +506,9 @@ export default function ContactDetailClient({
           {/* Quick actions */}
           <div className="admin-card p-4 space-y-1">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Quick Add</p>
-            <QuickAddTask contactId={contact.id} contactName={`${contact.first_name} ${contact.last_name}`} teamMembers={teamMembers} onAdded={(t: Record<string, unknown>) => setTasks((prev) => [t, ...prev])} />
-            <QuickAddDeal contactId={contact.id} companies={companies} onAdded={(d: Record<string, unknown>) => setDeals((prev) => [d, ...prev])} />
-            <QuickAddMeeting contactId={contact.id} onAdded={(m: Record<string, unknown>) => {
+            <QuickAddTask contactId={contact.id} contactName={`${contact.first_name} ${contact.last_name}`} teamMembers={teamMembers} onAdded={(t: Record<string, any>) => setTasks((prev) => [t, ...prev])} />
+            <QuickAddDeal contactId={contact.id} companies={companies} onAdded={(d: Record<string, any>) => setDeals((prev) => [d, ...prev])} />
+            <QuickAddMeeting contactId={contact.id} onAdded={(m: Record<string, any>) => {
               setActivities((prev) => [{ id:`tmp_${Date.now()}`, type:'meeting', description:`Meeting scheduled: ${m.title}`, created_at:new Date().toISOString(), full_name:'You' }, ...prev]);
             }} />
           </div>
@@ -650,20 +650,20 @@ export default function ContactDetailClient({
             <div className="admin-card overflow-hidden">
               <div className="px-5 py-3 border-b border-border flex items-center justify-between">
                 <p className="text-sm font-semibold">Tasks</p>
-                <QuickAddTask contactId={contact.id} contactName={`${contact.first_name} ${contact.last_name}`} teamMembers={teamMembers} onAdded={(t: Record<string, unknown>) => {  setTasks((prev: Record<string, unknown>) => [t, ...prev])}} />
+                <QuickAddTask contactId={contact.id} contactName={`${contact.first_name} ${contact.last_name}`} teamMembers={teamMembers} onAdded={(t: Record<string, any>) => {  setTasks((prev: any[]) => [t, ...(prev ?? [])])}} />
               </div>
               {!tasks.length ? (
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">No tasks yet — create one above</div>
               ) : (
                 <div className="divide-y divide-border">
-                  {[...tasks].sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
+                  {[...tasks].sort((a: Record<string, any>, b: Record<string, any>) => {
                     if (a.completed && !b.completed) return 1;
                     if (!a.completed && b.completed) return -1;
                     if (!a.due_date && !b.due_date) return 0;
                     if (!a.due_date) return 1;
                     if (!b.due_date) return -1;
                     return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
-                  }).map((t: Record<string, unknown>) => {
+                  }).map((t: Record<string, any>) => {
                     const today = new Date().toISOString().split('T')[0] || '';
                     const overdue = !t.completed && t.due_date && t.due_date < today;
                     return (
@@ -704,7 +704,7 @@ export default function ContactDetailClient({
             <div className="admin-card overflow-hidden">
               <div className="px-5 py-3 border-b border-border flex items-center justify-between">
                 <p className="text-sm font-semibold">Deals</p>
-                <QuickAddDeal contactId={contact.id} companies={companies} onAdded={(d: Record<string, unknown>) => {  setDeals((prev: Record<string, unknown>) => [d, ...prev])}} />
+                <QuickAddDeal contactId={contact.id} companies={companies} onAdded={(d: Record<string, any>) => {  setDeals((prev: any[]) => [d, ...(prev ?? [])])}} />
               </div>
               {!deals.length ? (
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">No deals yet — create one above</div>
