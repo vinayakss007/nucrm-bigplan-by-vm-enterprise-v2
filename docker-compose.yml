@@ -142,7 +142,11 @@ services:
     container_name: nucrm-alertmanager
     volumes:
       - ./deploy/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./deploy/monitoring/alertmanager/templates:/etc/alertmanager/templates:ro
       - alertmanagerdata:/alertmanager
+    environment:
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - CRITICAL_ERROR_WEBHOOK_URL=${CRITICAL_ERROR_WEBHOOK_URL:-}
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
