@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, Upload, Download, MoreHorizontal, Edit, Trash2, AlertCircle, X, UserPlus } from 'lucide-react'
+import { Plus, Upload, Download, MoreHorizontal, Edit, Trash2, AlertCircle, X, UserPlus, Archive, RotateCcw } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import { confirmThen } from '@/components/ui/confirm-dialog'
 import { InlineEdit } from '@/components/ui/inline-edit'
@@ -300,6 +300,38 @@ export default function ContactsDataTable({
   const [_bulkActionLoading, setBulkActionLoading] = useState(false)
   const [_showBulkAction, _setShowBulkAction] = useState<string | null>(null)
   const [_bulkPayload, _setBulkPayload] = useState<Record<string, string>>({})
+  const [customFields, setCustomFields] = useState<{ fieldKey: string; fieldLabel: string }[]>([])
+  const [segments, setSegments] = useState<{ id: string; name: string }[]>([])
+  const [sequences, setSequences] = useState<{ id: string; name: string }[]>([])
+  const [emailTemplates, setEmailTemplates] = useState<{ id: string; name: string }[]>([])
+
+  useEffect(() => {
+    fetch('/api/tenant/custom-fields?entityType=contact')
+      .then(r => r.ok ? r.json() : { fields: [] })
+      .then(d => setCustomFields(d.fields ?? []))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/tenant/segments?entity_type=contact')
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(d => setSegments(d.data ?? []))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/tenant/sequences')
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(d => setSequences(d.data ?? []))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/tenant/email-templates')
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(d => setEmailTemplates(d.data ?? []))
+      .catch(() => {})
+  }, [])
 
   const bulkActions = useMemo(() => [
     {
@@ -395,9 +427,54 @@ export default function ContactsDataTable({
       },
     },
     {
+      id: 'archive',
+      label: 'Archive',
+      requiresConfirmation: true,
+      confirmationMessage: 'Archive the selected contacts? They will be hidden from active views.',
+      onClick: async (selectedIds: string[]) => {
+        setBulkActionLoading(true)
+        const res = await fetch('/api/tenant/contacts/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'archive', contact_ids: selectedIds }),
+        })
+        const data = await res.json()
+        if (res.ok) {
+          toast.success(`Archived ${data.affected} contacts`)
+          loadData(pagination.pageIndex)
+        } else {
+          toast.error(data.error || 'Failed to archive contacts')
+        }
+        setBulkActionLoading(false)
+      },
+    },
+    {
+      id: 'restore',
+      label: 'Restore',
+      requiresConfirmation: true,
+      confirmationMessage: 'Restore the selected contacts from archive?',
+      onClick: async (selectedIds: string[]) => {
+        setBulkActionLoading(true)
+        const res = await fetch('/api/tenant/contacts/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'restore', contact_ids: selectedIds }),
+        })
+        const data = await res.json()
+        if (res.ok) {
+          toast.success(`Restored ${data.affected} contacts`)
+          loadData(pagination.pageIndex)
+        } else {
+          toast.error(data.error || 'Failed to restore contacts')
+        }
+        setBulkActionLoading(false)
+      },
+    },
+    {
       id: 'delete',
       label: 'Delete',
-      confirm: true,
+      requiresConfirmation: true,
+      confirmationMessage: 'Delete the selected contacts?',
       onClick: async (selectedIds: string[]) => {
         setBulkActionLoading(true)
         const res = await fetch('/api/tenant/contacts/bulk', {
@@ -411,6 +488,32 @@ export default function ContactsDataTable({
           loadData(pagination.pageIndex)
         } else {
           toast.error(data.error || 'Failed to delete contacts')
+        }
+        setBulkActionLoading(false)
+      },
+    },
+    {
+      id: 'update_field',
+      label: 'Update Field',
+      requiresSelect: true,
+      selectOptions: customFields.map(f => ({ value: f.fieldKey, label: f.fieldLabel })),
+      onClick: async (selectedIds: string[], fieldKey?: string) => {
+        if (!fieldKey) { toast.error('Select a field'); return; }
+        const field = customFields.find(f => f.fieldKey === fieldKey);
+        const value = window.prompt(`Enter value for "${field?.fieldLabel || fieldKey}":`);
+        if (value === null) return;
+        setBulkActionLoading(true)
+        const res = await fetch('/api/tenant/contacts/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'update_field', contact_ids: selectedIds, payload: { field_key: fieldKey, field_value: value } }),
+        })
+        const data = await res.json()
+        if (res.ok) {
+          toast.success(`Updated ${data.affected} contacts`)
+          loadData(pagination.pageIndex)
+        } else {
+          toast.error(data.error || 'Failed to update field')
         }
         setBulkActionLoading(false)
       },
@@ -443,7 +546,92 @@ export default function ContactsDataTable({
         setExporting(false)
       },
     },
-  ], [teamMembers, pagination.pageIndex, loadData])
+    {
+      id: 'add_note',
+      label: 'Add Note',
+      requiresInput: true,
+      inputPlaceholder: 'Note content...',
+      onClick: async (ids: string[], content?: string) => {
+        if (!content?.trim()) { toast.error('Note content required'); return; }
+        const res = await fetch('/api/tenant/notes/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entity_type: 'contact', entity_ids: ids, content }),
+        });
+        if (!res.ok) throw new Error('Failed to add notes');
+        toast.success(`Note added to ${ids.length} contact(s)`);
+      }
+    },
+    {
+      id: 'add_to_sequence',
+      label: 'Add to Sequence',
+      requiresSelect: true,
+      selectOptions: sequences.map(s => ({ value: s.id, label: s.name })),
+      onClick: async (selectedIds: string[], sequenceId?: string) => {
+        if (!sequenceId) { toast.error('Select a sequence'); return; }
+        setBulkActionLoading(true)
+        const res = await fetch('/api/tenant/contacts/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'add_to_sequence', contact_ids: selectedIds, payload: { sequence_id: sequenceId } }),
+        })
+        const data = await res.json()
+        if (res.ok) {
+          toast.success(`Enrolled ${data.affected} contacts in sequence`)
+          loadData(pagination.pageIndex)
+        } else {
+          toast.error(data.error || 'Failed to enroll contacts')
+        }
+        setBulkActionLoading(false)
+      },
+    },
+    ...(emailTemplates.length > 0 ? [{
+      id: 'send_email',
+      label: 'Send Email',
+      requiresSelect: true,
+      selectOptions: emailTemplates.map(t => ({ value: t.id, label: t.name })),
+      onClick: async (selectedIds: string[], templateId?: string) => {
+        if (!templateId) { toast.error('Select a template'); return; }
+        setBulkActionLoading(true)
+        const res = await fetch('/api/tenant/email/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entity_type: 'contact', entity_ids: selectedIds, template_id: templateId }),
+        })
+        const data = await res.json()
+        if (res.ok) {
+          toast.success(`Sent ${data.sent} email(s), ${data.failed} failed`)
+          if (data.errors?.length) console.warn('Bulk email errors:', data.errors)
+        } else {
+          toast.error(data.error || 'Failed to send emails')
+        }
+        setBulkActionLoading(false)
+      },
+    }] : []),
+    ...(segments.length > 0 ? [{
+      id: 'add_to_segment',
+      label: 'Add to Segment',
+      requiresSelect: true,
+      selectOptions: segments.map(s => ({ value: s.id, label: s.name })),
+      onClick: async (ids: string[], input?: string) => {
+        if (!input) { toast.error('Select a segment'); return; }
+        setBulkActionLoading(true)
+        const res = await fetch('/api/tenant/contacts/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'add_to_segment', contact_ids: ids, payload: { segment_id: input } }),
+        })
+        const data = await res.json()
+        if (res.ok) {
+          toast.success(`Added ${data.affected} contacts to segment`)
+          loadData(pagination.pageIndex)
+        } else {
+          toast.error(data.error || 'Failed to add to segment')
+        }
+        setBulkActionLoading(false)
+      },
+    }] : []),
+  ], [teamMembers, pagination.pageIndex, loadData, customFields, sequences, segments, emailTemplates])
 
   const handleAddContact = async (e: React.FormEvent) => {
     e.preventDefault()
