@@ -8,7 +8,8 @@ export default function PublicFormPage() {
   const params = useParams();
   const formId = params['id'] as string;
   
-  const [form, setForm] = useState<Record<string, unknown> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [form, setForm] = useState<Record<string, any> | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);

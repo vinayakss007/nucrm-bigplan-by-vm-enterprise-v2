@@ -12,7 +12,8 @@ import { logError } from '@/lib/errors';
 export default function KBArticlePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const [article, setArticle] = useState<Record<string, unknown> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [article, setArticle] = useState<Record<string, any> | null>(null);
   const [loading, setLoading] = useState(true);
   const [voted, setVoted] = useState<'helpful' | 'not_helpful' | null>(null);
   const [showEdit, setShowEdit] = useState(false);

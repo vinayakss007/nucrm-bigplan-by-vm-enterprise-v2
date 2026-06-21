@@ -1,10 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-<<<<<<< HEAD
 import { Package, Users, ToggleRight, ToggleLeft, Save } from 'lucide-react';
-=======
-import { Zap, Package, Users, ToggleRight, Save } from 'lucide-react';
->>>>>>> fix/batch-2-e2e-useEffect
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 

@@ -28,11 +28,7 @@ export default async function SuperAdminDashboard() {
 
   if (!user?.isSuperAdmin) redirect('/tenant/dashboard');
 
-<<<<<<< HEAD
   const [statsRes, recentTenants, recentErrors, _recentActivity, expiringSoon] = await Promise.all([
-=======
-  const [statsRes, recentTenants, recentErrors, recentActivity, expiringSoon] = await Promise.all([
->>>>>>> fix/batch-2-e2e-useEffect
     db.execute(sql`SELECT public.platform_stats() as data`).catch((err) => { console.error('[dashboard] platform_stats failed', err); return { rows: [{ data: {} }] }; }),
     
     db.select({
