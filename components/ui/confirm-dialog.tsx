@@ -1,8 +1,9 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './dialog';
 import { Button } from './button';
 import { AlertTriangle } from 'lucide-react';
+import { getConfirmDestructivePref } from '@/lib/client-prefs';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -12,10 +13,31 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   variant?: 'danger' | 'warning' | 'default';
   onConfirm: () => void;
+  skip?: boolean;
 }
 
-export function ConfirmDialog({ open, onOpenChange, title, message, confirmLabel = 'Delete', variant = 'danger', onConfirm }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, onOpenChange, title, message, confirmLabel = 'Delete', variant = 'danger', onConfirm, skip }: ConfirmDialogProps) {
   const [loading, setLoading] = useState(false);
+  const [shouldSkip, setShouldSkip] = useState(false);
+
+  useEffect(() => {
+    if (skip !== undefined) {
+      setShouldSkip(skip);
+    } else if (open) {
+      getConfirmDestructivePref().then(pref => {
+        setShouldSkip(pref === 'never');
+      });
+    }
+  }, [open, skip]);
+
+  useEffect(() => {
+    if (open && shouldSkip) {
+      onConfirm();
+      onOpenChange(false);
+    }
+  }, [open, shouldSkip, onConfirm, onOpenChange]);
+
+  if (shouldSkip) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -52,7 +74,16 @@ export function ConfirmDialog({ open, onOpenChange, title, message, confirmLabel
 import toast from 'react-hot-toast';
 import { captureError } from '@/lib/capture-error';
 
-export function confirmThen(message: string, action: () => void | Promise<void>): Promise<boolean> {
+export async function confirmThen(message: string, action: () => void | Promise<void>, riskLevel: 'always' | 'danger_only' = 'danger_only'): Promise<boolean> {
+  const pref = await getConfirmDestructivePref();
+  if (pref === 'never') {
+    await action();
+    return true;
+  }
+  if (pref === 'danger_only' && riskLevel === 'always') {
+    await action();
+    return true;
+  }
   return new Promise((resolve) => {
     toast((t) => (
       <div className="flex items-center gap-3">

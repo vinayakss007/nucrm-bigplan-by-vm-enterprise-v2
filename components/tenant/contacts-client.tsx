@@ -52,6 +52,7 @@ interface Props {
   companies: CompanyOpt[];
   teamMembers: TeamMemberOpt[];
   permissions: { canCreate:boolean; canEdit:boolean; canDelete:boolean; canViewAll:boolean; canImport?:boolean; canExport?:boolean; canAssign?:boolean };
+  defaultView?: string;
   totalCount?: number;
   tenantId: string;
   userId: string;
@@ -162,7 +163,7 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: { compa
   );
 }
 
-export default function TenantContactsClient({ initialContacts, companies, teamMembers, permissions, _tenantId, _userId, totalCount, initialOffset, initialQ, initialStatus }: Props) {
+export default function TenantContactsClient({ initialContacts, companies, teamMembers, permissions, _tenantId, _userId, totalCount, initialOffset, initialQ, initialStatus, defaultView }: Props) {
   const normalize = (data: Record<string, unknown>[]) => (data || []).map((c: Record<string, unknown>) => toSnakeCase(c));
   const [contacts, setContacts] = useState(normalize(initialContacts));
   const [total, setTotal]       = useState(totalCount ?? initialContacts.length);
@@ -177,7 +178,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
   >(null);
   const [bulkInput, setBulkInput] = useState('');
   const limit                   = 50;
-  const [view, setView]         = useState<'list'|'grid'>('list');
+  const [view, setView]         = useState<'list'|'grid'>(defaultView === 'grid' ? 'grid' : 'list');
   const [search, setSearch]     = useState(initialQ || '');
   const [statusFilter, setStatusFilter] = useState(initialStatus || 'all');
   const [showAdd, setShowAdd]   = useState(false);
