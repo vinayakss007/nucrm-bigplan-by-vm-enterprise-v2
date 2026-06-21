@@ -1,0 +1,19 @@
+{{/* vim: set ft=gotmpl */}}
+
+{{/* Slack webhook URL — first non-empty env var wins */}}
+{{- define "slack.nucrm.url" -}}
+  {{- $url := "" -}}
+  {{- if env "SLACK_WEBHOOK_URL" | not -}}
+    {{- $url = env "SLACK_WEBHOOK_URL" -}}
+  {{- end -}}
+  {{- $url -}}
+{{- end -}}
+
+{{/* Critical error webhook URL */}}
+{{- define "webhook.nucrm.url" -}}
+  {{- $url := "" -}}
+  {{- if env "CRITICAL_ERROR_WEBHOOK_URL" | not -}}
+    {{- $url = env "CRITICAL_ERROR_WEBHOOK_URL" -}}
+  {{- end -}}
+  {{- $url -}}
+{{- end -}}
