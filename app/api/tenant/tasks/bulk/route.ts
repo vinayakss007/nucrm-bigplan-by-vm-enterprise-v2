@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { tasks, tenantMembers } from '@/drizzle/schema';
+import { tasks, tenantMembers, segments, segmentMembers } from '@/drizzle/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
@@ -206,6 +206,81 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case 'update_field': {
+        const deny = requirePerm(ctx, 'tasks.edit');
+        if (deny) return deny;
+        const fieldKey = payload['field_key'] as string | undefined;
+        const fieldValue = payload['field_value'];
+        if (!fieldKey) return NextResponse.json({ error: 'field_key required' }, { status: 400 });
+        
+        const res = await db
+          .update(tasks)
+          .set({
+            metadata: sql`jsonb_set(COALESCE(${tasks.metadata}, '{}'::jsonb), ${'{"' + fieldKey + '"}'}::text[], ${JSON.stringify(fieldValue)}::jsonb, true)`,
+            updatedAt: new Date(),
+            updatedBy: ctx.userId,
+          })
+          .where(
+            and(
+              inArray(tasks.id, validIds),
+              eq(tasks.tenantId, ctx.tenantId)
+            )
+          );
+        
+        affected = res.rowCount ?? 0;
+        break;
+      }
+
+      case 'archive': {
+        const deny = requirePerm(ctx, 'tasks.delete');
+        if (deny) return deny;
+        const res = await db
+          .update(tasks)
+          .set({
+            deletedAt: new Date(),
+            deletedBy: ctx.userId,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              inArray(tasks.id, validIds),
+              eq(tasks.tenantId, ctx.tenantId)
+            )
+          );
+        affected = res.rowCount ?? 0;
+        break;
+      }
+      case 'restore': {
+        const deny = requirePerm(ctx, 'tasks.edit');
+        if (deny) return deny;
+        const res = await db
+          .update(tasks)
+          .set({
+            deletedAt: null,
+            deletedBy: null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              inArray(tasks.id, validIds),
+              eq(tasks.tenantId, ctx.tenantId)
+            )
+          );
+        affected = res.rowCount ?? 0;
+        break;
+      }
+      case 'add_to_segment': {
+        const segId = payload['segment_id'] as string | undefined;
+        if (!segId) return NextResponse.json({ error: 'segment_id required' }, { status: 400 });
+        const [seg] = await db.select({ id: segments.id }).from(segments)
+          .where(and(eq(segments.id, segId), eq(segments.tenantId, ctx.tenantId)))
+          .limit(1);
+        if (!seg) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
+        const memberValues = validIds.map(entityId => ({ segmentId: segId, entityId, tenantId: ctx.tenantId }));
+        const resSeg = await db.insert(segmentMembers).values(memberValues).onConflictDoNothing();
+        affected = resSeg.rowCount ?? memberValues.length;
+        break;
+      }
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }
