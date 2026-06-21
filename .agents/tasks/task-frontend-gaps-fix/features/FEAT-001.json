@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "feat",
   "description": "Create settings pages for SLA, Assignment Rules, Territories, and Hierarchy - 4 settings UIs that expose existing backend CRUD APIs. Each page follows the settings pattern from app/tenant/settings/webhooks/page.tsx and app/tenant/settings/compliance/page.tsx.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Create app/tenant/settings/sla/page.tsx - 'use client' page with table of SLA policies (name, priority, response time, resolution time, breach count), create/edit modal, toggle active status. Fetches from /api/tenant/sla. Include loading.tsx and error.tsx.",
     "Create app/tenant/settings/assignment-rules/page.tsx - 'use client' page listing assignment rules (name, type badge for round_robin/territory/skill_based/weighted, entity type, priority). Create/edit modal with JSON config editor. Fetches from /api/tenant/assignment-rules. Include loading.tsx and error.tsx.",

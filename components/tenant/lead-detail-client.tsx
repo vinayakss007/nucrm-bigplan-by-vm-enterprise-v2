@@ -51,8 +51,10 @@ const AUTHORITY_LEVELS = {
 interface TeamMemberOpt { user_id: string; full_name: string; email?: string }
 
 interface Props {
-  lead: Record<string, unknown>;
-  activities: Record<string, unknown>[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  lead: Record<string, any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  activities: Record<string, any>[];
   relatedContacts: Record<string, unknown>[];
   teamMembers: TeamMemberOpt[];
   tenantId: string;
