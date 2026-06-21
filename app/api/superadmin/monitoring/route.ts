@@ -2,7 +2,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { tenants, plans, errorLogs, backupRecords, selectiveRestoreLogs, superAdminBackups } from '@/drizzle/schema';
+import { tenants, plans, errorLogs, healthChecks, backupRecords, selectiveRestoreLogs, superAdminBackups } from '@/drizzle/schema';
 import { eq, and, sql, desc, gt, inArray } from 'drizzle-orm';
 import { captureError } from '@/lib/capture-error';
 

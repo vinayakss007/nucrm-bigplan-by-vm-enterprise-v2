@@ -1,7 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { CreditCard, Plus, Edit, X, Save, Loader2, Users, Zap, Crown } from 'lucide-react';
+<<<<<<< HEAD
 import { cn } from '@/lib/utils';
+=======
+import { cn, formatCurrency } from '@/lib/utils';
+>>>>>>> fix/batch-2-e2e-useEffect
 import toast from 'react-hot-toast';
 
 const FEATURE_OPTIONS = ['contacts','deals','tasks','automations','forms','reports','sequences','products','quotes','ai','api_access','custom_roles','custom_domain','sso','audit_logs','dedicated_support'];
