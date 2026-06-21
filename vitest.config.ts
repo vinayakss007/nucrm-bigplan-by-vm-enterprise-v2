@@ -17,7 +17,6 @@ export default defineConfig({
         'lib/**/*.test.ts',
         'lib/**/*.spec.ts',
         'lib/**/__tests__/**',
-        'lib/ai/**',
         'lib/audit/**',
         'lib/backups/**',
         'lib/contacts/**',
