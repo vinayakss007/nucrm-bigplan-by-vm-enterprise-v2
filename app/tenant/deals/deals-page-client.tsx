@@ -17,10 +17,13 @@ interface Props {
   teamMembers: any[];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   permissions: any;
+  defaultView?: string;
 }
 
-export default function DealsPageClient({ initialDeals, stages, contacts, companies, teamMembers, permissions }: Props) {
-  const [view, setView] = useState<'kanban' | 'table'>('kanban');
+export default function DealsPageClient({ initialDeals, stages, contacts, companies, teamMembers, permissions, defaultView }: Props) {
+  const [view, setView] = useState<'kanban' | 'table'>(
+    (defaultView === 'kanban' || defaultView === 'card') ? 'kanban' : 'table'
+  );
 
   return (
     <>

@@ -4,6 +4,7 @@ import { companies, tenantMembers, users } from '@/drizzle/schema';
 import { eq, and, isNull, asc } from 'drizzle-orm';
 import { getContacts } from '@/lib/db/services/contacts';
 import { Suspense } from 'react';
+import { getUserDefaultView } from '@/lib/user-defaults';
 import ContactsClient from '@/components/tenant/contacts-client';
 import { toSnakeCase } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -78,6 +79,8 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
       .where(and(eq(tenantMembers.tenantId, tid), eq(tenantMembers.status, 'active')))
   ]);
 
+  const defaultView = await getUserDefaultView(tid, ctx.userId);
+
   return (
     <div className="space-y-6">
       <Suspense fallback={<LoadingSkeleton />}>
@@ -94,6 +97,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
           initialOffset={offset}
           initialQ={q}
           initialStatus={status}
+          defaultView={defaultView}
         />
       </Suspense>
     </div>

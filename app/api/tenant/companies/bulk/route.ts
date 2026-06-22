@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { companies, tenantMembers } from '@/drizzle/schema';
+import { companies, tenantMembers, segments, segmentMembers } from '@/drizzle/schema';
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
@@ -160,6 +160,79 @@ export async function POST(req: NextRequest) {
           );
         
         affected = res.rowCount ?? 0;
+        break;
+      }
+      case 'update_field': {
+        const deny = requirePerm(ctx, 'companies.edit');
+        if (deny) return deny;
+        const fieldKey = payload['field_key'] as string | undefined;
+        const fieldValue = payload['field_value'];
+        if (!fieldKey) return NextResponse.json({ error: 'field_key required' }, { status: 400 });
+        
+        const res = await db
+          .update(companies)
+          .set({
+            customFields: sql`jsonb_set(COALESCE(${companies.customFields}, '{}'::jsonb), ${'{"' + fieldKey + '"}'}::text[], ${JSON.stringify(fieldValue)}::jsonb, true)`,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              inArray(companies.id, validIds),
+              eq(companies.tenantId, ctx.tenantId)
+            )
+          );
+        
+        affected = res.rowCount ?? 0;
+        break;
+      }
+      case 'archive': {
+        const deny = requirePerm(ctx, 'companies.delete');
+        if (deny) return deny;
+        const res = await db
+          .update(companies)
+          .set({
+            deletedAt: new Date(),
+            deletedBy: ctx.userId,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              inArray(companies.id, validIds),
+              eq(companies.tenantId, ctx.tenantId)
+            )
+          );
+        affected = res.rowCount ?? 0;
+        break;
+      }
+      case 'restore': {
+        const deny = requirePerm(ctx, 'companies.edit');
+        if (deny) return deny;
+        const res = await db
+          .update(companies)
+          .set({
+            deletedAt: null,
+            deletedBy: null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              inArray(companies.id, validIds),
+              eq(companies.tenantId, ctx.tenantId)
+            )
+          );
+        affected = res.rowCount ?? 0;
+        break;
+      }
+      case 'add_to_segment': {
+        const segId = payload['segment_id'] as string | undefined;
+        if (!segId) return NextResponse.json({ error: 'segment_id required' }, { status: 400 });
+        const [seg] = await db.select({ id: segments.id }).from(segments)
+          .where(and(eq(segments.id, segId), eq(segments.tenantId, ctx.tenantId)))
+          .limit(1);
+        if (!seg) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
+        const memberValues = validIds.map(entityId => ({ segmentId: segId, entityId, tenantId: ctx.tenantId }));
+        const resSeg = await db.insert(segmentMembers).values(memberValues).onConflictDoNothing();
+        affected = resSeg.rowCount ?? memberValues.length;
         break;
       }
       default:
