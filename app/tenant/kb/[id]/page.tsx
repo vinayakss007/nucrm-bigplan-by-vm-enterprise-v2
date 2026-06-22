@@ -12,6 +12,7 @@ import { logError } from '@/lib/errors';
 export default function KBArticlePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [article, setArticle] = useState<Record<string, any> | null>(null);
   const [loading, setLoading] = useState(true);
   const [voted, setVoted] = useState<'helpful' | 'not_helpful' | null>(null);
@@ -22,7 +23,7 @@ export default function KBArticlePage() {
       const res = await fetch(`/api/tenant/kb/articles/${params.id}`);
       if (!res.ok) { router.push('/tenant/kb'); return; }
       const d = await res.json();
-      setArticle(d.data as Record<string, any>);
+      setArticle(d.data as Record<string, unknown>);
     } catch (err) { logError({ error: err, context: "catch:[context]" }); } finally { setLoading(false); }
   }, [params.id, router]);
 
@@ -39,7 +40,7 @@ export default function KBArticlePage() {
       if (res.ok) {
         setVoted(action);
         const d = await res.json();
-        setArticle((prev: Record<string, any> | null) => ({ ...prev, helpful: d.data.helpful, notHelpful: d.data.notHelpful }));
+        setArticle((prev: Record<string, unknown> | null) => ({ ...prev, helpful: d.data.helpful, notHelpful: d.data.notHelpful }));
       }
     } catch (err) { logError({ error: err, context: "catch:[context]" }); }
   };
