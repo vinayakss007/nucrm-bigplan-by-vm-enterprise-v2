@@ -15,10 +15,10 @@ const FIELD_TYPES = [
 
 export default function FormsPage() {
   const router = useRouter();
-  const [forms, setForms]       = useState<Record<string, unknown>[]>([]);
+  const [forms, setForms]       = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [_selected, _setSelected] = useState<Record<string, unknown>|null>(null);
+  const [_selected, _setSelected] = useState<any|null>(null);
   const [saving, setSaving]     = useState(false);
   const [copiedId, setCopiedId] = useState<string|null>(null);
   const [form, setForm] = useState({
@@ -66,8 +66,8 @@ export default function FormsPage() {
     toast.success('Deleted');
   };
 
-  const [viewingSubmissions, setViewingSubmissions] = useState<Record<string, unknown>|null>(null);
-  const [submissions, setSubmissions] = useState<Record<string, unknown>[]>([]);
+  const [viewingSubmissions, setViewingSubmissions] = useState<any|null>(null);
+  const [submissions, setSubmissions] = useState<any[]>([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
 
   const viewSubmissions = async (form: { id: string }) => {
@@ -109,7 +109,7 @@ export default function FormsPage() {
   const addField = () => setForm(f => ({...f, fields:[...f.fields, { key:`field_${Date.now()}`, label:'New Field', type:'text', required:false }]}));
   const removeField = (i: number) => setForm(f => ({...f, fields:f.fields.filter((_,idx) => idx !== i)}));
   const updateField = (i: number, key: string, val: unknown) =>
-    setForm(f => ({...f, fields:f.fields.map((x: Record<string, unknown>, idx) => idx === i ? {...x, [key]:val} : x)}));
+    setForm(f => ({...f, fields:f.fields.map((x: any, idx) => idx === i ? {...x, [key]:val} : x)}));
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 

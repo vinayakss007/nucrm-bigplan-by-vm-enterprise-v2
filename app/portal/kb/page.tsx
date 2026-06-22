@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Book, Search, ChevronRight } from 'lucide-react';
+import { Book, Search, ChevronRight, Clock, Eye } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
 export default function PortalKBPage() {

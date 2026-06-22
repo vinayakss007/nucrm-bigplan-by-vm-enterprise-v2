@@ -51,9 +51,9 @@ const AUTHORITY_LEVELS = {
 interface TeamMemberOpt { user_id: string; full_name: string; email?: string }
 
 interface Props {
-  lead: Record<string, unknown>;
-  activities: Record<string, unknown>[];
-  relatedContacts: Record<string, unknown>[];
+  lead: any;
+  activities: any[];
+  relatedContacts: any[];
   teamMembers: TeamMemberOpt[];
   tenantId: string;
   userId: string;
