@@ -21,7 +21,6 @@ const CAT_COLORS: Record<string, string> = {
 };
 
 export default function SuperAdminModulesPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [modules, setModules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
@@ -30,7 +29,6 @@ export default function SuperAdminModulesPage() {
   const load = async () => {
     const res = await fetch('/api/superadmin/modules');
     const d = await res.json();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     setModules((d.data ?? []).map((m: any) => ({
       ...m,
       planAccess: m.pricing || {
@@ -73,7 +71,7 @@ export default function SuperAdminModulesPage() {
     toast.success('Plan configurations saved');
   };
 
-  const _totalInstalls = modules.reduce((s, m) => s + (m.total_installs || 0), 0);
+  const totalInstalls = modules.reduce((s, m) => s + (m.total_installs || 0), 0);
 
   return (
     <div className="space-y-5 max-w-6xl">

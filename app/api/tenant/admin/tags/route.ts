@@ -17,6 +17,8 @@ import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
+import { validateBody } from '@/lib/api/validate';
+import { tagActionSchema } from '@/lib/api/schemas';
 
 type Counts = { leads: number; contacts: number; companies: number; total: number };
 
@@ -126,7 +128,9 @@ export async function POST(req: NextRequest) {
 
     let body;
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
-    const action = body.action;
+    const parsed = validateBody(tagActionSchema, body);
+    if (parsed instanceof NextResponse) return parsed;
+    const { action, tag: fromTag, new_tag: toTag, tags } = parsed.data;
 
     if (action === 'rename') {
       if (!fromTag || !toTag) return NextResponse.json({ error: 'tag and new_tag required' }, { status: 400 });
