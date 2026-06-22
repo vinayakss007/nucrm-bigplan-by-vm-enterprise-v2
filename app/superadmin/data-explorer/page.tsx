@@ -675,6 +675,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function DataTable({ title, icon, count, isExpanded, onToggle, columns, data, renderRow }: {
   title: string;
   icon: React.ReactNode;
