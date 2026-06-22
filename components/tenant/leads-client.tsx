@@ -113,6 +113,36 @@ export default function LeadsClient({
     tags: '',
   });
   const [addingLead, setAddingLead] = useState(false);
+  const [customFields, setCustomFields] = useState<{ fieldKey: string; fieldLabel: string }[]>([]);
+  const [showBulkField, setShowBulkField] = useState(false);
+  const [bulkFieldKey, setBulkFieldKey] = useState('');
+  const [segments, setSegments] = useState<{ id: string; name: string }[]>([]);
+  const [showSegmentPicker, setShowSegmentPicker] = useState(false);
+  const [segmentId, setSegmentId] = useState('');
+  const [sequences, setSequences] = useState<{ id: string; name: string }[]>([]);
+  const [showBulkSequence, setShowBulkSequence] = useState(false);
+  const [bulkSequenceId, setBulkSequenceId] = useState('');
+
+  useEffect(() => {
+    fetch('/api/tenant/custom-fields?entityType=lead')
+      .then(r => r.ok ? r.json() : { fields: [] })
+      .then(d => setCustomFields(d.fields ?? []))
+      .catch(() => {})
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/tenant/segments?entity_type=lead')
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(d => setSegments(d.data ?? []))
+      .catch(() => {})
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/tenant/sequences')
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(d => setSequences(d.data ?? []))
+      .catch(() => {})
+  }, []);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -341,11 +371,133 @@ export default function LeadsClient({
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setSelectedLeads(new Set())}
-            >
+            {showBulkField ? (
+              <div className="flex items-center gap-1">
+                <select
+                  value={bulkFieldKey}
+                  onChange={(e) => setBulkFieldKey(e.target.value)}
+                  className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="">Select field...</option>
+                  {customFields.map(f => (
+                    <option key={f.fieldKey} value={f.fieldKey}>{f.fieldLabel}</option>
+                  ))}
+                </select>
+                <Button size="sm" onClick={async () => {
+                  if (!bulkFieldKey) { toast.error('Select a field'); return; }
+                  const field = customFields.find(f => f.fieldKey === bulkFieldKey);
+                  const value = window.prompt(`Enter value for "${field?.fieldLabel || bulkFieldKey}":`);
+                  if (value === null) return;
+                  const res = await fetch('/api/tenant/leads/bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'update_field', lead_ids: Array.from(selectedLeads), payload: { field_key: bulkFieldKey, field_value: value } }),
+                  });
+                  if (res.ok) {
+                    toast.success('Field updated');
+                    setSelectedLeads(new Set());
+                    setShowBulkField(false);
+                    setBulkFieldKey('');
+                    load();
+                  } else {
+                    const data = await res.json();
+                    toast.error(data.error || 'Failed to update field');
+                  }
+                }}>
+                  Apply
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => { setShowBulkField(false); setBulkFieldKey(''); }}>
+                  <XCircle className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => setShowBulkField(true)}>
+                Update Field
+              </Button>
+            )}
+            {showSegmentPicker ? (
+              <div className="flex items-center gap-1">
+                <select
+                  value={segmentId}
+                  onChange={(e) => setSegmentId(e.target.value)}
+                  className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="">Select segment...</option>
+                  {segments.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                <Button size="sm" onClick={async () => {
+                  if (!segmentId) { toast.error('Select a segment'); return; }
+                  const res = await fetch('/api/tenant/leads/bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'add_to_segment', lead_ids: Array.from(selectedLeads), payload: { segment_id: segmentId } }),
+                  });
+                  if (res.ok) {
+                    toast.success('Added to segment');
+                    setSelectedLeads(new Set());
+                    setShowSegmentPicker(false);
+                    setSegmentId('');
+                    load();
+                  } else {
+                    const data = await res.json();
+                    toast.error(data.error || 'Failed to add to segment');
+                  }
+                }}>
+                  Apply
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => { setShowSegmentPicker(false); setSegmentId(''); }}>
+                  <XCircle className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : segments.length > 0 ? (
+              <Button size="sm" variant="outline" onClick={() => setShowSegmentPicker(true)}>
+                Add to Segment
+              </Button>
+            ) : null}
+            {showBulkSequence ? (
+              <div className="flex items-center gap-1">
+                <select
+                  value={bulkSequenceId}
+                  onChange={(e) => setBulkSequenceId(e.target.value)}
+                  className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="">Select sequence...</option>
+                  {sequences.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                <Button size="sm" onClick={async () => {
+                  if (!bulkSequenceId) { toast.error('Select a sequence'); return; }
+                  const res = await fetch('/api/tenant/leads/bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'add_to_sequence', lead_ids: Array.from(selectedLeads), payload: { sequence_id: bulkSequenceId } }),
+                  });
+                  if (res.ok) {
+                    toast.success('Enrolled in sequence');
+                    setSelectedLeads(new Set());
+                    setShowBulkSequence(false);
+                    setBulkSequenceId('');
+                    load();
+                  } else {
+                    const data = await res.json();
+                    toast.error(data.error || 'Failed to enroll');
+                  }
+                }}>
+                  Apply
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => { setShowBulkSequence(false); setBulkSequenceId(''); }}>
+                  <XCircle className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => setShowBulkSequence(true)}>
+                Add to Sequence
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={() => setSelectedLeads(new Set())}>
               Clear
             </Button>
           </div>

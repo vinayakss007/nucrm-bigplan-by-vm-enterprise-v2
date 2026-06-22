@@ -10,8 +10,8 @@ import { validateBody } from '@/lib/api/validate';
 import { bulkUpdateSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, tenantMembers } from '@/drizzle/schema';
-import { eq, and, sql, inArray } from 'drizzle-orm';
+import { contacts, tenantMembers, sequences, sequenceEnrollments, segments, segmentMembers } from '@/drizzle/schema';
+import { eq, and, sql, inArray, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 
@@ -204,6 +204,109 @@ export async function POST(req: NextRequest) {
           );
         
         affected = res.rowCount ?? 0;
+        break;
+      }
+      case 'update_field': {
+        const deny = requirePerm(ctx, 'contacts.edit');
+        if (deny) return deny;
+        const fieldKey = payload['field_key'] as string | undefined;
+        const fieldValue = payload['field_value'];
+        if (!fieldKey) return NextResponse.json({ error: 'field_key required' }, { status: 400 });
+        
+        const res = await db
+          .update(contacts)
+          .set({
+            customFields: sql`jsonb_set(COALESCE(${contacts.customFields}, '{}'::jsonb), ${'{"' + fieldKey + '"}'}::text[], ${JSON.stringify(fieldValue)}::jsonb, true)`,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              inArray(contacts.id, validIds),
+              eq(contacts.tenantId, ctx.tenantId)
+            )
+          );
+        
+        affected = res.rowCount ?? 0;
+        break;
+      }
+      case 'archive': {
+        const deny = requirePerm(ctx, 'contacts.delete');
+        if (deny) return deny;
+        const res = await db
+          .update(contacts)
+          .set({
+            isArchived: true,
+            deletedAt: new Date(),
+            deletedBy: ctx.userId,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              inArray(contacts.id, validIds),
+              eq(contacts.tenantId, ctx.tenantId)
+            )
+          );
+        affected = res.rowCount ?? 0;
+        break;
+      }
+      case 'restore': {
+        const deny = requirePerm(ctx, 'contacts.edit');
+        if (deny) return deny;
+        const res = await db
+          .update(contacts)
+          .set({
+            isArchived: false,
+            deletedAt: null,
+            deletedBy: null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              inArray(contacts.id, validIds),
+              eq(contacts.tenantId, ctx.tenantId)
+            )
+          );
+        affected = res.rowCount ?? 0;
+        break;
+      }
+      case 'add_to_sequence': {
+        const deny = requirePerm(ctx, 'automations.manage');
+        if (deny) return deny;
+        const sequenceId = payload['sequence_id'] as string | undefined;
+        if (!sequenceId) return NextResponse.json({ error: 'sequence_id required' }, { status: 400 });
+        
+        const [seq] = await db.select({ id: sequences.id }).from(sequences)
+          .where(and(eq(sequences.id, sequenceId), eq(sequences.tenantId, ctx.tenantId), isNull(sequences.deletedAt)))
+          .limit(1);
+        if (!seq) return NextResponse.json({ error: 'Sequence not found' }, { status: 404 });
+        
+        const enrollValues = validIds.map(contactId => ({
+          tenantId: ctx.tenantId,
+          sequenceId,
+          contactId,
+          enrolledBy: ctx.userId,
+          status: 'active',
+          currentStep: 1,
+        }));
+        
+        const res = await db.insert(sequenceEnrollments).values(enrollValues).onConflictDoNothing();
+        affected = res.rowCount ?? enrollValues.length;
+        
+        await db.update(sequences).set({ enrollCount: sql`COALESCE(${sequences.enrollCount}, 0) + ${affected}` })
+          .where(eq(sequences.id, sequenceId));
+        
+        break;
+      }
+      case 'add_to_segment': {
+        const segId = payload['segment_id'] as string | undefined;
+        if (!segId) return NextResponse.json({ error: 'segment_id required' }, { status: 400 });
+        const [seg] = await db.select({ id: segments.id }).from(segments)
+          .where(and(eq(segments.id, segId), eq(segments.tenantId, ctx.tenantId)))
+          .limit(1);
+        if (!seg) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
+        const memberValues = validIds.map(entityId => ({ segmentId: segId, entityId, tenantId: ctx.tenantId }));
+        const resSeg = await db.insert(segmentMembers).values(memberValues).onConflictDoNothing();
+        affected = resSeg.rowCount ?? memberValues.length;
         break;
       }
       default:

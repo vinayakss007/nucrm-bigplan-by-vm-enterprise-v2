@@ -2,6 +2,7 @@ import { requireTenantCtx, can } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
 import { deals, contacts, companies, users, tenantMembers, pipelines, dealStages } from '@/drizzle/schema';
 import { eq, and, or, isNull, desc, asc } from 'drizzle-orm';
+import { getUserDefaultView } from '@/lib/user-defaults';
 import DealsPageClient from './deals-page-client';
 
 export default async function DealsPage() {
@@ -84,6 +85,8 @@ export default async function DealsPage() {
       .where(and(eq(tenantMembers.tenantId, tid), eq(tenantMembers.status, 'active')))
   ]);
 
+  const defaultView = await getUserDefaultView(tid, ctx.userId);
+
   return (
     <DealsPageClient
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,6 +100,7 @@ export default async function DealsPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       teamMembers={teamMembers as any}
       permissions={permissions}
+      defaultView={defaultView}
     />
   );
 }
