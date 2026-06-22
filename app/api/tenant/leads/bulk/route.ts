@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { leads, tenantMembers, contacts, sequences, sequenceEnrollments, segments, segmentMembers } from '@/drizzle/schema';
+import { leads, tenantMembers, sequences, sequenceEnrollments, segments, segmentMembers } from '@/drizzle/schema';
 import { eq, and, inArray, sql, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
