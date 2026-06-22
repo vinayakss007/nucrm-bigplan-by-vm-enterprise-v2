@@ -56,11 +56,7 @@ export default function TenantSettingsAuditPage() {
     fetch(`/api/superadmin/tenant-settings?tenant_id=${params.id}`)
       .then(r => r.ok ? r.json() : Promise.reject(r))
       .then(setData)
-<<<<<<< HEAD
-      .catch((err) => { console.error('[tenant-settings] fetch failed', err); setData({ error: true } as PageData); })
-=======
       .catch((err) => { console.error('[tenant-settings] fetch failed', err); setData({ error: true }); })
->>>>>>> fix/batch-2-e2e-useEffect
       .finally(() => setLoading(false));
   }, [params?.id]);
 

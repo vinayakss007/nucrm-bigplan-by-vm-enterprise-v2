@@ -4,11 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { supportTickets, tenants, users } from '@/drizzle/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
-<<<<<<< HEAD
-import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
-=======
->>>>>>> fix/batch-2-e2e-useEffect
+
 
 export async function GET(request: NextRequest) {
   try {
