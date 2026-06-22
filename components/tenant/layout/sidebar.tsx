@@ -160,30 +160,43 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
   })();
   const [hiddenItems, setHiddenItems] = useState<string[]>(initialHidden);
 
-  // ── Hydrate state from localStorage ─────────────────────────
+  // ── Hydrate state from server (with localStorage fallback) ──
   useEffect(() => {
-    try {
-      const p = localStorage.getItem(PIN_KEY);
-      if (p) setPinned(JSON.parse(p));
-      const q = sessionStorage.getItem(FILTER_KEY);
-      if (q) setQuery(q);
-      const s = localStorage.getItem(SECTION_KEY);
-      if (s) {
-        setOpenSections(JSON.parse(s));
-      } else {
-        setOpenSections(Object.fromEntries(NAV_SECTIONS.map(s => [s.id, !!s.defaultOpen])));
-      }
-
-      // Read hidden_nav_items from the resolved-prefs cache that
-      // <UserPreferencesApplier /> populates on mount (overrides server value).
-      const cached = sessionStorage.getItem('nucrm.prefs.cache');
-      if (cached) {
-        const prefs = JSON.parse(cached);
-        if (Array.isArray(prefs?.hidden_nav_items)) {
-          setHiddenItems(prefs.hidden_nav_items);
+    (async () => {
+      try {
+        const res = await fetch('/api/tenant/user/preferences');
+        if (res.ok) {
+          const { data } = await res.json();
+          if (data?.pinned) setPinned(data.pinned);
+          if (data?.sections) setOpenSections(data.sections);
+          else setOpenSections(Object.fromEntries(NAV_SECTIONS.map(s => [s.id, !!s.defaultOpen])));
         }
-      }
-    } catch { /* Fallback to default on corrupted storage data */ }
+      } catch { /* fallback to localStorage */ }
+
+      // localStorage fallback for pinned
+      try {
+        if (!pinned.length) {
+          const p = localStorage.getItem(PIN_KEY);
+          if (p) setPinned(JSON.parse(p));
+        }
+        const q = sessionStorage.getItem(FILTER_KEY);
+        if (q) setQuery(q);
+        if (!Object.keys(openSections).length) {
+          const s = localStorage.getItem(SECTION_KEY);
+          if (s) setOpenSections(JSON.parse(s));
+          else setOpenSections(Object.fromEntries(NAV_SECTIONS.map(s => [s.id, !!s.defaultOpen])));
+        }
+
+        const cached = sessionStorage.getItem('nucrm.prefs.cache');
+        if (cached) {
+          const prefs = JSON.parse(cached);
+          if (Array.isArray(prefs?.hidden_nav_items)) {
+            setHiddenItems(prefs.hidden_nav_items);
+          }
+        }
+      } catch { /* fallback */ }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // React to live preference changes (Save on Preferences page emits this)
@@ -228,10 +241,21 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
     if (pathname.startsWith('/tenant/settings')) setSettingsOpen(true);
   }, [pathname]);
 
+  const persistSidebarPrefs = useCallback(async (prefs: { pinned?: string[]; sections?: Record<string, boolean> }) => {
+    try {
+      await fetch('/api/tenant/user/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(prefs),
+      });
+    } catch { /* server persistence is best-effort */ }
+  }, []);
+
   const toggleSection = (id: string) => {
     setOpenSections(prev => {
       const next = { ...prev, [id]: !prev[id] };
       try { localStorage.setItem(SECTION_KEY, JSON.stringify(next)); } catch { /* Fallback to default on corrupted storage data */ }
+      persistSidebarPrefs({ sections: next });
       return next;
     });
   };
@@ -240,9 +264,10 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
     setPinned(prev => {
       const next = prev.includes(href) ? prev.filter(h => h !== href) : [...prev, href];
       try { localStorage.setItem(PIN_KEY, JSON.stringify(next)); } catch { /* Fallback to default on corrupted storage data */ }
+      persistSidebarPrefs({ pinned: next });
       return next;
     });
-  }, []);
+  }, [persistSidebarPrefs]);
 
   const hasPerm = useCallback((item: NavItem) => {
     if (item.adminOnly && !isAdmin) return false;

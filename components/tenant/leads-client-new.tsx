@@ -196,6 +196,7 @@ interface Props {
   sources: Record<string, unknown>[];
   tenantId: string;
   userId: string;
+  defaultView?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _sources?: any[];
   _tenantId?: string;
@@ -211,7 +212,7 @@ interface Lead {
   tags?: string[];
 }
 
-export default function LeadsClientNew({ permissions, teamMembers, companies, stats, _sources, _tenantId, _userId }: Props) {
+export default function LeadsClientNew({ permissions, teamMembers, companies, stats, _sources, _tenantId, _userId, defaultView }: Props) {
   const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -222,7 +223,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
   const [sortOrder, setSortOrder] = useState('DESC');
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [viewMode, setViewMode] = useState<'table'|'kanban'>('table');
+  const [viewMode, setViewMode] = useState<'table'|'kanban'>(defaultView === 'kanban' || defaultView === 'card' ? 'kanban' : 'table');
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);

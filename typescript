@@ -1,0 +1,13 @@
+Script started on 2026-06-21 15:03:29+00:00 [COMMAND="echo 'y' | npx drizzle-kit generate --name='add_missing_tables' --config=/home/vinayak_shruti_biz/nucrm-enterprise/drizzle.config.ts 2>&1" <not executed on terminal>]
+[1G[0K⠙[1G[0K[90mReading config file '/home/vinayak_shruti_biz/nucrm-enterprise/drizzle.config.ts'[39m
+Error: Interactive prompts require a TTY terminal (process.stdin.isTTY or process.stdout.isTTY is false). This can happen when running in CI, piped input, or non-interactive shells.
+    at render10 [90m(/home/vinayak_shruti_biz/nucrm-enterprise/[39mnode_modules/[4mdrizzle-kit[24m/bin.cjs:1450:31[90m)[39m
+    at promptColumnsConflicts [90m(/home/vinayak_shruti_biz/nucrm-enterprise/[39mnode_modules/[4mdrizzle-kit[24m/bin.cjs:32711:65[90m)[39m
+    at columnsResolver [90m(/home/vinayak_shruti_biz/nucrm-enterprise/[39mnode_modules/[4mdrizzle-kit[24m/bin.cjs:32146:28[90m)[39m
+    at applyPgSnapshotsDiff [90m(/home/vinayak_shruti_biz/nucrm-enterprise/[39mnode_modules/[4mdrizzle-kit[24m/bin.cjs:28228:73[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+    at async prepareAndMigratePg [90m(/home/vinayak_shruti_biz/nucrm-enterprise/[39mnode_modules/[4mdrizzle-kit[24m/bin.cjs:32191:42[90m)[39m
+    at async Object.handler [90m(/home/vinayak_shruti_biz/nucrm-enterprise/[39mnode_modules/[4mdrizzle-kit[24m/bin.cjs:91988:7[90m)[39m
+    at async run [90m(/home/vinayak_shruti_biz/nucrm-enterprise/[39mnode_modules/[4mdrizzle-kit[24m/bin.cjs:91472:7[90m)[39m
+[1G[0K⠙[1G[0K
+Script done on 2026-06-21 15:03:32+00:00 [COMMAND_EXIT_CODE="0"]

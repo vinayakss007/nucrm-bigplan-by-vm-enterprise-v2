@@ -3,6 +3,7 @@ import { db } from '@/drizzle/db';
 import { leads, tenantMembers, users, companies } from '@/drizzle/schema';
 import { eq, and, isNull, sql, desc, asc } from 'drizzle-orm';
 import { Suspense } from 'react';
+import { getUserDefaultView } from '@/lib/user-defaults';
 import LeadsClient from '@/components/tenant/leads-client-new';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -98,6 +99,8 @@ export default async function LeadsPage() {
   const stats = statsRaw.map(s => ({ lead_status: s.lead_status, count: s.count, total_score: s.total_score, avg_score: s.avg_score }));
   const sources = sourcesRaw.map(s => ({ lead_source: s.lead_source, count: s.count }));
 
+  const defaultView = await getUserDefaultView(tid, ctx.userId);
+
   return (
     <Suspense fallback={<LoadingSkeleton />}>
       <LeadsClient
@@ -112,6 +115,7 @@ export default async function LeadsPage() {
         sources={sources as any}
         tenantId={tid}
         userId={ctx.userId}
+        defaultView={defaultView}
       />
     </Suspense>
   );
