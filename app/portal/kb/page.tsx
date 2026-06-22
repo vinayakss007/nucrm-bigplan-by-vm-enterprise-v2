@@ -1,13 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-<<<<<<< HEAD
-import { Book, Search, ChevronRight, Clock, Eye } from 'lucide-react';
-import { formatDate } from '@/lib/utils';
-=======
 import { Book, Search, ChevronRight } from 'lucide-react';
-import { cn, formatDate } from '@/lib/utils';
->>>>>>> fix/batch-2-e2e-useEffect
+import { formatDate } from '@/lib/utils';
 
 export default function PortalKBPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

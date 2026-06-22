@@ -1,11 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { CreditCard, Plus, Edit, X, Save, Loader2, Users, Zap, Crown } from 'lucide-react';
-<<<<<<< HEAD
 import { cn } from '@/lib/utils';
-=======
-import { cn, formatCurrency } from '@/lib/utils';
->>>>>>> fix/batch-2-e2e-useEffect
 import toast from 'react-hot-toast';
 
 interface PlanData {

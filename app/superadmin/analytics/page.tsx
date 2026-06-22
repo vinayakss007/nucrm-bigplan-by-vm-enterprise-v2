@@ -1,10 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-<<<<<<< HEAD
 import { BarChart3, RefreshCw } from 'lucide-react';
-=======
-import { BarChart3, Users, RefreshCw } from 'lucide-react';
->>>>>>> fix/batch-2-e2e-useEffect
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { formatCurrency } from '@/lib/utils';
 
