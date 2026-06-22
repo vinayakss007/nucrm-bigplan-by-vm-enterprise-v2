@@ -1,6 +1,6 @@
 {
   "name": "nucrm-enterprise",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Multi-tenant Enterprise CRM built with Next.js 16, PostgreSQL, and JWT auth",
   "author": "NuCRM Team",
   "license": "MIT",
