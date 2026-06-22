@@ -675,7 +675,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function DataTable({ title, icon, count, isExpanded, onToggle, columns, data, renderRow }: {
   title: string;
   icon: React.ReactNode;
@@ -683,8 +682,8 @@ function DataTable({ title, icon, count, isExpanded, onToggle, columns, data, re
   isExpanded: boolean;
   onToggle: () => void;
   columns: string[];
-  data: Record<string, unknown>[];
-  renderRow: (item: Record<string, unknown>) => React.ReactNode;
+  data: any[];
+  renderRow: (item: any) => React.ReactNode;
 }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">

@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Package, Users, ToggleRight, Save } from 'lucide-react';
+import { Package, Users, ToggleRight, ToggleLeft, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 

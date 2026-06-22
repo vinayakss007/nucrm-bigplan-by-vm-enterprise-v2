@@ -8,11 +8,11 @@ export default function PublicFormPage() {
   const params = useParams();
   const formId = params['id'] as string;
   
-  const [form, setForm] = useState<Record<string, unknown> | null>(null);
+  const [form, setForm] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [values, setValues] = useState<Record<string, unknown>>({});
+  const [values, setValues] = useState<any>({});
 
   useEffect(() => {
     const loadForm = async () => {
@@ -55,7 +55,7 @@ export default function PublicFormPage() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateValue = (key: string, value: any) => {
-    setValues(v => ({ ...v, [key]: value }));
+    setValues((v: any) => ({ ...v, [key]: value }));
   };
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";

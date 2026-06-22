@@ -24,7 +24,7 @@ export default function ActivityFeedWidget({ data }: WidgetProps) {
         <p className="text-xs font-medium text-muted-foreground/70 text-center py-6">No activity yet &mdash; start by adding contacts</p>
       ) : (
         <div className="divide-y divide-border">
-          {items.map((a: Record<string, unknown>) => {
+          {items.map((a: any) => {
             const Icon = ACTIVITY_ICONS[a.type] ?? Activity;
             return (
               <div key={a.id} className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
