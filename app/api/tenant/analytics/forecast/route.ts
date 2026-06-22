@@ -59,7 +59,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'deal_id is required' }, { status: 400 });
     }
 
-    const result = await db.execute(sql`SELECT public.calculate_deal_win_probability(${deal_id}) as probability`);
+    const result = await db.execute(sql`
+      SELECT GREATEST(0.05, LEAST(0.95, ds."order"::numeric / NULLIF(pm.max_order, 0)::numeric)) AS probability
+      FROM deals d
+      JOIN deal_stages ds ON d.stage_id = ds.id
+      CROSS JOIN LATERAL (
+        SELECT MAX(ds2."order") AS max_order
+        FROM deal_stages ds2
+        WHERE ds2.pipeline_id = ds.pipeline_id
+      ) pm
+      WHERE d.id = ${deal_id}
+    `);
     const probability = (result.rows[0] as Record<string, unknown>)?.probability as number || 0;
 
     const [forecast] = await db.select()

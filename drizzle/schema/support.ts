@@ -54,9 +54,9 @@ export const webhookQueue = pgTable('webhook_queue', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => {
   return {
-    webhookIdx: index('idx_webhook_deliveries_webhook_id').on(table.webhookId),
-    statusIdx: index('idx_webhook_deliveries_status').on(table.status),
-    nextRetryIdx: index('idx_webhook_deliveries_next_retry').on(table.nextRetryAt).where(sql`status = 'pending'`),
+    webhookIdx: index('idx_webhook_queue_webhook_id').on(table.webhookId),
+    statusIdx: index('idx_webhook_queue_status').on(table.status),
+    nextRetryIdx: index('idx_webhook_queue_next_retry').on(table.nextRetryAt).where(sql`status = 'pending'`),
   };
 });
 

@@ -7,6 +7,11 @@
 
 ---
 
+## PRs PENDING YOUR APPROVAL
+- [#240 fix/production-readiness-0623](https://github.com/vinayakss007/nucrm-bigplan-by-vm-enterprise-v2/pull/240)
+- [#241 fix/empty-catch-blocks](https://github.com/vinayakss007/nucrm-bigplan-by-vm-enterprise-v2/pull/241)
+- [#242](https://github.com/vinayakss007/nucrm-bigplan-by-vm-enterprise-v2/pull/242) ✅ ALREADY MERGED
+
 ## DONE — verified fixed (checklist was stale)
 
 | Item | What was claimed | Actual status |

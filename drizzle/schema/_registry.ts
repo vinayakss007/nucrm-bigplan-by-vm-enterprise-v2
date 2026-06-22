@@ -373,6 +373,10 @@ import {
   documents as storageDocuments,
 } from './files';
 
+import {
+  superAdminAuditLogs,
+} from './super-admin-audit';
+
 // =============================================================================
 // TABLE REGISTRY DEFINITION
 // =============================================================================
@@ -451,7 +455,7 @@ export const TABLE_REGISTRY = {
       dependencies: ['tenants', 'users', 'roles'],
       description: 'Tenant membership and roles',
       isCore: true,
-      indexes: ['idx_tenants_tenant', 'idx_tenant_members_user', 'idx_tenant_members_tenant_user'],
+      indexes: ['idx_tenant_members_tenant', 'idx_tenant_members_user', 'idx_tenant_members_tenant_user'],
     },
   },
   roles: {
@@ -1378,7 +1382,7 @@ export const TABLE_REGISTRY = {
   aiEmailDrafts: {
     table: emailDrafts,
     metadata: {
-      name: 'ai_email_drafts',
+      name: 'comm_email_drafts',
       schemaGroup: 'comm',
       hasTenantId: true,
       hasSoftDelete: true,
@@ -2522,6 +2526,21 @@ export const TABLE_REGISTRY = {
       indexes: ['idx_dashboard_layouts_tenant', 'idx_dashboard_layouts_user_default'],
     },
   },
+  superAdminAuditLogs: {
+    table: superAdminAuditLogs,
+    metadata: {
+      name: 'super_admin_audit_logs',
+      schemaGroup: 'infra',
+      hasTenantId: false,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: [],
+      description: 'Super admin audit log entries with hash chain for tamper evidence',
+      isCore: false,
+      indexes: ['idx_super_admin_audit_admin', 'idx_super_admin_audit_action', 'idx_super_admin_audit_tenant', 'idx_super_admin_audit_time'],
+    },
+  },
   tenantHierarchy: {
     table: tenantHierarchy,
     metadata: {
@@ -3508,7 +3527,7 @@ export const TABLE_REGISTRY = {
   storageDocuments: {
     table: storageDocuments,
     metadata: {
-      name: 'documents',
+      name: 'storage_documents',
       schemaGroup: 'documents',
       hasTenantId: true,
       hasSoftDelete: true,
@@ -3517,7 +3536,7 @@ export const TABLE_REGISTRY = {
       dependencies: ['tenants', 'users'],
       description: 'Workspace file attachments in object storage',
       isCore: false,
-      indexes: ['idx_documents_tenant', 'idx_documents_active', 'idx_documents_metadata_g', 'idx_documents_link', 'idx_documents_uploader'],
+      indexes: ['idx_storage_documents_tenant', 'idx_storage_documents_active', 'idx_storage_documents_metadata_g', 'idx_storage_documents_link', 'idx_storage_documents_uploader'],
     },
   },
 
