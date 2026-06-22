@@ -153,25 +153,54 @@ export async function get<T = any>(key: string): Promise<T | null> {
 
 const LOCK_TTL = 5;
 const STALE_TTL_MULTIPLIER = 2;
+const MAX_LOCK_RETRIES = 3;
+const LOCK_RETRY_BASE_MS = 50;
 
-async function acquireLock(key: string): Promise<boolean> {
+let lockCounter = 0;
+function makeLockValue(): string {
+  return `${process.pid}:${++lockCounter}`;
+}
+
+const LOCK_SCRIPT = `
+  if redis.call('GET', KEYS[1]) == ARGV[1] then
+    redis.call('DEL', KEYS[1])
+    return 1
+  end
+  return 0
+`;
+
+async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<{ acquired: boolean; value: string }> {
   const redis = getRedisClient();
-  if (!redis) return true;
+  if (!redis) return { acquired: true, value: '' };
+  const value = makeLockValue();
   try {
-    const result = await redis.call('SET', `nucrm:lock:${key}`, '1', 'EX', LOCK_TTL, 'NX');
-    return result === 'OK';
+    const result = await redis.call('SET', `nucrm:lock:${key}`, value, 'EX', ttlSeconds, 'NX');
+    return { acquired: result === 'OK', value };
   } catch (e) {
     console.error('[Cache] acquireLock failed', e);
-    return false;
+    return { acquired: false, value: '' };
   }
 }
 
-async function releaseLock(key: string): Promise<void> {
+async function releaseLock(key: string, value: string): Promise<void> {
   const redis = getRedisClient();
-  if (!redis) return;
+  if (!redis || !value) return;
   try {
-    await redis.del(`nucrm:lock:${key}`);
-  } catch { /* Fallback to default on corrupted storage data */ }
+    await redis.eval(LOCK_SCRIPT, 1, `nucrm:lock:${key}`, value);
+  } catch { /* safe */ }
+}
+
+async function refreshLock(key: string, value: string, ttlSeconds: number): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis || !value) return;
+  try {
+    await redis.expire(`nucrm:lock:${key}`, ttlSeconds);
+  } catch { /* safe */ }
+}
+
+function ttlWithJitter(ttlSeconds: number): number {
+  const jitter = Math.floor(Math.random() * ttlSeconds * 0.1);
+  return ttlSeconds + jitter;
 }
 
 /**
@@ -189,21 +218,38 @@ export async function getOrSet<T = any>(
   const cached = await get<T>(key);
   if (cached !== null) return cached;
 
-  const lockAcquired = await acquireLock(key);
-  if (!lockAcquired) {
-    const stale = await get<{ data: T; expires: number }>(`stale:${key}`);
-    if (stale && stale.expires > Date.now()) {
-      return stale.data;
+  const jitteredTtl = ttlWithJitter(ttlSeconds);
+  const lockTtl = Math.min(10, Math.max(5, Math.ceil(ttlSeconds / 10)));
+
+  let lock = await acquireLock(key, lockTtl);
+  if (!lock.acquired) {
+    for (let attempt = 1; attempt <= MAX_LOCK_RETRIES; attempt++) {
+      await new Promise(r => setTimeout(r, LOCK_RETRY_BASE_MS * Math.pow(2, attempt - 1)));
+      const retryCache = await get<T>(key);
+      if (retryCache !== null) return retryCache;
+      lock = await acquireLock(key, lockTtl);
+      if (lock.acquired) break;
+    }
+    if (!lock.acquired) {
+      const stale = await get<{ data: T; expires: number }>(`stale:${key}`);
+      if (stale && stale.expires > Date.now()) {
+        return stale.data;
+      }
     }
   }
 
+  const refreshInterval = setInterval(() => {
+    refreshLock(key, lock.value, lockTtl);
+  }, (lockTtl * 1000) / 2);
+
   try {
     const value = await fallback();
-    await set(key, value, ttlSeconds);
-    await set(`stale:${key}`, { data: value, expires: Date.now() + ttlSeconds * STALE_TTL_MULTIPLIER * 1000 }, ttlSeconds * STALE_TTL_MULTIPLIER);
+    await set(key, value, jitteredTtl);
+    await set(`stale:${key}`, { data: value, expires: Date.now() + jitteredTtl * STALE_TTL_MULTIPLIER * 1000 }, jitteredTtl * STALE_TTL_MULTIPLIER);
     return value;
   } finally {
-    if (lockAcquired) await releaseLock(key);
+    clearInterval(refreshInterval);
+    if (lock.acquired) await releaseLock(key, lock.value);
   }
 }
 
@@ -225,19 +271,36 @@ export async function getOrSetStale<T = any>(
   const stale = await get<{ data: T; expires: number }>(`stale:${key}`);
   if (stale) return stale.data;
 
-  const lockAcquired = await acquireLock(key);
-  if (!lockAcquired) {
-    const retry = await get<{ data: T; expires: number }>(`stale:${key}`);
-    if (retry) return retry.data;
+  const jitteredTtl = ttlWithJitter(ttlSeconds);
+  const lockTtl = Math.min(10, Math.max(5, Math.ceil(ttlSeconds / 10)));
+
+  let lock = await acquireLock(key, lockTtl);
+  if (!lock.acquired) {
+    for (let attempt = 1; attempt <= MAX_LOCK_RETRIES; attempt++) {
+      await new Promise(r => setTimeout(r, LOCK_RETRY_BASE_MS * Math.pow(2, attempt - 1)));
+      const retryStale = await get<{ data: T; expires: number }>(`stale:${key}`);
+      if (retryStale) return retryStale.data;
+      lock = await acquireLock(key, lockTtl);
+      if (lock.acquired) break;
+    }
+    if (!lock.acquired) {
+      const finalStale = await get<{ data: T; expires: number }>(`stale:${key}`);
+      if (finalStale) return finalStale.data;
+    }
   }
+
+  const refreshInterval = setInterval(() => {
+    refreshLock(key, lock.value, lockTtl);
+  }, (lockTtl * 1000) / 2);
 
   try {
     const value = await fallback();
-    await set(key, value, ttlSeconds);
-    await set(`stale:${key}`, { data: value, expires: Date.now() + ttlSeconds * STALE_TTL_MULTIPLIER * 1000 }, ttlSeconds * STALE_TTL_MULTIPLIER);
+    await set(key, value, jitteredTtl);
+    await set(`stale:${key}`, { data: value, expires: Date.now() + jitteredTtl * STALE_TTL_MULTIPLIER * 1000 }, jitteredTtl * STALE_TTL_MULTIPLIER);
     return value;
   } finally {
-    if (lockAcquired) await releaseLock(key);
+    clearInterval(refreshInterval);
+    if (lock.acquired) await releaseLock(key, lock.value);
   }
 }
 
@@ -254,15 +317,15 @@ export async function warm<T = any>(
 ): Promise<void> {
   const exists = await get(key);
   if (exists !== null) return;
-  const lockAcquired = await acquireLock(`warm:${key}`);
-  if (!lockAcquired) return;
+  const { acquired, value: lockVal } = await acquireLock(`warm:${key}`);
+  if (!acquired) return;
   try {
     const recheck = await get(key);
     if (recheck !== null) return;
     const value = await fallback();
-    await set(key, value, ttlSeconds);
+    await set(key, value, ttlWithJitter(ttlSeconds));
   } finally {
-    if (lockAcquired) await releaseLock(`warm:${key}`);
+    if (acquired) await releaseLock(`warm:${key}`, lockVal);
   }
 }
 

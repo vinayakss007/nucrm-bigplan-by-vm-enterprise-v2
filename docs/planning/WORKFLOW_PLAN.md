@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # NuCRM Production Rollout Plan — Phases 0 → 8
 
 This is the canonical, sequenced plan for shipping the end-to-end customer
@@ -364,7 +363,6 @@ Files modified / created:
 - `app/api/tenant/leads/[id]/assign/route.ts`                (Phase 3, new)
 - `components/tenant/lead-detail-client.tsx`                 (Phase 3)
 - `WORKFLOW_PLAN.md`                                          (this document)
-=======
 # NuCRM — Workflow Plan (Phases 0 → 8)
 
 > Canonical phase numbering for the project. Use this doc — **not**
@@ -625,4 +623,3 @@ Independent items — can land in any order, no dependencies.
 - Customer journey: `WORKFLOW.md` (the lead → contact → deal → ... map).
 - Competitive frame: `POSITIONING.md`.
 - Ops gap log: `BULK_AND_SETTINGS_GAPS.md`, `REMAINING_GAPS.txt`.
->>>>>>> main
