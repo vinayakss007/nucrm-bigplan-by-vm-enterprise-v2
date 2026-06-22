@@ -3517,7 +3517,7 @@ export const TABLE_REGISTRY = {
       dependencies: ['tenants', 'users'],
       description: 'Workspace file attachments in object storage',
       isCore: false,
-      indexes: ['idx_documents_tenant', 'idx_documents_active', 'idx_documents_metadata_g', 'idx_documents_link', 'idx_documents_uploader'],
+      indexes: ['idx_documents_tenant', 'idx_documents_active', 'idx_documents_metadata_g', 'idx_documents_link', 'idx_storage_documents_uploader'],
     },
   },
 

@@ -63,7 +63,7 @@ export const documents = pgTable(
     activeIdx: utils.activeIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
     linkIdx: index('idx_documents_link').on(table.linkedEntityType, table.linkedEntityId),
-    uploaderIdx: index('idx_documents_uploader').on(table.uploadedBy),
+    uploaderIdx: index('idx_storage_documents_uploader').on(table.uploadedBy),
   }),
 );
 
