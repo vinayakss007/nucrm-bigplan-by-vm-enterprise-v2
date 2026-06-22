@@ -2,7 +2,7 @@
   "id": "FEAT-004",
   "type": "feat",
   "description": "Create [id] detail routes for Contracts, Subscriptions, Orders, and Quotes - both API routes (app/api/tenant/*/[id]/route.ts) and frontend pages (app/tenant/*/[id]/page.tsx). Follow the pattern from app/api/tenant/deals/[id]/route.ts and app/tenant/deals/[id]/page.tsx.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Create app/api/tenant/contracts/[id]/route.ts - GET/PUT/DELETE single contract by ID. Follow deals/[id] pattern: requireAuth, requirePerm (if applicable), select by id+tenantId, return { data: contract }. PUT updates allowlisted fields. DELETE soft-deletes.",
     "Create app/tenant/contracts/[id]/page.tsx - 'use client' detail page showing contract info (title, number, type, status, dates, value, terms, notes, contact). Edit inline or via modal. Status change buttons. Back link to /tenant/contracts. Include loading.tsx and error.tsx.",

@@ -15,10 +15,11 @@ const FIELD_TYPES = [
 
 export default function FormsPage() {
   const router = useRouter();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [forms, setForms]       = useState<Record<string, any>[]>([]);
   const [loading, setLoading]   = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [_selected, _setSelected] = useState<Record<string, any>|null>(null);
+  const [_selected, _setSelected] = useState<Record<string, unknown>|null>(null);
   const [saving, setSaving]     = useState(false);
   const [copiedId, setCopiedId] = useState<string|null>(null);
   const [form, setForm] = useState({
@@ -66,7 +67,9 @@ export default function FormsPage() {
     toast.success('Deleted');
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [viewingSubmissions, setViewingSubmissions] = useState<Record<string, any>|null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [submissions, setSubmissions] = useState<Record<string, any>[]>([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
 
