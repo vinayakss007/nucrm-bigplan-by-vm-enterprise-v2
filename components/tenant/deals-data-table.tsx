@@ -82,7 +82,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
     try {
       const res = await fetch(`/api/tenant/deals?${params}`)
       const data = await res.json()
-      setDeals((data.data ?? []).map((d: Record<string, unknown>) => toSnakeCase(d)))
+      setDeals((data.data ?? []).map((d: any) => toSnakeCase(d)))
       setTotal(data.total ?? 0)
     } catch (error) {
       console.error('Failed to load deals:', error)
@@ -276,7 +276,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
       .then(d => setSegments(d.data ?? []))
       .catch(() => {})
   }, [])
-  const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, unknown> = {}) => {
+  const callBulk = useCallback(async (action: string, ids: string[], payload: any = {}) => {
     setBulkBusy(true)
     try {
       const res = await fetch('/api/tenant/deals/bulk', {

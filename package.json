@@ -28,8 +28,9 @@
     "sales-pipeline"
   ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+"dev": "npm run db:sync && next dev",
+    "dev:nosync": "next dev",
+    "build": "NODE_OPTIONS=\"--max-old-space-size=4096\" next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "npx tsc --noEmit --pretty",

@@ -25,7 +25,7 @@ export default function DealsClosingWidget({ data }: WidgetProps) {
         <p className="text-xs font-medium text-muted-foreground/70 text-center py-5">No deals closing soon</p>
       ) : (
         <div className="divide-y divide-border">
-          {items.map((d: Record<string, any>) => (
+          {items.map((d: any) => (
             <Link key={d.id} href="/tenant/deals" className="flex items-center gap-2 py-2 first:pt-0 last:pb-0 hover:bg-accent/20 transition-colors -mx-3 px-3 rounded">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold truncate">{d.title}</p>
