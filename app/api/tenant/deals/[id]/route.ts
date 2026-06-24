@@ -102,7 +102,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         .from(dealStages)
         .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
         .where(and(
-          eq(dealStages.name, body.stage),
+          ilike(dealStages.name, body.stage),
           eq(pipelines.tenantId, ctx.tenantId)
         ))
         .limit(1);
