@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
-import { Plus, MoreHorizontal, Edit, Trash2, DollarSign, Tag, UserPlus, ArrowRightLeft, Trophy, Layers } from 'lucide-react'
+import { Plus, MoreHorizontal, Edit, Trash2, DollarSign, Tag, UserPlus, ArrowRightLeft, Trophy, Layers, Archive, RotateCcw } from 'lucide-react'
 import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
@@ -82,7 +82,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
     try {
       const res = await fetch(`/api/tenant/deals?${params}`)
       const data = await res.json()
-      setDeals((data.data ?? []).map((d: Record<string, unknown>) => toSnakeCase(d)))
+      setDeals((data.data ?? []).map((d: any) => toSnakeCase(d)))
       setTotal(data.total ?? 0)
     } catch (error) {
       console.error('Failed to load deals:', error)
@@ -260,7 +260,23 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
 
   // ── Bulk actions ──────────────────────────────────────────
   const [_bulkBusy, setBulkBusy] = useState(false)
-  const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, unknown> = {}) => {
+  const [customFields, setCustomFields] = useState<{ fieldKey: string; fieldLabel: string }[]>([])
+  const [segments, setSegments] = useState<{ id: string; name: string }[]>([])
+
+  useEffect(() => {
+    fetch('/api/tenant/custom-fields?entityType=deal')
+      .then(r => r.ok ? r.json() : { fields: [] })
+      .then(d => setCustomFields(d.fields ?? []))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/tenant/segments?entity_type=deal')
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(d => setSegments(d.data ?? []))
+      .catch(() => {})
+  }, [])
+  const callBulk = useCallback(async (action: string, ids: string[], payload: any = {}) => {
     setBulkBusy(true)
     try {
       const res = await fetch('/api/tenant/deals/bulk', {
@@ -345,6 +361,36 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
       },
     },
     {
+      id: 'update_field',
+      label: 'Update Field',
+      icon: <Tag className="w-3.5 h-3.5" />,
+      requiresSelect: true,
+      selectOptions: customFields.map(f => ({ value: f.fieldKey, label: f.fieldLabel })),
+      onClick: async (ids: string[], fieldKey?: string) => {
+        if (!fieldKey) return toast.error('Select a field')
+        const field = customFields.find(f => f.fieldKey === fieldKey)
+        const value = window.prompt(`Enter value for "${field?.fieldLabel || fieldKey}":`)
+        if (value === null) return
+        await callBulk('update_field', ids, { field_key: fieldKey, field_value: value })
+      },
+    },
+    {
+      id: 'archive',
+      label: 'Archive',
+      icon: <Archive className="w-3.5 h-3.5" />,
+      requiresConfirmation: true,
+      confirmationMessage: 'Archive the selected deals? They will be hidden from active views.',
+      onClick: async (ids: string[]) => callBulk('archive', ids),
+    },
+    {
+      id: 'restore',
+      label: 'Restore',
+      icon: <RotateCcw className="w-3.5 h-3.5" />,
+      requiresConfirmation: true,
+      confirmationMessage: 'Restore the selected deals from archive?',
+      onClick: async (ids: string[]) => callBulk('restore', ids),
+    },
+    {
       id: 'delete',
       label: 'Delete',
       icon: <Trash2 className="w-3.5 h-3.5" />,
@@ -352,7 +398,17 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
       confirmationMessage: 'Soft-delete the selected deals? They can be restored from Trash.',
       onClick: async (ids: string[]) => callBulk('delete', ids),
     },
-  ], [teamMembers, stages, callBulk])
+    ...(segments.length > 0 ? [{
+      id: 'add_to_segment',
+      label: 'Add to Segment',
+      requiresSelect: true,
+      selectOptions: segments.map(s => ({ value: s.id, label: s.name })),
+      onClick: async (ids: string[], input?: string) => {
+        if (!input) return toast.error('Select a segment')
+        await callBulk('add_to_segment', ids, { segment_id: input })
+      },
+    }] : []),
+  ], [teamMembers, stages, callBulk, customFields, segments])
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
 

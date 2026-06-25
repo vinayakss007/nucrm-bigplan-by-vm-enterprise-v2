@@ -48,7 +48,7 @@ export default function TenantCompaniesClient({ initialCompanies, permissions, t
         <div className="text-center py-16"><Building2 className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" /><p className="font-semibold">No companies {search ? 'found' : 'yet'}</p></div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((c: Record<string, any>) => (
+          {filtered.map((c: any) => (
             <div key={c.id} className="admin-card p-5 hover:shadow-md hover:border-violet-200 dark:hover:border-violet-800 transition-all cursor-pointer group"
               onClick={() => router.push(`/tenant/companies/${c.id}`)}>
               <div className="flex items-start gap-3 mb-3">

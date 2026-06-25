@@ -54,11 +54,6 @@
 
 ---
 
-## PHASE 4 ✅ COMPLETE
-AI Gateway foundation, Secrets Vault, Activity Log, Auto-Draft, Lead-scoring, At-risk, Summarize — all built, tested.
-- 88 AI tests across 8 test files
-- 1878 total tests passing
-- 0 TypeScript errors
-
-## PHASE 5+ (Future)
+## PHASE 4+ (Future)
+AI Gateway foundation → Auto-Draft → Lead-scoring → At-risk → Summarize
 Per `docs/planning/REMAINING_BUILD_PLAN.md`
