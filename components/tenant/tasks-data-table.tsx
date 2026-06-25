@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useCallback, useMemo } from 'react'
-import { Plus, MoreHorizontal, Edit, Trash2, CheckCircle, AlertTriangle, Columns, UserPlus, Flag, Calendar as CalendarIcon, RotateCcw } from 'lucide-react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { Plus, MoreHorizontal, Edit, Trash2, CheckCircle, AlertTriangle, Columns, UserPlus, Flag, Calendar as CalendarIcon, RotateCcw, Archive } from 'lucide-react'
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
@@ -285,7 +285,24 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
   ], [pagination.pageIndex, loadData, today])
 
   // ── Bulk actions ──────────────────────────────────────────
-  const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, unknown> = {}) => {
+  const [customFields, setCustomFields] = useState<{ fieldKey: string; fieldLabel: string }[]>([])
+  const [segments, setSegments] = useState<{ id: string; name: string }[]>([])
+
+  useEffect(() => {
+    fetch('/api/tenant/custom-fields?entityType=task')
+      .then(r => r.ok ? r.json() : { fields: [] })
+      .then(d => setCustomFields(d.fields ?? []))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/tenant/segments?entity_type=task')
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(d => setSegments(d.data ?? []))
+      .catch(() => {})
+  }, [])
+
+  const callBulk = useCallback(async (action: string, ids: string[], payload: any = {}) => {
     const res = await fetch('/api/tenant/tasks/bulk', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -352,6 +369,36 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
       },
     },
     {
+      id: 'update_field',
+      label: 'Update Field',
+      icon: <Flag className="w-3.5 h-3.5" />,
+      requiresSelect: true,
+      selectOptions: customFields.map(f => ({ value: f.fieldKey, label: f.fieldLabel })),
+      onClick: async (ids: string[], fieldKey?: string) => {
+        if (!fieldKey) return toast.error('Select a field')
+        const field = customFields.find(f => f.fieldKey === fieldKey)
+        const value = window.prompt(`Enter value for "${field?.fieldLabel || fieldKey}":`)
+        if (value === null) return
+        await callBulk('update_field', ids, { field_key: fieldKey, field_value: value })
+      },
+    },
+    {
+      id: 'archive',
+      label: 'Archive',
+      icon: <Archive className="w-3.5 h-3.5" />,
+      requiresConfirmation: true,
+      confirmationMessage: 'Archive the selected tasks? They will be hidden from active views.',
+      onClick: async (ids: string[]) => callBulk('archive', ids),
+    },
+    {
+      id: 'restore',
+      label: 'Restore',
+      icon: <RotateCcw className="w-3.5 h-3.5" />,
+      requiresConfirmation: true,
+      confirmationMessage: 'Restore the selected tasks from archive?',
+      onClick: async (ids: string[]) => callBulk('restore', ids),
+    },
+    {
       id: 'delete',
       label: 'Delete',
       icon: <Trash2 className="w-3.5 h-3.5" />,
@@ -359,7 +406,17 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
       confirmationMessage: 'Soft-delete the selected tasks? They can be restored from Trash.',
       onClick: async (ids: string[]) => callBulk('delete', ids),
     },
-  ], [teamMembers, callBulk])
+    ...(segments.length > 0 ? [{
+      id: 'add_to_segment',
+      label: 'Add to Segment',
+      requiresSelect: true,
+      selectOptions: segments.map(s => ({ value: s.id, label: s.name })),
+      onClick: async (ids: string[], input?: string) => {
+        if (!input) return toast.error('Select a segment')
+        await callBulk('add_to_segment', ids, { segment_id: input })
+      },
+    }] : []),
+  ], [teamMembers, callBulk, customFields, segments])
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
 

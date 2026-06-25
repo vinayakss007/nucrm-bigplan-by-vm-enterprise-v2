@@ -126,8 +126,7 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    let body;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    const body = await req.json();
     const parsed = validateBody(tagActionSchema, body);
     if (parsed instanceof NextResponse) return parsed;
     const { action, tag: fromTag, new_tag: toTag, tags } = parsed.data;
