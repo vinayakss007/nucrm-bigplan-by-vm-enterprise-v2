@@ -16,6 +16,12 @@ export function getDb(): DbClient {
 
 export const db: DbClient = new Proxy({} as DbClient, {
   get(_, prop) {
-    return getDb()[prop as keyof DbClient];
+    const instance = getDb();
+    const value = instance[prop as keyof DbClient];
+    // Bind methods to the instance to ensure proper `this` context
+    if (typeof value === 'function') {
+      return value.bind(instance);
+    }
+    return value;
   }
 });
