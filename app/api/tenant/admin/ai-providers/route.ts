@@ -29,7 +29,7 @@ import {
   type AIProviderId,
 } from '@/lib/ai/secrets';
 
-const PROVIDERS: AIProviderId[] = ['openai', 'anthropic', 'groq', 'ollama'];
+const PROVIDERS: AIProviderId[] = ['openai', 'anthropic', 'groq', 'ollama', 'opencode'];
 
 interface IncomingProvider {
   enabled?: boolean;
@@ -53,6 +53,7 @@ const DEFAULTS: Record<AIProviderId, {
   anthropic: { enabled: false, default_model: 'claude-3-5-sonnet-latest', temperature: 0.4, max_tokens: 1024, fallback_priority: 2 },
   groq:      { enabled: false, default_model: 'llama-3.1-70b-versatile',  temperature: 0.4, max_tokens: 1024, fallback_priority: 3 },
   ollama:    { enabled: false, default_model: 'llama3.1:8b',              temperature: 0.4, max_tokens: 1024, fallback_priority: 4, base_url: 'http://localhost:11434' },
+  opencode:  { enabled: false, default_model: 'opencode',                 temperature: 0.4, max_tokens: 1024, fallback_priority: 5, base_url: 'https://api.opencode.ai' },
 };
 
 export async function GET(req: NextRequest) {
@@ -67,7 +68,7 @@ export async function GET(req: NextRequest) {
       .where(eq(tenants.id, ctx.tenantId))
       .limit(1);
     const stored = ((t?.settings as Record<string, unknown> | null) ?? {})['ai_providers'] as Record<string, Record<string, unknown>> | undefined ?? {};
-    const keys = await listProviderKeyMeta(ctx.tenantId);
+    const keys = await listProviderKeyMeta(ctx.tenantId, ctx.userId);
 
     const providers: Record<string, unknown> = {};
     for (const id of PROVIDERS) {
@@ -77,8 +78,10 @@ export async function GET(req: NextRequest) {
         api_key_present: keys[id].present,
         api_key_prefix: keys[id].keyPrefix,
         rotated_at: keys[id].rotatedAt,
+        key_type: keys[id].keyType,
         // Ollama uses base_url from the secrets table when set; fall back to JSON config
         ...(id === 'ollama' && keys.ollama.baseUrl ? { base_url: keys.ollama.baseUrl } : {}),
+        ...(id === 'opencode' && keys.opencode.baseUrl ? { base_url: keys.opencode.baseUrl } : {}),
       };
     }
 

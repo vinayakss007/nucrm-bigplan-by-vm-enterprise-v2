@@ -75,17 +75,18 @@ export const AI_CAPABILITIES: AICapability[] = [
     href: '/tenant/settings/ai-providers',
     label: 'Providers',
     icon: BrainCircuit,
-    desc: 'OpenAI · Anthropic · Groq · Ollama',
+    desc: 'OpenAI · Anthropic · Groq · Ollama · OpenCode',
     depends_on: [],
     adminOnly: true,
   },
 ];
 
-export type AIProviderId = 'openai' | 'anthropic' | 'groq' | 'ollama';
+export type AIProviderId = 'openai' | 'anthropic' | 'groq' | 'ollama' | 'opencode';
 
 export const AI_PROVIDERS: { id: AIProviderId; label: string; defaultModel: string; site: string; note: string }[] = [
   { id: 'openai',    label: 'OpenAI',    defaultModel: 'gpt-4o-mini',          site: 'platform.openai.com',  note: 'Best general-purpose; fastest cost-quality balance with -mini.' },
   { id: 'anthropic', label: 'Anthropic', defaultModel: 'claude-3-5-sonnet',    site: 'console.anthropic.com', note: 'Strong reasoning; longer context for summaries.' },
   { id: 'groq',      label: 'Groq',      defaultModel: 'llama-3.1-70b-versatile', site: 'console.groq.com',  note: 'Ultra-fast Llama inference; great for live drafts.' },
   { id: 'ollama',    label: 'Ollama',    defaultModel: 'llama3.1:8b',           site: 'ollama.com',           note: 'Self-hosted; data never leaves your machine.' },
+  { id: 'opencode',  label: 'OpenCode',  defaultModel: 'opencode',              site: 'opencode.ai',          note: 'Platform-provided AI; use your own key or leverage system credits.' },
 ];
