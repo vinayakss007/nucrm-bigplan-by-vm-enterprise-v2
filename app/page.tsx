@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { useState } from 'react';
 import {
   ArrowRight, Zap, Shield, Bot, Puzzle,
-  Check, ChevronRight, Globe, Mail, BarChart3,
-  Users, TrendingUp, Building2, Menu, X, Cpu,
+  Check, Globe, Mail, BarChart3,
+  Users, TrendingUp, Menu, X, Cpu,
   Sparkles, ArrowUpRight
 } from 'lucide-react';
 
@@ -52,9 +52,6 @@ const plans = [
     highlight: false,
   },
 ];
-
-const logos = ['Acme Corp', 'TechFlow', 'ScaleUp', 'Nexus', 'Orbit'];
-
 
 export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);

@@ -4,10 +4,20 @@ import { useParams, useRouter } from 'next/navigation';
 import { Book, ArrowLeft, ThumbsUp, ThumbsDown, Clock, Eye } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 
+interface KBArticle {
+  id: string;
+  title: string;
+  content: string;
+  excerpt?: string;
+  categoryName?: string;
+  views?: number;
+  createdAt: string;
+}
+
 export default function PortalKBArticlePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const [article, setArticle] = useState<any>(null);
+  const [article, setArticle] = useState<KBArticle | null>(null);
   const [loading, setLoading] = useState(true);
   const [helpful, setHelpful] = useState<boolean | null>(null);
 
