@@ -42,10 +42,11 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 // ── JWT tokens ────────────────────────────────────────────────
-export async function createToken(userId: string): Promise<string> {
+export async function createToken(userId: string, expiresInDays?: number): Promise<string> {
+  const expiry = expiresInDays ?? SESSION_EXPIRES_DAYS;
   return new SignJWT({ sub: userId })
     .setProtectedHeader({ alg: 'HS256' })
-    .setExpirationTime(`${SESSION_EXPIRES_DAYS}d`)
+    .setExpirationTime(`${expiry}d`)
     .setIssuedAt()
     .sign(JWT_SECRET);
 }
@@ -66,13 +67,14 @@ export async function hashToken(token: string): Promise<string> {
 }
 
 // ── Session cookie helpers ────────────────────────────────────
-export async function setSessionCookie(token: string) {
+export async function setSessionCookie(token: string, maxAgeDays?: number) {
   const cookieStore = await cookies();
+  const maxAge = (maxAgeDays ?? SESSION_EXPIRES_DAYS) * 24 * 60 * 60;
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env['COOKIE_SECURE'] === 'false' ? false : process.env['NODE_ENV'] === 'production',
     sameSite: 'strict',
-    maxAge: SESSION_EXPIRES_DAYS * 24 * 60 * 60,
+    maxAge,
     path: '/',
   });
 }
