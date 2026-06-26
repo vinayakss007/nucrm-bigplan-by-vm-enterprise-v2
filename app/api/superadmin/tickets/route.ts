@@ -124,7 +124,8 @@ export async function PATCH(request: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const { id, status, resolution, assigned_to } = validated.data;
 
-    const updateData: Record<string, unknown> = { updatedAt: new Date() };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updateData: any = { updatedAt: new Date() };
     if (status) {
       updateData.status = status;
       if (status === 'resolved') {
