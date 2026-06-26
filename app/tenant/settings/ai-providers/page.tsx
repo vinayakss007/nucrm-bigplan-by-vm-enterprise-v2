@@ -2,10 +2,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   BrainCircuit, Save, Loader2, ShieldX, ExternalLink, ArrowUpDown, Eye, EyeOff,
+  User, Building2, Globe,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { AI_PROVIDERS } from '@/components/tenant/ai/ai-config';
+
+type KeyType = 'system' | 'tenant' | 'personal';
 
 type ProviderConfig = {
   enabled: boolean;
@@ -16,6 +19,16 @@ type ProviderConfig = {
   api_key_set?: boolean;
   api_key?: string; // write-only
   base_url?: string;
+  api_key_present?: boolean;
+  api_key_prefix?: string | null;
+  rotated_at?: string | null;
+  key_type?: KeyType | null;
+};
+
+const KEY_TYPE_LABELS: Record<KeyType, { label: string; icon: typeof User; color: string }> = {
+  system:   { label: 'System',   icon: Globe,      color: 'bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300' },
+  tenant:   { label: 'Tenant',   icon: Building2,  color: 'bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300' },
+  personal: { label: 'Personal', icon: User,        color: 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' },
 };
 
 export default function AIProvidersPage() {
@@ -96,10 +109,11 @@ export default function AIProvidersPage() {
         </p>
       </div>
 
+      {/* Key resolution explanation */}
       <div className="rounded-xl border border-dashed border-border p-3 flex items-start gap-2 text-xs">
         <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
         <p className="text-muted-foreground">
-          <strong className="text-foreground">Fallback order:</strong> lower number = tried first. Set 1 for your primary, 2 for backup, etc. Disabled providers are skipped.
+          <strong className="text-foreground">Key resolution:</strong> Personal keys (yours) take priority over tenant keys (admin-set) over system keys (platform-provided). Set 1 for your primary provider, 2 for backup, etc. Disabled providers are skipped.
         </p>
       </div>
 
@@ -107,7 +121,9 @@ export default function AIProvidersPage() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {ordered.map(p => {
           const cfg = data[p.id] ?? { enabled: false, default_model: p.defaultModel, temperature: 0.4, max_tokens: 1024, fallback_priority: 99 };
-          const ready = cfg.enabled && (p.id === 'ollama' ? !!cfg.base_url : (cfg.api_key_set || !!cfg.api_key));
+          const ready = cfg.enabled && (p.id === 'ollama' || p.id === 'opencode' ? !!cfg.base_url : (cfg.api_key_set || !!cfg.api_key || cfg.api_key_present));
+          const effectiveKeyType = cfg.key_type;
+          const keyTypeInfo = effectiveKeyType ? KEY_TYPE_LABELS[effectiveKeyType] : null;
           return (
             <div key={p.id} className={cn(
               'rounded-xl border bg-card p-4 space-y-3 transition-colors',
@@ -127,6 +143,12 @@ export default function AIProvidersPage() {
                       <p className="text-sm font-semibold">{p.label}</p>
                       {ready && <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">Ready</span>}
                       {cfg.enabled && !ready && <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300">Missing key</span>}
+                      {keyTypeInfo && (
+                        <span className={cn('text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded inline-flex items-center gap-1', keyTypeInfo.color)}>
+                          <keyTypeInfo.icon className="w-2.5 h-2.5" />
+                          {keyTypeInfo.label}
+                        </span>
+                      )}
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-0.5">{p.note}</p>
                     <a href={`https://${p.site}`} target="_blank" rel="noreferrer"
@@ -192,7 +214,7 @@ export default function AIProvidersPage() {
               <Field label="Base URL" hint="Override API endpoint (leave blank for default)">
                 <input className={inp} value={cfg.base_url ?? ''}
                   onChange={e => setField(p.id, 'base_url', e.target.value)}
-                  placeholder={p.id === 'openai' ? 'https://api.openai.com' : p.id === 'groq' ? 'https://api.groq.com/openai' : p.id === 'ollama' ? 'http://localhost:11434' : 'https://api.anthropic.com'} />
+                  placeholder={p.id === 'openai' ? 'https://api.openai.com' : p.id === 'groq' ? 'https://api.groq.com/openai' : p.id === 'ollama' ? 'http://localhost:11434' : p.id === 'opencode' ? 'https://api.opencode.ai' : 'https://api.anthropic.com'} />
               </Field>
             </div>
           );

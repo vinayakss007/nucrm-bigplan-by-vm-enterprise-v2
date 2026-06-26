@@ -28,7 +28,7 @@ import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema/core';
 import { aiActivity } from '@/drizzle/schema/ai';
 import { eq } from 'drizzle-orm';
-import { getProviderKey, type AIProviderId } from './secrets';
+import { getProviderKey, type AIProviderId, type KeyType } from './secrets';
 
 export type GatewayMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -100,6 +100,7 @@ const PROVIDER_DEFAULTS: Record<AIProviderId, ProviderConfig> = {
   anthropic: { enabled: false, default_model: 'claude-3-5-sonnet-latest', temperature: 0.4, max_tokens: 1024, fallback_priority: 2 },
   groq:      { enabled: false, default_model: 'llama-3.1-70b-versatile',  temperature: 0.4, max_tokens: 1024, fallback_priority: 3 },
   ollama:    { enabled: false, default_model: 'llama3.1:8b',              temperature: 0.4, max_tokens: 1024, fallback_priority: 4, base_url: 'http://localhost:11434' },
+  opencode:  { enabled: false, default_model: 'opencode',                 temperature: 0.4, max_tokens: 1024, fallback_priority: 5, base_url: 'https://api.opencode.ai' },
 };
 
 /** Approximate cost per 1K tokens (USD cents × 100 = sub-cent precision). */
@@ -116,6 +117,8 @@ const COST_PER_1K_TOKENS: Record<string, { in: number; out: number }> = {
   'llama-3.1-8b-instant':     { in: 0.5,  out: 0.8 },
   // Ollama is self-hosted — zero
   'llama3.1:8b':              { in: 0.0,  out: 0.0 },
+  // OpenCode — platform-provided AI (cost tracked via credits)
+  'opencode':                 { in: 0.0,  out: 0.0 },
 };
 
 function estimateCostCents(model: string, tokensIn: number, tokensOut: number): number {
@@ -289,6 +292,10 @@ async function callProvider(
       const url = baseUrlOverride || cfg.base_url || 'https://api.groq.com/openai';
       return callOpenAILike(url, apiKey, model, req.system, req.messages, max_tokens, temperature);
     }
+    case 'opencode': {
+      const url = baseUrlOverride || cfg.base_url || 'https://api.opencode.ai';
+      return callOpenAILike(url, apiKey, model, req.system, req.messages, max_tokens, temperature);
+    }
     case 'anthropic':
       return callAnthropic(apiKey, model, req.system, req.messages, max_tokens, temperature);
     case 'ollama': {
@@ -365,9 +372,9 @@ export async function chat(req: GatewayRequest): Promise<GatewayResponse> {
     const cfg = configs[provider];
     const start = Date.now();
 
-    let keyData: { plaintext: string; baseUrl: string | null } | null = null;
+    let keyData: { plaintext: string; baseUrl: string | null; keyType: KeyType } | null = null;
     try {
-      keyData = await getProviderKey(req.tenantId, provider);
+      keyData = await getProviderKey(req.tenantId, provider, req.userId ?? undefined);
     } catch (err) {
       errors.push({ provider, message: `secrets vault: ${(err as Error).message}` });
       // Log a stub activity row so the failure shows up in the audit
@@ -382,7 +389,7 @@ export async function chat(req: GatewayRequest): Promise<GatewayResponse> {
       continue;
     }
 
-    if (!keyData && provider !== 'ollama') {
+    if (!keyData && provider !== 'ollama' && provider !== 'opencode') {
       errors.push({ provider, message: 'no API key stored' });
       continue;
     }
@@ -403,7 +410,7 @@ export async function chat(req: GatewayRequest): Promise<GatewayResponse> {
         costCents, latencyMs,
         entityType: req.entityType ?? null, entityId: req.entityId ?? null,
         errorMessage: null,
-        metadata: { ...(req.metadata ?? {}), attempt: i, fallback_chain: chain },
+        metadata: { ...(req.metadata ?? {}), attempt: i, fallback_chain: chain, key_type: keyData?.keyType },
       });
 
       return {

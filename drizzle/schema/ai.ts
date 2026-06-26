@@ -24,27 +24,40 @@ import { users } from './core';
 
 // ── 1. AI PROVIDER SECRETS ───────────────────────────
 // Per-tenant encrypted API keys for the multi-provider gateway.
-// One row per (tenant, provider). Soft-deletable.
+// Supports three key types:
+//   - 'system'  — Platform-provided key (superadmin sets via /superadmin/ai-keys)
+//   - 'tenant'  — Organization/workspace key (admin sets via /tenant/settings/ai-providers)
+//   - 'personal' — User's own key (user sets via /tenant/settings/ai-keys)
+// Lookup order: personal → tenant → system (first found wins)
+// One row per (tenant, provider, keyType). Soft-deletable.
 export const aiProviderSecrets = pgTable('ai_provider_secrets', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
-  /** 'openai' | 'anthropic' | 'groq' | 'ollama' (ollama uses base_url, no key) */
+  /** 'openai' | 'anthropic' | 'groq' | 'ollama' | 'opencode' */
   provider: text('provider').notNull(),
+  /** 'system' | 'tenant' | 'personal' — who owns this key */
+  keyType: text('key_type').notNull().default('tenant'),
+  /** For personal keys: which user owns this key. Null for system/tenant keys. */
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
   /** AES-256-GCM ciphertext from lib/crypto.encrypt() */
   encryptedKey: text('encrypted_key').notNull(),
   /** Last 4 chars of the plaintext key, safe to display */
   keyPrefix: text('key_prefix'),
-  /** Optional self-hosted base URL (Ollama only). Plain text — not a secret. */
+  /** Optional self-hosted base URL (Ollama/OpenCode only). Plain text — not a secret. */
   baseUrl: text('base_url'),
   ...utils.lifecycle(),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   rotatedAt: timestamp('rotated_at', { withTimezone: true }),
 }, (table) => ({
   tenantIdx: utils.tenantIdx(table),
-  uniqueTenantProvider: uniqueIndex('idx_ai_provider_secrets_unique')
-    .on(table.tenantId, table.provider)
+  uniqueTenantProviderType: uniqueIndex('idx_ai_provider_secrets_unique')
+    .on(table.tenantId, table.provider, table.keyType)
     .where(sql`deleted_at IS NULL`),
+  uniquePersonalKey: uniqueIndex('idx_ai_provider_secrets_personal')
+    .on(table.tenantId, table.provider, table.userId)
+    .where(sql`deleted_at IS NULL AND key_type = 'personal'`),
   activeIdx: utils.activeIdx(table),
+  userIdx: index('idx_ai_provider_secrets_user').on(table.userId),
 }));
 
 // ── 2. AI ACTIVITY LOG ───────────────────────────────
