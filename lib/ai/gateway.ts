@@ -100,7 +100,7 @@ const PROVIDER_DEFAULTS: Record<AIProviderId, ProviderConfig> = {
   anthropic: { enabled: false, default_model: 'claude-3-5-sonnet-latest', temperature: 0.4, max_tokens: 1024, fallback_priority: 2 },
   groq:      { enabled: false, default_model: 'llama-3.1-70b-versatile',  temperature: 0.4, max_tokens: 1024, fallback_priority: 3 },
   ollama:    { enabled: false, default_model: 'llama3.1:8b',              temperature: 0.4, max_tokens: 1024, fallback_priority: 4, base_url: 'http://localhost:11434' },
-  opencode:  { enabled: false, default_model: 'gpt-5.4-mini',            temperature: 0.4, max_tokens: 1024, fallback_priority: 5, base_url: 'https://opencode.ai/zen' },
+  opencode:  { enabled: false, default_model: 'deepseek-v4-flash-free',   temperature: 0.4, max_tokens: 1024, fallback_priority: 5, base_url: 'https://opencode.ai/zen' },
 };
 
 /** Approximate cost per 1K tokens (USD cents × 100 = sub-cent precision). */
