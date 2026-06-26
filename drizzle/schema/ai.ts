@@ -43,8 +43,10 @@ export const aiProviderSecrets = pgTable('ai_provider_secrets', {
   encryptedKey: text('encrypted_key').notNull(),
   /** Last 4 chars of the plaintext key, safe to display */
   keyPrefix: text('key_prefix'),
-  /** Optional self-hosted base URL (Ollama/OpenCode only). Plain text — not a secret. */
+  /** Optional self-hosted base URL. Plain text — not a secret. */
   baseUrl: text('base_url'),
+  /** Optional model override — stored per-key so each user can use their own model. */
+  modelOverride: text('model_override'),
   ...utils.lifecycle(),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   rotatedAt: timestamp('rotated_at', { withTimezone: true }),

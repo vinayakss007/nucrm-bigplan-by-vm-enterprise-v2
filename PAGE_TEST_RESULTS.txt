@@ -1,0 +1,165 @@
+========================================
+NUCRM ENTERPRISE - PAGE TEST RESULTS
+Date: Fri Jun 26 09:15:46 UTC 2026
+========================================
+
+P | 200 | / | Landing Page
+P | 307 | /offline | Offline Page
+P | 200 | /health | Health Check
+P | 307 | /setup | Setup Page
+P | 200 | /docs | Docs Page
+P | 307 | /api-docs | API Docs
+P | 200 | /lead-capture | Lead Capture
+P | 200 | /test-js | Test JS Page
+P | 200 | /auth/login | Login
+P | 200 | /auth/login-simple | Login Simple
+P | 200 | /auth/signup | Signup
+P | 200 | /auth/forgot-password | Forgot Password
+P | 200 | /auth/reset-password | Reset Password
+P | 200 | /auth/verify-email | Verify Email
+P | 200 | /auth/invite | Invite
+P | 307 | /auth/no-workspace | No Workspace
+P | 200 | /portal | Portal Home
+P | 200 | /portal/invoices | Portal Invoices
+P | 200 | /portal/kb | Portal Knowledge Base
+P | 200 | /portal/tickets | Portal Tickets
+P | 307 | /superadmin/dashboard | Super Admin Dashboard
+P | 307 | /superadmin/tenants | Tenants List
+P | 307 | /superadmin/users | Users
+P | 307 | /superadmin/billing | Billing
+P | 307 | /superadmin/analytics | Analytics
+P | 307 | /superadmin/revenue | Revenue
+P | 307 | /superadmin/usage | Usage
+P | 307 | /superadmin/errors | Errors
+P | 307 | /superadmin/health | Health
+P | 307 | /superadmin/monitoring | Monitoring
+P | 307 | /superadmin/backups | Backups
+P | 307 | /superadmin/selective-restore | Selective Restore
+P | 307 | /superadmin/modules | Modules
+P | 307 | /superadmin/templates | Templates
+P | 307 | /superadmin/announcements | Announcements
+P | 307 | /superadmin/tickets | Support Tickets
+P | 307 | /superadmin/docs | Documentation
+P | 307 | /superadmin/data-explorer | Data Explorer
+P | 307 | /superadmin/settings | Settings
+P | 307 | /superadmin/adoption | Adoption
+P | 307 | /superadmin/token-control | Token Control
+P | 307 | /tenant | Tenant Home
+P | 307 | /tenant/dashboard | Dashboard
+P | 307 | /tenant/onboarding | Onboarding
+P | 307 | /tenant/trial-expired | Trial Expired
+P | 307 | /tenant/leads | Leads List
+P | 307 | /tenant/contacts | Contacts List
+P | 307 | /tenant/companies | Companies List
+P | 307 | /tenant/deals | Deals List
+P | 307 | /tenant/deals/kanban | Deals Kanban
+P | 307 | /tenant/tickets | Tickets List
+P | 307 | /tenant/tickets/kanban | Tickets Kanban
+P | 307 | /tenant/quotes | Quotes List
+P | 307 | /tenant/orders | Orders List
+P | 307 | /tenant/invoices | Invoices List
+P | 307 | /tenant/contracts | Contracts List
+P | 307 | /tenant/offers | Offers List
+P | 307 | /tenant/subscriptions | Subscriptions List
+P | 307 | /tenant/products | Products List
+P | 307 | /tenant/services | Services
+P | 307 | /tenant/calls | Calls
+P | 307 | /tenant/sms | SMS
+P | 307 | /tenant/chat | Chat
+P | 307 | /tenant/email-templates | Email Templates
+P | 307 | /tenant/notifications | Notifications
+P | 307 | /tenant/tasks | Tasks List
+P | 307 | /tenant/tasks/kanban | Tasks Kanban
+P | 307 | /tenant/calendar | Calendar
+P | 307 | /tenant/projects | Projects List
+P | 307 | /tenant/approvals | Approvals
+P | 307 | /tenant/documents | Documents
+P | 307 | /tenant/docs | Docs
+P | 307 | /tenant/kb | Knowledge Base
+P | 307 | /tenant/kb/categories | KB Categories
+P | 307 | /tenant/esignature | E-Signature
+P | 307 | /tenant/forms | Forms List
+P | 307 | /tenant/forms/builder | Form Builder
+P | 307 | /tenant/analytics | Analytics
+P | 307 | /tenant/analytics/forecast | Forecast
+P | 307 | /tenant/analytics/email | Email Analytics
+P | 307 | /tenant/reports | Reports
+P | 307 | /tenant/reports/custom | Custom Reports
+P | 307 | /tenant/reports/builder | Report Builder
+P | 307 | /tenant/reports/scheduled | Scheduled Reports
+P | 307 | /tenant/leaderboards | Leaderboards
+P | 307 | /tenant/search | Search
+P | 307 | /tenant/ai | AI Home
+P | 307 | /tenant/ai/lead-scoring | AI Lead Scoring
+P | 307 | /tenant/ai/draft | AI Draft
+P | 307 | /tenant/ai/activity | AI Activity
+P | 307 | /tenant/ai/at-risk | AI At-Risk
+P | 307 | /tenant/ai/summarize | AI Summarize
+P | 307 | /tenant/automation | Automation
+P | 307 | /tenant/automation/builder | Automation Builder
+P | 307 | /tenant/automation/sequences | Sequences
+P | 307 | /tenant/sequences | Sequences Alt
+P | 307 | /tenant/workflows | Workflows
+P | 307 | /tenant/integrations | Integrations
+P | 307 | /tenant/integrations/connected | Connected
+P | 307 | /tenant/integrations/webhooks | Webhooks
+P | 307 | /tenant/plugins | Plugins
+P | 307 | /tenant/settings | Settings Home
+P | 307 | /tenant/settings/profile | Profile
+P | 307 | /tenant/settings/preferences | Preferences
+P | 307 | /tenant/settings/team | Team
+P | 307 | /tenant/settings/admin | Admin
+P | 307 | /tenant/settings/security | Security
+P | 307 | /tenant/settings/sessions | Sessions
+P | 307 | /tenant/settings/roles | Roles
+P | 307 | /tenant/settings/rbac | RBAC
+P | 307 | /tenant/settings/hierarchy | Hierarchy
+P | 307 | /tenant/settings/territories | Territories
+P | 307 | /tenant/settings/pipelines | Pipelines
+P | 307 | /tenant/settings/picklists | Picklists
+P | 307 | /tenant/settings/custom-fields | Custom Fields
+P | 307 | /tenant/settings/assignment-rules | Assignment Rules
+P | 307 | /tenant/settings/lead-scoring | Lead Scoring Rules
+P | 307 | /tenant/settings/at-risk-rules | At-Risk Rules
+P | 307 | /tenant/settings/tags-manager | Tags Manager
+P | 307 | /tenant/settings/email | Email Settings
+P | 307 | /tenant/settings/notifications | Notification Settings
+P | 307 | /tenant/settings/billing | Billing
+P | 307 | /tenant/settings/billing/invoices | Billing Invoices
+P | 307 | /tenant/settings/bulk-transfer | Bulk Transfer
+P | 307 | /tenant/settings/import-export | Import/Export
+P | 307 | /tenant/settings/integrations | Integration Settings
+P | 307 | /tenant/settings/webhooks | Webhooks Settings
+P | 307 | /tenant/settings/webhooks/logs | Webhook Logs
+P | 307 | /tenant/settings/api-keys | API Keys
+P | 307 | /tenant/settings/sso | SSO
+P | 307 | /tenant/settings/login-policy | Login Policy
+P | 307 | /tenant/settings/compliance | Compliance
+P | 307 | /tenant/settings/audit | Audit Log
+P | 307 | /tenant/settings/backup | Backup
+P | 307 | /tenant/settings/general | General Settings
+P | 307 | /tenant/settings/localization | Localization
+P | 307 | /tenant/settings/currency | Currency
+P | 307 | /tenant/settings/tax | Tax Settings
+P | 307 | /tenant/settings/sla | SLA
+P | 307 | /tenant/settings/portal | Portal Settings
+P | 307 | /tenant/settings/branding | Branding
+P | 307 | /tenant/settings/industry-templates | Industry Templates
+P | 307 | /tenant/settings/ai-activity | AI Activity Settings
+P | 307 | /tenant/settings/ai-providers | AI Providers
+P | 307 | /tenant/settings/ai-templates | AI Templates
+P | 307 | /tenant/settings/telegram | Telegram
+P | 307 | /tenant/settings/out-of-office | Out of Office
+P | 307 | /tenant/settings/user-defaults | User Defaults
+P | 307 | /tenant/visitors | Visitors
+P | 307 | /tenant/trash | Trash
+P | 307 | /tenant/modules | Modules
+P | 307 | /tenant/docs | Documentation
+P | 307 | /dev/dashboard | Dev Dashboard
+
+========================================
+SUMMARY
+Total Tested: 153
+Passed: 153
+Failed: 0
+========================================

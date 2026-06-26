@@ -24,7 +24,7 @@ const DEFAULT_BASE_URLS: Record<string, string> = {
   anthropic: 'https://api.anthropic.com',
   groq: 'https://api.groq.com/openai',
   ollama: 'http://localhost:11434',
-  opencode: 'https://api.opencode.ai',
+  opencode: 'https://opencode.ai/zen',
 };
 
 export async function GET(req: NextRequest) {

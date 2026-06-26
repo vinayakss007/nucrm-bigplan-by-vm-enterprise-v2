@@ -14,13 +14,16 @@ import { aiProviderSecrets } from '@/drizzle/schema/ai';
 import { encrypt, decrypt } from '@/lib/crypto';
 import { and, eq, isNull, or, sql } from 'drizzle-orm';
 
-export type AIProviderId = 'openai' | 'anthropic' | 'groq' | 'ollama' | 'opencode';
+/** Named providers have presets; any other string is a custom OpenAI-compatible provider. */
+export type NamedProvider = 'openai' | 'anthropic' | 'groq' | 'ollama' | 'opencode';
+export type AIProviderId = string;
 export type KeyType = 'system' | 'tenant' | 'personal';
 
-const VALID_PROVIDERS: AIProviderId[] = ['openai', 'anthropic', 'groq', 'ollama', 'opencode'];
+/** Providers with built-in presets (defaults, special API handling). */
+const NAMED_PROVIDERS: NamedProvider[] = ['openai', 'anthropic', 'groq', 'ollama', 'opencode'];
 
 export class SecretsVaultError extends Error {
-  code: 'encryption_key_missing' | 'decrypt_failed' | 'invalid_provider' | 'not_found';
+  code: 'encryption_key_missing' | 'decrypt_failed' | 'invalid_key_type' | 'not_found';
   constructor(code: SecretsVaultError['code'], message: string) {
     super(message);
     this.code = code;
@@ -39,16 +42,15 @@ function getEncryptionKey(): string {
   return key;
 }
 
-function assertValidProvider(provider: string): asserts provider is AIProviderId {
-  if (!VALID_PROVIDERS.includes(provider as AIProviderId)) {
-    throw new SecretsVaultError('invalid_provider', `Unknown provider '${provider}'. Valid: ${VALID_PROVIDERS.join(', ')}`);
+function assertValidKeyType(keyType: string): asserts keyType is KeyType {
+  if (!['system', 'tenant', 'personal'].includes(keyType)) {
+    throw new SecretsVaultError('invalid_key_type', `Invalid keyType '${keyType}'. Valid: system, tenant, personal`);
   }
 }
 
-function assertValidKeyType(keyType: string): asserts keyType is KeyType {
-  if (!['system', 'tenant', 'personal'].includes(keyType)) {
-    throw new SecretsVaultError('invalid_provider', `Invalid keyType '${keyType}'. Valid: system, tenant, personal`);
-  }
+/** Check if a provider ID is a named (preset) provider. */
+export function isNamedProvider(id: string): id is NamedProvider {
+  return NAMED_PROVIDERS.includes(id as NamedProvider);
 }
 
 // ── Provider key resolution (personal → tenant → system) ──────────────
@@ -66,8 +68,7 @@ export async function getProviderKey(
   tenantId: string,
   provider: string,
   userId?: string,
-): Promise<{ plaintext: string; baseUrl: string | null; keyType: KeyType } | null> {
-  assertValidProvider(provider);
+): Promise<{ plaintext: string; baseUrl: string | null; modelOverride: string | null; keyType: KeyType } | null> {
 
   // 1. Try personal key first
   if (userId) {
@@ -115,18 +116,17 @@ export async function getProviderKey(
 }
 
 async function decryptRow(
-  row: { encryptedKey: string; baseUrl: string | null },
+  row: { encryptedKey: string; baseUrl: string | null; modelOverride: string | null },
   keyType: KeyType,
-): Promise<{ plaintext: string; baseUrl: string | null; keyType: KeyType }> {
-  // Ollama/OpenCode can be saved with no key (the local daemon is open)
+): Promise<{ plaintext: string; baseUrl: string | null; modelOverride: string | null; keyType: KeyType }> {
   if (!row.encryptedKey) {
-    return { plaintext: '', baseUrl: row.baseUrl ?? null, keyType };
+    return { plaintext: '', baseUrl: row.baseUrl ?? null, modelOverride: row.modelOverride ?? null, keyType };
   }
 
   const encryptionKey = getEncryptionKey();
   try {
     const plaintext = decrypt(row.encryptedKey, encryptionKey);
-    return { plaintext, baseUrl: row.baseUrl ?? null, keyType };
+    return { plaintext, baseUrl: row.baseUrl ?? null, modelOverride: row.modelOverride ?? null, keyType };
   } catch (err) {
     throw new SecretsVaultError(
       'decrypt_failed',
@@ -149,19 +149,20 @@ export async function setProviderKey(
   tenantId: string,
   provider: string,
   plaintextKey: string,
-  opts: { baseUrl?: string; userId?: string; keyType?: KeyType } = {},
+  opts: { baseUrl?: string; modelOverride?: string; userId?: string; keyType?: KeyType } = {},
 ): Promise<{ keyPrefix: string }> {
-  assertValidProvider(provider);
   const keyType = opts.keyType ?? 'tenant';
   assertValidKeyType(keyType);
 
   if (keyType === 'personal' && !opts.userId) {
-    throw new SecretsVaultError('invalid_provider', 'userId is required for personal keys');
+    throw new SecretsVaultError('invalid_key_type', 'userId is required for personal keys');
   }
 
   const trimmed = plaintextKey.trim();
-  if (provider !== 'ollama' && provider !== 'opencode' && !trimmed) {
-    throw new SecretsVaultError('invalid_provider', 'API key cannot be empty for cloud providers');
+  // Only cloud providers with known APIs require a key; custom/self-hosted may not
+  const needsKey = !['ollama', 'opencode'].includes(provider) && !opts.baseUrl;
+  if (needsKey && !trimmed) {
+    throw new SecretsVaultError('invalid_key_type', 'API key cannot be empty for cloud providers');
   }
 
   const encryptionKey = getEncryptionKey();
@@ -193,7 +194,8 @@ export async function setProviderKey(
     userId: keyType === 'personal' ? (opts.userId ?? null) : null,
     encryptedKey,
     keyPrefix,
-    baseUrl: opts.baseUrl?.trim().slice(0, 200) ?? null,
+    baseUrl: opts.baseUrl?.trim().slice(0, 500) ?? null,
+    modelOverride: opts.modelOverride?.trim().slice(0, 200) ?? null,
     createdBy: opts.userId ?? null,
     rotatedAt: new Date(),
   });
@@ -208,7 +210,7 @@ export async function setSystemKey(
   tenantId: string,
   provider: string,
   plaintextKey: string,
-  opts: { baseUrl?: string } = {},
+  opts: { baseUrl?: string; modelOverride?: string } = {},
 ): Promise<{ keyPrefix: string }> {
   return setProviderKey(tenantId, provider, plaintextKey, { ...opts, keyType: 'system' });
 }
@@ -221,7 +223,7 @@ export async function setPersonalKey(
   provider: string,
   plaintextKey: string,
   userId: string,
-  opts: { baseUrl?: string } = {},
+  opts: { baseUrl?: string; modelOverride?: string } = {},
 ): Promise<{ keyPrefix: string }> {
   return setProviderKey(tenantId, provider, plaintextKey, { ...opts, keyType: 'personal', userId });
 }
@@ -242,10 +244,10 @@ export async function getProviderKeyMeta(
   present: boolean;
   keyPrefix: string | null;
   baseUrl: string | null;
+  modelOverride: string | null;
   rotatedAt: Date | null;
   keyType: KeyType | null;
 }> {
-  assertValidProvider(provider);
 
   // 1. Check personal key
   if (userId) {
@@ -263,6 +265,7 @@ export async function getProviderKeyMeta(
         present: !!personal.encryptedKey || provider === 'ollama' || provider === 'opencode',
         keyPrefix: personal.keyPrefix,
         baseUrl: personal.baseUrl,
+        modelOverride: personal.modelOverride,
         rotatedAt: personal.rotatedAt,
         keyType: 'personal',
       };
@@ -283,6 +286,7 @@ export async function getProviderKeyMeta(
       present: !!tenant.encryptedKey || provider === 'ollama' || provider === 'opencode',
       keyPrefix: tenant.keyPrefix,
       baseUrl: tenant.baseUrl,
+      modelOverride: tenant.modelOverride,
       rotatedAt: tenant.rotatedAt,
       keyType: 'tenant',
     };
@@ -302,12 +306,13 @@ export async function getProviderKeyMeta(
       present: !!system.encryptedKey || provider === 'ollama' || provider === 'opencode',
       keyPrefix: system.keyPrefix,
       baseUrl: system.baseUrl,
+      modelOverride: system.modelOverride,
       rotatedAt: system.rotatedAt,
       keyType: 'system',
     };
   }
 
-  return { present: false, keyPrefix: null, baseUrl: null, rotatedAt: null, keyType: null };
+  return { present: false, keyPrefix: null, baseUrl: null, modelOverride: null, rotatedAt: null, keyType: null };
 }
 
 /**
@@ -318,10 +323,11 @@ export async function getProviderKeyMeta(
 export async function listProviderKeyMeta(
   tenantId: string,
   userId?: string,
-): Promise<Record<AIProviderId, {
+): Promise<Record<string, {
   present: boolean;
   keyPrefix: string | null;
   baseUrl: string | null;
+  modelOverride: string | null;
   rotatedAt: Date | null;
   keyType: KeyType | null;
 }>> {
@@ -331,6 +337,7 @@ export async function listProviderKeyMeta(
       encryptedKey: aiProviderSecrets.encryptedKey,
       keyPrefix: aiProviderSecrets.keyPrefix,
       baseUrl: aiProviderSecrets.baseUrl,
+      modelOverride: aiProviderSecrets.modelOverride,
       rotatedAt: aiProviderSecrets.rotatedAt,
       keyType: aiProviderSecrets.keyType,
       userId: aiProviderSecrets.userId,
@@ -341,29 +348,25 @@ export async function listProviderKeyMeta(
       isNull(aiProviderSecrets.deletedAt),
     ));
 
-  // Build priority map: personal (if userId matches) > tenant > system
   const keyPriority: Record<KeyType, number> = { personal: 3, tenant: 2, system: 1 };
 
-  const out = {} as Record<AIProviderId, {
+  const out: Record<string, {
     present: boolean;
     keyPrefix: string | null;
     baseUrl: string | null;
+    modelOverride: string | null;
     rotatedAt: Date | null;
     keyType: KeyType | null;
-  }>;
-  for (const id of VALID_PROVIDERS) {
-    out[id] = { present: false, keyPrefix: null, baseUrl: null, rotatedAt: null, keyType: null };
-  }
+  }> = {};
+
   for (const row of rows) {
-    if (!VALID_PROVIDERS.includes(row.provider as AIProviderId)) continue;
-    const rid = row.provider as AIProviderId;
+    const rid = row.provider;
     const rowKey = row.encryptedKey || row.provider === 'ollama' || row.provider === 'opencode';
     if (!rowKey) continue;
 
     const rowPriority = keyPriority[row.keyType as KeyType] ?? 0;
-    const currentPriority = out[rid].keyType ? keyPriority[out[rid].keyType!] : -1;
+    const currentPriority = out[rid]?.keyType ? keyPriority[out[rid].keyType!] : -1;
 
-    // Skip personal keys for other users
     if (row.keyType === 'personal' && userId && row.userId !== userId) continue;
 
     if (rowPriority > currentPriority) {
@@ -371,6 +374,7 @@ export async function listProviderKeyMeta(
         present: true,
         keyPrefix: row.keyPrefix,
         baseUrl: row.baseUrl,
+        modelOverride: row.modelOverride,
         rotatedAt: row.rotatedAt,
         keyType: row.keyType as KeyType,
       };
@@ -385,11 +389,12 @@ export async function listProviderKeyMeta(
 export async function listAllKeysForTenant(
   tenantId: string,
 ): Promise<Array<{
-  provider: AIProviderId;
+  provider: string;
   keyType: KeyType;
   userId: string | null;
   keyPrefix: string | null;
   baseUrl: string | null;
+  modelOverride: string | null;
   rotatedAt: Date | null;
 }>> {
   const rows = await db
@@ -397,6 +402,7 @@ export async function listAllKeysForTenant(
       provider: aiProviderSecrets.provider,
       keyPrefix: aiProviderSecrets.keyPrefix,
       baseUrl: aiProviderSecrets.baseUrl,
+      modelOverride: aiProviderSecrets.modelOverride,
       rotatedAt: aiProviderSecrets.rotatedAt,
       keyType: aiProviderSecrets.keyType,
       userId: aiProviderSecrets.userId,
@@ -407,16 +413,15 @@ export async function listAllKeysForTenant(
       isNull(aiProviderSecrets.deletedAt),
     ));
 
-  return rows
-    .filter(r => VALID_PROVIDERS.includes(r.provider as AIProviderId))
-    .map(r => ({
-      provider: r.provider as AIProviderId,
-      keyType: r.keyType as KeyType,
-      userId: r.userId,
-      keyPrefix: r.keyPrefix,
-      baseUrl: r.baseUrl,
-      rotatedAt: r.rotatedAt,
-    }));
+  return rows.map(r => ({
+    provider: r.provider,
+    keyType: r.keyType as KeyType,
+    userId: r.userId,
+    keyPrefix: r.keyPrefix,
+    baseUrl: r.baseUrl,
+    modelOverride: r.modelOverride,
+    rotatedAt: r.rotatedAt,
+  }));
 }
 
 // ── Delete keys ───────────────────────────────────────────────────────
@@ -430,7 +435,6 @@ export async function deleteProviderKey(
   keyType: KeyType = 'tenant',
   userId?: string,
 ): Promise<void> {
-  assertValidProvider(provider);
   assertValidKeyType(keyType);
 
   const conditions = [

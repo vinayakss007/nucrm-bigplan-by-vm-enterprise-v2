@@ -16,24 +16,20 @@ import {
   deleteProviderKey,
   getProviderKeyMeta,
   SecretsVaultError,
-  type AIProviderId,
 } from '@/lib/ai/secrets';
 
-const VALID_PROVIDERS: AIProviderId[] = ['openai', 'anthropic', 'groq', 'ollama', 'opencode'];
+/** Accept any provider string — no hardcoded list. */
 
 export async function GET(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    // Get all provider key metadata for the current user
-    const results: Record<string, unknown> = {};
-    for (const provider of VALID_PROVIDERS) {
-      const meta = await getProviderKeyMeta(ctx.tenantId, provider, ctx.userId);
-      results[provider] = meta;
-    }
+    // Get provider key metadata from the secrets table (dynamic, not hardcoded)
+    const { listProviderKeyMeta } = await import('@/lib/ai/secrets');
+    const allKeys = await listProviderKeyMeta(ctx.tenantId, ctx.userId);
 
-    return NextResponse.json({ keys: results });
+    return NextResponse.json({ keys: allKeys });
   } catch (err) {
     return apiError(err);
   }
@@ -47,22 +43,23 @@ export async function POST(req: NextRequest) {
     let body;
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
-    const { provider, api_key, base_url } = body as {
+    const { provider, api_key, base_url, model } = body as {
       provider?: string;
       api_key?: string;
       base_url?: string;
+      model?: string;
     };
 
-    if (!provider || !api_key) {
-      return NextResponse.json({ error: 'provider and api_key are required' }, { status: 400 });
-    }
-    if (!VALID_PROVIDERS.includes(provider as AIProviderId)) {
-      return NextResponse.json({ error: `provider must be one of ${VALID_PROVIDERS.join(', ')}` }, { status: 400 });
+    if (!provider) {
+      return NextResponse.json({ error: 'provider is required' }, { status: 400 });
     }
 
     let result;
     try {
-      result = await setPersonalKey(ctx.tenantId, provider, api_key, ctx.userId, { baseUrl: base_url });
+      result = await setPersonalKey(ctx.tenantId, provider, api_key ?? '', ctx.userId, {
+        baseUrl: base_url,
+        modelOverride: model,
+      });
     } catch (err) {
       if (err instanceof SecretsVaultError && err.code === 'encryption_key_missing') {
         return NextResponse.json({
@@ -93,11 +90,11 @@ export async function DELETE(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
 
     const provider = req.nextUrl.searchParams.get('provider');
-    if (!provider || !VALID_PROVIDERS.includes(provider as AIProviderId)) {
-      return NextResponse.json({ error: `provider must be one of ${VALID_PROVIDERS.join(', ')}` }, { status: 400 });
+    if (!provider) {
+      return NextResponse.json({ error: 'provider query param required' }, { status: 400 });
     }
 
-    await deleteProviderKey(ctx.tenantId, provider as AIProviderId, 'personal', ctx.userId);
+    await deleteProviderKey(ctx.tenantId, provider, 'personal', ctx.userId);
 
     await logAudit({
       tenantId: ctx.tenantId,

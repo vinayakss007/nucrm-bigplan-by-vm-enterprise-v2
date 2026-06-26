@@ -6,7 +6,7 @@ import {
   ArrowRight, Loader2, MessageSquare, CheckCircle2, AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { AI_CAPABILITIES, AI_PROVIDERS } from '@/components/tenant/ai/ai-config';
+import { AI_CAPABILITIES, AI_PROVIDER_PRESETS, getProviderLabel } from '@/components/tenant/ai/ai-config';
 
 /**
  * AI Hub landing — the single place every AI capability lives.
@@ -38,7 +38,7 @@ export default function AIHubPage() {
   }
 
   const providersUp = status?.enabled_count ?? 0;
-  const totalProviders = AI_PROVIDERS.length;
+  const totalProviders = status?.providers?.length ?? Object.keys(AI_PROVIDER_PRESETS).length;
 
   return (
     <div className="space-y-5 animate-fade-in pb-12">
@@ -158,20 +158,20 @@ export default function AIHubPage() {
           </Link>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          {AI_PROVIDERS.map(p => {
-            const sp = status?.providers.find(s => s.id === p.id);
-            const ready = sp?.enabled && sp?.status === 'ready';
+          {(status?.providers ?? []).map(p => {
+            const ready = p.enabled && p.status === 'ready';
+            const preset = AI_PROVIDER_PRESETS[p.id];
             return (
               <div key={p.id} className={cn(
                 'flex items-center gap-2.5 px-3 py-2.5 rounded-lg border',
                 ready ? 'border-emerald-300/60 bg-emerald-50/30 dark:bg-emerald-950/10' : 'border-border',
               )}>
                 <div className={cn('w-1.5 h-1.5 rounded-full',
-                  ready ? 'bg-emerald-500' : sp?.enabled ? 'bg-amber-500' : 'bg-muted-foreground/30',
+                  ready ? 'bg-emerald-500' : p.enabled ? 'bg-amber-500' : 'bg-muted-foreground/30',
                 )} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold truncate">{p.label}</p>
-                  <p className="text-[10px] text-muted-foreground truncate font-mono">{p.defaultModel}</p>
+                  <p className="text-xs font-semibold truncate">{getProviderLabel(p.id)}</p>
+                  <p className="text-[10px] text-muted-foreground truncate font-mono">{preset?.defaultModel ?? 'custom'}</p>
                 </div>
               </div>
             );

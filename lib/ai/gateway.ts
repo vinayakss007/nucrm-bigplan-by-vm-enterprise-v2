@@ -28,7 +28,7 @@ import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema/core';
 import { aiActivity } from '@/drizzle/schema/ai';
 import { eq } from 'drizzle-orm';
-import { getProviderKey, type AIProviderId, type KeyType } from './secrets';
+import { getProviderKey, isNamedProvider, type KeyType } from './secrets';
 
 export type GatewayMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -37,8 +37,8 @@ export interface GatewayRequest {
   userId: string | null;
   /** Capability name — written to ai_activity.action ('draft', 'lead_scoring', …) */
   action: string;
-  /** Force a specific provider; otherwise fallback chain is used */
-  provider?: AIProviderId;
+  /** Force a specific provider; otherwise fallback chain is used. Any string accepted — unknown providers use OpenAI-compatible format. */
+  provider?: string;
   /** Override the provider's default model */
   model?: string;
   /** System prompt — pulled out of `messages` for providers that take it separately */
@@ -55,7 +55,7 @@ export interface GatewayRequest {
 
 export interface GatewayResponse {
   text: string;
-  provider: AIProviderId;
+  provider: string;
   model: string;
   tokensIn: number;
   tokensOut: number;
@@ -73,9 +73,9 @@ export class GatewayError extends Error {
     | 'all_providers_failed'
     | 'invalid_request'
     | 'unknown';
-  provider?: AIProviderId;
+  provider?: string;
   status?: number;
-  constructor(code: GatewayError['code'], message: string, opts: { provider?: AIProviderId; status?: number } = {}) {
+  constructor(code: GatewayError['code'], message: string, opts: { provider?: string; status?: number } = {}) {
     super(message);
     this.code = code;
     this.name = 'GatewayError';
@@ -95,7 +95,7 @@ interface ProviderConfig {
   base_url?: string;
 }
 
-const PROVIDER_DEFAULTS: Record<AIProviderId, ProviderConfig> = {
+const PROVIDER_DEFAULTS: Record<string, ProviderConfig> = {
   openai:    { enabled: false, default_model: 'gpt-4o-mini',              temperature: 0.4, max_tokens: 1024, fallback_priority: 1 },
   anthropic: { enabled: false, default_model: 'claude-3-5-sonnet-latest', temperature: 0.4, max_tokens: 1024, fallback_priority: 2 },
   groq:      { enabled: false, default_model: 'llama-3.1-70b-versatile',  temperature: 0.4, max_tokens: 1024, fallback_priority: 3 },
@@ -127,22 +127,29 @@ function estimateCostCents(model: string, tokensIn: number, tokensOut: number): 
   return Math.round(((tokensIn * rate.in) + (tokensOut * rate.out)) / 10);
 }
 
-async function loadProviderConfigs(tenantId: string): Promise<Record<AIProviderId, ProviderConfig>> {
+async function loadProviderConfigs(tenantId: string): Promise<Record<string, ProviderConfig>> {
   const [t] = await db.select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
   const stored = ((t?.settings as Record<string, unknown> | null) ?? {})['ai_providers'] as Record<string, Partial<ProviderConfig>> | undefined ?? {};
-  const out = {} as Record<AIProviderId, ProviderConfig>;
-  for (const id of Object.keys(PROVIDER_DEFAULTS) as AIProviderId[]) {
-    out[id] = { ...PROVIDER_DEFAULTS[id], ...(stored[id] ?? {}) };
+  const out: Record<string, ProviderConfig> = {};
+  // Load named provider defaults first
+  for (const id of Object.keys(PROVIDER_DEFAULTS)) {
+    out[id] = { ...PROVIDER_DEFAULTS[id as keyof typeof PROVIDER_DEFAULTS], ...(stored[id] ?? {}) };
+  }
+  // Load any custom providers from stored config
+  for (const [id, cfg] of Object.entries(stored)) {
+    if (!out[id]) {
+      out[id] = { enabled: false, default_model: '', temperature: 0.4, max_tokens: 1024, fallback_priority: 99, ...cfg };
+    }
   }
   return out;
 }
 
 /** Pick the order to try providers in. Forced provider goes first, then enabled ones by fallback_priority asc. */
 function buildProviderChain(
-  configs: Record<AIProviderId, ProviderConfig>,
-  forced?: AIProviderId,
-): AIProviderId[] {
-  const enabled = (Object.keys(configs) as AIProviderId[])
+  configs: Record<string, ProviderConfig>,
+  forced?: string,
+): string[] {
+  const enabled = Object.keys(configs)
     .filter(id => configs[id].enabled)
     .sort((a, b) => configs[a].fallback_priority - configs[b].fallback_priority);
 
@@ -273,35 +280,38 @@ async function callOllama(
 }
 
 async function callProvider(
-  provider: AIProviderId,
+  provider: string,
   cfg: ProviderConfig,
   apiKey: string,
   baseUrlOverride: string | null,
+  modelOverride: string | null,
   req: GatewayRequest,
 ): Promise<ProviderCall> {
-  const model = req.model ?? cfg.default_model;
+  const model = req.model ?? modelOverride ?? cfg.default_model;
   const max_tokens = req.max_tokens ?? cfg.max_tokens;
   const temperature = req.temperature ?? cfg.temperature;
 
+  // Known providers with special API handling
+  if (provider === 'anthropic') {
+    return callAnthropic(apiKey, model, req.system, req.messages, max_tokens, temperature);
+  }
+  if (provider === 'ollama') {
+    const url = baseUrlOverride || cfg.base_url || 'http://localhost:11434';
+    return callOllama(url, model, req.system, req.messages, max_tokens, temperature);
+  }
+
+  // Everything else (openai, groq, opencode, custom, any new provider) → OpenAI-compatible
+  const url = baseUrlOverride || cfg.base_url || getDefaultBaseUrl(provider);
+  return callOpenAILike(url, apiKey, model, req.system, req.messages, max_tokens, temperature);
+}
+
+/** Fallback base URLs for named providers. Custom providers must supply a base_url. */
+function getDefaultBaseUrl(provider: string): string {
   switch (provider) {
-    case 'openai': {
-      const url = baseUrlOverride || cfg.base_url || 'https://api.openai.com';
-      return callOpenAILike(url, apiKey, model, req.system, req.messages, max_tokens, temperature);
-    }
-    case 'groq': {
-      const url = baseUrlOverride || cfg.base_url || 'https://api.groq.com/openai';
-      return callOpenAILike(url, apiKey, model, req.system, req.messages, max_tokens, temperature);
-    }
-    case 'opencode': {
-      const url = baseUrlOverride || cfg.base_url || 'https://api.opencode.ai';
-      return callOpenAILike(url, apiKey, model, req.system, req.messages, max_tokens, temperature);
-    }
-    case 'anthropic':
-      return callAnthropic(apiKey, model, req.system, req.messages, max_tokens, temperature);
-    case 'ollama': {
-      const url = baseUrlOverride || cfg.base_url || 'http://localhost:11434';
-      return callOllama(url, model, req.system, req.messages, max_tokens, temperature);
-    }
+    case 'openai':    return 'https://api.openai.com';
+    case 'groq':      return 'https://api.groq.com/openai';
+    case 'opencode':  return 'https://opencode.ai/zen';
+    default:          return '';  // custom providers must have base_url set
   }
 }
 
@@ -311,7 +321,7 @@ interface LogPayload {
   tenantId: string;
   userId: string | null;
   action: string;
-  provider: AIProviderId;
+  provider: string;
   model: string | null;
   status: 'success' | 'error' | 'rate_limited' | 'fallback_used';
   tokensIn: number;
@@ -365,14 +375,14 @@ export async function chat(req: GatewayRequest): Promise<GatewayResponse> {
     throw new GatewayError('no_provider_enabled', 'No AI provider is enabled. Configure one at /tenant/settings/ai-providers.');
   }
 
-  const errors: { provider: AIProviderId; message: string; status?: number }[] = [];
+  const errors: { provider: string; message: string; status?: number }[] = [];
 
   for (let i = 0; i < chain.length; i++) {
     const provider = chain[i]!;
-    const cfg = configs[provider];
+    const cfg = configs[provider] ?? { enabled: false, default_model: '', temperature: 0.4, max_tokens: 1024, fallback_priority: 99 };
     const start = Date.now();
 
-    let keyData: { plaintext: string; baseUrl: string | null; keyType: KeyType } | null = null;
+    let keyData: { plaintext: string; baseUrl: string | null; modelOverride: string | null; keyType: KeyType } | null = null;
     try {
       keyData = await getProviderKey(req.tenantId, provider, req.userId ?? undefined);
     } catch (err) {
@@ -396,9 +406,10 @@ export async function chat(req: GatewayRequest): Promise<GatewayResponse> {
 
     const apiKey = keyData?.plaintext ?? '';
     const baseUrlOverride = keyData?.baseUrl ?? null;
+    const modelOverride = keyData?.modelOverride ?? null;
 
     try {
-      const result = await callProvider(provider, cfg, apiKey, baseUrlOverride, req);
+      const result = await callProvider(provider, cfg, apiKey, baseUrlOverride, modelOverride, req);
       const latencyMs = Date.now() - start;
       const costCents = estimateCostCents(result.model, result.tokensIn, result.tokensOut);
 
@@ -410,7 +421,7 @@ export async function chat(req: GatewayRequest): Promise<GatewayResponse> {
         costCents, latencyMs,
         entityType: req.entityType ?? null, entityId: req.entityId ?? null,
         errorMessage: null,
-        metadata: { ...(req.metadata ?? {}), attempt: i, fallback_chain: chain, key_type: keyData?.keyType },
+        metadata: { ...(req.metadata ?? {}), attempt: i, fallback_chain: chain, key_type: keyData?.keyType, model_override: modelOverride },
       });
 
       return {
@@ -436,7 +447,7 @@ export async function chat(req: GatewayRequest): Promise<GatewayResponse> {
         tokensIn: 0, tokensOut: 0, costCents: 0, latencyMs,
         entityType: req.entityType ?? null, entityId: req.entityId ?? null,
         errorMessage: message.slice(0, 1000),
-        metadata: { ...(req.metadata ?? {}), attempt: i, fallback_chain: chain, key_type: keyData?.keyType },
+        metadata: { ...(req.metadata ?? {}), attempt: i, fallback_chain: chain, key_type: keyData?.keyType, model_override: modelOverride },
       });
 
       // 400 / 422 (and other non-auth 4xx) are fatal — bail out
