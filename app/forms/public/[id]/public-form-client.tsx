@@ -21,7 +21,7 @@ interface FormSettings {
 
 interface FormProps {
   id: string;
-  fields: FormField[];
+  fields: unknown;
   settings?: FormSettings;
 }
 
