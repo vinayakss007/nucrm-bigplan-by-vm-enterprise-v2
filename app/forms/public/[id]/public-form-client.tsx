@@ -3,13 +3,33 @@
 import { useState, useEffect, useRef } from 'react';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default function PublicFormClient({ form }: { form: any }) {
+interface FormField {
+  id: string;
+  key: string;
+  label: string;
+  type: string;
+  required?: boolean;
+  placeholder?: string;
+  options?: string[];
+}
+
+interface FormSettings {
+  success_message?: string;
+  submit_button_text?: string;
+  theme_color?: string;
+}
+
+interface FormProps {
+  id: string;
+  fields: unknown;
+  settings?: FormSettings;
+}
+
+export default function PublicFormClient({ form }: { form: FormProps }) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [formData, setFormData] = useState<Record<string, any>>({});
+  const [formData, setFormData] = useState<Record<string, string>>({});
   const containerRef = useRef<HTMLFormElement>(null);
 
   // Resize reporting for iframes
@@ -57,16 +77,14 @@ export default function PublicFormClient({ form }: { form: any }) {
       if (window.parent !== window) {
         window.parent.postMessage({ type: 'nucrm-submit-success', formId: form.id }, '*');
       }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Submission failed');
     } finally {
       setLoading(false);
     }
   };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleChange = (key: string, value: any) => {
+  const handleChange = (key: string, value: string) => {
     setFormData(prev => ({ ...prev, [key]: value }));
   };
 
@@ -92,7 +110,7 @@ export default function PublicFormClient({ form }: { form: any }) {
 
   return (
     <form ref={containerRef} onSubmit={handleSubmit} className="space-y-5">
-      {fields.map((field: Record<string, any>) => (
+      {fields.map((field) => (
         <div key={field.id}>
           <label className="block text-sm font-semibold mb-1.5">
             {field.label} {field.required && <span className="text-red-500">*</span>}
