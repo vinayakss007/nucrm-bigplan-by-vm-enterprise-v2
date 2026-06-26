@@ -15,10 +15,11 @@ import { tenants } from '@/drizzle/schema';
 import { aiActivity } from '@/drizzle/schema/ai';
 import { eq, sql, and, gte } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
-import { listProviderKeyMeta, type AIProviderId } from '@/lib/ai/secrets';
+import { listProviderKeyMeta } from '@/lib/ai/secrets';
 import { getAtRiskDeals } from '@/lib/ai/at-risk';
 
-const PROVIDER_IDS: AIProviderId[] = ['openai', 'anthropic', 'groq', 'ollama'];
+/** Named providers to always show in the dashboard (even if not configured). */
+const NAMED_PROVIDER_IDS = ['openai', 'anthropic', 'groq', 'ollama', 'opencode'];
 
 export async function GET(req: NextRequest) {
   try {
@@ -35,9 +36,11 @@ export async function GET(req: NextRequest) {
     const aiSettings = ((t?.settings as Record<string, unknown> | null) ?? {})['ai_providers'] as Record<string, { enabled?: boolean }> | undefined ?? {};
     const keyMeta = await listProviderKeyMeta(ctx.tenantId);
 
-    const providers = PROVIDER_IDS.map(id => {
+    // Dynamic: named presets + any custom providers that have keys stored
+    const allProviderIds = new Set([...NAMED_PROVIDER_IDS, ...Object.keys(keyMeta)]);
+    const providers = Array.from(allProviderIds).map(id => {
       const enabled = aiSettings[id]?.enabled === true;
-      const present = keyMeta[id].present;
+      const present = keyMeta[id]?.present ?? false;
       let status: 'ready' | 'missing_key' | 'disabled' = 'disabled';
       if (enabled && present) status = 'ready';
       else if (enabled && !present) status = 'missing_key';
@@ -46,8 +49,8 @@ export async function GET(req: NextRequest) {
         enabled,
         present,
         status,
-        key_prefix: keyMeta[id].keyPrefix,
-        rotated_at: keyMeta[id].rotatedAt,
+        key_prefix: keyMeta[id]?.keyPrefix ?? null,
+        rotated_at: keyMeta[id]?.rotatedAt ?? null,
       };
     });
     const enabled_count = providers.filter(p => p.status === 'ready').length;

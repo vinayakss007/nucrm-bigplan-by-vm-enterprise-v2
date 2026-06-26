@@ -22,10 +22,9 @@ import {
   listAllKeysForTenant,
   listProviderKeyMeta,
   SecretsVaultError,
-  type AIProviderId,
 } from '@/lib/ai/secrets';
 
-const VALID_PROVIDERS: AIProviderId[] = ['openai', 'anthropic', 'groq', 'ollama', 'opencode'];
+/** Accept any provider string — no hardcoded list. */
 
 export async function GET(req: NextRequest) {
   try {
@@ -81,18 +80,16 @@ export async function POST(req: NextRequest) {
     let body;
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
-    const { tenantId, provider, api_key, base_url } = body as {
+    const { tenantId, provider, api_key, base_url, model } = body as {
       tenantId?: string;
       provider?: string;
       api_key?: string;
       base_url?: string;
+      model?: string;
     };
 
-    if (!tenantId || !provider || !api_key) {
-      return NextResponse.json({ error: 'tenantId, provider, and api_key are required' }, { status: 400 });
-    }
-    if (!VALID_PROVIDERS.includes(provider as AIProviderId)) {
-      return NextResponse.json({ error: `provider must be one of ${VALID_PROVIDERS.join(', ')}` }, { status: 400 });
+    if (!tenantId || !provider) {
+      return NextResponse.json({ error: 'tenantId and provider are required' }, { status: 400 });
     }
 
     // Verify tenant exists
@@ -101,7 +98,10 @@ export async function POST(req: NextRequest) {
 
     let result;
     try {
-      result = await setSystemKey(tenantId, provider, api_key, { baseUrl: base_url });
+      result = await setSystemKey(tenantId, provider, api_key ?? '', {
+        baseUrl: base_url,
+        modelOverride: model,
+      });
     } catch (err) {
       if (err instanceof SecretsVaultError && err.code === 'encryption_key_missing') {
         return NextResponse.json({
@@ -138,11 +138,8 @@ export async function DELETE(req: NextRequest) {
     if (!tenantId || !provider) {
       return NextResponse.json({ error: 'tenantId and provider are required' }, { status: 400 });
     }
-    if (!VALID_PROVIDERS.includes(provider as AIProviderId)) {
-      return NextResponse.json({ error: `provider must be one of ${VALID_PROVIDERS.join(', ')}` }, { status: 400 });
-    }
 
-    await deleteProviderKey(tenantId, provider as AIProviderId, 'system');
+    await deleteProviderKey(tenantId, provider, 'system');
 
     await logAudit({
       tenantId,
