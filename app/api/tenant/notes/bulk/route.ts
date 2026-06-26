@@ -6,12 +6,11 @@ import { notes, contacts, deals, leads, companies, tasks } from '@/drizzle/schem
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
-import type { AnyColumn } from 'drizzle-orm';
-
 const MAX_BULK = 500;
 const VALID_ENTITY_TYPES = ['contact', 'deal', 'lead', 'company', 'task'] as const;
 
-const entityTables: Record<string, { table: typeof contacts; idField: AnyColumn; tenantField: AnyColumn }> = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const entityTables: Record<string, { table: any; idField: any; tenantField: any }> = {
   contact: { table: contacts, idField: contacts.id, tenantField: contacts.tenantId },
   deal: { table: deals, idField: deals.id, tenantField: deals.tenantId },
   lead: { table: leads, idField: leads.id, tenantField: leads.tenantId },
