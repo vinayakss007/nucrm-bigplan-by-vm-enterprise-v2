@@ -38,7 +38,7 @@ export async function POST_login(request: NextRequest) {
     const body = await request.json();
     const parsed = validateBody(loginSchema, body);
     if (parsed instanceof NextResponse) return parsed;
-    const { email, password } = parsed.data;
+    const { email, password, remember_me } = parsed.data;
 
     // Check if email is blocked
     const emailBlockCheck = await isBlocked(email, 'email');
@@ -114,17 +114,18 @@ export async function POST_login(request: NextRequest) {
     }
 
     // Create session
-    const token = await createToken(user.id);
+    const sessionDays = remember_me ? 30 : 1; // 30 days if remember me, 1 day otherwise
+    const token = await createToken(user.id, sessionDays);
     const tokenHash = await hashToken(token);
     await db.insert(sessions).values({
       userId: user.id,
       tokenHash,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+      expiresAt: new Date(Date.now() + sessionDays * 24 * 60 * 60 * 1000),
       ipAddress: ip,
       userAgent: userAgent?.slice(0, 255),
     });
 
-    await setSessionCookie(token);
+    await setSessionCookie(token, sessionDays);
     const csrfToken = generateCsrfToken();
     const response = NextResponse.json({ 
       ok:true,

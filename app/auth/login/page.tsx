@@ -22,13 +22,14 @@ export default function LoginPage() {
     const formData = new FormData(e.currentTarget);
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
+    const remember_me = formData.get('remember_me') === 'on';
 
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, remember_me }),
       });
 
       const data = await res.json();
@@ -185,6 +186,17 @@ export default function LoginPage() {
                 </div>
               </div>
 
+              {/* Remember me checkbox */}
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="remember_me"
+                    className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-violet-600 focus:ring-violet-500 dark:bg-slate-800"
+                  />
+                  <span className="text-sm text-slate-600 dark:text-slate-400">Remember me</span>
+                </label>
+              </div>
 
               {/* Submit button */}
               <button

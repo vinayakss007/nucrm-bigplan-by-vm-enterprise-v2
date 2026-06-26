@@ -1016,6 +1016,7 @@ export const loginSchema = z.object({
   email: z.string().email().max(255).transform((v) => v.trim().toLowerCase()),
   password: z.string().min(1),
   totp_token: z.string().optional(),
+  remember_me: z.boolean().optional().default(false),
 });
 
 export const forgotPasswordSchema = z.object({

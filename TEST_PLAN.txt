@@ -1,0 +1,784 @@
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                    NuCRM ENTERPRISE — COMPREHENSIVE TEST PLAN                    ║
+║                    Every feature, every operation, every flow                    ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+Generated: 2026-06-23
+App URL: http://34.123.152.161:3000
+Admin: admin@nucrm.com / AdminPass123!
+
+
+================================================================================
+1. AUTH SYSTEM — 28 Operations
+================================================================================
+
+  [ ] 1.1  Login page loads at /auth/login
+  [ ] 1.2  Login with valid email + password → redirects to dashboard
+  [ ] 1.3  Login with invalid email → shows error
+  [ ] 1.4  Login with invalid password → shows error
+  [ ] 1.5  Login with empty fields → validation error
+  [ ] 1.6  "Remember me" checkbox persists session
+  [ ] 1.7  Forgot password link → /auth/forgot-password
+  [ ] 1.8  Forgot password — submit valid email → success message
+  [ ] 1.9  Forgot password — invalid email → error message
+  [ ] 1.10 Reset password with valid token → password changed
+  [ ] 1.11 Reset password with expired token → error
+  [ ] 1.12 Sign-up page loads at /auth/signup
+  [ ] 1.13 Sign-up with valid data → account created
+  [ ] 1.14 Sign-up with existing email → duplicate error
+  [ ] 1.15 Sign-up with weak password → validation error
+  [ ] 1.16 Email verification link → verified status
+  [ ] 1.17 Resend verification email → success
+  [ ] 1.18 Logout → session cleared, redirect to login
+  [ ] 1.19 Session expiry → redirect to login
+  [ ] 1.20 2FA setup (TOTP) → QR code + verification
+  [ ] 1.21 2FA login with valid code → access granted
+  [ ] 1.22 2FA login with invalid code → access denied
+  [ ] 1.23 2FA backup codes work
+  [ ] 1.24 Invite acceptance flow → join workspace
+  [ ] 1.25 OAuth login (Google/GitHub) → works end-to-end
+  [ ] 1.26 SSO/SAML login → works end-to-end
+  [ ] 1.27 Session persists across page refreshes
+  [ ] 1.28 Multiple tabs — same session works
+
+
+================================================================================
+2. ONBOARDING FLOW — 8 Operations
+================================================================================
+
+  [ ] 2.1  Onboarding page loads at /tenant/onboarding
+  [ ] 2.2  Step 1: Select product → Next enabled
+  [ ] 2.3  Step 2: Confirm modules → toggle modules on/off
+  [ ] 2.4  Step 3: Quick Setup — company name, pipeline name
+  [ ] 2.5  Step 4: Complete → success screen
+  [ ] 2.6  "Skip setup" button skips to dashboard
+  [ ] 2.7  Back button works on each step
+  [ ] 2.8  Onboarding completed — never shows again
+
+
+================================================================================
+3. DASHBOARD — 16 Operations
+================================================================================
+
+  [ ] 3.1  Dashboard loads at /tenant/dashboard
+  [ ] 3.2  Total Contacts widget loads (count + link)
+  [ ] 3.3  Open Pipeline widget loads ($ value + count)
+  [ ] 3.4  Revenue MTD widget loads
+  [ ] 3.5  Tasks Due Today widget loads
+  [ ] 3.6  Recent Activity feed loads
+  [ ] 3.7  My Tasks widget shows assigned tasks
+  [ ] 3.8  Closing Soon widget shows deals nearing close
+  [ ] 3.9  Recent Contacts widget shows latest contacts
+  [ ] 3.10 Follow-ups widget shows pending follow-ups
+  [ ] 3.11 Refresh button works on each widget
+  [ ] 3.12 Widget links navigate to correct pages
+  [ ] 3.13 Dashboard data updates after creating records
+  [ ] 3.14 Dashboard loads with empty state (no data)
+  [ ] 3.15 Dashboard loads with data (after seeding)
+  [ ] 3.16 Dashboard layout persists across sessions
+
+
+================================================================================
+4. CONTACTS — 24 Operations
+================================================================================
+
+  [ ] 4.1  Contacts list page loads at /tenant/contacts
+  [ ] 4.2  List view — columns: Contact, Company, Email, Phone, Status, Lifecycle, Score, Added
+  [ ] 4.3  Grid view toggle works
+  [ ] 4.4  Create contact via "New Contact" dialog
+  [ ] 4.5  Create contact — all fields: first name, last name, email, phone, job title
+  [ ] 4.6  Create contact — select company from dropdown
+  [ ] 4.7  Create contact — select status (New/Contacted/Qualified/Disqualified/Converted/Lost)
+  [ ] 4.8  Create contact — select lead source (Website/Referral/Cold Outreach/Social/Event/Inbound/Ad/Other)
+  [ ] 4.9  Create contact — add tags (comma separated)
+  [ ] 4.10 Create contact — assign to user
+  [ ] 4.11 Create contact with duplicate email → warning/error
+  [ ] 4.12 Create contact without required fields → validation error
+  [ ] 4.13 Edit contact — change name, email, phone, company
+  [ ] 4.14 Edit contact — change status, lifecycle stage
+  [ ] 4.15 Edit contact — add/remove tags
+  [ ] 4.16 Delete contact → moves to trash
+  [ ] 4.17 Delete contact with deals → warning about linked records
+  [ ] 4.18 Bulk delete contacts
+  [ ] 4.19 Bulk assign contacts to user
+  [ ] 4.20 Bulk add tags to contacts
+  [ ] 4.21 Search contacts by name, email, company
+  [ ] 4.22 Filter contacts by status, lifecycle, tags
+  [ ] 4.23 Click contact → detail page loads
+  [ ] 4.24 Contact detail — all tabs load (Activity, Deals, Tasks, Notes, Files, Timeline)
+
+
+================================================================================
+5. COMPANIES — 20 Operations
+================================================================================
+
+  [ ] 5.1  Companies list page loads at /tenant/companies
+  [ ] 5.2  Create company — name, domain, industry, size, revenue
+  [ ] 5.3  Create company — address fields (street, city, state, zip, country)
+  [ ] 5.4  Create company — social links (website, LinkedIn, Twitter)
+  [ ] 5.5  Create company — custom fields
+  [ ] 5.6  Create company — add tags
+  [ ] 5.7  Create company without name → validation error
+  [ ] 5.8  Edit company — update all fields
+  [ ] 5.9  Edit company — change industry, size
+  [ ] 5.10 Edit company — add/remove contacts
+  [ ] 5.11 Delete company → moves to trash
+  [ ] 5.12 Delete company with contacts → warning
+  [ ] 5.13 Bulk delete companies
+  [ ] 5.14 Search companies by name, domain, industry
+  [ ] 5.15 Filter companies by industry, size, tags
+  [ ] 5.16 Company detail page — Overview tab loads
+  [ ] 5.17 Company detail — Contacts tab lists linked contacts
+  [ ] 5.18 Company detail — Deals tab lists deals
+  [ ] 5.19 Company detail — Activity feed loads
+  [ ] 5.20 Link contact to company during creation
+
+
+================================================================================
+6. LEADS — 22 Operations
+================================================================================
+
+  [ ] 6.1  Leads list page loads at /tenant/leads
+  [ ] 6.2  Create lead — first name, last name, email, phone
+  [ ] 6.3  Create lead — source tracking (Website/Referral/Cold Outreach/etc.)
+  [ ] 6.4  Create lead — UTM parameters (source, medium, campaign, content)
+  [ ] 6.5  Create lead — score (manual entry)
+  [ ] 6.6  Create lead — assign to user
+  [ ] 6.7  Create lead without email → validation error
+  [ ] 6.8  Edit lead — update fields
+  [ ] 6.9  Edit lead — change status
+  [ ] 6.10 Convert lead → creates contact + deal
+  [ ] 6.11 Convert lead with existing contact match → merge option
+  [ ] 6.12 Delete lead → moves to trash
+  [ ] 6.13 Bulk delete leads
+  [ ] 6.14 Bulk assign leads to user
+  [ ] 6.15 Import leads from CSV
+  [ ] 6.16 Search leads by name, email, source
+  [ ] 6.17 Filter leads by status, source, score range
+  [ ] 6.18 Lead detail page loads — all info displayed
+  [ ] 6.19 Lead detail — activity history loads
+  [ ] 6.20 Lead scoring — BANT criteria display
+  [ ] 6.21 Lead conversion history tracked in timeline
+  [ ] 6.22 Public lead capture form → creates lead
+
+
+================================================================================
+7. DEALS / PIPELINE — 26 Operations
+================================================================================
+
+  [ ] 7.1  Deals page loads at /tenant/deals
+  [ ] 7.2  Kanban view — all stages displayed (Signed Up, Trial Active, Lead, Qualified, Converted, Churned, Proposal, Negotiation, Won, Lost)
+  [ ] 7.3  Table view toggle works
+  [ ] 7.4  Create deal — title, amount, stage
+  [ ] 7.5  Create deal — select contact
+  [ ] 7.6  Create deal — select company
+  [ ] 7.7  Create deal — close date picker
+  [ ] 7.8  Create deal — assign to user
+  [ ] 7.9  Create deal — description field
+  [ ] 7.10 Create deal without title → validation error
+  [ ] 7.11 Create deal without amount → validation error
+  [ ] 7.12 Drag-and-drop deal between stages in Kanban
+  [ ] 7.13 Drag-and-drop updates deal stage immediately
+  [ ] 7.14 Edit deal — change title, amount, stage
+  [ ] 7.15 Edit deal — change close date
+  [ ] 7.16 Edit deal — change assigned user
+  [ ] 7.17 Delete deal → moves to trash
+  [ ] 7.18 Bulk delete deals
+  [ ] 7.19 Bulk move deals to different stage
+  [ ] 7.20 Pipeline value updates when deal amount changes
+  [ ] 7.21 Search deals by title, contact, company
+  [ ] 7.22 Filter deals by stage, amount range, assigned user
+  [ ] 7.23 Deal detail page — all sections load
+  [ ] 7.24 Deal detail — contact info displayed
+  [ ] 7.25 Deal detail — activity timeline loads
+  [ ] 7.26 Multiple pipelines — switch between them
+
+
+================================================================================
+8. TASKS — 16 Operations
+================================================================================
+
+  [ ] 8.1  Tasks page loads at /tenant/tasks
+  [ ] 8.2  Kanban view — stages: To Do, In Progress, Done
+  [ ] 8.3  Table view toggle works
+  [ ] 8.4  Create task — title, description, priority, due date
+  [ ] 8.5  Create task — assign to user
+  [ ] 8.6  Create task — link to deal/contact/company
+  [ ] 8.7  Create task without title → validation error
+  [ ] 8.8  Edit task — update all fields
+  [ ] 8.9  Drag-and-drop task between Kanban stages
+  [ ] 8.10 Mark task as complete → moves to Done
+  [ ] 8.11 Delete task → moves to trash
+  [ ] 8.12 Bulk delete tasks
+  [ ] 8.13 Bulk assign tasks
+  [ ] 8.14 Search tasks by title
+  [ ] 8.15 Filter tasks by priority, status, assigned user
+  [ ] 8.16 Task reminder notifications
+
+
+================================================================================
+9. PROJECTS — 10 Operations
+================================================================================
+
+  [ ] 9.1  Projects page loads at /tenant/projects
+  [ ] 9.2  Create project — name, description, dates
+  [ ] 9.3  Create project with milestones
+  [ ] 9.4  Edit project — update fields
+  [ ] 9.5  Delete project
+  [ ] 9.6  Project detail page loads
+  [ ] 9.7  Add tasks to project
+  [ ] 9.8  Track project progress
+  [ ] 9.9  Search projects
+  [ ] 9.10 Filter projects by status
+
+
+================================================================================
+10. CALENDAR — 8 Operations
+================================================================================
+
+  [ ] 10.1 Calendar page loads at /tenant/calendar
+  [ ] 10.2 Month view displays
+  [ ] 10.3 Week view toggle
+  [ ] 10.4 Day view toggle
+  [ ] 10.5 Create event/meeting from calendar
+  [ ] 10.6 Edit event
+  [ ] 10.7 Delete event
+  [ ] 10.8 Events sync with contacts/deals
+
+
+================================================================================
+11. FOLLOW-UPS — 6 Operations
+================================================================================
+
+  [ ] 11.1 Follow-ups page loads at /tenant/follow-ups/missed
+  [ ] 11.2 Missed follow-ups list displays
+  [ ] 11.3 Create follow-up reminder
+  [ ] 11.4 Mark follow-up as done
+  [ ] 11.5 Snooze follow-up
+  [ ] 11.6 Follow-up notifications
+
+
+================================================================================
+12. QUOTES / PROPOSALS — 14 Operations
+================================================================================
+
+  [ ] 12.1 Quotes page loads at /tenant/quotes
+  [ ] 12.2 Create quote — title, contact, company
+  [ ] 12.3 Create quote — add line items (product, qty, price)
+  [ ] 12.4 Quote status workflow (Draft → Sent → Accepted → Rejected)
+  [ ] 12.5 Edit quote — update line items
+  [ ] 12.6 Edit quote — change status
+  [ ] 12.7 Delete quote
+  [ ] 12.8 Quote detail page loads — all items visible
+  [ ] 12.9 Download quote as PDF
+  [ ] 12.10 Send quote via email
+  [ ] 12.11 Quote approval workflow
+  [ ] 12.12 Convert quote to invoice
+  [ ] 12.13 Search quotes
+  [ ] 12.14 Filter quotes by status
+
+
+================================================================================
+13. ORDERS — 10 Operations
+================================================================================
+
+  [ ] 13.1 Orders page loads at /tenant/orders
+  [ ] 13.2 Create order — contact, company, items
+  [ ] 13.3 Order status workflow (Pending → Confirmed → Shipped → Delivered → Cancelled)
+  [ ] 13.4 Edit order
+  [ ] 13.5 Delete order
+  [ ] 13.6 Order detail page loads
+  [ ] 13.7 Track shipping status
+  [ ] 13.8 Search orders
+  [ ] 13.9 Filter orders by status
+  [ ] 13.10 Order total calculation
+
+
+================================================================================
+14. CONTRACTS — 10 Operations
+================================================================================
+
+  [ ] 14.1 Contracts page loads at /tenant/contracts
+  [ ] 14.2 Create contract — name, type, start/end dates
+  [ ] 14.3 Create contract — terms and conditions
+  [ ] 14.4 Contract status workflow (Draft → Active → Expired → Terminated)
+  [ ] 14.5 Edit contract
+  [ ] 14.6 Delete contract
+  [ ] 14.7 Contract detail page loads
+  [ ] 14.8 Contract renewal tracking
+  [ ] 14.9 Auto-reminder before contract expiry
+  [ ] 14.10 Search/filter contracts
+
+
+================================================================================
+15. INVOICES — 14 Operations
+================================================================================
+
+  [ ] 15.1 Invoices page loads at /tenant/invoices
+  [ ] 15.2 Create invoice — contact, company, line items
+  [ ] 15.3 Invoice status workflow (Draft → Sent → Paid → Overdue → Cancelled)
+  [ ] 15.4 Edit invoice — update items
+  [ ] 15.5 Edit invoice — change status
+  [ ] 15.6 Delete invoice
+  [ ] 15.7 Invoice detail page loads
+  [ ] 15.8 Download invoice as PDF
+  [ ] 15.9 Send invoice via email
+  [ ] 15.10 Record payment against invoice
+  [ ] 15.11 Partial payment recording
+  [ ] 15.12 Recurring invoice setup
+  [ ] 15.13 Invoice tax calculation
+  [ ] 15.14 Search/filter invoices
+
+
+================================================================================
+16. SUBSCRIPTIONS — 8 Operations
+================================================================================
+
+  [ ] 16.1 Subscriptions page loads at /tenant/subscriptions
+  [ ] 16.2 Create subscription — service, billing frequency
+  [ ] 16.3 Trial period management
+  [ ] 16.4 Auto-renewal toggle
+  [ ] 16.5 Cancel subscription
+  [ ] 16.6 Upgrade/downgrade plan
+  [ ] 16.7 Subscription detail page loads
+  [ ] 16.8 Billing history
+
+
+================================================================================
+17. PRODUCTS — 8 Operations
+================================================================================
+
+  [ ] 17.1 Products page loads at /tenant/products
+  [ ] 17.2 Create product — name, SKU, price, description
+  [ ] 17.3 Create product — tax rate, category
+  [ ] 17.4 Edit product
+  [ ] 17.5 Delete product
+  [ ] 17.6 Product catalog with pricing
+  [ ] 17.7 Search products
+  [ ] 17.8 Filter by category
+
+
+================================================================================
+18. SERVICES — 6 Operations
+================================================================================
+
+  [ ] 18.1 Services page loads at /tenant/services
+  [ ] 18.2 Create service — name, pricing (hourly/monthly/yearly)
+  [ ] 18.3 Edit service
+  [ ] 18.4 Delete service
+  [ ] 18.5 Service catalog
+  [ ] 18.6 Link service to subscription
+
+
+================================================================================
+19. APPROVALS — 6 Operations
+================================================================================
+
+  [ ] 19.1 Approvals page loads at /tenant/approvals
+  [ ] 19.2 Approval request list displays
+  [ ] 19.3 Approve request
+  [ ] 19.4 Reject request
+  [ ] 19.5 Approval detail page
+  [ ] 19.6 Approval notification
+
+
+================================================================================
+20. TICKETS (HELPDESK) — 16 Operations
+================================================================================
+
+  [ ] 20.1 Tickets page loads at /tenant/tickets
+  [ ] 20.2 Kanban view — stages: New, Open, In Progress, Waiting, Resolved, Closed
+  [ ] 20.3 Table view toggle
+  [ ] 20.4 Create ticket — subject, description, priority
+  [ ] 20.5 Create ticket — assign to agent
+  [ ] 20.6 Create ticket from contact
+  [ ] 20.7 Edit ticket
+  [ ] 20.8 Add reply to ticket
+  [ ] 20.9 Add internal note (not visible to customer)
+  [ ] 20.10 Change ticket status
+  [ ] 20.11 Resolve ticket
+  [ ] 20.12 Reopen resolved ticket
+  [ ] 20.13 Delete ticket
+  [ ] 20.14 Ticket detail page — full thread visible
+  [ ] 20.15 Search tickets by subject, contact
+  [ ] 20.16 Filter by status, priority, assigned agent
+
+
+================================================================================
+21. KNOWLEDGE BASE — 10 Operations
+================================================================================
+
+  [ ] 21.1 KB page loads at /tenant/kb
+  [ ] 21.2 Create article — title, content, category
+  [ ] 21.3 Create article with attachments
+  [ ] 21.4 Edit article
+  [ ] 21.5 Delete article
+  [ ] 21.6 KB categories management
+  [ ] 21.7 Search articles
+  [ ] 21.8 Public KB portal
+  [ ] 21.9 Article view tracking
+  [ ] 21.10 Article categorization
+
+
+================================================================================
+22. EMAIL SEQUENCES — 10 Operations
+================================================================================
+
+  [ ] 22.1 Sequences page loads at /tenant/sequences
+  [ ] 22.2 Create sequence — name, description
+  [ ] 22.3 Add steps to sequence (email, delay, condition)
+  [ ] 22.4 Edit sequence step
+  [ ] 22.5 Delete sequence step
+  [ ] 22.6 Enroll contact in sequence
+  [ ] 22.7 Sequence analytics (opens, clicks, replies)
+  [ ] 22.8 Pause/resume sequence
+  [ ] 22.9 Unenroll contact
+  [ ] 22.10 Sequence templates
+
+
+================================================================================
+23. AUTOMATION / WORKFLOWS — 10 Operations
+================================================================================
+
+  [ ] 23.1 Automation page loads at /tenant/automation
+  [ ] 23.2 Visual workflow builder loads at /tenant/automation/builder
+  [ ] 23.3 Create workflow — add trigger (contact.created, deal.won, etc.)
+  [ ] 23.4 Add action to workflow (send email, update field, create task)
+  [ ] 23.5 Connect trigger → action in visual editor
+  [ ] 23.6 Save workflow
+  [ ] 23.7 Activate/deactivate workflow
+  [ ] 23.8 Workflow execution log
+  [ ] 23.9 Edit existing workflow
+  [ ] 23.10 Delete workflow
+
+
+================================================================================
+24. FORMS — 8 Operations
+================================================================================
+
+  [ ] 24.1 Forms page loads at /tenant/forms
+  [ ] 24.2 Create form — name, fields
+  [ ] 24.3 Form builder — add fields (text, email, select, checkbox)
+  [ ] 24.4 Form builder — drag-and-drop reorder
+  [ ] 24.5 Publish form → public URL
+  [ ] 24.6 Form submissions tracking
+  [ ] 24.7 Embed form on external site
+  [ ] 24.8 Edit/delete form
+
+
+================================================================================
+25. REPORTS & ANALYTICS — 12 Operations
+================================================================================
+
+  [ ] 25.1 Reports page loads at /tenant/reports
+  [ ] 25.2 Pre-built reports display
+  [ ] 25.3 Report builder — select entity, fields, filters
+  [ ] 25.4 Report builder — add charts (bar, line, pie)
+  [ ] 25.5 Save report
+  [ ] 25.6 Run report → data displays
+  [ ] 25.7 Export report as CSV/PDF
+  [ ] 25.8 Schedule recurring report
+  [ ] 25.9 Analytics dashboard loads at /tenant/analytics
+  [ ] 25.10 Revenue forecasting at /tenant/analytics/forecast
+  [ ] 25.11 Email analytics at /tenant/analytics/email
+  [ ] 25.12 Leaderboards at /tenant/leaderboards
+
+
+================================================================================
+26. AI FEATURES — 12 Operations
+================================================================================
+
+  [ ] 26.1 AI Hub page loads at /tenant/ai
+  [ ] 26.2 Auto-Draft email composer at /tenant/ai/draft
+  [ ] 26.3 Auto-Draft generates email from context
+  [ ] 26.4 Lead Scoring page at /tenant/ai/lead-scoring
+  [ ] 26.5 Lead scoring configuration
+  [ ] 26.6 Recompute lead scores
+  [ ] 26.7 At-Risk Deals page at /tenant/ai/at-risk
+  [ ] 26.8 At-risk deal rules configuration
+  [ ] 26.9 AI Summarization at /tenant/ai/summarize
+  [ ] 26.10 AI Activity log at /tenant/ai/activity
+  [ ] 26.11 AI provider configuration in settings
+  [ ] 26.12 AI usage tracking
+
+
+================================================================================
+27. SETTINGS — 46 Pages (key operations)
+================================================================================
+
+  [ ] 27.1 Profile settings — update name, avatar, phone
+  [ ] 27.2 Preferences — locale, theme (dark/light), timezone
+  [ ] 27.3 Notification preferences — toggle email/push channels
+  [ ] 27.4 General workspace settings — name, domain, logo
+  [ ] 27.5 Team management — invite member, remove member
+  [ ] 27.6 Team member roles — change role
+  [ ] 27.7 Billing — view current plan
+  [ ] 27.8 Billing — upgrade/downgrade plan
+  [ ] 27.9 Billing invoices list
+  [ ] 27.10 Branding — company logo, colors, favicon
+  [ ] 27.11 Security — change password
+  [ ] 27.12 Security — 2FA setup
+  [ ] 27.13 Login policy — session timeout, max attempts
+  [ ] 27.14 Sessions — view active sessions, revoke
+  [ ] 27.15 SSO configuration — SAML/OIDC setup
+  [ ] 27.16 Email settings — SMTP config, from address
+  [ ] 27.17 Roles & Permissions — create role
+  [ ] 27.18 Roles & Permissions — edit role permissions
+  [ ] 27.19 Roles & Permissions — delete role
+  [ ] 27.20 RBAC — assign role to user
+  [ ] 27.21 Custom fields — add field to entity
+  [ ] 27.22 Custom fields — edit/delete custom field
+  [ ] 27.23 Pipelines — create new pipeline
+  [ ] 27.24 Pipelines — edit stages, reorder
+  [ ] 27.25 Pipelines — set default pipeline
+  [ ] 27.26 Picklists — manage dropdown values
+  [ ] 27.27 Tags manager — create/edit/delete tags
+  [ ] 27.28 Import contacts from CSV
+  [ ] 27.29 Export data to CSV
+  [ ] 27.30 Bulk transfer ownership
+  [ ] 27.31 API keys — generate new key
+  [ ] 27.32 API keys — revoke key
+  [ ] 27.33 Webhooks — create webhook endpoint
+  [ ] 27.34 Webhooks — test webhook
+  [ ] 27.35 Webhook logs — view delivery history
+  [ ] 27.36 AI Providers — configure OpenAI/other
+  [ ] 27.37 AI Templates — create/edit prompt templates
+  [ ] 27.38 Lead Scoring rules — configure BANT weights
+  [ ] 27.39 At-Risk rules — configure churn signals
+  [ ] 27.40 SLA policies — create/edit
+  [ ] 27.41 Territories — create territory
+  [ ] 27.42 Hierarchy — tenant hierarchy setup
+  [ ] 27.43 Currency — set default currency, exchange rates
+  [ ] 27.44 Tax — configure tax rates
+  [ ] 27.45 Localization — date format, number format
+  [ ] 27.46 Compliance — data retention, GDPR tools
+  [ ] 27.47 Audit log — view all changes
+  [ ] 27.48 Backup — manual backup
+  [ ] 27.49 Backup — restore from backup
+  [ ] 27.50 Client portal settings
+  [ ] 27.51 User defaults — default views
+  [ ] 27.52 Assignment rules — auto-assign leads/deals
+
+
+================================================================================
+28. SUPER ADMIN — 40 Operations
+================================================================================
+
+  [ ] 28.1  Super Admin dashboard loads at /superadmin/dashboard
+  [ ] 28.2  Platform stats (total tenants, users, revenue) display
+  [ ] 28.3  Monitoring page at /superadmin/monitoring
+  [ ] 28.4  Health check at /superadmin/health
+  [ ] 28.5  Tenants list at /superadmin/tenants
+  [ ] 28.6  Create tenant — name, owner, plan
+  [ ] 28.7  Edit tenant — change plan, status
+  [ ] 28.8  Suspend tenant
+  [ ] 28.9  Activate suspended tenant
+  [ ] 28.10 Delete tenant
+  [ ] 28.11 Tenant detail — overview tab
+  [ ] 28.12 Tenant detail — users list
+  [ ] 28.13 Tenant detail — usage metrics
+  [ ] 28.14 Tenant detail — subscription/billing info
+  [ ] 28.15 Tenant detail — modules enabled
+  [ ] 28.16 Users list at /superadmin/users
+  [ ] 28.17 View user details
+  [ ] 28.18 Impersonate tenant → login as tenant admin
+  [ ] 28.19 Stop impersonation
+  [ ] 28.20 Join tenant as member
+  [ ] 28.21 Revenue analytics at /superadmin/revenue
+  [ ] 28.22 MRR/ARR charts display
+  [ ] 28.23 Plans & billing at /superadmin/billing
+  [ ] 28.24 CREATE PLAN — name, price, features, limits
+  [ ] 28.25 EDIT PLAN — change price, features, limits
+  [ ] 28.26 DELETE PLAN
+  [ ] 28.27 Usage metrics at /superadmin/usage
+  [ ] 28.28 Adoption analytics at /superadmin/adoption
+  [ ] 28.29 Drift analysis (upgrades/downgrades)
+  [ ] 28.30 Backup management at /superadmin/backups
+  [ ] 28.31 Trigger manual backup
+  [ ] 28.32 Selective restore at /superadmin/selective-restore
+  [ ] 28.33 Error logs at /superadmin/errors — view app errors
+  [ ] 28.34 Support tickets at /superadmin/tickets — view all tickets
+  [ ] 28.35 Announcements at /superadmin/announcements
+  [ ] 28.36 CREATE ANNOUNCEMENT — title, content, target
+  [ ] 28.37 EDIT/DELETE announcement
+  [ ] 28.38 Module management at /superadmin/modules
+  [ ] 28.39 Toggle module for all tenants
+  [ ] 28.40 Platform settings at /superadmin/settings
+  [ ] 28.41 Data explorer at /superadmin/data-explorer
+  [ ] 28.42 Template management at /superadmin/templates
+  [ ] 28.43 Assign template to tenant
+  [ ] 28.44 Token budget control at /superadmin/token-control
+  [ ] 28.45 Transfer super admin to another user
+
+
+================================================================================
+29. INTEGRATIONS & PLUGINS — 12 Operations
+================================================================================
+
+  [ ] 29.1 Integrations page loads at /tenant/integrations
+  [ ] 29.2 Connect SendGrid integration
+  [ ] 29.3 Connect Slack integration
+  [ ] 29.4 Connect Mailgun integration
+  [ ] 29.5 Connect OpenAI integration
+  [ ] 29.6 Plugin marketplace loads at /tenant/plugins
+  [ ] 29.7 Install plugin from marketplace
+  [ ] 29.8 Configure plugin
+  [ ] 29.9 Execute plugin action
+  [ ] 29.10 Plugin execution logs
+  [ ] 29.11 Uninstall plugin
+  [ ] 29.12 Webhook integration — create inbound webhook
+
+
+================================================================================
+30. MODULES — 8 Operations
+================================================================================
+
+  [ ] 30.1 Modules page loads at /tenant/modules
+  [ ] 30.2 View available modules
+  [ ] 30.3 Install module
+  [ ] 30.4 Uninstall module
+  [ ] 30.5 Module billing (paid modules)
+  [ ] 30.6 Module feature gating — restricted module shows paywall
+  [ ] 30.7 Super admin force-enable module
+  [ ] 30.8 Module auto-install on plan change
+
+
+================================================================================
+31. COMMUNICATIONS — 10 Operations
+================================================================================
+
+  [ ] 31.1 WhatsApp integration — send message
+  [ ] 31.2 WhatsApp message history
+  [ ] 31.3 WhatsApp templates management
+  [ ] 31.4 Email tracking — opens and clicks
+  [ ] 31.5 SMS messaging
+  [ ] 31.6 Call logging
+  [ ] 31.7 Live chat at /tenant/chat
+  [ ] 31.8 Email warmup configuration
+  [ ] 31.9 Telegram bot integration
+  [ ] 31.10 Visitor tracking at /tenant/visitors
+
+
+================================================================================
+32. TRASH & DATA MANAGEMENT — 8 Operations
+================================================================================
+
+  [ ] 32.1 Trash page loads at /tenant/trash
+  [ ] 32.2 View deleted contacts, deals, companies
+  [ ] 32.3 Restore item from trash
+  [ ] 32.4 Permanent delete from trash
+  [ ] 32.5 Empty trash
+  [ ] 32.6 Bulk restore
+  [ ] 32.7 Bulk permanent delete
+  [ ] 32.8 Trash pagination
+
+
+================================================================================
+33. SEARCH — 4 Operations
+================================================================================
+
+  [ ] 33.1 Global search (⌘K) — command palette opens
+  [ ] 33.2 Search contacts by name
+  [ ] 33.3 Search deals by title
+  [ ] 33.4 Search results link to correct pages
+
+
+================================================================================
+34. NOTIFICATIONS — 6 Operations
+================================================================================
+
+  [ ] 34.1 Notification bell — unread count displays
+  [ ] 34.2 Click notification → redirects to relevant record
+  [ ] 34.3 Mark notification as read
+  [ ] 34.4 Mark all as read
+  [ ] 34.5 Notification preferences — toggle types
+  [ ] 34.6 Real-time notification via SSE
+
+
+================================================================================
+35. CLIENT PORTAL — 6 Operations
+================================================================================
+
+  [ ] 35.1 Portal login at /portal
+  [ ] 35.2 View invoices in portal
+  [ ] 35.3 View knowledge base in portal
+  [ ] 35.4 Submit ticket in portal
+  [ ] 35.5 View ticket status in portal
+  [ ] 35.6 Portal customization
+
+
+================================================================================
+36. WEBHOOKS — 6 Operations
+================================================================================
+
+  [ ] 36.1 Outbound webhook delivery on events
+  [ ] 36.2 Webhook retry on failure
+  [ ] 36.3 Dead letter queue management
+  [ ] 36.4 Webhook delivery logs
+  [ ] 36.5 Stripe webhook handler (billing events)
+  [ ] 36.6 Resend.com webhook handler (email events)
+
+
+================================================================================
+37. CRON JOBS — 14 Operations
+================================================================================
+
+  [ ] 37.1 Auto-backup cron runs
+  [ ] 37.2 Cleanup cron purges old data
+  [ ] 37.3 Missed follow-up detection cron
+  [ ] 37.4 Lead warming campaign processor
+  [ ] 37.5 At-risk deal detection cron
+  [ ] 37.6 Lead score recalculation cron
+  [ ] 37.7 Sequence step processor
+  [ ] 37.8 Webhook retry cron
+  [ ] 37.9 Subscription check cron
+  [ ] 37.10 Task reminder cron
+  [ ] 37.11 Trial expiry monitoring cron
+  [ ] 37.12 Usage snapshot cron
+  [ ] 37.13 Email warmup processor
+  [ ] 37.14 All crons protected by CRON_SECRET
+
+
+================================================================================
+38. DOCUMENTS & FILES — 8 Operations
+================================================================================
+
+  [ ] 38.1 Documents page at /tenant/documents
+  [ ] 38.2 Upload file
+  [ ] 38.3 Download file
+  [ ] 38.4 Delete file
+  [ ] 38.5 Organize files in folders
+  [ ] 38.6 Link file to contact/deal/company
+  [ ] 38.7 File preview
+  [ ] 38.8 E-signature request
+
+
+================================================================================
+39. LEAD WARMING — 8 Operations
+================================================================================
+
+  [ ] 39.1 Lead warming campaigns at /tenant/lead-warming/campaigns
+  [ ] 39.2 Create campaign
+  [ ] 39.3 Schedule events
+  [ ] 39.4 Track replies
+  [ ] 39.5 Campaign analytics
+  [ ] 39.6 Edit campaign
+  [ ] 39.7 Delete campaign
+  [ ] 39.8 Campaign stats dashboard
+
+
+================================================================================
+40. DEVELOPER — 6 Operations
+================================================================================
+
+  [ ] 40.1 API docs at /tenant/docs
+  [ ] 40.2 API v2 endpoints at /api/v2/
+  [ ] 40.3 OpenAPI spec at /api/openapi
+  [ ] 40.4 API key management (create, scopes, revoke)
+  [ ] 40.5 API rate limiting per plan
+  [ ] 40.6 API usage tracking
+
+================================================================================
+                              END OF TEST PLAN
+                  Total Operations: ~520 across 40 sections
+================================================================================
