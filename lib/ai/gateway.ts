@@ -100,7 +100,7 @@ const PROVIDER_DEFAULTS: Record<AIProviderId, ProviderConfig> = {
   anthropic: { enabled: false, default_model: 'claude-3-5-sonnet-latest', temperature: 0.4, max_tokens: 1024, fallback_priority: 2 },
   groq:      { enabled: false, default_model: 'llama-3.1-70b-versatile',  temperature: 0.4, max_tokens: 1024, fallback_priority: 3 },
   ollama:    { enabled: false, default_model: 'llama3.1:8b',              temperature: 0.4, max_tokens: 1024, fallback_priority: 4, base_url: 'http://localhost:11434' },
-  opencode:  { enabled: false, default_model: 'opencode',                 temperature: 0.4, max_tokens: 1024, fallback_priority: 5, base_url: 'https://api.opencode.ai' },
+  opencode:  { enabled: false, default_model: 'gpt-5.4-mini',            temperature: 0.4, max_tokens: 1024, fallback_priority: 5, base_url: 'https://opencode.ai/zen' },
 };
 
 /** Approximate cost per 1K tokens (USD cents × 100 = sub-cent precision). */
@@ -436,7 +436,7 @@ export async function chat(req: GatewayRequest): Promise<GatewayResponse> {
         tokensIn: 0, tokensOut: 0, costCents: 0, latencyMs,
         entityType: req.entityType ?? null, entityId: req.entityId ?? null,
         errorMessage: message.slice(0, 1000),
-        metadata: { ...(req.metadata ?? {}), attempt: i, fallback_chain: chain },
+        metadata: { ...(req.metadata ?? {}), attempt: i, fallback_chain: chain, key_type: keyData?.keyType },
       });
 
       // 400 / 422 (and other non-auth 4xx) are fatal — bail out
