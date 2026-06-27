@@ -17,9 +17,10 @@ import { eq, sql, and, gte } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { listProviderKeyMeta } from '@/lib/ai/secrets';
 import { getAtRiskDeals } from '@/lib/ai/at-risk';
+import { getCreditBalance } from '@/lib/ai/credits';
 
 /** Named providers to always show in the dashboard (even if not configured). */
-const NAMED_PROVIDER_IDS = ['openai', 'anthropic', 'groq', 'ollama', 'opencode'];
+const NAMED_PROVIDER_IDS = ['openai', 'anthropic', 'groq', 'ollama', 'opencode', 'deepseek'];
 
 export async function GET(req: NextRequest) {
   try {

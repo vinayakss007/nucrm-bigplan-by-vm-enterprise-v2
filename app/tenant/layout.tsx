@@ -38,8 +38,16 @@ export default async function TenantLayout({ children }: { children: React.React
     metadata: user?.metadata,
   };
 
+  const planFeatures = JSON.stringify(ctx.plan.features ?? []);
+  const isSuperAdmin = ctx.isSuperAdmin;
+
   return (
     <BrandingProvider branding={branding}>
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `window.__NUCRM_PLAN_FEATURES__=${planFeatures};window.__NUCRM_IS_SUPER_ADMIN__=${isSuperAdmin};`,
+        }}
+      />
       <TenantShell
         tenant={tenant} 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -32,6 +32,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { chat, GatewayError } from '@/lib/ai/gateway';
+import { requireAiFeature } from '@/lib/ai/plan-gate';
 import {
   hydrateDraftContext,
   interpolate,
@@ -55,6 +56,9 @@ export async function POST(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const gate = await requireAiFeature(ctx, 'ai_draft');
+    if (gate) return gate;
 
     const limited = await checkRateLimit(req, { action: 'ai_draft', max: 30, windowMinutes: 60 });
     if (limited) return limited;

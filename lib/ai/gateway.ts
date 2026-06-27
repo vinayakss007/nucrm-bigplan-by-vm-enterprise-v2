@@ -27,8 +27,9 @@
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema/core';
 import { aiActivity } from '@/drizzle/schema/ai';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { getProviderKey, isNamedProvider, type KeyType } from './secrets';
+import { checkCredits, deductCredits, isCentralizedProvider } from './credits';
 
 export type GatewayMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -101,6 +102,7 @@ const PROVIDER_DEFAULTS: Record<string, ProviderConfig> = {
   groq:      { enabled: false, default_model: 'llama-3.1-70b-versatile',  temperature: 0.4, max_tokens: 1024, fallback_priority: 3 },
   ollama:    { enabled: false, default_model: 'llama3.1:8b',              temperature: 0.4, max_tokens: 1024, fallback_priority: 4, base_url: 'http://localhost:11434' },
   opencode:  { enabled: false, default_model: 'deepseek-v4-flash-free',   temperature: 0.4, max_tokens: 1024, fallback_priority: 5, base_url: 'https://opencode.ai/zen' },
+  deepseek:  { enabled: false, default_model: 'deepseek-chat',            temperature: 0.4, max_tokens: 1024, fallback_priority: 6, base_url: 'https://api.deepseek.com' },
 };
 
 /** Approximate cost per 1K tokens (USD cents × 100 = sub-cent precision). */
@@ -119,6 +121,8 @@ const COST_PER_1K_TOKENS: Record<string, { in: number; out: number }> = {
   'llama3.1:8b':              { in: 0.0,  out: 0.0 },
   // OpenCode — platform-provided AI (cost tracked via credits)
   'opencode':                 { in: 0.0,  out: 0.0 },
+  // DeepSeek
+  'deepseek-chat':            { in: 0.14, out: 0.28 },
 };
 
 function estimateCostCents(model: string, tokensIn: number, tokensOut: number): number {
@@ -311,6 +315,7 @@ function getDefaultBaseUrl(provider: string): string {
     case 'openai':    return 'https://api.openai.com';
     case 'groq':      return 'https://api.groq.com/openai';
     case 'opencode':  return 'https://opencode.ai/zen';
+    case 'deepseek':  return 'https://api.deepseek.com';
     default:          return '';  // custom providers must have base_url set
   }
 }
@@ -368,6 +373,16 @@ export async function chat(req: GatewayRequest): Promise<GatewayResponse> {
     throw new GatewayError('invalid_request', 'messages must be a non-empty array');
   }
 
+  // Check if using centralized credits for the requested/first provider
+  const isCentralized = await isCentralizedProvider(req.tenantId, req.provider ?? '');
+  if (isCentralized) {
+    const estimatedTokens = req.max_tokens ?? 1024;
+    const creditCheck = await checkCredits(req.tenantId, estimatedTokens);
+    if (!creditCheck.allowed) {
+      throw new GatewayError('no_key_for_provider', creditCheck.reason ?? 'Insufficient credits');
+    }
+  }
+
   const configs = await loadProviderConfigs(req.tenantId);
   const chain = buildProviderChain(configs, req.provider);
 
@@ -423,6 +438,22 @@ export async function chat(req: GatewayRequest): Promise<GatewayResponse> {
         errorMessage: null,
         metadata: { ...(req.metadata ?? {}), attempt: i, fallback_chain: chain, key_type: keyData?.keyType, model_override: modelOverride },
       });
+
+      // Deduct credits if using centralized pool
+      const providerIsCentralized = await isCentralizedProvider(req.tenantId, provider);
+      if (providerIsCentralized) {
+        await deductCredits({
+          tenantId: req.tenantId,
+          userId: req.userId,
+          action: req.action,
+          provider,
+          model: result.model,
+          tokensIn: result.tokensIn,
+          tokensOut: result.tokensOut,
+          costCents,
+          activityId,
+        });
+      }
 
       return {
         text: result.text,

@@ -1,10 +1,11 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sparkles, ShieldCheck } from 'lucide-react';
+import { Sparkles, ShieldCheck, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AI_CAPABILITIES } from '@/components/tenant/ai/ai-config';
 import { useEffect, useState } from 'react';
+import { usePlanFeatures } from '@/hooks/use-plan-features';
 
 /**
  * AI Hub shell — sub-rail on lg+, horizontal scroll pills below lg.
@@ -13,6 +14,7 @@ import { useEffect, useState } from 'react';
 export default function AILayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
+  const { hasFeature, loaded: featuresLoaded } = usePlanFeatures();
 
   useEffect(() => {
     fetch('/api/tenant/me')
@@ -21,7 +23,12 @@ export default function AILayout({ children }: { children: React.ReactNode }) {
       .catch((err) => console.error('[AI Layout] fetch /api/tenant/me failed:', err));
   }, []);
 
-  const items = AI_CAPABILITIES.filter(c => !c.adminOnly || isAdmin);
+  const items = AI_CAPABILITIES.filter(c => {
+    if (c.adminOnly && !isAdmin) return false;
+    // Hide items whose feature is not in the plan (unless it's the Hub overview or Providers)
+    if (c.featureKey && featuresLoaded && !hasFeature(c.featureKey)) return false;
+    return true;
+  });
 
   const isActive = (href: string) => {
     if (href === '/tenant/ai') return pathname === '/tenant/ai';
