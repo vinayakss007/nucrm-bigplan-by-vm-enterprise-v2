@@ -7,7 +7,7 @@
  */
 import {
   Sparkles, FileEdit, Target, AlertTriangle, Activity,
-  BrainCircuit, MessageSquare,
+  BrainCircuit, MessageSquare, Heart, MessagesSquare,
 } from 'lucide-react';
 
 export type AICapability = {
@@ -18,11 +18,26 @@ export type AICapability = {
   desc: string;
   /** CRM features this capability needs to actually work. */
   depends_on: string[];
+  /** Plan feature key that gates this capability. If missing, always visible. */
+  featureKey?: string;
   /** Pin to dashboard? */
   primary?: boolean;
   badge?: 'new' | 'beta' | 'soon';
   adminOnly?: boolean;
 };
+
+/** All AI feature keys that can be toggled per plan in Super Admin */
+export const AI_FEATURE_KEYS = [
+  'ai_draft',
+  'ai_lead_scoring',
+  'ai_at_risk',
+  'ai_sentiment',
+  'ai_lead_warming',
+  'ai_summarize',
+  'ai_activity_log',
+] as const;
+
+export type AiFeatureKey = typeof AI_FEATURE_KEYS[number];
 
 export const AI_CAPABILITIES: AICapability[] = [
   {
@@ -39,6 +54,7 @@ export const AI_CAPABILITIES: AICapability[] = [
     icon: FileEdit,
     desc: 'Generate follow-up emails, calls, notes',
     depends_on: ['Email integration', 'Contacts'],
+    featureKey: 'ai_draft',
     badge: 'beta',
   },
   {
@@ -47,6 +63,7 @@ export const AI_CAPABILITIES: AICapability[] = [
     icon: Target,
     desc: 'Predict who to call next',
     depends_on: ['Leads', 'Activity history', 'Picklists (sources)'],
+    featureKey: 'ai_lead_scoring',
     badge: 'beta',
   },
   {
@@ -55,6 +72,7 @@ export const AI_CAPABILITIES: AICapability[] = [
     icon: AlertTriangle,
     desc: 'Stalled deals worth a manager nudge',
     depends_on: ['Deals', 'Pipeline stages', 'Activities'],
+    featureKey: 'ai_at_risk',
     badge: 'beta',
   },
   {
@@ -63,6 +81,25 @@ export const AI_CAPABILITIES: AICapability[] = [
     icon: MessageSquare,
     desc: 'TL;DR for any record',
     depends_on: ['Activities', 'Notes'],
+    featureKey: 'ai_summarize',
+  },
+  {
+    href: '/tenant/ai/sentiment',
+    label: 'Sentiment Analysis',
+    icon: BrainCircuit,
+    desc: 'Analyze text sentiment for deals & contacts',
+    depends_on: ['Deals', 'Activities'],
+    featureKey: 'ai_sentiment',
+    badge: 'beta',
+  },
+  {
+    href: '/tenant/ai/lead-warming',
+    label: 'Lead Warming',
+    icon: Heart,
+    desc: 'AI replies, festival messages & birthday greetings',
+    depends_on: ['Contacts', 'Email integration'],
+    featureKey: 'ai_lead_warming',
+    badge: 'beta',
   },
   {
     href: '/tenant/ai/activity',
@@ -70,6 +107,7 @@ export const AI_CAPABILITIES: AICapability[] = [
     icon: Activity,
     desc: 'What AI did recently · tokens · cost',
     depends_on: [],
+    featureKey: 'ai_activity_log',
   },
   {
     href: '/tenant/settings/ai-providers',
@@ -88,6 +126,7 @@ export const AI_PROVIDER_PRESETS: Record<string, { label: string; defaultModel: 
   groq:      { label: 'Groq',      defaultModel: 'llama-3.1-70b-versatile',  site: 'console.groq.com',     note: 'Ultra-fast Llama inference; great for live drafts.' },
   ollama:    { label: 'Ollama',    defaultModel: 'llama3.1:8b',              site: 'ollama.com',           note: 'Self-hosted; data never leaves your machine.', base_url: 'http://localhost:11434' },
   opencode:  { label: 'OpenCode',  defaultModel: 'deepseek-v4-flash-free',   site: 'opencode.ai',          note: 'Platform-provided AI; 48+ models including free tiers. Bring your own key.', base_url: 'https://opencode.ai/zen' },
+  deepseek:  { label: 'DeepSeek',  defaultModel: 'deepseek-chat',            site: 'platform.deepseek.com', note: 'Cost-effective reasoning model; great for analysis and scoring.', base_url: 'https://api.deepseek.com' },
 };
 
 /**

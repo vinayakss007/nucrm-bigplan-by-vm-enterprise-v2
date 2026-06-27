@@ -10,7 +10,7 @@ import {
   Building2, Globe, DollarSign, Users, Workflow, ListChecks,
   Tag, Library, ShieldUser, Crown, Receipt, Lock, ShieldCheck, KeyRound,
   Network, MapPin, Repeat, Timer, Mail, Webhook, History,
-  Scale, Shield, Save, ArrowRightLeft, Upload, Send, BrainCircuit, FileEdit, Target, AlertTriangle, Activity,
+  Scale, Shield, Save, ArrowRightLeft, Upload, Send, BrainCircuit, FileEdit, Target, AlertTriangle, Activity, Heart, MessagesSquare,
 } from 'lucide-react';
 
 export type SettingsItem = {
@@ -123,11 +123,13 @@ export const GROUPS: SettingsGroup[] = [
   {
     id: 'admin-ai', label: 'AI', scope: 'admin',
     items: [
-      { href: '/tenant/settings/ai-providers',    label: 'AI Providers',     icon: BrainCircuit, desc: 'OpenAI / Anthropic / Groq / Ollama', adminOnly: true, badge: 'new', keywords: 'ai providers openai anthropic groq ollama llm model api key gateway' },
+      { href: '/tenant/settings/ai-providers',    label: 'AI Providers',     icon: BrainCircuit, desc: 'OpenAI / Anthropic / Groq / Ollama / OpenCode / Deepseek', adminOnly: true, badge: 'new', keywords: 'ai providers openai anthropic groq ollama opencode deepseek llm model api key gateway' },
       { href: '/tenant/settings/ai-templates',    label: 'Auto-Draft Templates', icon: FileEdit, desc: 'Email & message draft prompts',     adminOnly: true, badge: 'new', keywords: 'ai email draft template prompt followup' },
       { href: '/tenant/settings/lead-scoring',    label: 'Lead Scoring Rules', icon: Target,    desc: 'Factors, weights, recompute',       adminOnly: true, badge: 'new', keywords: 'ai lead score scoring rules factors weights' },
       { href: '/tenant/settings/at-risk-rules',   label: 'At-Risk Detection', icon: AlertTriangle, desc: 'Stalled deals & accounts',         adminOnly: true, badge: 'new', keywords: 'ai at risk deal stalled days inactivity' },
       { href: '/tenant/settings/ai-activity',     label: 'AI Activity Log',   icon: Activity,    desc: 'Tokens used, suggestions made',     adminOnly: true, badge: 'new', keywords: 'ai activity log tokens usage cost' },
+      { href: '/tenant/ai/sentiment',             label: 'Sentiment Analysis', icon: BrainCircuit, desc: 'Analyze text sentiment for deals',  badge: 'beta', keywords: 'ai sentiment analysis text positive negative neutral' },
+      { href: '/tenant/ai/lead-warming',          label: 'Lead Warming',       icon: Heart,       desc: 'Festival messages & reply analysis', badge: 'beta', keywords: 'ai lead warming festival birthday reply analysis' },
     ],
   },
   {

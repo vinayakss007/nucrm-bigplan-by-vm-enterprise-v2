@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { GatewayError } from '@/lib/ai/gateway';
+import { requireAiFeature } from '@/lib/ai/plan-gate';
 import { summarizeEntity, type SummarizeEntityType } from '@/lib/ai/summarize';
 
 interface PostBody {
@@ -22,6 +23,9 @@ export async function POST(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const gate = await requireAiFeature(ctx, 'ai_summarize');
+    if (gate) return gate;
 
     const limited = await checkRateLimit(req, { action: 'ai_summarize', max: 30, windowMinutes: 60 });
     if (limited) return limited;
