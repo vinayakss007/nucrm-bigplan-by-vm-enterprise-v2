@@ -10,7 +10,7 @@ import {
   Building2, Globe, DollarSign, Users, Workflow, ListChecks,
   Tag, Library, ShieldUser, Crown, Receipt, Lock, ShieldCheck, KeyRound,
   Network, MapPin, Repeat, Timer, Mail, Webhook, History,
-  Scale, Shield, Save, ArrowRightLeft, Upload, Send, BrainCircuit, FileEdit, Target, AlertTriangle, Activity, Heart, MessagesSquare,
+  Scale, Shield, Save, ArrowRightLeft, Upload, Send, BrainCircuit, FileEdit, Target, AlertTriangle, Activity, Heart,
 } from 'lucide-react';
 
 export type SettingsItem = {

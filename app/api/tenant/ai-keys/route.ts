@@ -14,7 +14,6 @@ import { logAudit } from '@/lib/audit';
 import {
   setPersonalKey,
   deleteProviderKey,
-  getProviderKeyMeta,
   SecretsVaultError,
 } from '@/lib/ai/secrets';
 
