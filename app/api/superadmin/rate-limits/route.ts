@@ -2,22 +2,21 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { plans, users } from '@/drizzle/schema';
+import { plans, users, systemSettings } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
-import { sql } from 'drizzle-orm';
 
 const RATE_LIMIT_ENDPOINTS = [
-  { key: 'api', label: 'API Requests', default: 60, window: 'per minute', desc: 'General API endpoints' },
-  { key: 'auth', label: 'Auth Requests', default: 5, window: 'per minute', desc: 'Login, signup, password reset' },
-  { key: 'contacts', label: 'Contacts CRUD', default: 30, window: 'per minute', desc: 'Contact create/update/delete' },
-  { key: 'deals', label: 'Deals CRUD', default: 30, window: 'per minute', desc: 'Deal create/update/delete' },
-  { key: 'export', label: 'Data Export', default: 10, window: 'per hour', desc: 'CSV/Excel exports' },
-  { key: 'import', label: 'Data Import', default: 5, window: 'per hour', desc: 'Bulk data imports' },
-  { key: 'ai', label: 'AI Features', default: 30, window: 'per hour', desc: 'AI scoring, suggestions' },
-  { key: 'webhook', label: 'Webhooks', default: 1000, window: 'per hour', desc: 'Inbound webhook calls' },
-  { key: 'passwordReset', label: 'Password Reset', default: 3, window: 'per hour', desc: 'Password reset requests' },
-  { key: 'emailVerification', label: 'Email Verification', default: 10, window: 'per hour', desc: 'Email verification links' },
-  { key: 'bulk', label: 'Bulk Operations', default: 5, window: 'per hour', desc: 'Bulk update/delete' },
+  { key: 'api', label: 'API Requests', window: 60, windowLabel: 'per minute' },
+  { key: 'auth', label: 'Auth Requests', window: 60, windowLabel: 'per minute' },
+  { key: 'contacts', label: 'Contacts CRUD', window: 60, windowLabel: 'per minute' },
+  { key: 'deals', label: 'Deals CRUD', window: 60, windowLabel: 'per minute' },
+  { key: 'export', label: 'Data Export', window: 3600, windowLabel: 'per hour' },
+  { key: 'import', label: 'Data Import', window: 3600, windowLabel: 'per hour' },
+  { key: 'ai', label: 'AI Features', window: 3600, windowLabel: 'per hour' },
+  { key: 'webhook', label: 'Webhooks', window: 3600, windowLabel: 'per hour' },
+  { key: 'passwordReset', label: 'Password Reset', window: 3600, windowLabel: 'per hour' },
+  { key: 'emailVerification', label: 'Email Verification', window: 3600, windowLabel: 'per hour' },
+  { key: 'bulk', label: 'Bulk Operations', window: 3600, windowLabel: 'per hour' },
 ];
 
 export async function GET(_request: NextRequest) {
@@ -26,11 +25,29 @@ export async function GET(_request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
+    // Get global defaults from system_settings
+    let globalDefaults: Record<string, number> = {};
+    try {
+      const setting = await db.query.systemSettings.findFirst({
+        where: eq(systemSettings.key, 'global_rate_limits'),
+        columns: { value: true },
+      });
+      if (setting?.value) {
+        globalDefaults = typeof setting.value === 'string'
+          ? JSON.parse(setting.value)
+          : (setting.value as Record<string, number>);
+      }
+    } catch {
+      // Empty defaults
+    }
+
+    // Get all plans
     const allPlans = await db.query.plans.findMany({
       columns: { id: true, name: true, slug: true, rateLimitConfig: true },
       orderBy: (t, { asc }) => [asc(t.sortOrder)],
     });
 
+    // Get super admins
     const superAdmins = await db.query.users.findMany({
       where: eq(users.isSuperAdmin, true),
       columns: { id: true, email: true, fullName: true, unlimitedRateLimit: true },
@@ -38,6 +55,7 @@ export async function GET(_request: NextRequest) {
 
     return NextResponse.json({
       data: {
+        globalDefaults,
         plans: allPlans.map(p => ({
           id: p.id,
           name: p.name,
@@ -66,6 +84,27 @@ export async function PUT(request: NextRequest) {
 
     const body = await request.json();
     const { action } = body;
+
+    if (action === 'update_global') {
+      const { rateLimits } = body;
+      if (!rateLimits || typeof rateLimits !== 'object') {
+        return NextResponse.json({ error: 'rateLimits object required' }, { status: 400 });
+      }
+
+      await db
+        .insert(systemSettings)
+        .values({
+          key: 'global_rate_limits',
+          value: JSON.stringify(rateLimits),
+          tenantId: null,
+        })
+        .onConflictDoUpdate({
+          target: [systemSettings.key, systemSettings.tenantId],
+          set: { value: JSON.stringify(rateLimits), updatedAt: new Date() },
+        });
+
+      return NextResponse.json({ ok: true, message: 'Global rate limits updated' });
+    }
 
     if (action === 'update_plan_limits') {
       const { planId, rateLimits } = body;
@@ -99,38 +138,12 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'planId required' }, { status: 400 });
       }
 
-      const defaultConfig = Object.fromEntries(
-        RATE_LIMIT_ENDPOINTS.map(e => [e.key, e.default])
-      );
-
+      // Reset to empty object so plan uses global defaults
       await db.update(plans)
-        .set({ rateLimitConfig: defaultConfig, updatedAt: new Date() })
+        .set({ rateLimitConfig: {}, updatedAt: new Date() })
         .where(eq(plans.id, planId));
 
-      return NextResponse.json({ ok: true, message: `Rate limits reset to defaults for plan ${planId}` });
-    }
-
-    if (action === 'update_global') {
-      const { rateLimits } = body;
-      if (!rateLimits) {
-        return NextResponse.json({ error: 'rateLimits required' }, { status: 400 });
-      }
-
-      await db.transaction(async (tx) => {
-        await tx
-          .insert(sql`system_settings`)
-          .values({
-            key: 'global_rate_limits',
-            value: JSON.stringify(rateLimits),
-            tenantId: null,
-          })
-          .onConflictDoUpdate({
-            target: [sql`key`, sql`tenant_id`],
-            set: { value: JSON.stringify(rateLimits), updatedAt: new Date() },
-          });
-      });
-
-      return NextResponse.json({ ok: true, message: 'Global rate limits updated' });
+      return NextResponse.json({ ok: true, message: `Plan ${planId} reset to use global defaults` });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
