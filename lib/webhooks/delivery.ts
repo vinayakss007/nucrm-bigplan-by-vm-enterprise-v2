@@ -215,6 +215,7 @@ export async function generateSignature(delivery: WebhookDelivery): Promise<stri
 
 /**
  * Get webhook delivery stats
+ * Uses parameterized queries to prevent SQL injection
  */
 export async function getWebhookStats(webhookId: string, days: number = 7): Promise<{
   total: number;
@@ -223,18 +224,22 @@ export async function getWebhookStats(webhookId: string, days: number = 7): Prom
   pending: number;
   avgDeliveryTime: number;
 }> {
-  const daysInterval = sql`interval '${sql.raw(days.toString())} days'`;
+  // Validate days parameter to prevent injection
+  const safeDays = Math.max(1, Math.min(365, Math.floor(days)));
+  
+  // Calculate the cutoff date in JavaScript instead of SQL
+  const cutoffDate = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000);
 
   const totalResults = await db.select({ count: sql<number>`count(*)::int` })
     .from(webhookDeliveries)
-    .where(and(eq(webhookDeliveries.webhookId, webhookId), gt(webhookDeliveries.createdAt, sql`now() - ${daysInterval}`)));
+    .where(and(eq(webhookDeliveries.webhookId, webhookId), gt(webhookDeliveries.createdAt, cutoffDate)));
 
   const successResults = await db.select({ count: sql<number>`count(*)::int` })
     .from(webhookDeliveries)
     .where(and(
       eq(webhookDeliveries.webhookId, webhookId), 
       eq(webhookDeliveries.status, 'delivered'), 
-      gt(webhookDeliveries.createdAt, sql`now() - ${daysInterval}`))
+      gt(webhookDeliveries.createdAt, cutoffDate))
     );
 
   const failedResults = await db.select({ count: sql<number>`count(*)::int` })
@@ -242,7 +247,7 @@ export async function getWebhookStats(webhookId: string, days: number = 7): Prom
     .where(and(
       eq(webhookDeliveries.webhookId, webhookId), 
       eq(webhookDeliveries.status, 'failed'), 
-      gt(webhookDeliveries.createdAt, sql`now() - ${daysInterval}`))
+      gt(webhookDeliveries.createdAt, cutoffDate))
     );
 
   const pendingResults = await db.select({ count: sql<number>`count(*)::int` })
@@ -250,7 +255,7 @@ export async function getWebhookStats(webhookId: string, days: number = 7): Prom
     .where(and(
       eq(webhookDeliveries.webhookId, webhookId), 
       eq(webhookDeliveries.status, 'pending'), 
-      gt(webhookDeliveries.createdAt, sql`now() - ${daysInterval}`))
+      gt(webhookDeliveries.createdAt, cutoffDate))
     );
 
   const avgTimeResults = await db.select({ avg_ms: sql<number>`EXTRACT(EPOCH FROM AVG(delivered_at - created_at)) * 1000` })
@@ -258,7 +263,7 @@ export async function getWebhookStats(webhookId: string, days: number = 7): Prom
     .where(and(
       eq(webhookDeliveries.webhookId, webhookId), 
       eq(webhookDeliveries.status, 'delivered'), 
-      gt(webhookDeliveries.createdAt, sql`now() - ${daysInterval}`))
+      gt(webhookDeliveries.createdAt, cutoffDate))
     );
 
   return {
