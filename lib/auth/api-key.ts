@@ -6,7 +6,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/drizzle/db';
 import { apiKeys, apiKeyUsage, users } from '@/drizzle/schema';
-import { eq, and, sql, gt, or, isNull, desc, asc } from 'drizzle-orm';
+import { eq, and, sql, gt, desc, asc } from 'drizzle-orm';
 import { AuthContext } from '@/lib/auth/middleware';
 import { createHash } from 'crypto';
 
