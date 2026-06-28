@@ -12,7 +12,7 @@
 import { db } from '@/drizzle/db';
 import { aiProviderSecrets } from '@/drizzle/schema/ai';
 import { encrypt, decrypt } from '@/lib/crypto';
-import { and, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 /** Named providers have presets; any other string is a custom OpenAI-compatible provider. */
 export type NamedProvider = 'openai' | 'anthropic' | 'groq' | 'ollama' | 'opencode';

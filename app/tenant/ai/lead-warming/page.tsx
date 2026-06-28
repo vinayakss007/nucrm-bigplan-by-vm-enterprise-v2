@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import {
   Heart, Loader2, Mail, MessageSquare, Phone, ArrowRight,
-  ThumbsUp, ThumbsDown, Minus, AlertTriangle, Clock, CheckCircle2,
+  ThumbsUp, Clock, CheckCircle2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

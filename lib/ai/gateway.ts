@@ -27,8 +27,8 @@
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema/core';
 import { aiActivity } from '@/drizzle/schema/ai';
-import { eq, and } from 'drizzle-orm';
-import { getProviderKey, isNamedProvider, type KeyType } from './secrets';
+import { eq } from 'drizzle-orm';
+import { getProviderKey, type KeyType } from './secrets';
 import { checkCredits, deductCredits, isCentralizedProvider } from './credits';
 
 export type GatewayMessage = { role: 'user' | 'assistant'; content: string };
