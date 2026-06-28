@@ -96,10 +96,9 @@ export async function PUT(request: NextRequest) {
         .values({
           key: 'global_rate_limits',
           value: JSON.stringify(rateLimits),
-          tenantId: null,
         })
         .onConflictDoUpdate({
-          target: [systemSettings.key, systemSettings.tenantId],
+          target: [systemSettings.key],
           set: { value: JSON.stringify(rateLimits), updatedAt: new Date() },
         });
 
