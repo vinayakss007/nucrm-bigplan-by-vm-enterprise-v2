@@ -6,15 +6,15 @@ import { apiError } from '@/lib/api-error';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
-import { sql } from 'drizzle-orm';
+import { superAdminAuditLogs } from '@/drizzle/schema';
 import { requireAuth } from '@/lib/auth/middleware';
+import { eq, and, gte, lte, desc, count } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    // Check if user is super admin
     if (!ctx.isSuperAdmin) {
       return NextResponse.json({ error: 'Unauthorized - Super Admin access required' }, { status: 403 });
     }
@@ -29,67 +29,50 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, parseInt(searchParams.get('limit') ?? '50'));
     const offset = parseInt(searchParams.get('offset') ?? '0');
 
-    // Build query conditions
-    const conditions: string[] = [];
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const params: any[] = [];
-    let paramIndex = 1;
+    const conditions = [];
 
     if (adminId) {
-      conditions.push(`admin_id = $${paramIndex++}`);
-      params.push(adminId);
+      conditions.push(eq(superAdminAuditLogs.adminId, adminId));
     }
     if (action) {
-      conditions.push(`action = $${paramIndex++}`);
-      params.push(action);
+      conditions.push(eq(superAdminAuditLogs.action, action));
     }
     if (targetType) {
-      conditions.push(`target_type = $${paramIndex++}`);
-      params.push(targetType);
+      conditions.push(eq(superAdminAuditLogs.targetType, targetType));
     }
     if (tenantId) {
-      conditions.push(`tenant_id = $${paramIndex++}`);
-      params.push(tenantId);
+      conditions.push(eq(superAdminAuditLogs.tenantId, tenantId));
     }
     if (startDate) {
-      conditions.push(`created_at >= $${paramIndex++}`);
-      params.push(new Date(startDate));
+      conditions.push(gte(superAdminAuditLogs.createdAt, new Date(startDate)));
     }
     if (endDate) {
-      conditions.push(`created_at <= $${paramIndex++}`);
-      params.push(new Date(endDate));
+      conditions.push(lte(superAdminAuditLogs.createdAt, new Date(endDate)));
     }
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    // Query audit logs
-    const logsResult = await db.execute(sql`
-      SELECT * FROM super_admin_audit_logs
-      ${sql.raw(whereClause)}
-      ORDER BY created_at DESC
-      LIMIT ${limit}
-      OFFSET ${offset}
-    `);
+    const logsResult = await db
+      .select()
+      .from(superAdminAuditLogs)
+      .where(whereClause)
+      .orderBy(desc(superAdminAuditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
 
-    // Get total count
-    const countResult = await db.execute(sql`
-      SELECT COUNT(*) as total FROM super_admin_audit_logs
-      ${sql.raw(whereClause)}
-    `);
+    const countResult = await db
+      .select({ total: count() })
+      .from(superAdminAuditLogs)
+      .where(whereClause);
 
     return NextResponse.json({
-      data: (logsResult as unknown as { rows: unknown[] })?.rows || [],
-      total: ((countResult as unknown as { rows: Array<{ total: unknown }> })?.rows?.[0]?.total as number) ?? 0,
+      data: logsResult,
+      total: countResult[0]?.total ?? 0,
       limit,
       offset,
     });
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     console.error('[super-admin audit-logs GET]', err);
     return apiError(err);
   }

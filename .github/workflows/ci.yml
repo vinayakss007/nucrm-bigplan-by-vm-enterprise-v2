@@ -127,8 +127,47 @@ jobs:
           DATABASE_SSL: 'false'
           REDIS_URL: redis://localhost:6379
 
+  security-scan:
+    name: Security Scan (SAST)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Run Semgrep SAST
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/javascript
+            p/typescript
+            p/nodejs
+            p/nextjs
+            p/security-audit
+          generateSarif: true
+        continue-on-error: true
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Upload SAST results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+        continue-on-error: true
+
   build:
     name: Build
+    needs: [lint-typecheck, security-scan]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

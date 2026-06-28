@@ -6,10 +6,15 @@
  * - Per-IP, per-user, per-tenant limits
  * - ✅ FIXED: Proper sliding window algorithm with cleanup
  * - Configurable limits per endpoint
+ * - ✅ NEW: Per-plan rate limiting from database
+ * - ✅ NEW: Super admin bypass for unlimited rate limits
  */
 
 import { cache } from './cache/index';
 import { NextResponse } from 'next/server';
+import { db } from '@/drizzle/db';
+import { plans, users } from '@/drizzle/schema';
+import { eq } from 'drizzle-orm';
 
 export interface RateLimitConfig {
   max: number;      // Max requests
@@ -21,6 +26,62 @@ export interface RateLimitResult {
   remaining: number;
   reset: number;    // Timestamp when limit resets
   limit: number;
+}
+
+// Default rate limits (fallback when plan config not available)
+const DEFAULT_RATE_LIMITS: Record<string, number> = {
+  api: 60,
+  auth: 5,
+  contacts: 30,
+  deals: 30,
+  export: 10,
+  import: 5,
+  ai: 30,
+  webhook: 1000,
+  passwordReset: 3,
+  emailVerification: 10,
+  bulk: 5,
+};
+
+/**
+ * Get rate limit for a specific endpoint from plan config
+ */
+export async function getPlanRateLimit(
+  planId: string | null,
+  endpoint: string
+): Promise<number> {
+  if (!planId) return DEFAULT_RATE_LIMITS[endpoint] || 60;
+
+  try {
+    const plan = await db.query.plans.findFirst({
+      where: eq(plans.id, planId),
+      columns: { rateLimitConfig: true },
+    });
+
+    if (!plan?.rateLimitConfig) return DEFAULT_RATE_LIMITS[endpoint] || 60;
+
+    const config = plan.rateLimitConfig as Record<string, number>;
+    return config[endpoint] ?? DEFAULT_RATE_LIMITS[endpoint] ?? 60;
+  } catch {
+    return DEFAULT_RATE_LIMITS[endpoint] || 60;
+  }
+}
+
+/**
+ * Check if user has unlimited rate limit (super admin)
+ */
+export async function hasUnlimitedRateLimit(userId: string): Promise<boolean> {
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { unlimitedRateLimit: true, isSuperAdmin: true },
+    });
+
+    // Super admin always has unlimited rate limits
+    return user?.unlimitedRateLimit === true || user?.isSuperAdmin === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -201,6 +262,39 @@ export async function rateLimitMiddleware(
  */
 export function createLimiter(config: RateLimitConfig): RateLimiter {
   return new RateLimiter(config);
+}
+
+/**
+ * Check rate limit with plan-based limits and super admin bypass
+ * Use this for tenant API routes
+ */
+export async function checkPlanRateLimit(
+  userId: string,
+  planId: string | null,
+  endpoint: string,
+  keyPrefix: string = 'api'
+): Promise<{ result: RateLimitResult; bypassed: boolean } | null> {
+  // Check if user has unlimited rate limit
+  const isUnlimited = await hasUnlimitedRateLimit(userId);
+  if (isUnlimited) {
+    return {
+      result: { allowed: true, remaining: 999999, reset: Date.now() + 60000, limit: 999999 },
+      bypassed: true,
+    };
+  }
+
+  // Get plan-specific limit
+  const maxRequests = await getPlanRateLimit(planId, endpoint);
+
+  // Determine window based on endpoint type
+  const hourlyEndpoints = ['export', 'import', 'ai', 'webhook', 'passwordReset', 'emailVerification', 'bulk'];
+  const window = hourlyEndpoints.includes(endpoint) ? 3600 : 60;
+
+  const key = `${keyPrefix}:${userId}:${endpoint}`;
+  const limiter = new RateLimiter({ max: maxRequests, window });
+  const result = await limiter.check(key);
+
+  return { result, bypassed: false };
 }
 
 // Default export
