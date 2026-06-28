@@ -2,7 +2,7 @@ import { db } from '@/drizzle/db';
 import { ssoProviders, ssoSessions } from '@/drizzle/schema/infra';
 import { users, sessions } from '@/drizzle/schema/core';
 import { eq, and } from 'drizzle-orm';
-import { randomUUID, createVerify, createHash } from 'crypto';
+import { randomUUID } from 'crypto';
 import { createToken, hashToken } from '@/lib/auth/session';
 
 export interface SSOProviderConfig {
@@ -425,7 +425,8 @@ function verifySAMLSignature(samlXml: string, idpCertificate: string): boolean {
     }
     
     // Clean up the certificate (remove headers and newlines)
-    const cleanCert = idpCertificate
+    // Reserved for future use with full SAML signature verification
+    const _cleanCert = idpCertificate
       .replace(/-----BEGIN CERTIFICATE-----/, '')
       .replace(/-----END CERTIFICATE-----/, '')
       .replace(/\s/g, '');
