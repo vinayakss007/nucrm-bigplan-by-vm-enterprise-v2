@@ -306,22 +306,22 @@ export default rateLimiter;
 
 /**
  * Backwards compatibility - old checkRateLimit function
- * Now fetches limits from database
+ * Accepts max/windowMinutes but fetches from DB when available
  */
 export async function checkRateLimit(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   request: any,
-  options: { action?: string } = {}
+  options: { action?: string; max?: number; windowMinutes?: number } = {}
 ) {
-  const { action = 'api' } = options;
+  const { action = 'api', max: fallbackMax, windowMinutes: fallbackWindow } = options;
 
   const ip = request?.headers?.get('x-forwarded-for')?.split(',')[0] || 'unknown';
   const key = `v1_rate:${action}:${ip}`;
 
-  const max = await getRateLimit(null, action);
-  if (max === 0) return null; // Disabled
-
-  const window = getEndpointWindow(action);
+  // Get limit from DB first, fall back to provided max
+  const dbMax = await getRateLimit(null, action);
+  const max = dbMax > 0 ? dbMax : (fallbackMax || 100);
+  const window = fallbackWindow ? fallbackWindow * 60 : getEndpointWindow(action);
   const limiter = new RateLimiter({ max, window });
   const result = await limiter.check(key);
 
