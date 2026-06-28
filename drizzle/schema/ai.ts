@@ -16,7 +16,7 @@
  *       - acceptance-rate tracking (was the suggestion kept?)
  */
 import {
-  pgTable, uuid, text, timestamp, boolean, integer, bigint, index, uniqueIndex, decimal,
+  pgTable, uuid, text, timestamp, boolean, integer, bigint, index, uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import * as utils from './utils';

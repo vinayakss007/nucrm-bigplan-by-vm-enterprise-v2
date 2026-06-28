@@ -26,7 +26,6 @@ import {
   deleteProviderKey,
   listProviderKeyMeta,
   SecretsVaultError,
-  isNamedProvider,
 } from '@/lib/ai/secrets';
 
 /** Named providers with built-in defaults. Any other key in the config is a custom provider. */
