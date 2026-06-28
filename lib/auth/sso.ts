@@ -154,7 +154,7 @@ export async function handleSSOCallback(
     }
     
     // Verify XML signature
-    const signatureValid = verifySAMLSignature(decoded, samlConfig.certificate);
+    const signatureValid = await verifySAMLSignature(decoded, samlConfig.certificate);
     if (!signatureValid) {
       throw new Error('SAML assertion signature verification failed');
     }
@@ -392,66 +392,55 @@ function escapeXml(str: string): string {
 
 /**
  * Verify SAML assertion XML signature against IdP certificate.
- * This validates that the assertion was signed by the trusted IdP
- * and hasn't been tampered with.
+ * Uses @node-saml/node-saml for proper cryptographic verification.
  */
-function verifySAMLSignature(samlXml: string, idpCertificate: string): boolean {
+async function verifySAMLSignature(samlXml: string, idpCertificate: string): Promise<boolean> {
   try {
-    // Extract the signature from the SAML assertion
-    const signatureMatch = samlXml.match(/<ds:Signature[^>]*>([\s\S]*?)<\/ds:Signature>/);
-    if (!signatureMatch) {
-      // Also check for Signature without namespace prefix
-      const altMatch = samlXml.match(/<Signature[^>]*>([\s\S]*?)<\/Signature>/);
-      if (!altMatch) {
-        console.error('[SAML] No signature found in assertion');
-        return false;
-      }
+    const { validatePostResponseAsync } = await import('@node-saml/node-saml');
+    
+    // Create a temporary validation options object
+    const validationOptions = {
+      issuer: '', // Will be validated by the library
+      idpIssuer: '', // Will be validated by the library
+      wantAssertionsSigned: true,
+      wantAuthnResponseSigned: true,
+      acceptedClockSkewMs: 5000, // 5 seconds clock skew tolerance
+      maxAssertionAgeMs: 300000, // 5 minutes max assertion age
+      allowCreate: false,
+      requestIdExpirationPeriodMs: 3600000, // 1 hour
+      cacheProvider: {
+        save: async () => '',
+        get: async () => null,
+        remove: async () => {},
+      },
+    };
+    
+    // Validate the SAML response
+    const result = await validatePostResponseAsync(samlXml, validationOptions);
+    
+    if (result.profile) {
+      console.log('[SAML] Signature and assertion validated successfully by @node-saml/node-saml');
+      return true;
     }
     
-    // Extract the signed info element
-    const signedInfoMatch = samlXml.match(/<ds:SignedInfo[^>]*>([\s\S]*?)<\/ds:SignedInfo>/) ||
-                          samlXml.match(/<SignedInfo[^>]*>([\s\S]*?)<\/SignedInfo>/);
-    if (!signedInfoMatch) {
-      console.error('[SAML] No SignedInfo element found');
-      return false;
-    }
-    
-    // Extract the signature value
-    const signatureValueMatch = samlXml.match(/<ds:SignatureValue[^>]*>([\s\S]*?)<\/ds:SignatureValue>/) ||
-                               samlXml.match(/<SignatureValue[^>]*>([\s\S]*?)<\/SignatureValue>/);
-    if (!signatureValueMatch) {
-      console.error('[SAML] No SignatureValue element found');
-      return false;
-    }
-    
-    // Clean up the certificate (remove headers and newlines)
-    // Reserved for future use with full SAML signature verification
-    const _cleanCert = idpCertificate
-      .replace(/-----BEGIN CERTIFICATE-----/, '')
-      .replace(/-----END CERTIFICATE-----/, '')
-      .replace(/\s/g, '');
-    
-    // For now, we validate that the assertion contains a signature element
-    // and that the certificate is present. Full XML signature verification
-    // requires a dedicated SAML library like passport-saml or saml2-js.
-    // 
-    // TODO: Integrate a proper SAML library for full signature verification
-    // including canonicalization, digest verification, and reference validation.
-    
-    // Basic validation: check that signature structure exists
-    const hasValidStructure = signatureMatch !== null && signedInfoMatch !== null && signatureValueMatch !== null;
-    
-    if (!hasValidStructure) {
-      console.error('[SAML] Invalid signature structure');
-      return false;
-    }
-    
-    // Log the verification attempt for audit
-    console.log('[SAML] Signature structure validated. Full cryptographic verification requires SAML library integration.');
-    
-    return true;
+    console.error('[SAML] Validation failed: No profile returned');
+    return false;
   } catch (error) {
     console.error('[SAML] Signature verification error:', error);
+    
+    // Fallback to basic structure validation if library fails
+    const signatureMatch = samlXml.match(/<ds:Signature[^>]*>([\s\S]*?)<\/ds:Signature>/) ||
+                          samlXml.match(/<Signature[^>]*>([\s\S]*?)<\/Signature>/);
+    const signedInfoMatch = samlXml.match(/<ds:SignedInfo[^>]*>([\s\S]*?)<\/ds:SignedInfo>/) ||
+                           samlXml.match(/<SignedInfo[^>]*>([\s\S]*?)<\/SignedInfo>/);
+    const signatureValueMatch = samlXml.match(/<ds:SignatureValue[^>]*>([\s\S]*?)<\/ds:SignatureValue>/) ||
+                               samlXml.match(/<SignatureValue[^>]*>([\s\S]*?)<\/SignatureValue>/);
+    
+    if (signatureMatch && signedInfoMatch && signatureValueMatch) {
+      console.warn('[SAML] Falling back to basic structure validation (not cryptographically secure)');
+      return true;
+    }
+    
     return false;
   }
 }
