@@ -154,8 +154,8 @@ function buildProviderChain(
   forced?: string,
 ): string[] {
   const enabled = Object.keys(configs)
-    .filter(id => configs[id].enabled)
-    .sort((a, b) => configs[a].fallback_priority - configs[b].fallback_priority);
+    .filter(id => configs[id]!.enabled)
+    .sort((a, b) => configs[a]!.fallback_priority - configs[b]!.fallback_priority);
 
   if (!forced) return enabled;
   return [forced, ...enabled.filter(id => id !== forced)];
