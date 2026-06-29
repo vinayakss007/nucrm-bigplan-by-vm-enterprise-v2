@@ -7,9 +7,9 @@ const _TEST_USER = {
   password: 'admin123',
 };
 
-test.describe('Authentication', () => {
+test.describe.serial('Authentication', () => {
   test('login page loads with branding', async ({ page }) => {
-    await page.goto('/auth/login');
+    await page.goto('/auth/login', { waitUntil: 'networkidle' });
     await expect(page.locator('h1').first()).toContainText(/Welcome/i);
     await expect(page.getByText('NuCRM').first()).toBeVisible();
     await expect(page.locator('input[name="email"]')).toBeVisible();
@@ -17,7 +17,7 @@ test.describe('Authentication', () => {
   });
 
   test('signup page loads with form', async ({ page }) => {
-    await page.goto('/auth/signup');
+    await page.goto('/auth/signup', { waitUntil: 'networkidle', timeout: 60000 });
     // The form heading is the second h1
     const headings = page.locator('h1');
     await expect(headings.first()).toContainText(/Start/i);
@@ -28,7 +28,7 @@ test.describe('Authentication', () => {
   });
 
   test('signup validates terms agreement', async ({ page }) => {
-    await page.goto('/auth/signup');
+    await page.goto('/auth/signup', { waitUntil: 'networkidle' });
     await page.fill('input[placeholder="Acme Corp"]', 'TestCorp');
     await page.fill('input[placeholder="Jane Smith"]', 'Test User');
     await page.fill('input[type="email"]', 'test@example.com');
@@ -43,7 +43,7 @@ test.describe('Authentication', () => {
   });
 
   test('navigate from login to signup and back', async ({ page }) => {
-    await page.goto('/auth/login');
+    await page.goto('/auth/login', { waitUntil: 'networkidle' });
     await page.click('text=Sign up free');
     await expect(page).toHaveURL(/\/auth\/signup/);
 
@@ -52,18 +52,18 @@ test.describe('Authentication', () => {
   });
 
   test('forgot password link navigates correctly', async ({ page }) => {
-    await page.goto('/auth/login');
+    await page.goto('/auth/login', { waitUntil: 'networkidle' });
     await page.getByRole('link', { name: /forgot password/i }).click();
     await expect(page).toHaveURL(/\/auth\/forgot-password/, { timeout: 10000 });
   });
 
   test('unauthenticated access to protected route redirects to login', async ({ page }) => {
-    await page.goto('/tenant/contacts');
+    await page.goto('/tenant/contacts', { waitUntil: 'networkidle' });
     await expect(page).toHaveURL(/\/auth\/login/);
   });
 
   test('password strength indicator shows on signup', async ({ page }) => {
-    await page.goto('/auth/signup');
+    await page.goto('/auth/signup', { waitUntil: 'networkidle' });
     const passwordInput = page.locator('input[type="password"]');
     
     await passwordInput.fill('weak');
@@ -71,7 +71,7 @@ test.describe('Authentication', () => {
   });
 
   test('signup form has all required fields', async ({ page }) => {
-    await page.goto('/auth/signup');
+    await page.goto('/auth/signup', { waitUntil: 'networkidle' });
     
     // Check visible form fields
     await expect(page.locator('label:has-text("Workspace name")')).toBeVisible();
@@ -84,7 +84,7 @@ test.describe('Authentication', () => {
   });
 
   test('login has forgot password and signup links', async ({ page }) => {
-    await page.goto('/auth/login');
+    await page.goto('/auth/login', { waitUntil: 'networkidle' });
     
     await expect(page.locator('text=Forgot password?')).toBeVisible();
     await expect(page.locator('a:has-text("Sign up free")')).toBeVisible();

@@ -5,7 +5,7 @@ import { validateBody } from '@/lib/api/validate';
 import { updateDealSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { deals, contacts, tenants, activities, pipelines, dealStages } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, ilike } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { notifyTenantMembers } from '@/lib/notifications';
@@ -102,7 +102,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         .from(dealStages)
         .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
         .where(and(
-          eq(dealStages.name, body.stage),
+          ilike(dealStages.name, body.stage),
           eq(pipelines.tenantId, ctx.tenantId)
         ))
         .limit(1);

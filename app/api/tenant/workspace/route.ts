@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { tenants, users, plans } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { dbCache, invalidateCache } from '@/lib/db/cache';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -89,6 +90,9 @@ export async function PATCH(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+
+    const limited = await checkRateLimit(request, { action: 'settings_update', max: 30, windowMinutes: 1 });
+    if (limited) return limited;
 
     const body = await request.json();
  
