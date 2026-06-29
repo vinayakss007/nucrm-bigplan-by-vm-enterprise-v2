@@ -76,8 +76,9 @@ describe('AI Secrets Vault', () => {
       expect(result.keyPrefix).toBe('…1234');
     });
 
-    it('throws for invalid provider', async () => {
-      await expect(mod.setProviderKey('t-1', 'invalid', 'key')).rejects.toThrow(mod.SecretsVaultError);
+    it('accepts any provider (provider-agnostic)', async () => {
+      const result = await mod.setProviderKey('t-1', 'invalid', 'key');
+      expect(result.keyPrefix).toBeDefined();
     });
 
     it('throws for empty key on cloud providers', async () => {
@@ -107,9 +108,10 @@ describe('AI Secrets Vault', () => {
 
   describe('getProviderKey', () => {
     it('returns decrypted key for stored provider', async () => {
-      mockDbFindFirst.mockResolvedValueOnce({ encryptedKey: 'enc:sk-real', baseUrl: null });
+      mockDbFindFirst.mockResolvedValueOnce({ encryptedKey: 'enc:sk-real', baseUrl: null, keyType: 'tenant', modelOverride: null });
       const result = await mod.getProviderKey('t-1', 'openai');
-      expect(result).toEqual({ plaintext: 'sk-real', baseUrl: null });
+      expect(result.plaintext).toBe('sk-real');
+      expect(result.baseUrl).toBeNull();
     });
 
     it('returns null when no key exists', async () => {
@@ -118,9 +120,10 @@ describe('AI Secrets Vault', () => {
     });
 
     it('returns empty for ollama with no encrypted key', async () => {
-      mockDbFindFirst.mockResolvedValueOnce({ encryptedKey: '', baseUrl: 'http://localhost:11434' });
+      mockDbFindFirst.mockResolvedValueOnce({ encryptedKey: '', baseUrl: 'http://localhost:11434', keyType: 'tenant', modelOverride: null });
       const result = await mod.getProviderKey('t-1', 'ollama');
-      expect(result).toEqual({ plaintext: '', baseUrl: 'http://localhost:11434' });
+      expect(result.plaintext).toBe('');
+      expect(result.baseUrl).toBe('http://localhost:11434');
     });
 
     it('throws SecretsVaultError on decrypt failure', async () => {
@@ -129,8 +132,10 @@ describe('AI Secrets Vault', () => {
       await expect(mod.getProviderKey('t-1', 'openai')).rejects.toThrow(mod.SecretsVaultError);
     });
 
-    it('throws for invalid provider', async () => {
-      await expect(mod.getProviderKey('t-1', 'invalid')).rejects.toThrow(mod.SecretsVaultError);
+    it('returns null for unknown provider', async () => {
+      mockDbFindFirst.mockResolvedValueOnce(null);
+      const result = await mod.getProviderKey('t-1', 'invalid');
+      expect(result).toBeNull();
     });
   });
 
@@ -160,21 +165,20 @@ describe('AI Secrets Vault', () => {
       await expect(mod.deleteProviderKey('t-1', 'openai')).resolves.not.toThrow();
     });
 
-    it('throws for invalid provider', async () => {
-      await expect(mod.deleteProviderKey('t-1', 'invalid')).rejects.toThrow(mod.SecretsVaultError);
+    it('accepts any provider (provider-agnostic)', async () => {
+      await expect(mod.deleteProviderKey('t-1', 'invalid')).resolves.not.toThrow();
     });
   });
 
   describe('listProviderKeyMeta', () => {
-    it('returns metadata for all providers', async () => {
+    it('returns metadata for providers with keys', async () => {
       mockDbSelectResolve.mockResolvedValueOnce([
         { provider: 'openai', encryptedKey: 'enc:1', keyPrefix: '…a', baseUrl: null, rotatedAt: new Date() },
         { provider: 'anthropic', encryptedKey: 'enc:2', keyPrefix: '…b', baseUrl: null, rotatedAt: new Date() },
       ]);
       const result = await mod.listProviderKeyMeta('t-1');
-      expect(Object.keys(result)).toEqual(['openai', 'anthropic', 'groq', 'ollama']);
       expect(result.openai.present).toBe(true);
-      expect(result.groq.present).toBe(false);
+      expect(result.anthropic.present).toBe(true);
     });
 
     it('returns all false when no keys exist', async () => {
