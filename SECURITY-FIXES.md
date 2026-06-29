@@ -1,8 +1,8 @@
 # Security Fixes — Audit Round #275
 
 **Branch:** `security-fixes-round-275`
-**Files changed:** 15
-**Commits:** 3 (`e4c0462`, `e4c6906`, `f9a743c`)
+**Files changed:** 16
+**Commits:** 4 (`e4c0462`, `e4c6906`, `f9a743c`, batch-4)
 **Verification:** TypeScript compilation clean, ESLint clean
 
 ---
@@ -37,6 +37,13 @@
 | #275 | Rate limiting: missing on export endpoints | High | `app/api/tenant/export/route.ts`, `app/api/tenant/contacts/export/route.ts` |
 | #276 | CSS injection: branding provider unsanitized values | Medium | `lib/branding.ts` |
 | #277 | CSS injection: branded header unsanitized values | Medium | `lib/branding.ts` |
+
+## Batch 4 (2 fixes) — Pending commit
+
+| # | Issue | Severity | Files Changed |
+|---|-------|----------|---------------|
+| #278 | Webhook delivery: per-webhook secrets not used | High | `lib/webhooks/delivery.ts` |
+| #279 | Webhook delivery: no payload size validation | Medium | `lib/webhooks/delivery.ts` |
 
 ---
 
@@ -242,13 +249,13 @@ The Content Security Policy in `next.config.mjs` included `unsafe-eval` and `uns
 
 ## PR Description
 
-**Title:** Fix 16 critical/high security vulnerabilities (SQL injection, SSRF, CSS injection, rate limiting)
+**Title:** Fix 18 critical/high security vulnerabilities (SQL injection, SSRF, CSS injection, rate limiting, webhook secrets)
 
 **Body:**
 
 ### Summary
 
-This PR addresses 16 security vulnerabilities identified during a comprehensive codebase audit. All fixes follow a defensive-in-depth approach with allowlist validation + parameterized queries.
+This PR addresses 18 security vulnerabilities identified during a comprehensive codebase audit. All fixes follow a defensive-in-depth approach with allowlist validation + parameterized queries.
 
 ### Changes
 
@@ -269,6 +276,8 @@ This PR addresses 16 security vulnerabilities identified during a comprehensive 
 | 13 | Auth rate limiting (reset-password) | High | `app/api/auth/reset-password/route.ts` | 3 req/hr via checkRateLimit |
 | 14 | Export rate limiting | High | `app/api/tenant/export/route.ts`, `contacts/export/route.ts` | 10 req/hr via limiters.export |
 | 15-16 | CSS injection — branding | Medium | `lib/branding.ts` | sanitizeColor + sanitizeCssUrl |
+| 17 | Webhook secrets: per-webhook not used | High | `lib/webhooks/delivery.ts` | DB lookup + secretOverride param |
+| 18 | Webhook delivery: no payload size limit | Medium | `lib/webhooks/delivery.ts` | 1 MB MAX_WEBHOOK_PAYLOAD_SIZE_BYTES |
 
 ### Verification
 - TypeScript compilation: 0 errors
@@ -280,6 +289,7 @@ This PR addresses 16 security vulnerabilities identified during a comprehensive 
 - `WEBHOOK_SECRET` env var required in production (was already best practice)
 - `reset-password` now returns 429 after 3 requests per hour
 - Tenant exports now return 429 after 10 requests per hour
+- Webhook payloads > 1 MB now rejected before delivery
 
 ### Related
 - Closes #262 (Report Builder SQL injection)
@@ -298,6 +308,8 @@ This PR addresses 16 security vulnerabilities identified during a comprehensive 
 - Closes #275 (Export rate limiting)
 - Closes #276 (CSS injection — branding)
 - Closes #277 (CSS injection — header)
+- Closes #278 (Per-webhook secrets not used)
+- Closes #279 (Webhook payload size validation)
 
 ---
 ---
@@ -306,9 +318,9 @@ This PR addresses 16 security vulnerabilities identified during a comprehensive 
 
 **Scan date:** 2026-06-29
 **Status:** Identified, NOT yet fixed
-**Total issues:** 14 (5 Critical, 4 High, 5 Medium) — 1 cancelled as false positive (HIGH-3)
-**Fixed so far:** 13 (6 batch-1 + 6 batch-2 + 4 batch-3 — includes 2 combined fixes)
-**Remaining:** 3 unfixed (1 Critical: .env.production committed, 1 High: webhook secrets not enveloped, 1 Medium: webhook payload validation)
+**Total issues:** 15 (5 Critical, 3 High, 5 Medium) — 1 cancelled as false positive (HIGH-3)
+**Fixed so far:** 15 (6 batch-1 + 6 batch-2 + 4 batch-3 + 2 batch-4 — includes 2 combined fixes)
+**Remaining:** 1 unfixed (1 Critical: .env.production committed to git history — requires BFG/filter-branch)
 
 ---
 
@@ -755,14 +767,14 @@ if (JSON.stringify(payload.payload).length > MAX_PAYLOAD_SIZE) {
 | CRITICAL-4 | Critical | `.env.production` committed | `deploy/.env.production` | **UNFIXED** |
 | CRITICAL-5 | Critical | Hardcoded DB credentials | `drizzle.config.ts` | **FIXED** |
 | HIGH-1 | High | SSRF — webhook delivery | `lib/webhooks/delivery.ts` | **FIXED** |
-| HIGH-2 | High | Webhook secrets not enveloped | `lib/webhooks/delivery.ts` | **UNFIXED** |
+| HIGH-2 | High | Webhook secrets not enveloped | `lib/webhooks/delivery.ts` | **FIXED** |
 | HIGH-3 | High | Missing superadmin auth checks | `app/api/superadmin/` (15+ routes) | **FALSE POSITIVE** — all routes already have `isSuperAdmin` |
 | HIGH-4 | High | No rate limiting — auth endpoints | `app/api/auth/` routes | **FIXED** |
 | HIGH-5 | High | No rate limiting — export endpoints | `app/api/tenant/*/export/` | **FIXED** |
 | MEDIUM-1 | Medium | CSS injection — branding provider | `components/branding/branding-provider.tsx` | **FIXED** |
 | MEDIUM-2 | Medium | CSS injection — branded header | `components/shared/branded-header.tsx` | **FIXED** |
 | MEDIUM-3 | Medium | Minor SQL injection — webhook stats | `lib/webhooks/delivery.ts:226` | **FIXED** |
-| MEDIUM-4 | Medium | Missing webhook payload validation | `lib/webhooks/delivery.ts` | **UNFIXED** |
+| MEDIUM-4 | Medium | Missing webhook payload validation | `lib/webhooks/delivery.ts` | **FIXED** |
 
 ---
 
@@ -930,6 +942,53 @@ Both functions feed into `dangerouslySetInnerHTML` in `branding-provider.tsx` an
 - Added `sanitizeColor(value)` — validates hex (`#fff`), rgb/rgba, hsl/hsla, and a named-color allowlist; blocks values containing `;`, `{`, `()`
 - Added `sanitizeCssUrl(url)` — parses with `new URL()`, rejects non-`http:/https:` protocols, returns `url()` on parse failure
 - Applied to all CSS property values in both `brandingToCssVars()` and `generateCSSVariables()`
+
+### Verification
+- TypeScript: clean
+- ESLint: clean
+
+---
+
+## Batch 4 Fixes — Applied 2026-06-29
+
+### FIX 17: Per-Webhook Secret in Signature Generation
+**File:** `lib/webhooks/delivery.ts`
+**Severity:** HIGH
+**CWE:** CWE-310 (Cryptographic Issues)
+
+### Problem
+`generateSignature()` always used the global `WEBHOOK_SECRET` env var, ignoring the per-webhook `secret` column in the `webhooks` table. This meant:
+- All webhooks shared the same signing secret — compromising one compromised all
+- The per-webhook `secret` field was dead code
+- No ability to rotate secrets per webhook
+
+### Fix
+- Added optional `secretOverride` parameter to `generateSignature(delivery, secretOverride?)`
+- In `processWebhookDelivery`, look up the webhook's `secret` from the DB via `db.query.webhooks.findFirst()`
+- Pass per-webhook secret to `generateSignature`; falls back to global `WEBHOOK_SECRET` if not set
+
+### Verification
+- TypeScript: clean
+- ESLint: clean
+
+---
+
+### FIX 18: Payload Size Validation on Webhook Delivery
+**File:** `lib/webhooks/delivery.ts`
+**Severity:** MEDIUM
+**CWE:** CWE-770 (Allocation of Resources Without Limits or Throttling)
+
+### Problem
+Webhook payloads were serialized and sent without size limits. A malicious or buggy webhook producer could queue multi-GB payloads, causing:
+- Memory exhaustion in the delivery process
+- Network timeouts and resource waste
+- Potential denial-of-service on the delivery infrastructure
+
+### Fix
+- Added `MAX_WEBHOOK_PAYLOAD_SIZE_BYTES = 1 * 1024 * 1024` (1 MB) constant
+- Before `fetch()`, validates `JSON.stringify(payloadData).length` against limit
+- Throws with descriptive error including actual size in MB if exceeded
+- Payload is serialized once for size check, reused in the `fetch()` body
 
 ### Verification
 - TypeScript: clean
