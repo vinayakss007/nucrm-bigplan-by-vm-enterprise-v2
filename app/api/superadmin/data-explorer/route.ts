@@ -131,6 +131,11 @@ async function handleSchemaInfo() {
 
     for (const table of tenantTables.slice(0, 20)) {
       try {
+        // SECURITY: Validate table name against regex to prevent SQL injection
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(table.table_name)) {
+          continue;
+        }
+
         const columnsRes = await db.execute(sql`
           SELECT column_name, data_type, is_nullable
           FROM information_schema.columns
@@ -138,7 +143,7 @@ async function handleSchemaInfo() {
           ORDER BY ordinal_position
         `);
 
-        const countResult = await db.execute(sql`SELECT count(*) FROM "${sql.raw(table.table_name)}"`);
+        const countResult = await db.execute(sql`SELECT count(*) FROM ${sql.identifier(table.table_name)}`);
 
         tableDetails.push({
           table: table.table_name,

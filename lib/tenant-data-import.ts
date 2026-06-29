@@ -239,6 +239,7 @@ export class TenantDataImporter {
 
   /**
    * Import from SQL string (alternative format)
+   * SECURITY: Only allows INSERT statements targeting known tables.
    */
   static async importFromSQL(tenantId: string, sqlString: string): Promise<TenantImportResult> {
     const result: TenantImportResult = {
@@ -247,35 +248,41 @@ export class TenantDataImporter {
       errors: [],
     };
 
+    const statements = sqlString
+      .split(';')
+      .map(s => s.trim())
+      .filter(s => s && !s.startsWith('--') && s.toUpperCase() !== 'BEGIN' && s.toUpperCase() !== 'COMMIT');
+
+    // SECURITY: Reject any statement that is not an INSERT — prevents DDL, DROP, TRUNCATE, UPDATE, DELETE injection
+    for (const statement of statements) {
+      const upper = statement.toUpperCase().trim();
+      if (!upper.startsWith('INSERT')) {
+        throw new Error(
+          `Security violation: Only INSERT statements allowed in SQL import. ` +
+          `Found: ${upper.substring(0, 80)}...`
+        );
+      }
+    }
+
     try {
       await db.transaction(async (tx) => {
-        // Split by semicolons and execute each statement
-        const statements = sqlString
-          .split(';')
-          .map(s => s.trim())
-          .filter(s => s && !s.startsWith('--') && s.toUpperCase() !== 'BEGIN' && s.toUpperCase() !== 'COMMIT');
-
         for (const statement of statements) {
           try {
             const res = await tx.execute(sql.raw(statement));
             if (res.rowCount) {
               result.recordsRestored += res.rowCount;
             }
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } catch (err: any) {
-            result.errors.push({ table: 'sql', error: err.message });
-            console.warn('[Import SQL] Statement failed:', err.message);
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            result.errors.push({ table: 'sql', error: message });
+            console.warn('[Import SQL] Statement failed:', message);
           }
         }
       });
-      result.tablesRestored = 1; // SQL batch
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      throw new Error(`SQL import failed: ${err.message}`);
+      result.tablesRestored = 1;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`SQL import failed: ${message}`);
     }
 
     return result;

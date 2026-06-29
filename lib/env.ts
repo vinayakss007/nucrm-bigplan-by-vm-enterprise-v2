@@ -138,6 +138,20 @@ export function validateEnv(): EnvConfig {
     errors.push('ENCRYPTION_KEY must be at least 32 characters (hex, 64 chars recommended)');
   }
 
+  // Validate WEBHOOK_SECRET (required for production webhook signatures)
+  const webhookSecret = getOptionalEnv('WEBHOOK_SECRET');
+  if (!webhookSecret) {
+    if (getOptionalEnv('NODE_ENV') === 'production') {
+      errors.push('WEBHOOK_SECRET is required in production');
+    }
+  } else if (webhookSecret === 'webhook-secret-change-in-production') {
+    errors.push('WEBHOOK_SECRET must be changed from the default placeholder value');
+  } else {
+    try { validateNotWeak('WEBHOOK_SECRET', webhookSecret); } catch (e: unknown) {
+      errors.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   // Validate DATABASE_POOL_SIZE
   const poolSize = parseInt(getOptionalEnv('DATABASE_POOL_SIZE', '10') ?? '10', 10);
   if (isNaN(poolSize) || poolSize < 1 || poolSize > 100) {

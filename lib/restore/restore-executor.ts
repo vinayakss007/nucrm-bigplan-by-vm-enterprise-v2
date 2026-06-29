@@ -84,6 +84,22 @@ const TABLE_DEPENDENCY_ORDER: string[] = [
   'billing_events', 'usage_snapshots', 'usage_alerts', 'limit_violations', 'announcements',
 ];
 
+/** Allowlist of tables that can be restored — derived from TABLE_DEPENDENCY_ORDER */
+const RESTORABLE_TABLES = new Set(TABLE_DEPENDENCY_ORDER);
+
+function validateTableName(table: string): void {
+  if (!RESTORABLE_TABLES.has(table)) {
+    throw new Error(`Invalid table name: '${table}'. Table not in restore allowlist.`);
+  }
+}
+
+/** Validate that snapshot data keys only reference allowlisted tables */
+function validateSnapshotTables(snapshotData: Record<string, unknown[]>): void {
+  for (const table of Object.keys(snapshotData)) {
+    validateTableName(table);
+  }
+}
+
 /**
  * Order tables by foreign key dependency.
  */
@@ -149,8 +165,11 @@ export async function createPreRestoreSnapshot(
   let totalRecords = 0;
   
   for (const table of tables) {
+    validateTableName(table);
     try {
-      const result = await db.execute(sql.raw(`SELECT * FROM public.${table} WHERE tenant_id = '${tenantId}'`));
+      const result = await db.execute(
+        sql`SELECT * FROM ${sql.identifier(table)} WHERE tenant_id = ${tenantId}`
+      );
       snapshotData[table] = result.rows;
       totalRecords += result.rows.length;
     } catch {
@@ -187,19 +206,20 @@ export async function rollbackToSnapshot(snapshotId: string, tenantId: string): 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const snapshotData = snapshot.snapshotData as Record<string, any[]>;
   
+  validateSnapshotTables(snapshotData);
+
   await db.transaction(async (tx) => {
     for (const [table, rows] of Object.entries(snapshotData)) {
       // Delete current data
-      await tx.execute(sql.raw(`DELETE FROM public.${table} WHERE tenant_id = '${tenantId}'`));
+      await tx.execute(sql`DELETE FROM ${sql.identifier(table)} WHERE tenant_id = ${tenantId}`);
       
       // Restore from snapshot
       if (Array.isArray(rows) && rows.length > 0) {
         const columns = Object.keys(rows[0]);
         for (const row of rows) {
-          const values = columns.map(c => formatSQLValue(row[c])).join(', ');
-          await tx.execute(sql.raw(
-            `INSERT INTO public.${table} (${columns.join(', ')}) VALUES (${values})`
-          ));
+          const colList = sql.join(columns.map(c => sql.identifier(c)), sql`, `);
+          const placeholders = sql.join(columns.map(c => sql`${row[c]}`), sql`, `);
+          await tx.execute(sql`INSERT INTO ${sql.identifier(table)} (${colList}) VALUES (${placeholders})`);
         }
       }
     }
@@ -347,18 +367,6 @@ export async function executeSelectiveRestore(
   }
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function formatSQLValue(value: any): string {
-  if (value === null || value === undefined) return 'NULL';
-  if (typeof value === 'number') return value.toString();
-  if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
-  if (value instanceof Date) return `'${value.toISOString()}'`;
-  if (typeof value === 'object') return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
-  return `'${String(value).replace(/'/g, "''")}'`;
-}
-
 export async function countExistingRecords(
   tenantId: string,
   tables: string[]
@@ -366,10 +374,11 @@ export async function countExistingRecords(
   const counts: Record<string, number> = {};
   
   for (const table of tables) {
+    validateTableName(table);
     try {
-      const result = await db.execute(sql.raw(
-        `SELECT count(*)::int as cnt FROM public.${table} WHERE tenant_id = '${tenantId}'`
-      ));
+      const result = await db.execute(
+        sql`SELECT count(*)::int as cnt FROM ${sql.identifier(table)} WHERE tenant_id = ${tenantId}`
+      );
       const row = result.rows[0] as { cnt?: number } | undefined;
       counts[table] = row?.cnt ?? 0;
     } catch {

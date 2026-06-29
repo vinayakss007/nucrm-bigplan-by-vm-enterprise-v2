@@ -194,18 +194,32 @@ async function executeReport(params: ReportParams): Promise<ReportResult> {
   // Add soft-delete filter for applicable entities
   const softDeleteFilter = ['contacts', 'deals'].includes(entity) ? ' AND deleted_at IS NULL' : '';
 
-  const query = `
-    SELECT 
-      ${groupExpr} as label,
-      ${metricExpr} as value
-    FROM ${tableName}
-    WHERE tenant_id = $1 ${dateFilter} ${softDeleteFilter}
-    GROUP BY ${groupExpr}
+  const conditions = [sql`tenant_id = ${tenantId}`];
+
+  if (dateRange?.from) {
+    conditions.push(sql`created_at >= ${new Date(dateRange.from)}`);
+  }
+  if (dateRange?.to) {
+    conditions.push(sql`created_at <= ${new Date(dateRange.to)}`);
+  }
+  if (['contacts', 'deals'].includes(entity)) {
+    conditions.push(sql`deleted_at IS NULL`);
+  }
+
+  const whereClause = conditions.length > 0
+    ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
+    : sql``;
+
+  const { rows } = await db.execute(sql`
+    SELECT
+      ${sql.raw(groupExpr)} as label,
+      ${sql.raw(metricExpr)} as value
+    FROM ${sql.raw(tableName)}
+    ${whereClause}
+    GROUP BY ${sql.raw(groupExpr)}
     ORDER BY value DESC
     LIMIT ${limit}
-  `;
-
-  const { rows } = await db.execute(sql.raw(buildParameterizedQuery(query, queryParams)));
+  `);
 
   // Calculate total and percentages
   const data = (rows as { label?: unknown; value?: unknown }[]).map(row => ({
