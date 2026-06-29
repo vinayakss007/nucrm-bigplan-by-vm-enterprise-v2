@@ -139,20 +139,30 @@ export class RateLimiter {
    */
   async check(
     key: string,
-    config?: Partial<RateLimitConfig>
+    maxOrConfig?: Partial<RateLimitConfig> | number,
+    window?: number
   ): Promise<RateLimitResult> {
-    const { max, window } = { ...this.defaultConfig, ...config };
+    let max: number;
+    let win: number;
+    if (typeof maxOrConfig === 'number') {
+      max = maxOrConfig;
+      win = window ?? this.defaultConfig.window;
+    } else {
+      const merged = { ...this.defaultConfig, ...maxOrConfig };
+      max = merged.max;
+      win = merged.window;
+    }
     const now = Date.now();
 
     const windowKey = `rate:${key}`;
 
     // Add current request with timestamp
-    const current = await cache.incr(windowKey, window);
+    const current = await cache.incr(windowKey, win);
 
     const result: RateLimitResult = {
       allowed: current <= max,
       remaining: Math.max(0, max - current),
-      reset: now + (window * 1000),
+      reset: now + (win * 1000),
       limit: max,
     };
 
@@ -208,8 +218,18 @@ export class RateLimiter {
  * Rate limit error
  */
 export class RateLimitError extends Error {
-  constructor(public result: RateLimitResult) {
-    super(`Rate limit exceeded. Try again in ${Math.ceil((result.reset - Date.now()) / 1000)}s`);
+  public result: RateLimitResult;
+  constructor(resultOrLimit: RateLimitResult | number) {
+    if (typeof resultOrLimit === 'number') {
+      const limit = resultOrLimit;
+      const reset = Date.now() + 60000;
+      const result: RateLimitResult = { allowed: false, remaining: 0, reset, limit };
+      super(`Rate limit exceeded. Try again in 60s`);
+      this.result = result;
+    } else {
+      super(`Rate limit exceeded. Try again in ${Math.ceil((resultOrLimit.reset - Date.now()) / 1000)}s`);
+      this.result = resultOrLimit;
+    }
     this.name = 'RateLimitError';
   }
 }
@@ -281,7 +301,7 @@ export async function createEndpointLimiter(endpoint: string): Promise<RateLimit
  */
 export async function rateLimitMiddleware(
   request: Request,
-  endpoint: string,
+  endpointOrLimiter: string | RateLimiter,
   keyPrefix: string = 'api'
 ): Promise<RateLimitResult | null> {
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
@@ -289,6 +309,13 @@ export async function rateLimitMiddleware(
 
   const identifier = authHeader ? `user:${authHeader.slice(0, 20)}` : `ip:${ip}`;
   const key = `${keyPrefix}:${identifier}`;
+
+  // If a RateLimiter instance is passed directly (backward compat)
+  if (endpointOrLimiter instanceof RateLimiter) {
+    return endpointOrLimiter.check(key);
+  }
+
+  const endpoint = endpointOrLimiter;
 
   // Get limit from DB
   const max = await getRateLimit(null, endpoint);
@@ -298,6 +325,32 @@ export async function rateLimitMiddleware(
   const limiter = new RateLimiter({ max, window });
   return limiter.check(key);
 }
+
+/**
+ * Backward-compatible createLimiter factory
+ */
+export function createLimiter(config: { max?: number; window?: number; windowMs?: number } = {}): RateLimiter {
+  const window = config.window ?? (config.windowMs ? Math.ceil(config.windowMs / 1000) : 60);
+  const max = config.max ?? 100;
+  return new RateLimiter({ max, window });
+}
+
+/**
+ * Pre-configured limiters per endpoint (backward compat)
+ */
+export const limiters: Record<string, RateLimiter> = {
+  api: new RateLimiter({ max: 60, window: 60 }),
+  auth: new RateLimiter({ max: 10, window: 60 }),
+  export: new RateLimiter({ max: 10, window: 3600 }),
+  import: new RateLimiter({ max: 10, window: 3600 }),
+  ai: new RateLimiter({ max: 30, window: 3600 }),
+  webhook: new RateLimiter({ max: 30, window: 3600 }),
+  passwordReset: new RateLimiter({ max: 3, window: 3600 }),
+  emailVerification: new RateLimiter({ max: 5, window: 3600 }),
+  contacts: new RateLimiter({ max: 60, window: 60 }),
+  deals: new RateLimiter({ max: 60, window: 60 }),
+  bulk: new RateLimiter({ max: 10, window: 3600 }),
+};
 
 // Default export - dynamically created per request
 export const rateLimiter = new RateLimiter({ max: 1, window: 60 });

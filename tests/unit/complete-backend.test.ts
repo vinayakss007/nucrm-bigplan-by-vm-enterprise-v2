@@ -4,6 +4,22 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+vi.mock('@/drizzle/db', () => ({
+  db: {
+    query: {
+      plans: { findFirst: vi.fn(async () => null) },
+      users: { findFirst: vi.fn(async () => null) },
+      systemSettings: { findFirst: vi.fn(async () => null) },
+    },
+  },
+}));
+
+vi.mock('@/drizzle/schema', () => ({
+  plans: {},
+  users: {},
+  systemSettings: {},
+}));
+
 describe('cache/index - comprehensive', () => {
   beforeEach(() => {
     vi.resetModules();
