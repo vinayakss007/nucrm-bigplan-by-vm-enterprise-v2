@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Building2, Users, CreditCard, BarChart3,
   Settings, LogOut, Crown, Activity, Heart,
   Database, AlertTriangle, MessageSquare, Megaphone, TrendingUp, Gauge, Zap,
-  X, Menu, RotateCcw, ChevronDown, Search, Book, Terminal,
+  X, Menu, RotateCcw, ChevronDown, Search, Book, Shield, Terminal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
