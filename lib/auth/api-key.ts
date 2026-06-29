@@ -147,6 +147,20 @@ export async function revokeApiKey(keyId: string, tenantId: string): Promise<boo
 }
 
 /**
+ * Rotate an API key (revoke old, create new)
+ */
+export async function rotateApiKey(
+  keyId: string,
+  tenantId: string,
+  userId: string,
+  name: string,
+  scopes: string[]
+): Promise<{ key: string; prefix: string } | null> {
+  await revokeApiKey(keyId, tenantId);
+  return await generateApiKey(tenantId, userId, name, scopes);
+}
+
+/**
  * Get API key usage stats
  * Uses parameterized queries to prevent SQL injection
  */
