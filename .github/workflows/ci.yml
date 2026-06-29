@@ -71,8 +71,8 @@ jobs:
 
       - run: npm ci
 
-      - name: Run migrations
-        run: npm run db:migrate
+      - name: Sync database schema
+        run: npm run db:sync
 
       - name: Unit tests
         run: npm run test:unit
@@ -115,8 +115,8 @@ jobs:
 
       - run: npm ci
 
-      - name: Run migrations
-        run: npm run db:migrate
+      - name: Sync database schema
+        run: npm run db:sync
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_test
 
