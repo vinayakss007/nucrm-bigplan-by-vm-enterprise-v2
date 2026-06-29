@@ -8,9 +8,11 @@
  */
 
 import { db } from '@/drizzle/db';
-import { webhookDeliveries } from '@/drizzle/schema/automation';
+import { webhookDeliveries, webhooks } from '@/drizzle/schema/automation';
 import { eq, and, sql, gt } from 'drizzle-orm';
 import { devLogger } from '@/lib/dev-logger';
+
+const MAX_WEBHOOK_PAYLOAD_SIZE_BYTES = 1 * 1024 * 1024; // 1 MB
 
 export interface WebhookPayload {
   id: string;
@@ -94,6 +96,16 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
   const attempt = ((delivery.metadata as { attempt?: number })?.attempt || 0) + 1;
   const maxRetries = (delivery.metadata as { max_retries?: number })?.max_retries || 3;
 
+  // Look up per-webhook secret (falls back to global WEBHOOK_SECRET)
+  let webhookSecret: string | undefined;
+  if (delivery.webhookId) {
+    const webhook = await db.query.webhooks.findFirst({
+      where: eq(webhooks.id, delivery.webhookId),
+      columns: { secret: true },
+    });
+    webhookSecret = webhook?.secret ?? undefined;
+  }
+
   const sigHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     'User-Agent': 'NuCRM-Webhook/1.0',
@@ -105,11 +117,18 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
       status: 'pending',
       payload: payloadData,
       max_retries: maxRetries,
-    } as unknown as WebhookDelivery),
+    } as unknown as WebhookDelivery, webhookSecret),
     ...(headers || {}),
   };
 
   const startTime = Date.now();
+
+  // Payload size validation: prevent memory exhaustion
+  const serializedPayload = JSON.stringify(payloadData);
+  if (serializedPayload.length > MAX_WEBHOOK_PAYLOAD_SIZE_BYTES) {
+    const sizeMB = (serializedPayload.length / (1024 * 1024)).toFixed(2);
+    throw new Error(`Webhook payload exceeds 1 MB limit (${sizeMB} MB)`);
+  }
 
   // SSRF protection: block requests to internal/loopback addresses
   try {
@@ -214,9 +233,9 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
 /**
  * Generate webhook signature for verification
  */
-export async function generateSignature(delivery: WebhookDelivery): Promise<string> {
+export async function generateSignature(delivery: WebhookDelivery, secretOverride?: string): Promise<string> {
   const { createHmac } = await import('crypto');
-  const secret = process.env['WEBHOOK_SECRET'];
+  const secret = secretOverride || process.env['WEBHOOK_SECRET'];
   
   if (!secret || secret === 'webhook-secret-change-in-production') {
     throw new Error('WEBHOOK_SECRET environment variable must be configured in production');
