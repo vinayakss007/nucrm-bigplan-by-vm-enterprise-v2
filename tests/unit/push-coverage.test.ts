@@ -3,6 +3,22 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+vi.mock('@/drizzle/db', () => ({
+  db: {
+    query: {
+      plans: { findFirst: vi.fn(async () => null) },
+      users: { findFirst: vi.fn(async () => null) },
+      systemSettings: { findFirst: vi.fn(async () => null) },
+    },
+  },
+}));
+
+vi.mock('@/drizzle/schema', () => ({
+  plans: {},
+  users: {},
+  systemSettings: {},
+}));
+
 // Global mock for database client to prevent unhandled rejections in all tests
 vi.mock('@/lib/db/client', () => ({
   query: vi.fn().mockResolvedValue({ rows: [] }),
