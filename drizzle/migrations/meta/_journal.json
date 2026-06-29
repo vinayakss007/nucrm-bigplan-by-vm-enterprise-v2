@@ -163,46 +163,6 @@
       "when": 1781712000000,
       "tag": "0022_follow_ups_add_updated_by",
       "breakpoints": true
-    },
-    {
-      "idx": 23,
-      "version": "7",
-      "dialect": "postgresql",
-      "when": 1782000000000,
-      "tag": "0023_ai_key_type_personal_system",
-      "breakpoints": true
-    },
-    {
-      "idx": 24,
-      "version": "7",
-      "dialect": "postgresql",
-      "when": 1782100000000,
-      "tag": "0024_ai_model_override",
-      "breakpoints": true
-    },
-    {
-      "idx": 25,
-      "version": "7",
-      "dialect": "postgresql",
-      "when": 1782200000000,
-      "tag": "0025_ai_credits_system",
-      "breakpoints": true
-    },
-    {
-      "idx": 26,
-      "version": "7",
-      "dialect": "postgresql",
-      "when": 1782300000000,
-      "tag": "0026_per_plan_rate_limiting",
-      "breakpoints": true
-    },
-    {
-      "idx": 27,
-      "version": "7",
-      "dialect": "postgresql",
-      "when": 1782400000000,
-      "tag": "0032_rename_announcement_body_to_content",
-      "breakpoints": true
     }
   ]
 }
