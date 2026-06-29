@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       ));
 
     const stepsDone = progress.filter(p => p.isCompleted).map(p => p.stepName);
-    const isCompleted = stepsDone.includes('onboarding_complete') || progress.some(p => p.stepName === 'all' && p.isCompleted);
+    const isCompleted = stepsDone.includes('onboarding_complete') || stepsDone.includes('completed') || progress.some(p => p.stepName === 'all' && p.isCompleted);
 
     return NextResponse.json({ 
       steps_done: stepsDone, 
