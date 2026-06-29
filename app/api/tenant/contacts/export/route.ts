@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { generateExportData } from '@/lib/export';
+import { limiters, getRateLimitHeaders } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,6 +10,15 @@ export async function GET(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     const deny = requirePerm(ctx, 'contacts.export' as string);
     if (deny) return deny;
+
+    const rlKey = `export:contacts:${ctx.tenantId}`;
+    const rlResult = await limiters.export.check(rlKey);
+    if (!rlResult.allowed) {
+      return NextResponse.json(
+        { error: 'Export rate limit exceeded. Try again later.' },
+        { status: 429, headers: getRateLimitHeaders(rlResult) }
+      );
+    }
 
     const { searchParams } = new URL(request.url);
     const q = searchParams.get('q') || undefined;

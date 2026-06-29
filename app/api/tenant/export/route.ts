@@ -6,12 +6,22 @@ import { contacts, companies, deals } from '@/drizzle/schema';
 import { tasks, activities } from '@/drizzle/schema';
 import { users, tenantMembers } from '@/drizzle/schema';
 import { eq, asc } from 'drizzle-orm';
+import { limiters, getRateLimitHeaders } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+
+    const rlKey = `export:${ctx.tenantId}`;
+    const rlResult = await limiters.export.check(rlKey);
+    if (!rlResult.allowed) {
+      return NextResponse.json(
+        { error: 'Export rate limit exceeded. Try again later.' },
+        { status: 429, headers: getRateLimitHeaders(rlResult) }
+      );
+    }
 
     const tid = ctx.tenantId;
 

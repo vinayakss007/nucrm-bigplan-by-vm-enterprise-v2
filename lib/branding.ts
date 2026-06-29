@@ -102,6 +102,47 @@ export async function getBrandingForDomain(domain: string): Promise<BrandingConf
 }
 
 /**
+ * Sanitize a CSS color value to prevent injection.
+ * Only allows hex colors, rgb/rgba, hsl/hsla, and named CSS colors.
+ * Blocks values containing semicolons, braces, or other CSS-breaking characters.
+ */
+function sanitizeColor(value: string): string {
+  // Block if contains characters that could break CSS property context
+  if (/[;{}()]/.test(value)) {
+    return '#000000';
+  }
+  // Allow hex (#fff, #ffffff), rgb(), rgba(), hsl(), hsla(), and common named colors
+  if (/^#[0-9a-fA-F]{3,8}$/.test(value)) return value;
+  if (/^(rgb|rgba|hsl|hsla)\s*\(/.test(value)) return value;
+  // Named colors allowlist (common ones)
+  const namedColors = new Set([
+    'transparent', 'currentcolor', 'inherit', 'initial', 'unset',
+    'black', 'white', 'red', 'green', 'blue', 'yellow', 'orange', 'purple',
+    'gray', 'grey', 'cyan', 'magenta', 'lime', 'olive', 'navy', 'teal',
+    'maroon', 'aqua', 'fuchsia', 'silver',
+  ]);
+  if (namedColors.has(value.toLowerCase())) return value;
+  // Fallback: reject anything that doesn't look like a safe color
+  return '#000000';
+}
+
+/**
+ * Sanitize a URL value for use inside CSS url() function.
+ * Blocks javascript:, data:, and non-http protocols.
+ */
+function sanitizeCssUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return 'url()';
+    }
+    return `url(${parsed.href})`;
+  } catch {
+    return 'url()';
+  }
+}
+
+/**
  * Sanitize custom CSS to prevent XSS attacks.
  * Strips any content that could break out of a <style> tag or inject scripts.
  */
@@ -127,12 +168,12 @@ export function sanitizeCustomCss(css: string): string {
 export function generateCSSVariables(config: BrandingConfig): string {
   const vars: string[] = [];
 
-  vars.push(`--brand-primary: ${config.primaryColor};`);
-  vars.push(`--brand-secondary: ${config.secondaryColor};`);
-  vars.push(`--brand-accent: ${config.accentColor};`);
+  vars.push(`--brand-primary: ${sanitizeColor(config.primaryColor)};`);
+  vars.push(`--brand-secondary: ${sanitizeColor(config.secondaryColor)};`);
+  vars.push(`--brand-accent: ${sanitizeColor(config.accentColor)};`);
 
   if (config.logoUrl) {
-    vars.push(`--brand-logo-url: url(${config.logoUrl});`);
+    vars.push(`--brand-logo-url: ${sanitizeCssUrl(config.logoUrl)};`);
   }
 
   if (config.customCss) {
@@ -200,10 +241,10 @@ export type TenantBranding = BrandingConfig;
  */
 export function brandingToCssVars(branding: TenantBranding): Record<string, string> {
   return {
-    '--brand-primary': branding.primaryColor,
-    '--brand-secondary': branding.secondaryColor,
-    '--brand-accent': branding.accentColor,
-    ...(branding.logoUrl ? { '--brand-logo-url': `url(${branding.logoUrl})` } : {}),
+    '--brand-primary': sanitizeColor(branding.primaryColor),
+    '--brand-secondary': sanitizeColor(branding.secondaryColor),
+    '--brand-accent': sanitizeColor(branding.accentColor),
+    ...(branding.logoUrl ? { '--brand-logo-url': sanitizeCssUrl(branding.logoUrl) } : {}),
     '--brand-header-layout': branding.headerLayout,
   };
 }
