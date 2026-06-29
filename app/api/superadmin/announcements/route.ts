@@ -46,13 +46,14 @@ export async function POST(request: NextRequest) {
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     
     const b = await request.json();
-    if (!b.title || !b.content) return NextResponse.json({ error: 'title and content required' }, { status: 400 });
+    const content = b.body || b.content; // Accept both 'body' and 'content' fields
+    if (!b.title || !content) return NextResponse.json({ error: 'title and body (or content) required' }, { status: 400 });
 
     const [row] = await db
       .insert(announcements)
       .values({
         title: b.title,
-        content: b.content,
+        content: content,
         type: b.type || 'info',
         target: b.target || 'all',
         isActive: b.is_active ?? true,
