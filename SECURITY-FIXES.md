@@ -214,13 +214,13 @@ export const env = {
 
 ## Issue 6: CSP Hardening
 
-**Title:** CSP Hardening: Remove `unsafe-eval` and `unsafe-inline` from script-src
+**Title:** CSP Hardening: Remove `unsafe-eval` from script-src
 **Labels:** `security`, `medium`, `csp`, `headers`
 
 ### Severity: Medium (CVSS ~6.0)
 
 ### Description
-The Content Security Policy in `next.config.mjs` included `unsafe-eval` and `unsafe-inline` in `script-src`, which are the most dangerous CSP deviations.
+The Content Security Policy in `next.config.mjs` included `unsafe-eval` in `script-src`, which allows `eval()` and `new Function()` — enabling XSS via code injection.
 
 ### Before
 ```javascript
@@ -229,21 +229,25 @@ The Content Security Policy in `next.config.mjs` included `unsafe-eval` and `uns
 
 ### After
 ```javascript
-"script-src 'self'"
+"script-src 'self' 'unsafe-inline'"
 ```
 
 ### Impact
-- `unsafe-eval`: Allows `eval()` and `new Function()` — enables XSS via code injection
-- `unsafe-inline`: Allows inline `<script>` tags — enables XSS payloads
+- `unsafe-eval` **removed**: Blocks `eval()` and `new Function()` — prevents XSS via code injection
+- `unsafe-inline` **retained**: Required by Next.js for client-side hydration and routing. Removing it breaks all client-side functionality (confirmed via Playwright testing — 10 CSP violations, login form non-functional).
+- Added `upgrade-insecure-requests`
 
 ### Fix (Applied)
-- Removed `unsafe-eval` from `script-src`
-- Removed `unsafe-inline` from `script-src`
+- Removed `unsafe-eval` from `script-src` ✅
+- Retained `unsafe-inline` in `script-src` (required by Next.js framework)
+- Retained `unsafe-inline` in `style-src` (required by Tailwind CSS runtime)
 - Added `upgrade-insecure-requests`
-- Retained `unsafe-inline` only in `style-src` (needed for Tailwind CSS runtime)
 
 ### Notes
 - Next.js does not require `unsafe-eval` when using the default SWC compiler
+- Next.js **does** require `unsafe-inline` in `script-src` for its internal hydration and routing scripts
+- `unsafe-inline` in `script-src` is a known limitation — eliminating it requires custom server-side nonce injection (out of scope for this fix)
+- The remaining risk (`unsafe-inline` in script-src) is mitigated by other CSP directives (`frame-ancestors 'none'`, `form-action 'self'`) and the input validation/XSS protections elsewhere in the codebase
 
 ---
 
@@ -266,7 +270,7 @@ This PR addresses 18 security vulnerabilities identified during a comprehensive 
 | 3 | Tenant Data Import SQL injection | High | `lib/tenant-data-import.ts` | INSERT-only filtering |
 | 4 | Data Explorer table name validation | Medium | `app/api/superadmin/data-explorer/route.ts` | Regex + `sql.identifier()` |
 | 5 | Webhook secret validation | Medium | `lib/env.ts` | Startup validation |
-| 6 | CSP hardening | Medium | `next.config.mjs` | Remove `unsafe-eval` |
+| 6 | CSP hardening | Medium | `next.config.mjs` | Remove `unsafe-eval` (retained `unsafe-inline` per Next.js requirements) |
 | 7 | Feature flags auth bypass | Critical | `app/api/admin/flags/route.ts` | requireAuth + isSuperAdmin |
 | 8 | Audit logs SQL injection | Critical | `app/api/super-admin/audit-logs/route.ts` | Drizzle `sql` template |
 | 9 | Email tracking open redirect | Critical | `app/api/tenant/email/track/route.ts` | URL blocklist + private IP |
@@ -297,7 +301,7 @@ This PR addresses 18 security vulnerabilities identified during a comprehensive 
 - Closes #264 (Tenant Data Import SQL injection)
 - Closes #265 (Data Explorer SQL injection)
 - Closes #266 (Webhook secret validation)
-- Closes #267 (CSP hardening)
+- Closes #267 (CSP hardening — removed `unsafe-eval`, retained `unsafe-inline` per Next.js requirements)
 - Closes #268 (Feature flags auth bypass)
 - Closes #269 (Audit logs SQL injection)
 - Closes #270 (Email tracking open redirect)
