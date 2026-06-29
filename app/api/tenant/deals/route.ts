@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
         .from(dealStages)
         .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
         .where(and(
-          eq(dealStages.name, v.stage),
+          ilike(dealStages.name, v.stage),
           eq(pipelines.tenantId, ctx.tenantId)
         ))
         .limit(1);
