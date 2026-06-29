@@ -1,7 +1,8 @@
 # Security Fixes — Audit Round #275
 
 **Branch:** `security-fixes-round-275`
-**Files changed:** 11
+**Files changed:** 15
+**Commits:** 3 (`e4c0462`, `e4c6906`, `f9a743c`)
 **Verification:** TypeScript compilation clean, ESLint clean
 
 ---
@@ -17,7 +18,7 @@
 | #266 | Webhook secret: placeholder accepted at runtime | Critical | `lib/env.ts` |
 | #267 | CSP: `unsafe-eval` and `unsafe-inline` in script-src | High | `next.config.mjs` |
 
-## Batch 2 (6 fixes) — Pending commit
+## Batch 2 (6 fixes) — Committed as `e4c6906`
 
 | # | Issue | Severity | Files Changed |
 |---|-------|----------|---------------|
@@ -27,6 +28,15 @@
 | #271 | Drizzle Config: hardcoded DB credentials | Critical | `drizzle.config.ts` |
 | #272 | Webhook Delivery: SSRF via outbound HTTP | High | `lib/webhooks/delivery.ts` |
 | #273 | Webhook Stats: `sql.raw()` with integer interpolation | Medium | `lib/webhooks/delivery.ts` |
+
+## Batch 3 (4 fixes) — Committed as `f9a743c`
+
+| # | Issue | Severity | Files Changed |
+|---|-------|----------|---------------|
+| #274 | Rate limiting: missing on auth endpoints | High | `app/api/auth/reset-password/route.ts` |
+| #275 | Rate limiting: missing on export endpoints | High | `app/api/tenant/export/route.ts`, `app/api/tenant/contacts/export/route.ts` |
+| #276 | CSS injection: branding provider unsanitized values | Medium | `lib/branding.ts` |
+| #277 | CSS injection: branded header unsanitized values | Medium | `lib/branding.ts` |
 
 ---
 
@@ -232,13 +242,13 @@ The Content Security Policy in `next.config.mjs` included `unsafe-eval` and `uns
 
 ## PR Description
 
-**Title:** Fix 6 critical security vulnerabilities (SQL injection, CSP, webhook secrets)
+**Title:** Fix 16 critical/high security vulnerabilities (SQL injection, SSRF, CSS injection, rate limiting)
 
 **Body:**
 
 ### Summary
 
-This PR addresses 6 security vulnerabilities identified during a comprehensive codebase audit. All fixes follow a defensive-in-depth approach with allowlist validation + parameterized queries.
+This PR addresses 16 security vulnerabilities identified during a comprehensive codebase audit. All fixes follow a defensive-in-depth approach with allowlist validation + parameterized queries.
 
 ### Changes
 
@@ -250,6 +260,15 @@ This PR addresses 6 security vulnerabilities identified during a comprehensive c
 | 4 | Data Explorer table name validation | Medium | `app/api/superadmin/data-explorer/route.ts` | Regex + `sql.identifier()` |
 | 5 | Webhook secret validation | Medium | `lib/env.ts` | Startup validation |
 | 6 | CSP hardening | Medium | `next.config.mjs` | Remove `unsafe-eval` |
+| 7 | Feature flags auth bypass | Critical | `app/api/admin/flags/route.ts` | requireAuth + isSuperAdmin |
+| 8 | Audit logs SQL injection | Critical | `app/api/super-admin/audit-logs/route.ts` | Drizzle `sql` template |
+| 9 | Email tracking open redirect | Critical | `app/api/tenant/email/track/route.ts` | URL blocklist + private IP |
+| 10 | Hardcoded DB credentials | Critical | `drizzle.config.ts` | Fail-fast if env missing |
+| 11 | Webhook SSRF | High | `lib/webhooks/delivery.ts` | URL + IP blocklist |
+| 12 | Webhook stats sql.raw | Medium | `lib/webhooks/delivery.ts` | Parameterized integer |
+| 13 | Auth rate limiting (reset-password) | High | `app/api/auth/reset-password/route.ts` | 3 req/hr via checkRateLimit |
+| 14 | Export rate limiting | High | `app/api/tenant/export/route.ts`, `contacts/export/route.ts` | 10 req/hr via limiters.export |
+| 15-16 | CSS injection — branding | Medium | `lib/branding.ts` | sanitizeColor + sanitizeCssUrl |
 
 ### Verification
 - TypeScript compilation: 0 errors
@@ -259,6 +278,8 @@ This PR addresses 6 security vulnerabilities identified during a comprehensive c
 ### Breaking Changes
 - `importFromSQL()` now rejects non-INSERT statements (by design)
 - `WEBHOOK_SECRET` env var required in production (was already best practice)
+- `reset-password` now returns 429 after 3 requests per hour
+- Tenant exports now return 429 after 10 requests per hour
 
 ### Related
 - Closes #262 (Report Builder SQL injection)
@@ -273,6 +294,10 @@ This PR addresses 6 security vulnerabilities identified during a comprehensive c
 - Closes #271 (Hardcoded DB credentials)
 - Closes #272 (Webhook SSRF)
 - Closes #273 (Webhook stats sql.raw)
+- Closes #274 (Auth rate limiting)
+- Closes #275 (Export rate limiting)
+- Closes #276 (CSS injection — branding)
+- Closes #277 (CSS injection — header)
 
 ---
 ---
@@ -281,9 +306,9 @@ This PR addresses 6 security vulnerabilities identified during a comprehensive c
 
 **Scan date:** 2026-06-29
 **Status:** Identified, NOT yet fixed
-**Total issues:** 14 (5 Critical, 4 High, 5 Medium)
-**Fixed so far:** 9 (6 batch-1 + 3 batch-2 critical + 1 high + 1 medium)
-**Remaining:** 5 unfixed (1 Critical: .env.production committed, 2 High: webhook secrets + rate limiting, 2 Medium: CSS injection)
+**Total issues:** 14 (5 Critical, 4 High, 5 Medium) — 1 cancelled as false positive (HIGH-3)
+**Fixed so far:** 13 (6 batch-1 + 6 batch-2 + 4 batch-3 — includes 2 combined fixes)
+**Remaining:** 3 unfixed (1 Critical: .env.production committed, 1 High: webhook secrets not enveloped, 1 Medium: webhook payload validation)
 
 ---
 
@@ -732,10 +757,10 @@ if (JSON.stringify(payload.payload).length > MAX_PAYLOAD_SIZE) {
 | HIGH-1 | High | SSRF — webhook delivery | `lib/webhooks/delivery.ts` | **FIXED** |
 | HIGH-2 | High | Webhook secrets not enveloped | `lib/webhooks/delivery.ts` | **UNFIXED** |
 | HIGH-3 | High | Missing superadmin auth checks | `app/api/superadmin/` (15+ routes) | **FALSE POSITIVE** — all routes already have `isSuperAdmin` |
-| HIGH-4 | High | No rate limiting — auth endpoints | `app/api/auth/` routes | **UNFIXED** |
-| HIGH-5 | High | No rate limiting — export endpoints | `app/api/tenant/*/export/` | **UNFIXED** |
-| MEDIUM-1 | Medium | CSS injection — branding provider | `components/branding/branding-provider.tsx` | **UNFIXED** |
-| MEDIUM-2 | Medium | CSS injection — branded header | `components/shared/branded-header.tsx` | **UNFIXED** |
+| HIGH-4 | High | No rate limiting — auth endpoints | `app/api/auth/` routes | **FIXED** |
+| HIGH-5 | High | No rate limiting — export endpoints | `app/api/tenant/*/export/` | **FIXED** |
+| MEDIUM-1 | Medium | CSS injection — branding provider | `components/branding/branding-provider.tsx` | **FIXED** |
+| MEDIUM-2 | Medium | CSS injection — branded header | `components/shared/branded-header.tsx` | **FIXED** |
 | MEDIUM-3 | Medium | Minor SQL injection — webhook stats | `lib/webhooks/delivery.ts:226` | **FIXED** |
 | MEDIUM-4 | Medium | Missing webhook payload validation | `lib/webhooks/delivery.ts` | **UNFIXED** |
 
@@ -838,6 +863,73 @@ The webhook delivery function made an outbound HTTP request to a URL from the da
 
 ### Also Fixed: MEDIUM-3 — `sql.raw()` in Webhook Stats
 - Replaced `sql`interval '${sql.raw(days.toString())} days'`` with `sql`(${days} || ' days')::interval`` — parameterized integer interpolation
+
+### Verification
+- TypeScript: clean
+- ESLint: clean
+
+---
+
+## Batch 3 Fixes — Applied 2026-06-29
+
+### FIX 13: Rate Limiting on Auth Endpoints
+**File:** `app/api/auth/reset-password/route.ts`
+**Severity:** HIGH
+**CWE:** CWE-307 (Improper Restriction of Excessive Authentication Attempts)
+
+### Problem
+The `reset-password` endpoint had zero rate limiting. An attacker could brute-force password reset tokens (6-digit code) or enumerate valid email addresses by observing response differences.
+
+### Fix
+- Added `checkRateLimit(request, { action: 'reset-password', max: 3, windowMinutes: 60 })` at the start of the POST handler
+- Imports `checkRateLimit` from `@/lib/rate-limit`
+- Returns 429 with rate limit headers when exceeded
+
+### Verification
+- TypeScript: clean
+- ESLint: clean
+
+---
+
+### FIX 14: Rate Limiting on Export Endpoints
+**Files:** `app/api/tenant/export/route.ts`, `app/api/tenant/contacts/export/route.ts`
+**Severity:** HIGH
+**CWE:** CWE-770 (Allocation of Resources Without Limits or Throttling)
+
+### Problem
+Export endpoints could be called repeatedly without rate limiting, enabling data exfiltration at scale and denial-of-service through resource exhaustion.
+
+### Fix
+- Added `limiters.export.check()` (10 req/hr, Redis-backed sliding window) to both tenant export and contacts export routes
+- Returns 429 with `getRateLimitHeaders(rlResult)` when exceeded
+- Per-tenant keying: `export:{tenantId}` and `export:contacts:{tenantId}`
+
+### Notes
+- `user/export` (GDPR data export) left unchanged — edge middleware already provides 10 req/min for all authenticated routes; adding stricter limits could hinder GDPR compliance
+
+### Verification
+- TypeScript: clean
+- ESLint: clean
+
+---
+
+### FIX 15-16: CSS Injection in Branding Module
+**File:** `lib/branding.ts`
+**Severity:** MEDIUM
+**CWE:** CWE-79 (Improper Neutralization of Input During Web Page Generation)
+
+### Problem
+Both `brandingToCssVars()` and `generateCSSVariables()` built CSS strings from unsanitized database values:
+- `brandingToCssVars()` constructed `--brand-logo-url: url(${branding.logoUrl})` — a crafted `logoUrl` could inject arbitrary CSS
+- `generateCSSVariables()` used raw `config.primaryColor`, `config.secondaryColor`, `config.accentColor` — values containing `;` or `{}` could break CSS property context
+- Only `config.customCss` was sanitized (via `sanitizeCustomCss()`)
+
+Both functions feed into `dangerouslySetInnerHTML` in `branding-provider.tsx` and `branded-header.tsx`.
+
+### Fix
+- Added `sanitizeColor(value)` — validates hex (`#fff`), rgb/rgba, hsl/hsla, and a named-color allowlist; blocks values containing `;`, `{`, `()`
+- Added `sanitizeCssUrl(url)` — parses with `new URL()`, rejects non-`http:/https:` protocols, returns `url()` on parse failure
+- Applied to all CSS property values in both `brandingToCssVars()` and `generateCSSVariables()`
 
 ### Verification
 - TypeScript: clean
