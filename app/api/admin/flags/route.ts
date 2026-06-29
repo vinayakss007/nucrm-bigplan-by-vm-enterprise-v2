@@ -1,12 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllFlags, isEnabled, setOverride, deleteOverride, DEFINED_FLAGS } from '@/lib/flags';
+import { requireAuth } from '@/lib/auth/middleware';
 
-export async function GET(_request: NextRequest) {
+async function requireSuperAdmin(request: NextRequest) {
+  const ctx = await requireAuth(request);
+  if (ctx instanceof NextResponse) return ctx;
+  if (!ctx.isSuperAdmin) {
+    return null;
+  }
+  return ctx;
+}
+
+export async function GET(request: NextRequest) {
+  const ctx = await requireSuperAdmin(request);
+  if (!ctx) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
   const flags = await getAllFlags();
   return NextResponse.json({ flags });
 }
 
 export async function POST(request: NextRequest) {
+  const ctx = await requireSuperAdmin(request);
+  if (!ctx) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
   const body = await request.json();
   const { key, enabled, tenantIds, userIds, percentage } = body;
 
@@ -24,6 +42,10 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const ctx = await requireSuperAdmin(request);
+  if (!ctx) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
   const { searchParams } = new URL(request.url);
   const key = searchParams.get('key');
   if (!key) return NextResponse.json({ error: 'key required' }, { status: 400 });

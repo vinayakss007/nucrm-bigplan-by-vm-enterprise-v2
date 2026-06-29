@@ -59,6 +59,28 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'url parameter required' }, { status: 400 });
       }
 
+      // Validate URL to prevent open redirect to internal/loopback addresses
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(linkUrl);
+      } catch {
+        return new NextResponse(TRACKING_PIXEL, {
+          status: 200,
+          headers: { 'Content-Type': 'image/gif', 'Cache-Control': 'no-store' },
+        });
+      }
+
+      const hostname = parsedUrl.hostname.toLowerCase();
+      const BLOCKED_HOSTS = ['localhost', '127.0.0.1', '::1', '0.0.0.0', '169.254.169.254', 'metadata.google.internal'];
+      const isPrivate = /^10\./.test(hostname) || /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) || /^192\.168\./.test(hostname);
+
+      if (BLOCKED_HOSTS.includes(hostname) || isPrivate || !['http:', 'https:'].includes(parsedUrl.protocol)) {
+        return new NextResponse(TRACKING_PIXEL, {
+          status: 200,
+          headers: { 'Content-Type': 'image/gif', 'Cache-Control': 'no-store' },
+        });
+      }
+
       // Log click
       await db.insert(emailClicks).values({
         tenantId,
@@ -69,7 +91,7 @@ export async function GET(req: NextRequest) {
         ipAddress: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || null,
       });
 
-      // 302 redirect to destination
+      // 302 redirect to validated destination
       return NextResponse.redirect(linkUrl, 302);
     }
 

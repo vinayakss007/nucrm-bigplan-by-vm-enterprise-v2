@@ -111,6 +111,23 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
 
   const startTime = Date.now();
 
+  // SSRF protection: block requests to internal/loopback addresses
+  try {
+    const targetUrl = new URL(deliveryUrl);
+    const hostname = targetUrl.hostname.toLowerCase();
+    const BLOCKED_HOSTS = ['localhost', '127.0.0.1', '::1', '0.0.0.0', '169.254.169.254', 'metadata.google.internal'];
+    const isPrivate = /^10\./.test(hostname) || /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) || /^192\.168\./.test(hostname);
+
+    if (BLOCKED_HOSTS.includes(hostname) || isPrivate || !['http:', 'https:'].includes(targetUrl.protocol)) {
+      throw new Error(`SSRF blocked: delivery to ${targetUrl.hostname} is not allowed`);
+    }
+  } catch (e) {
+    if (e instanceof TypeError && e.message.includes('Invalid URL')) {
+      throw new Error(`Invalid webhook delivery URL: ${deliveryUrl}`);
+    }
+    throw e;
+  }
+
   try {
     const response = await fetch(deliveryUrl, {
       method: 'POST',
