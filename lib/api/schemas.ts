@@ -832,7 +832,7 @@ export const createPlanSchema = z.object({
 });
 
 export const updatePlanSchema = createPlanSchema.partial().extend({
-  id: z.string().max(50),
+  id: z.string().uuid(),
 });
 
 export const createTenantSchema = z.object({
