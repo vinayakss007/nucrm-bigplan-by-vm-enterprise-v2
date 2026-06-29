@@ -310,7 +310,7 @@ export const fileUploads = pgTable('file_uploads', {
 export const announcements = pgTable('announcements', {
   id: utils.pk(),
   title: text('title').notNull(),
-  body: text('body').notNull(),
+  content: text('content').notNull(),
   type: text('type').default('info'), // 'info', 'warning', 'update', 'feature'
   target: text('target').default('all'), // 'all', 'tenants', 'super_admins'
   targetTenantIds: uuid('target_tenant_ids').array(),
