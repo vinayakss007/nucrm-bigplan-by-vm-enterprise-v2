@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       ));
 
     const stepsDone = progress.filter(p => p.isCompleted).map(p => p.stepName);
-    const isCompleted = stepsDone.includes('completed') || progress.some(p => p.stepName === 'all' && p.isCompleted);
+    const isCompleted = stepsDone.includes('onboarding_complete') || stepsDone.includes('completed') || progress.some(p => p.stepName === 'all' && p.isCompleted);
 
     return NextResponse.json({ 
       steps_done: stepsDone, 
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
     await db.insert(onboardingProgress).values({
       tenantId: ctx.tenantId,
       userId: ctx.userId,
-      stepName: 'completed',
+      stepName: 'onboarding_complete',
       isCompleted: true,
       completedAt: new Date(),
     }).onConflictDoUpdate({
@@ -113,7 +113,7 @@ export async function PATCH(request: NextRequest) {
       await db.insert(onboardingProgress).values({
         tenantId: ctx.tenantId,
         userId: ctx.userId,
-        stepName: 'completed',
+        stepName: 'onboarding_complete',
         isCompleted: true,
         completedAt: new Date(),
       }).onConflictDoUpdate({

@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Mail, X, CheckCircle, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -7,6 +7,14 @@ export default function EmailVerifyBanner({ email }: { email: string }) {
   const [dismissed, setDismissed] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+
+  // Check localStorage on mount
+  useEffect(() => {
+    const dismissedKey = `email_verify_dismissed_${email}`;
+    if (localStorage.getItem(dismissedKey) === 'true') {
+      setDismissed(true);
+    }
+  }, [email]);
 
   if (dismissed) return null;
 
@@ -17,6 +25,11 @@ export default function EmailVerifyBanner({ email }: { email: string }) {
     if (res.ok) { setSent(true); toast.success('Verification email sent!'); }
     else toast.error(data.error || 'Could not send');
     setSending(false);
+  };
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    localStorage.setItem(`email_verify_dismissed_${email}`, 'true');
   };
 
   return (
@@ -36,7 +49,7 @@ export default function EmailVerifyBanner({ email }: { email: string }) {
           {sending ? 'Sending...' : 'Resend email'}
         </button>
       )}
-      <button onClick={() => setDismissed(true)} className="shrink-0 opacity-60 hover:opacity-100">
+      <button onClick={handleDismiss} className="shrink-0 opacity-60 hover:opacity-100">
         <X className="w-3.5 h-3.5" />
       </button>
     </div>
