@@ -36,7 +36,8 @@ vi.mock('@/drizzle/schema/ai', () => ({
     id: 'id', tenantId: 'tenant_id', provider: 'provider',
     encryptedKey: 'encrypted_key', keyPrefix: 'key_prefix',
     baseUrl: 'base_url', createdBy: 'created_by', rotatedAt: 'rotated_at',
-    deletedAt: 'deleted_at',
+    deletedAt: 'deleted_at', keyType: 'key_type', userId: 'user_id',
+    modelOverride: 'model_override',
   },
 }));
 
@@ -136,10 +137,11 @@ describe('AI Secrets Vault', () => {
 
   describe('getProviderKeyMeta', () => {
     it('returns presence info when key exists', async () => {
-      mockDbFindFirst.mockResolvedValueOnce({ encryptedKey: 'enc:v', keyPrefix: '…abcd', baseUrl: null, rotatedAt: new Date('2026-01-01') });
+      mockDbFindFirst.mockResolvedValueOnce({ encryptedKey: 'enc:v', keyPrefix: '…abcd', baseUrl: null, rotatedAt: new Date('2026-01-01'), keyType: 'tenant' });
       const r = await mod.getProviderKeyMeta('t-1', 'openai');
       expect(r.present).toBe(true);
       expect(r.keyPrefix).toBe('…abcd');
+      expect(r.keyType).toBe('tenant');
     });
 
     it('returns present=false when no key', async () => {
@@ -149,7 +151,7 @@ describe('AI Secrets Vault', () => {
     });
 
     it('ollama is present without encrypted key', async () => {
-      mockDbFindFirst.mockResolvedValueOnce({ encryptedKey: '', keyPrefix: '', baseUrl: 'http://localhost:11434', rotatedAt: new Date() });
+      mockDbFindFirst.mockResolvedValueOnce({ encryptedKey: '', keyPrefix: '', baseUrl: 'http://localhost:11434', rotatedAt: new Date(), keyType: 'tenant' });
       const r = await mod.getProviderKeyMeta('t-1', 'ollama');
       expect(r.present).toBe(true);
     });
@@ -165,16 +167,68 @@ describe('AI Secrets Vault', () => {
     });
   });
 
+  describe('deleteProviderKey with keyType', () => {
+    it('deletes with keyType param', async () => {
+      await expect(mod.deleteProviderKey('t-1', 'openai', 'system')).resolves.not.toThrow();
+    });
+
+    it('deletes with keyType and userId', async () => {
+      await expect(mod.deleteProviderKey('t-1', 'openai', 'personal', 'u-1')).resolves.not.toThrow();
+    });
+  });
+
+  describe('listAllKeysForTenant', () => {
+    it('returns array of key rows', async () => {
+      mockDbSelectResolve.mockResolvedValueOnce([
+        { provider: 'openai', keyType: 'system', keyPrefix: '…a', baseUrl: null, modelOverride: null, userId: null, createdBy: null, rotatedAt: null },
+        { provider: 'anthropic', keyType: 'tenant', keyPrefix: '…b', baseUrl: null, modelOverride: null, userId: null, createdBy: 'u-1', rotatedAt: new Date() },
+      ]);
+      const result = await mod.listAllKeysForTenant('t-1');
+      expect(result).toHaveLength(2);
+      expect(result[0].provider).toBe('openai');
+      expect(result[0].keyType).toBe('system');
+    });
+
+    it('returns empty array when no keys', async () => {
+      mockDbSelectResolve.mockResolvedValueOnce([]);
+      const result = await mod.listAllKeysForTenant('t-1');
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('setPersonalKey', () => {
+    it('stores a personal key', async () => {
+      const result = await mod.setPersonalKey('t-1', 'openai', 'sk-test-5678', 'u-1');
+      expect(result.keyPrefix).toBe('…5678');
+    });
+
+    it('throws for invalid provider', async () => {
+      await expect(mod.setPersonalKey('t-1', 'invalid', 'key', 'u-1')).rejects.toThrow(mod.SecretsVaultError);
+    });
+  });
+
+  describe('setSystemKey', () => {
+    it('stores a system key', async () => {
+      const result = await mod.setSystemKey('t-1', 'openai', 'sk-test-9012');
+      expect(result.keyPrefix).toBe('…9012');
+    });
+
+    it('throws for invalid provider', async () => {
+      await expect(mod.setSystemKey('t-1', 'invalid', 'key')).rejects.toThrow(mod.SecretsVaultError);
+    });
+  });
+
   describe('listProviderKeyMeta', () => {
     it('returns metadata for all providers', async () => {
       mockDbSelectResolve.mockResolvedValueOnce([
-        { provider: 'openai', encryptedKey: 'enc:1', keyPrefix: '…a', baseUrl: null, rotatedAt: new Date() },
-        { provider: 'anthropic', encryptedKey: 'enc:2', keyPrefix: '…b', baseUrl: null, rotatedAt: new Date() },
+        { provider: 'openai', encryptedKey: 'enc:1', keyPrefix: '…a', baseUrl: null, rotatedAt: new Date(), keyType: 'tenant' },
+        { provider: 'anthropic', encryptedKey: 'enc:2', keyPrefix: '…b', baseUrl: null, rotatedAt: new Date(), keyType: 'tenant' },
       ]);
       const result = await mod.listProviderKeyMeta('t-1');
       expect(Object.keys(result)).toEqual(['openai', 'anthropic', 'groq', 'ollama']);
       expect(result.openai.present).toBe(true);
       expect(result.groq.present).toBe(false);
+      expect(result.openai.keyType).toBe('tenant');
     });
 
     it('returns all false when no keys exist', async () => {
