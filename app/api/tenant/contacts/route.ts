@@ -11,6 +11,7 @@ import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logError } from '@/lib/errors-server';
+import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 
  
  
@@ -207,6 +208,9 @@ export async function POST(request: NextRequest) {
       email: v.email, 
       name: `${v.first_name} ${v.last_name}` 
     });
+
+    // Invalidate dashboard widget cache
+    invalidateWidgetCache(ctx.tenantId, 'stats-contacts', 'contacts-recent');
 
     // WORKFLOW-C: trigger automation rules (non-blocking)
     const { evaluateAutomations } = await import('@/lib/automation/engine');

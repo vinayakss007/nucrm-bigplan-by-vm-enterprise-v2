@@ -1,0 +1,89 @@
+╔══════════════════════════════════════════════════════════════╗
+║           NuCRM ENTERPRISE — TESTING ISSUES FOUND           ║
+║           Discovered during detailed testing (v0.4.0)       ║
+╚══════════════════════════════════════════════════════════════╝
+
+Date: 2026-06-24
+
+================================================================================
+1. PLAYWRIGHT E2E TEST FAILURES
+================================================================================
+
+  [FAIL] auth.spec.ts - "forgot password link navigates correctly"
+    Error: page.goto: net::ERR_ABORTED at http://localhost:3000/auth/login
+    File: tests/e2e/auth.spec.ts:52
+    Cause: Navigation to /auth/login gets aborted (likely auth middleware
+    redirect loop or middleware blocking the test request).
+
+  [FAIL] auth.spec.ts - "signup page loads with form"
+    Error: Test timeout of 30000ms exceeded.
+    File: tests/e2e/auth.spec.ts:17
+    Cause: Page fails to load within 30s timeout.
+
+
+================================================================================
+2. STAGE NAME CASE-SENSITIVE MATCHING (DEALS API)
+================================================================================
+
+  File: app/api/tenant/deals/[id]/route.ts
+  Issue: Uses eq(dealStages.name, body.stage) — exact case match fails when
+  stage name casing differs (e.g. "signed up" vs "Signed Up").
+  Fix: Changed to ilike(dealStages.name, body.stage) for case-insensitive match.
+
+  File: app/api/tenant/deals/route.ts
+  Issue: Same issue in POST endpoint.
+  Fix: Changed eq → ilike for stage name matching.
+
+
+================================================================================
+3. INDEX NAME MISMATCH IN SCHEMA REGISTRY
+================================================================================
+
+  File: drizzle/schema/_registry.ts
+  Issue: Registry references idx_documents_link and idx_documents_uploader,
+  but actual indexes in files.ts are named idx_files_link and idx_files_uploader.
+  Fix: Updated registry to reference correct index names.
+
+
+================================================================================
+4. INDEX NAMES OUT OF SYNC (documents table → files table)
+================================================================================
+
+  File: drizzle/schema/files.ts
+  Issue: Indexes are named idx_files_link and idx_files_uploader (matching the
+  actual table name), which conflicts with the registry using idx_documents_*.
+  Fix: Aligned both sides to use idx_files_* naming.
+
+
+================================================================================
+5. BUILD OOM (OUT OF MEMORY)
+================================================================================
+
+  File: package.json
+  Issue: next build crashes on smaller machines due to insufficient Node heap
+  (default ~2GB not enough for this project).
+  Fix: Added NODE_OPTIONS="--max-old-space-size=4096" to build script.
+  Added convenience script: "up": "bash scripts/bootstrap.sh"
+
+
+================================================================================
+UNCOMMITTED FIXES (currently in working tree, not committed)
+================================================================================
+
+  Modified files not yet committed:
+  - app/api/tenant/deals/[id]/route.ts
+  - app/api/tenant/deals/route.ts
+  - drizzle/schema/_registry.ts
+  - drizzle/schema/files.ts
+  - package.json
+
+  Untracked files:
+  - TEST_PLAN.txt
+  - scripts/bootstrap.sh
+
+
+================================================================================
+NOTE: v0.4.0 commit (1407e2b) is LOCAL ONLY on feat/db-reset-sync branch.
+It has NOT been pushed to remote yet. The above fixes should be committed
+before pushing.
+================================================================================
