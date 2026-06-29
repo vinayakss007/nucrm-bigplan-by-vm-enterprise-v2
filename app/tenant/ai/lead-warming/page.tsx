@@ -91,7 +91,7 @@ export default function LeadWarmingPage() {
       <div className="flex flex-wrap gap-1.5">
         <FilterPill label="All" count={replies.length} active={filter === 'all'} onClick={() => setFilter('all')} />
         {Object.entries(intentCounts).sort((a, b) => b[1] - a[1]).map(([intent, count]) => {
-          const cfg = INTENT_CONFIG[intent] ?? INTENT_CONFIG.unknown;
+          const cfg = INTENT_CONFIG[intent] ?? INTENT_CONFIG.unknown!;
           return (
             <FilterPill
               key={intent}
@@ -112,7 +112,7 @@ export default function LeadWarmingPage() {
           </div>
         ) : (
           filtered.map(reply => {
-            const intentCfg = INTENT_CONFIG[reply.intent] ?? INTENT_CONFIG.unknown;
+            const intentCfg = INTENT_CONFIG[reply.intent] ?? INTENT_CONFIG.unknown!;
             const ChannelIcon = CHANNEL_ICONS[reply.channel] ?? Mail;
             return (
               <div key={reply.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
