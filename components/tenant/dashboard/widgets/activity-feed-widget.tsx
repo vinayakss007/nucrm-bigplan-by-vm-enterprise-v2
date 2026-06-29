@@ -34,7 +34,7 @@ export default function ActivityFeedWidget({ data }: WidgetProps) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{a.description}</p>
                   <p className="text-xs font-semibold text-foreground/60 mt-0.5">
-                    {a.full_name ?? 'System'} &middot; {formatRelativeTime(a.created_at)}
+                    {formatRelativeTime(a.createdAt)}
                   </p>
                 </div>
               </div>

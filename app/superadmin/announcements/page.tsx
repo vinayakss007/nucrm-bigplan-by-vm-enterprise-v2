@@ -16,7 +16,7 @@ export default function AnnouncementsPage() {
   const [items, setItems]   = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm]     = useState({ title:'', body:'', type:'info', target:'all', is_active:true, ends_at:'' });
+  const [form, setForm]     = useState({ title:'', content:'', type:'info', target:'all', is_active:true, ends_at:'' });
   const [saving, setSaving] = useState(false);
   const inp = "w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-violet-500";
 
@@ -27,7 +27,7 @@ export default function AnnouncementsPage() {
     e.preventDefault(); setSaving(true);
     const res = await fetch('/api/superadmin/announcements',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form) });
     const d = await res.json();
-    if (res.ok) { toast.success('Announcement created'); setShowForm(false); setForm({title:'',body:'',type:'info',target:'all',is_active:true,ends_at:''}); load(); }
+    if (res.ok) { toast.success('Announcement created'); setShowForm(false); setForm({title:'',content:'',type:'info',target:'all',is_active:true,ends_at:''}); load(); }
     else toast.error(d.error||'Failed');
     setSaving(false);
   };
@@ -65,7 +65,7 @@ export default function AnnouncementsPage() {
             </div>
             <div className="col-span-2">
               <label className="block text-xs font-medium text-white/50 mb-1">Message</label>
-              <textarea value={form.body} onChange={e=>setForm(f=>({...f,body:e.target.value}))} rows={3} className={inp+' resize-none'} placeholder="Detailed message for your tenants..."/>
+              <textarea value={form.content} onChange={e=>setForm(f=>({...f,content:e.target.value}))} rows={3} className={inp+' resize-none'} placeholder="Detailed message for your tenants..."/>
             </div>
             <div>
               <label className="block text-xs font-medium text-white/50 mb-1">Type</label>
@@ -113,7 +113,7 @@ export default function AnnouncementsPage() {
                   <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 mt-0.5', cfg.badge)}>{a.type}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-white">{a.title}</p>
-                    {a.body && <p className="text-xs text-white/50 mt-1">{a.body}</p>}
+                    {a.content && <p className="text-xs text-white/50 mt-1">{a.content}</p>}
                     <div className="flex items-center gap-3 mt-1.5 text-[10px] text-white/25">
                       <span>Target: {a.target}</span>
                       {a.ends_at && <span>Expires: {formatDate(a.ends_at)}</span>}

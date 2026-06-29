@@ -245,7 +245,7 @@ const leadWarmingWorker = new Worker(
         );
 
         if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
+          const errData = await response.json().catch(() => ({ error: { message: `HTTP ${response.status}` } }));
           throw new Error(errData.error?.message || `HTTP ${response.status}`);
         }
 

@@ -7,7 +7,6 @@ import {
 import { cn } from '@/lib/utils';
 import { PRODUCT_REGISTRY } from '@/lib/products/registry';
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
-import { useRouter } from 'next/navigation';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   FileText, Brain, MessageCircle, LifeBuoy, Users, Home, ShoppingCart, Receipt,
@@ -20,7 +19,6 @@ function getIcon(name: string) {
 const STEPS = ['Choose Product', 'Confirm Modules', 'Quick Setup', 'Complete'] as const;
 
 export default function OnboardingPage() {
-  const router = useRouter();
   const [step, setStep] = useState(0);
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
   const [enabledModules, setEnabledModules] = useState<string[]>([]);
@@ -85,7 +83,7 @@ export default function OnboardingPage() {
       }
 
       // Mark onboarding as complete so user won't be redirected back here
-      await fetch('/api/tenant/onboarding/complete', {
+      const completeRes = await fetch('/api/tenant/onboarding/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -94,7 +92,13 @@ export default function OnboardingPage() {
           company_name: companyName.trim(),
           pipeline_name: pipelineName.trim() || 'Sales Pipeline',
         }),
-      }).catch((err) => console.error('[onboarding] complete error:', err));
+      });
+      if (!completeRes.ok) {
+        const errData = await completeRes.json().catch(() => ({ error: 'Failed to finalize onboarding' }));
+        setSubmitError((errData as { error?: string }).error ?? 'Failed to finalize onboarding');
+        setIsSubmitting(false);
+        return;
+      }
 
       setStep(3);
     } catch {
@@ -127,7 +131,7 @@ export default function OnboardingPage() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ product_id: 'skip', modules: [] }),
             }).catch((err) => console.error('[onboarding] skip error:', err));
-            router.push('/tenant/dashboard');
+            window.location.href = '/tenant/dashboard';
           }}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
@@ -299,7 +303,7 @@ export default function OnboardingPage() {
             capabilities - this product is your curated starting point.
           </p>
           <button
-            onClick={() => router.push('/tenant/dashboard')}
+            onClick={() => { window.location.href = '/tenant/dashboard'; }}
             className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition-colors mt-4"
           >
             Go to Dashboard <ArrowRight className="w-4 h-4" />
