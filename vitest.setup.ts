@@ -29,3 +29,6 @@ if (!process.env['SESSION_SECRET']) {
 if (!process.env['NEXT_PUBLIC_APP_URL']) {
   process.env['NEXT_PUBLIC_APP_URL'] = 'http://localhost:3000';
 }
+if (!process.env['ENCRYPTION_KEY']) {
+  process.env['ENCRYPTION_KEY'] = 'a0b1c2d3e4f5g6h7i8j9k0l1m2n3o4p5q6r7s8t9u0v1w2x3y4z5a0b1c2d3e4f5g6h7i8j9k0l1m2n3o4p5';
+}
