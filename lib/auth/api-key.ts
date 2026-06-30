@@ -6,7 +6,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/drizzle/db';
 import { apiKeys, apiKeyUsage, users } from '@/drizzle/schema';
-import { eq, and, sql, gt, or, desc, asc } from 'drizzle-orm';
+import { eq, and, sql, gt, desc, asc } from 'drizzle-orm';
 import { AuthContext } from '@/lib/auth/middleware';
 import { createHash } from 'crypto';
 
@@ -29,11 +29,7 @@ export async function tryApiKeyAuth(request: NextRequest): Promise<AuthContext |
   .innerJoin(users, eq(users.id, apiKeys.userId))
   .where(and(
     eq(apiKeys.keyHash, keyHash),
-    eq(apiKeys.isActive, true),
-    or(
-      sql`${apiKeys.expiresAt} IS NULL`,
-      gt(apiKeys.expiresAt, new Date())
-    )
+    eq(apiKeys.isActive, true)
   ));
 
   const row = results[0];
@@ -160,30 +156,31 @@ export async function rotateApiKey(
   name: string,
   scopes: string[]
 ): Promise<{ key: string; prefix: string } | null> {
-  // Revoke old key
   await revokeApiKey(keyId, tenantId);
-  
-  // Generate new key
   return await generateApiKey(tenantId, userId, name, scopes);
 }
 
 /**
  * Get API key usage stats
+ * Uses parameterized queries to prevent SQL injection
  */
 export async function getApiKeyUsage(
   keyId: string,
   days: number = 7
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<{ total: number; byEndpoint: any[]; byStatus: any[] }> {
+): Promise<{ total: number; byEndpoint: { endpoint: string; count: number }[]; byStatus: { status: number; count: number }[] }> {
+  // Validate days parameter to prevent injection
+  const safeDays = Math.max(1, Math.min(365, Math.floor(days)));
+  
+  // Calculate the cutoff date in JavaScript instead of SQL
+  const cutoffDate = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000);
+  
   const totalResults = await db.select({
     count: sql<number>`count(*)::int`
   })
   .from(apiKeyUsage)
   .where(and(
     eq(apiKeyUsage.apiKeyId, keyId),
-    gt(apiKeyUsage.createdAt, sql`now() - interval '${sql.raw(days.toString())} days'`)
+    gt(apiKeyUsage.createdAt, cutoffDate)
   ));
 
   const byEndpointResults = await db.select({
@@ -193,7 +190,7 @@ export async function getApiKeyUsage(
   .from(apiKeyUsage)
   .where(and(
     eq(apiKeyUsage.apiKeyId, keyId),
-    gt(apiKeyUsage.createdAt, sql`now() - interval '${sql.raw(days.toString())} days'`)
+    gt(apiKeyUsage.createdAt, cutoffDate)
   ))
   .groupBy(apiKeyUsage.endpoint)
   .orderBy(desc(sql`count`))
@@ -206,7 +203,7 @@ export async function getApiKeyUsage(
   .from(apiKeyUsage)
   .where(and(
     eq(apiKeyUsage.apiKeyId, keyId),
-    gt(apiKeyUsage.createdAt, sql`now() - interval '${sql.raw(days.toString())} days'`)
+    gt(apiKeyUsage.createdAt, cutoffDate)
   ))
   .groupBy(apiKeyUsage.statusCode)
   .orderBy(asc(apiKeyUsage.statusCode));
@@ -214,6 +211,6 @@ export async function getApiKeyUsage(
   return {
     total: totalResults[0]?.count || 0,
     byEndpoint: byEndpointResults,
-    byStatus: byStatusResults.map(r => ({ status: r.statusCode, count: r.count })),
+    byStatus: byStatusResults.map(r => ({ status: r.statusCode ?? 0, count: r.count })),
   };
 }

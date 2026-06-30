@@ -26,6 +26,11 @@ vi.mock('@/drizzle/db', () => ({
         returning: vi.fn(() => mockDbInsert()),
       })),
     })),
+    query: {
+      aiProviderSecrets: { findFirst: vi.fn(async () => null) },
+      tenantAiCredits: { findFirst: vi.fn(async () => null) },
+      tenants: { findFirst: vi.fn(async () => null) },
+    },
   },
 }));
 
@@ -36,6 +41,8 @@ vi.mock('@/drizzle/schema/core', () => ({
 vi.mock('@/drizzle/schema/ai', () => ({
   aiProviderSecrets: { id: 'id', tenantId: 'tenant_id', provider: 'provider', isCentralized: 'is_centralized' },
   aiActivity: { id: 'id', tenantId: 'tenant_id', userId: 'user_id', action: 'action', provider: 'provider', model: 'model', status: 'status', tokensIn: 'tokens_in', tokensOut: 'tokens_out', tokensUsed: 'tokens_used', costCents: 'cost_cents', latencyMs: 'latency_ms', entityType: 'entity_type', entityId: 'entity_id', errorMessage: 'error_message', metadata: 'metadata' },
+  aiProviderSecrets: { tenantId: 'tenant_id', provider: 'provider', isCentralized: 'is_centralized' },
+  tenantAiCredits: { tenantId: 'tenant_id', billingPeriod: 'billing_period', allocatedTokens: 'allocated_tokens', usedTokens: 'used_tokens' },
 }));
 
 vi.mock('drizzle-orm', () => ({

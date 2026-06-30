@@ -1,13 +1,12 @@
 'use client';
 import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Zap, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 function VerifyEmailContent() {
   const [status, setStatus] = useState<'loading'|'success'|'error'>('loading');
   const [msg, setMsg] = useState('');
   const searchParams = useSearchParams();
-  const router = useRouter();
   const token = searchParams.get('token');
 
   useEffect(() => {
@@ -15,11 +14,11 @@ function VerifyEmailContent() {
     fetch('/api/auth/verify-email', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token}) })
       .then(r => r.json())
       .then(d => {
-        if (d.ok) { setStatus('success'); setMsg(d.email); setTimeout(() => router.push('/tenant/dashboard'), 2500); }
+        if (d.ok) { setStatus('success'); setMsg(d.email); setTimeout(() => { window.location.href = '/tenant/dashboard'; }, 2500); }
         else { setStatus('error'); setMsg(d.error); }
       })
       .catch(() => { setStatus('error'); setMsg('Verification failed. Please try again.'); });
-  }, [token, router]);
+  }, [token]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-violet-950 flex items-center justify-center p-4">

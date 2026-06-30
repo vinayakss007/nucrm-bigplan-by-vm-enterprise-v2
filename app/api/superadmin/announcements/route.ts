@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
       .select({
         id: announcements.id,
         title: announcements.title,
-        body: announcements.body,
+        content: announcements.content,
         type: announcements.type,
         is_active: announcements.isActive,
         target: announcements.target,
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       .insert(announcements)
       .values({
         title: b.title,
-        body: content,
+        content: content,
         type: b.type || 'info',
         target: b.target || 'all',
         isActive: b.is_active ?? true,

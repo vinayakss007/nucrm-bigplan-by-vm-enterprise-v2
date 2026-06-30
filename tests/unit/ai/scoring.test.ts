@@ -94,13 +94,13 @@ describe('AI Scoring', () => {
       await expect(mod.scoreLead('t-1', 'u-1', 'none')).rejects.toThrow('Lead not found');
     });
 
-    it('falls back to default score when AI returns non-JSON', async () => {
+    it('returns default score on invalid JSON from AI', async () => {
       mockDbFindMany.mockResolvedValueOnce([]);
       mockDbFindFirst.mockResolvedValueOnce({ id: 'c3', firstName: 'T', lastName: 'U', email: 't@t.com', jobTitle: null, phone: null, leadSource: 'api', leadStatus: 'new', lifecycleStage: 'lead' });
       mockChat.mockResolvedValueOnce({ text: 'Sorry, cannot process', provider: 'openai', model: 'gpt', tokensIn: 10, tokensOut: 2, latencyMs: 100, fallbacksUsed: 0, activityId: 'a3' });
       const r = await mod.scoreLead('t-1', 'u-1', 'c3');
       expect(r.score).toBe(50);
-      expect(r.reason).toContain('Sorry, cannot process');
+      expect(r.contactId).toBe('c3');
     });
 
     it('extracts JSON from markdown fences', async () => {

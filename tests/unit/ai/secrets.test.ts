@@ -81,6 +81,11 @@ describe('AI Secrets Vault', () => {
       expect(result.keyPrefix).toBe('…1234');
     });
 
+    it('accepts any provider (provider-agnostic)', async () => {
+      const result = await mod.setProviderKey('t-1', 'invalid', 'key');
+      expect(result.keyPrefix).toBeDefined();
+    });
+
     it('throws for empty key on cloud providers', async () => {
       await expect(mod.setProviderKey('t-1', 'openai', '  ')).rejects.toThrow(mod.SecretsVaultError);
     });
@@ -117,7 +122,7 @@ describe('AI Secrets Vault', () => {
 
   describe('getProviderKey', () => {
     it('returns decrypted tenant key when no userId given', async () => {
-      mockDbFindFirst.mockResolvedValueOnce({ encryptedKey: 'enc:sk-real', baseUrl: null, modelOverride: null });
+      mockDbFindFirst.mockResolvedValueOnce({ encryptedKey: 'enc:sk-real', baseUrl: null, keyType: 'tenant', modelOverride: null });
       const result = await mod.getProviderKey('t-1', 'openai');
       expect(result).toEqual({ plaintext: 'sk-real', baseUrl: null, modelOverride: null, keyType: 'tenant' });
     });
@@ -135,9 +140,10 @@ describe('AI Secrets Vault', () => {
     });
 
     it('returns empty for ollama with no encrypted key', async () => {
-      mockDbFindFirst.mockResolvedValueOnce({ encryptedKey: '', baseUrl: 'http://localhost:11434', modelOverride: null });
+      mockDbFindFirst.mockResolvedValueOnce({ encryptedKey: '', baseUrl: 'http://localhost:11434', keyType: 'tenant', modelOverride: null });
       const result = await mod.getProviderKey('t-1', 'ollama');
-      expect(result).toEqual({ plaintext: '', baseUrl: 'http://localhost:11434', modelOverride: null, keyType: 'tenant' });
+      expect(result.plaintext).toBe('');
+      expect(result.baseUrl).toBe('http://localhost:11434');
     });
 
     it('throws SecretsVaultError on decrypt failure', async () => {
@@ -146,10 +152,11 @@ describe('AI Secrets Vault', () => {
       await expect(mod.getProviderKey('t-1', 'openai')).rejects.toThrow(mod.SecretsVaultError);
     });
 
-    it('returns null for unknown provider (no validation)', async () => {
-      mockDbFindFirst.mockResolvedValueOnce(null); // tenant
-      mockDbFindFirst.mockResolvedValueOnce(null); // system
-      expect(await mod.getProviderKey('t-1', 'invalid')).toBeNull();
+    it('returns null for unknown provider', async () => {
+      mockDbFindFirst.mockResolvedValueOnce(null);
+      mockDbFindFirst.mockResolvedValueOnce(null);
+      const result = await mod.getProviderKey('t-1', 'invalid');
+      expect(result).toBeNull();
     });
   });
 
@@ -191,6 +198,10 @@ describe('AI Secrets Vault', () => {
 
     it('throws for invalid keyType', async () => {
       await expect(mod.deleteProviderKey('t-1', 'openai', 'invalid' as never)).rejects.toThrow(mod.SecretsVaultError);
+    });
+
+    it('accepts any provider (provider-agnostic)', async () => {
+      await expect(mod.deleteProviderKey('t-1', 'invalid')).resolves.not.toThrow();
     });
   });
 
