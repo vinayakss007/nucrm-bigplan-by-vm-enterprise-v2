@@ -154,6 +154,7 @@ describe('AI Secrets Vault', () => {
 
     it('returns null for unknown provider', async () => {
       mockDbFindFirst.mockResolvedValueOnce(null);
+      mockDbFindFirst.mockResolvedValueOnce(null);
       const result = await mod.getProviderKey('t-1', 'invalid');
       expect(result).toBeNull();
     });
