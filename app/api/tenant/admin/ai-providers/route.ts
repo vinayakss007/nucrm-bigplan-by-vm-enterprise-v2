@@ -68,7 +68,10 @@ export async function GET(req: NextRequest) {
       .where(eq(tenants.id, ctx.tenantId))
       .limit(1);
     const stored = ((t?.settings as Record<string, unknown> | null) ?? {})['ai_providers'] as Record<string, Record<string, unknown>> | undefined ?? {};
-    const keys = await listProviderKeyMeta(ctx.tenantId, ctx.userId);
+    const keys = await listProviderKeyMeta(ctx.tenantId, ctx.userId) as Record<string, {
+      present: boolean; keyPrefix: string | null; baseUrl: string | null;
+      rotatedAt: Date | null; keyType: string | null; modelOverride?: string | null;
+    }>;
 
     const providers: Record<string, unknown> = {};
     // Merge named defaults + stored config
