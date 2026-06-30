@@ -194,7 +194,7 @@ export async function handleSSOCallback(
         expectedNonce: nonce,
       });
       
-      email = claims.email;
+      email = claims.email ?? '';
       idToken = undefined; // ID token is verified, don't need to store raw
     } catch (error) {
       if (error instanceof OidcError) {
@@ -293,9 +293,8 @@ export async function validateOIDCToken(
     // Try to verify signature using JWKS if issuer is available
     if (config.issuer) {
       try {
-        const { discover, jwtVerify, createRemoteJWKSet } = await import('jose');
-        const discovery = await discover(config.issuer);
-        const JWKS = createRemoteJWKSet(new URL(discovery.jwks_uri));
+        const { jwtVerify, createRemoteJWKSet } = await import('jose');
+        const JWKS = createRemoteJWKSet(new URL(`${config.issuer}/.well-known/openid-configuration`));
         
         await jwtVerify(idToken, JWKS, {
           issuer: config.issuer,
@@ -396,29 +395,27 @@ function escapeXml(str: string): string {
  */
 async function verifySAMLSignature(samlXml: string, idpCertificate: string): Promise<boolean> {
   try {
-    const { validatePostResponseAsync } = await import('@node-saml/node-saml');
-    
-    // Create a temporary validation options object
-    const validationOptions = {
-      issuer: '', // Will be validated by the library
-      idpIssuer: '', // Will be validated by the library
+    const SAMLModule = await import('@node-saml/node-saml');
+    const samlValidator = new (SAMLModule as any).SAML({
+      issuer: '',
+      idpIssuer: '',
       wantAssertionsSigned: true,
       wantAuthnResponseSigned: true,
-      acceptedClockSkewMs: 5000, // 5 seconds clock skew tolerance
-      maxAssertionAgeMs: 300000, // 5 minutes max assertion age
+      acceptedClockSkewMs: 5000,
+      maxAssertionAgeMs: 300000,
       allowCreate: false,
-      requestIdExpirationPeriodMs: 3600000, // 1 hour
+      requestIdExpirationPeriodMs: 3600000,
       cacheProvider: {
         save: async () => '',
         get: async () => null,
         remove: async () => {},
       },
-    };
+    });
     
     // Validate the SAML response
-    const result = await validatePostResponseAsync(samlXml, validationOptions);
+    const validateResult = await (samlValidator as any).validatePostResponseAsync(samlXml);
     
-    if (result.profile) {
+    if (validateResult?.profile) {
       console.log('[SAML] Signature and assertion validated successfully by @node-saml/node-saml');
       return true;
     }

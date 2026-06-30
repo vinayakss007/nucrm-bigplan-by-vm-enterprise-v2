@@ -211,6 +211,6 @@ export async function getApiKeyUsage(
   return {
     total: totalResults[0]?.count || 0,
     byEndpoint: byEndpointResults,
-    byStatus: byStatusResults.map(r => ({ status: r.statusCode, count: r.count })),
+    byStatus: byStatusResults.map(r => ({ status: r.statusCode ?? 0, count: r.count })),
   };
 }

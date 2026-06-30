@@ -154,7 +154,7 @@ export function maskPii(value: string): string {
   if (!value || typeof value !== 'string') return value;
 
   if (PII_PATTERNS.email.test(value)) {
-    const [local, domain] = value.split('@');
+    const [local = '', domain = ''] = value.split('@');
     return `${local.charAt(0)}***@${domain}`;
   }
 
@@ -235,7 +235,6 @@ export async function logExportActivity(
         ipAddress,
         timestamp: new Date().toISOString(),
       }),
-      tenantId: null,
     });
   } catch (err) {
     console.error('[DLP] Failed to log export activity:', err);
