@@ -235,6 +235,7 @@ export async function allocateCredits(params: {
         allocatedCostCents: sql`${tenantAiCredits.allocatedCostCents} + ${params.costCents ?? 0}`,
         hardCapEnabled: params.hardCapEnabled ?? true,
         softCapPct: params.softCapPct ?? 80,
+        status: 'active',
         allocationNotes: params.notes,
         allocatedBy: params.allocatedBy,
         setBy: params.allocatedBy,
