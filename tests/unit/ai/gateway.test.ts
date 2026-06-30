@@ -17,6 +17,9 @@ const mockFrom = vi.fn(() => ({
 
 vi.mock('@/drizzle/db', () => ({
   db: {
+    query: {
+      aiProviderSecrets: { findFirst: vi.fn() },
+    },
     select: vi.fn(() => ({ from: mockFrom })),
     insert: vi.fn(() => ({
       values: vi.fn(() => ({
@@ -31,6 +34,7 @@ vi.mock('@/drizzle/schema/core', () => ({
 }));
 
 vi.mock('@/drizzle/schema/ai', () => ({
+  aiProviderSecrets: { id: 'id', tenantId: 'tenant_id', provider: 'provider', isCentralized: 'is_centralized' },
   aiActivity: { id: 'id', tenantId: 'tenant_id', userId: 'user_id', action: 'action', provider: 'provider', model: 'model', status: 'status', tokensIn: 'tokens_in', tokensOut: 'tokens_out', tokensUsed: 'tokens_used', costCents: 'cost_cents', latencyMs: 'latency_ms', entityType: 'entity_type', entityId: 'entity_id', errorMessage: 'error_message', metadata: 'metadata' },
 }));
 
