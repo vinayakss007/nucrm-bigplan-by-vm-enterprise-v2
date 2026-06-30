@@ -43,9 +43,11 @@ export async function PATCH(req: NextRequest, { params }: any) {
     
     if (body.completed === true) {
       updateData.status = 'completed';
+      updateData.completed = true;
       updateData.completedAt = new Date();
     } else if (body.completed === false) {
       updateData.status = 'pending';
+      updateData.completed = false;
       updateData.completedAt = null;
     }
 

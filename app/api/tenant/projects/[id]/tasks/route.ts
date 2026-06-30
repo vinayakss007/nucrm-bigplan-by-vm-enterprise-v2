@@ -40,6 +40,7 @@ export async function GET(
       id: tasks.id,
       title: tasks.title,
       status: tasks.status,
+      completed: tasks.completed,
       priority: tasks.priority,
       dueDate: tasks.dueDate,
       assignedTo: tasks.assignedTo,

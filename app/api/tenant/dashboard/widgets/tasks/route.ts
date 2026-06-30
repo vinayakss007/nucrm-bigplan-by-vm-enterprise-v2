@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
         dueDate: tasks.dueDate,
         priority: tasks.priority,
         status: tasks.status,
+        completed: tasks.completed,
       })
       .from(tasks)
       .where(and(
