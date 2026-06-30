@@ -84,7 +84,7 @@ export async function PATCH(request: NextRequest) {
 
     const [row] = await db
       .update(announcements)
-      .set({ isActive: is_active ?? true })
+      .set({ isActive: is_active ?? true, updatedAt: new Date() })
       .where(eq(announcements.id, id))
       .returning();
 

@@ -257,7 +257,7 @@ export async function DELETE(request: NextRequest) {
     } else {
       await db
         .update(tenants)
-        .set({ status: 'suspended', updatedAt: new Date() })
+        .set({ status: 'suspended', deletedAt: new Date(), updatedAt: new Date() })
         .where(eq(tenants.id, id));
     }
     return NextResponse.json({ ok: true });
