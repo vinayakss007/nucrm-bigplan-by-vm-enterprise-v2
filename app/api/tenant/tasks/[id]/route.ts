@@ -109,7 +109,8 @@ export async function DELETE(req: NextRequest, { params }: any) {
     const [row] = await db.update(tasks)
       .set({ 
         deletedAt: new Date(),
-        deletedBy: ctx.userId 
+        deletedBy: ctx.userId,
+        updatedAt: new Date(),
       })
       .where(and(
         eq(tasks.id, id),

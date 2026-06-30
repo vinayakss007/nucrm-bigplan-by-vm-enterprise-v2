@@ -214,6 +214,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       .set({
         deletedAt: new Date(),
         deletedBy: ctx.userId,
+        updatedAt: new Date(),
       })
       .where(
         and(
