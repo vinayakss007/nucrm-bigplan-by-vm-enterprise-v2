@@ -29,6 +29,7 @@ export default async function TasksPage() {
         description: tasks.description,
         priority: tasks.priority,
         status: tasks.status,
+        completed: tasks.completed,
         dueDate: tasks.dueDate,
         completedAt: tasks.completedAt,
         contactId: tasks.contactId,
