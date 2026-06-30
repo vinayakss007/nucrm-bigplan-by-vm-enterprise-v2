@@ -81,7 +81,7 @@ Format: {"score": number, "reason": "brief explanation", "factors": {"factor_nam
       // Try to extract score from plain text
       const scoreMatch = resp.text.match(/(\d{1,3})/);
       parsed = {
-        score: scoreMatch ? Math.min(100, parseInt(scoreMatch[1])) : 50,
+        score: scoreMatch ? Math.min(100, parseInt(scoreMatch[1] ?? '50')) : 50,
         reason: resp.text.slice(0, 500),
         factors: {},
       };
@@ -90,7 +90,7 @@ Format: {"score": number, "reason": "brief explanation", "factors": {"factor_nam
     // Last resort: extract any number as score
     const scoreMatch = resp.text.match(/(\d{1,3})/);
     parsed = {
-      score: scoreMatch ? Math.min(100, parseInt(scoreMatch[1])) : 50,
+      score: scoreMatch ? Math.min(100, parseInt(scoreMatch[1] ?? '50')) : 50,
       reason: resp.text.slice(0, 500),
       factors: {},
     };
