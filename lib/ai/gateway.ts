@@ -137,12 +137,12 @@ async function loadProviderConfigs(tenantId: string): Promise<Record<string, Pro
   const out: Record<string, ProviderConfig> = {};
   // Load named provider defaults first
   for (const id of Object.keys(PROVIDER_DEFAULTS)) {
-    out[id] = { ...PROVIDER_DEFAULTS[id as keyof typeof PROVIDER_DEFAULTS], ...(stored[id] ?? {}) };
+    out[id] = { ...PROVIDER_DEFAULTS[id as keyof typeof PROVIDER_DEFAULTS], ...(stored[id] ?? {}) } as ProviderConfig;
   }
   // Load any custom providers from stored config
   for (const [id, cfg] of Object.entries(stored)) {
     if (!out[id]) {
-      out[id] = { enabled: false, default_model: '', temperature: 0.4, max_tokens: 1024, fallback_priority: 99, ...cfg };
+      out[id] = { enabled: false, default_model: '', temperature: 0.4, max_tokens: 1024, fallback_priority: 99, ...cfg } as ProviderConfig;
     }
   }
   return out;
@@ -154,8 +154,8 @@ function buildProviderChain(
   forced?: string,
 ): string[] {
   const enabled = Object.keys(configs)
-    .filter(id => configs[id].enabled)
-    .sort((a, b) => configs[a].fallback_priority - configs[b].fallback_priority);
+    .filter(id => configs[id]!.enabled)
+    .sort((a, b) => configs[a]!.fallback_priority - configs[b]!.fallback_priority);
 
   if (!forced) return enabled;
   return [forced, ...enabled.filter(id => id !== forced)];
