@@ -34,7 +34,10 @@ export async function GET(req: NextRequest) {
       .limit(1);
 
     const aiSettings = ((t?.settings as Record<string, unknown> | null) ?? {})['ai_providers'] as Record<string, { enabled?: boolean }> | undefined ?? {};
-    const keyMeta = await listProviderKeyMeta(ctx.tenantId);
+    const keyMeta = await listProviderKeyMeta(ctx.tenantId) as Record<string, {
+      present: boolean; keyPrefix: string | null; baseUrl: string | null;
+      rotatedAt: Date | null; keyType: string | null;
+    }>;
 
     // Dynamic: named presets + any custom providers that have keys stored
     const allProviderIds = new Set([...NAMED_PROVIDER_IDS, ...Object.keys(keyMeta)]);
