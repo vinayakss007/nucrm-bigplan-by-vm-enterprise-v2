@@ -262,27 +262,6 @@ function buildMetricExpression(metric: string, metricField?: string): string {
   }
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildParameterizedQuery(query: string, params: any[]): string {
-  // For raw SQL execution with drizzle, we need to inline the parameters safely
-  // This is acceptable because all field names are whitelist-validated above
-  let result = query;
-  for (let i = params.length; i >= 1; i--) {
-    const value = params[i - 1];
-    if (value instanceof Date) {
-      result = result.replace(`$${i}`, `'${value.toISOString()}'`);
-    } else if (typeof value === 'string') {
-      // Escape single quotes
-      result = result.replace(`$${i}`, `'${value.replace(/'/g, "''")}'`);
-    } else {
-      result = result.replace(`$${i}`, String(value));
-    }
-  }
-  return result;
-}
-
 /**
  * GET /api/tenant/reports/builder
  * Returns available report dimensions and metrics for the UI.

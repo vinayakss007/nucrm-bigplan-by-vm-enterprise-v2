@@ -1,5 +1,6 @@
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
+import { parseInsertStatement } from '@/lib/restore/backup-parser';
 
 /**
  * TenantDataImporter
@@ -239,7 +240,8 @@ export class TenantDataImporter {
 
   /**
    * Import from SQL string (alternative format)
-   * SECURITY: Only allows INSERT statements targeting known tables.
+   * SECURITY: Parses INSERT statements and uses parameterized queries.
+   * Only allows INSERT statements targeting known tables.
    */
   static async importFromSQL(tenantId: string, sqlString: string): Promise<TenantImportResult> {
     const result: TenantImportResult = {
@@ -248,12 +250,21 @@ export class TenantDataImporter {
       errors: [],
     };
 
+    // Allowlist of tables that can be imported via SQL
+    const ALLOWED_IMPORT_TABLES = new Set([
+      'contacts', 'companies', 'deals', 'tasks', 'activities',
+      'notes', 'tags', 'custom_fields', 'pipeline_stages',
+      'users', 'roles', 'permissions',
+    ]);
+
     const statements = sqlString
       .split(';')
       .map(s => s.trim())
       .filter(s => s && !s.startsWith('--') && s.toUpperCase() !== 'BEGIN' && s.toUpperCase() !== 'COMMIT');
 
-    // SECURITY: Reject any statement that is not an INSERT — prevents DDL, DROP, TRUNCATE, UPDATE, DELETE injection
+    // Parse each INSERT statement and validate
+    const parsedStatements: Array<{ table: string; columns: string[]; values: string[] }> = [];
+    
     for (const statement of statements) {
       const upper = statement.toUpperCase().trim();
       if (!upper.startsWith('INSERT')) {
@@ -262,27 +273,53 @@ export class TenantDataImporter {
           `Found: ${upper.substring(0, 80)}...`
         );
       }
+
+      const parsed = parseInsertStatement(statement);
+      if (!parsed) {
+        throw new Error(`Failed to parse INSERT statement: ${statement.substring(0, 100)}...`);
+      }
+
+      // Validate table name against allowlist
+      if (!ALLOWED_IMPORT_TABLES.has(parsed.table)) {
+        throw new Error(
+          `Security violation: Table '${parsed.table}' is not in the allowed import tables. ` +
+          `Allowed: ${Array.from(ALLOWED_IMPORT_TABLES).join(', ')}`
+        );
+      }
+
+      // Validate no SQL keywords in values (basic check for injection in values)
+      for (const val of parsed.values) {
+        const valUpper = val.toUpperCase().trim();
+        if (valUpper.includes('DROP ') || valUpper.includes('DELETE ') || 
+            valUpper.includes('UPDATE ') || valUpper.includes('EXEC ') ||
+            valUpper.includes('EXECUTE ') || valUpper.includes('--')) {
+          throw new Error(`Security violation: Suspicious content in value: ${val.substring(0, 50)}`);
+        }
+      }
+
+      parsedStatements.push(parsed);
     }
 
     try {
       await db.transaction(async (tx) => {
-        for (const statement of statements) {
+        for (const { table, columns, values } of parsedStatements) {
           try {
-            const res = await tx.execute(sql.raw(statement));
-            if (res.rowCount) {
-              result.recordsRestored += res.rowCount;
-            }
+            // Build parameterized INSERT query
+            const colList = sql.join(columns.map(c => sql.identifier(c)), sql`, `);
+            const placeholders = sql.join(values.map(v => sql`${v}`), sql`, `);
+            
+            await tx.execute(sql`INSERT INTO ${sql.identifier(table)} (${colList}) VALUES (${placeholders})`);
+            result.recordsRestored++;
           } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
-            result.errors.push({ table: 'sql', error: message });
+            result.errors.push({ table, error: message });
             console.warn('[Import SQL] Statement failed:', message);
           }
         }
       });
-      result.tablesRestored = 1;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      throw new Error(`SQL import failed: ${message}`);
+      throw new Error(`SQL import transaction failed: ${message}`);
     }
 
     return result;

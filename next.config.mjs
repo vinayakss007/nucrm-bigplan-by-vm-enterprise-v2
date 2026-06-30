@@ -3,6 +3,12 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 let nextConfig = {
+  // Limit API body size to 10MB (default is 4MB)
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
   allowedDevOrigins: ['localhost:3000', '34.58.9.237', '34.123.152.161'],
   typescript: { ignoreBuildErrors: false },
   devIndicators: { buildActivity: false },
@@ -38,7 +44,6 @@ let nextConfig = {
         { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
         { key: 'X-DNS-Prefetch-Control', value: 'on' },
         { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
-        { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests" },
       ],
     }, {
       source: '/api/:path*',
