@@ -5,6 +5,16 @@ const mockDbSelect = vi.fn();
 const mockDbInsert = vi.fn();
 const mockGetProviderKey = vi.fn();
 
+const mockCheckCredits = vi.fn().mockResolvedValue({ allowed: true, balance: {} });
+const mockDeductCredits = vi.fn();
+const mockIsCentralizedProvider = vi.fn().mockResolvedValue(false);
+
+vi.mock('@/lib/ai/credits', () => ({
+  checkCredits: mockCheckCredits,
+  deductCredits: mockDeductCredits,
+  isCentralizedProvider: mockIsCentralizedProvider,
+}));
+
 vi.mock('@/lib/ai/secrets', () => ({
   getProviderKey: mockGetProviderKey,
 }));
