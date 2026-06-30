@@ -1,0 +1,31 @@
+{
+  "timestamp": 1782746377253,
+  "vulns": [
+    {
+      "id": "GHSA-67mh-4wv8-2f99",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-67mh-4wv8-2f99"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/esbuild@0.21.5"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-67mh-4wv8-2f99"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "timestamp": 1782746377253,
+  "vulns": [
+    {
+      "id": "GHSA-5xrq-8626-4rwp",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-5xrq-8626-4rwp"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/vitest@2.1.8"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-5xrq-8626-4rwp"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-9crc-q9x8-hgqq",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-9crc-q9x8-hgqq"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/vitest@2.1.8"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-9crc-q9x8-hgqq"
+        }
+      ]
+    }
+  ]
+}

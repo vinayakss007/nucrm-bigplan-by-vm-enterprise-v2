@@ -1,0 +1,31 @@
+{
+  "timestamp": 1782746375738,
+  "vulns": [
+    {
+      "id": "GHSA-4x5r-pxfx-6jf8",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-4x5r-pxfx-6jf8"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/%40babel/core@7.29.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-4x5r-pxfx-6jf8"
+        }
+      ]
+    }
+  ]
+}

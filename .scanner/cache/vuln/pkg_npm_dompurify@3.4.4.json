@@ -1,0 +1,239 @@
+{
+  "timestamp": 1782746375761,
+  "vulns": [
+    {
+      "id": "GHSA-76mc-f452-cxcm",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-76mc-f452-cxcm"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/dompurify@3.4.4"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-76mc-f452-cxcm"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-87xg-pxx2-7hvx",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-87xg-pxx2-7hvx"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/dompurify@3.4.4"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-87xg-pxx2-7hvx"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-cmwh-pvxp-8882",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-cmwh-pvxp-8882"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/dompurify@3.4.4"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-cmwh-pvxp-8882"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-gvmj-g25r-r7wr",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-gvmj-g25r-r7wr"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/dompurify@3.4.4"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-gvmj-g25r-r7wr"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-hpcv-96wg-7vj8",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-hpcv-96wg-7vj8"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/dompurify@3.4.4"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-hpcv-96wg-7vj8"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-r47g-fvhr-h676",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-r47g-fvhr-h676"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/dompurify@3.4.4"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-r47g-fvhr-h676"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-rp9w-3fw7-7cwq",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-rp9w-3fw7-7cwq"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/dompurify@3.4.4"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-rp9w-3fw7-7cwq"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-vxr8-fq34-vvx9",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-vxr8-fq34-vvx9"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/dompurify@3.4.4"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-vxr8-fq34-vvx9"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-x4vx-rjvf-j5p4",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-x4vx-rjvf-j5p4"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/dompurify@3.4.4"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-x4vx-rjvf-j5p4"
+        }
+      ]
+    }
+  ]
+}

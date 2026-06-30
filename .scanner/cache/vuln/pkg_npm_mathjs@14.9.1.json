@@ -1,0 +1,57 @@
+{
+  "timestamp": 1782746375770,
+  "vulns": [
+    {
+      "id": "GHSA-29qv-4j9f-fjw5",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-29qv-4j9f-fjw5"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/mathjs@14.9.1"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-29qv-4j9f-fjw5"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-jvff-x2qm-6286",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-jvff-x2qm-6286"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/mathjs@14.9.1"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-jvff-x2qm-6286"
+        }
+      ]
+    }
+  ]
+}

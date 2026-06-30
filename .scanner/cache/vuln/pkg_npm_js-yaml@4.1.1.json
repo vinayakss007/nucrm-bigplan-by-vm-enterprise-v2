@@ -1,0 +1,31 @@
+{
+  "timestamp": 1782746375767,
+  "vulns": [
+    {
+      "id": "GHSA-h67p-54hq-rp68",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-h67p-54hq-rp68"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/js-yaml@4.1.1"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-h67p-54hq-rp68"
+        }
+      ]
+    }
+  ]
+}

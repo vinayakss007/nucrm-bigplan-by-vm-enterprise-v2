@@ -1,0 +1,31 @@
+{
+  "timestamp": 1782746375758,
+  "vulns": [
+    {
+      "id": "GHSA-jxxr-4gwj-5jf2",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-jxxr-4gwj-5jf2"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/brace-expansion@5.0.5"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-jxxr-4gwj-5jf2"
+        }
+      ]
+    }
+  ]
+}

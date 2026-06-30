@@ -1,0 +1,83 @@
+{
+  "timestamp": 1782746377253,
+  "vulns": [
+    {
+      "id": "GHSA-4w7w-66w2-5vf9",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-4w7w-66w2-5vf9"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/vite@5.4.21"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-4w7w-66w2-5vf9"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-fx2h-pf6j-xcff",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-fx2h-pf6j-xcff"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/vite@5.4.21"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-fx2h-pf6j-xcff"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-v6wh-96g9-6wx3",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-v6wh-96g9-6wx3"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/vite@5.4.21"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-v6wh-96g9-6wx3"
+        }
+      ]
+    }
+  ]
+}

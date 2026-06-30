@@ -1,0 +1,31 @@
+{
+  "timestamp": 1782746377249,
+  "vulns": [
+    {
+      "id": "GHSA-g7r4-m6w7-qqqr",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-g7r4-m6w7-qqqr"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/esbuild@0.27.7"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-g7r4-m6w7-qqqr"
+        }
+      ]
+    }
+  ]
+}

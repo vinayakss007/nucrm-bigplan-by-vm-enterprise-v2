@@ -1,0 +1,31 @@
+{
+  "timestamp": 1782746377244,
+  "vulns": [
+    {
+      "id": "GHSA-w7jw-789q-3m8p",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-w7jw-789q-3m8p"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/shell-quote@1.8.3"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-w7jw-789q-3m8p"
+        }
+      ]
+    }
+  ]
+}

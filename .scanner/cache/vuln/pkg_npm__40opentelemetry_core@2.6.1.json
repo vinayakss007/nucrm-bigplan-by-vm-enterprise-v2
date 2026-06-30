@@ -1,0 +1,31 @@
+{
+  "timestamp": 1782746375743,
+  "vulns": [
+    {
+      "id": "GHSA-8988-4f7v-96qf",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-8988-4f7v-96qf"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/%40opentelemetry/core@2.6.1"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-8988-4f7v-96qf"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "timestamp": 1782746377236,
+  "vulns": [
+    {
+      "id": "GHSA-qx2v-qp2m-jg93",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/GHSA-qx2v-qp2m-jg93"
+      },
+      "ratings": [
+        {
+          "score": 0,
+          "severity": "unknown",
+          "method": "other"
+        }
+      ],
+      "description": "",
+      "affects": [
+        {
+          "ref": "pkg:npm/postcss@8.4.31"
+        }
+      ],
+      "properties": [
+        {
+          "name": "osv:id",
+          "value": "GHSA-qx2v-qp2m-jg93"
+        }
+      ]
+    }
+  ]
+}
