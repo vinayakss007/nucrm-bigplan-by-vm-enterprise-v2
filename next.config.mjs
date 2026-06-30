@@ -26,7 +26,7 @@ let nextConfig = {
   },
   compress: true,
   productionBrowserSourceMaps: false,
-  serverExternalPackages: ['pg', 'nodemailer'],
+  serverExternalPackages: ['pg', 'pg-boss', 'nodemailer'],
   transpilePackages: ['@xyflow/react'],
   async headers() {
     return [{

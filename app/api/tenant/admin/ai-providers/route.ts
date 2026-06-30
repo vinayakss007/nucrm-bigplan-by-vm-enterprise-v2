@@ -26,10 +26,10 @@ import {
   deleteProviderKey,
   listProviderKeyMeta,
   SecretsVaultError,
-  type AIProviderId,
 } from '@/lib/ai/secrets';
 
-const PROVIDERS: AIProviderId[] = ['openai', 'anthropic', 'groq', 'ollama'];
+/** Named providers with built-in defaults. Any other key in the config is a custom provider. */
+const NAMED_PROVIDERS = ['openai', 'anthropic', 'groq', 'ollama', 'opencode'];
 
 interface IncomingProvider {
   enabled?: boolean;
@@ -41,7 +41,7 @@ interface IncomingProvider {
   base_url?: string;
 }
 
-const DEFAULTS: Record<AIProviderId, {
+const DEFAULTS: Record<string, {
   enabled: boolean;
   default_model: string;
   temperature: number;
@@ -53,6 +53,7 @@ const DEFAULTS: Record<AIProviderId, {
   anthropic: { enabled: false, default_model: 'claude-3-5-sonnet-latest', temperature: 0.4, max_tokens: 1024, fallback_priority: 2 },
   groq:      { enabled: false, default_model: 'llama-3.1-70b-versatile',  temperature: 0.4, max_tokens: 1024, fallback_priority: 3 },
   ollama:    { enabled: false, default_model: 'llama3.1:8b',              temperature: 0.4, max_tokens: 1024, fallback_priority: 4, base_url: 'http://localhost:11434' },
+  opencode:  { enabled: false, default_model: 'deepseek-v4-flash-free',   temperature: 0.4, max_tokens: 1024, fallback_priority: 5, base_url: 'https://opencode.ai/zen' },
 };
 
 export async function GET(req: NextRequest) {
@@ -67,18 +68,23 @@ export async function GET(req: NextRequest) {
       .where(eq(tenants.id, ctx.tenantId))
       .limit(1);
     const stored = ((t?.settings as Record<string, unknown> | null) ?? {})['ai_providers'] as Record<string, Record<string, unknown>> | undefined ?? {};
-    const keys = await listProviderKeyMeta(ctx.tenantId);
+    const keys = await listProviderKeyMeta(ctx.tenantId, ctx.userId);
 
     const providers: Record<string, unknown> = {};
-    for (const id of PROVIDERS) {
+    // Merge named defaults + stored config
+    const allProviderIds = new Set([...NAMED_PROVIDERS, ...Object.keys(stored), ...Object.keys(keys)]);
+    for (const id of allProviderIds) {
+      const defaults = DEFAULTS[id] ?? { enabled: false, default_model: '', temperature: 0.4, max_tokens: 1024, fallback_priority: 99 };
       providers[id] = {
-        ...DEFAULTS[id],
+        ...defaults,
         ...(stored[id] ?? {}),
-        api_key_present: keys[id].present,
-        api_key_prefix: keys[id].keyPrefix,
-        rotated_at: keys[id].rotatedAt,
-        // Ollama uses base_url from the secrets table when set; fall back to JSON config
-        ...(id === 'ollama' && keys.ollama.baseUrl ? { base_url: keys.ollama.baseUrl } : {}),
+        api_key_present: keys[id]?.present ?? false,
+        api_key_prefix: keys[id]?.keyPrefix ?? null,
+        rotated_at: keys[id]?.rotatedAt ?? null,
+        key_type: keys[id]?.keyType ?? null,
+        model_override: keys[id]?.modelOverride ?? null,
+        // base_url from secrets table takes precedence
+        ...(keys[id]?.baseUrl ? { base_url: keys[id].baseUrl } : {}),
       };
     }
 
@@ -105,9 +111,12 @@ export async function PATCH(req: NextRequest) {
     //   - configPatch (written to tenants.settings.ai_providers via jsonb_set)
     //   - keyUpdates  (written to ai_provider_secrets via the vault)
     const configPatch: Record<string, Record<string, unknown>> = {};
-    const keyUpdates: Array<{ provider: AIProviderId; apiKey?: string; baseUrl?: string }> = [];
+    const keyUpdates: Array<{ provider: string; apiKey?: string; baseUrl?: string; modelOverride?: string }> = [];
 
-    for (const id of PROVIDERS) {
+    // Accept any provider key from the incoming payload (named or custom)
+    const allIds = Object.keys(incoming as Record<string, unknown>);
+
+    for (const id of allIds) {
       const raw = (incoming as Record<string, unknown>)[id];
       if (!raw || typeof raw !== 'object') continue;
       const p = raw as IncomingProvider;
@@ -115,7 +124,7 @@ export async function PATCH(req: NextRequest) {
       const cfg: Record<string, unknown> = {};
       if (typeof p['enabled'] === 'boolean') cfg['enabled'] = p['enabled'];
       if (typeof p['default_model'] === 'string' && p['default_model'].trim()) {
-        cfg['default_model'] = p['default_model'].trim().slice(0, 100);
+        cfg['default_model'] = p['default_model'].trim().slice(0, 200);
       }
       if (typeof p['temperature'] === 'number') {
         if (p['temperature'] < 0 || p['temperature'] > 2) {
@@ -140,7 +149,7 @@ export async function PATCH(req: NextRequest) {
       if (Object.keys(cfg).length > 0) configPatch[id] = cfg;
 
       // Key handling — keys never land in tenants.settings; they go in the vault.
-      const update: { provider: AIProviderId; apiKey?: string; baseUrl?: string } = { provider: id };
+      const update: { provider: string; apiKey?: string; baseUrl?: string; modelOverride?: string } = { provider: id };
       let touched = false;
       if (typeof p['api_key'] === 'string') {
         const trimmed = p['api_key'].trim();
@@ -149,13 +158,15 @@ export async function PATCH(req: NextRequest) {
           touched = true;
         }
       }
-      if (id === 'ollama' && typeof p['base_url'] === 'string') {
+      // base_url accepted for ALL providers (not just ollama/opencode)
+      if (typeof p['base_url'] === 'string') {
         const url = p['base_url'].trim();
         if (url && !/^https?:\/\//.test(url)) {
-          return NextResponse.json({ error: 'ollama.base_url must start with http(s)://' }, { status: 400 });
+          return NextResponse.json({ error: `${id}.base_url must start with http(s)://` }, { status: 400 });
         }
         update.baseUrl = url;
-        if (!update.apiKey) update.apiKey = ''; // empty string keeps Ollama row valid (key not required)
+        // If provider has a base_url but no API key, store empty key (for self-hosted)
+        if (!update.apiKey) update.apiKey = '';
         touched = true;
       }
       if (touched) keyUpdates.push(update);
@@ -222,11 +233,11 @@ export async function DELETE(req: NextRequest) {
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const provider = req.nextUrl.searchParams.get('provider');
-    if (!provider || !PROVIDERS.includes(provider as AIProviderId)) {
-      return NextResponse.json({ error: `provider must be one of ${PROVIDERS.join(', ')}` }, { status: 400 });
+    if (!provider) {
+      return NextResponse.json({ error: 'provider query param required' }, { status: 400 });
     }
 
-    await deleteProviderKey(ctx.tenantId, provider as AIProviderId);
+    await deleteProviderKey(ctx.tenantId, provider);
 
     await logAudit({
       tenantId: ctx.tenantId,

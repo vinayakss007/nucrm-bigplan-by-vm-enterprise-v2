@@ -93,6 +93,9 @@ export const users = pgTable('users', {
   totpBackupCodes: jsonb('totp_backup_codes'),
   totpVerifiedAt: timestamp('totp_verified_at', { withTimezone: true }),
 
+  // Rate Limiting
+  unlimitedRateLimit: boolean('unlimited_rate_limit').default(false),
+
   deletedBy: utils.deletedBy(),
   
   ...utils.lifecycle(),

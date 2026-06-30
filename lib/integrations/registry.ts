@@ -111,7 +111,7 @@ async function handleSendGrid(instance: IntegrationInstance, action: string, par
         }],
       }),
     });
-    return { success: res.ok, data: await res.json().catch(() => ({})) };
+    return { success: res.ok, data: await res.json().catch(() => ({ error: `HTTP ${res.status}` })) };
   }
 
   return { success: false, error: `Unknown action: ${action}` };

@@ -24,27 +24,44 @@ import { users } from './core';
 
 // ── 1. AI PROVIDER SECRETS ───────────────────────────
 // Per-tenant encrypted API keys for the multi-provider gateway.
-// One row per (tenant, provider). Soft-deletable.
+// Supports three key types:
+//   - 'system'  — Platform-provided key (superadmin sets via /superadmin/ai-keys)
+//   - 'tenant'  — Organization/workspace key (admin sets via /tenant/settings/ai-providers)
+//   - 'personal' — User's own key (user sets via /tenant/settings/ai-keys)
+// Lookup order: personal → tenant → system (first found wins)
+// One row per (tenant, provider, keyType). Soft-deletable.
 export const aiProviderSecrets = pgTable('ai_provider_secrets', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
-  /** 'openai' | 'anthropic' | 'groq' | 'ollama' (ollama uses base_url, no key) */
+  /** 'openai' | 'anthropic' | 'groq' | 'ollama' | 'opencode' */
   provider: text('provider').notNull(),
+  /** 'system' | 'tenant' | 'personal' — who owns this key */
+  keyType: text('key_type').notNull().default('tenant'),
+  /** For personal keys: which user owns this key. Null for system/tenant keys. */
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
   /** AES-256-GCM ciphertext from lib/crypto.encrypt() */
   encryptedKey: text('encrypted_key').notNull(),
   /** Last 4 chars of the plaintext key, safe to display */
   keyPrefix: text('key_prefix'),
-  /** Optional self-hosted base URL (Ollama only). Plain text — not a secret. */
+  /** Optional self-hosted base URL. Plain text — not a secret. */
   baseUrl: text('base_url'),
+  /** Optional model override — stored per-key so each user can use their own model. */
+  modelOverride: text('model_override'),
+  /** If true, use tenant's centralized credit pool instead of personal key tracking */
+  isCentralized: boolean('is_centralized').notNull().default(false),
   ...utils.lifecycle(),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   rotatedAt: timestamp('rotated_at', { withTimezone: true }),
 }, (table) => ({
   tenantIdx: utils.tenantIdx(table),
-  uniqueTenantProvider: uniqueIndex('idx_ai_provider_secrets_unique')
-    .on(table.tenantId, table.provider)
+  uniqueTenantProviderType: uniqueIndex('idx_ai_provider_secrets_unique')
+    .on(table.tenantId, table.provider, table.keyType)
     .where(sql`deleted_at IS NULL`),
+  uniquePersonalKey: uniqueIndex('idx_ai_provider_secrets_personal')
+    .on(table.tenantId, table.provider, table.userId)
+    .where(sql`deleted_at IS NULL AND key_type = 'personal'`),
   activeIdx: utils.activeIdx(table),
+  userIdx: index('idx_ai_provider_secrets_user').on(table.userId),
 }));
 
 // ── 2. AI ACTIVITY LOG ───────────────────────────────
@@ -187,3 +204,83 @@ export const atRiskRules = pgTable('at_risk_rules', {
   stageIdx: index('idx_at_risk_rules_stage').on(table.tenantId, table.stageId),
   activeIdx: utils.activeIdx(table),
 }));
+
+// ── 6. TENANT AI CREDITS ─────────────────────────────
+// Per-tenant credit balance for centralized AI usage.
+// Super admin allocates tokens; tenants consume from this pool.
+// Two offering types:
+//   - Centralized: Super admin allocates credits, users consume from pool
+//   - Personal: Users add their own API keys, tracked separately
+export const tenantAiCredits = pgTable('tenant_ai_credits', {
+  id: utils.pk(),
+  tenantId: utils.tenantId().unique(),
+  /** Total tokens allocated this billing period */
+  allocatedTokens: bigint('allocated_tokens', { mode: 'number' }).notNull().default(0),
+  /** Tokens consumed this billing period */
+  usedTokens: bigint('used_tokens', { mode: 'number' }).notNull().default(0),
+  /** Cost in cents (1/100 of USD) for this period */
+  allocatedCostCents: bigint('allocated_cost_cents', { mode: 'number' }).notNull().default(0),
+  usedCostCents: bigint('used_cost_cents', { mode: 'number' }).notNull().default(0),
+  /** Billing period identifier (YYYY-MM) */
+  billingPeriod: text('billing_period').notNull(),
+  /** Hard cap: block AI calls when balance exhausted */
+  hardCapEnabled: boolean('hard_cap_enabled').notNull().default(true),
+  /** Soft cap: warn at threshold (default 80%) */
+  softCapPct: integer('soft_cap_pct').default(80),
+  /** Status: active, exhausted, suspended */
+  status: text('status').notNull().default('active'),
+  /** Notes from super admin allocation */
+  allocationNotes: text('allocation_notes'),
+  setBy: uuid('set_by').references(() => users.id, { onDelete: 'set null' }),
+  ...utils.lifecycle(),
+  allocatedBy: uuid('allocated_by').references(() => users.id, { onDelete: 'set null' }),
+}, (table) => ({
+  tenantIdx: utils.tenantIdx(table),
+  periodIdx: index('idx_tenant_ai_credits_period').on(table.tenantId, table.billingPeriod),
+  statusIdx: index('idx_tenant_ai_credits_status').on(table.status),
+}));
+
+// ── 7. AI CREDITS LEDGER ─────────────────────────────
+// Per-call credit deduction log. Written after every successful AI call
+// when using centralized credits. Enables:
+//   - Per-tenant usage breakdown
+//   - Per-user usage breakdown
+//   - Per-action (draft/scoring/summarize) breakdown
+//   - Audit trail for credit consumption
+export const aiCreditsLedger = pgTable('ai_credits_ledger', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  /** Which AI action consumed credits */
+  action: text('action').notNull(),
+  /** Provider used */
+  provider: text('provider').notNull(),
+  /** Model used */
+  model: text('model'),
+  /** Tokens consumed */
+  tokensIn: integer('tokens_in').notNull().default(0),
+  tokensOut: integer('tokens_out').notNull().default(0),
+  tokensUsed: integer('tokens_used').notNull().default(0),
+  /** Cost in 1/100ths of a cent */
+  costCents: bigint('cost_cents', { mode: 'number' }).notNull().default(0),
+  /** Running balance after this deduction */
+  balanceAfterTokens: bigint('balance_after_tokens', { mode: 'number' }),
+  balanceAfterCostCents: bigint('balance_after_cost_cents', { mode: 'number' }),
+  /** Reference to ai_activity row */
+  activityId: uuid('activity_id'),
+  /** Billing period */
+  billingPeriod: text('billing_period').notNull(),
+  createdAt: utils.createdAt(),
+}, (table) => ({
+  tenantIdx: index('idx_ai_credits_ledger_tenant').on(table.tenantId, table.createdAt),
+  userIdx: index('idx_ai_credits_ledger_user').on(table.tenantId, table.userId, table.createdAt),
+  periodIdx: index('idx_ai_credits_ledger_period').on(table.tenantId, table.billingPeriod),
+  activityIdx: index('idx_ai_credits_ledger_activity').on(table.activityId),
+}));
+
+// ── 8. AI PROVIDER CENTRALIZED FLAG ──────────────────
+// Extension to ai_provider_secrets: when isCentralized = true,
+// the provider uses the tenant's centralized credit pool instead
+// of a personal API key. The key still needs to exist (system key),
+// but usage is deducted from the tenant's credit balance.
+// This is added as a column to ai_provider_secrets (see migration).

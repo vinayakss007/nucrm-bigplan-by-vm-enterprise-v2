@@ -1,11 +1,16 @@
 'use client';
+import { useMemo } from 'react';
 import type { WidgetProps } from '@/types/dashboard';
 import { formatDate, cn } from '@/lib/utils';
 import Link from 'next/link';
 
 export default function TasksWidget({ data }: WidgetProps) {
   const items = data?.items ?? [];
-  const today = new Date().toISOString().split('T')[0] || '';
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString().split('T')[0] || '';
+  }, []);
 
   return (
     <div>

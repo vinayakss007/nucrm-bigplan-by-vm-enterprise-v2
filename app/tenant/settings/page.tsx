@@ -40,11 +40,11 @@ export default function SettingsIndex() {
     fetch('/api/tenant/me').then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setIsAdmin(d.is_admin ?? false)).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     fetch('/api/tenant/settings-status').then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) { setStatuses(d.statuses ?? {}); setSummary(d.summary ?? summary); } })
+      .then(d => { if (d && !_ignore) { setStatuses(d.statuses ?? {}); setSummary(d.summary ?? { configured: 0, default: 0, attention: 0, unknown: 0 }); } })
       .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
      
     return () => { _ignore = true; };
-}, [, summary]);
+}, []);
 
   const q = query.trim().toLowerCase();
   const visible = useMemo(() => visibleForRole(isAdmin), [isAdmin]);
