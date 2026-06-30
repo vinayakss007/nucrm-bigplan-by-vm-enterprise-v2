@@ -1,11 +1,14 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BrainCircuit, Save, Loader2, ShieldX, ExternalLink, ArrowUpDown, Eye, EyeOff,
+  User, Building2, Globe, RefreshCw, ChevronDown, Plus, Trash2, Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { AI_PROVIDERS } from '@/components/tenant/ai/ai-config';
+import { AI_PROVIDER_PRESETS, getProviderLabel } from '@/components/tenant/ai/ai-config';
+
+type KeyType = 'system' | 'tenant' | 'personal';
 
 type ProviderConfig = {
   enabled: boolean;
@@ -14,8 +17,21 @@ type ProviderConfig = {
   max_tokens: number;
   fallback_priority: number;
   api_key_set?: boolean;
-  api_key?: string; // write-only
+  api_key?: string;
   base_url?: string;
+  api_key_present?: boolean;
+  api_key_prefix?: string | null;
+  rotated_at?: string | null;
+  key_type?: KeyType | null;
+  model_override?: string | null;
+};
+
+type ModelEntry = { id: string; name: string; owned_by?: string };
+
+const KEY_TYPE_LABELS: Record<KeyType, { label: string; icon: typeof User; color: string }> = {
+  system:   { label: 'System',   icon: Globe,      color: 'bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300' },
+  tenant:   { label: 'Tenant',   icon: Building2,  color: 'bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300' },
+  personal: { label: 'Personal', icon: User,        color: 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' },
 };
 
 export default function AIProvidersPage() {
@@ -26,25 +42,93 @@ export default function AIProvidersPage() {
   const [isAdmin, setIsAdmin] = useState(true);
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
 
+  // Model fetching state per provider
+  const [modelCache, setModelCache] = useState<Record<string, ModelEntry[]>>({});
+  const [modelLoading, setModelLoading] = useState<Record<string, boolean>>({});
+  const [modelError, setModelError] = useState<Record<string, string | null>>({});
+  const [modelSearch, setModelSearch] = useState<Record<string, string>>({});
+  const [showModelDropdown, setShowModelDropdown] = useState<Record<string, boolean>>({});
+
+  // Custom provider form
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newProviderId, setNewProviderId] = useState('');
+  const [newProviderUrl, setNewProviderUrl] = useState('');
+
   useEffect(() => {
-  let ignore = false;
+    let ignore = false;
     Promise.all([
       fetch('/api/tenant/admin/ai-providers').then(r => r.ok ? r.json() : { providers: {} }),
       fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ]).then(([d, me]: any[]) => { if (ignore) return; 
-      setData(d.providers ?? { } );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ]).then(([d, me]: any[]) => { if (ignore) return;
+      setData(d.providers ?? {} );
       setOriginal(d.providers ?? {});
       setIsAdmin(me?.is_admin ?? false);
     }).finally(() => setLoading(false));
     return () => { ignore = true; };
-}, []);
+  }, []);
 
   const dirty = useMemo(() => JSON.stringify(data) !== JSON.stringify(original), [data, original]);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const setField = (id: string, k: keyof ProviderConfig, v: any) => {
     setData(prev => ({ ...prev, [id]: { ...prev[id]!, [k]: v } }));
+  };
+
+  const fetchModels = useCallback(async (providerId: string) => {
+    const cfg = data[providerId];
+    if (!cfg) return;
+    setModelLoading(prev => ({ ...prev, [providerId]: true }));
+    setModelError(prev => ({ ...prev, [providerId]: null }));
+    try {
+      const params = new URLSearchParams({ provider: providerId });
+      if (cfg.base_url) params.set('base_url', cfg.base_url);
+      if (cfg.api_key) params.set('api_key', cfg.api_key);
+      const res = await fetch(`/api/tenant/ai/models?${params}`);
+      const d = await res.json();
+      if (res.ok) {
+        setModelCache(prev => ({ ...prev, [providerId]: d.models ?? [] }));
+        if (d.error) setModelError(prev => ({ ...prev, [providerId]: d.error }));
+      } else {
+        setModelError(prev => ({ ...prev, [providerId]: d.error || 'Failed to fetch models' }));
+      }
+    } catch (err) {
+      setModelError(prev => ({ ...prev, [providerId]: (err as Error).message }));
+    } finally {
+      setModelLoading(prev => ({ ...prev, [providerId]: false }));
+    }
+  }, [data]);
+
+  const addCustomProvider = () => {
+    const id = newProviderId.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    if (!id) return toast.error('Provider ID is required');
+    if (data[id]) return toast.error('Provider already exists');
+    const url = newProviderUrl.trim();
+    if (url && !url.startsWith('http')) return toast.error('URL must start with http(s)://');
+    setData(prev => ({
+      ...prev,
+      [id]: {
+        enabled: true,
+        default_model: '',
+        temperature: 0.4,
+        max_tokens: 1024,
+        fallback_priority: Object.keys(prev).length + 1,
+        base_url: url || undefined,
+        api_key: '',
+      },
+    }));
+    setNewProviderId('');
+    setNewProviderUrl('');
+    setShowAddForm(false);
+    toast.success(`Added "${id}" — set API key and model below`);
+  };
+
+  const removeProvider = (id: string) => {
+    setData(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   };
 
   const save = async () => {
@@ -57,7 +141,6 @@ export default function AIProvidersPage() {
     const d = await res.json();
     if (res.ok) {
       toast.success('AI providers saved');
-      // Clear write-only fields, refresh
       const cleared: Record<string, ProviderConfig> = {};
       for (const k of Object.keys(data)) {
         cleared[k] = { ...data[k]!, api_key: undefined, api_key_set: data[k]!.api_key ? true : data[k]!.api_key_set };
@@ -82,9 +165,8 @@ export default function AIProvidersPage() {
     </div>
   );
 
-  // Sort by fallback priority for display
-  const ordered = AI_PROVIDERS.slice().sort((a, b) =>
-    (data[a.id]?.fallback_priority ?? 99) - (data[b.id]?.fallback_priority ?? 99)
+  const ordered = Object.keys(data).sort((a, b) =>
+    (data[a]?.fallback_priority ?? 99) - (data[b]?.fallback_priority ?? 99)
   );
 
   return (
@@ -92,24 +174,37 @@ export default function AIProvidersPage() {
       <div>
         <h1 className="text-xl font-bold flex items-center gap-2"><BrainCircuit className="w-5 h-5 text-violet-600" />AI Providers</h1>
         <p className="text-sm text-muted-foreground mt-1 max-w-3xl">
-          Connect one or more LLMs. The gateway tries them in fallback order — if OpenAI rate-limits, the next enabled provider takes over without changing your code. Every output stays user-editable.
+          Connect any LLM — OpenAI-compatible APIs, Anthropic, Groq, self-hosted Ollama, or any custom endpoint. The gateway tries them in fallback order.
         </p>
       </div>
 
       <div className="rounded-xl border border-dashed border-border p-3 flex items-start gap-2 text-xs">
         <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
         <p className="text-muted-foreground">
-          <strong className="text-foreground">Fallback order:</strong> lower number = tried first. Set 1 for your primary, 2 for backup, etc. Disabled providers are skipped.
+          <strong className="text-foreground">Key resolution:</strong> Personal keys (yours) → tenant keys (admin) → system keys (platform). Any provider with a base URL and OpenAI-compatible API works. Set model as any string (e.g. &quot;gpt-4o&quot;, &quot;llama3.1:8b&quot;, &quot;my-fine-tuned-v2&quot;).
         </p>
       </div>
 
-      {/* XL: 2-col grid; mobile/tablet: single column */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {ordered.map(p => {
-          const cfg = data[p.id] ?? { enabled: false, default_model: p.defaultModel, temperature: 0.4, max_tokens: 1024, fallback_priority: 99 };
-          const ready = cfg.enabled && (p.id === 'ollama' ? !!cfg.base_url : (cfg.api_key_set || !!cfg.api_key));
+          const cfg = data[p] ?? { enabled: false, default_model: '', temperature: 0.4, max_tokens: 1024, fallback_priority: 99 };
+          const preset = AI_PROVIDER_PRESETS[p];
+          const isCustom = !preset;
+          const ready = cfg.enabled && ((cfg.api_key_set || !!cfg.api_key || cfg.api_key_present) || !!cfg.base_url);
+          const effectiveKeyType = cfg.key_type;
+          const keyTypeInfo = effectiveKeyType ? KEY_TYPE_LABELS[effectiveKeyType] : null;
+          const models = modelCache[p] ?? [];
+          const isLoadingModels = modelLoading[p] ?? false;
+          const modelErr = modelError[p];
+          const search = modelSearch[p] ?? '';
+          const showDropdown = showModelDropdown[p] ?? false;
+          const filteredModels = models.filter(m =>
+            m.id.toLowerCase().includes(search.toLowerCase()) ||
+            m.name.toLowerCase().includes(search.toLowerCase())
+          );
+
           return (
-            <div key={p.id} className={cn(
+            <div key={p} className={cn(
               'rounded-xl border bg-card p-4 space-y-3 transition-colors',
               ready ? 'border-emerald-300/60 dark:border-emerald-800/40' : 'border-border',
             )}>
@@ -124,50 +219,125 @@ export default function AIProvidersPage() {
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold">{p.label}</p>
+                      <p className="text-sm font-semibold">{getProviderLabel(p)}</p>
+                      {isCustom && <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300">Custom</span>}
                       {ready && <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">Ready</span>}
                       {cfg.enabled && !ready && <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300">Missing key</span>}
+                      {keyTypeInfo && (
+                        <span className={cn('text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded inline-flex items-center gap-1', keyTypeInfo.color)}>
+                          <keyTypeInfo.icon className="w-2.5 h-2.5" />
+                          {keyTypeInfo.label}
+                        </span>
+                      )}
                     </div>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">{p.note}</p>
-                    <a href={`https://${p.site}`} target="_blank" rel="noreferrer"
-                       className="text-[10px] text-muted-foreground/70 hover:text-violet-600 inline-flex items-center gap-0.5 mt-0.5">
-                      <ExternalLink className="w-2.5 h-2.5" /> {p.site}
-                    </a>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {preset?.note ?? 'Custom OpenAI-compatible provider'}
+                    </p>
+                    {preset?.site && (
+                      <a href={`https://${preset.site}`} target="_blank" rel="noreferrer"
+                         className="text-[10px] text-muted-foreground/70 hover:text-violet-600 inline-flex items-center gap-0.5 mt-0.5">
+                        <ExternalLink className="w-2.5 h-2.5" /> {preset.site}
+                      </a>
+                    )}
                   </div>
                 </div>
-                {/* Enable toggle */}
-                <button type="button" role="switch" aria-checked={cfg.enabled}
-                  onClick={() => setField(p.id, 'enabled', !cfg.enabled)}
-                  className={cn(
-                    'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors mt-1',
-                    cfg.enabled ? 'bg-violet-600' : 'bg-muted',
-                  )}>
-                  <span className={cn('inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform',
-                    cfg.enabled ? 'translate-x-5' : 'translate-x-1')} />
-                </button>
+                <div className="flex items-center gap-1 mt-1">
+                  {isCustom && (
+                    <button type="button" onClick={() => removeProvider(p)}
+                      className="p-1 text-muted-foreground hover:text-red-500 transition-colors" title="Remove custom provider">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button type="button" role="switch" aria-checked={cfg.enabled}
+                    onClick={() => setField(p, 'enabled', !cfg.enabled)}
+                    className={cn(
+                      'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors',
+                      cfg.enabled ? 'bg-violet-600' : 'bg-muted',
+                    )}>
+                    <span className={cn('inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform',
+                      cfg.enabled ? 'translate-x-5' : 'translate-x-1')} />
+                  </button>
+                </div>
               </div>
 
               {/* Config grid */}
               <div className="grid grid-cols-2 gap-2">
-                <Field label="Default model">
-                  <input className={inp} value={cfg.default_model ?? ''}
-                    onChange={e => setField(p.id, 'default_model', e.target.value)}
-                    placeholder={p.defaultModel} />
-                </Field>
+                {/* Model — always free text input with optional fetch */}
+                <div className="col-span-2">
+                  <Field label="Model" hint="Any model name — type freely or fetch from provider">
+                    <div className="relative">
+                      <div className="flex gap-1.5">
+                        <div className="relative flex-1">
+                          <input
+                            className={cn(inp, 'pr-8')}
+                            value={cfg.default_model ?? ''}
+                            onChange={e => setField(p, 'default_model', e.target.value)}
+                            placeholder={preset?.defaultModel ?? 'e.g. gpt-4o, llama3.1:8b, my-fine-tuned-v2'}
+                            onFocus={() => models.length > 0 && setShowModelDropdown(prev => ({ ...prev, [p]: true }))}
+                            onBlur={() => setTimeout(() => setShowModelDropdown(prev => ({ ...prev, [p]: false })), 200)}
+                          />
+                          {models.length > 0 && (
+                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                          )}
+                          {showDropdown && filteredModels.length > 0 && (
+                            <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-popover shadow-lg">
+                              <input
+                                className="w-full px-3 py-1.5 text-xs border-b border-border bg-transparent focus:outline-none"
+                                placeholder="Search models..."
+                                value={search}
+                                onChange={e => setModelSearch(prev => ({ ...prev, [p]: e.target.value }))}
+                                autoFocus
+                              />
+                              {filteredModels.map(m => (
+                                <button
+                                  key={m.id}
+                                  type="button"
+                                  className={cn(
+                                    'w-full text-left px-3 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground',
+                                    cfg.default_model === m.id && 'bg-accent font-medium'
+                                  )}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    setField(p, 'default_model', m.id);
+                                    setShowModelDropdown(prev => ({ ...prev, [p]: false }));
+                                  }}
+                                >
+                                  <span className="font-mono">{m.id}</span>
+                                  {m.owned_by && <span className="text-muted-foreground ml-1.5">({m.owned_by})</span>}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => fetchModels(p)}
+                          disabled={isLoadingModels}
+                          className="shrink-0 px-2.5 py-2 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50 transition-colors"
+                          title="Fetch available models from provider API"
+                        >
+                          {isLoadingModels ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                      {modelErr && <p className="text-[10px] text-amber-600 mt-1">{modelErr}</p>}
+                      {models.length > 0 && !modelErr && <p className="text-[10px] text-emerald-600 mt-1">{models.length} models available</p>}
+                    </div>
+                  </Field>
+                </div>
                 <Field label="Fallback priority" hint="1 = primary">
                   <input type="number" min={1} max={99} className={inp}
                     value={cfg.fallback_priority ?? 99}
-                    onChange={e => setField(p.id, 'fallback_priority', Number(e.target.value) || 99)} />
+                    onChange={e => setField(p, 'fallback_priority', Number(e.target.value) || 99)} />
                 </Field>
                 <Field label="Temperature" hint="0 = strict · 1 = creative">
                   <input type="number" min={0} max={2} step={0.1} className={inp}
                     value={cfg.temperature ?? 0.4}
-                    onChange={e => setField(p.id, 'temperature', Number(e.target.value) || 0)} />
+                    onChange={e => setField(p, 'temperature', Number(e.target.value) || 0)} />
                 </Field>
                 <Field label="Max tokens">
                   <input type="number" min={16} max={32000} className={inp}
                     value={cfg.max_tokens ?? 1024}
-                    onChange={e => setField(p.id, 'max_tokens', Number(e.target.value) || 1024)} />
+                    onChange={e => setField(p, 'max_tokens', Number(e.target.value) || 1024)} />
                 </Field>
               </div>
 
@@ -175,29 +345,72 @@ export default function AIProvidersPage() {
               <Field label={cfg.api_key_set ? 'API key (replace to update)' : 'API key'}>
                 <div className="relative">
                   <input
-                    type={showKey[p.id] ? 'text' : 'password'}
+                    type={showKey[p] ? 'text' : 'password'}
                     className={cn(inp, 'pr-9 font-mono')}
                     value={cfg.api_key ?? ''}
-                    onChange={e => setField(p.id, 'api_key', e.target.value)}
+                    onChange={e => setField(p, 'api_key', e.target.value)}
                     placeholder={cfg.api_key_set ? '•••••••• already saved' : 'sk-…'}
                   />
-                  <button type="button" onClick={() => setShowKey(s => ({ ...s, [p.id]: !s[p.id] }))}
+                  <button type="button" onClick={() => setShowKey(s => ({ ...s, [p]: !s[p] }))}
                     className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground">
-                    {showKey[p.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    {showKey[p] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
                 </div>
               </Field>
 
-              {/* Base URL — override the provider's default endpoint */}
-              <Field label="Base URL" hint="Override API endpoint (leave blank for default)">
+              {/* Base URL — shown for ALL providers */}
+              <Field label="Base URL" hint="API endpoint — required for custom providers, optional for named ones">
                 <input className={inp} value={cfg.base_url ?? ''}
-                  onChange={e => setField(p.id, 'base_url', e.target.value)}
-                  placeholder={p.id === 'openai' ? 'https://api.openai.com' : p.id === 'groq' ? 'https://api.groq.com/openai' : p.id === 'ollama' ? 'http://localhost:11434' : 'https://api.anthropic.com'} />
+                  onChange={e => setField(p, 'base_url', e.target.value)}
+                  placeholder={preset?.base_url ?? 'https://your-api.com/v1'} />
               </Field>
             </div>
           );
         })}
       </div>
+
+      {/* Add custom provider */}
+      {!showAddForm ? (
+        <button
+          type="button"
+          onClick={() => setShowAddForm(true)}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-border text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+        >
+          <Plus className="w-4 h-4" /> Add custom provider
+        </button>
+      ) : (
+        <div className="rounded-xl border border-violet-300 dark:border-violet-800 bg-card p-4 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <Info className="w-4 h-4 text-violet-600" />
+            Add any OpenAI-compatible provider
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Any LLM that exposes an OpenAI-compatible <code className="bg-muted px-1 rounded">/v1/chat/completions</code> endpoint works. Just give it an ID and base URL.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <Field label="Provider ID" hint="lowercase, no spaces">
+              <input className={inp} value={newProviderId}
+                onChange={e => setNewProviderId(e.target.value)}
+                placeholder="e.g. my-llm, deepseek, together" />
+            </Field>
+            <Field label="Base URL" hint="must start with http(s)://">
+              <input className={inp} value={newProviderUrl}
+                onChange={e => setNewProviderUrl(e.target.value)}
+                placeholder="https://api.example.com/v1" />
+            </Field>
+            <div className="flex items-end gap-2">
+              <button onClick={addCustomProvider}
+                className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-colors">
+                Add
+              </button>
+              <button onClick={() => { setShowAddForm(false); setNewProviderId(''); setNewProviderUrl(''); }}
+                className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Save bar */}
       <div className={cn(

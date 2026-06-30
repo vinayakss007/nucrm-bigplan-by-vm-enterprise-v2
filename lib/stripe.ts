@@ -349,12 +349,16 @@ export async function verifyWebhookSignature(
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
+  // Pad shorter string to match length to prevent timing leaks
+  const maxLen = Math.max(a.length, b.length);
+  const aPadded = a.padEnd(maxLen, '\0');
+  const bPadded = b.padEnd(maxLen, '\0');
+  
   let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  for (let i = 0; i < maxLen; i++) {
+    result |= aPadded.charCodeAt(i) ^ bPadded.charCodeAt(i);
   }
-  return result === 0;
+  return result === 0 && a.length === b.length;
 }
 
 // ── Plan Price Mapping ───────────────────────────────────────────────────────

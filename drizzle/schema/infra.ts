@@ -30,6 +30,19 @@ export const plans = pgTable('plans', {
   maxAutomations: integer('max_automations').default(5),
   maxForms: integer('max_forms').default(3),
   maxApiCallsDay: integer('max_api_calls_day').default(1000),
+  rateLimitConfig: jsonb('rate_limit_config').default({
+    api: 60,
+    auth: 5,
+    contacts: 30,
+    deals: 30,
+    export: 10,
+    import: 5,
+    ai: 30,
+    webhook: 1000,
+    passwordReset: 3,
+    emailVerification: 10,
+    bulk: 5,
+  }),
   features: jsonb('features').default([]),
   isActive: boolean('is_active').default(true),
   sortOrder: integer('sort_order').default(0),
@@ -297,7 +310,7 @@ export const fileUploads = pgTable('file_uploads', {
 export const announcements = pgTable('announcements', {
   id: utils.pk(),
   title: text('title').notNull(),
-  body: text('body').notNull(),
+  content: text('content').notNull(),
   type: text('type').default('info'), // 'info', 'warning', 'update', 'feature'
   target: text('target').default('all'), // 'all', 'tenants', 'super_admins'
   targetTenantIds: uuid('target_tenant_ids').array(),

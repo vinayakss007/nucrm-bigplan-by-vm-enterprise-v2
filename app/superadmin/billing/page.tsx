@@ -6,6 +6,16 @@ import toast from 'react-hot-toast';
 
 const FEATURE_OPTIONS = ['contacts','deals','tasks','automations','forms','reports','sequences','products','quotes','ai','api_access','custom_roles','custom_domain','sso','audit_logs','dedicated_support'];
 
+const AI_FEATURE_OPTIONS = [
+  { key: 'ai_draft', label: 'Auto-Draft', desc: 'AI email/call/note drafting' },
+  { key: 'ai_lead_scoring', label: 'Lead Scoring', desc: 'Predict who to call next' },
+  { key: 'ai_at_risk', label: 'At-Risk Deals', desc: 'Stalled deal detection' },
+  { key: 'ai_sentiment', label: 'Sentiment Analysis', desc: 'Text sentiment scoring' },
+  { key: 'ai_lead_warming', label: 'Lead Warming', desc: 'Festival/birthday messages' },
+  { key: 'ai_summarize', label: 'Summarize', desc: 'TL;DR for any record' },
+  { key: 'ai_activity_log', label: 'AI Activity Log', desc: 'Token/cost tracking' },
+];
+
 function PlanForm({ plan, onSave, onClose }: { plan?: any; onSave: () => void; onClose: () => void }) {
   const [f, setF] = useState({
     id: plan?.id || '', name: plan?.name || '', price_monthly: plan?.price_monthly || 0,
@@ -68,6 +78,37 @@ function PlanForm({ plan, onSave, onClose }: { plan?: any; onSave: () => void; o
                 <button key={feat} type="button" onClick={()=>toggleFeature(feat)}
                   className={cn('px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors capitalize', f.features.includes(feat)?'border-violet-500/50 bg-violet-500/20 text-violet-400':'border-white/10 text-white/30 hover:text-white/60')}>
                   {feat.replace(/_/g,' ')}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-white/50 uppercase tracking-wide mb-3">AI Features</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {AI_FEATURE_OPTIONS.map(ai => (
+                <button key={ai.key} type="button" onClick={()=>toggleFeature(ai.key)}
+                  className={cn(
+                    'flex items-start gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors',
+                    f.features.includes(ai.key)
+                      ? 'border-emerald-500/50 bg-emerald-500/10'
+                      : 'border-white/10 hover:border-white/20'
+                  )}>
+                  <div className={cn(
+                    'mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors',
+                    f.features.includes(ai.key)
+                      ? 'border-emerald-500 bg-emerald-500'
+                      : 'border-white/20'
+                  )}>
+                    {f.features.includes(ai.key) && (
+                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className={cn('text-xs font-semibold', f.features.includes(ai.key) ? 'text-emerald-400' : 'text-white/60')}>{ai.label}</p>
+                    <p className="text-[10px] text-white/30 mt-0.5">{ai.desc}</p>
+                  </div>
                 </button>
               ))}
             </div>

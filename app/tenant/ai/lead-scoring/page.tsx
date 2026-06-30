@@ -43,7 +43,7 @@ export default function AILeadScoringPage() {
         return r.json();
       })
       .then(d => {
-        const data = d.leads || [];
+        const data = d.data || d.leads || [];
         setLeads(data);
         if (data.length > 0) {
           const avg = Math.round(data.reduce((acc: number, l: Lead) => acc + (l.score ?? 0), 0) / data.length);

@@ -83,6 +83,7 @@ export async function POST(req: NextRequest) {
               contactId: enrollment.contactId,
               recipient: enrollment.contact.email,
               subject: step.subject || 'Follow up',
+              bodyText: body,
               sequenceEnrollmentId: enrollment.id,
             });
 

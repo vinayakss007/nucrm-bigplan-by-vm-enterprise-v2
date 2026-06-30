@@ -26,7 +26,7 @@ export default function SuperAdminShell({ user, stats, children }: { user: any; 
   };
 
   return (
-    <div className="dark flex h-screen overflow-hidden bg-gray-950">
+    <div className="flex h-screen overflow-hidden bg-background">
       {/* Mobile overlay */}
       {mobileOpen && (
         <div 
@@ -49,7 +49,7 @@ export default function SuperAdminShell({ user, stats, children }: { user: any; 
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <SuperAdminHeader profile={user} stats={stats} onToggleSidebar={toggle} />
-        <main id="main-content" className="flex-1 overflow-y-auto scrollbar-thin p-4 sm:p-5 bg-gray-950" role="main">
+        <main id="main-content" className="flex-1 overflow-y-auto scrollbar-thin p-4 sm:p-5 bg-background" role="main">
           {children}
         </main>
       </div>

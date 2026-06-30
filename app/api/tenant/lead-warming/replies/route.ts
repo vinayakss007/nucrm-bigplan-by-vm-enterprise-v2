@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { apiError } from '@/lib/api-error';
+import { requireAiFeature } from '@/lib/ai/plan-gate';
 import { db } from '@/drizzle/db';
 import { leadWarmingReplies, leadWarmingMessages } from '@/drizzle/schema/lead-warming';
 import { contacts } from '@/drizzle/schema';
@@ -15,6 +16,10 @@ export async function GET(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const gate = await requireAiFeature(ctx, 'ai_lead_warming');
+    if (gate) return gate;
+
     if (!can(ctx, 'automations.view')) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
@@ -65,6 +70,10 @@ export async function POST(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const gate = await requireAiFeature(ctx, 'ai_lead_warming');
+    if (gate) return gate;
+
     if (!can(ctx, 'automations.manage')) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }

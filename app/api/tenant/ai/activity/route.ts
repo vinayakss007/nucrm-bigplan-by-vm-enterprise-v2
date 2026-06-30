@@ -21,14 +21,18 @@ import { aiActivity } from '@/drizzle/schema/ai';
 import { users } from '@/drizzle/schema/core';
 import { eq, and, desc, sql, gte, count } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { requireAiFeature } from '@/lib/ai/plan-gate';
 
 const VALID_STATUSES = new Set(['success', 'error', 'rate_limited', 'fallback_used']);
-const VALID_PROVIDERS = new Set(['openai', 'anthropic', 'groq', 'ollama']);
+const VALID_PROVIDERS = new Set(['openai', 'anthropic', 'groq', 'ollama', 'opencode', 'deepseek']);
 
 export async function GET(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const gate = await requireAiFeature(ctx, 'ai_activity_log');
+    if (gate) return gate;
 
     const sp = req.nextUrl.searchParams;
     const action = sp.get('action');
@@ -131,6 +135,9 @@ export async function PATCH(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const gate = await requireAiFeature(ctx, 'ai_activity_log');
+    if (gate) return gate;
 
     let body;
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }

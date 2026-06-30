@@ -6,6 +6,7 @@ import { contactScores, contacts } from '@/drizzle/schema';
 import { eq, and, desc, gte } from 'drizzle-orm';
 import { can } from '@/lib/auth/middleware';
 import { scoreLead, bulkScoreLeads } from '@/lib/ai/scoring';
+import { requireAiFeature } from '@/lib/ai/plan-gate';
 
 /**
  * POST /api/tenant/ai/score
@@ -17,6 +18,10 @@ export async function POST(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const gate = await requireAiFeature(ctx, 'ai_lead_scoring');
+    if (gate) return gate;
+
     if (!can(ctx, 'contacts.view_all')) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }

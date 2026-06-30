@@ -43,7 +43,7 @@ type Resp = {
 };
 
 const ACTIONS = ['', 'draft', 'lead_scoring', 'predict_deal', 'suggest_followup', 'summarize'];
-const PROVIDERS = ['', 'openai', 'anthropic', 'groq', 'ollama'];
+const PROVIDERS = ['', 'openai', 'anthropic', 'groq', 'ollama', 'opencode', 'deepseek'];
 const STATUSES = ['', 'success', 'fallback_used', 'error', 'rate_limited'];
 
 function fmtCost(cents: number): string {
