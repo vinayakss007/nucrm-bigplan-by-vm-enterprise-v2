@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
         message: 'Backup completed successfully',
       });
     } else {
-      const cronError = await cronRes.json().catch((err) => { console.error('[backup] cron response parse failed', err); return {}; });
+      const cronError = await cronRes.json().catch((err) => { console.error('[backup] cron response parse failed', err); return { error: `HTTP ${cronRes.status}` }; });
       return NextResponse.json({ error: cronError.error || 'Backup failed' }, { status: 500 });
     }
  

@@ -150,7 +150,7 @@ describe('SSO - OIDC Token Validation', () => {
         email: 'user@example.com',
       });
 
-      const result = validateOIDCToken(token, config);
+      const result = await validateOIDCToken(token, config);
       expect(result.valid).toBe(false);
       expect(result.error).toContain('expired');
     });
@@ -165,7 +165,7 @@ describe('SSO - OIDC Token Validation', () => {
         sub: 'user-123',
       });
 
-      const result = validateOIDCToken(token, config);
+      const result = await validateOIDCToken(token, config);
       expect(result.valid).toBe(false);
       expect(result.error).toContain('issuer');
     });
@@ -180,7 +180,7 @@ describe('SSO - OIDC Token Validation', () => {
         sub: 'user-123',
       });
 
-      const result = validateOIDCToken(token, config);
+      const result = await validateOIDCToken(token, config);
       expect(result.valid).toBe(false);
       expect(result.error).toContain('audience');
     });
@@ -196,7 +196,7 @@ describe('SSO - OIDC Token Validation', () => {
         email: 'user@example.com',
       });
 
-      const result = validateOIDCToken(token, config);
+      const result = await validateOIDCToken(token, config);
       expect(result.valid).toBe(true);
       expect(result.payload).toBeDefined();
       expect(result.payload!['email']).toBe('user@example.com');
@@ -204,7 +204,7 @@ describe('SSO - OIDC Token Validation', () => {
 
     it('rejects malformed tokens', async () => {
       const { validateOIDCToken } = await import('@/lib/auth/sso');
-      const result = validateOIDCToken('not.a.valid.jwt.token', config);
+      const result = await validateOIDCToken('not.a.valid.jwt.token', config);
       expect(result.valid).toBe(false);
     });
   });

@@ -3,6 +3,41 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+vi.mock('@/drizzle/db', () => ({
+  db: {
+    query: {
+      plans: { findFirst: vi.fn(async () => null) },
+      users: { findFirst: vi.fn(async () => null) },
+      systemSettings: { findFirst: vi.fn(async () => null) },
+      aiProviderSecrets: { findFirst: vi.fn(async () => null) },
+      tenantAiCredits: { findFirst: vi.fn(async () => null) },
+      sessions: { findFirst: vi.fn(async () => null) },
+    },
+    insert: vi.fn(() => ({
+      values: vi.fn(() => ({
+        returning: vi.fn(async () => []),
+      })),
+    })),
+    update: vi.fn(() => ({
+      set: vi.fn(() => ({
+        where: vi.fn(async () => {}),
+      })),
+    })),
+  },
+}));
+
+vi.mock('@/drizzle/schema', () => ({
+  plans: {},
+  users: {},
+  systemSettings: {},
+  apiKeys: {},
+  ssoProviders: {},
+  ssoSessions: {},
+  sessions: {},
+  aiProviderSecrets: {},
+  tenantAiCredits: {},
+}));
+
 // Global mock for database client to prevent unhandled rejections in all tests
 vi.mock('@/lib/db/client', () => ({
   query: vi.fn().mockResolvedValue({ rows: [] }),
