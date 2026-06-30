@@ -220,7 +220,7 @@ describe('TenantDataImporter', () => {
 
       const result = await TenantDataImporter.importFromSQL('tenant-1', '');
 
-      expect(result.tablesRestored).toBe(1);
+      expect(result.tablesRestored).toBe(0);
       expect(result.recordsRestored).toBe(0);
     });
 
@@ -229,9 +229,11 @@ describe('TenantDataImporter', () => {
 
       const { TenantDataImporter } = await import('@/lib/tenant-data-import');
 
+      // Comments and BEGIN/COMMIT are filtered; no INSERT statements remain
       const result = await TenantDataImporter.importFromSQL('tenant-1', '-- comment\nBEGIN;\nCOMMIT;');
 
-      expect(result.tablesRestored).toBe(1);
+      expect(result.tablesRestored).toBe(0);
+      expect(result.recordsRestored).toBe(0);
     });
 
     it('throws when transaction fails', async () => {
@@ -244,8 +246,8 @@ describe('TenantDataImporter', () => {
       const { TenantDataImporter } = await import('@/lib/tenant-data-import');
 
       await expect(
-        TenantDataImporter.importFromSQL('tenant-1', 'INSERT INTO test VALUES (1)')
-      ).rejects.toThrow('SQL import failed');
+        TenantDataImporter.importFromSQL('tenant-1', 'INSERT INTO "contacts" ("id") VALUES (\'1\')')
+      ).rejects.toThrow('SQL import transaction failed');
     });
   });
 });

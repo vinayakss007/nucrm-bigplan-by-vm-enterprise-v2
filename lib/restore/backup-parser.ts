@@ -144,8 +144,9 @@ function getFileStream(filePath: string): Readable {
  */
 export function parseInsertStatement(line: string): ParsedStatement | null {
   // Match: INSERT INTO table_name (col1, col2, ...) VALUES (...);
+  // Handles both quoted identifiers ("table") and unquoted (table)
   const match = line.match(
-    /INSERT\s+INTO\s+(?:public\.)?(\w+)\s*\(([^)]+)\)\s*VALUES\s+(.+);?\s*$/i
+    /INSERT\s+INTO\s+(?:public\.)?(?:"?(\w+)"?)\s*\(([^)]+)\)\s*VALUES\s+(.+);?\s*$/i
   );
 
   if (!match) return null;

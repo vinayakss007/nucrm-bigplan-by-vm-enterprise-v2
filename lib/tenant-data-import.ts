@@ -302,6 +302,7 @@ export class TenantDataImporter {
 
     try {
       await db.transaction(async (tx) => {
+        const tablesSeen = new Set<string>();
         for (const { table, columns, values } of parsedStatements) {
           try {
             // Build parameterized INSERT query
@@ -309,6 +310,7 @@ export class TenantDataImporter {
             const placeholders = sql.join(values.map(v => sql`${v}`), sql`, `);
             
             await tx.execute(sql`INSERT INTO ${sql.identifier(table)} (${colList}) VALUES (${placeholders})`);
+            tablesSeen.add(table);
             result.recordsRestored++;
           } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
@@ -316,6 +318,7 @@ export class TenantDataImporter {
             console.warn('[Import SQL] Statement failed:', message);
           }
         }
+        result.tablesRestored = tablesSeen.size;
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);

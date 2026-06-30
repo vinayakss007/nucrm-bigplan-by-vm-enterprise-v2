@@ -5,11 +5,16 @@ const mockDbInsertReturning = vi.fn();
 const mockDbUpdateChain = { set: vi.fn(() => ({ where: vi.fn(() => Promise.resolve()) })) };
 const mockDbSelectResolve = vi.fn();
 
+const mockDbWebhooksFindFirst = vi.fn();
+
 vi.mock('@/drizzle/db', () => ({
   db: {
     query: {
       webhookDeliveries: {
         findFirst: vi.fn(() => mockDbFindFirst()),
+      },
+      webhooks: {
+        findFirst: vi.fn(() => mockDbWebhooksFindFirst()),
       },
     },
     insert: vi.fn(() => ({
@@ -28,6 +33,7 @@ vi.mock('@/drizzle/db', () => ({
 
 vi.mock('@/drizzle/schema/automation', () => ({
   webhookDeliveries: { id: 'id', tenantId: 'tenant_id', webhookId: 'webhook_id', eventType: 'event_type', status: 'status', payload: 'payload', createdAt: 'created_at', responseStatus: 'response_status', responseBody: 'response_body', durationMs: 'duration_ms', metadata: 'metadata' },
+  webhooks: { id: 'id', secret: 'secret', tenantId: 'tenant_id' },
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -49,6 +55,7 @@ describe('Webhook Delivery', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     process.env = { ...OLD_ENV, WEBHOOK_SECRET: 'test-webhook-secret' };
+    mockDbWebhooksFindFirst.mockResolvedValue({ secret: null });
     mod = await import('@/lib/webhooks/delivery');
   });
 
