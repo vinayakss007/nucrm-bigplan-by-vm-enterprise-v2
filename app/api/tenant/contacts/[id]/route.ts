@@ -10,6 +10,7 @@ import { logAudit } from '@/lib/audit';
 import { trackFieldChange } from '@/lib/history';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
+import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -227,6 +228,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     fireWebhooks(ctx.tenantId, 'contact.updated', { id: contactId }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
+    invalidateWidgetCache(ctx.tenantId, 'stats-contacts', 'contacts-recent', 'activity');
+
     return NextResponse.json({ data: row });
  
  
@@ -280,6 +283,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     });
 
     fireWebhooks(ctx.tenantId, 'contact.deleted', { id: contactId }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+
+    invalidateWidgetCache(ctx.tenantId, 'stats-contacts', 'contacts-recent', 'activity');
 
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
  

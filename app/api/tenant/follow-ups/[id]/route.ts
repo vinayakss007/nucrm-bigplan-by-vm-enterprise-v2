@@ -38,7 +38,7 @@ export async function PATCH(req: NextRequest, { params }: any) {
     if (v.assigned_to !== undefined) updateData.assignedTo = v.assigned_to;
     if (v.auto_ai_enabled !== undefined) updateData.autoAiEnabled = v.auto_ai_enabled;
 
-    if (body.status === 'completed') {
+    if (v.status === 'completed') {
       updateData.completedAt = new Date();
       updateData.missedDays = 0;
     }

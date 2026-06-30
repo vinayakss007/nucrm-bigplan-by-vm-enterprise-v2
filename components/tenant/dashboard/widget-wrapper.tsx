@@ -59,6 +59,13 @@ export function WidgetShell({
   if (error && !data) return <WidgetError message={error} onRetry={onRefresh} />;
   if (!data) return <WidgetEmpty message="No data available" />;
 
+  // Check for "meaningfully empty" data (e.g., { count: 0 } or { items: [] })
+  const isEmptyData = data && typeof data === 'object' && (
+    (data.count === 0 && (!data.items || data.items.length === 0)) ||
+    (data.items?.length === 0 && data.count === undefined)
+  );
+  if (isEmptyData && loading) return <WidgetSkeleton size={size} />;
+
   return (
     <div className="admin-card h-full">
       <div className="px-4 pt-3 pb-1">

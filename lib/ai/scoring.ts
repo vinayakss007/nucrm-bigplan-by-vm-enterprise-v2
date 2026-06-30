@@ -50,7 +50,9 @@ export async function scoreLead(tenantId: string, userId: string, contactId: str
   const systemPrompt = `You are an expert sales qualifier. Score this lead from 0 to 100 based on the provided rules.
 Higher score = higher priority.
 Weights are hints: 50+ is a strong bonus, -20 is a penalty.
-Output ONLY a JSON object: { "score": number, "reason": string, "factors": { "factor_name": points_awarded } }`;
+
+IMPORTANT: Return ONLY a valid JSON object, no markdown, no explanation before or after.
+Format: {"score": number, "reason": "brief explanation", "factors": {"factor_name": points_awarded}}`;
 
   const userPrompt = `Rules:\n${rulesText}\n\nLead Data:\n${leadText}`;
 
@@ -67,15 +69,31 @@ Output ONLY a JSON object: { "score": number, "reason": string, "factors": { "fa
   });
 
   // 5. Parse response
- 
- 
+  
+  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let parsed: any;
   try {
     const jsonMatch = resp.text.match(/\{[\s\S]*\}/);
-    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : resp.text);
+    if (jsonMatch) {
+      parsed = JSON.parse(jsonMatch[0]);
+    } else {
+      // Try to extract score from plain text
+      const scoreMatch = resp.text.match(/(\d{1,3})/);
+      parsed = {
+        score: scoreMatch ? Math.min(100, parseInt(scoreMatch[1] ?? '50')) : 50,
+        reason: resp.text.slice(0, 500),
+        factors: {},
+      };
+    }
   } catch {
-    throw new Error('AI returned invalid JSON');
+    // Last resort: extract any number as score
+    const scoreMatch = resp.text.match(/(\d{1,3})/);
+    parsed = {
+      score: scoreMatch ? Math.min(100, parseInt(scoreMatch[1] ?? '50')) : 50,
+      reason: resp.text.slice(0, 500),
+      factors: {},
+    };
   }
 
   const finalScore = Math.max(0, Math.min(100, Number(parsed.score) || 0));

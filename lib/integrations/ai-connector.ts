@@ -50,7 +50,7 @@ export async function aiConnector(
         body: pattern.method !== 'GET' ? JSON.stringify(pattern.body) : undefined,
       });
 
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
 
       if (res.ok || res.status === 201) {
         return { success: true, data, raw: { status: res.status, headers: Object.fromEntries(res.headers) } };
