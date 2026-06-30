@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { followUps } from '@/drizzle/schema';
-import { eq, and, isNull, asc, lte, sql } from 'drizzle-orm';
+import { eq, and, isNull, asc, lte, sql, inArray } from 'drizzle-orm';
 import { withCache } from '@/lib/dashboard/widget-cache';
 
 export async function GET(request: NextRequest) {
@@ -26,16 +26,16 @@ export async function GET(request: NextRequest) {
       .where(and(
         eq(followUps.tenantId, tid),
         isNull(followUps.deletedAt),
-        eq(followUps.status, 'pending'),
+        inArray(followUps.status, ['pending', 'missed']),
         lte(followUps.dueDate, now),
       ))
       .orderBy(asc(followUps.dueDate))
       .limit(5);
 
     const [stats] = await db.select({
-      todayCount: sql<number>`count(*) filter (where ${followUps.dueDate}::date = CURRENT_DATE and ${followUps.status} = 'pending')::int`,
-      overdueCount: sql<number>`count(*) filter (where ${followUps.dueDate} < ${now} and ${followUps.status} = 'pending')::int`,
-      totalPending: sql<number>`count(*) filter (where ${followUps.status} = 'pending')::int`,
+      todayCount: sql<number>`count(*) filter (where ${followUps.dueDate}::date = CURRENT_DATE and ${followUps.status} in ('pending', 'missed'))::int`,
+      overdueCount: sql<number>`count(*) filter (where ${followUps.dueDate}::date < CURRENT_DATE and ${followUps.status} in ('pending', 'missed'))::int`,
+      totalPending: sql<number>`count(*) filter (where ${followUps.status} in ('pending', 'missed'))::int`,
     })
     .from(followUps)
     .where(and(

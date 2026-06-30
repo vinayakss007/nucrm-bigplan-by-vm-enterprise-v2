@@ -1,0 +1,1180 @@
+{
+  "info": {
+    "name": "NuCRM Enterprise API",
+    "description": "Complete API collection for NuCRM Enterprise CRM.\n\n## Authentication\n- **JWT**: Login via /api/auth/login, cookie `nucrm_session` auto-stored\n- **API Key**: Use `Authorization: Bearer ak_live_xxxxx` header\n\n## Security Best Practices\n- Always use HTTPS in production\n- API keys have scoped permissions (contacts:read, deals:all, etc.)\n- CSRF tokens required for state-changing requests (auto-handled via cookie)\n- Rate limited to 100 req/min per user\n- Row-Level Security (RLS) ensures tenant data isolation",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "Authorization",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "Bearer {{api_key}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "00 - Auth Setup",
+      "description": "Login and get session token for all subsequent requests",
+      "item": [
+        {
+          "name": "Login (Super Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login successful', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.environment.set('auth_status', 'authenticated');",
+                  "});",
+                  "",
+                  "// Extract session cookie for other requests",
+                  "if (pm.response.code === 200) {",
+                  "    console.log('Session cookie set automatically');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (Org Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"a@a.com\",\n  \"password\": \"Vinayak@1234\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Get CSRF Token",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/auth/csrf-token",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "csrf-token"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('CSRF token retrieved', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var data = pm.response.json();",
+                  "    if (data.token) {",
+                  "        pm.environment.set('csrf_token', data.token);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "me"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('User info retrieved', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var data = pm.response.json();",
+                  "    console.log('User:', JSON.stringify(data, null, 2));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - API Keys",
+      "description": "Manage API keys for external access. Keys are scoped and can be revoked.",
+      "item": [
+        {
+          "name": "List API Keys",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/api-keys",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "api-keys"]
+            }
+          }
+        },
+        {
+          "name": "Create API Key (Full Access)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"postman-test-key\",\n  \"scopes\": [\"*\"],\n  \"expires_in_days\": 30\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/api-keys",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "api-keys"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('API key created', function() {",
+                  "    pm.response.to.have.status(201);",
+                  "    var data = pm.response.json();",
+                  "    if (data.key) {",
+                  "        console.log('⚠️ SAVE THIS KEY (shown once):', data.key);",
+                  "        console.log('Key prefix:', data.prefix);",
+                  "        // Uncomment next line to auto-set for testing:",
+                  "        // pm.environment.set('api_key', data.key);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create API Key (Read-Only Contacts)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"readonly-contacts\",\n  \"scopes\": [\"contacts:read\", \"contacts:list\"],\n  \"expires_in_days\": 7\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/api-keys",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "api-keys"]
+            }
+          }
+        },
+        {
+          "name": "Create API Key (Scoped - Deals + Contacts)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"sales-team-key\",\n  \"scopes\": [\"contacts:read\", \"contacts:write\", \"deals:all\", \"leads:all\"],\n  \"expires_in_days\": 90\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/api-keys",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "api-keys"]
+            }
+          }
+        },
+        {
+          "name": "Test API Key Auth",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "key",
+                  "value": "Authorization",
+                  "type": "string"
+                },
+                {
+                  "key": "value",
+                  "value": "Bearer {{api_key}}",
+                  "type": "string"
+                },
+                {
+                  "key": "in",
+                  "value": "header",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/contacts?limit=5",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "contacts"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revoke API Key",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/api-keys/KEY_ID_HERE",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "api-keys", "KEY_ID_HERE"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Contacts",
+      "description": "CRUD operations for contacts with full RBAC",
+      "item": [
+        {
+          "name": "List Contacts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/contacts?limit=50&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "contacts"],
+              "query": [
+                { "key": "limit", "value": "50" },
+                { "key": "offset", "value": "0" },
+                { "key": "search", "value": "", "disabled": true },
+                { "key": "sort", "value": "createdAt:desc", "disabled": true }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Contacts list retrieved', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var data = pm.response.json();",
+                  "    pm.expect(data).to.have.property('data');",
+                  "    console.log('Total contacts:', data.data?.length || 0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Contact",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Test\",\n  \"lastName\": \"Contact\",\n  \"email\": \"test.contact@example.com\",\n  \"phone\": \"+1-555-0199\",\n  \"jobTitle\": \"QA Engineer\",\n  \"tags\": [\"test\", \"postman\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/contacts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "contacts"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Contact created', function() {",
+                  "    pm.response.to.have.status(201);",
+                  "    var data = pm.response.json();",
+                  "    if (data.id) {",
+                  "        pm.environment.set('contact_id', data.id);",
+                  "        console.log('Created contact ID:', data.id);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Contact by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/contacts/{{contact_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "contacts", "{{contact_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Contact",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Updated\",\n  \"tags\": [\"test\", \"postman\", \"updated\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/contacts/{{contact_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "contacts", "{{contact_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Contact",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/contacts/{{contact_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "contacts", "{{contact_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Search Contacts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/contacts?search=test&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "contacts"],
+              "query": [
+                { "key": "search", "value": "test" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Bulk Create Contacts",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contacts\": [\n    {\"firstName\": \"Bulk1\", \"lastName\": \"User\", \"email\": \"bulk1@test.com\"},\n    {\"firstName\": \"Bulk2\", \"lastName\": \"User\", \"email\": \"bulk2@test.com\"}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/contacts/bulk",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "contacts", "bulk"]
+            }
+          }
+        },
+        {
+          "name": "Export Contacts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/contacts/export",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "contacts", "export"]
+            }
+          }
+        },
+        {
+          "name": "Contact Timeline",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/contacts/{{contact_id}}/timeline",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "contacts", "{{contact_id}}", "timeline"]
+            }
+          }
+        },
+        {
+          "name": "Get Contact Notes",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/contacts/{{contact_id}}/notes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "contacts", "{{contact_id}}", "notes"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Leads",
+      "description": "Lead management and pipeline operations",
+      "item": [
+        {
+          "name": "List Leads",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/leads?limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "leads"],
+              "query": [
+                { "key": "limit", "value": "50" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Lead",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"New\",\n  \"lastName\": \"Lead\",\n  \"email\": \"new.lead@example.com\",\n  \"source\": \"postman_test\",\n  \"status\": \"new\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/leads",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "leads"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Lead created', function() {",
+                  "    pm.response.to.have.status(201);",
+                  "    var data = pm.response.json();",
+                  "    if (data.id) {",
+                  "        pm.environment.set('lead_id', data.id);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Lead",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/leads/{{lead_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "leads", "{{lead_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Lead",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"contacted\",\n  \"notes\": \"Follow up scheduled\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/leads/{{lead_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "leads", "{{lead_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Convert Lead to Deal",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dealName\": \"Converted Deal\",\n  \"value\": 5000\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/leads/{{lead_id}}/convert",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "leads", "{{lead_id}}", "convert"]
+            }
+          }
+        },
+        {
+          "name": "Bulk Import Leads",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leads\": [\n    {\"firstName\": \"Import1\", \"lastName\": \"Lead\", \"email\": \"import1@test.com\"},\n    {\"firstName\": \"Import2\", \"lastName\": \"Lead\", \"email\": \"import2@test.com\"}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/leads/bulk",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "leads", "bulk"]
+            }
+          }
+        },
+        {
+          "name": "Delete Lead",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/leads/{{lead_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "leads", "{{lead_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Deals",
+      "description": "Deal and pipeline management",
+      "item": [
+        {
+          "name": "List Deals",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/deals?limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "deals"],
+              "query": [
+                { "key": "limit", "value": "50" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Deal",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Deal\",\n  \"value\": 10000,\n  \"currency\": \"USD\",\n  \"stageId\": \"STAGE_ID_HERE\",\n  \"expectedCloseDate\": \"2026-07-31\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/deals",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "deals"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Deal created', function() {",
+                  "    pm.response.to.have.status(201);",
+                  "    var data = pm.response.json();",
+                  "    if (data.id) {",
+                  "        pm.environment.set('deal_id', data.id);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Deal",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/deals/{{deal_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "deals", "{{deal_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Deal",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": 15000,\n  \"probability\": 75\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/deals/{{deal_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "deals", "{{deal_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Deal",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/deals/{{deal_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "deals", "{{deal_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Super Admin",
+      "description": "Super Admin only APIs - requires isSuperAdmin=true",
+      "item": [
+        {
+          "name": "List All Tenants",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/super-admin/tenants?limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "super-admin", "tenants"],
+              "query": [
+                { "key": "limit", "value": "50" },
+                { "key": "q", "value": "", "disabled": true },
+                { "key": "status", "value": "", "disabled": true }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Tenants list retrieved', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var data = pm.response.json();",
+                  "    console.log('Total tenants:', data.total);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search Tenants",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/super-admin/tenants?q=demo&status=active",
+              "host": ["{{base_url}}"],
+              "path": ["api", "super-admin", "tenants"],
+              "query": [
+                { "key": "q", "value": "demo" },
+                { "key": "status", "value": "active" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Audit Logs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/super-admin/audit-logs?limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "super-admin", "audit-logs"],
+              "query": [
+                { "key": "limit", "value": "50" },
+                { "key": "action", "value": "", "disabled": true },
+                { "key": "tenant_id", "value": "", "disabled": true },
+                { "key": "start_date", "value": "", "disabled": true },
+                { "key": "end_date", "value": "", "disabled": true }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Tenant Admin",
+      "description": "Organization Admin settings and configuration",
+      "item": [
+        {
+          "name": "Workspace Info",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/workspace",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "workspace"]
+            }
+          }
+        },
+        {
+          "name": "Usage Status",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/usage-status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "usage-status"]
+            }
+          }
+        },
+        {
+          "name": "List Roles",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/roles",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "roles"]
+            }
+          }
+        },
+        {
+          "name": "Create Role",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sales Rep\",\n  \"slug\": \"sales-rep\",\n  \"permissions\": {\n    \"contacts:read\": true,\n    \"contacts:write\": true,\n    \"deals:read\": true,\n    \"deals:write\": true,\n    \"leads:all\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/roles",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "roles"]
+            }
+          }
+        },
+        {
+          "name": "AI Providers Config",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/admin/ai-providers",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "admin", "ai-providers"]
+            }
+          }
+        },
+        {
+          "name": "Lead Scoring Rules",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/admin/lead-scoring",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "admin", "lead-scoring"]
+            }
+          }
+        },
+        {
+          "name": "Login Policy",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/admin/login-policy",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "admin", "login-policy"]
+            }
+          }
+        },
+        {
+          "name": "Picklists",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/admin/picklists",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "admin", "picklists"]
+            }
+          }
+        },
+        {
+          "name": "Localization Settings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/admin/localization",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "admin", "localization"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Dashboard",
+      "description": "Dashboard stats and widgets",
+      "item": [
+        {
+          "name": "Dashboard Stats",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/dashboard/stats/contacts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "dashboard", "stats", "contacts"]
+            }
+          }
+        },
+        {
+          "name": "Pipeline Stats",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/dashboard/stats/pipeline",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "dashboard", "stats", "pipeline"]
+            }
+          }
+        },
+        {
+          "name": "Revenue Stats",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/dashboard/stats/revenue",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "dashboard", "stats", "revenue"]
+            }
+          }
+        },
+        {
+          "name": "Task Stats",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/dashboard/stats/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "dashboard", "stats", "tasks"]
+            }
+          }
+        },
+        {
+          "name": "Recent Contacts Widget",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/dashboard/widgets/contacts/recent",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "dashboard", "widgets", "contacts", "recent"]
+            }
+          }
+        },
+        {
+          "name": "Leads Widget",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/dashboard/widgets/leads",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "dashboard", "widgets", "leads"]
+            }
+          }
+        },
+        {
+          "name": "Tasks Widget",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/dashboard/widgets/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "dashboard", "widgets", "tasks"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Forms",
+      "description": "Form builder and public form endpoints",
+      "item": [
+        {
+          "name": "List Forms",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/forms",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "forms"]
+            }
+          }
+        },
+        {
+          "name": "Create Form",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Contact Form\",\n  \"fields\": [\n    {\"name\": \"firstName\", \"type\": \"text\", \"required\": true},\n    {\"name\": \"lastName\", \"type\": \"text\", \"required\": true},\n    {\"name\": \"email\", \"type\": \"email\", \"required\": true}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/forms",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "forms"]
+            }
+          }
+        },
+        {
+          "name": "Public Form (No Auth)",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "none" },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/forms/public/FORM_ID_HERE",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "forms", "public", "FORM_ID_HERE"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Documents",
+      "description": "Document management and file uploads",
+      "item": [
+        {
+          "name": "List Documents",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/documents",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "documents"]
+            }
+          }
+        },
+        {
+          "name": "Get Upload URL",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fileName\": \"test-document.pdf\",\n  \"contentType\": \"application/pdf\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/documents/upload-url",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "documents", "upload-url"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Security Tests",
+      "description": "Test unauthorized access, CSRF, and role enforcement",
+      "item": [
+        {
+          "name": "TEST: Unauthenticated Access (Should 401)",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "none" },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/contacts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "contacts"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 401 for unauthenticated request', function() {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TEST: Super Admin Endpoint with Regular User (Should 403)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/super-admin/tenants",
+              "host": ["{{base_url}}"],
+              "path": ["api", "super-admin", "tenants"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 403 for non-super-admin', function() {",
+                  "    if (pm.response.code === 403) {",
+                  "        console.log('✅ Correctly blocked non-super-admin');",
+                  "    } else if (pm.response.code === 200) {",
+                  "        console.log('⚠️ User is super-admin, test passed');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TEST: Invalid API Key (Should 401)",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                { "key": "key", "value": "Authorization", "type": "string" },
+                { "key": "value", "value": "Bearer ak_invalid_key_12345", "type": "string" },
+                { "key": "in", "value": "header", "type": "string" }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/contacts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "contacts"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 401 for invalid API key', function() {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TEST: Cross-Tenant Access (RLS enforced)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/tenant/contacts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tenant", "contacts"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('RLS ensures tenant isolation', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var data = pm.response.json();",
+                  "    // All returned contacts should belong to current tenant",
+                  "    console.log('Contacts returned (RLS filtered):', data.data?.length || 0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

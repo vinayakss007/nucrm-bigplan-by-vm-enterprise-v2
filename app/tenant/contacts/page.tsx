@@ -62,7 +62,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
     offset
   });
 
-  const [companiesList, teamMembers] = await Promise.all([
+  const [companiesList, teamMembers, defaultView] = await Promise.all([
     db.query.companies.findMany({
       where: and(eq(companies.tenantId, tid), isNull(companies.deletedAt)),
       orderBy: [asc(companies.name)],
@@ -76,10 +76,9 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
       })
       .from(tenantMembers)
       .innerJoin(users, eq(users.id, tenantMembers.userId))
-      .where(and(eq(tenantMembers.tenantId, tid), eq(tenantMembers.status, 'active')))
+      .where(and(eq(tenantMembers.tenantId, tid), eq(tenantMembers.status, 'active'))),
+    getUserDefaultView(tid, ctx.userId),
   ]);
-
-  const defaultView = await getUserDefaultView(tid, ctx.userId);
 
   return (
     <div className="space-y-6">
