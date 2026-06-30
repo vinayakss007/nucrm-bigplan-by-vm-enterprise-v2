@@ -207,8 +207,9 @@ describe('AI Secrets Vault', () => {
       expect(result.keyPrefix).toBe('…5678');
     });
 
-    it('throws for invalid provider', async () => {
-      await expect(mod.setPersonalKey('t-1', 'invalid', 'key', 'u-1')).rejects.toThrow(mod.SecretsVaultError);
+    it('accepts any provider (provider-agnostic)', async () => {
+      const result = await mod.setPersonalKey('t-1', 'invalid', 'key', 'u-1');
+      expect(result.keyPrefix).toBeDefined();
     });
   });
 
@@ -218,8 +219,9 @@ describe('AI Secrets Vault', () => {
       expect(result.keyPrefix).toBe('…9012');
     });
 
-    it('throws for invalid provider', async () => {
-      await expect(mod.setSystemKey('t-1', 'invalid', 'key')).rejects.toThrow(mod.SecretsVaultError);
+    it('accepts any provider (provider-agnostic)', async () => {
+      const result = await mod.setSystemKey('t-1', 'invalid', 'key');
+      expect(result.keyPrefix).toBeDefined();
     });
   });
 
