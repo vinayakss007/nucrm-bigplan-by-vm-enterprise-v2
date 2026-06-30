@@ -126,7 +126,8 @@ export async function POST(req: NextRequest) {
           .set({
             deletedAt: new Date(),
             deletedBy: ctx.userId,
-            isCustomer: false, // Map is_archived to some field or metadata
+            isCustomer: false,
+            updatedAt: new Date(),
           })
           .where(
             and(

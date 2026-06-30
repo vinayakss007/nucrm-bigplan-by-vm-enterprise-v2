@@ -99,7 +99,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     }
 
     await db.update(savedViews)
-      .set({ deletedAt: new Date() })
+      .set({ deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as any)
       .where(eq(savedViews.id, id));
 
     return NextResponse.json({ success: true });

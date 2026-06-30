@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       })
       .onConflictDoUpdate({
         target: [platformSettings.tenantId, platformSettings.key],
-        set: { value: JSON.stringify(reports) },
+        set: { value: JSON.stringify(reports), updatedAt: new Date() },
       });
 
     return NextResponse.json({ ok: true, data: newReport });

@@ -159,7 +159,8 @@ export async function DELETE(
     const [deleted] = await db.update(automations)
       .set({ 
         deletedAt: new Date(),
-        deletedBy: ctx.userId 
+        deletedBy: ctx.userId,
+        updatedAt: new Date(),
       })
       .where(and(
         eq(automations.id, id),

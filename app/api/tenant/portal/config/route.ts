@@ -61,7 +61,7 @@ export async function PUT(request: NextRequest) {
       })
       .onConflictDoUpdate({
         target: [platformSettings.tenantId, platformSettings.key],
-        set: { value: JSON.stringify(config) },
+        set: { value: JSON.stringify(config), updatedAt: new Date() },
       });
 
     return NextResponse.json({ ok: true, data: config });

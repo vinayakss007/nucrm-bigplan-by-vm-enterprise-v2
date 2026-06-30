@@ -50,6 +50,7 @@ export async function markOnboardingComplete(tenantId: string, userId: string): 
       set: {
         isCompleted: true,
         completedAt: new Date(),
+        updatedAt: new Date(),
       },
     });
   } catch (err) {
@@ -77,6 +78,7 @@ export async function recordOnboardingStep(
       set: {
         isCompleted: true,
         completedAt: new Date(),
+        updatedAt: new Date(),
       },
     });
   } catch (err) {
