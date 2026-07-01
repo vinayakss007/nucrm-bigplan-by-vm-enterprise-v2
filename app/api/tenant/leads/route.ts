@@ -282,7 +282,7 @@ export async function POST(request: NextRequest) {
       createNotification({
         userId: v.assigned_to,
         tenantId: ctx.tenantId,
-        type: 'task_assigned',
+        type: 'contact_assigned',
         title: `New lead assigned: ${v.first_name} ${v.last_name ?? ''}`.trim(),
         entity_type: 'lead',
         entity_id: newLead.id,
