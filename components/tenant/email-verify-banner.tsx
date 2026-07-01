@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Mail, X, CheckCircle, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -7,16 +7,31 @@ export default function EmailVerifyBanner({ email }: { email: string }) {
   const [dismissed, setDismissed] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [serverVerified, setServerVerified] = useState(false);
 
-  // Check localStorage on mount
+  const checkVerification = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tenant/onboarding/complete');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.completed) {
+          setServerVerified(true);
+        }
+      }
+    } catch {
+      // Silently ignore
+    }
+  }, []);
+
   useEffect(() => {
     const dismissedKey = `email_verify_dismissed_${email}`;
     if (localStorage.getItem(dismissedKey) === 'true') {
       setDismissed(true);
     }
-  }, [email]);
+    checkVerification();
+  }, [email, checkVerification]);
 
-  if (dismissed) return null;
+  if (dismissed || serverVerified) return null;
 
   const resend = async () => {
     setSending(true);
