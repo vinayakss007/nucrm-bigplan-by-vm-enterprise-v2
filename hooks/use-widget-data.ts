@@ -25,22 +25,24 @@ export function useWidgetData<T = any>(
     const abort = new AbortController()
     abortRef.current = abort
 
+    let showedCache = false
+
     try {
       const cached = sessionStorage.getItem(cacheKey)
       if (cached) {
         const { data, timestamp } = JSON.parse(cached)
         if (Date.now() - timestamp < ttl) {
           setState({ data, loading: false, error: null, stale: false })
-          if (!isBackground) return
+          showedCache = true
         }
       }
     } catch { /* Fallback to default on corrupted storage data */ }
 
     if (abort.signal.aborted) return
 
-    if (!isBackground) {
+    if (!isBackground && !showedCache) {
       setState(prev => ({ ...prev, loading: true }))
-    } else {
+    } else if (showedCache) {
       setState(prev => ({ ...prev, stale: true }))
     }
 

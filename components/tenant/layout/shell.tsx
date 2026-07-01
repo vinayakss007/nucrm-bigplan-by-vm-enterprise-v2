@@ -202,7 +202,7 @@ export default function TenantShell({ tenant, profile, roleSlug, permissions, is
         )}
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {!emailVerified && <EmailVerifyBanner email={email}/>}
+          {!emailVerified && <EmailVerifyBanner email={email} emailVerified={emailVerified}/>}
           <PlanLimitBanner/>
           <TenantHeader
             tenant={tenant} profile={profile} roleSlug={roleSlug}

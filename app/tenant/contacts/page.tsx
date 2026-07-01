@@ -6,7 +6,7 @@ import { getContacts } from '@/lib/db/services/contacts';
 import { Suspense } from 'react';
 import { getUserDefaultView } from '@/lib/user-defaults';
 import ContactsClient from '@/components/tenant/contacts-client';
-import { toSnakeCase } from '@/lib/utils';
+
 import { Skeleton } from '@/components/ui/skeleton';
 
 function LoadingSkeleton() {
@@ -52,21 +52,25 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
     canAssign: can(ctx, 'contacts.assign'),
   };
 
-  const { contacts: contactsResult, total: totalCount } = await getContacts({
-    tenantId: tid,
-    userId: ctx.userId,
-    viewAll: permissions.canViewAll,
-    q,
-    status,
-    limit,
-    offset
-  });
-
-  const [companiesList, teamMembers, defaultView] = await Promise.all([
+  const [
+    { contacts: contactsResult, total: totalCount },
+    companiesList,
+    teamMembers,
+    defaultView,
+  ] = await Promise.all([
+    getContacts({
+      tenantId: tid,
+      userId: ctx.userId,
+      viewAll: permissions.canViewAll,
+      q,
+      status,
+      limit,
+      offset,
+    }),
     db.query.companies.findMany({
       where: and(eq(companies.tenantId, tid), isNull(companies.deletedAt)),
       orderBy: [asc(companies.name)],
-      columns: { id: true, name: true }
+      columns: { id: true, name: true },
     }),
     db
       .select({
@@ -85,7 +89,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
       <Suspense fallback={<LoadingSkeleton />}>
         <ContactsClient
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          initialContacts={toSnakeCase(contactsResult as any) as any}
+          initialContacts={contactsResult as any}
           companies={companiesList}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           teamMembers={teamMembers as any}
