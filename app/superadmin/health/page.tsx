@@ -36,21 +36,22 @@ export default function HealthPage() {
   const [lastRun, setLastRun] = useState<Date|null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
-  const run = async () => {
+  const run = async (abortSignal?: AbortSignal) => {
     setLoading(true);
     const [sa, app] = await Promise.all([
-      fetch('/api/superadmin/health').then(r=>r.json()).catch((err) => { console.error('[health] superadmin health fetch failed', err); return {checks:[]}; }),
-      fetch('/api/health').then(r=>r.json()).catch((err) => logError({ error: err, context: "async-catch:[context]" })),
+      fetch('/api/superadmin/health', { signal: abortSignal }).then(r=>r.json()).catch((err) => { console.error('[health] superadmin health fetch failed', err); return {checks:[]}; }),
+      fetch('/api/health', { signal: abortSignal }).then(r=>r.json()).catch((err) => logError({ error: err, context: "async-catch:[context]" })),
     ]);
     setChecks(sa.checks||[]); setAppHealth(app);
     setLastRun(new Date()); setLoading(false);
   };
 
   useEffect(() => {
-    run();
+    const abort = new AbortController();
+    run(abort.signal);
     let iv: NodeJS.Timeout;
-    if (autoRefresh) iv = setInterval(run, 30_000);
-    return () => clearInterval(iv);
+    if (autoRefresh) iv = setInterval(() => run(abort.signal), 30_000);
+    return () => { abort.abort(); clearInterval(iv); };
   }, [autoRefresh]);
 
   const allUp = checks.every(c=>c.status==='up') && appHealth?.status==='ok';
@@ -72,7 +73,7 @@ export default function HealthPage() {
             className={cn('px-3 py-1.5 rounded-lg border text-xs transition-colors', autoRefresh?'border-violet-500/30 bg-violet-500/10 text-violet-400':'border-white/10 text-white/30 hover:text-white')}>
             {autoRefresh ? '⏸ Auto-refresh ON' : '▶ Auto-refresh OFF'}
           </button>
-          <button onClick={run} disabled={loading}
+          <button onClick={() => run()} disabled={loading}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-xs text-white/40 hover:text-white disabled:opacity-40 transition-colors">
             <RefreshCw className={cn('w-3.5 h-3.5', loading&&'animate-spin')}/>Run Checks
           </button>

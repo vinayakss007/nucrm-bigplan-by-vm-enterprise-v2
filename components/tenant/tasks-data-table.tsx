@@ -289,17 +289,21 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
   const [segments, setSegments] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
-    fetch('/api/tenant/custom-fields?entityType=task')
+    const abort = new AbortController();
+    fetch('/api/tenant/custom-fields?entityType=task', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { fields: [] })
-      .then(d => setCustomFields(d.fields ?? []))
-      .catch(() => {})
+      .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
+      .catch(() => {});
+    return () => abort.abort();
   }, [])
 
   useEffect(() => {
-    fetch('/api/tenant/segments?entity_type=task')
+    const abort = new AbortController();
+    fetch('/api/tenant/segments?entity_type=task', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => setSegments(d.data ?? []))
-      .catch(() => {})
+      .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
+      .catch(() => {});
+    return () => abort.abort();
   }, [])
 
   const callBulk = useCallback(async (action: string, ids: string[], payload: any = {}) => {

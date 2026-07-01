@@ -162,10 +162,11 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
 
   // ── Hydrate state from server (with localStorage fallback) ──
   useEffect(() => {
+    const abort = new AbortController();
     (async () => {
       try {
-        const res = await fetch('/api/tenant/user/preferences');
-        if (res.ok) {
+        const res = await fetch('/api/tenant/user/preferences', { signal: abort.signal });
+        if (res.ok && !abort.signal.aborted) {
           const { data } = await res.json();
           if (data?.pinned) setPinned(data.pinned);
           if (data?.sections) setOpenSections(data.sections);
@@ -196,6 +197,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
         }
       } catch { /* fallback */ }
     })();
+    return () => abort.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
