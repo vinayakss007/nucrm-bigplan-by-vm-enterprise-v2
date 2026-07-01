@@ -14,7 +14,7 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 
 type Category = 'typecheck' | 'lint' | 'unit' | 'integration' | 'build' | 'lighthouse';
@@ -110,7 +110,7 @@ async function checkLighthouse(): Promise<CheckResult> {
   let perf = 0, a11y = 0, bp = 0, seo = 0;
   try {
     if (existsSync(reportPath)) {
-      const report = JSON.parse(require('fs').readFileSync(reportPath, 'utf-8'));
+      const report = JSON.parse(readFileSync(reportPath, 'utf-8'));
       perf = Math.round(report.categories?.performance?.score * 100 || 0);
       a11y = Math.round(report.categories?.accessibility?.score * 100 || 0);
       bp = Math.round(report.categories?.['best-practices']?.score * 100 || 0);
