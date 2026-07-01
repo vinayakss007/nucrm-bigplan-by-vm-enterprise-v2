@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   if (ctx instanceof NextResponse) return ctx;
   const tid = ctx.tenantId;
 
-  return withCache(tid, 'stats-contacts', 300, async () => {
+  return withCache(tid, 'stats-contacts', 30, async () => {
     const result = await db.execute(sql`
       SELECT
         (SELECT COUNT(*)::int FROM ${contacts} WHERE tenant_id = ${tid} AND deleted_at IS NULL) AS count,

@@ -41,7 +41,7 @@ export const updateContactSchema = createContactSchema.partial();
 
 export const contactQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
+  limit: z.coerce.number().int().min(1).max(200).default(25),
   q: z.string().optional(),
   lead_status: z.string().optional(),
   company_id: z.string().uuid().optional().or(z.literal('')),

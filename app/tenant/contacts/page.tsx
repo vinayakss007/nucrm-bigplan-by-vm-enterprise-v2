@@ -3,11 +3,12 @@ import { db } from '@/drizzle/db';
 import { companies, tenantMembers, users } from '@/drizzle/schema';
 import { eq, and, isNull, asc } from 'drizzle-orm';
 import { getContacts } from '@/lib/db/services/contacts';
-import { Suspense } from 'react';
+import { Suspense, lazy } from 'react';
 import { getUserDefaultView } from '@/lib/user-defaults';
-import ContactsClient from '@/components/tenant/contacts-client';
 import { toSnakeCase } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+
+const ContactsClient = lazy(() => import('@/components/tenant/contacts-client'));
 
 function LoadingSkeleton() {
   return (
@@ -40,7 +41,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
   const offset = parseInt(sp.offset || '0');
   const q = sp.q || '';
   const status = sp.status || 'all';
-  const limit = 50;
+  const limit = 25;
 
   const permissions = {
     canCreate: can(ctx, 'contacts.create'),
