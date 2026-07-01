@@ -14,6 +14,7 @@ import { contacts, tenantMembers, sequences, sequenceEnrollments, segments, segm
 import { eq, and, sql, inArray, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
+import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 
 const MAX_BULK = 500;
 
@@ -312,6 +313,8 @@ export async function POST(req: NextRequest) {
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }
+
+    invalidateWidgetCache(ctx.tenantId, 'stats-contacts', 'contacts-recent', 'activity');
 
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,

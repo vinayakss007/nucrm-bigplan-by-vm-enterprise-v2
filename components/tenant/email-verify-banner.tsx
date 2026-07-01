@@ -3,8 +3,9 @@ import { useState, useEffect } from 'react';
 import { Mail, X, CheckCircle, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-export default function EmailVerifyBanner({ email }: { email: string }) {
+export default function EmailVerifyBanner({ email, emailVerified }: { email: string; emailVerified?: boolean }) {
   const [dismissed, setDismissed] = useState(false);
+  const [verified, setVerified] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
 
@@ -16,7 +17,20 @@ export default function EmailVerifyBanner({ email }: { email: string }) {
     }
   }, [email]);
 
-  if (dismissed) return null;
+  // Self-check verification status (handles stale parent props during client-side navigation)
+  useEffect(() => {
+    fetch('/api/auth/user/me', { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        if (data?.emailVerified) {
+          localStorage.removeItem(`email_verify_dismissed_${email}`);
+          setVerified(true);
+        }
+      })
+      .catch(() => {});
+  }, [email]);
+
+  if (emailVerified || verified || dismissed) return null;
 
   const resend = async () => {
     setSending(true);
