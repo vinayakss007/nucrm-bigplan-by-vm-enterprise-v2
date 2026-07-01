@@ -36,8 +36,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data: tree });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     return apiError(err);
   }
 }
@@ -65,8 +64,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: row }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     return apiError(err);
   }
 }
@@ -103,8 +101,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ data: row });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     return apiError(err);
   }
 }
@@ -126,6 +123,7 @@ export async function DELETE(req: NextRequest) {
     // Soft delete
     const [row] = await db
       .update(territories)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .set({ deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as any)
       .where(and(eq(territories.id, id), eq(territories.tenantId, ctx.tenantId)))
       .returning();
@@ -137,8 +135,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ data: { id, deleted: true } });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     return apiError(err);
   }
 }

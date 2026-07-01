@@ -123,9 +123,12 @@ export default async function LeadDetailPage({ params }: PageProps) {
   
   return (
     <LeadDetailClient
-      lead={lead}
-      activities={activities}
-      relatedContacts={relatedContacts}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+      lead={lead as any}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+      activities={activities as any}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+      relatedContacts={relatedContacts as any}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       teamMembers={teamMembers as any}
       tenantId={ctx.tenantId}

@@ -54,8 +54,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data: rates, total: rates.length });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     return apiError(err);
   }
 }
@@ -90,8 +89,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: row }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     return apiError(err);
   }
 }
@@ -131,8 +129,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ data: row });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     return apiError(err);
   }
 }
@@ -157,6 +154,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     const [row] = await db.update(taxRates)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .set({ isActive: false, deletedAt: sql`now()`, deletedBy: ctx.userId, updatedAt: new Date() } as any)
       .where(and(eq(taxRates.id, id), eq(taxRates.tenantId, ctx.tenantId)))
       .returning();
@@ -168,8 +166,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ data: { id: row.id, deleted: true } });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     return apiError(err);
   }
 }

@@ -306,7 +306,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
     return () => abort.abort();
   }, [])
 
-  const callBulk = useCallback(async (action: string, ids: string[], payload: any = {}) => {
+  const callBulk = useCallback(async (action: string, ids: string[], payload: unknown = {}) => {
     const res = await fetch('/api/tenant/tasks/bulk', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

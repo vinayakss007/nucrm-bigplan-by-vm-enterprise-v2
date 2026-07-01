@@ -22,13 +22,13 @@ interface Role {
 export default function TenantRolesPage() {
   const params = useParams();
   const tenantId = params['id'] as string;
-  const [tenant, setTenant] = useState<any>(null);
+  const [tenant, setTenant] = useState<{ name: string } | null>(null);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [editRole, setEditRole] = useState<Role | null>(null);
   const [showEditor, setShowEditor] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [openCat, setOpenCat] = useState<string | null>(PERMISSION_CATEGORIES[0] ?? null);
+  const [_saving, setSaving] = useState(false);
+  const [_openCat, _setOpenCat] = useState<string | null>(PERMISSION_CATEGORIES[0] ?? null);
 
   const load = useCallback(async () => {
     try {
@@ -60,8 +60,8 @@ export default function TenantRolesPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to save');
       toast.success('Permissions updated');
       load();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'An error occurred');
     } finally {
       setSaving(false);
     }
@@ -79,8 +79,8 @@ export default function TenantRolesPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to create');
       toast.success('Role created');
       load();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'An error occurred');
     } finally {
       setSaving(false);
     }
@@ -99,8 +99,8 @@ export default function TenantRolesPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to delete');
       toast.success('Role deleted');
       load();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'An error occurred');
     } finally {
       setSaving(false);
     }

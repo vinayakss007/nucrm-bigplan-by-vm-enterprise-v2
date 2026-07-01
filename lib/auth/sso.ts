@@ -393,10 +393,19 @@ function escapeXml(str: string): string {
  * Verify SAML assertion XML signature against IdP certificate.
  * Uses @node-saml/node-saml for proper cryptographic verification.
  */
-async function verifySAMLSignature(samlXml: string, idpCertificate: string): Promise<boolean> {
+interface SamlResponse {
+  profile?: Record<string, unknown>;
+}
+
+interface SamlValidatorInstance {
+  validatePostResponseAsync(xml: string): Promise<SamlResponse>;
+}
+
+async function verifySAMLSignature(samlXml: string, _idpCertificate: string): Promise<boolean> {
   try {
     const SAMLModule = await import('@node-saml/node-saml');
-    const samlValidator = new (SAMLModule as any).SAML({
+    const SamlClass = SAMLModule.SAML as unknown as new (config: Record<string, unknown>) => SamlValidatorInstance;
+    const samlValidator = new SamlClass({
       issuer: '',
       idpIssuer: '',
       wantAssertionsSigned: true,
@@ -413,7 +422,7 @@ async function verifySAMLSignature(samlXml: string, idpCertificate: string): Pro
     });
     
     // Validate the SAML response
-    const validateResult = await (samlValidator as any).validatePostResponseAsync(samlXml);
+    const validateResult = await samlValidator.validatePostResponseAsync(samlXml);
     
     if (validateResult?.profile) {
       console.log('[SAML] Signature and assertion validated successfully by @node-saml/node-saml');

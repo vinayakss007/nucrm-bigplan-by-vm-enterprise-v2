@@ -13,8 +13,9 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function GET(req: NextRequest, { params }: any) {
+type Params = { params: Promise<{ id: string }> };
+
+export async function GET(req: NextRequest, { params }: Params) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -66,16 +67,14 @@ export async function GET(req: NextRequest, { params }: any) {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     return apiError(err);
   }
 }
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function PATCH(req: NextRequest, { params }: any) {
+export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -92,7 +91,7 @@ export async function PATCH(req: NextRequest, { params }: any) {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: Record<string, any> = { updatedAt: new Date() };
 
     const allowedFields = [
@@ -138,16 +137,14 @@ export async function PATCH(req: NextRequest, { params }: any) {
     return NextResponse.json({ ok: true, data: updated });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     return apiError(err);
   }
 }
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function DELETE(req: NextRequest, { params }: any) {
+export async function DELETE(req: NextRequest, { params }: Params) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -162,6 +159,7 @@ export async function DELETE(req: NextRequest, { params }: any) {
     const { id } = await params;
 
     await db.update(leadWarmingCampaigns)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .set({ status: 'archived', deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as any)
       .where(and(
         eq(leadWarmingCampaigns.id, id),
@@ -171,8 +169,7 @@ export async function DELETE(req: NextRequest, { params }: any) {
     return NextResponse.json({ ok: true, message: 'Campaign archived' });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     return apiError(err);
   }
 }

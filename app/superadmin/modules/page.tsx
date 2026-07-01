@@ -20,8 +20,21 @@ const CAT_COLORS: Record<string, string> = {
   analytics: 'bg-orange-500/15 text-orange-400',
 };
 
+interface ModuleData {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  category: string;
+  total_installs: number;
+  features: string[];
+  pricing?: Record<string, { enabled: boolean }>;
+  planAccess?: Record<string, { enabled: boolean }>;
+  [key: string]: unknown;
+}
+
 export default function SuperAdminModulesPage() {
-  const [modules, setModules] = useState<any[]>([]);
+  const [modules, setModules] = useState<ModuleData[]>([]);
   const [loading, setLoading] = useState(true);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
@@ -29,7 +42,7 @@ export default function SuperAdminModulesPage() {
   const load = async () => {
     const res = await fetch('/api/superadmin/modules');
     const d = await res.json();
-    setModules((d.data ?? []).map((m: any) => ({
+    setModules((d.data ?? []).map((m: ModuleData) => ({
       ...m,
       planAccess: m.pricing || {
         free: { enabled: false },
@@ -71,7 +84,7 @@ export default function SuperAdminModulesPage() {
     toast.success('Plan configurations saved');
   };
 
-  const totalInstalls = modules.reduce((s, m) => s + (m.total_installs || 0), 0);
+  const _totalInstalls = modules.reduce((s, m) => s + (m.total_installs || 0), 0);
 
   return (
     <div className="space-y-5 max-w-6xl">

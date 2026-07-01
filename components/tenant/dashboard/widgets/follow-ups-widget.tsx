@@ -6,7 +6,8 @@ import Link from 'next/link';
 
 export default function FollowUpsWidget({ data }: WidgetProps) {
   const items = data?.items ?? [];
-  const stats = data?.stats ?? {};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const stats = (data?.stats ?? {}) as any;
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -40,7 +41,7 @@ export default function FollowUpsWidget({ data }: WidgetProps) {
         <p className="text-xs font-medium text-muted-foreground/70 text-center py-5">No follow-ups due</p>
       ) : (
         <div className="divide-y divide-border">
-          {items.slice(0, 5).map((f: any) => {
+          {items.slice(0, 5).map((f: { id: string; dueDate?: string; title?: string }) => {
             const dueDate = f.dueDate ? new Date(f.dueDate) : null;
             const overdue = dueDate && dueDate < today;
             return (

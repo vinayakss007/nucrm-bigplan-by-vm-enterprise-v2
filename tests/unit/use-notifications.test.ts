@@ -14,9 +14,8 @@ vi.mock('react', () => ({
     const cleanup = fn();
     if (cleanup) cleanupRegistry.push(cleanup);
   },
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  useCallback: (fn: any) => fn,
-  useRef: (initial: any) => ({ current: initial }),
+  useCallback: <T extends (...args: unknown[]) => unknown>(fn: T) => fn as T,
+  useRef: (initial: unknown) => ({ current: initial }),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

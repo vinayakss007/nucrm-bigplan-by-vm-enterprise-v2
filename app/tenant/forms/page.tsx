@@ -13,12 +13,37 @@ const FIELD_TYPES = [
   { id:'number', label:'Number' }, { id:'date', label:'Date' },
 ];
 
+interface FormField {
+  key: string;
+  label: string;
+  type: string;
+  required: boolean;
+}
+
+interface FormData {
+  id: string;
+  name: string;
+  is_active?: boolean;
+  submissions?: number;
+  fields?: FormField[];
+}
+
+interface Submission {
+  id: string;
+  contact_email?: string;
+  first_name?: string;
+  last_name?: string;
+  contact_id?: string;
+  created_at: string;
+  data?: Record<string, unknown>;
+}
+
 export default function FormsPage() {
   const router = useRouter();
-  const [forms, setForms]       = useState<any[]>([]);
+  const [forms, setForms]       = useState<FormData[]>([]);
   const [loading, setLoading]   = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [_selected, _setSelected] = useState<any|null>(null);
+  const [_selected, _setSelected] = useState<unknown>(null);
   const [saving, setSaving]     = useState(false);
   const [copiedId, setCopiedId] = useState<string|null>(null);
   const [form, setForm] = useState({
@@ -56,8 +81,7 @@ export default function FormsPage() {
       method:'PATCH', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ is_active: !f.is_active }),
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setForms((forms: any) => forms.map((x: any) => x.id === f.id ? {...x, is_active: !f.is_active} : x));
+    setForms((forms: FormData[]) => forms.map(x => x.id === f.id ? {...x, is_active: !f.is_active} : x));
   };
 
   const del = async (id: string) => {
@@ -66,12 +90,12 @@ export default function FormsPage() {
     toast.success('Deleted');
   };
 
-  const [viewingSubmissions, setViewingSubmissions] = useState<any|null>(null);
-  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [viewingSubmissions, setViewingSubmissions] = useState<FormData | null>(null);
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
 
   const viewSubmissions = async (form: { id: string }) => {
-    setViewingSubmissions(form);
+    setViewingSubmissions(form as FormData);
     setLoadingSubmissions(true);
     try {
       const res = await fetch(`/api/tenant/forms/${form.id}`);
@@ -109,7 +133,7 @@ export default function FormsPage() {
   const addField = () => setForm(f => ({...f, fields:[...f.fields, { key:`field_${Date.now()}`, label:'New Field', type:'text', required:false }]}));
   const removeField = (i: number) => setForm(f => ({...f, fields:f.fields.filter((_,idx) => idx !== i)}));
   const updateField = (i: number, key: string, val: unknown) =>
-    setForm(f => ({...f, fields:f.fields.map((x: any, idx) => idx === i ? {...x, [key]:val} : x)}));
+    setForm(f => ({...f, fields:f.fields.map((x, idx) => idx === i ? {...x, [key]:val} : x)}));
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
@@ -231,8 +255,7 @@ export default function FormsPage() {
                 </p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                <button onClick={() => viewSubmissions(f as any)} title="View submissions"
+                <button onClick={() => viewSubmissions(f)} title="View submissions"
                   className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/60 text-xs font-medium transition-colors">
                   <FileText className="w-3.5 h-3.5" /> <span className="hidden md:inline">Submissions</span>
                 </button>
@@ -248,8 +271,7 @@ export default function FormsPage() {
                   className="hidden sm:flex p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
                   {copiedId === f.id ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                 </button>
-                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                <button onClick={() => toggle(f as any)} title="Toggle active"
+                <button onClick={() => toggle(f)} title="Toggle active"
                   className="text-muted-foreground hover:text-violet-600 transition-colors">
                   {f.is_active ? <ToggleRight className="w-5 h-5 text-violet-600" /> : <ToggleLeft className="w-5 h-5" />}
                 </button>
