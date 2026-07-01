@@ -302,7 +302,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
       .catch(() => {})
   }, [])
 
-  const callBulk = useCallback(async (action: string, ids: string[], payload: any = {}) => {
+  const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, unknown> = {}) => {
     const res = await fetch('/api/tenant/tasks/bulk', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

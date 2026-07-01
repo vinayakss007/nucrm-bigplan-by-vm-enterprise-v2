@@ -16,7 +16,29 @@ const AI_FEATURE_OPTIONS = [
   { key: 'ai_activity_log', label: 'AI Activity Log', desc: 'Token/cost tracking' },
 ];
 
-function PlanForm({ plan, onSave, onClose }: { plan?: any; onSave: () => void; onClose: () => void }) {
+interface Plan {
+  id: string;
+  name: string;
+  price_monthly: number;
+  price_yearly: number;
+  max_users: number;
+  max_contacts: number;
+  max_deals: number;
+  max_automations: number;
+  max_forms: number;
+  max_api_calls_day: number;
+  max_storage_gb: number;
+  features: string[];
+  sort_order: number;
+}
+
+interface PlanFormProps {
+  plan?: Plan;
+  onSave: () => void;
+  onClose: () => void;
+}
+
+function PlanForm({ plan, onSave, onClose }: PlanFormProps) {
   const [f, setF] = useState({
     id: plan?.id || '', name: plan?.name || '', price_monthly: plan?.price_monthly || 0,
     price_yearly: plan?.price_yearly || 0, max_users: plan?.max_users || 5,
@@ -66,7 +88,7 @@ function PlanForm({ plan, onSave, onClose }: { plan?: any; onSave: () => void; o
               ].map(([key,label]) => (
                 <div key={key}>
                   <label className="block text-xs font-medium text-white/40 mb-1">{label}</label>
-                  <input type="number" value={(f as any)[key as string]} onChange={e=>setF(p=>({...p,[key as string]:Number(e.target.value)}))} className={inp}/>
+                  <input type="number" value={f[key as keyof typeof f] as number} onChange={e=>setF(p=>({...p,[key as string]:Number(e.target.value)}))} className={inp}/>
                 </div>
               ))}
             </div>
@@ -126,10 +148,10 @@ function PlanForm({ plan, onSave, onClose }: { plan?: any; onSave: () => void; o
 }
 
 export default function BillingPage() {
-  const [plans, setPlans] = useState<any[]>([]);
-  const [tenants, setTenants] = useState<any[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [tenants, setTenants] = useState<{ plan_id: string; status: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editPlan, setEditPlan] = useState<any>(null);
+  const [editPlan, setEditPlan] = useState<Plan | null>(null);
   const [creating, setCreating] = useState(false);
 
   const load = async () => {
@@ -148,12 +170,12 @@ export default function BillingPage() {
     if (t.status==='trialing') planCounts[t.plan_id]!.trialing++;
   });
 
-  const PLAN_ICONS: Record<string,any> = { free:Users, starter:Zap, pro:Crown, enterprise:Crown };
+  const PLAN_ICONS: Record<string, React.ComponentType<{ className?: string }>> = { free:Users, starter:Zap, pro:Crown, enterprise:Crown };
   const PLAN_COLORS: Record<string,string> = { free:'text-white/40', starter:'text-blue-400', pro:'text-violet-400', enterprise:'text-amber-400' };
 
   return (
     <div className="space-y-5 max-w-6xl">
-      {(editPlan || creating) && <PlanForm plan={editPlan} onSave={load} onClose={()=>{setEditPlan(null);setCreating(false);}}/>}
+      {(editPlan != null || creating) && <PlanForm plan={editPlan ?? undefined} onSave={load} onClose={()=>{setEditPlan(null);setCreating(false);}}/>}
 
       <div className="flex items-center justify-between">
         <div>

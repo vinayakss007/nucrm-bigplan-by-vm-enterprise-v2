@@ -29,7 +29,7 @@ export default function SuperAdminRateLimitsPage() {
   const [plans, setPlans] = useState<PlanRateLimits[]>([]);
   const [superAdmins, setSuperAdmins] = useState<SuperAdmin[]>([]);
   const [endpoints, setEndpoints] = useState<RateLimitEndpoint[]>([]);
-  const [globalDefaults, setGlobalDefaults] = useState<Record<string, number>>({});
+  const [, setGlobalDefaults] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<string>('');

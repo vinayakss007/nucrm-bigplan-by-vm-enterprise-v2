@@ -4,17 +4,16 @@ import { Plus, Search, Building2, Globe, Users, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default function TenantCompaniesClient({ initialCompanies, permissions, tenantId, userId }: any) {
-  const [companies, setCompanies] = useState(initialCompanies);
+interface Company { id: string; name: string; industry?: string; size?: string; website?: string; phone?: string; address?: string; notes?: string; contact_count?: number }
+
+export default function TenantCompaniesClient({ initialCompanies, permissions, tenantId, userId }: { initialCompanies: Company[]; permissions: { canCreate?: boolean; canEdit?: boolean; canDelete?: boolean }; tenantId: string; userId: string }) {
+  const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [editCo, setEditCo] = useState<any>(null);
+  const [editCo, setEditCo] = useState<Company | null>(null);
   const router = useRouter();
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const filtered = companies.filter((c: any) => !search || c.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = companies.filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()));
 
   const reload = useCallback(async () => {
     const res = await fetch('/api/tenant/companies');
@@ -26,8 +25,7 @@ export default function TenantCompaniesClient({ initialCompanies, permissions, t
   const del = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const res = await fetch(`/api/tenant/companies/${id}`, { method: 'DELETE' });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (res.ok) { setCompanies((p: any[]) => p.filter(c => c.id !== id)); toast.success('Deleted'); }
+    if (res.ok) { setCompanies((p) => p.filter(c => c.id !== id)); toast.success('Deleted'); }
     else toast.error('Failed to delete');
   };
 
@@ -48,7 +46,7 @@ export default function TenantCompaniesClient({ initialCompanies, permissions, t
         <div className="text-center py-16"><Building2 className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" /><p className="font-semibold">No companies {search ? 'found' : 'yet'}</p></div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((c: any) => (
+          {filtered.map((c) => (
             <div key={c.id} className="admin-card p-5 hover:shadow-md hover:border-violet-200 dark:hover:border-violet-800 transition-all cursor-pointer group"
               onClick={() => router.push(`/tenant/companies/${c.id}`)}>
               <div className="flex items-start gap-3 mb-3">
@@ -72,18 +70,16 @@ export default function TenantCompaniesClient({ initialCompanies, permissions, t
           ))}
         </div>
       )}
-      {showForm && <CompanyFormModal company={editCo} tenantId={tenantId} userId={userId} onSaved={reload} onClose={() => { setShowForm(false); setEditCo(null); }} />}
+      {showForm && <CompanyFormModal company={editCo} _tenantId={tenantId} _userId={userId} onSaved={reload} onClose={() => { setShowForm(false); setEditCo(null); }} />}
     </div>
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CompanyFormModal({ company, _tenantId, _userId, onSaved, onClose }: any) {
+function CompanyFormModal({ company, _tenantId: _tenantId, _userId: _userId, onSaved, onClose }: { company: Company | null; _tenantId?: string; _userId?: string; onSaved: () => void; onClose: () => void }) {
   const [form, setForm] = useState({ name: company?.name||'', industry: company?.industry||'', size: company?.size||'', website: company?.website||'', phone: company?.phone||'', address: company?.address||'', notes: company?.notes||'' });
   const [saving, setSaving] = useState(false);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const set = (f: string) => (e: React.ChangeEvent<any>) => setForm(p => ({ ...p, [f]: e.target.value }));
+  const set = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setForm(p => ({ ...p, [f]: e.target.value }));
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);

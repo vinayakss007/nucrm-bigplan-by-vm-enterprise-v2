@@ -9,10 +9,12 @@ import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { logError } from '@/lib/errors';
 
+interface KBArticle { id: string; title?: string; content?: string; excerpt?: string; categoryId?: string; status?: string; helpful?: number; notHelpful?: number; categoryName?: string; createdAt?: string; views?: number }
+
 export default function KBArticlePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const [article, setArticle] = useState<any | null>(null);
+  const [article, setArticle] = useState<KBArticle | null>(null);
   const [loading, setLoading] = useState(true);
   const [voted, setVoted] = useState<'helpful' | 'not_helpful' | null>(null);
   const [showEdit, setShowEdit] = useState(false);
@@ -22,7 +24,7 @@ export default function KBArticlePage() {
       const res = await fetch(`/api/tenant/kb/articles/${params.id}`);
       if (!res.ok) { router.push('/tenant/kb'); return; }
       const d = await res.json();
-      setArticle(d.data as any);
+      setArticle(d.data as KBArticle);
     } catch (err) { logError({ error: err, context: "catch:[context]" }); } finally { setLoading(false); }
   }, [params.id, router]);
 
@@ -39,7 +41,7 @@ export default function KBArticlePage() {
       if (res.ok) {
         setVoted(action);
         const d = await res.json();
-        setArticle((prev: any | null) => ({ ...prev, helpful: d.data.helpful, notHelpful: d.data.notHelpful }));
+        setArticle((prev) => prev ? { ...prev, helpful: d.data.helpful, notHelpful: d.data.notHelpful } : prev);
       }
     } catch (err) { logError({ error: err, context: "catch:[context]" }); }
   };
@@ -63,7 +65,7 @@ export default function KBArticlePage() {
   if (!article) return null;
 
   const totalVotes = (article.helpful || 0) + (article.notHelpful || 0);
-  const helpfulPct = totalVotes > 0 ? Math.round((article.helpful / totalVotes) * 100) : null;
+  const helpfulPct = totalVotes > 0 ? Math.round(((article.helpful ?? 0) / totalVotes) * 100) : null;
 
   return (
     <div className="space-y-6 animate-fade-in max-w-3xl">
@@ -124,9 +126,8 @@ export default function KBArticlePage() {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function EditArticleModal({ article, onClose, onSaved }: { article: Record<string, any>; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ title: article.title, content: article.content, excerpt: article.excerpt || '', category_id: article.categoryId || '', status: article.status });
+function EditArticleModal({ article, onClose, onSaved }: { article: KBArticle; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({ title: article.title ?? '', content: article.content ?? '', excerpt: article.excerpt || '', category_id: article.categoryId || '', status: article.status });
   const [saving, setSaving] = useState(false);
 
   const save = async (e: React.FormEvent) => {
