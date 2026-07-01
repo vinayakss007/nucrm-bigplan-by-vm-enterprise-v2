@@ -1,9 +1,18 @@
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// #177: Ensure custom .next directory exists (e.g. tmpfs for faster builds)
+const distDir = process.env.NEXT_DIST_DIR || '.next';
+if (distDir !== '.next' && !fs.existsSync(distDir)) {
+  fs.mkdirSync(distDir, { recursive: true });
+  console.log(`[next.config] Created distDir: ${distDir}`);
+}
+
 /** @type {import('next').NextConfig} */
 let nextConfig = {
-  distDir: process.env.NEXT_DIST_DIR || '.next',
+  distDir,
   allowedDevOrigins: ['localhost:3000', '34.58.9.237', '34.123.152.161'],
   typescript: { ignoreBuildErrors: false },
   devIndicators: { buildActivity: false },
