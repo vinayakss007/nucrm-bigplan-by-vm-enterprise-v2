@@ -59,6 +59,9 @@ interface Props {
   totalCount?: number
   tenantId: string
   userId: string
+  initialQ?: string
+  initialOffset?: number
+  initialStatus?: string
   _tenantId?: string
   _userId?: string
 }
@@ -69,6 +72,9 @@ export default function ContactsDataTable({
   teamMembers,
   permissions,
   totalCount = 0,
+  initialQ,
+  initialOffset,
+  initialStatus,
   _tenantId,
   _userId,
 }: Props) {
@@ -90,8 +96,9 @@ export default function ContactsDataTable({
     assigned_to: '',
   })
   const [addingContact, setAddingContact] = useState(false)
-  const [globalFilter, setGlobalFilter] = useState('')
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
+  const [globalFilter, setGlobalFilter] = useState(initialQ ?? '')
+  const [pagination, setPagination] = useState({ pageIndex: (initialOffset ?? 0) / 25, pageSize: 25 })
+  const [initialized, setInitialized] = useState(false)
   const router = useRouter()
 
   const loadData = useCallback(async (page = 0, search = globalFilter) => {
@@ -126,8 +133,12 @@ export default function ContactsDataTable({
     setPagination(prev => ({ ...prev, pageSize: size, pageIndex: 0 }))
   }, [])
 
-  // Refresh when component mounts with proper cleanup
+  // Skip initial client-side fetch if server data is already available
   useEffect(() => {
+    if (initialized) return
+    setInitialized(true)
+    // Only fetch on mount if no initial data or search/filter params are active
+    if (initialContacts.length > 0 && !initialQ && initialStatus === 'all') return
     const abortController = new AbortController()
     const loadDataWithAbort = async () => {
       setLoading(true)
@@ -150,7 +161,7 @@ export default function ContactsDataTable({
     }
     loadDataWithAbort()
     return () => abortController.abort()
-  }, [pagination.pageSize, globalFilter])
+  }, [initialQ, initialStatus, initialContacts, pagination.pageSize, globalFilter, initialized])
 
   const columns: ColumnDef<Contact>[] = useMemo(() => [
     {

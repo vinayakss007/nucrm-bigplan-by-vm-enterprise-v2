@@ -76,8 +76,17 @@ export function useWidgetData<T = any>(
     if (options?.enabled === false) return
     doFetch(false)
     const interval = setInterval(() => doFetch(true), ttl)
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        doFetch(false)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+
     return () => {
       clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibility)
       abortRef.current?.abort()
     }
   }, [doFetch, options?.enabled, ttl])

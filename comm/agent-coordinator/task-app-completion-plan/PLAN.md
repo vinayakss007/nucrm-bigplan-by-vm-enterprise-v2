@@ -12,11 +12,11 @@
 - [ ] **Pre-Phase-4 Fix Tracker**: Security, Stability & Code Quality (#216)
 
 ### Agent B (Frontend/UI)
-- [ ] **Fix BUG-002**: Onboarding page reappears after completion
-- [ ] **Fix BUG-003**: Dashboard contact count stale after creating new contact
-- [ ] **Fix BUG-006**: Contacts page 2-3s client-side load delay
-- [ ] **Fix BUG-008**: Email verification banner shown persistently
-- [ ] **Review & merge PR #275**: Task completion persistence fix
+- [x] **Fix BUG-002**: Onboarding page reappears after completion
+- [x] **Fix BUG-003**: Dashboard contact count stale after creating new contact
+- [x] **Fix BUG-006**: Contacts page 2-3s client-side load delay
+- [x] **Fix BUG-008**: Email verification banner shown persistently
+- [ ] **Review & merge PR #275**: Task completion persistence fix (⚠️ Blocked: needs approving review from write-access member)
 - [ ] **MCP-based testing infrastructure**: Playwright MCP, quality gate, Lighthouse (#239)
 
 ### Coordination
