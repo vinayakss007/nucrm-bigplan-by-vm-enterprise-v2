@@ -12,9 +12,20 @@ const EVENT_COLORS: Record<string,string> = {
   payment_failed:'text-red-400', refund:'text-amber-400',
 };
 
+interface RevenueData {
+  mrr?: { mrr?: number; paying?: number; trialing?: number; free_tier?: number };
+  events?: { id: string; event_type: string; tenant_name?: string; amount?: number; created_at: string }[];
+}
+
+interface Tenant {
+  plan_id: string;
+  status: string;
+  created_at?: string;
+}
+
 export default function RevenuePage() {
-  const [data, setData]     = useState<any>(null);
-  const [tenants, setTenants] = useState<any[]>([]);
+  const [data, setData]     = useState<RevenueData | null>(null);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,7 +34,7 @@ export default function RevenuePage() {
       fetch('/api/superadmin/revenue').then(r=>r.json()),
       fetch('/api/superadmin/tenants').then(r=>r.json()),
     ]).then(([rev, ten]) => { if (ignore) return; 
-      setData(rev); setTenants(ten.data||[]); setLoading(false);
+      setData(rev as RevenueData); setTenants(ten.data||[]); setLoading(false);
      } );
     return () => { ignore = true; };
 }, []);
@@ -94,7 +105,7 @@ export default function RevenuePage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)"/>
                 <XAxis dataKey="month" tick={TICK} tickLine={false} axisLine={false}/>
                 <YAxis tick={TICK} tickLine={false} axisLine={false} tickFormatter={v=>`$${v}`}/>
-                <Tooltip contentStyle={TIP} formatter={(v:any)=>[formatCurrency(v),'MRR']}/>
+                <Tooltip contentStyle={TIP} formatter={(v:number)=>[formatCurrency(v),'MRR']}/>
                 <Area type="monotone" dataKey="value" stroke="#10b981" fill="url(#m)" strokeWidth={2}/>
               </AreaChart>
             </ResponsiveContainer>
@@ -145,7 +156,7 @@ export default function RevenuePage() {
           </div>
         ) : (
           <div className="divide-y divide-white/5">
-            {(data.events||[]).map((e:any) => (
+            {(data?.events||[]).map((e) => (
               <div key={e.id} className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors">
                 <div className={cn('w-2 h-2 rounded-full shrink-0',
                   e.event_type.includes('paid')||e.event_type==='upgrade'?'bg-emerald-500':
@@ -157,7 +168,7 @@ export default function RevenuePage() {
                   </p>
                   <p className="text-xs text-white/30">{e.tenant_name||'Unknown tenant'}</p>
                 </div>
-                {e.amount>0 && <p className="text-sm font-bold text-emerald-400 shrink-0">{formatCurrency(e.amount)}</p>}
+                {e.amount != null && e.amount>0 && <p className="text-sm font-bold text-emerald-400 shrink-0">{formatCurrency(e.amount)}</p>}
                 <p className="text-xs text-white/20 shrink-0">{formatRelativeTime(e.created_at)}</p>
               </div>
             ))}

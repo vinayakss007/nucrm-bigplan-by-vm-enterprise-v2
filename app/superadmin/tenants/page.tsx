@@ -412,9 +412,25 @@ export default function SuperAdminTenantsPage() {
   );
 }
 
-function ModulesModal({ tenant, onClose, _onSaved }: { tenant: any; onClose: () => void; _onSaved: () => void }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [modules, setModules] = useState<any[]>([]);
+interface ModulesModalProps {
+  tenant: TenantInfo;
+  onClose: () => void;
+  _onSaved: () => void;
+}
+
+interface TenantModule {
+  id: string;
+  name: string;
+  icon: string;
+  description?: string;
+  category: string;
+  status: string;
+  planAllowed: boolean;
+  features?: string[];
+}
+
+function ModulesModal({ tenant, onClose, _onSaved }: ModulesModalProps) {
+  const [modules, setModules] = useState<TenantModule[]>([]);
   const [plan, setPlan] = useState('');
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);

@@ -3,16 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
-interface FormField {
-  id: string;
-  key: string;
-  label: string;
-  type: string;
-  required?: boolean;
-  placeholder?: string;
-  options?: string[];
-}
-
 interface FormSettings {
   success_message?: string;
   submit_button_text?: string;

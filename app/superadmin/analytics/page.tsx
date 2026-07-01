@@ -8,9 +8,12 @@ const TICK   = { fill:'rgba(255,255,255,0.3)', fontSize:10 };
 const TIP    = { background:'hsl(222,32%,9%)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, fontSize:11 };
 const COLORS = ['#7c3aed','#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444'];
 
+interface TenantRow { id?: string; name?: string; plan_id?: string; status?: string; current_contacts?: number; current_deals?: number; current_users?: number }
+interface MonitoringData { tenantGrowth?: { day?: string; count?: number }[] }
+
 export default function SuperAdminAnalyticsPage() {
-  const [tenants, setTenants]   = useState<any[]>([]);
-  const [monitoring, setMonitoring] = useState<any>(null);
+  const [tenants, setTenants]   = useState<TenantRow[]>([]);
+  const [monitoring, setMonitoring] = useState<MonitoringData | null>(null);
   const [loading, setLoading]   = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -26,7 +29,7 @@ export default function SuperAdminAnalyticsPage() {
 
   // Compute metrics
   const PLAN_PRICES: Record<string,number> = { free:0, starter:29, pro:79, enterprise:199 };
-  const mrr = tenants.filter(t=>t.status==='active').reduce((s,t)=>s+(PLAN_PRICES[t.plan_id]||0),0);
+  const mrr = tenants.filter(t=>t.status==='active').reduce((s,t)=>s+(PLAN_PRICES[t.plan_id ?? 'free']||0),0);
   const totalContacts = tenants.reduce((s,t)=>s+(t.current_contacts||0),0);
   const totalDeals    = tenants.reduce((s,t)=>s+(t.current_deals||0),0);
   const totalUsers    = tenants.reduce((s,t)=>s+(t.current_users||0),0);
@@ -37,7 +40,7 @@ export default function SuperAdminAnalyticsPage() {
   const planMix = Object.entries(planCounts).map(([name,value])=>({ name:name.charAt(0).toUpperCase()+name.slice(1), value }));
 
   // Tenant growth (last 30 days from monitoring)
-  const growthData = (monitoring?.tenantGrowth||[]).map((d:any) => ({
+  const growthData = (monitoring?.tenantGrowth||[]).map((d) => ({
     day: d.day?.slice(5), count: d.count,
   }));
 

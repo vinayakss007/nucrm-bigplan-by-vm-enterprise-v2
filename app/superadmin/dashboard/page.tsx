@@ -88,7 +88,7 @@ export default async function SuperAdminDashboard() {
     .catch((err) => { console.error('[dashboard] expiringSoon failed', err); return []; }),
   ]);
 
-  const s = (statsRes as any).rows?.[0]?.data ?? {};
+  const s = (statsRes as unknown as { rows?: [{ data?: Record<string, unknown> }] })?.rows?.[0]?.data ?? {};
   const mrr = Number(s.mrr ?? 0);
 
   const STATUS_COLORS: Record<string,string> = {
@@ -140,7 +140,7 @@ export default async function SuperAdminDashboard() {
           { icon: DollarSign, label:'Monthly Revenue', value: formatCurrency(mrr), sub:`ARR: ${formatCurrency(mrr*12)}`, color:'text-emerald-600 dark:text-emerald-400', bg:'bg-emerald-50 dark:bg-emerald-950/20', href:'/superadmin/revenue' },
           { icon: Building2,  label:'Active Tenants',  value: (s.active_tenants??0).toLocaleString(), sub:`${s.trialing??0} trialing`, color:'text-violet-600 dark:text-violet-400', bg:'bg-violet-50 dark:bg-violet-950/20', href:'/superadmin/tenants' },
           { icon: Users,      label:'Total Users',     value: (s.total_users??0).toLocaleString(), sub:'across all orgs', color:'text-blue-600 dark:text-blue-400', bg:'bg-blue-50 dark:bg-blue-950/20', href:'/superadmin/users' },
-          { icon: AlertTriangle, label:'Open Errors', value: (s.unresolved_errors??0).toString(), sub:'last 24 hours', color:(s.unresolved_errors??0)>0?'text-red-600 dark:text-red-400':'text-muted-foreground', bg:(s.unresolved_errors??0)>0?'bg-red-50 dark:bg-red-950/20':'bg-muted', href:'/superadmin/errors' },
+          { icon: AlertTriangle, label:'Open Errors', value: Number(s.unresolved_errors??0).toString(), sub:'last 24 hours', color:Number(s.unresolved_errors??0)>0?'text-red-600 dark:text-red-400':'text-muted-foreground', bg:Number(s.unresolved_errors??0)>0?'bg-red-50 dark:bg-red-950/20':'bg-muted', href:'/superadmin/errors' },
         ].map(m => (
           <Link key={m.label} href={m.href}
             className="rounded-xl border border-border bg-card p-5 hover:border-violet-300 dark:hover:border-violet-500/50 hover:bg-accent/50 transition-all group">

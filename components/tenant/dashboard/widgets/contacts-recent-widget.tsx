@@ -33,23 +33,26 @@ export default function ContactsRecentWidget({ data }: WidgetProps) {
         </div>
       ) : (
         <div className="divide-y divide-border">
-          {items.map((c: any) => (
-            <Link key={c.id} href={`/tenant/contacts/${c.id}`} className="flex items-center gap-2 py-2 first:pt-0 last:pb-0 hover:bg-accent/20 transition-colors -mx-3 px-3 rounded">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
-                {c.firstName?.charAt(0)?.toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold">{c.firstName} {c.lastName}</p>
-                <p className="text-xs font-semibold text-foreground/70 truncate">{c.email || 'No email'}</p>
-              </div>
-              <div className="text-right shrink-0">
-                <span className={cn('text-xs font-bold px-2 py-0.5 rounded capitalize', STATUS_COLORS[c.leadStatus as string] || STATUS_COLORS['lead'])}>
-                  {c.leadStatus}
-                </span>
-                <p className="text-xs font-semibold text-foreground/60 mt-0.5">{formatRelativeTime(c.createdAt)}</p>
-              </div>
-            </Link>
-          ))}
+          {items.map((c: Record<string, unknown>) => {
+            const contact = c as { id: string; firstName: string; lastName: string; email: string; leadStatus: string; createdAt: string | Date | null | undefined };
+            return (
+              <Link key={contact.id} href={`/tenant/contacts/${contact.id}`} className="flex items-center gap-2 py-2 first:pt-0 last:pb-0 hover:bg-accent/20 transition-colors -mx-3 px-3 rounded">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
+                  {String(contact.firstName).charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold">{contact.firstName} {contact.lastName}</p>
+                  <p className="text-xs font-semibold text-foreground/70 truncate">{contact.email || 'No email'}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className={cn('text-xs font-bold px-2 py-0.5 rounded capitalize', STATUS_COLORS[contact.leadStatus] || STATUS_COLORS['lead'])}>
+                    {contact.leadStatus}
+                  </span>
+                  <p className="text-xs font-semibold text-foreground/60 mt-0.5">{formatRelativeTime(contact.createdAt)}</p>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

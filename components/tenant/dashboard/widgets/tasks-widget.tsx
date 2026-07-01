@@ -22,15 +22,16 @@ export default function TasksWidget({ data }: WidgetProps) {
         <p className="text-xs font-medium text-muted-foreground/70 text-center py-5">No open tasks</p>
       ) : (
         <div className="divide-y divide-border">
-          {items.slice(0, 5).map((t: any) => {
-            const overdue = t.due_date && t.due_date < today;
+          {items.slice(0, 5).map((t: Record<string, unknown>) => {
+            const task = t as { id: string; title: string; priority: string; due_date: string | undefined };
+            const overdue = task.due_date && task.due_date < today;
             return (
-              <Link key={t.id} href="/tenant/tasks" className="flex items-center gap-2 py-2 first:pt-0 last:pb-0 hover:bg-accent/20 transition-colors -mx-3 px-3 rounded">
-                <div className={cn('w-2 h-2 rounded-full shrink-0', t.priority === 'high' ? 'bg-red-500' : t.priority === 'medium' ? 'bg-amber-500' : 'bg-slate-300')} />
-                <p className="text-sm font-medium flex-1 truncate">{t.title}</p>
-                {t.due_date && (
+              <Link key={task.id} href="/tenant/tasks" className="flex items-center gap-2 py-2 first:pt-0 last:pb-0 hover:bg-accent/20 transition-colors -mx-3 px-3 rounded">
+                <div className={cn('w-2 h-2 rounded-full shrink-0', task.priority === 'high' ? 'bg-red-500' : task.priority === 'medium' ? 'bg-amber-500' : 'bg-slate-300')} />
+                <p className="text-sm font-medium flex-1 truncate">{task.title}</p>
+                {task.due_date && (
                   <span className={cn('text-xs font-bold shrink-0', overdue ? 'text-red-500' : 'text-foreground/60')}>
-                    {overdue ? '⚠ ' : ''}{formatDate(t.due_date)}
+                    {overdue ? '⚠ ' : ''}{formatDate(task.due_date)}
                   </span>
                 )}
               </Link>

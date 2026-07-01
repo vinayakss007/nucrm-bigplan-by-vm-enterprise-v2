@@ -675,15 +675,15 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function DataTable({ title, icon, count, isExpanded, onToggle, columns, data, renderRow }: {
+function DataTable<T>({ title, icon, count, isExpanded, onToggle, columns, data, renderRow }: {
   title: string;
   icon: React.ReactNode;
   count: number;
   isExpanded: boolean;
   onToggle: () => void;
   columns: string[];
-  data: any[];
-  renderRow: (item: any) => React.ReactNode;
+  data: T[];
+  renderRow: (item: T) => React.ReactNode;
 }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">

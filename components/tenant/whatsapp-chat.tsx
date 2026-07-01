@@ -43,7 +43,7 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
       const data = await res.json()
       if (!signal?.aborted) setMessages(data.data || [])
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return
       if (!signal?.aborted) console.error('[whatsapp] loadMessages failed', err);
     } finally {

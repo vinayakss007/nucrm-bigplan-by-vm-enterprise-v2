@@ -4,15 +4,18 @@ import { useParams } from 'next/navigation';
 import { FileText, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+interface PublicForm { name?: string; description?: string; settings?: { success_message?: string }; fields?: PublicFormField[] }
+interface PublicFormField { key: string; label: string; type?: string; required?: boolean; options?: string[] }
+
 export default function PublicFormPage() {
   const params = useParams();
   const formId = params['id'] as string;
   
-  const [form, setForm] = useState<any | null>(null);
+  const [form, setForm] = useState<PublicForm | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [values, setValues] = useState<any>({});
+  const [values, setValues] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
     const loadForm = async () => {
@@ -53,9 +56,8 @@ export default function PublicFormPage() {
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const updateValue = (key: string, value: any) => {
-    setValues((v: any) => ({ ...v, [key]: value }));
+  const updateValue = (key: string, value: unknown) => {
+    setValues((v) => ({ ...v, [key]: value }));
   };
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
@@ -109,8 +111,7 @@ export default function PublicFormPage() {
 
         {/* Form */}
         <form onSubmit={submit} className="space-y-4">
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          {form.fields?.map((field: Record<string, any>, index: number) => (
+          {form.fields?.map((field, index) => (
             <div key={index}>
               <label className="block text-sm font-medium mb-1">
                 {field.label}
@@ -119,7 +120,7 @@ export default function PublicFormPage() {
               
               {field.type === 'textarea' ? (
                 <textarea
-                  value={values[field.key] || ''}
+                  value={String(values[field.key] || '')}
                   onChange={e => updateValue(field.key, e.target.value)}
                   className={inp}
                   rows={4}
@@ -127,7 +128,7 @@ export default function PublicFormPage() {
                 />
               ) : field.type === 'select' ? (
                 <select
-                  value={values[field.key] || ''}
+                  value={String(values[field.key] || '')}
                   onChange={e => updateValue(field.key, e.target.value)}
                   className={inp}
                   required={field.required}
@@ -141,7 +142,7 @@ export default function PublicFormPage() {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={values[field.key] || false}
+                    checked={Boolean(values[field.key])}
                     onChange={e => updateValue(field.key, e.target.checked)}
                     className="w-4 h-4 rounded border-border text-violet-600"
                     required={field.required}
@@ -151,7 +152,7 @@ export default function PublicFormPage() {
               ) : (
                 <input
                   type={field.type || 'text'}
-                  value={values[field.key] || ''}
+                  value={String(values[field.key] || '')}
                   onChange={e => updateValue(field.key, e.target.value)}
                   className={inp}
                   required={field.required}
