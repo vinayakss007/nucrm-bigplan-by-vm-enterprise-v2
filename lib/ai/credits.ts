@@ -154,7 +154,7 @@ export async function deductCredits(params: {
 
   try {
     // Atomic update: deduct from balance
-    const [updated] = await db
+    const [_updated] = await db
       .update(tenantAiCredits)
       .set({
         usedTokens: sql`${tenantAiCredits.usedTokens} + ${tokensUsed}`,

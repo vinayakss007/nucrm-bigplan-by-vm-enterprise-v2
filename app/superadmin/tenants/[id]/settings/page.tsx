@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -7,9 +7,92 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+interface BusinessHoursConfig {
+  enabled: boolean;
+  start_time: string;
+  end_time: string;
+  working_days: string[];
+}
+
+interface LocalizationData {
+  timezone?: string;
+  currency?: string;
+  fiscal_year_start_month?: number;
+  week_start?: string;
+  number_format?: string;
+  weekend_days?: string[];
+  business_hours?: BusinessHoursConfig;
+  holidays?: unknown[];
+  [key: string]: unknown;
+}
+
+interface PasswordPolicy {
+  min_length: number;
+  max_age_days: number;
+  prevent_reuse_count: number;
+  require_uppercase: boolean;
+  require_number: boolean;
+  require_symbol: boolean;
+}
+
+interface TwoFactorPolicy {
+  enforcement: string;
+  grace_period_days: number;
+}
+
+interface SessionPolicy {
+  idle_timeout_minutes: number;
+  max_lifetime_hours: number;
+  max_concurrent: number;
+}
+
+interface NetworkPolicy {
+  ip_allowlist_enabled: boolean;
+  ip_allowlist: string[];
+}
+
+interface LoginPolicyData {
+  allow_self_signup: boolean;
+  allowed_email_domains: string[];
+  blocked_email_domains: string[];
+}
+
+interface LoginPolicySettings {
+  password?: PasswordPolicy;
+  two_factor?: TwoFactorPolicy;
+  session?: SessionPolicy;
+  network?: NetworkPolicy;
+  login?: LoginPolicyData;
+  [key: string]: unknown;
+}
+
+interface PicklistData {
+  [key: string]: Array<{ value: string; label: string }>;
+}
+
+interface TenantData {
+  error?: boolean;
+  tenant: {
+    name: string;
+    slug: string;
+    plan_id: string;
+    status: string;
+    active_members: number;
+    current_users: number;
+    current_contacts: number;
+    current_deals: number;
+  };
+  settings: {
+    localization: LocalizationData | null;
+    login_policy: LoginPolicySettings | null;
+    picklists: PicklistData | null;
+    other_keys: string[];
+  };
+}
+
 export default function TenantSettingsAuditPage() {
   const params = useParams<{ id: string }>();
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<TenantData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -17,7 +100,7 @@ export default function TenantSettingsAuditPage() {
     fetch(`/api/superadmin/tenant-settings?tenant_id=${params.id}`)
       .then(r => r.ok ? r.json() : Promise.reject(r))
       .then(setData)
-      .catch((err) => { console.error('[tenant-settings] fetch failed', err); setData({ error: true }); })
+      .catch((err) => { console.error('[tenant-settings] fetch failed', err); setData({ error: true } as TenantData); })
       .finally(() => setLoading(false));
   }, [params?.id]);
 
@@ -152,19 +235,22 @@ export default function TenantSettingsAuditPage() {
         {!pl && <Empty>Using platform defaults</Empty>}
         {pl && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {Object.entries(pl).map(([cat, list]: any) => (
-              <div key={cat} className="rounded-lg border border-border p-3">
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                  {cat.replace(/_/g, ' ')} <span className="text-muted-foreground/50 font-normal">({list?.length ?? 0})</span>
-                </p>
-                <div className="flex flex-wrap gap-1">
-                  {(list ?? []).slice(0, 12).map((e: any) => (
-                    <span key={e.value} className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono">{e.label}</span>
-                  ))}
-                  {(list?.length ?? 0) > 12 && <span className="text-[10px] text-muted-foreground">+{list.length - 12} more</span>}
+            {Object.entries(pl).map(([cat, list]) => {
+              const items = (list ?? []) as Array<{ value: string; label: string }>;
+              return (
+                <div key={cat} className="rounded-lg border border-border p-3">
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                    {cat.replace(/_/g, ' ')} <span className="text-muted-foreground/50 font-normal">({items.length ?? 0})</span>
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {items.slice(0, 12).map((e) => (
+                      <span key={e.value} className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono">{e.label}</span>
+                    ))}
+                    {items.length > 12 && <span className="text-[10px] text-muted-foreground">+{items.length - 12} more</span>}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Section>
@@ -180,16 +266,16 @@ export default function TenantSettingsAuditPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: any }) {
+function Stat({ label, value }: { label: string; value: unknown }) {
   return (
     <div className="rounded-lg border border-border bg-card p-3">
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="text-xl font-bold tabular-nums mt-0.5">{value ?? 0}</p>
+      <p className="text-xl font-bold tabular-nums mt-0.5">{String(value ?? 0)}</p>
     </div>
   );
 }
 
-function Section({ title, icon: Icon, children }: { title: string; icon: any; children: React.ReactNode }) {
+function Section({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 space-y-3">
       <p className="text-sm font-semibold flex items-center gap-2">
@@ -200,7 +286,7 @@ function Section({ title, icon: Icon, children }: { title: string; icon: any; ch
   );
 }
 
-function SubBlock({ title, icon: Icon, children }: { title: string; icon: any; children: React.ReactNode }) {
+function SubBlock({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-border/50 p-3 space-y-2">
       <p className="text-xs font-semibold flex items-center gap-1.5 text-muted-foreground">
@@ -215,7 +301,7 @@ function Grid({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-2 md:grid-cols-3 gap-2">{children}</div>;
 }
 
-function KV({ k, v }: { k: string; v: any }) {
+function KV({ k, v }: { k: string; v: unknown }) {
   return (
     <div className="text-xs">
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{k}</p>
