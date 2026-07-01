@@ -177,7 +177,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
     | null
   >(null);
   const [bulkInput, setBulkInput] = useState('');
-  const limit                   = 50;
+  const limit                   = 25;
   const [view, setView]         = useState<'list'|'grid'>(defaultView === 'grid' ? 'grid' : 'list');
   const [search, setSearch]     = useState(initialQ || '');
   const [statusFilter, setStatusFilter] = useState(initialStatus || 'all');
@@ -189,7 +189,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
 
   const load = useCallback(async (newOffset=0, q=search, status=statusFilter) => {
     setLoading(true);
-    const params = new URLSearchParams({ offset:String(newOffset) });
+    const params = new URLSearchParams({ offset:String(newOffset), limit: String(limit) });
     if (q) params.set('q', q);
     if (status !== 'all') params.set('status', status);
     router.push(`/tenant/contacts?${params.toString()}`, { scroll: false });

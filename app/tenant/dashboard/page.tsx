@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation';
 import { hasCompletedOnboarding } from '@/lib/onboarding/check';
 import DashboardClient from '@/components/tenant/dashboard-client';
 
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardPage() {
   const ctx = await requireTenantCtx();
 
