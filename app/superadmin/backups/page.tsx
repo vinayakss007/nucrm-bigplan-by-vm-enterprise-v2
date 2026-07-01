@@ -87,38 +87,43 @@ export default function SuperAdminBackups() {
   const [runningBackup, setRunningBackup] = useState(false);
 
   useEffect(() => {
-    loadSchedules();
-    loadBackups();
-    loadCriticalData();
+    const abort = new AbortController();
+    loadSchedules(abort.signal);
+    loadBackups(abort.signal);
+    loadCriticalData(abort.signal);
+    return () => abort.abort();
   }, []);
 
-  const loadSchedules = async () => {
+  const loadSchedules = async (abortSignal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/superadmin/backups');
+      const res = await fetch('/api/superadmin/backups', { signal: abortSignal });
       const data = await res.json();
       if (data.schedules) setSchedules(data.schedules);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('Failed to load schedules:', err);
     }
   };
 
-  const loadBackups = async () => {
+  const loadBackups = async (abortSignal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/superadmin/backups?list=recent');
+      const res = await fetch('/api/superadmin/backups?list=recent', { signal: abortSignal });
       const data = await res.json();
       if (data.backups) setBackups(data.backups);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('Failed to load backups:', err);
     }
   };
 
-  const loadCriticalData = async () => {
+  const loadCriticalData = async (abortSignal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/superadmin/backups?critical=true');
+      const res = await fetch('/api/superadmin/backups?critical=true', { signal: abortSignal });
       const data = await res.json();
       if (data.deleted) setDeletedData(data.deleted);
       if (data.stats) setCriticalStats(data.stats);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('Failed to load critical data:', err);
     }
   };
@@ -344,7 +349,7 @@ export default function SuperAdminBackups() {
               <Clock className="w-5 h-5" />
               Recent Backups
             </h2>
-            <button onClick={loadBackups} className="p-2 hover:bg-gray-800 rounded-lg">
+            <button onClick={() => loadBackups()} className="p-2 hover:bg-gray-800 rounded-lg">
               <RefreshCw className="w-4 h-4 text-gray-400" />
             </button>
           </div>
@@ -425,7 +430,7 @@ export default function SuperAdminBackups() {
                   className="pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              <button onClick={loadCriticalData} className="p-2 hover:bg-gray-800 rounded-lg">
+              <button onClick={() => loadCriticalData()} className="p-2 hover:bg-gray-800 rounded-lg">
                 <RefreshCw className="w-4 h-4 text-gray-400" />
               </button>
             </div>

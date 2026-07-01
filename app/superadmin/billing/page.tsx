@@ -132,14 +132,18 @@ export default function BillingPage() {
   const [editPlan, setEditPlan] = useState<any>(null);
   const [creating, setCreating] = useState(false);
 
-  const load = async () => {
+  const load = async (abortSignal?: AbortSignal) => {
     const [p, t] = await Promise.all([
-      fetch('/api/superadmin/plans').then(r=>r.json()),
-      fetch('/api/superadmin/tenants').then(r=>r.json()),
+      fetch('/api/superadmin/plans', { signal: abortSignal }).then(r=>r.json()),
+      fetch('/api/superadmin/tenants', { signal: abortSignal }).then(r=>r.json()),
     ]);
     setPlans(p.data||[]); setTenants(t.data||[]); setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const abort = new AbortController();
+    load(abort.signal);
+    return () => abort.abort();
+  }, []);
 
   const planCounts: Record<string,{active:number;trialing:number}> = {};
   tenants.forEach(t => {

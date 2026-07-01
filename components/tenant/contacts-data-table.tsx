@@ -306,31 +306,39 @@ export default function ContactsDataTable({
   const [emailTemplates, setEmailTemplates] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
-    fetch('/api/tenant/custom-fields?entityType=contact')
+    const abort = new AbortController();
+    fetch('/api/tenant/custom-fields?entityType=contact', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { fields: [] })
-      .then(d => setCustomFields(d.fields ?? []))
-      .catch(() => {})
+      .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
+      .catch(() => {});
+    return () => abort.abort();
   }, [])
 
   useEffect(() => {
-    fetch('/api/tenant/segments?entity_type=contact')
+    const abort = new AbortController();
+    fetch('/api/tenant/segments?entity_type=contact', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => setSegments(d.data ?? []))
-      .catch(() => {})
+      .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
+      .catch(() => {});
+    return () => abort.abort();
   }, [])
 
   useEffect(() => {
-    fetch('/api/tenant/sequences')
+    const abort = new AbortController();
+    fetch('/api/tenant/sequences', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => setSequences(d.data ?? []))
-      .catch(() => {})
+      .then(d => { if (!abort.signal.aborted) setSequences(d.data ?? []); })
+      .catch(() => {});
+    return () => abort.abort();
   }, [])
 
   useEffect(() => {
-    fetch('/api/tenant/email-templates')
+    const abort = new AbortController();
+    fetch('/api/tenant/email-templates', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => setEmailTemplates(d.data ?? []))
-      .catch(() => {})
+      .then(d => { if (!abort.signal.aborted) setEmailTemplates(d.data ?? []); })
+      .catch(() => {});
+    return () => abort.abort();
   }, [])
 
   const bulkActions = useMemo(() => [

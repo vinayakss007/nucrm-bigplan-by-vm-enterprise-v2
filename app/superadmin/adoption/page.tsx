@@ -34,11 +34,11 @@ export default function AdoptionMonitoringPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = async () => {
+  const load = async (abortSignal?: AbortSignal) => {
     setRefreshing(true);
     const [adoptionRes, activityRes] = await Promise.all([
-      fetch('/api/superadmin/adoption').then(r => r.ok ? r.json() : null).catch((err) => { console.error('[adoption] fetch failed', err); return null; }),
-      fetch('/api/superadmin/recent-activity?limit=20').then(r => r.ok ? r.json() : null).catch((err) => { console.error('[adoption] activity fetch failed', err); return null; }),
+      fetch('/api/superadmin/adoption', { signal: abortSignal }).then(r => r.ok ? r.json() : null).catch((err) => { console.error('[adoption] fetch failed', err); return null; }),
+      fetch('/api/superadmin/recent-activity?limit=20', { signal: abortSignal }).then(r => r.ok ? r.json() : null).catch((err) => { console.error('[adoption] activity fetch failed', err); return null; }),
     ]);
     setData(adoptionRes);
     setActivity(activityRes);
@@ -46,7 +46,11 @@ export default function AdoptionMonitoringPage() {
     setRefreshing(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const abort = new AbortController();
+    load(abort.signal);
+    return () => abort.abort();
+  }, []);
 
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
   if (!data) return <div className="text-sm text-muted-foreground">Failed to load adoption metrics.</div>;
@@ -65,7 +69,7 @@ export default function AdoptionMonitoringPage() {
             How many tenants have configured each major settings tree, weak configurations, and recent platform activity. Read-only.
           </p>
         </div>
-        <button onClick={load} disabled={refreshing}
+        <button onClick={() => load()} disabled={refreshing}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50">
           <RefreshCw className={cn('w-3.5 h-3.5', refreshing && 'animate-spin')} />
           Refresh
