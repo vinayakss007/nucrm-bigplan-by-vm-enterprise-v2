@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       completedAt: new Date(),
     }).onConflictDoUpdate({
       target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
-      set: { isCompleted: true, completedAt: new Date() },
+      set: { isCompleted: true, completedAt: new Date(), updatedAt: new Date() },
     });
 
     return NextResponse.json({
@@ -118,7 +118,7 @@ export async function PATCH(request: NextRequest) {
         completedAt: new Date(),
       }).onConflictDoUpdate({
         target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
-        set: { isCompleted: true, completedAt: new Date() }
+        set: { isCompleted: true, completedAt: new Date(), updatedAt: new Date() }
       });
     } else if (v.step) {
       await db.insert(onboardingProgress).values({
@@ -129,7 +129,7 @@ export async function PATCH(request: NextRequest) {
         completedAt: new Date(),
       }).onConflictDoUpdate({
         target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
-        set: { isCompleted: true, completedAt: new Date() }
+        set: { isCompleted: true, completedAt: new Date(), updatedAt: new Date() }
       });
     }
     return NextResponse.json({ ok: true });

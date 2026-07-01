@@ -10,7 +10,7 @@ export const modules = pgTable('modules', {
   description: text('description'),
   category: text('category'),
   icon: text('icon'),
-  isAvailable: text('is_available').default('false'),
+  isAvailable: boolean('is_available').default(false),
   manifest: jsonb('manifest').default({}),
   ...utils.lifecycle(),
 });

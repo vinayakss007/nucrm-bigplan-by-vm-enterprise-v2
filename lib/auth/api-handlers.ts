@@ -228,7 +228,7 @@ export async function POST_signup(request: NextRequest) {
         joinedAt: new Date(),
       }).onConflictDoUpdate({
         target: [tenantMembers.tenantId, tenantMembers.userId],
-        set: { status: 'active', roleId: adminRole.id, roleSlug: 'admin' }
+        set: { status: 'active', roleId: adminRole.id, roleSlug: 'admin', updatedAt: new Date() }
       });
 
       // Set last_tenant_id so they land in their org after login

@@ -257,6 +257,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         deletedAt: new Date(),
         deletedBy: ctx.userId,
         isArchived: true,
+        updatedAt: new Date(),
       })
       .where(
         and(

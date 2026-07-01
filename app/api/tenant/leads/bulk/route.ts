@@ -134,7 +134,8 @@ export async function POST(req: NextRequest) {
           .set({ 
             deletedAt: new Date(), 
             deletedBy: ctx.userId, 
-            isArchived: true 
+            isArchived: true,
+            updatedAt: new Date(),
           })
           .where(
             and(

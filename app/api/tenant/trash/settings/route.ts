@@ -69,7 +69,7 @@ export async function PUT(request: NextRequest) {
       })
       .onConflictDoUpdate({
         target: [platformSettings.tenantId, platformSettings.key],
-        set: { value: String(retention_days) },
+        set: { value: String(retention_days), updatedAt: new Date() },
       });
 
     return NextResponse.json({ ok: true });

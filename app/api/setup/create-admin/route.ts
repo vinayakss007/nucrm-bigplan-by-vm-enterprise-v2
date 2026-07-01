@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
         isSystem: true,
       }).onConflictDoUpdate({
         target: [roles.tenantId, roles.slug],
-        set: { permissions: { all: true } }
+        set: { permissions: { all: true }, updatedAt: new Date() }
       }).returning();
       if (!adminRole) throw new Error('Failed to create admin role');
 
@@ -105,7 +105,8 @@ export async function POST(request: NextRequest) {
         set: {
           status: 'active',
           roleSlug: 'admin',
-          roleId: adminRoleId
+          roleId: adminRoleId,
+          updatedAt: new Date(),
         }
       });
 

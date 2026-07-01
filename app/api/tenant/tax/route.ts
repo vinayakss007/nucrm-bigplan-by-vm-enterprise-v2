@@ -113,7 +113,7 @@ export async function PUT(req: NextRequest) {
     if (parsed instanceof NextResponse) return parsed;
     const { id, ...updates } = parsed.data;
 
-    const updateData = { ...updates } as Record<string, unknown>;
+    const updateData = { ...updates, updatedAt: new Date() } as Record<string, unknown>;
     if (updateData.rate !== undefined) {
       updateData.rate = String(updateData.rate);
     }
@@ -157,7 +157,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     const [row] = await db.update(taxRates)
-      .set({ isActive: false, deletedAt: sql`now()` })
+      .set({ isActive: false, deletedAt: sql`now()`, deletedBy: ctx.userId, updatedAt: new Date() } as any)
       .where(and(eq(taxRates.id, id), eq(taxRates.tenantId, ctx.tenantId)))
       .returning();
 

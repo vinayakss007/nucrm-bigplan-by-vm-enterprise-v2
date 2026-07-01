@@ -70,7 +70,7 @@ export async function PATCH(request: NextRequest) {
 
     if (body.action === 'mark_all_read' || body.markAllRead === true) {
       await db.update(notifications)
-        .set({ readAt: new Date() })
+        .set({ readAt: new Date(), updatedAt: new Date() })
         .where(and(
           eq(notifications.tenantId, ctx.tenantId),
           eq(notifications.userId, ctx.userId),
@@ -81,7 +81,7 @@ export async function PATCH(request: NextRequest) {
 
     if (body.id) {
       await db.update(notifications)
-        .set({ readAt: new Date() })
+        .set({ readAt: new Date(), updatedAt: new Date() })
         .where(and(
           eq(notifications.id, body.id),
           eq(notifications.userId, ctx.userId),

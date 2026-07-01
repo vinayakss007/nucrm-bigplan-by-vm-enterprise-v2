@@ -78,6 +78,7 @@ export async function DELETE(req: NextRequest, { params }: any) {
       .set({
         deletedAt: new Date(),
         deletedBy: ctx.userId,
+        updatedAt: new Date(),
       })
       .where(and(
         eq(followUps.id, id),

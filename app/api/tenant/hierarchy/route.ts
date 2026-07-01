@@ -147,7 +147,7 @@ export async function DELETE(req: NextRequest) {
     // Soft delete
     const [row] = await db
       .update(tenantHierarchy)
-      .set({ deletedAt: new Date() })
+      .set({ deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as any)
       .where(and(
         eq(tenantHierarchy.id, id),
         eq(tenantHierarchy.parentTenantId, ctx.tenantId)

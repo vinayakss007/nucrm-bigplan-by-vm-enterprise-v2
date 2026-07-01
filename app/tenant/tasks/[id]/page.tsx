@@ -18,6 +18,7 @@ export default async function TaskDetailPage({ params }: PageProps) {
     title: tasks.title,
     description: tasks.description,
     status: tasks.status,
+    completed: tasks.completed,
     priority: tasks.priority,
     due_at: tasks.dueDate,
     created_at: tasks.createdAt,
