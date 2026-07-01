@@ -43,9 +43,11 @@ export async function PATCH(req: NextRequest, { params }: any) {
     
     if (body.completed === true) {
       updateData.status = 'completed';
+      updateData.completed = true;
       updateData.completedAt = new Date();
     } else if (body.completed === false) {
       updateData.status = 'pending';
+      updateData.completed = false;
       updateData.completedAt = null;
     }
 
@@ -107,7 +109,8 @@ export async function DELETE(req: NextRequest, { params }: any) {
     const [row] = await db.update(tasks)
       .set({ 
         deletedAt: new Date(),
-        deletedBy: ctx.userId 
+        deletedBy: ctx.userId,
+        updatedAt: new Date(),
       })
       .where(and(
         eq(tasks.id, id),

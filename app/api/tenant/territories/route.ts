@@ -126,7 +126,7 @@ export async function DELETE(req: NextRequest) {
     // Soft delete
     const [row] = await db
       .update(territories)
-      .set({ deletedAt: new Date() })
+      .set({ deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as any)
       .where(and(eq(territories.id, id), eq(territories.tenantId, ctx.tenantId)))
       .returning();
 

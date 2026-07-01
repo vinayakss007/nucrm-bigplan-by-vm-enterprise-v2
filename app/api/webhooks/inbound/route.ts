@@ -55,7 +55,8 @@ async function resolveApiKey(rawKey: string) {
   await db.update(apiKeys)
     .set({ 
       lastUsedAt: new Date(),
-      callCount: sql`${apiKeys.callCount} + 1`
+      callCount: sql`${apiKeys.callCount} + 1`,
+      updatedAt: new Date(),
     })
     .where(eq(apiKeys.id, row.id));
 

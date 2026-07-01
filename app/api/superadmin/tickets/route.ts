@@ -130,6 +130,8 @@ export async function PATCH(request: NextRequest) {
       updateData.status = status;
       if (status === 'resolved') {
         updateData.resolvedAt = new Date();
+      } else {
+        updateData.resolvedAt = null;
       }
     }
     if (resolution !== undefined) {
@@ -137,6 +139,9 @@ export async function PATCH(request: NextRequest) {
     }
     if (assigned_to !== undefined) {
       updateData.assignedTo = assigned_to;
+    }
+    if (ctx.userId) {
+      updateData.updatedBy = ctx.userId;
     }
 
     const [row] = await db

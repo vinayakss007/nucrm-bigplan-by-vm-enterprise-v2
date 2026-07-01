@@ -162,7 +162,7 @@ export async function DELETE(req: NextRequest, { params }: any) {
     const { id } = await params;
 
     await db.update(leadWarmingCampaigns)
-      .set({ status: 'archived', deletedAt: new Date() })
+      .set({ status: 'archived', deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as any)
       .where(and(
         eq(leadWarmingCampaigns.id, id),
         eq(leadWarmingCampaigns.tenantId, ctx.tenantId)
