@@ -7,6 +7,13 @@
     "playwright-test": {
       "command": "npx",
       "args": ["-y", "@playwright/mcp@latest"]
+    },
+    "agent-comm": {
+      "command": "npx",
+      "args": ["@jerfowler/agent-comm-mcp-server"],
+      "env": {
+        "AGENT_COMM_DIR": "./comm"
+      }
     }
   }
 }
