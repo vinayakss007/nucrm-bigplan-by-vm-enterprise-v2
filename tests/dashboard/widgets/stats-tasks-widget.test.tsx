@@ -12,7 +12,7 @@ describe('StatsTasksWidget', () => {
 
   it('shows None overdue when zero', () => {
     render(<StatsTasksWidget data={{ dueToday: 0, overdue: 0 }} tenantId="t1" userId="u1" isAdmin={false} />);
-    expect(screen.getByText('0')).toBeTruthy();
+    expect(screen.getByText('Get started')).toBeTruthy();
     expect(screen.getByText('None overdue')).toBeTruthy();
   });
 
