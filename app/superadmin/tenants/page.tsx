@@ -144,18 +144,22 @@ export default function SuperAdminTenantsPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-muted/30 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500";
   const lbl = "block text-xs font-medium text-muted-foreground mb-1";
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (abortSignal?: AbortSignal) => {
     const q = new URLSearchParams();
     if (search) q.set('q', search);
     if (filterStatus) q.set('status', filterStatus);
     const [t, me] = await Promise.all([
-      fetch('/api/superadmin/tenants?' + q).then(r=>r.json()),
-      fetch('/api/superadmin/me').then(r=>r.json()),
+      fetch('/api/superadmin/tenants?' + q, { signal: abortSignal }).then(r=>r.json()),
+      fetch('/api/superadmin/me', { signal: abortSignal }).then(r=>r.json()),
     ]);
     setTenants(t.data||[]); setMeInfo(me); setLoading(false);
   }, [search, filterStatus]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const abort = new AbortController();
+    load(abort.signal);
+    return () => abort.abort();
+  }, [load]);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
@@ -239,7 +243,7 @@ export default function SuperAdminTenantsPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={load} className="p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"><RefreshCw className="w-4 h-4"/></button>
+          <button onClick={() => load()} className="p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"><RefreshCw className="w-4 h-4"/></button>
           <button onClick={()=>setShowCreate(s=>!s)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-colors"><Plus className="w-4 h-4"/>New Organization</button>
         </div>
       </div>

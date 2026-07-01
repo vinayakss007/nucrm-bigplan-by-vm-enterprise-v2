@@ -264,17 +264,21 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
   const [segments, setSegments] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
-    fetch('/api/tenant/custom-fields?entityType=deal')
+    const abort = new AbortController();
+    fetch('/api/tenant/custom-fields?entityType=deal', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { fields: [] })
-      .then(d => setCustomFields(d.fields ?? []))
-      .catch(() => {})
+      .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
+      .catch(() => {});
+    return () => abort.abort();
   }, [])
 
   useEffect(() => {
-    fetch('/api/tenant/segments?entity_type=deal')
+    const abort = new AbortController();
+    fetch('/api/tenant/segments?entity_type=deal', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => setSegments(d.data ?? []))
-      .catch(() => {})
+      .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
+      .catch(() => {});
+    return () => abort.abort();
   }, [])
   const callBulk = useCallback(async (action: string, ids: string[], payload: any = {}) => {
     setBulkBusy(true)

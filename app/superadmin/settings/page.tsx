@@ -33,13 +33,13 @@ export default function SuperAdminSettingsPage() {
   const [testResult, setTestResult] = useState<'ok'|'fail'|null>(null);
 
   useEffect(() => {
-  let ignore = false;
-    fetch('/api/superadmin/settings').then(r=>r.json()).then(d=>{ if (ignore) return;
+    const abort = new AbortController();
+    fetch('/api/superadmin/settings', { signal: abort.signal }).then(r=>r.json()).then(d=>{ if (abort.signal.aborted) return;
       if(d.data) setS(prev => ({...prev,...d.data}));
       setLoading(false);
-    }).catch((err) => { console.error('[settings] fetch failed', err); setLoading(false); });
-    return () => { ignore = true; };
-}, []);
+    }).catch((err) => { if (err instanceof DOMException && err.name === 'AbortError') return; console.error('[settings] fetch failed', err); setLoading(false); });
+    return () => abort.abort();
+  }, []);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const set = (k: string) => (e: React.ChangeEvent<any>) => setS(p=>({...p,[k]:e.target.value}));

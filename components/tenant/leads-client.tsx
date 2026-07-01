@@ -124,24 +124,30 @@ export default function LeadsClient({
   const [bulkSequenceId, setBulkSequenceId] = useState('');
 
   useEffect(() => {
-    fetch('/api/tenant/custom-fields?entityType=lead')
+    const abort = new AbortController();
+    fetch('/api/tenant/custom-fields?entityType=lead', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { fields: [] })
-      .then(d => setCustomFields(d.fields ?? []))
-      .catch(() => {})
+      .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
+      .catch(() => {});
+    return () => abort.abort();
   }, []);
 
   useEffect(() => {
-    fetch('/api/tenant/segments?entity_type=lead')
+    const abort = new AbortController();
+    fetch('/api/tenant/segments?entity_type=lead', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => setSegments(d.data ?? []))
-      .catch(() => {})
+      .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
+      .catch(() => {});
+    return () => abort.abort();
   }, []);
 
   useEffect(() => {
-    fetch('/api/tenant/sequences')
+    const abort = new AbortController();
+    fetch('/api/tenant/sequences', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => setSequences(d.data ?? []))
-      .catch(() => {})
+      .then(d => { if (!abort.signal.aborted) setSequences(d.data ?? []); })
+      .catch(() => {});
+    return () => abort.abort();
   }, []);
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -160,7 +166,11 @@ export default function LeadsClient({
     }
   }, [activeStatus, search]);
 
-  useEffect(() => { load(); }, [activeStatus, search, load]);
+  useEffect(() => {
+    const abort = new AbortController();
+    load(abort.signal);
+    return () => abort.abort();
+  }, [activeStatus, search, load]);
 
   // Pipeline statistics
   const stats = Object.entries(PIPELINE_CONFIG).map(([id, config]) => {

@@ -39,11 +39,11 @@ export default function SuperAdminRateLimitsPage() {
   const [activeTab, setActiveTab] = useState<'global' | 'plans'>('global');
 
   useEffect(() => {
-    let ignore = false;
-    fetch('/api/superadmin/rate-limits')
+    const abort = new AbortController();
+    fetch('/api/superadmin/rate-limits', { signal: abort.signal })
       .then(r => r.json())
       .then(d => {
-        if (ignore) return;
+        if (abort.signal.aborted) return;
         if (d.data) {
           setPlans(d.data.plans || []);
           setSuperAdmins(d.data.superAdmins || []);
@@ -57,8 +57,8 @@ export default function SuperAdminRateLimitsPage() {
         }
         setLoading(false);
       })
-      .catch(() => { setLoading(false); });
-    return () => { ignore = true; };
+      .catch(() => { if (!abort.signal.aborted) setLoading(false); });
+    return () => abort.abort();
   }, []);
 
   const selectPlan = (planId: string) => {

@@ -59,13 +59,13 @@ export default function ErrorsPage() {
   const [expanded, setExpanded] = useState<string|null>(null);
   const [resolving, setResolving] = useState<string|null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (abortSignal?: AbortSignal) => {
     setLoading(true);
     setFetchError(null);
     const q = new URLSearchParams({ resolved });
     if (level) q.set('level', level);
     try {
-      const res = await fetch('/api/superadmin/errors?' + q);
+      const res = await fetch('/api/superadmin/errors?' + q, { signal: abortSignal });
       if (!res.ok) {
         const errBody = await res.json().catch((err) => { console.error('[errors] parse error body failed', err); return { error: `HTTP ${res.status}` }; });
         throw new Error(errBody.error || `Request failed (${res.status})`);
@@ -73,13 +73,18 @@ export default function ErrorsPage() {
       const d = await res.json();
       setData(d);
     } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setFetchError(err instanceof Error ? err.message : 'Failed to load errors');
       setData(null);
     } finally {
       setLoading(false);
     }
   }, [level, resolved]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const abort = new AbortController();
+    load(abort.signal);
+    return () => abort.abort();
+  }, [load]);
 
   const resolve = async (id?: string, resolveAll?: boolean, lvl?: string) => {
     if (id) setResolving(id);
@@ -111,7 +116,7 @@ export default function ErrorsPage() {
           <p className="text-xs text-white/30">Application errors, API failures, and exceptions</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={load} className="p-2 rounded-lg border border-white/10 text-white/30 hover:text-white transition-colors"><RefreshCw className="w-3.5 h-3.5"/></button>
+          <button onClick={() => load()} className="p-2 rounded-lg border border-white/10 text-white/30 hover:text-white transition-colors"><RefreshCw className="w-3.5 h-3.5"/></button>
           {resolved==='false' && (
             <button onClick={() => { if(confirm('Mark all unresolved errors as resolved?')) resolve(undefined, true); }}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 text-xs font-medium hover:bg-emerald-600/30 transition-colors">
@@ -166,7 +171,7 @@ export default function ErrorsPage() {
             <AlertTriangle className="w-10 h-10 text-red-500/60 mx-auto mb-3"/>
             <p className="text-red-400/80 text-sm font-medium mb-1">Failed to load errors</p>
             <p className="text-white/30 text-xs mb-4">{fetchError}</p>
-            <button onClick={load} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600/20 border border-violet-500/30 text-violet-400 text-xs font-medium hover:bg-violet-600/30 transition-colors mx-auto">
+            <button onClick={() => load()} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600/20 border border-violet-500/30 text-violet-400 text-xs font-medium hover:bg-violet-600/30 transition-colors mx-auto">
               <RefreshCw className="w-3 h-3"/>Retry
             </button>
           </div>
