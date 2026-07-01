@@ -152,6 +152,7 @@ export async function PATCH(req: NextRequest) {
 
     const result = await db
       .update(aiActivity)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .set({ accepted, updatedAt: new Date() } as any)
       .where(and(...filters))
       .returning({ id: aiActivity.id });

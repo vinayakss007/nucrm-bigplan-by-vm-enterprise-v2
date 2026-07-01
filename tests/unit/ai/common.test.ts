@@ -59,7 +59,7 @@ vi.mock('drizzle-orm', () => ({
   gt: vi.fn((...a: unknown[]) => ({ type: 'gt', args: a })),
   lt: vi.fn((...a: unknown[]) => ({ type: 'lt', args: a })),
   sql: Object.assign(
-    vi.fn((...args: unknown[]) => {
+    vi.fn((..._args: unknown[]) => {
       const fn = (() => '') as unknown as ReturnType<typeof vi.fn>;
       fn.as = vi.fn((alias: string) => ({ type: 'sqlAs', alias }));
       return fn as unknown as ReturnType<typeof vi.fn<{ as: (a: string) => { type: string; alias: string } }>>;

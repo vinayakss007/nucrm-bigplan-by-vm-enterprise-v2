@@ -48,7 +48,7 @@ interface CompanyOpt { id: string; name: string }
 interface TeamMemberOpt { user_id: string; full_name: string }
 
 interface Props {
-  initialContacts: any[];
+  initialContacts: unknown[];
   companies: CompanyOpt[];
   teamMembers: TeamMemberOpt[];
   permissions: { canCreate:boolean; canEdit:boolean; canDelete:boolean; canViewAll:boolean; canImport?:boolean; canExport?:boolean; canAssign?:boolean };
@@ -164,7 +164,7 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: { compa
 }
 
 export default function TenantContactsClient({ initialContacts, companies, teamMembers, permissions, _tenantId, _userId, totalCount, initialOffset, initialQ, initialStatus, defaultView }: Props) {
-  const normalize = (data: any[]) => (data || []).map((c: any) => toSnakeCase(c));
+  const normalize = (data: unknown[]) => (data || []).map((c: unknown) => toSnakeCase(c as Record<string, unknown>));
   const [contacts, setContacts] = useState(normalize(initialContacts));
   const [total, setTotal]       = useState(totalCount ?? initialContacts.length);
   const [offset, setOffset]     = useState(initialOffset ?? 0);
@@ -271,7 +271,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
   // ── Real bulk-API integration ────────────────────────────────────────
   const callBulk = useCallback(async (
     action: 'delete' | 'tag' | 'untag' | 'assign' | 'status',
-    payload?: any,
+    payload?: unknown,
   ) => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;

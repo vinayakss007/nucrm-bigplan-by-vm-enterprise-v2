@@ -50,10 +50,55 @@ const AUTHORITY_LEVELS = {
 
 interface TeamMemberOpt { user_id: string; full_name: string; email?: string }
 
+interface LeadData {
+  id: string;
+  budget?: number;
+  budget_currency?: string;
+  authority_level?: string;
+  need_description?: string;
+  timeline?: string;
+  timeline_target_date?: string;
+  lead_status?: string;
+  lifecycle_stage?: string;
+  first_name?: string;
+  last_name?: string;
+  title?: string;
+  company_name?: string;
+  assigned_name?: string;
+  email?: string;
+  linkedin_url?: string;
+  score?: number;
+  phone?: string;
+  company_industry?: string;
+  company_size?: string;
+  company_website?: string;
+  lead_source?: string;
+  country?: string;
+  city?: string;
+  tags?: string[];
+  notes?: string;
+  assigned_to?: string;
+  [key: string]: unknown;
+}
+
+interface ActivityData {
+  id: string;
+  description: string;
+  performed_at: string;
+  performed_by_name: string;
+}
+
+interface RelatedContactData {
+  id: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+}
+
 interface Props {
-  lead: any;
-  activities: any[];
-  relatedContacts: any[];
+  lead: LeadData;
+  activities: ActivityData[];
+  relatedContacts: RelatedContactData[];
   teamMembers: TeamMemberOpt[];
   tenantId: string;
   userId: string;
@@ -253,7 +298,7 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => copyToClipboard(lead.email, 'Email')}>
+              <DropdownMenuItem onClick={() => copyToClipboard(lead.email ?? '', 'Email')}>
                 <Copy className="w-4 h-4 mr-2" />
                 Copy Email
               </DropdownMenuItem>
@@ -378,10 +423,10 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
                 <p className="text-xs text-muted-foreground">Email</p>
                 <div className="flex items-center gap-2">
                   <Mail className="w-3.5 h-3.5 text-muted-foreground" />
-                  <a href={`mailto:${lead.email}`} className="text-sm text-violet-600 hover:underline">
+                  <a href={`mailto:${lead.email ?? ''}`} className="text-sm text-violet-600 hover:underline">
                     {lead.email}
                   </a>
-                  <button onClick={() => copyToClipboard(lead.email, 'Email')} className="text-muted-foreground hover:text-foreground">
+                  <button onClick={() => copyToClipboard(lead.email ?? '', 'Email')} className="text-muted-foreground hover:text-foreground">
                     <Copy className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -633,11 +678,11 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
                   </a>
                 </div>
               )}
-              {lead.tags?.length > 0 && (
+              {lead.tags != null && lead.tags.length > 0 && (
                 <div>
                   <p className="text-xs text-muted-foreground">Tags</p>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {lead.tags.map((tag: string, i: number) => (
+                    {(lead.tags ?? []).map((tag: string, i: number) => (
                       <Badge key={i} variant="outline" className="text-xs">{tag}</Badge>
                     ))}
                   </div>

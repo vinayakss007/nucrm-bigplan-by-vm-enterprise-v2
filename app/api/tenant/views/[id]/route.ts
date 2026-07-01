@@ -99,6 +99,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     }
 
     await db.update(savedViews)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .set({ deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as any)
       .where(eq(savedViews.id, id));
 
