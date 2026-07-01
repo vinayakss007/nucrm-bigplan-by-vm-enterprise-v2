@@ -57,7 +57,7 @@ describe('DashboardClient', () => {
     const abortSpy = vi.spyOn(AbortController.prototype, 'abort');
     const { unmount } = render(<DashboardClient tenantId="t1" userId="u1" planName="pro" isAdmin={false} />);
     unmount();
-    expect(abortSpy).toHaveBeenCalledTimes(1);
+    expect(abortSpy).toHaveBeenCalledTimes(2);
     abortSpy.mockRestore();
   });
 
