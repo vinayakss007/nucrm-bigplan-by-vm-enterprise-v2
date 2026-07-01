@@ -59,6 +59,9 @@ interface Props {
   totalCount?: number
   tenantId: string
   userId: string
+  initialQ?: string
+  initialOffset?: number
+  initialStatus?: string
   _tenantId?: string
   _userId?: string
 }
@@ -69,6 +72,9 @@ export default function ContactsDataTable({
   teamMembers,
   permissions,
   totalCount = 0,
+  initialQ,
+  initialOffset,
+  initialStatus,
   _tenantId,
   _userId,
 }: Props) {
