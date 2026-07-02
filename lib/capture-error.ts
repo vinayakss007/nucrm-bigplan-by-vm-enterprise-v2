@@ -1,5 +1,3 @@
-'use client';
-
 import { useEffect, useRef } from 'react';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
