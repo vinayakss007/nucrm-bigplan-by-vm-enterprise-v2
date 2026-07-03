@@ -58,6 +58,7 @@
     "prod:start": "bash scripts/start-production.sh",
     "prod:start:custom": "NODE_OPTIONS='--max-old-space-size=2048' next start -H 127.0.0.1",
     "prod:seed": "npx tsx scripts/seed-massive-drizzle.ts",
+    "telegram:setup-webhook": "npx tsx scripts/telegram-setup-webhook.ts",
     "demo:setup": "node setup-demo.js",
     "worker": "tsx worker.ts",
     "worker:dev": "tsx watch worker.ts",

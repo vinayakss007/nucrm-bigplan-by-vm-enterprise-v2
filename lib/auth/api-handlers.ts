@@ -8,6 +8,7 @@ import { hashPassword, verifyPassword, createToken, hashToken, setSessionCookie,
 import { generateCsrfToken, setCsrfCookie } from '@/lib/auth/csrf';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendEmail, sendWebhookNotification, sendTelegram } from '@/lib/email/service';
+import { sendAdminTelegram } from '@/lib/telegram-admin';
 import { devLogger } from '@/lib/dev-logger';
 import { logger } from '@/lib/logger';
 import { randomBytes, createHash, createHmac } from 'crypto';
@@ -25,6 +26,11 @@ export async function POST_login(request: NextRequest) {
     // Check if IP is blocked
     const ipBlockCheck = await isBlocked(ip, 'ip');
     if (ipBlockCheck.blocked) {
+      sendAdminTelegram({
+        icon: '🛡️',
+        title: 'IP Blocked — Brute Force',
+        message: `IP: \`${ip}\`\nBlocked until: ${ipBlockCheck.blockedUntil?.toISOString() ?? 'N/A'}\nUser-Agent: ${userAgent ?? 'N/A'}`,
+      }).catch(() => {});
       return NextResponse.json({ 
         error: 'Too many login attempts. Please try again later.',
         blocked_until: ipBlockCheck.blockedUntil?.toISOString(),
@@ -43,6 +49,11 @@ export async function POST_login(request: NextRequest) {
     // Check if email is blocked
     const emailBlockCheck = await isBlocked(email, 'email');
     if (emailBlockCheck.blocked) {
+      sendAdminTelegram({
+        icon: '🛡️',
+        title: 'Account Blocked — Brute Force',
+        message: `Email: \`${email}\`\nIP: \`${ip}\`\nBlocked until: ${emailBlockCheck.blockedUntil?.toISOString() ?? 'N/A'}`,
+      }).catch(() => {});
       return NextResponse.json({ 
         error: 'Too many login attempts for this account. Please try again later.',
         blocked_until: emailBlockCheck.blockedUntil?.toISOString(),
