@@ -4,6 +4,7 @@ import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { sendAdminTelegram } from '@/lib/telegram-admin';
 
 /**
  * Stripe Webhook Handler
@@ -214,6 +215,12 @@ async function handlePaymentFailed(invoice: any) {
       .where(eq(tenants.id, tenant.id));
 
     console.log(`[Stripe] Payment failed for tenant ${tenant.id} — marked as past_due`);
+
+    sendAdminTelegram({
+      icon: '💳',
+      title: 'Payment Failed',
+      message: `Tenant: \`${tenant.id}\`\nAmount: ${invoice.amount_paid ? `$${(invoice.amount_paid / 100).toFixed(2)}` : 'N/A'}\nStatus: past_due`,
+    }).catch(() => {});
   }
 }
 

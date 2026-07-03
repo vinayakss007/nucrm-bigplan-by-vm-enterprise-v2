@@ -1,3 +1,5 @@
+import { sendAdminTelegram } from '@/lib/telegram-admin';
+
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const rateLimitMap = new Map<string, number>();
 
@@ -54,4 +56,10 @@ export async function sendCriticalErrorAlert(opts: {
   } catch {
     console.error('[critical-error-alert] Failed to send alert');
   }
+
+  sendAdminTelegram({
+    icon: '🚨',
+    title: `Critical Error (${opts.level ?? 'fatal'})`,
+    message: `*${message}*\nContext: ${opts.context ?? 'N/A'}\nEnvironment: ${environment}`,
+  }).catch(() => {});
 }
