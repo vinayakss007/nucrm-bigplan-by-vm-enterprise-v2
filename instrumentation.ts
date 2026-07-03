@@ -6,7 +6,20 @@ export async function register() {
     const { initEnv } = await import("./lib/env");
     initEnv();
 
-    // DB schema is auto-synced via `npm run dev` script — no startup sync needed
+    // Auto-register Telegram bot webhook
+    const botToken = process.env['TELEGRAM_BOT_TOKEN'];
+    const appUrl = process.env['NEXT_PUBLIC_APP_URL'];
+    if (botToken && appUrl && appUrl !== 'http://localhost:3000') {
+      const webhookUrl = `${appUrl.replace(/\/$/, '')}/api/webhooks/telegram/bot`;
+      fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: webhookUrl }),
+      }).then(r => r.json()).then(d => {
+        if (d.ok) console.log('[telegram] Webhook registered:', webhookUrl);
+        else console.warn('[telegram] Webhook registration failed:', d.description);
+      }).catch(() => {});
+    }
   }
 
   if (process.env['NEXT_RUNTIME'] === "edge") {
