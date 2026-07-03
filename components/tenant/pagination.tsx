@@ -27,7 +27,7 @@ export default function Pagination({ total, offset, limit, onChange }: Props) {
 
   return (
     <div className="flex items-center justify-between px-1 py-2">
-      <p className="text-xs text-muted-foreground">{from}–{to} of {total.toLocaleString()}</p>
+      <p className="text-xs text-muted-foreground" suppressHydrationWarning>{from}–{to} of {total.toLocaleString()}</p>
       <div className="flex items-center gap-1">
         <button onClick={() => go(page - 1)} disabled={page === 1}
           className="w-8 h-8 flex items-center justify-center rounded-lg border border-border hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
