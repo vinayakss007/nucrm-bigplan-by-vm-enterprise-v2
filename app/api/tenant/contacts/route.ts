@@ -209,18 +209,8 @@ export async function POST(request: NextRequest) {
       name: `${v.first_name} ${v.last_name}` 
     });
 
-<<<<<<< HEAD
-<<<<<<< HEAD
     // Invalidate dashboard widget caches
     invalidateWidgetCache(ctx.tenantId, 'stats-contacts', 'contacts-recent', 'activity');
-=======
-    // Invalidate dashboard widget cache
-    invalidateWidgetCache(ctx.tenantId, 'stats-contacts', 'contacts-recent');
->>>>>>> origin/fix/bug-batch-june-25
-=======
-    // Invalidate dashboard widget caches
-    invalidateWidgetCache(ctx.tenantId, 'stats-contacts', 'contacts-recent', 'activity');
->>>>>>> origin/fix/bug-batch-15-jun-29
 
     // WORKFLOW-C: trigger automation rules (non-blocking)
     const { evaluateAutomations } = await import('@/lib/automation/engine');
