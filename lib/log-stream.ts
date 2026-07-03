@@ -43,7 +43,6 @@ export const logStream = {
       try {
         client.controller.enqueue(bytes);
       } catch {
-        console.error('[log-stream] Failed to enqueue for client', id);
         clients.delete(id);
       }
     }
