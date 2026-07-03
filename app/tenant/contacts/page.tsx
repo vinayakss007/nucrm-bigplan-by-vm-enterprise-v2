@@ -5,6 +5,7 @@ import { eq, and, isNull, asc } from 'drizzle-orm';
 import { getContacts } from '@/lib/db/services/contacts';
 import { Suspense, lazy } from 'react';
 import { getUserDefaultView } from '@/lib/user-defaults';
+import { toSnakeCase } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const ContactsClient = lazy(() => import('@/components/tenant/contacts-client'));
@@ -52,25 +53,21 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
     canAssign: can(ctx, 'contacts.assign'),
   };
 
-  const [
-    { contacts: contactsResult, total: totalCount },
-    companiesList,
-    teamMembers,
-    defaultView,
-  ] = await Promise.all([
-    getContacts({
-      tenantId: tid,
-      userId: ctx.userId,
-      viewAll: permissions.canViewAll,
-      q,
-      status,
-      limit,
-      offset,
-    }),
+  const { contacts: contactsResult, total: totalCount } = await getContacts({
+    tenantId: tid,
+    userId: ctx.userId,
+    viewAll: permissions.canViewAll,
+    q,
+    status,
+    limit,
+    offset
+  });
+
+  const [companiesList, teamMembers, defaultView] = await Promise.all([
     db.query.companies.findMany({
       where: and(eq(companies.tenantId, tid), isNull(companies.deletedAt)),
       orderBy: [asc(companies.name)],
-      columns: { id: true, name: true },
+      columns: { id: true, name: true }
     }),
     db
       .select({
@@ -89,7 +86,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
       <Suspense fallback={<LoadingSkeleton />}>
         <ContactsClient
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          initialContacts={contactsResult as any}
+          initialContacts={toSnakeCase(contactsResult as any) as any}
           companies={companiesList}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           teamMembers={teamMembers as any}
