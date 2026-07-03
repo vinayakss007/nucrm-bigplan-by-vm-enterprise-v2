@@ -8,7 +8,7 @@ import {
   CheckCircle, XCircle, Archive, Globe, Edit, UserPlus,
   CircleDot,
 } from 'lucide-react';
-import { cn, formatDate, getInitials } from '@/lib/utils';
+import { cn, formatDate, getInitials, toSnakeCase } from '@/lib/utils';
 import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
 import ImportModal from './import-modal';
 import Pagination from './pagination';
@@ -164,11 +164,9 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: { compa
   );
 }
 
-const PAGE_SIZE = 25;
-
 export default function TenantContactsClient({ initialContacts, companies, teamMembers, permissions, _tenantId, _userId, totalCount, initialOffset, initialQ, initialStatus, defaultView }: Props) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [contacts, setContacts] = useState<Record<string, any>[]>(initialContacts || []);
+  const normalize = (data: Record<string, unknown>[]) => (data || []).map((c) => toSnakeCase(c));
+  const [contacts, setContacts] = useState(normalize(initialContacts));
   const [total, setTotal]       = useState(totalCount ?? initialContacts.length);
   const [offset, setOffset]     = useState(initialOffset ?? 0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -180,7 +178,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
     | null
   >(null);
   const [bulkInput, setBulkInput] = useState('');
-  const limit                   = PAGE_SIZE;
+  const limit                   = 50;
   const [view, setView]         = useState<'list'|'grid'>(defaultView === 'grid' ? 'grid' : 'list');
   const [search, setSearch]     = useState(initialQ || '');
   const [statusFilter, setStatusFilter] = useState(initialStatus || 'all');
@@ -192,14 +190,13 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
 
   const load = useCallback(async (newOffset=0, q=search, status=statusFilter) => {
     setLoading(true);
-    const params = new URLSearchParams({ offset:String(newOffset), limit: String(limit) });
+    const params = new URLSearchParams({ offset:String(newOffset) });
     if (q) params.set('q', q);
     if (status !== 'all') params.set('status', status);
     router.push(`/tenant/contacts?${params.toString()}`, { scroll: false });
     const res = await fetch('/api/tenant/contacts?'+params.toString());
     const data = await res.json();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setContacts((data.data as Record<string, any>[]) || []);
+    setContacts(normalize(data.data));
     setTotal(data.total ?? 0);
     setOffset(newOffset);
     setLoading(false);
