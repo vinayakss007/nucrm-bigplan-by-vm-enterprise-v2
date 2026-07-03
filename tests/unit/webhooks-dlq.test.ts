@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-let mockWhere = vi.fn(() => [{ count: 0 }]);
-let mockGroupBy = vi.fn();
+let mockRows: unknown[] = [{ count: 0 }];
+let mockThen = vi.fn((fn?: (rows: unknown[]) => unknown) => fn ? fn(mockRows) : mockRows);
+let mockWhere = vi.fn(() => ({ then: mockThen }));
 
 vi.mock('@/drizzle/db', () => ({
   db: {
@@ -18,18 +19,23 @@ vi.mock('@/drizzle/db', () => ({
         where: mockWhere,
       })),
     })),
-    delete: vi.fn(() => ({ where: vi.fn(() => Promise.resolve({ rowCount: 1 })) })),
+    delete: vi.fn(() => ({
+      where: vi.fn(() => ({
+        returning: vi.fn(() => Promise.resolve([{ id: 'dlq-1' }])),
+      })),
+    })),
   },
 }));
 
 vi.mock('@/drizzle/schema/automation', () => ({
-  deadLetterQueue: { id: 'id', tenantId: 'tenant_id' },
+  deadLetterQueue: { id: 'id', tenantId: 'tenant_id', status: 'status', createdAt: 'created_at' },
   webhookDeliveries: { id: 'id', tenantId: 'tenant_id' },
 }));
 
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((...a) => ({ type: 'eq', args: a })),
   and: vi.fn((...a) => ({ type: 'and', args: a })),
+  lt: vi.fn((...a) => ({ type: 'lt', args: a })),
   sql: Object.assign(vi.fn((...a) => ({ type: 'sql', args: a })), { raw: vi.fn() }),
   desc: vi.fn((...a) => ({ type: 'desc', args: a })),
 }));
@@ -38,12 +44,16 @@ vi.mock('@/lib/dev-logger', () => ({
   devLogger: { queue: vi.fn(), error: vi.fn() },
 }));
 
+vi.mock('./delivery', () => ({
+  processWebhookDelivery: vi.fn().mockResolvedValue(undefined),
+}));
+
 describe('Webhook Dead Letter Queue', () => {
   let mod: typeof import('@/lib/webhooks/dlq');
 
   beforeEach(async () => {
-    mockWhere = vi.fn(() => [{ count: 0 }]);
-    mockGroupBy = vi.fn();
+    mockRows = [{ count: 0 }];
+    mockWhere = vi.fn(() => ({ then: mockThen }));
     vi.clearAllMocks();
     mod = await import('@/lib/webhooks/dlq');
   });
@@ -91,7 +101,7 @@ describe('Webhook Dead Letter Queue', () => {
     it('returns paginated entries with total', async () => {
       const { db } = await import('@/drizzle/db');
       (db.query.deadLetterQueue.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([{ id: 'dlq-1' }]);
-      mockWhere.mockReturnValueOnce([{ count: 1 }]);
+      mockRows = [{ count: 1 }];
 
       const result = await mod.listDLQEntries('t-1', { limit: 10, offset: 0 });
       expect(result.entries).toHaveLength(1);
@@ -101,27 +111,41 @@ describe('Webhook Dead Letter Queue', () => {
 
   describe('getDLQStats', () => {
     it('aggregates stats by status', async () => {
-      mockWhere.mockReturnValueOnce({ groupBy: mockGroupBy });
-      mockGroupBy.mockResolvedValueOnce([
-        { status: 'pending', count: 5 },
-        { status: 'resolved', count: 3 },
-        { status: 'failed', count: 2 },
-      ]);
+      const results = [
+        [{ count: 5 }],
+        [{ count: 3 }],
+        [{ count: 10 }],
+      ];
+      let callIdx = 0;
+      mockThen = vi.fn((fn?: (rows: unknown[]) => unknown) => {
+        const rows = results[callIdx] || [{ count: 0 }];
+        callIdx++;
+        return fn ? fn(rows) : rows;
+      });
+      mockWhere = vi.fn(() => ({ then: mockThen }));
       const stats = await mod.getDLQStats('t-1');
       expect(stats.total).toBe(10);
       expect(stats.pending).toBe(5);
       expect(stats.resolved).toBe(3);
-      expect(stats.failed).toBe(2);
     });
 
     it('returns zeros when no entries', async () => {
-      mockWhere.mockReturnValueOnce({ groupBy: mockGroupBy });
-      mockGroupBy.mockResolvedValueOnce([]);
+      const results = [
+        [{ count: 0 }],
+        [{ count: 0 }],
+        [{ count: 0 }],
+      ];
+      let callIdx = 0;
+      mockThen = vi.fn((fn?: (rows: unknown[]) => unknown) => {
+        const rows = results[callIdx] || [{ count: 0 }];
+        callIdx++;
+        return fn ? fn(rows) : rows;
+      });
+      mockWhere = vi.fn(() => ({ then: mockThen }));
       const stats = await mod.getDLQStats('t-1');
       expect(stats.total).toBe(0);
       expect(stats.pending).toBe(0);
       expect(stats.resolved).toBe(0);
-      expect(stats.failed).toBe(0);
     });
   });
 
