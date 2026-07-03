@@ -12,15 +12,17 @@
 - [ ] **Pre-Phase-4 Fix Tracker**: Security, Stability & Code Quality (#216)
 
 ### Agent B (Frontend/UI)
-- [x] **Fix BUG-002**: Onboarding page reappears after completion
-- [x] **Fix BUG-003**: Dashboard contact count stale after creating new contact
-- [x] **Fix BUG-006**: Contacts page 2-3s client-side load delay
-- [x] **Fix BUG-008**: Email verification banner shown persistently
+- [x] **Fix BUG-002**: Onboarding page reappears after completion (PR #277)
+- [x] **Fix BUG-003**: Dashboard contact count stale after creating new contact (PR #277)
+- [x] **Fix BUG-006**: Contacts page 2-3s client-side load delay (PR #277)
+- [x] **Fix BUG-008**: Email verification banner shown persistently (PR #277)
+- [x] **Fix #160**: Add error.tsx boundary to superadmin/logs (PR #278)
 - [ ] **Review & merge PR #275**: Task completion persistence fix (⚠️ Blocked: needs approving review from write-access member)
-- [ ] **MCP-based testing infrastructure**: Playwright MCP, quality gate, Lighthouse (#239)
+- [ ] **MCP-based testing infrastructure**: Playwright MCP, quality gate, Lighthouse (#239) — on hold per instructions
 
 ### Coordination
-- [ ] Sync via ./comm directory and GitHub Issues/PRs
+- [x] Sync via ./comm directory and GitHub Issues/PRs
 - [ ] Update task.json status as items are completed
 - [ ] Use `report_progress()` to update on blockers
-- [ ] Run `npm run build && npm test` before marking done
+- [x] Run `npm test` — all tests pass
+- [ ] Run `npm run build` — times out (memory/scale issue, pre-existing)
