@@ -56,7 +56,7 @@ export async function PUT(req: NextRequest) {
 
     await db
       .update(users)
-      .set({ metadata: metadata as typeof users.$inferInsert.metadata })
+      .set({ metadata: metadata as typeof users.$inferInsert.metadata, updatedAt: new Date() })
       .where(eq(users.id, ctx.userId));
 
     await logAudit({

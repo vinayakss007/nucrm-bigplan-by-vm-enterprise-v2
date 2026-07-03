@@ -232,17 +232,21 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
   const [segments, setSegments] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
-    fetch('/api/tenant/custom-fields?entityType=company')
+    const abort = new AbortController();
+    fetch('/api/tenant/custom-fields?entityType=company', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { fields: [] })
-      .then(d => setCustomFields(d.fields ?? []))
-      .catch(() => {})
+      .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
+      .catch(() => {});
+    return () => abort.abort();
   }, [])
 
   useEffect(() => {
-    fetch('/api/tenant/segments?entity_type=company')
+    const abort = new AbortController();
+    fetch('/api/tenant/segments?entity_type=company', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => setSegments(d.data ?? []))
-      .catch(() => {})
+      .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
+      .catch(() => {});
+    return () => abort.abort();
   }, [])
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, any> = {}) => {

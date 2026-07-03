@@ -137,12 +137,21 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
     }
   }, [router]);
 
+  const searchAbortRef = useRef<AbortController | null>(null);
+
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) { setResults(null); setSearching(false); return; }
+    searchAbortRef.current?.abort();
+    const abort = new AbortController();
+    searchAbortRef.current = abort;
     setSearching(true);
-    const res = await fetch(`/api/tenant/search?q=${encodeURIComponent(q)}&limit=20`);
-    const data = await res.json();
-    setResults(data); setSearching(false); setShowDrop(true);
+    try {
+      const res = await fetch(`/api/tenant/search?q=${encodeURIComponent(q)}&limit=20`, { signal: abort.signal });
+      const data = await res.json();
+      if (!abort.signal.aborted) { setResults(data); setSearching(false); setShowDrop(true); }
+    } catch {
+      if (!abort.signal.aborted) { setSearching(false); }
+    }
   }, []);
 
   const markNotifRead = async (id: string) => {

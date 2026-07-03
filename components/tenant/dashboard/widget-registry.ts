@@ -7,7 +7,7 @@ const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     id: 'stats-contacts', name: 'Contacts Overview',
     description: 'Total contacts and new this month',
     category: 'core', defaultSize: '1x1', minPlan: 'free',
-    refreshInterval: 300, apiEndpoint: '/api/tenant/dashboard/widgets/stats/contacts',
+    refreshInterval: 30, apiEndpoint: '/api/tenant/dashboard/widgets/stats/contacts',
   },
   'stats-pipeline': {
     id: 'stats-pipeline', name: 'Pipeline Value',

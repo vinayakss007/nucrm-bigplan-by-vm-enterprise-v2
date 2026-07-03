@@ -43,19 +43,20 @@ export default function MonitoringPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  const load = async () => {
+  const load = async (abortSignal?: AbortSignal) => {
     const [mon, hlt] = await Promise.all([
-      fetch('/api/superadmin/monitoring').then(r => r.ok ? r.json() : {}),
-      fetch('/api/health').then(r=>r.json()),
+      fetch('/api/superadmin/monitoring', { signal: abortSignal }).then(r => r.ok ? r.json() : {}),
+      fetch('/api/health', { signal: abortSignal }).then(r=>r.json()),
     ]);
     setData(mon); setHealth(hlt);
     setLastRefresh(new Date()); setLoading(false); setRefreshing(false);
   };
 
   useEffect(() => {
-    load();
-    const iv = setInterval(load, 30_000);
-    return () => clearInterval(iv);
+    const abort = new AbortController();
+    load(abort.signal);
+    const iv = setInterval(() => load(abort.signal), 30_000);
+    return () => { abort.abort(); clearInterval(iv); };
   }, []);
 
   const s  = data?.stats ?? {};

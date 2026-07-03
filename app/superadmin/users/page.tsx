@@ -42,11 +42,11 @@ export default function SuperAdminUsersPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-muted/30 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500";
   const lbl = "block text-xs font-medium text-muted-foreground mb-1";
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (abortSignal?: AbortSignal) => {
     const q = search ? `?q=${encodeURIComponent(search)}` : '';
     const [res, meRes] = await Promise.all([
-      fetch('/api/superadmin/users' + q),
-      fetch('/api/superadmin/me'),
+      fetch('/api/superadmin/users' + q, { signal: abortSignal }),
+      fetch('/api/superadmin/me', { signal: abortSignal }),
     ]);
     const d = await res.json();
     const m = await meRes.json();
@@ -54,7 +54,11 @@ export default function SuperAdminUsersPage() {
     setMe(m);
     setLoading(false);
   }, [search]);
-  useEffect(() => { load(); }, [search, load]);
+  useEffect(() => {
+    const abort = new AbortController();
+    load(abort.signal);
+    return () => abort.abort();
+  }, [search, load]);
 
   const transferSuperAdmin = async () => {
     if (!transferTarget) { toast.error('Select a target user'); return; }

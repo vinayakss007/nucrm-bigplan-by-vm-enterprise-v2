@@ -16,15 +16,17 @@ export default function SettingsNav() {
   const [query, setQuery] = useState('');
 
   useEffect(() => {
-    fetch('/api/tenant/me')
+    const abort = new AbortController();
+    fetch('/api/tenant/me', { signal: abort.signal })
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => setIsAdmin(d.is_admin ?? false))
+      .then(d => { if (!abort.signal.aborted) setIsAdmin(d.is_admin ?? false); })
       .catch(() => { /* Fallback to default on corrupted storage data */ });
 
     try {
       const q = sessionStorage.getItem('nucrm.settings.query');
       if (q) setQuery(q);
     } catch (e) { console.error('[settings-nav] sessionStorage read failed:', e); }
+    return () => abort.abort();
   }, []);
 
   useEffect(() => {

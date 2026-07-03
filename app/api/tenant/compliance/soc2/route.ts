@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
           status: 'completed',
           completedAt: new Date(),
           result: report as unknown as Record<string, unknown>,
+          updatedAt: new Date(),
         })
         .where(eq(complianceRequests.id, request!.id));
  
@@ -78,6 +79,7 @@ export async function POST(req: NextRequest) {
         .set({
           status: 'failed',
           errorMessage: msg,
+          updatedAt: new Date(),
         })
         .where(eq(complianceRequests.id, request!.id));
 
