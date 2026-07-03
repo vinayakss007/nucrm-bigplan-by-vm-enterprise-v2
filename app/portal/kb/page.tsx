@@ -4,8 +4,17 @@ import Link from 'next/link';
 import { Book, Search, ChevronRight, Clock, Eye } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
+interface PortalArticle {
+  id: string;
+  title: string;
+  excerpt?: string;
+  content?: string;
+  createdAt?: string | Date | null;
+  views?: number;
+}
+
 export default function PortalKBPage() {
-  const [articles, setArticles] = useState<any[]>([]);
+  const [articles, setArticles] = useState<PortalArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
@@ -53,7 +62,7 @@ export default function PortalKBPage() {
                 {a.excerpt && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{a.excerpt}</p>}
                 <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
                   <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatDate(a.createdAt)}</span>
-                  {a.views > 0 && <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{a.views} views</span>}
+                  {a.views != null && a.views > 0 && <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{a.views} views</span>}
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-violet-600 transition-colors shrink-0 mt-1" />

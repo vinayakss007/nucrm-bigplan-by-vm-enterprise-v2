@@ -6,6 +6,33 @@ import { Plus, FileText, ExternalLink, Copy, Check, ToggleLeft, ToggleRight,
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
+interface FormFieldDef {
+  key: string;
+  label: string;
+  type: string;
+  required: boolean;
+}
+
+interface FormItem {
+  id: string;
+  name: string;
+  description?: string;
+  is_active?: boolean;
+  fields?: FormFieldDef[];
+  submissions?: number;
+  settings?: { success_message?: string; notify_email?: string };
+}
+
+interface FormSubmissionRecord {
+  id: string;
+  first_name?: string;
+  last_name?: string;
+  contact_email?: string;
+  contact_id?: string;
+  data?: Record<string, unknown>;
+  created_at: string;
+}
+
 const FIELD_TYPES = [
   { id:'text', label:'Text' }, { id:'email', label:'Email' },
   { id:'phone', label:'Phone' }, { id:'textarea', label:'Long text' },
@@ -15,10 +42,10 @@ const FIELD_TYPES = [
 
 export default function FormsPage() {
   const router = useRouter();
-  const [forms, setForms]       = useState<any[]>([]);
+  const [forms, setForms]       = useState<FormItem[]>([]);
   const [loading, setLoading]   = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [_selected, _setSelected] = useState<any|null>(null);
+  const [_selected, _setSelected] = useState<FormItem | null>(null);
   const [saving, setSaving]     = useState(false);
   const [copiedId, setCopiedId] = useState<string|null>(null);
   const [form, setForm] = useState({
@@ -56,8 +83,7 @@ export default function FormsPage() {
       method:'PATCH', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ is_active: !f.is_active }),
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setForms((forms: any) => forms.map((x: any) => x.id === f.id ? {...x, is_active: !f.is_active} : x));
+    setForms((prev) => prev.map((x) => x.id === f.id ? {...x, is_active: !f.is_active} : x));
   };
 
   const del = async (id: string) => {
@@ -66,12 +92,12 @@ export default function FormsPage() {
     toast.success('Deleted');
   };
 
-  const [viewingSubmissions, setViewingSubmissions] = useState<any|null>(null);
-  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [viewingSubmissions, setViewingSubmissions] = useState<FormItem | null>(null);
+  const [submissions, setSubmissions] = useState<FormSubmissionRecord[]>([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
 
   const viewSubmissions = async (form: { id: string }) => {
-    setViewingSubmissions(form);
+    setViewingSubmissions(form as FormItem);
     setLoadingSubmissions(true);
     try {
       const res = await fetch(`/api/tenant/forms/${form.id}`);
@@ -109,7 +135,7 @@ export default function FormsPage() {
   const addField = () => setForm(f => ({...f, fields:[...f.fields, { key:`field_${Date.now()}`, label:'New Field', type:'text', required:false }]}));
   const removeField = (i: number) => setForm(f => ({...f, fields:f.fields.filter((_,idx) => idx !== i)}));
   const updateField = (i: number, key: string, val: unknown) =>
-    setForm(f => ({...f, fields:f.fields.map((x: any, idx) => idx === i ? {...x, [key]:val} : x)}));
+    setForm(f => ({...f, fields:f.fields.map((x: FormFieldDef, idx) => idx === i ? {...x, [key]:val} : x)}));
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
@@ -231,8 +257,7 @@ export default function FormsPage() {
                 </p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                <button onClick={() => viewSubmissions(f as any)} title="View submissions"
+                <button onClick={() => viewSubmissions(f)} title="View submissions"
                   className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/60 text-xs font-medium transition-colors">
                   <FileText className="w-3.5 h-3.5" /> <span className="hidden md:inline">Submissions</span>
                 </button>
@@ -248,8 +273,7 @@ export default function FormsPage() {
                   className="hidden sm:flex p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
                   {copiedId === f.id ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                 </button>
-                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                <button onClick={() => toggle(f as any)} title="Toggle active"
+                <button onClick={() => toggle(f)} title="Toggle active"
                   className="text-muted-foreground hover:text-violet-600 transition-colors">
                   {f.is_active ? <ToggleRight className="w-5 h-5 text-violet-600" /> : <ToggleLeft className="w-5 h-5" />}
                 </button>

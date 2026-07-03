@@ -25,17 +25,20 @@ export default function DealsClosingWidget({ data }: WidgetProps) {
         <p className="text-xs font-medium text-muted-foreground/70 text-center py-5">No deals closing soon</p>
       ) : (
         <div className="divide-y divide-border">
-          {items.map((d: any) => (
-            <Link key={d.id} href="/tenant/deals" className="flex items-center gap-2 py-2 first:pt-0 last:pb-0 hover:bg-accent/20 transition-colors -mx-3 px-3 rounded">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold truncate">{d.title}</p>
-                <span className={cn('text-xs font-semibold px-1.5 py-0.5 rounded', STAGE_COLORS[d.stage] || STAGE_COLORS['lead'])}>
-                  {d.stage}
-                </span>
-              </div>
-              <span className="text-sm font-extrabold text-violet-600 shrink-0">{formatCurrency(Number(d.value))}</span>
-            </Link>
-          ))}
+          {items.map((d: Record<string, unknown>) => {
+            const deal = d as { id: string; title: string; stage: string; value: number };
+            return (
+              <Link key={deal.id} href="/tenant/deals" className="flex items-center gap-2 py-2 first:pt-0 last:pb-0 hover:bg-accent/20 transition-colors -mx-3 px-3 rounded">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold truncate">{deal.title}</p>
+                  <span className={cn('text-xs font-semibold px-1.5 py-0.5 rounded', STAGE_COLORS[deal.stage] || STAGE_COLORS['lead'])}>
+                    {deal.stage}
+                  </span>
+                </div>
+                <span className="text-sm font-extrabold text-violet-600 shrink-0">{formatCurrency(Number(deal.value))}</span>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

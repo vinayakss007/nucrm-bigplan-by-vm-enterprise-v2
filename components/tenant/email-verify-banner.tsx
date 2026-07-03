@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Mail, X, CheckCircle, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-export default function EmailVerifyBanner({ email }: { email: string }) {
+export default function EmailVerifyBanner({ email }: { email: string; emailVerified?: boolean }) {
   const [dismissed, setDismissed] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);

@@ -8,7 +8,7 @@ import {
   CheckCircle, XCircle, Archive, Globe, Edit, UserPlus,
   CircleDot,
 } from 'lucide-react';
-import { cn, formatDate, getInitials, toSnakeCase } from '@/lib/utils';
+import { cn, formatDate, getInitials } from '@/lib/utils';
 import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
 import ImportModal from './import-modal';
 import Pagination from './pagination';
@@ -46,9 +46,10 @@ const SOURCE_LABELS: Record<string,string> = {
 
 interface CompanyOpt { id: string; name: string }
 interface TeamMemberOpt { user_id: string; full_name: string }
+interface ContactInput { id: string; first_name?: string; last_name?: string; email?: string; phone?: string; company_name?: string; lead_status?: string; lead_source?: string; assigned_name?: string; created_at?: string; score?: number; [key: string]: unknown }
 
 interface Props {
-  initialContacts: any[];
+  initialContacts: ContactInput[];
   companies: CompanyOpt[];
   teamMembers: TeamMemberOpt[];
   permissions: { canCreate:boolean; canEdit:boolean; canDelete:boolean; canViewAll:boolean; canImport?:boolean; canExport?:boolean; canAssign?:boolean };
@@ -166,8 +167,8 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: { compa
 const PAGE_SIZE = 25;
 
 export default function TenantContactsClient({ initialContacts, companies, teamMembers, permissions, _tenantId, _userId, totalCount, initialOffset, initialQ, initialStatus, defaultView }: Props) {
-  const normalize = (data: any[]) => (data || []).map((c: any) => toSnakeCase(c));
-  const [contacts, setContacts] = useState(normalize(initialContacts));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [contacts, setContacts] = useState<Record<string, any>[]>(initialContacts || []);
   const [total, setTotal]       = useState(totalCount ?? initialContacts.length);
   const [offset, setOffset]     = useState(initialOffset ?? 0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -197,7 +198,8 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
     router.push(`/tenant/contacts?${params.toString()}`, { scroll: false });
     const res = await fetch('/api/tenant/contacts?'+params.toString());
     const data = await res.json();
-    setContacts(normalize(data.data));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setContacts((data.data as Record<string, any>[]) || []);
     setTotal(data.total ?? 0);
     setOffset(newOffset);
     setLoading(false);
@@ -273,7 +275,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
   // ── Real bulk-API integration ────────────────────────────────────────
   const callBulk = useCallback(async (
     action: 'delete' | 'tag' | 'untag' | 'assign' | 'status',
-    payload?: any,
+    payload?: Record<string, unknown>,
   ) => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
