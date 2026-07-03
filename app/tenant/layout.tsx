@@ -56,7 +56,7 @@ export default async function TenantLayout({ children }: { children: React.React
         permissions={ctx.permissions} 
         isAdmin={ctx.isAdmin} 
         isSuperAdmin={ctx.isSuperAdmin}
-        emailVerified={user?.emailVerified ?? false} 
+        emailVerified={user?.emailVerified ?? true} 
         email={user?.email ?? ''}
       >
         {children}

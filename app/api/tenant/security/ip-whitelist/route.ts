@@ -64,7 +64,7 @@ export async function PUT(request: NextRequest) {
       })
       .onConflictDoUpdate({
         target: [platformSettings.tenantId, platformSettings.key],
-        set: { value },
+        set: { value, updatedAt: new Date() },
       });
 
     return NextResponse.json({ ok: true, ips: ipArray, enabled: enabled && ipArray.length > 0 });

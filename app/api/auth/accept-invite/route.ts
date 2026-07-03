@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
             roleId: role?.id || null,
             status: 'active',
             joinedAt: new Date(),
+            updatedAt: new Date(),
           }
         });
 

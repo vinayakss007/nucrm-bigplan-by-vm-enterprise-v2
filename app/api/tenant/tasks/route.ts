@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
       description: tasks.description,
       priority: tasks.priority,
       status: tasks.status,
+      completed: tasks.completed,
       dueDate: tasks.dueDate,
       completedAt: tasks.completedAt,
       contactId: tasks.contactId,
@@ -129,6 +130,7 @@ export async function POST(request: NextRequest) {
         dealId: v.deal_id || null,
         assignedTo: v.assigned_to || ctx.userId,
         status: v.status,
+        completed: v.status === 'completed',
         completedAt: v.status === 'completed' ? new Date() : null,
       })
       .returning();

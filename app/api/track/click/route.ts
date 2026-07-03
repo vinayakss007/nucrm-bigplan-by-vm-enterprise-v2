@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
           .set({
             clickedAt: sql`COALESCE(${emailTracking.clickedAt}, now())`,
             clickCount: sql`${emailTracking.clickCount} + 1`,
+            updatedAt: new Date(),
           })
           .where(eq(emailTracking.id, trackId));
 

@@ -27,9 +27,21 @@ export async function hasCompletedOnboarding(tenantId: string, userId: string): 
       columns: { id: true },
     });
 
-    return !!result;
+    if (result) return true;
+
+    // Fallback: check for legacy 'completed' step name
+    const legacyResult = await db.query.onboardingProgress.findFirst({
+      where: and(
+        eq(onboardingProgress.tenantId, tenantId),
+        eq(onboardingProgress.userId, userId),
+        eq(onboardingProgress.stepName, 'completed'),
+        eq(onboardingProgress.isCompleted, true)
+      ),
+      columns: { id: true },
+    });
+
+    return !!legacyResult;
   } catch {
-    // Silently skip during migration/setup when tables may not exist yet
     return true;
   }
 }
@@ -50,6 +62,7 @@ export async function markOnboardingComplete(tenantId: string, userId: string): 
       set: {
         isCompleted: true,
         completedAt: new Date(),
+        updatedAt: new Date(),
       },
     });
   } catch (err) {
@@ -77,6 +90,7 @@ export async function recordOnboardingStep(
       set: {
         isCompleted: true,
         completedAt: new Date(),
+        updatedAt: new Date(),
       },
     });
   } catch (err) {
