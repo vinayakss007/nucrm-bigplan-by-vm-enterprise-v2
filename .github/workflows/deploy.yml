@@ -9,7 +9,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NODE_ENV: production
   DOCKER_IMAGE: ghcr.io/${{ github.repository }}
   HEALTH_CHECK_RETRIES: 12
   HEALTH_CHECK_INTERVAL: 10
@@ -39,7 +38,7 @@ jobs:
         run: npm run lint
 
       - name: Build
-        run: npm run build
+        run: NODE_ENV=production npm run build
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
