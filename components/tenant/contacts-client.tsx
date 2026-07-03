@@ -59,6 +59,7 @@ interface Props {
   initialOffset?: number;
   initialQ?: string;
   initialStatus?: string;
+  limit?: number;
   _tenantId?: string;
   _userId?: string;
 }
@@ -163,7 +164,7 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: { compa
   );
 }
 
-export default function TenantContactsClient({ initialContacts, companies, teamMembers, permissions, _tenantId, _userId, totalCount, initialOffset, initialQ, initialStatus, defaultView }: Props) {
+export default function TenantContactsClient({ initialContacts, companies, teamMembers, permissions, _tenantId, _userId, totalCount, initialOffset, initialQ, initialStatus, defaultView, limit: limitProp }: Props) {
   const normalize = (data: any[]) => (data || []).map((c: any) => toSnakeCase(c));
   const [contacts, setContacts] = useState(normalize(initialContacts));
   const [total, setTotal]       = useState(totalCount ?? initialContacts.length);
@@ -177,7 +178,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
     | null
   >(null);
   const [bulkInput, setBulkInput] = useState('');
-  const limit                   = 25;
+  const limit                   = limitProp ?? 25;
   const [view, setView]         = useState<'list'|'grid'>(defaultView === 'grid' ? 'grid' : 'list');
   const [search, setSearch]     = useState(initialQ || '');
   const [statusFilter, setStatusFilter] = useState(initialStatus || 'all');

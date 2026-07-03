@@ -98,6 +98,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
           initialQ={q}
           initialStatus={status}
           defaultView={defaultView}
+          limit={limit}
         />
       </Suspense>
     </div>
