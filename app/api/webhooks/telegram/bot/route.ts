@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   const adminChatId = process.env.TELEGRAM_CHAT_ID;
   const isAdmin = adminChatId === String(chatId);
 
-  let user: { id: string; email: string; fullName: string | null; isSuperAdmin: boolean; telegramEnabled: boolean | null } | undefined;
+  let user: { id: string; email: string; fullName: string | null; isSuperAdmin: boolean | null; telegramEnabled: boolean | null } | undefined;
 
   if (isAdmin) {
     const [adminUser] = await db.select({
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  const cmd = text.split(' ')[0].toLowerCase();
+  const cmd = (text.split(' ')[0] || '').toLowerCase();
 
   if (cmd === '/start' || cmd === '/help') {
     let msg = `*Welcome, ${user.fullName}!*\n\nCommands:\n/info — Your account info\n`;
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
       id: tenants.id,
       name: tenants.name,
       slug: tenants.slug,
-      email: tenants.email,
+      billingEmail: tenants.billingEmail,
       createdAt: tenants.createdAt,
     })
       .from(tenants)
@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
       let msg = `*Pending Tenants (${pending.length})*\n\n`;
       for (const t of pending) {
         const date = t.createdAt ? new Date(t.createdAt).toLocaleDateString() : 'N/A';
-        msg += `• ${t.name} (\`${t.slug}\`)\n  Email: ${t.email || 'N/A'} | Created: ${date}\n`;
+        msg += `• ${t.name} (\`${t.slug}\`)\n  Email: ${t.billingEmail || 'N/A'} | Created: ${date}\n`;
       }
       sendReply(chatId, msg);
     }
@@ -177,23 +177,23 @@ export async function POST(req: NextRequest) {
   }
 
   if (cmd === '/stats' && user.isSuperAdmin) {
-    const [{ tenantCount }] = await db.select({
+    const [tenantRow] = await db.select({
       tenantCount: sql<number>`count(distinct ${tenants.id})`,
     }).from(tenants);
 
-    const [{ activeCount }] = await db.select({
+    const [activeRow] = await db.select({
       activeCount: sql<number>`count(*)`,
     }).from(tenants).where(eq(tenants.status, 'active'));
 
-    const [{ pendingCount }] = await db.select({
+    const [pendingRow] = await db.select({
       pendingCount: sql<number>`count(*)`,
     }).from(tenants).where(sql`${tenants.status} = 'pending' OR ${tenants.status} IS NULL`);
 
-    const [{ recentCount }] = await db.select({
+    const [recentRow] = await db.select({
       recentCount: sql<number>`count(*)`,
     }).from(tenants).where(sql`${tenants.createdAt} > now() - interval '7 days'`);
 
-    sendReply(chatId, `*Platform Stats*\nTotal Tenants: ${tenantCount}\nActive: ${activeCount}\nPending: ${pendingCount}\nNew (7d): ${recentCount}`);
+    sendReply(chatId, `*Platform Stats*\nTotal Tenants: ${tenantRow?.tenantCount ?? 0}\nActive: ${activeRow?.activeCount ?? 0}\nPending: ${pendingRow?.pendingCount ?? 0}\nNew (7d): ${recentRow?.recentCount ?? 0}`);
     return NextResponse.json({ ok: true });
   }
 
