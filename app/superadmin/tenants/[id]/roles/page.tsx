@@ -22,12 +22,14 @@ interface Role {
 export default function TenantRolesPage() {
   const params = useParams();
   const tenantId = params['id'] as string;
-  const [tenant, setTenant] = useState<{ id: string; name: string } | null>(null);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [tenant, setTenant] = useState<any>(null);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [editRole, setEditRole] = useState<Role | null>(null);
   const [showEditor, setShowEditor] = useState(false);
-  const [, setSaving] = useState(false);
+  const [_saving, setSaving] = useState(false);
+  const [_openCat, _setOpenCat] = useState<string | null>(PERMISSION_CATEGORIES[0] ?? null);
 
   const load = useCallback(async () => {
     try {
@@ -59,8 +61,9 @@ export default function TenantRolesPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to save');
       toast.success('Permissions updated');
       load();
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      toast.error(error.message);
     } finally {
       setSaving(false);
     }
@@ -78,8 +81,9 @@ export default function TenantRolesPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to create');
       toast.success('Role created');
       load();
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      toast.error(error.message);
     } finally {
       setSaving(false);
     }
@@ -98,8 +102,9 @@ export default function TenantRolesPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to delete');
       toast.success('Role deleted');
       load();
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Failed to delete');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      toast.error(error.message);
     } finally {
       setSaving(false);
     }

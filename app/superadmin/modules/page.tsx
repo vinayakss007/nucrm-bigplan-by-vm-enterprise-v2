@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Package, Users, ToggleRight, ToggleLeft, Save } from 'lucide-react';
+import { Package, Users, ToggleLeft, ToggleRight, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -20,24 +20,9 @@ const CAT_COLORS: Record<string, string> = {
   analytics: 'bg-orange-500/15 text-orange-400',
 };
 
-interface PlanAccess {
-  enabled: boolean;
-}
-
-interface Module {
-  id: string;
-  name: string;
-  icon: string;
-  description: string;
-  category: string;
-  features: string[];
-  total_installs: number;
-  planAccess: Record<string, PlanAccess>;
-  pricing?: Record<string, PlanAccess>;
-}
-
 export default function SuperAdminModulesPage() {
-  const [modules, setModules] = useState<Module[]>([]);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [modules, setModules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
@@ -45,15 +30,16 @@ export default function SuperAdminModulesPage() {
   const load = async () => {
     const res = await fetch('/api/superadmin/modules');
     const d = await res.json();
-    setModules((d.data ?? []).map((m: Record<string, unknown>) => ({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setModules((d.data ?? []).map((m: any) => ({
       ...m,
-      planAccess: (m.pricing as Record<string, PlanAccess>) || {
+      planAccess: m.pricing || {
         free: { enabled: false },
         starter: { enabled: false },
         pro: { enabled: false },
         enterprise: { enabled: false },
       }
-    } as Module)) as unknown as Module[]);
+    })));
     setLoading(false);
   };
 
@@ -87,6 +73,7 @@ export default function SuperAdminModulesPage() {
     toast.success('Plan configurations saved');
   };
 
+  const _totalInstalls = modules.reduce((s, m) => s + (m.total_installs || 0), 0);
 
   return (
     <div className="space-y-5 max-w-6xl">
