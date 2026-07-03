@@ -54,10 +54,14 @@ export async function POST(request: NextRequest) {
       .values({
         title: b.title,
 <<<<<<< HEAD
+<<<<<<< HEAD
         content: content,
 =======
         body: content,
 >>>>>>> origin/fix/bug-batch-june-25
+=======
+        content: content,
+>>>>>>> origin/fix/bug-batch-15-jun-29
         type: b.type || 'info',
         target: b.target || 'all',
         isActive: b.is_active ?? true,

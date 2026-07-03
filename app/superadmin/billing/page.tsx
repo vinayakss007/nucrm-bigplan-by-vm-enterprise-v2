@@ -16,6 +16,7 @@ const AI_FEATURE_OPTIONS = [
   { key: 'ai_activity_log', label: 'AI Activity Log', desc: 'Token/cost tracking' },
 ];
 
+<<<<<<< HEAD
 interface Plan {
   id: string;
   name: string;
@@ -39,6 +40,9 @@ interface PlanFormProps {
 }
 
 function PlanForm({ plan, onSave, onClose }: PlanFormProps) {
+=======
+function PlanForm({ plan, onSave, onClose }: { plan?: any; onSave: () => void; onClose: () => void }) {
+>>>>>>> origin/fix/bug-batch-15-jun-29
   const [f, setF] = useState({
     id: plan?.id || '', name: plan?.name || '', price_monthly: plan?.price_monthly || 0,
     price_yearly: plan?.price_yearly || 0, max_users: plan?.max_users || 5,
