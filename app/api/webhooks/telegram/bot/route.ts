@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   const adminChatId = process.env.TELEGRAM_CHAT_ID;
   const isAdmin = adminChatId === String(chatId);
 
-  let user: { id: string; email: string; fullName: string; isSuperAdmin: boolean; telegramEnabled: boolean | null } | undefined;
+  let user: { id: string; email: string; fullName: string | null; isSuperAdmin: boolean; telegramEnabled: boolean | null } | undefined;
 
   if (isAdmin) {
     const [adminUser] = await db.select({
