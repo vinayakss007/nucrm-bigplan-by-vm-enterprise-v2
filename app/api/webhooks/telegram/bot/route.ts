@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { users, tenants } from '@/drizzle/schema';
-import { eq, sql, desc, isNull } from 'drizzle-orm';
+import { eq, sql, desc } from 'drizzle-orm';
 
 interface TelegramMessage {
   message?: {
