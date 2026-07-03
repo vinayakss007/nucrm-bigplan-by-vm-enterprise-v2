@@ -24,17 +24,18 @@ export default function ActivityFeedWidget({ data }: WidgetProps) {
         <p className="text-xs font-medium text-muted-foreground/70 text-center py-6">No activity yet &mdash; start by adding contacts</p>
       ) : (
         <div className="divide-y divide-border">
-          {items.map((a: any) => {
-            const Icon = ACTIVITY_ICONS[a.type] ?? Activity;
+          {items.map((a: Record<string, unknown>) => {
+            const item = a as { id: string; type: string; description: string; createdAt: string | Date | null | undefined };
+            const Icon = ACTIVITY_ICONS[item.type] ?? Activity;
             return (
-              <div key={a.id} className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
+              <div key={item.id} className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
                 <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0">
                   <Icon className="w-3.5 h-3.5 text-foreground/70" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{a.description}</p>
+                  <p className="text-sm font-medium">{item.description}</p>
                   <p className="text-xs font-semibold text-foreground/60 mt-0.5">
-                    {formatRelativeTime(a.createdAt)}
+                    {formatRelativeTime(item.createdAt)}
                   </p>
                 </div>
               </div>

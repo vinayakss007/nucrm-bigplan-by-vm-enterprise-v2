@@ -12,6 +12,43 @@ import { cn, formatCurrency, formatDateTimeShort, formatDate, formatRelativeTime
 import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
 import { ContactTimeline } from '@/components/tenant/contact-timeline';
 import toast from 'react-hot-toast';
+import type { Task, Deal, Company } from '@/types';
+
+// ── Types ─────────────────────────────────────────────────────
+interface ContactFormState {
+  [key: string]: string | number | boolean | string[] | Record<string, unknown> | null | undefined;
+  id: string;
+  tenant_id: string;
+  created_by: string | null;
+  assigned_to: string | null;
+  company_id: string | null;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  city: string | null;
+  country: string | null;
+  tags: string;
+  notes: string | null;
+  lead_source: string | null;
+  lead_status: string;
+  score: number;
+  lifecycle_stage: string | null;
+  custom_fields: Record<string, unknown>;
+  is_archived: boolean;
+  do_not_contact: boolean;
+  website: string | null;
+  linkedin_url: string | null;
+  created_at: string;
+  updated_at: string;
+  company_name?: string;
+  assigned_name?: string;
+}
+
+interface TeamMemberOption {
+  user_id: string;
+  full_name: string;
+}
 
 // ── Constants ─────────────────────────────────────────────────
 const LEAD_STATUSES = [
@@ -50,8 +87,12 @@ const ACTIVITY_ICONS: Record<string,any> = {
 };
 
 // ── QuickAdd: Task inline ──────────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function QuickAddTask({ contactId, _contactName, teamMembers, onAdded }: any) {
+function QuickAddTask({ contactId, _contactName, teamMembers, onAdded }: {
+  contactId: string;
+  _contactName: string;
+  teamMembers: TeamMemberOption[];
+  onAdded: (task: Task) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title:'', priority:'medium', due_date:'', assigned_to:'' });
   const [saving, setSaving] = useState(false);
@@ -97,8 +138,11 @@ function QuickAddTask({ contactId, _contactName, teamMembers, onAdded }: any) {
 }
 
 // ── QuickAdd: Deal inline ──────────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function QuickAddDeal({ contactId, _companies, onAdded }: any) {
+function QuickAddDeal({ contactId, _companies, onAdded }: {
+  contactId: string;
+  _companies: Company[];
+  onAdded: (deal: Deal) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title:'', value:'', stage:'lead', close_date:'' });
   const [saving, setSaving] = useState(false);
@@ -140,8 +184,10 @@ function QuickAddDeal({ contactId, _companies, onAdded }: any) {
 }
 
 // ── QuickAdd: Meeting inline ───────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function QuickAddMeeting({ contactId, onAdded }: any) {
+function QuickAddMeeting({ contactId, onAdded }: {
+  contactId: string;
+  onAdded: (meeting: { id: string; title: string }) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title:'', start_time:'', end_time:'', location:'', meeting_url:'' });
   const [saving, setSaving] = useState(false);
@@ -206,7 +252,7 @@ export default function ContactDetailClient({
   const [contactLeads, setContactLeads]            = useState<any[]>([]);
   const [loadingContactLeads, setLoadingContactLeads] = useState(false);
   const [editing, setEditing]       = useState(false);
-  const [editForm, setEditForm]     = useState({ ...initialContact });
+  const [editForm, setEditForm]     = useState<ContactFormState>({ ...initialContact });
   const [noteText, setNoteText]     = useState('');
   const [noteType, setNoteType]     = useState('note');
   const [addingNote, setAddingNote] = useState(false);
@@ -305,9 +351,9 @@ export default function ContactDetailClient({
   // ── Save edit ────────────────────────────────────────────────
   const saveEdit = async () => {
     setSavingEdit(true);
-    const tagsArray = typeof editForm.tags === 'string'
+    const tagsArray = editForm.tags
       ? editForm.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
-      : editForm.tags;
+      : [];
 
     const res = await fetch(`/api/tenant/contacts/${contact.id}`, {
       method:'PATCH', headers:{'Content-Type':'application/json'},
@@ -429,16 +475,16 @@ export default function ContactDetailClient({
               ].map(([f, lbl]) => (
                 <div key={f}>
                   <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">{lbl}</label>
-                  <input value={editForm[f as string]||''} onChange={e => {  setEditForm((prev: any) => ({ ...prev, [f as string]: e.target.value }))}} className={inp} />
+                   <input value={String(editForm[f as string] ?? '')} onChange={e => {  setEditForm((prev) => ({ ...prev, [f as string]: e.target.value }))}} className={inp} />
                 </div>
               ))}
               <div>
                 <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">Tags (comma separated)</label>
-                <input value={editForm.tags||''} onChange={e => {  setEditForm((prev: any) => ({ ...prev, tags: e.target.value }))}} className={inp} />
+                <input value={editForm.tags || ''} onChange={e => {  setEditForm((prev) => ({ ...prev, tags: e.target.value }))}} className={inp} />
               </div>
               <div>
                 <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">Company</label>
-                <select value={editForm.company_id||''} onChange={e => {  setEditForm((p: any) => ({...p, company_id: e.target.value||null}))}} className={inp}>
+                <select value={editForm.company_id||''} onChange={e => {  setEditForm((p) => ({...p, company_id: e.target.value||null}))}} className={inp}>
                   <option value="">No company</option>
                   {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -446,7 +492,7 @@ export default function ContactDetailClient({
               </div>
               <div>
                 <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">Assigned To</label>
-                <select value={editForm.assigned_to||''} onChange={e => {  setEditForm((p: any) => ({...p, assigned_to: e.target.value||null}))}} className={inp}>
+                <select value={editForm.assigned_to||''} onChange={e => {  setEditForm((p) => ({...p, assigned_to: e.target.value||null}))}} className={inp}>
                   <option value="">Unassigned</option>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {teamMembers.map((m: any) => <option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
@@ -454,7 +500,7 @@ export default function ContactDetailClient({
               </div>
               <div>
                 <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">Notes</label>
-                <textarea value={editForm.notes||''} onChange={e => {  setEditForm((p: any) => ({...p, notes: e.target.value}))}} rows={3} className={inp+' resize-none'} />
+                <textarea value={editForm.notes||''} onChange={e => {  setEditForm((p) => ({...p, notes: e.target.value}))}} rows={3} className={inp+' resize-none'} />
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={saveEdit} disabled={savingEdit} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 disabled:opacity-50 transition-colors">
@@ -506,9 +552,9 @@ export default function ContactDetailClient({
           {/* Quick actions */}
           <div className="admin-card p-4 space-y-1">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Quick Add</p>
-            <QuickAddTask contactId={contact.id} contactName={`${contact.first_name} ${contact.last_name}`} teamMembers={teamMembers} onAdded={(t: any) => setTasks((prev) => [t, ...prev])} />
-            <QuickAddDeal contactId={contact.id} companies={companies} onAdded={(d: any) => setDeals((prev) => [d, ...prev])} />
-            <QuickAddMeeting contactId={contact.id} onAdded={(m: any) => {
+            <QuickAddTask contactId={contact.id} _contactName={`${contact.first_name} ${contact.last_name}`} teamMembers={teamMembers} onAdded={(t) => setTasks((prev) => [t, ...prev])} />
+            <QuickAddDeal contactId={contact.id} _companies={companies} onAdded={(d) => setDeals((prev) => [d, ...prev])} />
+            <QuickAddMeeting contactId={contact.id} onAdded={(m) => {
               setActivities((prev) => [{ id:`tmp_${Date.now()}`, type:'meeting', description:`Meeting scheduled: ${m.title}`, created_at:new Date().toISOString(), full_name:'You' }, ...prev]);
             }} />
           </div>
@@ -650,20 +696,20 @@ export default function ContactDetailClient({
             <div className="admin-card overflow-hidden">
               <div className="px-5 py-3 border-b border-border flex items-center justify-between">
                 <p className="text-sm font-semibold">Tasks</p>
-                <QuickAddTask contactId={contact.id} contactName={`${contact.first_name} ${contact.last_name}`} teamMembers={teamMembers} onAdded={(t: any) => {  setTasks((prev: any) => [t, ...prev])}} />
+                <QuickAddTask contactId={contact.id} _contactName={`${contact.first_name} ${contact.last_name}`} teamMembers={teamMembers} onAdded={(t) => {  setTasks((prev) => [t, ...prev])}} />
               </div>
               {!tasks.length ? (
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">No tasks yet — create one above</div>
               ) : (
                 <div className="divide-y divide-border">
-                  {[...tasks].sort((a: any, b: any) => {
+                  {[...tasks].sort((a: Task, b: Task) => {
                     if (a.completed && !b.completed) return 1;
                     if (!a.completed && b.completed) return -1;
                     if (!a.due_date && !b.due_date) return 0;
                     if (!a.due_date) return 1;
                     if (!b.due_date) return -1;
                     return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
-                  }).map((t: any) => {
+                  }).map((t: Task) => {
                     const today = new Date().toISOString().split('T')[0] || '';
                     const overdue = !t.completed && t.due_date && t.due_date < today;
                     return (
@@ -704,7 +750,7 @@ export default function ContactDetailClient({
             <div className="admin-card overflow-hidden">
               <div className="px-5 py-3 border-b border-border flex items-center justify-between">
                 <p className="text-sm font-semibold">Deals</p>
-                <QuickAddDeal contactId={contact.id} companies={companies} onAdded={(d: any) => {  setDeals((prev: any) => [d, ...prev])}} />
+                <QuickAddDeal contactId={contact.id} _companies={companies} onAdded={(d) => {  setDeals((prev) => [d, ...prev])}} />
               </div>
               {!deals.length ? (
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">No deals yet — create one above</div>

@@ -26,3 +26,4 @@
 - [ ] Use `report_progress()` to update on blockers
 - [x] Run `npm test` — all tests pass
 - [ ] Run `npm run build` — times out (memory/scale issue, pre-existing)
+>>>>>>> origin/main

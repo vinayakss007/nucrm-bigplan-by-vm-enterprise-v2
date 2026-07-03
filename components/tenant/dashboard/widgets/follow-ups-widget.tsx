@@ -6,7 +6,7 @@ import Link from 'next/link';
 
 export default function FollowUpsWidget({ data }: WidgetProps) {
   const items = data?.items ?? [];
-  const stats = data?.stats ?? {};
+  const stats = (data?.stats ?? {}) as { overdueCount: number; todayCount: number };
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -40,12 +40,13 @@ export default function FollowUpsWidget({ data }: WidgetProps) {
         <p className="text-xs font-medium text-muted-foreground/70 text-center py-5">No follow-ups due</p>
       ) : (
         <div className="divide-y divide-border">
-          {items.slice(0, 5).map((f: any) => {
-            const dueDate = f.dueDate ? new Date(f.dueDate) : null;
+          {items.slice(0, 5).map((f: Record<string, unknown>) => {
+            const followUp = f as { id: string; title: string; dueDate: string | Date | null | undefined };
+            const dueDate = followUp.dueDate ? new Date(followUp.dueDate) : null;
             const overdue = dueDate && dueDate < today;
             return (
               <Link
-                key={f.id}
+                key={followUp.id}
                 href="/tenant/follow-ups/missed"
                 className="flex items-center gap-2 py-2 first:pt-0 last:pb-0 hover:bg-accent/20 transition-colors -mx-3 px-3 rounded"
               >
@@ -53,10 +54,10 @@ export default function FollowUpsWidget({ data }: WidgetProps) {
                   'w-2 h-2 rounded-full shrink-0',
                   overdue ? 'bg-red-500' : 'bg-amber-400',
                 )} />
-                <p className="text-sm font-medium flex-1 truncate">{f.title}</p>
-                {f.dueDate && (
+                <p className="text-sm font-medium flex-1 truncate">{followUp.title}</p>
+                {followUp.dueDate && (
                   <span className={cn('text-xs font-bold shrink-0', overdue ? 'text-red-500' : 'text-foreground/60')}>
-                    {overdue ? '⚠ ' : ''}{formatDate(f.dueDate)}
+                    {overdue ? '⚠ ' : ''}{formatDate(followUp.dueDate)}
                   </span>
                 )}
               </Link>

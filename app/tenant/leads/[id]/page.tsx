@@ -4,10 +4,15 @@ import { leads, users, leadActivities, contacts, tenantMembers } from '@/drizzle
 import { eq, and, sql, desc, or, ilike } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import LeadDetailClient from '@/components/tenant/lead-detail-client';
+import type { Lead, Activity, RelatedContact } from '@/components/tenant/lead-detail-client';
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const stripNulls = (obj: Record<string, any>): Record<string, any> =>
+  Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, v ?? undefined]));
 
 export default async function LeadDetailPage({ params }: PageProps) {
   const ctx = await requireTenantCtx();
@@ -123,9 +128,9 @@ export default async function LeadDetailPage({ params }: PageProps) {
   
   return (
     <LeadDetailClient
-      lead={lead}
-      activities={activities}
-      relatedContacts={relatedContacts}
+      lead={stripNulls(lead) as unknown as Lead}
+      activities={activities.map(a => stripNulls(a) as unknown as Activity)}
+      relatedContacts={relatedContacts.map(c => stripNulls(c) as unknown as RelatedContact)}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       teamMembers={teamMembers as any}
       tenantId={ctx.tenantId}
