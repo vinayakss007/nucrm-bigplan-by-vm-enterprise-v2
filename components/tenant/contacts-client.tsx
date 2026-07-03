@@ -163,6 +163,8 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: { compa
   );
 }
 
+const PAGE_SIZE = 25;
+
 export default function TenantContactsClient({ initialContacts, companies, teamMembers, permissions, _tenantId, _userId, totalCount, initialOffset, initialQ, initialStatus, defaultView }: Props) {
   const normalize = (data: any[]) => (data || []).map((c: any) => toSnakeCase(c));
   const [contacts, setContacts] = useState(normalize(initialContacts));
@@ -177,7 +179,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
     | null
   >(null);
   const [bulkInput, setBulkInput] = useState('');
-  const limit                   = 25;
+  const limit                   = PAGE_SIZE;
   const [view, setView]         = useState<'list'|'grid'>(defaultView === 'grid' ? 'grid' : 'list');
   const [search, setSearch]     = useState(initialQ || '');
   const [statusFilter, setStatusFilter] = useState(initialStatus || 'all');
