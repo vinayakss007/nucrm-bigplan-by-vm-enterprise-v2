@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, Sun, Moon, Search, LogOut, X, Users, TrendingUp,
   Building2, Menu, ChevronDown, User, Settings, Crown, KeyRound, RefreshCw, UserCheck, CheckSquare,
-  Mail, Zap, AlertCircle, Info } from 'lucide-react';
+  Mail, AlertCircle, Info } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { cn, formatCurrency, getInitials, formatRelativeTime, toSnakeCase } from '@/lib/utils';
