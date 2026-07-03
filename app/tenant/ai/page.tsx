@@ -3,10 +3,14 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   Sparkles, BrainCircuit, FileEdit, Target, AlertTriangle, Activity,
-  ArrowRight, Loader2, MessageSquare, CheckCircle2, AlertCircle,
+  ArrowRight, Loader2, MessageSquare, CheckCircle2, AlertCircle, Lock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { AI_CAPABILITIES, AI_PROVIDERS } from '@/components/tenant/ai/ai-config';
+import { AI_CAPABILITIES, AI_PROVIDER_PRESETS, getProviderLabel } from '@/components/tenant/ai/ai-config';
+import { usePlanFeatures } from '@/hooks/use-plan-features';
+
+const _PRESETS = AI_PROVIDER_PRESETS ?? {};
+const _CAPABILITIES = AI_CAPABILITIES ?? [];
 
 /**
  * AI Hub landing — the single place every AI capability lives.
@@ -24,6 +28,7 @@ type Status = {
 export default function AIHubPage() {
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
+  const { hasFeature, loaded: featuresLoaded } = usePlanFeatures();
 
   useEffect(() => {
     fetch('/api/tenant/ai/status')
@@ -38,7 +43,7 @@ export default function AIHubPage() {
   }
 
   const providersUp = status?.enabled_count ?? 0;
-  const totalProviders = AI_PROVIDERS.length;
+  const totalProviders = status?.providers?.length ?? Object.keys(_PRESETS).length;
 
   return (
     <div className="space-y-5 animate-fade-in pb-12">
@@ -115,13 +120,22 @@ export default function AIHubPage() {
       <div>
         <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2 px-1">All capabilities</p>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-          {AI_CAPABILITIES.filter(c => c.href !== '/tenant/ai').map(cap => {
+          {_CAPABILITIES.filter(c => c.href !== '/tenant/ai').map(cap => {
             const Icon = cap.icon;
+            const enabled = !cap.featureKey || !featuresLoaded || hasFeature(cap.featureKey);
             return (
-              <Link key={cap.href} href={cap.href}
-                className="group flex items-start gap-3 px-4 py-3 rounded-xl border border-border bg-card hover:border-violet-300 dark:hover:border-violet-800 hover:bg-violet-50/30 dark:hover:bg-violet-950/10 transition-all hover:-translate-y-px">
-                <div className="w-8 h-8 rounded-lg bg-muted/50 group-hover:bg-violet-100 dark:group-hover:bg-violet-950/40 flex items-center justify-center shrink-0 transition-colors">
-                  <Icon className="w-4 h-4 text-muted-foreground group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors" />
+              <Link key={cap.href} href={enabled ? cap.href : '#'}
+                className={cn(
+                  'group flex items-start gap-3 px-4 py-3 rounded-xl border bg-card transition-all hover:-translate-y-px',
+                  enabled
+                    ? 'border-border hover:border-violet-300 dark:hover:border-violet-800 hover:bg-violet-50/30 dark:hover:bg-violet-950/10'
+                    : 'border-border/50 opacity-60 cursor-not-allowed hover:translate-y-0',
+                )}>
+                <div className={cn(
+                  'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors',
+                  enabled ? 'bg-muted/50 group-hover:bg-violet-100 dark:group-hover:bg-violet-950/40' : 'bg-muted/30',
+                )}>
+                  <Icon className={cn('w-4 h-4 transition-colors', enabled ? 'text-muted-foreground group-hover:text-violet-600 dark:group-hover:text-violet-400' : 'text-muted-foreground/50')} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
@@ -132,6 +146,11 @@ export default function AIHubPage() {
                     {cap.badge === 'soon' && (
                       <span className="text-[8px] px-1 py-0.5 rounded bg-slate-500 text-white font-bold uppercase tracking-wider">Soon</span>
                     )}
+                    {!enabled && (
+                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-violet-500 text-white font-bold uppercase tracking-wider flex items-center gap-0.5">
+                        <Lock className="w-2 h-2" /> Upgrade
+                      </span>
+                    )}
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{cap.desc}</p>
                   {cap.depends_on.length > 0 && (
@@ -140,7 +159,8 @@ export default function AIHubPage() {
                     </p>
                   )}
                 </div>
-                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-violet-600 dark:group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0 mt-0.5" />
+                {enabled && <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-violet-600 dark:group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0 mt-0.5" />}
+                {!enabled && <Lock className="w-3.5 h-3.5 text-muted-foreground/30 shrink-0 mt-0.5" />}
               </Link>
             );
           })}
@@ -158,20 +178,20 @@ export default function AIHubPage() {
           </Link>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          {AI_PROVIDERS.map(p => {
-            const sp = status?.providers.find(s => s.id === p.id);
-            const ready = sp?.enabled && sp?.status === 'ready';
+          {(status?.providers ?? []).map(p => {
+            const ready = p.enabled && p.status === 'ready';
+            const preset = _PRESETS[p.id];
             return (
               <div key={p.id} className={cn(
                 'flex items-center gap-2.5 px-3 py-2.5 rounded-lg border',
                 ready ? 'border-emerald-300/60 bg-emerald-50/30 dark:bg-emerald-950/10' : 'border-border',
               )}>
                 <div className={cn('w-1.5 h-1.5 rounded-full',
-                  ready ? 'bg-emerald-500' : sp?.enabled ? 'bg-amber-500' : 'bg-muted-foreground/30',
+                  ready ? 'bg-emerald-500' : p.enabled ? 'bg-amber-500' : 'bg-muted-foreground/30',
                 )} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold truncate">{p.label}</p>
-                  <p className="text-[10px] text-muted-foreground truncate font-mono">{p.defaultModel}</p>
+                  <p className="text-xs font-semibold truncate">{getProviderLabel(p.id)}</p>
+                  <p className="text-[10px] text-muted-foreground truncate font-mono">{preset?.defaultModel ?? 'custom'}</p>
                 </div>
               </div>
             );

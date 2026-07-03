@@ -126,6 +126,7 @@ export default function OnboardingPage() {
       <div className="flex justify-end">
         <button
           onClick={async () => {
+<<<<<<< HEAD
             try {
               await fetch('/api/tenant/onboarding/complete', {
                 method: 'POST',
@@ -135,6 +136,13 @@ export default function OnboardingPage() {
             } catch (err) {
               console.error('[onboarding] skip error:', err);
             }
+=======
+            await fetch('/api/tenant/onboarding/complete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ product_id: 'skip', modules: [] }),
+            }).catch((err) => console.error('[onboarding] skip error:', err));
+>>>>>>> origin/fix/bug-batch-15-jun-29
             window.location.href = '/tenant/dashboard';
           }}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors"

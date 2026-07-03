@@ -29,7 +29,11 @@ export default function SuperAdminRateLimitsPage() {
   const [plans, setPlans] = useState<PlanRateLimits[]>([]);
   const [superAdmins, setSuperAdmins] = useState<SuperAdmin[]>([]);
   const [endpoints, setEndpoints] = useState<RateLimitEndpoint[]>([]);
+<<<<<<< HEAD
   const [, setGlobalDefaults] = useState<Record<string, number>>({});
+=======
+  const [globalDefaults, setGlobalDefaults] = useState<Record<string, number>>({});
+>>>>>>> origin/fix/bug-batch-15-jun-29
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<string>('');
@@ -39,11 +43,19 @@ export default function SuperAdminRateLimitsPage() {
   const [activeTab, setActiveTab] = useState<'global' | 'plans'>('global');
 
   useEffect(() => {
+<<<<<<< HEAD
     const abort = new AbortController();
     fetch('/api/superadmin/rate-limits', { signal: abort.signal })
       .then(r => r.json())
       .then(d => {
         if (abort.signal.aborted) return;
+=======
+    let ignore = false;
+    fetch('/api/superadmin/rate-limits')
+      .then(r => r.json())
+      .then(d => {
+        if (ignore) return;
+>>>>>>> origin/fix/bug-batch-15-jun-29
         if (d.data) {
           setPlans(d.data.plans || []);
           setSuperAdmins(d.data.superAdmins || []);
@@ -57,8 +69,13 @@ export default function SuperAdminRateLimitsPage() {
         }
         setLoading(false);
       })
+<<<<<<< HEAD
       .catch(() => { if (!abort.signal.aborted) setLoading(false); });
     return () => abort.abort();
+=======
+      .catch(() => { setLoading(false); });
+    return () => { ignore = true; };
+>>>>>>> origin/fix/bug-batch-15-jun-29
   }, []);
 
   const selectPlan = (planId: string) => {
