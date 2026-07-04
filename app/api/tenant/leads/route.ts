@@ -107,6 +107,7 @@ export async function GET(request: NextRequest) {
       city: leads.city,
       lifecycleStage: leads.lifecycleStage,
       authorityLevel: leads.authorityLevel,
+      contactId: leads.contactId,
       assignedName: users.fullName,
       assignedAvatar: users.avatarUrl,
       companyDisplayName: companies.name
@@ -142,6 +143,7 @@ export async function GET(request: NextRequest) {
       city: lead.city,
       lifecycle_stage: lead.lifecycleStage,
       authority_level: lead.authorityLevel,
+      contact_id: lead.contactId,
       assigned_name: lead.assignedName,
       assigned_avatar: lead.assignedAvatar,
       company_display_name: lead.companyDisplayName,
@@ -180,20 +182,22 @@ export async function POST(request: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
-    const [existing] = await db.select()
-      .from(leads)
-      .where(and(
-        eq(leads.tenantId, ctx.tenantId),
-        sql`lower(${leads.email}) = lower(${v.email})`,
-        isNull(leads.deletedAt)
-      ))
-      .limit(1);
+    if (v.email) {
+      const [existing] = await db.select()
+        .from(leads)
+        .where(and(
+          eq(leads.tenantId, ctx.tenantId),
+          sql`lower(${leads.email}) = lower(${v.email})`,
+          isNull(leads.deletedAt)
+        ))
+        .limit(1);
 
-    if (existing) {
-      return NextResponse.json(
-        { error: 'A lead with this email already exists', is_duplicate: true, duplicate_id: existing.id, duplicate: existing },
-        { status: 409 }
-      );
+      if (existing) {
+        return NextResponse.json(
+          { error: 'A lead with this email already exists', is_duplicate: true, duplicate_id: existing.id, duplicate: existing },
+          { status: 409 }
+        );
+      }
     }
 
     // ── Workflow: every lead is attached to a contact at intake (one contact, many leads) ──
