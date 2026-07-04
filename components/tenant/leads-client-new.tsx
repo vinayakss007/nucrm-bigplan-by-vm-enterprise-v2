@@ -98,14 +98,54 @@ function KanbanColumn({ status, leads, onNavigate }: { status: string; leads: Le
   );
 }
 
-function QuickAddModal({ companies, teamMembers, onClose, onSuccess }: { companies: CompanyOpt[]; teamMembers: TeamMemberOpt[]; onClose: () => void; onSuccess: () => void }) {
+function QuickAddModal({ companies, teamMembers, contacts, onClose, onSuccess }: { companies: CompanyOpt[]; teamMembers: TeamMemberOpt[]; contacts: ContactOpt[]; onClose: () => void; onSuccess: () => void }) {
+  const [contactSearch, setContactSearch] = useState('');
+  const [selectedContactId, setSelectedContactId] = useState('');
+  const [showContactDropdown, setShowContactDropdown] = useState(false);
+  const contactInputRef = useRef<HTMLInputElement>(null);
+  const contactDropdownRef = useRef<HTMLDivElement>(null);
+
   const [data,setData]=useState({first_name:'',last_name:'',email:'',phone:'',title:'',company_name:'',lead_source:'website',budget:'',timeline:'',authority_level:'unknown',assigned_to:'',tags:''});
   const [saving,setSaving]=useState(false);
+
+  const filteredContacts = useMemo(() => {
+    const q = contactSearch.toLowerCase();
+    if (!q) return contacts.slice(0, 50);
+    return contacts.filter(c =>
+      `${c.first_name} ${c.last_name}`.toLowerCase().includes(q) ||
+      (c.email && c.email.toLowerCase().includes(q)) ||
+      (c.company_name && c.company_name.toLowerCase().includes(q))
+    ).slice(0, 50);
+  }, [contactSearch, contacts]);
+
+  const selectContact = (contact: ContactOpt) => {
+    setSelectedContactId(contact.id);
+    setContactSearch(`${contact.first_name} ${contact.last_name}`);
+    setShowContactDropdown(false);
+    setData(p => ({
+      ...p,
+      first_name: contact.first_name || '',
+      last_name: contact.last_name || '',
+      email: contact.email || '',
+      phone: contact.phone || '',
+      title: contact.job_title || '',
+      company_name: contact.company_name || '',
+    }));
+  };
+
+  const clearContact = () => {
+    setSelectedContactId('');
+    setContactSearch('');
+    setShowContactDropdown(false);
+  };
+
   const handle=async(e:React.FormEvent)=>{
     e.preventDefault();setSaving(true);
     try{
       const tagsArray = data.tags ? data.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
-      const res=await fetch('/api/tenant/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ ...data, tags: tagsArray })});
+      const body: Record<string, unknown> = { ...data, tags: tagsArray };
+      if (selectedContactId) body.contact_id = selectedContactId;
+      const res=await fetch('/api/tenant/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const json=await res.json();
       if(!res.ok){toast.error(json.error||'Failed');return;}
       toast.success('Lead created!');onSuccess();onClose();
@@ -125,6 +165,65 @@ function QuickAddModal({ companies, teamMembers, onClose, onSuccess }: { compani
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handle} className="mt-2 space-y-5">
+          {/* Contact Search */}
+          <div>
+            <p className="text-xs font-extrabold uppercase tracking-widest text-foreground/70 mb-3 flex items-center gap-2"><User className="w-3.5 h-3.5"/>Link to Contact</p>
+            <div className="relative" ref={contactDropdownRef}>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"/>
+                <input
+                  ref={contactInputRef}
+                  className="w-full pl-9 pr-8 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-shadow"
+                  placeholder="Search contacts by name, email, or company..."
+                  value={contactSearch}
+                  onChange={e => {
+                    setContactSearch(e.target.value);
+                    setShowContactDropdown(true);
+                    if (selectedContactId) {
+                      setSelectedContactId('');
+                    }
+                  }}
+                  onFocus={() => setShowContactDropdown(true)}
+                />
+                {selectedContactId && (
+                  <button type="button" onClick={clearContact} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    <X className="w-4 h-4"/>
+                  </button>
+                )}
+              </div>
+              {showContactDropdown && filteredContacts.length > 0 && (
+                <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
+                  {filteredContacts.map(contact => (
+                    <button
+                      key={contact.id}
+                      type="button"
+                      onClick={() => selectContact(contact)}
+                      className="w-full px-3 py-2 text-left hover:bg-accent transition-colors flex items-center gap-3 text-sm"
+                    >
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                        {getInitials(`${contact.first_name} ${contact.last_name}`)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{contact.first_name} {contact.last_name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{contact.email || 'No email'}{contact.company_name ? ` · ${contact.company_name}` : ''}</p>
+                      </div>
+                      {selectedContactId === contact.id && <CheckCircle className="w-4 h-4 text-violet-600 shrink-0"/>}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {showContactDropdown && contactSearch && filteredContacts.length === 0 && (
+                <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-card shadow-lg p-3 text-center">
+                  <p className="text-xs text-muted-foreground">No contacts found. Fill in details below to create a new contact.</p>
+                </div>
+              )}
+            </div>
+            {selectedContactId && (
+              <p className="text-xs text-violet-600 dark:text-violet-400 mt-1.5 flex items-center gap-1">
+                <CheckCircle className="w-3 h-3"/> Contact linked — details auto-filled below. You can edit them.
+              </p>
+            )}
+          </div>
           <div>
             <p className="text-xs font-extrabold uppercase tracking-widest text-foreground/70 mb-3 flex items-center gap-2"><User className="w-3.5 h-3.5"/>Identity</p>
             <div className="grid grid-cols-2 gap-3">
@@ -187,11 +286,13 @@ function QuickAddModal({ companies, teamMembers, onClose, onSuccess }: { compani
 
 interface CompanyOpt { id: string; name: string }
 interface TeamMemberOpt { user_id: string; full_name: string }
+interface ContactOpt { id: string; first_name: string; last_name: string; email: string | null; phone: string | null; job_title: string | null; company_id: string | null; company_name: string | null }
 
 interface Props {
   permissions: Record<string,boolean>;
   teamMembers: TeamMemberOpt[];
   companies: CompanyOpt[];
+  contacts: ContactOpt[];
   stats: { lead_status: string; count: string }[];
   sources: Record<string, unknown>[];
   tenantId: string;
@@ -212,7 +313,7 @@ interface Lead {
   tags?: string[];
 }
 
-export default function LeadsClientNew({ permissions, teamMembers, companies, stats, _sources, _tenantId, _userId, defaultView }: Props) {
+export default function LeadsClientNew({ permissions, teamMembers, companies, contacts, stats, _sources, _tenantId, _userId, defaultView }: Props) {
   const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -556,7 +657,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
         </div>
       )}
 
-      {showQuickAdd&&<QuickAddModal companies={companies} teamMembers={teamMembers} onClose={()=>setShowQuickAdd(false)} onSuccess={()=>load(0,activeStatus,debouncedSearch)}/>}
+      {showQuickAdd&&<QuickAddModal companies={companies} teamMembers={teamMembers} contacts={contacts} onClose={()=>setShowQuickAdd(false)} onSuccess={()=>load(0,activeStatus,debouncedSearch)}/>}
       {showImport&&<LeadImportModal onDone={()=>{load(0,activeStatus,debouncedSearch);setShowImport(false);}} onClose={()=>setShowImport(false)}/>}
     </div>
   );

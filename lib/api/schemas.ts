@@ -109,6 +109,7 @@ export const companyQuerySchema = z.object({
 
 // ── Lead schemas ──
 export const createLeadSchema = z.object({
+  contact_id: uuid.optional(),
   first_name: requiredString.max(100),
   last_name: z.string().trim().max(100).nullable().optional(),
   email: z.string().email().max(255).optional().nullable().or(z.literal('')),
