@@ -4,6 +4,8 @@ import { users } from '@/drizzle/schema';
 import { eq, count } from 'drizzle-orm';
 import SetupClient from './SetupClient';
 
+export const dynamic = 'force-dynamic';
+
 async function checkSetupDone(): Promise<boolean> {
   try {
     const [row] = await db.select({ count: count() }).from(users).where(eq(users.isSuperAdmin, true));
