@@ -3,7 +3,7 @@ import { validateBody } from '@/lib/api/validate';
 import { createLeadSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { leads, users, companies, leadActivities, activities } from '@/drizzle/schema';
+import { leads, users, companies, leadActivities, activities, contacts } from '@/drizzle/schema';
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -198,18 +198,39 @@ export async function POST(request: NextRequest) {
 
     // ── Workflow: every lead is attached to a contact at intake (one contact, many leads) ──
     const newLead = await db.transaction(async (tx) => {
-      // Resolve-or-create the contact for this lead (email dedup).
-      const resolve = await resolveOrCreateContactForLead(tx, ctx.tenantId, ctx.userId, {
-        firstName: v.first_name,
-        lastName: v.last_name,
-        email: v.email,
-        phone: v.phone,
-        title: v.job_title,
-        companyName: v.company,
-        source: v.source,
-        score: v.score,
-        assignedTo: v.assigned_to || ctx.userId,
-      });
+      let contactId: string;
+      let companyId: string | null = null;
+      let isNewContact = false;
+
+      if (v.contact_id) {
+        // User explicitly linked an existing contact
+        contactId = v.contact_id;
+        // Pull the company from the existing contact
+        const [existingContact] = await db.select({ companyId: contacts.companyId })
+          .from(contacts)
+          .where(and(
+            eq(contacts.id, v.contact_id),
+            eq(contacts.tenantId, ctx.tenantId),
+          ))
+          .limit(1);
+        companyId = existingContact?.companyId ?? null;
+      } else {
+        // Resolve-or-create the contact for this lead (email dedup).
+        const resolve = await resolveOrCreateContactForLead(tx, ctx.tenantId, ctx.userId, {
+          firstName: v.first_name,
+          lastName: v.last_name,
+          email: v.email,
+          phone: v.phone,
+          title: v.job_title,
+          companyName: v.company,
+          source: v.source,
+          score: v.score,
+          assignedTo: v.assigned_to || ctx.userId,
+        });
+        contactId = resolve.contactId;
+        companyId = resolve.companyId;
+        isNewContact = resolve.isNewContact;
+      }
 
       // Generate human-readable lead OID (per tenant, per year)
       const leadOid = await generateLeadOid(tx, ctx.tenantId);
@@ -223,7 +244,7 @@ export async function POST(request: NextRequest) {
           phone: v.phone || null,
           title: v.job_title || null,
           companyName: v.company || null,
-          companyId: resolve.companyId,
+          companyId,
           source: v.source || 'website',
           leadStatus: v.status,
           score: v.score,
@@ -238,7 +259,7 @@ export async function POST(request: NextRequest) {
           tags: [],
           internalNotes: null,
           customFields: v.custom_fields,
-          contactId: resolve.contactId,
+          contactId,
           leadOid,
           productId: (v as { product_id?: string }).product_id || null,
         })
@@ -253,19 +274,19 @@ export async function POST(request: NextRequest) {
         performedBy: ctx.userId,
         activityType: 'created',
         description: 'Lead created',
-        activityData: { lead_oid: leadOid, contact_id: resolve.contactId, is_new_contact: resolve.isNewContact },
+        activityData: { lead_oid: leadOid, contact_id: contactId, is_new_contact: isNewContact },
       });
 
       // Unified activities row so the lead shows up on the contact's system-events timeline
       await tx.insert(activities).values({
         tenantId: ctx.tenantId,
         userId: ctx.userId,
-        contactId: resolve.contactId,
+        contactId: contactId,
         entityType: 'lead',
         entityId: inserted.id,
         eventType: 'lead_created',
         action: 'create',
-        description: `Lead ${leadOid} created${resolve.isNewContact ? ' (new contact)' : ' (linked to existing contact)'}`,
+        description: `Lead ${leadOid} created${isNewContact ? ' (new contact)' : ' (linked to existing contact)'}`,
         metadata: { lead_oid: leadOid, lead_status: v.status, lead_source: v.source ?? 'website' },
       });
 
