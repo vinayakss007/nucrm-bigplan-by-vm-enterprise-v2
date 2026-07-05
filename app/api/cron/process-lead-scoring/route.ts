@@ -10,7 +10,7 @@ import { tenants } from '@/drizzle/schema/core';
 import { eq } from 'drizzle-orm';
 import { bulkScoreLeads } from '@/lib/ai/scoring';
 import { verifyCronSecret } from '@/lib/auth/cron';
-import { captureError } from '@/lib/capture-error';
+
 
 export async function GET(req: NextRequest) {
   if (!await verifyCronSecret(req)) {
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
       const scored = await bulkScoreLeads(tenant.id, tenant.ownerId, 20);
       results.push({ tenantId: tenant.id, scoredCount: scored.length });
     } catch (err) {
-      captureError(err, `LeadScoring:${tenant.id}`);
+      console.error(`[LeadScoring:${tenant.id}]`, err);
     }
   }
 
