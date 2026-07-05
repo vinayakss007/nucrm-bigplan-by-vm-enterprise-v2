@@ -1,3 +1,0 @@
-module.exports=[951468,e=>{"use strict";var i=e.i(233405);let t=e.i(224361).promisify(i.exec);e.s(["execAsync",0,t])},403191,e=>{"use strict";var i=e.i(605365),t=e.i(951468),r=e.i(730533);async function c(){let e="%windir%\\System32\\REG.exe";"ia32"===i.arch&&"PROCESSOR_ARCHITEW6432"in i.env&&(e="%windir%\\sysnative\\cmd.exe /c "+e);try{let i=(await (0,t.execAsync)(`${e} QUERY HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Cryptography /v MachineGuid`)).stdout.split("REG_SZ");if(2===i.length)return i[1].trim()}catch(e){r.diag.debug(`error reading machine id: ${e}`)}}e.s(["getMachineId",0,c])}];
-
-//# sourceMappingURL=0t6k_%40opentelemetry_resources_build_esm_detectors_platform_node_machine-id_0af~zzr._.js.map

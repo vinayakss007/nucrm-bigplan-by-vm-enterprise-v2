@@ -1,3 +1,0 @@
-{
-  "/api/tenant/workflows/[id]/run/route": "app/api/tenant/workflows/[id]/run/route.js"
-}
