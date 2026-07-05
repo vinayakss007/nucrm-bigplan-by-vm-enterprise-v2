@@ -10,6 +10,7 @@ interface Tenant {
   name: string;
   slug?: string;
   plan_id: string;
+  plan_name?: string;
   status: string;
   billing_type?: string;
   billing_email?: string;
