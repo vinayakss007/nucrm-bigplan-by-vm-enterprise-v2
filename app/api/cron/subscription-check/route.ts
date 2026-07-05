@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { tenants, subscriptions, billingEvents } from '@/drizzle/schema';
 import { eq, and, lt, ne, or, sql } from 'drizzle-orm';
-import { captureError } from '@/lib/capture-error';
+
 
 /**
  * POST /api/cron/subscription-check
@@ -100,7 +100,7 @@ export async function POST(request: Request) {
  
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-        captureError(err, `subscription-check:${sub.tenantId}`);
+        console.error(`[subscription-check:${sub.tenantId}]`, err);
       }
     }
 
@@ -114,7 +114,7 @@ export async function POST(request: Request) {
     });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    captureError(err, 'subscription-check:cron');
+    console.error('[subscription-check:cron]', err);
     return NextResponse.json(
       { error: 'Internal error' },
       { status: 500 }

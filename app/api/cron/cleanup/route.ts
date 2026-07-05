@@ -1,4 +1,3 @@
-import { captureError } from '@/lib/capture-error';
 import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
@@ -38,7 +37,7 @@ export async function POST(request: NextRequest) {
       const row = result.rows[0] as { count: number };
       r['trash_purged'] = row?.count ?? 0;
     } catch (err) {
-      captureError(err, 'Cleanup:PurgeTrash');
+      console.error('[Cleanup:PurgeTrash]', err);
       r['trash_purged'] = 0;
     }
 
@@ -47,7 +46,7 @@ export async function POST(request: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
-    captureError(err, 'Cleanup:Main');
+    console.error('[Cleanup:Main]', err);
     return apiError(err); 
   }
 }
