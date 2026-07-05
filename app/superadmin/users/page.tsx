@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useCallback } from 'react';
+import Link from 'next/link';
 import { Users, Search, Crown, Plus, ArrowRight, AlertTriangle, Loader2 } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -190,11 +191,11 @@ export default function SuperAdminUsersPage() {
                       {(u.full_name||u.email)?.charAt(0)?.toUpperCase()}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                      <Link href={`/superadmin/users/${u.id}`} className="text-sm font-medium text-foreground flex items-center gap-1.5 hover:underline">
                         {u.full_name||'—'}
                         {u.is_super_admin&&<Crown className="w-3 h-3 text-amber-500"/>}
                         {u.id===me?.userId&&<span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 font-bold">YOU</span>}
-                      </p>
+                      </Link>
                       <p className="text-xs text-muted-foreground">{u.email}</p>
                     </div>
                   </div>
