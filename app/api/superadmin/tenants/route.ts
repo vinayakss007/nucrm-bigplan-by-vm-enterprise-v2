@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     const { 
       name, plan_id = 'free', status = 'active', billing_email, primary_color = '#7c3aed',
       owner_email, owner_name, owner_password, trial_days = 14 
-    } = { ...v, ...rawBody };
+    } = v;
 
     if (!name?.trim()) return NextResponse.json({ error: 'name required' }, { status: 400 });
 
@@ -192,35 +192,26 @@ export async function PATCH(request: NextRequest) {
     const rawBody = await request.json();
     const validated = validateBody(updateTenantSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
-    const _v = validated.data;
-    const id = rawBody.id;
-    const updates = rawBody;
+    const v = validated.data;
+    // Validate id separately (not in updateTenantSchema)
+    const id = typeof rawBody.id === 'string' && rawBody.id.trim() ? rawBody.id.trim() : null;
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
     const allowed = ['name', 'planId', 'status', 'billingEmail', 'primaryColor', 'logoUrl', 'customDomain', 'trialEndsAt', 'adminNotes', 'billingType', 'manualPaidUntil'];
     
-    // Mapping legacy keys to Drizzle keys if necessary
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mappedUpdates: any = {};
-    for (const key of Object.keys(updates)) {
-      let mappedKey = key;
-      if (key === 'plan_id') mappedKey = 'planId';
-      if (key === 'billing_email') mappedKey = 'billingEmail';
-      if (key === 'primary_color') mappedKey = 'primaryColor';
-      if (key === 'logo_url') mappedKey = 'logoUrl';
-      if (key === 'custom_domain') mappedKey = 'customDomain';
-      if (key === 'trial_ends_at') mappedKey = 'trialEndsAt';
-      if (key === 'admin_notes') mappedKey = 'adminNotes';
-      if (key === 'billing_type') mappedKey = 'billingType';
-      if (key === 'manual_paid_until') mappedKey = 'manualPaidUntil';
+    // Map validated snake_case fields to camelCase Drizzle columns
+    const fieldMap: Record<string, string> = {
+      plan_id: 'planId', billing_email: 'billingEmail', primary_color: 'primaryColor',
+      logo_url: 'logoUrl', custom_domain: 'customDomain', trial_ends_at: 'trialEndsAt',
+      admin_notes: 'adminNotes', billing_type: 'billingType', manual_paid_until: 'manualPaidUntil',
+    };
 
+    const mappedUpdates: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(v)) {
+      if (val === undefined) continue;
+      const mappedKey = fieldMap[key] || key;
       if (allowed.includes(mappedKey)) {
-        mappedUpdates[mappedKey] = updates[key];
-        if (mappedKey === 'trialEndsAt' || mappedKey === 'manualPaidUntil') {
-          mappedUpdates[mappedKey] = new Date(updates[key]);
-        }
+        mappedUpdates[mappedKey] = (mappedKey === 'trialEndsAt' || mappedKey === 'manualPaidUntil') ? new Date(val as string) : val;
       }
     }
 

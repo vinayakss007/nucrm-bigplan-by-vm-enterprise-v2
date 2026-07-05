@@ -135,18 +135,14 @@ export async function GET(request: NextRequest) {
       .limit(10);
     }, []);
 
-    // Get API usage stats (simulated from request logs if available)
+    // API usage stats — placeholder until real request logging is implemented
     const apiStats = await safeQuery(async () => {
       return {
-        requests_today: Math.floor(Math.random() * 5000) + 1000,
-        requests_this_month: Math.floor(Math.random() * 100000) + 50000,
-        avg_response_time_ms: Math.floor(Math.random() * 200) + 50,
-        error_rate_pct: Math.floor(Math.random() * 2),
-        top_endpoints: [
-          { path: '/api/tenant/contacts', hits: Math.floor(Math.random() * 10000) },
-          { path: '/api/tenant/deals', hits: Math.floor(Math.random() * 8000) },
-          { path: '/api/tenant/dashboard', hits: Math.floor(Math.random() * 6000) },
-        ],
+        requests_today: 0,
+        requests_this_month: 0,
+        avg_response_time_ms: 0,
+        error_rate_pct: 0,
+        top_endpoints: [],
       };
     }, {});
 
