@@ -166,7 +166,7 @@ export default function SignupPage() {
             )}
 
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form method="post" onSubmit={handleSubmit} className="space-y-5">
               {/* Workspace name */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Workspace name</label>
