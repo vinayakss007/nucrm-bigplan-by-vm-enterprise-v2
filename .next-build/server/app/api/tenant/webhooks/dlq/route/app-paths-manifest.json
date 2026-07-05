@@ -1,0 +1,3 @@
+{
+  "/api/tenant/webhooks/dlq/route": "app/api/tenant/webhooks/dlq/route.js"
+}

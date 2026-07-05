@@ -1,0 +1,1 @@
+{"version":3,"sources":["../../../../app/tenant/follow-ups/layout.tsx"],"sourcesContent":["export default function FollowUpsLayout({ children }: { children: React.ReactNode }) {\n  return <>{children}</>;\n}\n"],"names":["FollowUpsLayout","children"],"mappings":"2EAAe,SAASA,AAAgB,UAAEC,CAAQ,CAAiC,EACjF,MAAO,CAAA,EAAA,EAAA,GAAA,EAAA,EAAA,QAAA,CAAA,UAAGA,GACZ"}

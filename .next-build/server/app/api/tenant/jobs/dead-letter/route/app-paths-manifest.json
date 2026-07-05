@@ -1,0 +1,3 @@
+{
+  "/api/tenant/jobs/dead-letter/route": "app/api/tenant/jobs/dead-letter/route.js"
+}

@@ -1,0 +1,3 @@
+module.exports=[207232,a=>{"use strict";var b=a.i(187924),c=a.i(572131);a.s(["default",0,function(){let[a,d]=(0,c.useState)("Loading...");return(0,c.useEffect)(()=>{d("JavaScript is working! Time: "+new Date().toLocaleTimeString())},[]),(0,b.jsxs)("div",{style:{padding:"50px",textAlign:"center",fontFamily:"sans-serif"},children:[(0,b.jsx)("h1",{children:"NuCRM JS Test"}),(0,b.jsx)("p",{style:{fontSize:"24px",color:"green"},children:a}),(0,b.jsx)("button",{onClick:()=>alert("Button works!"),style:{padding:"15px 30px",fontSize:"18px",background:"#7c3aed",color:"white",border:"none",borderRadius:"10px",cursor:"pointer"},children:"Click Me"})]})}])}];
+
+//# sourceMappingURL=app_test-js_page_tsx_08iij-9._.js.map

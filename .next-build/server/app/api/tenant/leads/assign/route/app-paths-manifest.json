@@ -1,0 +1,3 @@
+{
+  "/api/tenant/leads/assign/route": "app/api/tenant/leads/assign/route.js"
+}

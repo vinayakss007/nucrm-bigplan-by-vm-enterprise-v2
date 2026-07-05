@@ -1,0 +1,3 @@
+{
+  "/api/tenant/admin/lead-scoring/recompute/route": "app/api/tenant/admin/lead-scoring/recompute/route.js"
+}

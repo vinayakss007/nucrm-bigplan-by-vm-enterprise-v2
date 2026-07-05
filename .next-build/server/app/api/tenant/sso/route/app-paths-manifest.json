@@ -1,0 +1,3 @@
+{
+  "/api/tenant/sso/route": "app/api/tenant/sso/route.js"
+}

@@ -1,0 +1,3 @@
+{
+  "/api/cron/process-at-risk/route": "app/api/cron/process-at-risk/route.js"
+}

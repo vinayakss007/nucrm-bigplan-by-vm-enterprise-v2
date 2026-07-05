@@ -17,28 +17,33 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const activeTenants = await db.query.tenants.findMany({
-    where: eq(tenants.status, 'active'),
-    columns: { id: true, ownerId: true },
-  });
+  try {
+    const activeTenants = await db.query.tenants.findMany({
+      where: eq(tenants.status, 'active'),
+      columns: { id: true, ownerId: true },
+    });
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const results: any[] = [];
-  for (const tenant of activeTenants) {
-    if (!tenant.ownerId) continue;
-    try {
-      const scored = await bulkScoreLeads(tenant.id, tenant.ownerId, 20);
-      results.push({ tenantId: tenant.id, scoredCount: scored.length });
-    } catch (err) {
-      console.error(`[LeadScoring:${tenant.id}]`, err);
+   
+   
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const results: any[] = [];
+    for (const tenant of activeTenants) {
+      if (!tenant.ownerId) continue;
+      try {
+        const scored = await bulkScoreLeads(tenant.id, tenant.ownerId, 20);
+        results.push({ tenantId: tenant.id, scoredCount: scored.length });
+      } catch (err) {
+        console.error(`[LeadScoring:${tenant.id}]`, err);
+      }
     }
-  }
 
-  return NextResponse.json({
-    ok: true,
-    tenantsProcessed: activeTenants.length,
-    results,
-  });
+    return NextResponse.json({
+      ok: true,
+      tenantsProcessed: activeTenants.length,
+      results,
+    });
+  } catch (err) {
+    console.error('[LeadScoring] Error:', err);
+    return NextResponse.json({ error: 'Failed to process lead scoring' }, { status: 500 });
+  }
 }

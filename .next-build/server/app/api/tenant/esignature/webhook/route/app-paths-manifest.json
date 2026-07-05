@@ -1,0 +1,3 @@
+{
+  "/api/tenant/esignature/webhook/route": "app/api/tenant/esignature/webhook/route.js"
+}

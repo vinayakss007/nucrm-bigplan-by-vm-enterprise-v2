@@ -1,0 +1,3 @@
+{
+  "/api/cron/lead-warming/route": "app/api/cron/lead-warming/route.js"
+}

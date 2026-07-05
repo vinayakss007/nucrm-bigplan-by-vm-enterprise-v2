@@ -1,0 +1,3 @@
+{
+  "/api/tenant/lead-warming/campaigns/[id]/route": "app/api/tenant/lead-warming/campaigns/[id]/route.js"
+}

@@ -1,0 +1,3 @@
+{
+  "/api/tenant/permissions/check/route": "app/api/tenant/permissions/check/route.js"
+}

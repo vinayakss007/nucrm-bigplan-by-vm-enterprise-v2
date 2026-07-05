@@ -1,0 +1,3 @@
+module.exports=[670697,e=>{"use strict";var r=e.i(244018);let s=process.env.SENTRY_DSN;s&&r.init({dsn:s,enabled:"false"!==process.env.SENTRY_ENABLE,tracesSampleRate:process.env.SENTRY_TRACES_SAMPLE_RATE?parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE):.2,ignoreErrors:["Network Error","Failed to fetch","Load failed","ResizeObserver loop limit exceeded"],beforeSendTransaction:e=>"/api/health"===e.transaction?null:e,initialScope:{tags:{service:"nucrm-api",version:process.env.npm_package_version||"1.0.0"}}}),e.s([],933465),e.i(933465),e.s(["Sentry",0,r],670697)}];
+
+//# sourceMappingURL=sentry_server_config_ts_0n88nqa._.js.map

@@ -1,0 +1,3 @@
+{
+  "/api/tenant/admin/ai-templates/[id]/route": "app/api/tenant/admin/ai-templates/[id]/route.js"
+}

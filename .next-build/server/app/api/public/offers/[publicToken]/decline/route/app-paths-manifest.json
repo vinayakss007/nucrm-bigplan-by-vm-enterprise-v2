@@ -1,0 +1,3 @@
+{
+  "/api/public/offers/[publicToken]/decline/route": "app/api/public/offers/[publicToken]/decline/route.js"
+}

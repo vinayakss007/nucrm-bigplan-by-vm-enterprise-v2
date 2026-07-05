@@ -1,0 +1,3 @@
+{
+  "/api/tenant/admin/lead-scoring/route": "app/api/tenant/admin/lead-scoring/route.js"
+}

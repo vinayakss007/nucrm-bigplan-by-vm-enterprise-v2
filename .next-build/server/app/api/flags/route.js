@@ -1,0 +1,11 @@
+var R=require("../../../chunks/[turbopack]_runtime.js")("server/app/api/flags/route.js")
+R.c("server/chunks/_099dml~._.js")
+R.c("server/chunks/node_modules_next_11synfn._.js")
+R.c("server/chunks/node_modules_@opentelemetry_api_build_esm_01jwzjp._.js")
+R.c("server/chunks/[root-of-the-server]__00bl0kj._.js")
+R.c("server/chunks/[root-of-the-server]__0e6esfj._.js")
+R.c("server/chunks/node_modules_next_dist_0npcise._.js")
+R.c("server/chunks/[root-of-the-server]__0rk6b06._.js")
+R.c("server/chunks/_next-internal_server_app_api_flags_route_actions_0kfec.3.js")
+R.m(182944)
+module.exports=R.m(182944).exports
