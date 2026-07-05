@@ -38,7 +38,7 @@ export default function NoWorkspacePage() {
           <p className="text-muted-foreground mt-2">Create a workspace to get started with NuCRM</p>
         </div>
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-8">
-          <form onSubmit={create} className="space-y-4">
+          <form method="post" onSubmit={create} className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1.5">Workspace Name *</label>
               <input required value={name} onChange={e => setName(e.target.value)} placeholder="Acme Corp, My Agency..."
