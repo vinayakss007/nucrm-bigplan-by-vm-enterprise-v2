@@ -49,11 +49,11 @@ export async function POST(request: NextRequest) {
             subject: `Your NuCRM trial has ended — upgrade to keep access`,
             html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
               <h2 style="color:#111827">Your free trial has ended</h2>
-              <p style="color:#6b7280">Hi \${owner?.ownerName||'there'}, your \${t.name} workspace trial has expired.</p>
+              <p style="color:#6b7280">Hi ${owner?.ownerName||'there'}, your ${t.name} workspace trial has expired.</p>
               <p style="color:#6b7280">Your data is safe — upgrade within 30 days to regain full access.</p>
-              <a href="\${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">Upgrade Now →</a>
+              <a href="${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">Upgrade Now →</a>
             </div>`,
-            text: `Your NuCRM trial for \${t.name} has ended. Upgrade: \${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing`,
+            text: `Your NuCRM trial for ${t.name} has ended. Upgrade: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing`,
           }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
         }
       }
@@ -93,14 +93,14 @@ export async function POST(request: NextRequest) {
       if (to) {
         await sendEmail({
           to,
-          subject: `⏰ Your NuCRM trial expires in \${daysLeft} day\${daysLeft>1?'s':''}`,
+          subject: `⏰ Your NuCRM trial expires in ${daysLeft} day${daysLeft>1?'s':''}`,
           html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
-            <h2 style="color:#d97706">Trial expiring in \${daysLeft} day\${daysLeft>1?'s':''}</h2>
-            <p style="color:#6b7280">Hi \${t.ownerName||'there'}, your \${t.name} workspace trial ends in \${daysLeft} day\${daysLeft>1?'s':''}.</p>
+            <h2 style="color:#d97706">Trial expiring in ${daysLeft} day${daysLeft>1?'s':''}</h2>
+            <p style="color:#6b7280">Hi ${t.ownerName||'there'}, your ${t.name} workspace trial ends in ${daysLeft} day${daysLeft>1?'s':''}.</p>
             <p style="color:#6b7280">Upgrade now to keep all your data and team access.</p>
-            <a href="\${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">View Plans →</a>
+            <a href="${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">View Plans →</a>
           </div>`,
-          text: `Your NuCRM trial for \${t.name} expires in \${daysLeft} day(s). Upgrade: \${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing`,
+          text: `Your NuCRM trial for ${t.name} expires in ${daysLeft} day(s). Upgrade: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing`,
         }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
       }
       // Mark warned
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
           tenantId: t.id,
           userId: t.ownerId,
           eventType: 'trial_warning',
-          description: `Trial warning sent — \${daysLeft} days left`,
+          description: `Trial warning sent — ${daysLeft} days left`,
           entityType: 'tenant',
           entityId: t.id,
           action: 'trial_warning'
