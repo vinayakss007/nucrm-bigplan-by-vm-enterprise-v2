@@ -1,0 +1,3 @@
+{
+  "/api/tenant/email-templates/route": "app/api/tenant/email-templates/route.js"
+}

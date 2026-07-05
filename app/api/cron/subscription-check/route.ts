@@ -1,3 +1,4 @@
+import { verifySecret } from '@/lib/crypto';
 import { NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { tenants, subscriptions, billingEvents } from '@/drizzle/schema';
@@ -24,9 +25,7 @@ import { eq, and, lt, ne, or, sql } from 'drizzle-orm';
  * Schedule: daily at 05:00 UTC (see vercel.json / crontab)
  */
 export async function POST(request: Request) {
-  // Authenticate via cron secret
-  const cronSecret = request.headers.get('x-cron-secret');
-  if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+  if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

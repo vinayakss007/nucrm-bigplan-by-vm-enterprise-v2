@@ -130,6 +130,6 @@ export async function GET(request: NextRequest) {
       },
       error: "Internal server error",
       status: 'error'
-    }, { status: 200 });
+    }, { status: 500 });
   }
 }

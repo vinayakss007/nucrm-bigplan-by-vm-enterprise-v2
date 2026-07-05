@@ -1,0 +1,3 @@
+{
+  "/api/tenant/ai/sentiment/route": "app/api/tenant/ai/sentiment/route.js"
+}

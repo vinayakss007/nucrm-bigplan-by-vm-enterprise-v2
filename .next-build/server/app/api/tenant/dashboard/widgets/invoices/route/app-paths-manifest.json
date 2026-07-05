@@ -1,0 +1,3 @@
+{
+  "/api/tenant/dashboard/widgets/invoices/route": "app/api/tenant/dashboard/widgets/invoices/route.js"
+}

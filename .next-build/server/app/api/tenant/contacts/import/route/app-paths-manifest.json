@@ -1,0 +1,3 @@
+{
+  "/api/tenant/contacts/import/route": "app/api/tenant/contacts/import/route.js"
+}
