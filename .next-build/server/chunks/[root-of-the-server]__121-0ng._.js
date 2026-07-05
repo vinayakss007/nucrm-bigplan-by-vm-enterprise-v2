@@ -1,3 +1,0 @@
-module.exports=[522734,(e,i,r)=>{i.exports=e.x("fs",()=>require("fs"))},231934,e=>{"use strict";var i=e.i(522734),r=e.i(730533);async function t(){for(let e of["/etc/machine-id","/var/lib/dbus/machine-id"])try{return(await i.promises.readFile(e,{encoding:"utf8"})).trim()}catch(e){r.diag.debug(`error reading machine id: ${e}`)}}e.s(["getMachineId",0,t])}];
-
-//# sourceMappingURL=%5Broot-of-the-server%5D__121-0ng._.js.map

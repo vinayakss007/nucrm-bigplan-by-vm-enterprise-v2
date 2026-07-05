@@ -1,3 +1,0 @@
-module.exports=[598573,a=>{"use strict";var b=a.i(907997);a.s(["default",0,function(){return(0,b.jsxs)("div",{className:"animate-pulse w-full space-y-4",children:[(0,b.jsx)("div",{className:"h-7 w-56 bg-muted rounded"}),(0,b.jsx)("div",{className:"flex gap-2",children:[void 0,void 0,void 0,void 0].map((a,c)=>(0,b.jsx)("div",{className:"h-8 w-20 bg-muted rounded-lg"},c))}),(0,b.jsx)("div",{className:"admin-card p-5 space-y-4",children:[...Array(8)].map((a,c)=>(0,b.jsx)("div",{className:"h-12 bg-muted rounded-xl"},c))})]})}])},859694,a=>{a.n(a.i(598573))}];
-
-//# sourceMappingURL=app_tenant_settings_webhooks_logs_loading_tsx_107l00k._.js.map

@@ -1,3 +1,0 @@
-{
-  "/api/tenant/contacts/[id]/lifecycle/route": "app/api/tenant/contacts/[id]/lifecycle/route.js"
-}

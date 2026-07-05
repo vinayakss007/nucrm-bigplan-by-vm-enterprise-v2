@@ -1,3 +1,0 @@
-{
-  "/api/cron/process-lead-scoring/route": "app/api/cron/process-lead-scoring/route.js"
-}
