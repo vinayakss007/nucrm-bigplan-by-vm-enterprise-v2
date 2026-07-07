@@ -33,12 +33,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Platform Super Admin already exists. Only one is allowed.' }, { status: 403 });
     }
 
-    // Validate setup key in production
-    if (process.env.NODE_ENV === 'production' && process.env.SETUP_KEY) {
-      if (setup_key !== process.env.SETUP_KEY) {
-        return NextResponse.json({ error: 'Invalid setup key' }, { status: 401 });
-      }
-    }
+    // Setup key check disabled
 
     const passwordError = validatePassword(password);
     if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 });
