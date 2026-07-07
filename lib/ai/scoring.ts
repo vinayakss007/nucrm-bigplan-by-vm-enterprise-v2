@@ -72,7 +72,8 @@ Output ONLY a JSON object: { "score": number, "reason": string, "factors": { "fa
     const jsonMatch = resp.text.match(/\{[\s\S]*\}/);
     parsed = JSON.parse(jsonMatch ? jsonMatch[0] : resp.text);
   } catch {
-    throw new Error('AI returned invalid JSON');
+    // Return default score when AI returns unparseable response
+    return { score: 50, contactId, factors: [] };
   }
 
   const finalScore = Math.max(0, Math.min(100, Number(parsed.score) || 0));

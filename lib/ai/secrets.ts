@@ -13,8 +13,13 @@ import { encrypt, decrypt } from '@/lib/crypto';
 import { and, eq, isNull } from 'drizzle-orm';
 
 export type AIProviderId = 'openai' | 'anthropic' | 'groq' | 'ollama';
+export type KeyType = 'tenant' | 'personal' | 'system';
 
 const VALID_PROVIDERS: AIProviderId[] = ['openai', 'anthropic', 'groq', 'ollama'];
+
+export function isNamedProvider(provider: string): provider is AIProviderId {
+  return VALID_PROVIDERS.includes(provider as AIProviderId);
+}
 
 export class SecretsVaultError extends Error {
   code: 'encryption_key_missing' | 'decrypt_failed' | 'invalid_provider' | 'not_found';
@@ -52,9 +57,12 @@ export async function setProviderKey(
   tenantId: string,
   provider: string,
   plaintextKey: string,
-  opts: { baseUrl?: string; userId?: string } = {},
+  opts: { baseUrl?: string; userId?: string; keyType?: KeyType } = {},
 ): Promise<{ keyPrefix: string }> {
-  assertValidProvider(provider);
+  const keyType: KeyType = opts.keyType ?? 'tenant';
+  if (keyType === 'personal' && !opts.userId) {
+    throw new SecretsVaultError('invalid_provider', 'userId is required for personal keyType');
+  }
   const trimmed = plaintextKey.trim();
   if (provider !== 'ollama' && !trimmed) {
     throw new SecretsVaultError('invalid_provider', 'API key cannot be empty for cloud providers');
@@ -62,13 +70,14 @@ export async function setProviderKey(
 
   const encryptionKey = getEncryptionKey();
 
-  // Soft-delete any existing key for this (tenant, provider)
+  // Soft-delete any existing key for this (tenant, provider, keyType)
   await db
     .update(aiProviderSecrets)
     .set({ deletedAt: new Date() })
     .where(and(
       eq(aiProviderSecrets.tenantId, tenantId),
       eq(aiProviderSecrets.provider, provider),
+      eq(aiProviderSecrets.keyType, keyType),
       isNull(aiProviderSecrets.deletedAt),
     ));
 
@@ -82,6 +91,8 @@ export async function setProviderKey(
     encryptedKey,
     keyPrefix,
     baseUrl: opts.baseUrl?.trim().slice(0, 200) ?? null,
+    keyType,
+    userId: opts.userId ?? null,
     createdBy: opts.userId ?? null,
     rotatedAt: new Date(),
   });
@@ -100,9 +111,39 @@ export async function setProviderKey(
 export async function getProviderKey(
   tenantId: string,
   provider: string,
-): Promise<{ plaintext: string; baseUrl: string | null } | null> {
-  assertValidProvider(provider);
+  userId?: string,
+): Promise<{ plaintext: string; baseUrl: string | null; modelOverride: string | null; keyType: KeyType } | null> {
+  if (!isNamedProvider(provider)) return null;
 
+  // If userId given, check personal key first
+  if (userId) {
+    const personalRow = await db.query.aiProviderSecrets.findFirst({
+      where: and(
+        eq(aiProviderSecrets.tenantId, tenantId),
+        eq(aiProviderSecrets.provider, provider),
+        eq(aiProviderSecrets.userId, userId),
+        eq(aiProviderSecrets.keyType, 'personal'),
+        isNull(aiProviderSecrets.deletedAt),
+      ),
+    });
+    if (personalRow) {
+      if (!personalRow.encryptedKey) {
+        return { plaintext: '', baseUrl: personalRow.baseUrl ?? null, modelOverride: personalRow.modelOverride ?? null, keyType: 'personal' };
+      }
+      const encryptionKey = getEncryptionKey();
+      try {
+        const plaintext = decrypt(personalRow.encryptedKey, encryptionKey);
+        return { plaintext, baseUrl: personalRow.baseUrl ?? null, modelOverride: personalRow.modelOverride ?? null, keyType: 'personal' };
+      } catch (err) {
+        throw new SecretsVaultError(
+          'decrypt_failed',
+          `Failed to decrypt ${provider} key for tenant. Has ENCRYPTION_KEY rotated? ${(err as Error).message}`,
+        );
+      }
+    }
+  }
+
+  // Fall back to tenant key
   const row = await db.query.aiProviderSecrets.findFirst({
     where: and(
       eq(aiProviderSecrets.tenantId, tenantId),
@@ -115,13 +156,13 @@ export async function getProviderKey(
 
   // Ollama can be saved with no key (the local daemon is open)
   if (!row.encryptedKey) {
-    return { plaintext: '', baseUrl: row.baseUrl ?? null };
+    return { plaintext: '', baseUrl: row.baseUrl ?? null, modelOverride: row.modelOverride ?? null, keyType: (row.keyType as KeyType) ?? 'tenant' };
   }
 
   const encryptionKey = getEncryptionKey();
   try {
     const plaintext = decrypt(row.encryptedKey, encryptionKey);
-    return { plaintext, baseUrl: row.baseUrl ?? null };
+    return { plaintext, baseUrl: row.baseUrl ?? null, modelOverride: row.modelOverride ?? null, keyType: (row.keyType as KeyType) ?? 'tenant' };
   } catch (err) {
     throw new SecretsVaultError(
       'decrypt_failed',
@@ -137,7 +178,7 @@ export async function getProviderKey(
 export async function getProviderKeyMeta(
   tenantId: string,
   provider: string,
-): Promise<{ present: boolean; keyPrefix: string | null; baseUrl: string | null; rotatedAt: Date | null }> {
+): Promise<{ present: boolean; keyPrefix: string | null; baseUrl: string | null; rotatedAt: Date | null; keyType: KeyType }> {
   assertValidProvider(provider);
 
   const row = await db.query.aiProviderSecrets.findFirst({
@@ -153,22 +194,35 @@ export async function getProviderKeyMeta(
     keyPrefix: row?.keyPrefix ?? null,
     baseUrl: row?.baseUrl ?? null,
     rotatedAt: row?.rotatedAt ?? null,
+    keyType: (row?.keyType as KeyType) ?? 'tenant',
   };
 }
 
 /**
  * Soft-delete the stored key for a (tenant, provider).
  */
-export async function deleteProviderKey(tenantId: string, provider: string): Promise<void> {
-  assertValidProvider(provider);
+export async function deleteProviderKey(
+  tenantId: string,
+  provider: string,
+  keyType: KeyType = 'tenant',
+  userId?: string,
+): Promise<void> {
+  if (!['tenant', 'personal', 'system'].includes(keyType)) {
+    throw new SecretsVaultError('invalid_provider', `Invalid keyType '${keyType}'`);
+  }
+  const conditions = [
+    eq(aiProviderSecrets.tenantId, tenantId),
+    eq(aiProviderSecrets.provider, provider),
+    eq(aiProviderSecrets.keyType, keyType),
+    isNull(aiProviderSecrets.deletedAt),
+  ];
+  if (keyType === 'personal' && userId) {
+    conditions.push(eq(aiProviderSecrets.userId, userId));
+  }
   await db
     .update(aiProviderSecrets)
     .set({ deletedAt: new Date() })
-    .where(and(
-      eq(aiProviderSecrets.tenantId, tenantId),
-      eq(aiProviderSecrets.provider, provider),
-      isNull(aiProviderSecrets.deletedAt),
-    ));
+    .where(and(...conditions));
 }
 
 /**
@@ -178,7 +232,7 @@ export async function deleteProviderKey(tenantId: string, provider: string): Pro
  */
 export async function listProviderKeyMeta(
   tenantId: string,
-): Promise<Record<AIProviderId, { present: boolean; keyPrefix: string | null; baseUrl: string | null; rotatedAt: Date | null }>> {
+): Promise<Record<string, { present: boolean; keyPrefix: string | null; baseUrl: string | null; rotatedAt: Date | null }>> {
   const rows = await db
     .select({
       provider: aiProviderSecrets.provider,
@@ -193,13 +247,10 @@ export async function listProviderKeyMeta(
       isNull(aiProviderSecrets.deletedAt),
     ));
 
-  const out = {} as Record<AIProviderId, { present: boolean; keyPrefix: string | null; baseUrl: string | null; rotatedAt: Date | null }>;
-  for (const id of VALID_PROVIDERS) {
-    out[id] = { present: false, keyPrefix: null, baseUrl: null, rotatedAt: null };
-  }
+  const out: Record<string, { present: boolean; keyPrefix: string | null; baseUrl: string | null; rotatedAt: Date | null }> = {};
   for (const row of rows) {
     if (!VALID_PROVIDERS.includes(row.provider as AIProviderId)) continue;
-    out[row.provider as AIProviderId] = {
+    out[row.provider] = {
       present: !!row.encryptedKey || row.provider === 'ollama',
       keyPrefix: row.keyPrefix,
       baseUrl: row.baseUrl,
@@ -207,4 +258,51 @@ export async function listProviderKeyMeta(
     };
   }
   return out;
+}
+
+export async function setPersonalKey(
+  tenantId: string,
+  provider: string,
+  plaintextKey: string,
+  userId: string,
+): Promise<{ keyPrefix: string }> {
+  return setProviderKey(tenantId, provider, plaintextKey, { keyType: 'personal', userId });
+}
+
+export async function setSystemKey(
+  tenantId: string,
+  provider: string,
+  plaintextKey: string,
+): Promise<{ keyPrefix: string }> {
+  return setProviderKey(tenantId, provider, plaintextKey, { keyType: 'system' });
+}
+
+export async function listAllKeysForTenant(
+  tenantId: string,
+): Promise<Array<{ provider: string; keyType: KeyType; keyPrefix: string | null; baseUrl: string | null; modelOverride: string | null; userId: string | null; rotatedAt: Date | null }>> {
+  const rows = await db
+    .select({
+      provider: aiProviderSecrets.provider,
+      keyType: aiProviderSecrets.keyType,
+      keyPrefix: aiProviderSecrets.keyPrefix,
+      baseUrl: aiProviderSecrets.baseUrl,
+      modelOverride: aiProviderSecrets.modelOverride,
+      userId: aiProviderSecrets.userId,
+      rotatedAt: aiProviderSecrets.rotatedAt,
+    })
+    .from(aiProviderSecrets)
+    .where(and(
+      eq(aiProviderSecrets.tenantId, tenantId),
+      isNull(aiProviderSecrets.deletedAt),
+    ));
+
+  return rows.map((r) => ({
+    provider: r.provider,
+    keyType: (r.keyType as KeyType) ?? 'tenant',
+    keyPrefix: r.keyPrefix,
+    baseUrl: r.baseUrl,
+    modelOverride: r.modelOverride,
+    userId: r.userId,
+    rotatedAt: r.rotatedAt,
+  }));
 }
