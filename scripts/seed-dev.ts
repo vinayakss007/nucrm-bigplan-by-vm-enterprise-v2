@@ -43,6 +43,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import { sql } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import * as schema from '../drizzle/schema';
 
 // ============================================================================
@@ -180,6 +181,8 @@ async function main() {
     // ========================================================================
     logSection('Cleaning existing seed data');
 
+    // Delete API key usage first (FK to tenants)
+    await db.execute(sql`DELETE FROM api_key_usage WHERE tenant_id = ${IDS.tenant}`);
     await db.delete(schema.tenantMembers).where(sql`tenant_id = ${IDS.tenant}`);
     await db.delete(schema.roles).where(sql`tenant_id = ${IDS.tenant}`);
     await db.delete(schema.tenants).where(sql`id = ${IDS.tenant}`);
@@ -879,17 +882,31 @@ async function main() {
       { id: 'ai-assistant', name: 'AI Assistant', version: '1.0.0', description: 'AI-powered insights and automation', category: 'ai', isAvailable: 'true' },
       { id: 'forms-builder', name: 'Forms Builder', version: '1.0.0', description: 'Build and manage forms', category: 'marketing', isAvailable: 'true' },
       { id: 'automation-engine', name: 'Automation Engine', version: '1.0.0', description: 'Workflow automation', category: 'automation', isAvailable: 'true' },
+      { id: 'automation-basic', name: 'Automation Basic', version: '1.0.0', description: 'Basic workflow automation', category: 'automation', isAvailable: 'true' },
+      { id: 'automation-pro', name: 'Automation Pro', version: '1.0.0', description: 'Advanced workflow automation', category: 'automation', isAvailable: 'true' },
       { id: 'email-sequences', name: 'Email Sequences', version: '1.0.0', description: 'Drip campaign management', category: 'marketing', isAvailable: 'true' },
+      { id: 'whatsapp-bot', name: 'WhatsApp Bot', version: '1.0.0', description: 'WhatsApp messaging and SMS', category: 'messaging', isAvailable: 'true' },
+      { id: 'sales-quotes', name: 'Sales Quotes', version: '1.0.0', description: 'Quote generation and management', category: 'sales', isAvailable: 'true' },
+      { id: 'analytics-pro', name: 'Analytics Pro', version: '1.0.0', description: 'Advanced analytics and leaderboards', category: 'analytics', isAvailable: 'true' },
+      { id: 'service-helpdesk', name: 'Service Helpdesk', version: '1.0.0', description: 'Tickets, chat, and SLA management', category: 'service', isAvailable: 'true' },
+      { id: 'compliance', name: 'Compliance', version: '1.0.0', description: 'GDPR and SOC2 compliance', category: 'compliance', isAvailable: 'true' },
     ]).onConflictDoNothing();
-    logDone('modules', 5);
+    logDone('modules', 12);
 
     await db.insert(schema.tenantModules).values([
       { tenantId: IDS.tenant, moduleId: 'core-crm', status: 'active', installedBy: IDS.users.admin },
       { tenantId: IDS.tenant, moduleId: 'ai-assistant', status: 'active', installedBy: IDS.users.admin },
       { tenantId: IDS.tenant, moduleId: 'forms-builder', status: 'active', installedBy: IDS.users.admin },
       { tenantId: IDS.tenant, moduleId: 'automation-engine', status: 'active', installedBy: IDS.users.admin },
+      { tenantId: IDS.tenant, moduleId: 'automation-basic', status: 'active', installedBy: IDS.users.admin },
+      { tenantId: IDS.tenant, moduleId: 'automation-pro', status: 'active', installedBy: IDS.users.admin },
+      { tenantId: IDS.tenant, moduleId: 'whatsapp-bot', status: 'active', installedBy: IDS.users.admin },
+      { tenantId: IDS.tenant, moduleId: 'sales-quotes', status: 'active', installedBy: IDS.users.admin },
+      { tenantId: IDS.tenant, moduleId: 'analytics-pro', status: 'active', installedBy: IDS.users.admin },
+      { tenantId: IDS.tenant, moduleId: 'service-helpdesk', status: 'active', installedBy: IDS.users.admin },
+      { tenantId: IDS.tenant, moduleId: 'compliance', status: 'active', installedBy: IDS.users.admin },
     ]);
-    logDone('tenant_modules', 4);
+    logDone('tenant_modules', 11);
 
     // ========================================================================
     // CUSTOM PLUGINS (2) + EXECUTION LOGS
@@ -964,18 +981,33 @@ async function main() {
     // ========================================================================
     logSection('Seeding API Keys & Webhooks');
 
-    const apiKeyHash = await bcrypt.hash('nucrm_dev_abc123xyz789', 12);
+    // Generate API key matching lib/auth/api-key.ts format: ak_live_<random hex>
+    const apiKeyRandomPart = crypto.randomBytes(24).toString('hex');
+    const apiKeyRaw = `ak_live_${apiKeyRandomPart}`;
+    const apiKeyHash = crypto.createHash('sha256').update(apiKeyRaw).digest('hex');
+    const apiKeyPrefix = `ak_live_${apiKeyRandomPart.slice(0, 6)}`;
     await db.insert(schema.apiKeys).values({
       id: IDS.apiKey,
       tenantId: IDS.tenant,
       userId: IDS.users.admin,
       name: 'Development API Key',
       keyHash: apiKeyHash,
-      prefix: 'nucrm_dev_',
+      prefix: apiKeyPrefix,
       scopes: ['*'],
       isActive: true,
     });
     logDone('api_keys', 1);
+
+    // Write raw API key to file for test scripts
+    const apiKeyFile = '/tmp/nucrm-test-results/api_key.txt';
+    try {
+      const fs = await import('fs');
+      fs.mkdirSync('/tmp/nucrm-test-results', { recursive: true });
+      fs.writeFileSync(apiKeyFile, apiKeyRaw);
+      log('🔑', `API key written to ${apiKeyFile}`);
+    } catch {
+      log('⚠️', `Could not write API key file — raw key: ${apiKeyRaw}`);
+    }
 
     await db.insert(schema.webhooks).values([
       {

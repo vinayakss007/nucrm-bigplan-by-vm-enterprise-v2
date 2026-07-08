@@ -5,7 +5,15 @@ import { eq, and } from 'drizzle-orm';
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      return NextResponse.json(
+        { error: 'invalid_request', error_description: 'Request body must be application/x-www-form-urlencoded' },
+        { status: 400 }
+      );
+    }
     const token = formData.get('token') as string;
     const tokenTypeHint = formData.get('token_type_hint') as string;
     const clientId = formData.get('client_id') as string;

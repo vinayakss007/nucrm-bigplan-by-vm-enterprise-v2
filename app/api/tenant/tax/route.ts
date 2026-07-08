@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
-    const gate = await requireModule(ctx.tenantId, 'sales-quotes');
+    const gate = await requireModule(ctx.tenantId, 'sales-quotes', ctx.isSuperAdmin);
     if (gate) return gate;
 
     const { searchParams } = new URL(req.url);
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
-    const gate = await requireModule(ctx.tenantId, 'sales-quotes');
+    const gate = await requireModule(ctx.tenantId, 'sales-quotes', ctx.isSuperAdmin);
     if (gate) return gate;
 
     const raw = await req.json();
@@ -105,7 +105,7 @@ export async function PUT(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
-    const gate = await requireModule(ctx.tenantId, 'sales-quotes');
+    const gate = await requireModule(ctx.tenantId, 'sales-quotes', ctx.isSuperAdmin);
     if (gate) return gate;
 
     const raw = await req.json();
@@ -146,7 +146,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
-    const gate = await requireModule(ctx.tenantId, 'sales-quotes');
+    const gate = await requireModule(ctx.tenantId, 'sales-quotes', ctx.isSuperAdmin);
     if (gate) return gate;
 
     const { searchParams } = new URL(req.url);
