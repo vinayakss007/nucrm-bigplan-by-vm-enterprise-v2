@@ -34,12 +34,12 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-nucrm_redis_password_change_me}@redis:6379
-      - JWT_SECRET=${JWT_SECRET}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - SETUP_KEY=${SETUP_KEY}
-      - CRON_SECRET=${CRON_SECRET}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - JWT_SECRET=${JWT_SECRET:?REQUIRED}
+      - SESSION_SECRET=${SESSION_SECRET:?REQUIRED}
+      - SETUP_KEY=${SETUP_KEY:?REQUIRED}
+      - CRON_SECRET=${CRON_SECRET:?REQUIRED}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?REQUIRED}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
       - DATABASE_SSL=${DATABASE_SSL:-true}
       - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-10}
@@ -85,12 +85,12 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-nucrm_redis_password_change_me}@redis:6379
-      - JWT_SECRET=${JWT_SECRET}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - SETUP_KEY=${SETUP_KEY}
-      - CRON_SECRET=${CRON_SECRET}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - JWT_SECRET=${JWT_SECRET:?REQUIRED}
+      - SESSION_SECRET=${SESSION_SECRET:?REQUIRED}
+      - SETUP_KEY=${SETUP_KEY:?REQUIRED}
+      - CRON_SECRET=${CRON_SECRET:?REQUIRED}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?REQUIRED}
       - DATABASE_SSL=${DATABASE_SSL:-true}
     deploy:
       replicas: 1
@@ -253,7 +253,7 @@ services:
     container_name: nucrm-redis
     command: >
       redis-server
-      --requirepass ${REDIS_PASSWORD:-nucrm_redis_password_change_me}
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       --maxmemory 256mb
       --maxmemory-policy allkeys-lru
       --save 60 1000
@@ -264,7 +264,7 @@ services:
       # Restrict to localhost only for security
       - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-nucrm_redis_password_change_me}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5

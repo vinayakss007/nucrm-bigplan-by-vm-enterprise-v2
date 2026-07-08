@@ -24,12 +24,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# Local env files
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# Local env files — blanket block all .env* except .env.example
+.env*
+!.env.example
 
 # Vercel
 .vercel
