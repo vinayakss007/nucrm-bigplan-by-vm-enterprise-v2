@@ -32,9 +32,6 @@ export async function GET(
         eq(leads.tenantId, ctx.tenantId),
         isNull(leads.deletedAt)
       ),
-      with: {
-        company: true,
-      }
     });
     
     if (!lead) {

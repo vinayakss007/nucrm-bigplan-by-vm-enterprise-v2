@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
-    const gate = await requireModule(ctx.tenantId, 'ai-assistant');
+    const gate = await requireModule(ctx.tenantId, 'ai-assistant', ctx.isSuperAdmin);
     if (gate) return gate;
 
     const { searchParams } = new URL(req.url);

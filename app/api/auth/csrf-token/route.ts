@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   if (limited) return limited;
 
   const token = generateCsrfToken();
-  const response = NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true, token });
   response.headers.append('Set-Cookie', setCsrfCookie(token, process.env.COOKIE_SECURE !== 'false' && process.env.NODE_ENV === 'production'));
   return response;
 }

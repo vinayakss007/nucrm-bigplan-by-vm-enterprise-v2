@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
-    const gate = await requireModule(ctx.tenantId, 'core-crm');
+    const gate = await requireModule(ctx.tenantId, 'core-crm', ctx.isSuperAdmin);
     if (gate) return gate;
 
     // Get hierarchy entries where this tenant is the parent
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     if (!ctx.isAdmin) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-    const gate = await requireModule(ctx.tenantId, 'core-crm');
+    const gate = await requireModule(ctx.tenantId, 'core-crm', ctx.isSuperAdmin);
     if (gate) return gate;
 
     const body = await req.json();
@@ -95,7 +95,7 @@ export async function PUT(req: NextRequest) {
     if (!ctx.isAdmin) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-    const gate = await requireModule(ctx.tenantId, 'core-crm');
+    const gate = await requireModule(ctx.tenantId, 'core-crm', ctx.isSuperAdmin);
     if (gate) return gate;
 
     const body = await req.json();
@@ -134,7 +134,7 @@ export async function DELETE(req: NextRequest) {
     if (!ctx.isAdmin) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-    const gate = await requireModule(ctx.tenantId, 'core-crm');
+    const gate = await requireModule(ctx.tenantId, 'core-crm', ctx.isSuperAdmin);
     if (gate) return gate;
 
     const { searchParams } = new URL(req.url);
