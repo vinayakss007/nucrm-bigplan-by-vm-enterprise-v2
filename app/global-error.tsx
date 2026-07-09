@@ -29,7 +29,7 @@ export default function GlobalError({
               Something went wrong!
             </h1>
             <p style={{ color: '#6b7280', marginBottom: '24px' }}>
-              {error?.message || 'A critical error occurred.'}
+              A critical error occurred.
             </p>
             <button 
               onClick={() => window.location.reload()}
