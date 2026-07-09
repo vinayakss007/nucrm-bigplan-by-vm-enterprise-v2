@@ -373,7 +373,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           {tenant?.name?.charAt(0)?.toUpperCase() ?? 'W'}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-lg font-extrabold truncate leading-tight">{tenant?.name ?? 'Workspace'}</p>
+          <h1 className="text-lg font-extrabold truncate leading-tight">{tenant?.name ?? 'Workspace'}</h1>
         </div>
         {onToggle && (
           <button onClick={onToggle} className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md hover:bg-accent text-muted-foreground transition-colors" aria-label="Collapse sidebar">
@@ -407,9 +407,9 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
         {/* Pinned shortcuts */}
         {pinnedItems.length > 0 && (
           <div className="mb-2">
-            <p className="px-2.5 py-1 text-xs font-bold text-amber-600/80 dark:text-amber-400/80 uppercase tracking-wider flex items-center gap-1.5">
+            <h2 className="px-2.5 py-1 text-xs font-bold text-amber-600/80 dark:text-amber-400/80 uppercase tracking-wider flex items-center gap-1.5">
               <Star className="w-3 h-3 fill-current" /> Pinned
-            </p>
+            </h2>
             {pinnedItems.map(navItem)}
             <div className="h-px bg-border my-2" />
           </div>
@@ -429,6 +429,8 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           return (
             <div key={section.id} className="mb-1">
               <button onClick={() => !q && toggleSection(section.id)}
+                role="heading"
+                aria-level={2}
                 className={cn(
                   'flex items-center gap-1.5 w-full px-2.5 py-1.5 rounded-md text-sm font-extrabold uppercase tracking-wider transition-all duration-200',
                   q ? 'text-violet-600 dark:text-violet-400' : 'text-foreground/80 hover:text-foreground hover:scale-[1.01]'
@@ -452,6 +454,8 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
             <div className="h-px bg-border my-2" />
             <div>
               <button onClick={() => setSettingsOpen(o => !o)}
+                role="heading"
+                aria-level={2}
                 className={cn('flex items-center gap-1.5 w-full px-2.5 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200',
                   pathname.startsWith('/tenant/settings')
                     ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300'
