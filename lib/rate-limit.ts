@@ -340,7 +340,7 @@ export function createLimiter(config: { max?: number; window?: number; windowMs?
  */
 export const limiters: Record<string, RateLimiter> = {
   api: new RateLimiter({ max: 60, window: 60 }),
-  auth: new RateLimiter({ max: 10, window: 60 }),
+  auth: new RateLimiter({ max: 200, window: 60 }),
   export: new RateLimiter({ max: 10, window: 3600 }),
   import: new RateLimiter({ max: 10, window: 3600 }),
   ai: new RateLimiter({ max: 30, window: 3600 }),
