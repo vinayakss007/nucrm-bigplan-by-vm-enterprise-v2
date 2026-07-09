@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Globe, Save, Loader2, Plus, Trash2, CheckCircle, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import SettingsEmptyState from '@/components/shared/settings-empty-state';
 
 interface PortalConfig {
   enabled: boolean;
@@ -194,7 +195,7 @@ export default function PortalSettingsPage() {
           </div>
 
           {clients.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">No clients yet. Add your first client.</p>
+            <SettingsEmptyState icon={Users} title="No clients yet" description="Add your first client to the portal" />
           ) : (
             <div className="space-y-2">
               {clients.map(client => (
