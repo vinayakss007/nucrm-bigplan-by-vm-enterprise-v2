@@ -321,7 +321,7 @@ export default function ContactsDataTable({
     fetch('/api/tenant/custom-fields?entityType=contact', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { fields: [] })
       .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[contacts-data-table] Failed to load custom fields:', err); });
     return () => abort.abort();
   }, [])
 
@@ -330,7 +330,7 @@ export default function ContactsDataTable({
     fetch('/api/tenant/segments?entity_type=contact', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[contacts-data-table] Failed to load segments:', err); });
     return () => abort.abort();
   }, [])
 
@@ -339,7 +339,7 @@ export default function ContactsDataTable({
     fetch('/api/tenant/sequences', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSequences(d.data ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[contacts-data-table] Failed to load sequences:', err); });
     return () => abort.abort();
   }, [])
 
@@ -348,7 +348,7 @@ export default function ContactsDataTable({
     fetch('/api/tenant/email-templates', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setEmailTemplates(d.data ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[contacts-data-table] Failed to load email templates:', err); });
     return () => abort.abort();
   }, [])
 
