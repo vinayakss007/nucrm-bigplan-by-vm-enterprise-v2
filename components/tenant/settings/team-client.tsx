@@ -3,6 +3,29 @@ import { useState } from 'react';
 import { Users, Plus, Mail, UserMinus, AlertTriangle, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import { cn, formatDate, formatRelativeTime, getInitials } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { useFormValidation } from '@/lib/hooks/use-form-validation';
+
+const inviteValidationRules = {
+  email: {
+    required: true,
+    pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+  },
+};
+
+const directValidationRules = {
+  email: {
+    required: true,
+    pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+  },
+  full_name: {
+    required: true,
+    minLength: 2,
+  },
+  password: {
+    required: true,
+    minLength: 12,
+  },
+};
 
 interface TeamMember {
   id: string; user_id: string;
@@ -117,6 +140,8 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
   const [inviting, setInviting]       = useState(false);
   const [removeModal, setRemoveModal] = useState<TeamMember | null>(null);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
+  const { errors: inviteErrors, touched: inviteTouched, validate: inviteValidate, touch: inviteTouch, validateAll: inviteValidateAll, clearErrors: inviteClearErrors } = useFormValidation(inviteValidationRules);
+  const { errors: directErrors, touched: directTouched, validate: directValidate, touch: directTouch, validateAll: directValidateAll, clearErrors: directClearErrors } = useFormValidation(directValidationRules);
 
   const reload = async () => {
     const res = await fetch('/api/tenant/members');
@@ -130,6 +155,10 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
     
     try {
       if (mode === 'invite') {
+        if (!inviteValidateAll({ email: inviteEmail })) {
+          setInviting(false);
+          return;
+        }
         const res = await fetch('/api/tenant/invite/send',{ 
           method:'POST', 
           headers:{'Content-Type':'application/json'}, 
@@ -140,9 +169,14 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
           toast.success(`Invitation sent to ${inviteEmail}`); 
           setShowInvite(false); 
           setInviteEmail(''); 
+          inviteClearErrors();
           reload(); 
         } else toast.error(d.error);
       } else {
+        if (!directValidateAll({ email: inviteEmail, full_name: fullName, password })) {
+          setInviting(false);
+          return;
+        }
         const res = await fetch('/api/tenant/members',{ 
           method:'POST', 
           headers:{'Content-Type':'application/json'}, 
@@ -160,6 +194,7 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
           setInviteEmail('');
           setFullName('');
           setPassword('');
+          directClearErrors();
           reload(); 
         } else toast.error(d.error);
       }
@@ -239,7 +274,23 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
           <div className="grid grid-cols-2 gap-4 pt-1">
             <div className="col-span-2 sm:col-span-1">
               <label className="block text-xs font-medium text-muted-foreground mb-1.5">Email Address *</label>
-              <input type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} required placeholder="colleague@company.com" className={inp} autoFocus/>
+              <input type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)}
+                onBlur={() => mode === 'invite'
+                  ? inviteTouch('email') && inviteValidate('email', inviteEmail)
+                  : directTouch('email') && directValidate('email', inviteEmail)}
+                aria-invalid={mode === 'invite' ? !!inviteErrors.email : !!directErrors.email}
+                aria-describedby={mode === 'invite' && inviteErrors.email ? 'team-email-error' : mode === 'direct' && directErrors.email ? 'team-email-error-direct' : undefined}
+                required placeholder="colleague@company.com"
+                className={`${inp} ${
+                  (mode === 'invite' ? inviteErrors.email && inviteTouched.email : directErrors.email && directTouched.email)
+                    ? 'border-red-300 focus:ring-red-500' : ''
+                }`} autoFocus/>
+              {mode === 'invite' && inviteErrors.email && inviteTouched.email && (
+                <p id="team-email-error" className="mt-1 text-[11px] text-red-600" role="alert">{inviteErrors.email}</p>
+              )}
+              {mode === 'direct' && directErrors.email && directTouched.email && (
+                <p id="team-email-error-direct" className="mt-1 text-[11px] text-red-600" role="alert">{directErrors.email}</p>
+              )}
             </div>
             <div className="col-span-2 sm:col-span-1">
               <label className="block text-xs font-medium text-muted-foreground mb-1.5">Role</label>
@@ -254,11 +305,27 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
               <>
                 <div className="col-span-2 sm:col-span-1 animate-in slide-in-from-left-1 duration-200">
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5">Full Name *</label>
-                  <input type="text" value={fullName} onChange={e=>setFullName(e.target.value)} required placeholder="John Doe" className={inp}/>
+                  <input type="text" value={fullName} onChange={e=>setFullName(e.target.value)}
+                    onBlur={() => directTouch('full_name') && directValidate('full_name', fullName)}
+                    required placeholder="John Doe"
+                    aria-invalid={!!directErrors.full_name}
+                    aria-describedby={directErrors.full_name ? 'team-name-error' : undefined}
+                    className={`${inp} ${directErrors.full_name && directTouched.full_name ? 'border-red-300 focus:ring-red-500' : ''}`}/>
+                  {directErrors.full_name && directTouched.full_name && (
+                    <p id="team-name-error" className="mt-1 text-[11px] text-red-600" role="alert">{directErrors.full_name}</p>
+                  )}
                 </div>
                 <div className="col-span-2 sm:col-span-1 animate-in slide-in-from-right-1 duration-200">
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5">Password *</label>
-                  <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required placeholder="••••••••" className={inp}/>
+                  <input type="password" value={password} onChange={e=>setPassword(e.target.value)}
+                    onBlur={() => directTouch('password') && directValidate('password', password)}
+                    required placeholder="••••••••"
+                    aria-invalid={!!directErrors.password}
+                    aria-describedby={directErrors.password ? 'team-password-error' : undefined}
+                    className={`${inp} ${directErrors.password && directTouched.password ? 'border-red-300 focus:ring-red-500' : ''}`}/>
+                  {directErrors.password && directTouched.password && (
+                    <p id="team-password-error" className="mt-1 text-[11px] text-red-600" role="alert">{directErrors.password}</p>
+                  )}
                 </div>
               </>
             )}
