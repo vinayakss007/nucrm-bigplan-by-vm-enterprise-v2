@@ -352,7 +352,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePin(href); }}
           aria-label={isPinned ? `Unpin ${label}` : `Pin ${label}`}
           className={cn(
-            'absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded transition-opacity',
+            'absolute right-1 top-1/2 -translate-y-1/2 min-h-11 min-w-11 flex items-center justify-center rounded transition-opacity',
             isPinned
               ? 'opacity-100 text-amber-500'
               : 'opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-amber-500'
@@ -376,7 +376,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           <p className="text-lg font-extrabold truncate leading-tight">{tenant?.name ?? 'Workspace'}</p>
         </div>
         {onToggle && (
-          <button onClick={onToggle} className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md hover:bg-accent text-muted-foreground transition-colors" aria-label="Collapse sidebar">
+          <button onClick={onToggle} className="shrink-0 min-h-11 min-w-11 flex items-center justify-center rounded-md hover:bg-accent text-muted-foreground transition-colors" aria-label="Collapse sidebar">
             <X className="w-3 h-3" />
           </button>
         )}
@@ -395,7 +395,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           />
           {query && (
             <button onClick={() => setQuery('')} aria-label="Clear filter"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-foreground/60 hover:text-foreground">
+              className="absolute right-2 top-1/2 -translate-y-1/2 min-h-11 min-w-11 flex items-center justify-center text-foreground/60 hover:text-foreground">
               <X className="w-3 h-3" />
             </button>
           )}

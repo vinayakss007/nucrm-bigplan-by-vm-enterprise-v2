@@ -428,7 +428,7 @@ export default function DealsKanban({ initialDeals, stages, contacts, companies,
                         </button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-6 w-6 p-0 md:block hidden">
+                            <Button variant="ghost" className="min-h-11 min-w-11 p-0 md:block hidden">
                               <MoreHorizontal className="h-3.5 w-3.5" />
                             </Button>
                           </DropdownMenuTrigger>

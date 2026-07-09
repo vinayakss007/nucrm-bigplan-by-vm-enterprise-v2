@@ -1,0 +1,3 @@
+module.exports=[235033,a=>{"use strict";var b=a.i(907997);a.s(["default",0,function(){return(0,b.jsxs)("div",{className:"animate-pulse w-full space-y-4",children:[(0,b.jsx)("div",{className:"h-7 w-40 bg-muted rounded"}),(0,b.jsx)("div",{className:"admin-card p-5 space-y-4",children:[void 0,void 0,void 0,void 0].map((a,c)=>(0,b.jsxs)("div",{className:"space-y-1.5",children:[(0,b.jsx)("div",{className:"h-4 w-24 bg-muted rounded"}),(0,b.jsx)("div",{className:"h-10 bg-muted rounded-xl"})]},c))})]})}])},649017,a=>{a.n(a.i(235033))}];
+
+//# sourceMappingURL=app_tenant_settings_roles_loading_tsx_0ots_~d._.js.map

@@ -1,0 +1,3 @@
+{
+  "/api/tenant/sms/webhook/route": "app/api/tenant/sms/webhook/route.js"
+}

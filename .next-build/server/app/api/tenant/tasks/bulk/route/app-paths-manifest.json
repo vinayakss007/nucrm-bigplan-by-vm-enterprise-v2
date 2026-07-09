@@ -1,0 +1,3 @@
+{
+  "/api/tenant/tasks/bulk/route": "app/api/tenant/tasks/bulk/route.js"
+}

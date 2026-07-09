@@ -1,0 +1,3 @@
+{
+  "/api/superadmin/rate-limits/route": "app/api/superadmin/rate-limits/route.js"
+}

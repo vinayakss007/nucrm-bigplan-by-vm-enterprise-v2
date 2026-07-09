@@ -139,7 +139,7 @@ export default function TaskDetailClient({ task, permissions, _tenantId, _userId
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
+            <Button variant="ghost" className="min-h-11 min-w-11 p-0">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>

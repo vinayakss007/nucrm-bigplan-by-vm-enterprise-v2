@@ -1,0 +1,3 @@
+{
+  "/api/tenant/leads/import/route": "app/api/tenant/leads/import/route.js"
+}

@@ -1,0 +1,3 @@
+module.exports=[951468,e=>{"use strict";var i=e.i(233405);let r=e.i(224361).promisify(i.exec);e.s(["execAsync",0,r])},380191,e=>{"use strict";var i=e.i(522734),r=e.i(951468),t=e.i(730533);async function s(){try{return(await i.promises.readFile("/etc/hostid",{encoding:"utf8"})).trim()}catch(e){t.diag.debug(`error reading machine id: ${e}`)}try{return(await (0,r.execAsync)("kenv -q smbios.system.uuid")).stdout.trim()}catch(e){t.diag.debug(`error reading machine id: ${e}`)}}e.s(["getMachineId",0,s])}];
+
+//# sourceMappingURL=0t6k_%40opentelemetry_resources_build_esm_detectors_platform_node_machine-id_0es2k4g._.js.map

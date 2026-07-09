@@ -1,0 +1,3 @@
+module.exports=[931859,a=>{"use strict";var b=a.i(907997);a.s(["default",0,function(){return(0,b.jsxs)("div",{className:"max-w-4xl mx-auto space-y-5 animate-pulse",children:[(0,b.jsx)("div",{className:"h-12 bg-muted rounded-2xl"}),(0,b.jsx)("div",{className:"h-8 w-64 bg-muted rounded-xl"}),(0,b.jsx)("div",{className:"space-y-3",children:[void 0,void 0,void 0].map((a,c)=>(0,b.jsxs)("div",{className:"admin-card p-4 space-y-2",children:[(0,b.jsx)("div",{className:"h-4 w-32 bg-muted rounded"}),(0,b.jsx)("div",{className:"h-12 bg-muted rounded-lg"}),(0,b.jsx)("div",{className:"h-12 bg-muted rounded-lg"})]},c))})]})}])},804038,a=>{a.n(a.i(931859))}];
+
+//# sourceMappingURL=app_tenant_search_loading_tsx_0b3snzk._.js.map

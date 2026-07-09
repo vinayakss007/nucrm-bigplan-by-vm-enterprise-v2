@@ -1,0 +1,3 @@
+{
+  "/api/tenant/whatsapp/messages/route": "app/api/tenant/whatsapp/messages/route.js"
+}

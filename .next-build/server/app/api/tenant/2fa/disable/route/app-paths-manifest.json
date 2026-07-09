@@ -1,0 +1,3 @@
+{
+  "/api/tenant/2fa/disable/route": "app/api/tenant/2fa/disable/route.js"
+}

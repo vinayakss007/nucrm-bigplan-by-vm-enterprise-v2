@@ -1,0 +1,3 @@
+{
+  "/api/tenant/ai/summarize/route": "app/api/tenant/ai/summarize/route.js"
+}

@@ -1,0 +1,3 @@
+{
+  "/api/cron/warmup-emails/route": "app/api/cron/warmup-emails/route.js"
+}

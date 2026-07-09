@@ -278,7 +278,7 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className="min-h-11 min-w-11"
                         onClick={() => moveStep(index, 'up')}
                         disabled={index === 0}
                       >
@@ -289,7 +289,7 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className="min-h-11 min-w-11"
                         onClick={() => moveStep(index, 'down')}
                         disabled={index === steps.length - 1}
                       >
@@ -300,7 +300,7 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className="min-h-11 min-w-11"
                         onClick={() => setExpandedStep(isExpanded ? null : index)}
                       >
                         <svg 
@@ -315,7 +315,7 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-red-600 hover:text-red-700"
+                        className="min-h-11 min-w-11 text-red-600 hover:text-red-700"
                         onClick={() => deleteStep(index)}
                       >
                         <Trash2 className="w-4 h-4" />

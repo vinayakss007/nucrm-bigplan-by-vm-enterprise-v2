@@ -1,0 +1,3 @@
+{
+  "/api/tenant/tax/calculate/route": "app/api/tenant/tax/calculate/route.js"
+}

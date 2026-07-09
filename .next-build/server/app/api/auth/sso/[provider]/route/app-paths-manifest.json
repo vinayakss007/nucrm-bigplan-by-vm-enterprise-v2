@@ -1,0 +1,3 @@
+{
+  "/api/auth/sso/[provider]/route": "app/api/auth/sso/[provider]/route.js"
+}
