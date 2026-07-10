@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Plus, Building2, X, Loader2, Trash2 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -94,11 +95,13 @@ export default function HierarchyPage() {
   };
 
   const del = async (id: string) => {
-    const res = await fetch(`/api/tenant/hierarchy?id=${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      toast.success('Relationship removed');
-      load();
-    }
+    await confirmThen('Remove this hierarchy relationship?', async () => {
+      const res = await fetch(`/api/tenant/hierarchy?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('Relationship removed');
+        load();
+      }
+    });
   };
 
   return (
