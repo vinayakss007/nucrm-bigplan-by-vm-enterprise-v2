@@ -63,7 +63,7 @@ function QuotesPageInner() {
       const res = await fetch('/api/tenant/contacts');
       const data = await res.json();
       setContacts(data.contacts || []);
-    } catch (error) { console.error('Failed to fetch contacts', error); }
+    } catch (error) { console.error('Failed to fetch contacts', error); toast.error('Failed to load contacts'); }
   };
 
   const fetchQuotes = async () => {
@@ -71,7 +71,7 @@ function QuotesPageInner() {
       const res = await fetch('/api/tenant/quotes');
       const data = await res.json();
       setQuotes(data.quotes || []);
-    } catch (error) { console.error('Failed to fetch quotes', error); }
+    } catch (error) { console.error('Failed to fetch quotes', error); toast.error('Failed to load quotes'); }
     finally { setLoading(false); }
   };
 

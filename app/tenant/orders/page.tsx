@@ -64,7 +64,7 @@ function OrdersPageInner() {
       const res = await fetch('/api/tenant/contacts');
       const data = await res.json();
       setContacts(data.contacts || []);
-    } catch (error) { console.error('Failed to fetch contacts', error); }
+    } catch (error) { console.error('Failed to fetch contacts', error); toast.error('Failed to load contacts'); }
   };
 
   const fetchOrders = async () => {
@@ -74,6 +74,7 @@ function OrdersPageInner() {
       setOrders(data.orders || []);
     } catch (error) {
       console.error('Failed to fetch orders', error);
+      toast.error('Failed to load orders');
     } finally {
       setLoading(false);
     }

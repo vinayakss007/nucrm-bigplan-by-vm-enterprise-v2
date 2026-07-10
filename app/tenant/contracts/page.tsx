@@ -53,7 +53,7 @@ function ContractsPageInner() {
       const res = await fetch('/api/tenant/contacts');
       const data = await res.json();
       setContacts(data.contacts || []);
-    } catch (error) { console.error('Failed to fetch contacts', error); }
+    } catch (error) { console.error('Failed to fetch contacts', error); toast.error('Failed to load contacts'); }
   };
 
   const fetchContracts = async () => {
@@ -63,6 +63,7 @@ function ContractsPageInner() {
       setContracts(data.contracts || []);
     } catch (error) {
       console.error('Failed to fetch contracts', error);
+      toast.error('Failed to load contracts');
     } finally { setLoading(false); }
   };
 
