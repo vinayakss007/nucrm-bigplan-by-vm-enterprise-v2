@@ -169,7 +169,7 @@ const LOCK_SCRIPT = `
   return 0
 `;
 
-export export async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<{ acquired: boolean; value: string }> {
+export async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<{ acquired: boolean; value: string }> {
   const redis = getRedisClient();
   if (!redis) return { acquired: true, value: '' };
   const value = makeLockValue();
