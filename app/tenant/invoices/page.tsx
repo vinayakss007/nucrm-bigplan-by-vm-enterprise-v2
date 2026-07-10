@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Plus, Search, Eye, Download, FileText, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -38,6 +38,8 @@ function InvoicesPageInner() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [contactFilter, setContactFilter] = useState(initialContactId);
+  const [sortBy, setSortBy] = useState('issueDate');
+  const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('desc');
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
     title: '',
@@ -112,7 +114,27 @@ function InvoicesPageInner() {
     (!contactFilter || i.contactId === contactFilter)
   );
 
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const aVal = sortBy === 'totalAmount' || sortBy === 'balanceDue' ? parseFloat(a[sortBy as keyof Invoice] as string) : (a[sortBy as keyof Invoice] ?? '');
+      const bVal = sortBy === 'totalAmount' || sortBy === 'balanceDue' ? parseFloat(b[sortBy as keyof Invoice] as string) : (b[sortBy as keyof Invoice] ?? '');
+      if (typeof aVal === 'number' && typeof bVal === 'number') return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+      return sortOrder === 'asc' ? String(aVal).localeCompare(String(bVal)) : String(bVal).localeCompare(String(aVal));
+    });
+  }, [filtered, sortBy, sortOrder]);
+
   const totalOutstanding = filtered.filter(i => !['paid', 'cancelled'].includes(i.status)).reduce((sum, i) => sum + parseFloat(i.balanceDue), 0);
+
+  const toggleSort = (field: string) => {
+    if (sortBy === field) setSortOrder(o => o === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(field); setSortOrder('asc'); }
+  };
+
+  const SortHeader = ({ field, children }: { field: string; children: React.ReactNode }) => (
+    <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => toggleSort(field)}>
+      <span className="inline-flex items-center gap-1">{children}{sortBy === field ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+    </th>
+  );
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
@@ -182,17 +204,17 @@ function InvoicesPageInner() {
             <table className="w-full min-w-[700px]">
               <thead className="border-b border-border bg-muted/30">
                 <tr>
-                  <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Invoice #</th>
+                  <SortHeader field="invoiceNumber">Invoice #</SortHeader>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Contact</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Title</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider hidden md:table-cell">Date</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Amount</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Status</th>
+                  <SortHeader field="title"><span className="hidden sm:inline">Title</span></SortHeader>
+                  <SortHeader field="issueDate"><span className="hidden md:inline">Date</span></SortHeader>
+                  <SortHeader field="totalAmount">Amount</SortHeader>
+                  <SortHeader field="status"><span className="hidden sm:inline">Status</span></SortHeader>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map((invoice) => (
+                {sorted.map((invoice) => (
                   <tr key={invoice.id} className="hover:bg-accent/30 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs">{invoice.invoiceNumber}</td>
                     <td className="px-4 py-3 text-xs">{getContactName(invoice.contactId)}</td>
