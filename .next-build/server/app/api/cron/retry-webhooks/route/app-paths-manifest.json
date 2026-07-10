@@ -1,3 +1,0 @@
-{
-  "/api/cron/retry-webhooks/route": "app/api/cron/retry-webhooks/route.js"
-}

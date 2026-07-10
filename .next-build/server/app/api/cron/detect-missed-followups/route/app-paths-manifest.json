@@ -1,3 +1,0 @@
-{
-  "/api/cron/detect-missed-followups/route": "app/api/cron/detect-missed-followups/route.js"
-}
