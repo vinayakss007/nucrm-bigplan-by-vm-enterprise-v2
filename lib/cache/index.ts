@@ -169,7 +169,7 @@ const LOCK_SCRIPT = `
   return 0
 `;
 
-async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<{ acquired: boolean; value: string }> {
+export async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<{ acquired: boolean; value: string }> {
   const redis = getRedisClient();
   if (!redis) return { acquired: true, value: '' };
   const value = makeLockValue();
@@ -182,7 +182,7 @@ async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<
   }
 }
 
-async function releaseLock(key: string, value: string): Promise<void> {
+export async function releaseLock(key: string, value: string): Promise<void> {
   const redis = getRedisClient();
   if (!redis || !value) return;
   try {
@@ -190,7 +190,7 @@ async function releaseLock(key: string, value: string): Promise<void> {
   } catch { /* safe */ }
 }
 
-async function refreshLock(key: string, value: string, ttlSeconds: number): Promise<void> {
+export async function refreshLock(key: string, value: string, ttlSeconds: number): Promise<void> {
   const redis = getRedisClient();
   if (!redis || !value) return;
   try {
