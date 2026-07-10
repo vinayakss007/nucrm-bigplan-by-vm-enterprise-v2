@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { CheckSquare, Plus, X, User, Clock, CheckCircle, Trash2, Edit } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { Swipeable } from '@/components/ui/swipeable';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 
@@ -47,9 +48,12 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
   };
 
   const deleteTask = async (id: string) => {
-    const res = await fetch(`/api/tenant/tasks/${id}`, { method:'DELETE' });
-    if (res.ok) { setTasks(prev => prev.filter(t => t.id !== id)); toast.success('Task deleted'); }
-    else toast.error('Failed to delete');
+    const task = tasks.find(t => t.id === id);
+    confirmThen(`Delete "${task?.title || 'this task'}"?`, async () => {
+      const res = await fetch(`/api/tenant/tasks/${id}`, { method:'DELETE' });
+      if (res.ok) { setTasks(prev => prev.filter(t => t.id !== id)); toast.success('Task deleted'); }
+      else toast.error('Failed to delete');
+    });
   };
 
   const bulkComplete = async () => {

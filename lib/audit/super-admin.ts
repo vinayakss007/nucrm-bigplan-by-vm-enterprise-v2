@@ -6,7 +6,7 @@
  */
 
 import { db } from '@/drizzle/db';
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
 import { randomBytes, createHash } from 'crypto';
 
@@ -280,49 +280,39 @@ export async function getSuperAdminAuditLogs(filters: {
   limit?: number;
   offset?: number;
 }) {
-  const conditions: string[] = [];
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const params: any[] = [];
-  let paramIndex = 1;
+  const conditions: SQL[] = [];
 
   if (filters.adminId) {
-    conditions.push(`admin_id = $${paramIndex++}`);
-    params.push(filters.adminId);
+    conditions.push(sql`admin_id = ${filters.adminId}`);
   }
   if (filters.action) {
-    conditions.push(`action = $${paramIndex++}`);
-    params.push(filters.action);
+    conditions.push(sql`action = ${filters.action}`);
   }
   if (filters.targetType) {
-    conditions.push(`target_type = $${paramIndex++}`);
-    params.push(filters.targetType);
+    conditions.push(sql`target_type = ${filters.targetType}`);
   }
   if (filters.targetId) {
-    conditions.push(`target_id = $${paramIndex++}`);
-    params.push(filters.targetId);
+    conditions.push(sql`target_id = ${filters.targetId}`);
   }
   if (filters.tenantId) {
-    conditions.push(`tenant_id = $${paramIndex++}`);
-    params.push(filters.tenantId);
+    conditions.push(sql`tenant_id = ${filters.tenantId}`);
   }
   if (filters.startDate) {
-    conditions.push(`created_at >= $${paramIndex++}`);
-    params.push(filters.startDate);
+    conditions.push(sql`created_at >= ${filters.startDate}`);
   }
   if (filters.endDate) {
-    conditions.push(`created_at <= $${paramIndex++}`);
-    params.push(filters.endDate);
+    conditions.push(sql`created_at <= ${filters.endDate}`);
   }
 
-  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const whereClause = conditions.length > 0
+    ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
+    : sql``;
   const limit = filters.limit || 100;
   const offset = filters.offset || 0;
 
   const results = await db.execute(sql`
     SELECT * FROM super_admin_audit_logs
-    ${sql.raw(whereClause)}
+    ${whereClause}
     ORDER BY created_at DESC
     LIMIT ${limit}
     OFFSET ${offset}
@@ -330,7 +320,7 @@ export async function getSuperAdminAuditLogs(filters: {
 
   const countResult = await db.execute(sql`
     SELECT COUNT(*) as total FROM super_admin_audit_logs
-    ${sql.raw(whereClause)}
+    ${whereClause}
   `);
 
   return {

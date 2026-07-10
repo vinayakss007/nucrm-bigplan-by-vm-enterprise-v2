@@ -173,39 +173,32 @@ async function executeReport(params: ReportParams): Promise<ReportResult> {
   };
   const tableName = tableMap[entity]!;
 
-  let dateFilter = '';
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const queryParams: any[] = [tenantId];
-  let paramIndex = 2;
+  const conditions: import('drizzle-orm').SQL[] = [];
+  conditions.push(sql`${sql.identifier(tableName)}.tenant_id = ${tenantId}`);
 
   if (dateRange?.from) {
-    dateFilter += ` AND created_at >= $${paramIndex}`;
-    queryParams.push(new Date(dateRange.from));
-    paramIndex++;
+    conditions.push(sql`${sql.identifier(tableName)}.created_at >= ${new Date(dateRange.from)}`);
   }
   if (dateRange?.to) {
-    dateFilter += ` AND created_at <= $${paramIndex}`;
-    queryParams.push(new Date(dateRange.to));
-    paramIndex++;
+    conditions.push(sql`${sql.identifier(tableName)}.created_at <= ${new Date(dateRange.to)}`);
   }
 
-  // Add soft-delete filter for applicable entities
-  const softDeleteFilter = ['contacts', 'deals'].includes(entity) ? ' AND deleted_at IS NULL' : '';
+  if (['contacts', 'deals'].includes(entity)) {
+    conditions.push(sql`${sql.identifier(tableName)}.deleted_at IS NULL`);
+  }
 
-  const query = `
+  const whereClause = sql`WHERE ${sql.join(conditions, sql` AND `)}`;
+
+  const { rows } = await db.execute(sql`
     SELECT 
-      ${groupExpr} as label,
-      ${metricExpr} as value
-    FROM ${tableName}
-    WHERE tenant_id = $1 ${dateFilter} ${softDeleteFilter}
-    GROUP BY ${groupExpr}
+      ${sql.raw(groupExpr)} as label,
+      ${sql.raw(metricExpr)} as value
+    FROM ${sql.identifier(tableName)}
+    ${whereClause}
+    GROUP BY ${sql.raw(groupExpr)}
     ORDER BY value DESC
     LIMIT ${limit}
-  `;
-
-  const { rows } = await db.execute(sql.raw(buildParameterizedQuery(query, queryParams)));
+  `);
 
   // Calculate total and percentages
   const data = (rows as { label?: unknown; value?: unknown }[]).map(row => ({
@@ -246,27 +239,6 @@ function buildMetricExpression(metric: string, metricField?: string): string {
     case 'avg': return `COALESCE(ROUND(AVG(${metricField}::numeric), 2), 0)::numeric`;
     default: return 'COUNT(*)::int';
   }
-}
-
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildParameterizedQuery(query: string, params: any[]): string {
-  // For raw SQL execution with drizzle, we need to inline the parameters safely
-  // This is acceptable because all field names are whitelist-validated above
-  let result = query;
-  for (let i = params.length; i >= 1; i--) {
-    const value = params[i - 1];
-    if (value instanceof Date) {
-      result = result.replace(`$${i}`, `'${value.toISOString()}'`);
-    } else if (typeof value === 'string') {
-      // Escape single quotes
-      result = result.replace(`$${i}`, `'${value.replace(/'/g, "''")}'`);
-    } else {
-      result = result.replace(`$${i}`, String(value));
-    }
-  }
-  return result;
 }
 
 /**

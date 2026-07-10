@@ -167,12 +167,12 @@ export function getRecordAccessFilter(
       WHERE rp.tenant_id = ${tenantId}
         AND rp.role_id = ${roleId}
         AND rp.entity_type = ${entityType}
-        AND rp.entity_id = ${sql.raw(mapping.idColumn)}
+        AND rp.entity_id = ${sql.identifier(mapping.idColumn)}
         AND rp.deleted_at IS NULL
         AND (rp.expires_at IS NULL OR rp.expires_at > NOW())
         AND rp.access_level != 'none'
     )
-    OR ${sql.raw(mapping.assignedToColumn)} = ${userId}
-    OR ${sql.raw(mapping.createdByColumn)} = ${userId}
+    OR ${sql.identifier(mapping.assignedToColumn)} = ${userId}
+    OR ${sql.identifier(mapping.createdByColumn)} = ${userId}
   )`;
 }

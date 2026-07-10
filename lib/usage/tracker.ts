@@ -113,8 +113,6 @@ export async function incrementUsage(
         break;
 
       default:
-        // Custom counter stored in the JSONB counters field.
-        // Validate metric name against allowlist to prevent SQL injection via sql.raw().
         if (!VALID_CUSTOM_METRICS.includes(metric)) {
           console.warn(`[usage/tracker] Rejected invalid metric name: ${metric}`);
           return;
@@ -122,7 +120,7 @@ export async function incrementUsage(
         await db
           .update(userUsage)
           .set({
-            counters: sql`jsonb_set(COALESCE(counters, '{}'), ${sql.raw(`'{${metric}}'`)}, to_jsonb(COALESCE((counters->>'${sql.raw(metric)}')::int, 0) + ${amount}))`,
+            counters: sql`jsonb_set(COALESCE(counters, '{}'), ${sql(`{${metric}}`)}, to_jsonb(COALESCE((counters ->> ${metric})::int, 0) + ${amount}))`,
             lastActivityAt: new Date(),
             updatedAt: new Date(),
           })

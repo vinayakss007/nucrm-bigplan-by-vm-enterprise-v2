@@ -183,7 +183,7 @@ async function main() {
     await db.delete(schema.tenantMembers).where(sql`tenant_id = ${IDS.tenant}`);
     await db.delete(schema.roles).where(sql`tenant_id = ${IDS.tenant}`);
     await db.delete(schema.tenants).where(sql`id = ${IDS.tenant}`);
-    await db.delete(schema.users).where(sql`id IN (${sql.raw(Object.values(IDS.users).map(v => `'${v}'`).join(','))})`);
+    await db.delete(schema.users).where(sql`id IN (${sql.join(Object.values(IDS.users).map(v => sql`${v}`), sql`, `)})`);
 
     log('🧹', 'Cleaned existing seed data');
 
