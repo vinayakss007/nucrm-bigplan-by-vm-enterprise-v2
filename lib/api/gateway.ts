@@ -7,8 +7,8 @@ import { NextRequest } from 'next/server';
 import { tryApiKeyAuth } from '@/lib/auth/api-key';
 import { AuthContext } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { tenants } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { tenants, tenantMembers, sessions } from '@/drizzle/schema';
+import { eq, and, gt } from 'drizzle-orm';
 
 export interface GatewayConfig {
   allowedOrigins: string[];
@@ -20,6 +20,37 @@ export interface GatewayResolution {
   tenantId: string;
   authContext: AuthContext | null;
   source: 'api_key' | 'header' | 'domain' | 'subdomain';
+}
+
+async function getAuthenticatedUserId(request: NextRequest): Promise<string | null> {
+  const { verifyToken, hashToken } = await import('@/lib/auth/session');
+
+  // Try JWT cookie first
+  const sessionCookie = request.cookies.get('nucrm_session')?.value;
+  if (sessionCookie) {
+    const payload = await verifyToken(sessionCookie);
+    if (payload) {
+      const tokenHash = await hashToken(sessionCookie);
+      const results = await db.select({ userId: sessions.userId })
+        .from(sessions)
+        .where(and(
+          eq(sessions.tokenHash, tokenHash),
+          gt(sessions.expiresAt, new Date()),
+        ))
+        .limit(1);
+      if (results[0]) return results[0].userId;
+    }
+  }
+
+  // Try Authorization Bearer token
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const payload = await verifyToken(token);
+    if (payload) return payload.userId;
+  }
+
+  return null;
 }
 
 /**
@@ -37,7 +68,7 @@ export async function resolveGatewayTenant(request: NextRequest): Promise<Gatewa
     };
   }
 
-  // 2. Check X-Tenant-ID header (requires authentication via JWT cookie or Authorization header)
+  // 2. Check X-Tenant-ID header (requires authentication + tenant membership)
   const tenantIdHeader = request.headers.get('x-tenant-id');
   if (tenantIdHeader) {
     // X-Tenant-ID header-based resolution requires that the request also carries
@@ -50,6 +81,21 @@ export async function resolveGatewayTenant(request: NextRequest): Promise<Gatewa
       // Reject unauthenticated header-based resolution
       return null;
     }
+
+    // Verify the authenticated user actually belongs to the claimed tenant
+    const userId = await getAuthenticatedUserId(request);
+    if (!userId) return null;
+
+    const membership = await db.select({ id: tenantMembers.id })
+      .from(tenantMembers)
+      .where(and(
+        eq(tenantMembers.tenantId, tenantIdHeader),
+        eq(tenantMembers.userId, userId),
+        eq(tenantMembers.status, 'active'),
+      ))
+      .limit(1);
+
+    if (!membership[0]) return null;
 
     return {
       tenantId: tenantIdHeader,
