@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 const PIPELINE_CONFIG = {
@@ -170,14 +171,12 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
   };
 
   const deleteLead = async () => {
-    try {
+    await confirmThen(`Delete lead "${lead.first_name} ${lead.last_name}"?`, async () => {
       const res = await fetch(`/api/tenant/leads/${lead.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
       toast.success('Lead deleted');
       router.push('/tenant/leads');
-    } catch {
-      toast.error('Failed to delete lead');
-    }
+    });
   };
 
   const copyToClipboard = (text: string, label: string) => {
