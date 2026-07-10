@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Plus, Search, RefreshCw, X, Calendar } from 'lucide-react';
+import { Plus, Search, RefreshCw, X, Calendar, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -102,7 +102,7 @@ export default function SubscriptionsPage() {
 
       {/* Cards Grid */}
       {loading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading subscriptions...</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <RefreshCw className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
