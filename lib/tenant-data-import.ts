@@ -276,8 +276,9 @@ export class TenantDataImporter {
             // Validate that the statement targets only allowed tables
             const upperStmt = statement.toUpperCase();
             const tableMatch = upperStmt.match(/\b(?:INTO|FROM|UPDATE|JOIN)\s+(\w+)/i);
-            if (tableMatch && tableMatch[1]) {
-              const targetTable = tableMatch[1].toLowerCase();
+            const matchedTable = tableMatch?.[1];
+            if (matchedTable) {
+              const targetTable = matchedTable.toLowerCase();
               if (!ALLOWED_TABLES.has(targetTable)) {
                 result.errors.push({ table: targetTable, error: `Table '${targetTable}' is not allowed for SQL import` });
                 continue;
