@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Plus, Clock, Trash2, Loader2, X } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -48,9 +49,11 @@ export default function SequencesPage() {
   };
 
   const del = async (id: string) => {
+    await confirmThen('Delete this sequence?', async () => {
       await fetch(`/api/tenant/sequences/${id}`, { method:'DELETE' });
-    setSequences(s => s.filter(x => x.id !== id));
-    toast.success('Deleted');
+      setSequences(s => s.filter(x => x.id !== id));
+      toast.success('Deleted');
+    });
   };
 
   const addStep = () => setForm(f => ({...f, steps:[...f.steps, { delay_days:f.steps.length*3, action_type:'send_email', content:'', subject:'', body:'' }]}));
