@@ -1,6 +1,7 @@
 'use client';
 
 import { logError } from '@/lib/errors';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { useState, useRef, useEffect } from 'react';
 import {
   Database,
@@ -371,12 +372,14 @@ export default function SelectiveRestorePage() {
   };
 
   const handleDeleteBackup = async (backupId: string) => {
-    try {
-      await fetch(`/api/superadmin/selective-restore/backups?id=${backupId}`, { method: 'DELETE' });
-      loadBackups();
-    } catch (err) {
-      console.error('Delete failed:', err);
-    }
+    await confirmThen('Delete this backup permanently? This cannot be undone.', async () => {
+      try {
+        await fetch(`/api/superadmin/selective-restore/backups?id=${backupId}`, { method: 'DELETE' });
+        loadBackups();
+      } catch (err) {
+        console.error('Delete failed:', err);
+      }
+    });
   };
 
   const formatTimeAgo = (dateStr: string | null | undefined) => {

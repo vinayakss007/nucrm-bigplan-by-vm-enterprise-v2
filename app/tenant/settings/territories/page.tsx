@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Plus, Map, X, Loader2, Trash2 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -122,11 +123,13 @@ export default function TerritoriesPage() {
   };
 
   const del = async (id: string) => {
-    const res = await fetch(`/api/tenant/territories?id=${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      toast.success('Territory deleted');
-      load();
-    }
+    await confirmThen('Delete this territory?', async () => {
+      const res = await fetch(`/api/tenant/territories?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('Territory deleted');
+        load();
+      }
+    });
   };
 
   const findName = (id: string | null): string => {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import {
   Search,
   Trash2,
@@ -202,16 +203,18 @@ export default function SuperAdminDataExplorer() {
   };
 
   const handleDelete = async (table: string, id: string) => {
-    try {
-      await fetch('/api/superadmin/data-explorer', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ table, id, softDelete: true }),
-      });
-      handleSearch(); // Refresh
-    } catch (err) {
-      console.error('Delete failed:', err);
-    }
+    await confirmThen(`Permanently delete this ${table.slice(0,-1)} record? Data will be soft-deleted.`, async () => {
+      try {
+        await fetch('/api/superadmin/data-explorer', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ table, id, softDelete: true }),
+        });
+        handleSearch(); // Refresh
+      } catch (err) {
+        console.error('Delete failed:', err);
+      }
+    });
   };
 
   const copyToClipboard = (text: string) => {

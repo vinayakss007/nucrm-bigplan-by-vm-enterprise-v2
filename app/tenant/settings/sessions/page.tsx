@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Monitor, Smartphone, Globe, LogOut, Shield, Trash2 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -16,17 +17,21 @@ export default function SessionsPage() {
   useEffect(load, []);
 
   const revoke = async (sessionId: string) => {
-    setRevoking(sessionId);
-    await fetch('/api/user/sessions', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sessionId}) });
-    toast.success('Session revoked');
-    load();
-    setRevoking(null);
+    await confirmThen('Revoke this session? The device will be signed out.', async () => {
+      setRevoking(sessionId);
+      await fetch('/api/user/sessions', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sessionId}) });
+      toast.success('Session revoked');
+      load();
+      setRevoking(null);
+    });
   };
 
   const revokeAll = async () => {
-    await fetch('/api/user/sessions', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({revokeAll:true}) });
-    toast.success('All other sessions revoked');
-    load();
+    await confirmThen('Sign out all other devices? You will remain signed in here.', async () => {
+      await fetch('/api/user/sessions', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({revokeAll:true}) });
+      toast.success('All other sessions revoked');
+      load();
+    });
   };
 
   const getIcon = (ua: string) => {
