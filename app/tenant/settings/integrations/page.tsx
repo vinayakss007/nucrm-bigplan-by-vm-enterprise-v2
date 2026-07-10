@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Plug, Trash2, CheckCircle, XCircle, Globe, Mail, Zap, Send, Loader2 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -156,8 +157,10 @@ export default function IntegrationsPage() {
     setIntegrations(prev=>prev.map(i=>i.id===id?{...i,is_active:!active}:i));
   };
   const del = async (id: string) => {
+    await confirmThen('Remove this integration?', async () => {
       await fetch(`/api/tenant/integrations/${id}`,{method:'DELETE'});
-    setIntegrations(prev=>prev.filter(i=>i.id!==id)); toast.success('Removed');
+      setIntegrations(prev=>prev.filter(i=>i.id!==id)); toast.success('Removed');
+    });
   };
 
   return (
