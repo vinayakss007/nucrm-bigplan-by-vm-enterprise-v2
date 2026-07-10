@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import TenantSidebar from './sidebar';
 import TenantHeader from './header';
@@ -24,7 +24,6 @@ export default function TenantShell({ tenant, profile, roleSlug, permissions, is
   const [openCommandPalette, setOpenCommandPalette] = useState(false);
   const [openShortcutsModal, setOpenShortcutsModal] = useState(false);
   const mobileDrawerRef = useRef<HTMLDivElement>(null);
-  const hamburgerButtonRef = useRef<HTMLButtonElement>(null);
 
   // Escape key to close mobile drawer
   useEffect(() => {
