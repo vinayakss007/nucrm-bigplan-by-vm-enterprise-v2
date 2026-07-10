@@ -6,7 +6,6 @@ import { ArrowLeft, Shield, Plus, Edit, Trash2, Save, Lock, ChevronDown, Check, 
 import { PERMISSIONS, PERMISSION_CATEGORIES } from '@/lib/permissions/definitions';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
-import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 const DANGER_COLORS: Record<string, string> = { safe: 'text-emerald-500', moderate: 'text-amber-500', danger: 'text-red-500' };
