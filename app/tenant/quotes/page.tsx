@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Plus, Search, FileText, X, Send } from 'lucide-react';
+import { Plus, Search, FileText, X, Send, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -30,7 +30,7 @@ const statusColors: Record<string, string> = {
 
 export default function QuotesPage() {
   return (
-    <Suspense fallback={<div className="p-4 sm:p-6 text-center">Loading...</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center p-4 sm:p-6 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading...</div>}>
       <QuotesPageInner />
     </Suspense>
   );
@@ -192,7 +192,7 @@ function QuotesPageInner() {
 
       {/* Table */}
       {loading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading quotes...</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <FileText className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
