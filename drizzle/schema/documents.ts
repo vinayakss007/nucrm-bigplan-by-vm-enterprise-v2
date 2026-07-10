@@ -6,6 +6,7 @@
 
 import { pgTable, text, integer, jsonb, uuid, index } from 'drizzle-orm/pg-core';
 import * as utils from './utils';
+import { users as _users } from './core';
 
 // ── DOCUMENT FOLDERS ─────────────────────────────────────
 export const documentFolders = pgTable('document_folders', {
@@ -34,7 +35,7 @@ export const documents = pgTable('documents', {
   folderId: uuid('folder_id'),
   entityType: text('entity_type'), // 'contact' | 'deal' | 'company' | null
   entityId: text('entity_id'),
-  uploadedBy: uuid('uploaded_by').notNull(),
+  uploadedBy: uuid('uploaded_by').notNull().references(() => _users.id, { onDelete: 'restrict' }),
   metadata: jsonb('metadata').default({}),
   ...utils.lifecycle(),
 }, (table) => {
