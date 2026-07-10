@@ -49,6 +49,8 @@ COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/worker.ts ./worker.ts
 
+USER node
+
 EXPOSE 3000
 
 # Memory-limited start — prevents OOM on 4GB machines
