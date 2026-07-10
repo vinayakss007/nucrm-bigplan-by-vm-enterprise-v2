@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Plus, Globe, Check, X, Trash2, Loader2, ChevronDown, CheckCircle, XCircle, Clock, Copy } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -107,9 +108,11 @@ export default function WebhooksPage() {
   };
 
   const del = async (id: string) => {
-    await fetch(`/api/tenant/webhooks/${id}`, { method:'DELETE' });
-    setWebhooks(w => w.filter(x => x.id !== id));
-    toast.success('Deleted');
+    await confirmThen('Delete this webhook?', async () => {
+      await fetch(`/api/tenant/webhooks/${id}`, { method:'DELETE' });
+      setWebhooks(w => w.filter(x => x.id !== id));
+      toast.success('Deleted');
+    });
   };
 
   const copySecret = (id: string) => {

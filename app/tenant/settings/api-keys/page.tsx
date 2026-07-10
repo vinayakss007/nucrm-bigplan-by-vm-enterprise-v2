@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Key, Plus, Trash2, Copy, CheckCircle } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatDate, formatRelativeTime, apiFetch } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -32,8 +33,10 @@ export default function APIKeysPage() {
   };
 
   const del = async (id:string) => {
+    await confirmThen('Revoke this API key? Applications using this key will lose access.', async () => {
       await apiFetch(`/api/tenant/api-keys/${id}`,{method:'DELETE'});
-    toast.success('Key revoked'); load();
+      toast.success('Key revoked'); load();
+    });
   };
 
   const copy = (text:string) => {

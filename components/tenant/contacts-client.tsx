@@ -190,15 +190,20 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
 
   const load = useCallback(async (newOffset=0, q=search, status=statusFilter) => {
     setLoading(true);
-    const params = new URLSearchParams({ offset:String(newOffset), limit: String(limit) });
-    if (q) params.set('q', q);
-    if (status !== 'all') params.set('status', status);
-    router.push(`/tenant/contacts?${params.toString()}`, { scroll: false });
-    const res = await fetch('/api/tenant/contacts?'+params.toString());
-    const data = await res.json();
-    setContacts(normalize(data.data));
-    setTotal(data.total ?? 0);
-    setOffset(newOffset);
+    try {
+      const params = new URLSearchParams({ offset:String(newOffset), limit: String(limit) });
+      if (q) params.set('q', q);
+      if (status !== 'all') params.set('status', status);
+      router.push(`/tenant/contacts?${params.toString()}`, { scroll: false });
+      const res = await fetch('/api/tenant/contacts?'+params.toString());
+      const data = await res.json();
+      setContacts(normalize(data.data));
+      setTotal(data.total ?? 0);
+      setOffset(newOffset);
+    } catch (error) {
+      console.error('Failed to load contacts:', error);
+      toast.error('Failed to load contacts');
+    }
     setLoading(false);
   }, [search, statusFilter, router]);
 

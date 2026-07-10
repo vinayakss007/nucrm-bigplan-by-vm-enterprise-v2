@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Plus, Receipt, X, Loader2, Trash2, Pencil, Star } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -100,13 +101,15 @@ export default function TaxSettingsPage() {
   };
 
   const del = async (id: string) => {
-    const res = await fetch(`/api/tenant/tax?id=${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      setRates(prev => prev.filter(x => x.id !== id));
-      toast.success('Tax rate deleted');
-    } else {
-      toast.error('Failed to delete');
-    }
+    await confirmThen('Delete this tax rate?', async () => {
+      const res = await fetch(`/api/tenant/tax?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setRates(prev => prev.filter(x => x.id !== id));
+        toast.success('Tax rate deleted');
+      } else {
+        toast.error('Failed to delete');
+      }
+    });
   };
 
   const activeRates = rates.filter(r => r.isActive !== false);

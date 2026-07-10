@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Tag, Search, Pencil, GitMerge, Trash2, RefreshCw, Loader2, ShieldX, X, AlertCircle, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 
 type TagRow = { tag: string; leads: number; contacts: number; companies: number; total: number };
 
@@ -45,6 +46,13 @@ export default function TagsManagerPage() {
     return next;
   });
 
+  const toggleAll = () => {
+    if (selected.size === filtered.length) setSelected(new Set());
+    else setSelected(new Set(filtered.map(t => t.tag)));
+  };
+
+  const allSelected = filtered.length > 0 && selected.size === filtered.length;
+
   const doRename = async () => {
     if (!renameTarget) return;
     const value = renameValue.trim();
@@ -85,20 +93,22 @@ export default function TagsManagerPage() {
 
   const doMerge = async () => {
     if (selected.size < 2 || !mergeTarget.trim()) return;
-    setBusy(true);
-    const res = await fetch('/api/tenant/admin/tags', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'merge', tags: Array.from(selected), new_tag: mergeTarget.trim() }),
+    await confirmThen(`Merge ${selected.size} tag(s) into "${mergeTarget.trim()}"?`, async () => {
+      setBusy(true);
+      const res = await fetch('/api/tenant/admin/tags', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'merge', tags: Array.from(selected), new_tag: mergeTarget.trim() }),
+      });
+      const d = await res.json();
+      setBusy(false);
+      if (res.ok) {
+        toast.success(`Merged ${selected.size} tag(s) → "${mergeTarget.trim()}" across ${d.total} record(s)`);
+        setSelected(new Set()); setMergeTarget(''); setMergeOpen(false);
+        reload();
+      } else {
+        toast.error(d.error ?? 'Failed');
+      }
     });
-    const d = await res.json();
-    setBusy(false);
-    if (res.ok) {
-      toast.success(`Merged ${selected.size} tag(s) → "${mergeTarget.trim()}" across ${d.total} record(s)`);
-      setSelected(new Set()); setMergeTarget(''); setMergeOpen(false);
-      reload();
-    } else {
-      toast.error(d.error ?? 'Failed');
-    }
   };
 
   if (!isAdmin) return (
@@ -167,7 +177,14 @@ export default function TagsManagerPage() {
           ) : filtered.length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-muted-foreground">{q ? `No tags match "${query}"` : 'No tags yet'}</div>
           ) : (
-            filtered.map(row => (
+            <>
+            {filtered.length > 0 && (
+              <label className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground border-b border-border cursor-pointer hover:bg-accent/20">
+                <input type="checkbox" checked={allSelected} onChange={toggleAll} className="accent-violet-600" />
+                {allSelected ? `${selected.size} selected` : `Select all ${filtered.length} tag${filtered.length !== 1 ? 's' : ''}`}
+              </label>
+            )}
+            {filtered.map(row => (
               <div key={row.tag} className="px-3 py-3 flex items-start gap-2">
                 <input type="checkbox" checked={selected.has(row.tag)} onChange={() => toggle(row.tag)} className="mt-1" />
                 <div className="flex-1 min-w-0">
@@ -185,7 +202,8 @@ export default function TagsManagerPage() {
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
-            ))
+            ))}
+          </>
           )}
         </div>
 
@@ -193,7 +211,9 @@ export default function TagsManagerPage() {
         <table className="w-full hidden sm:table">
           <thead>
             <tr className="border-b border-border bg-muted/20 text-[10px] uppercase tracking-wider text-muted-foreground">
-              <th className="px-3 py-2.5 w-8"></th>
+              <th className="px-3 py-2.5 w-8">
+                {filtered.length > 0 && <input type="checkbox" checked={allSelected} onChange={toggleAll} className="accent-violet-600" />}
+              </th>
               <th className="px-3 py-2.5 text-left">Tag</th>
               <th className="px-3 py-2.5 text-right">Leads</th>
               <th className="px-3 py-2.5 text-right">Contacts</th>

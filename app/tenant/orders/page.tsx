@@ -1,7 +1,7 @@
 'use client';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Plus, Search, Package, X, FileText } from 'lucide-react';
+import { Plus, Search, Package, X, FileText, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -28,7 +28,7 @@ const statusColors: Record<string, string> = {
 
 export default function OrdersPage() {
   return (
-    <Suspense fallback={<div className="p-4 sm:p-6 text-center">Loading...</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center p-4 sm:p-6 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading...</div>}>
       <OrdersPageInner />
     </Suspense>
   );
@@ -43,7 +43,11 @@ function OrdersPageInner() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [contactFilter, setContactFilter] = useState(initialContactId);
+  const [sortBy, setSortBy] = useState('orderDate');
+  const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('desc');
+  const [page, setPage] = useState(0);
   const [showModal, setShowModal] = useState(false);
+  const pageSize = 25;
   const [form, setForm] = useState({
     title: '',
     contactId: initialContactId,
@@ -60,7 +64,7 @@ function OrdersPageInner() {
       const res = await fetch('/api/tenant/contacts');
       const data = await res.json();
       setContacts(data.contacts || []);
-    } catch (error) { console.error('Failed to fetch contacts', error); }
+    } catch (error) { console.error('Failed to fetch contacts', error); toast.error('Failed to load contacts'); }
   };
 
   const fetchOrders = async () => {
@@ -70,6 +74,7 @@ function OrdersPageInner() {
       setOrders(data.orders || []);
     } catch (error) {
       console.error('Failed to fetch orders', error);
+      toast.error('Failed to load orders');
     } finally {
       setLoading(false);
     }
@@ -114,6 +119,31 @@ function OrdersPageInner() {
     (o.orderNumber.toLowerCase().includes(search.toLowerCase()) || getContactName(o.contactId).toLowerCase().includes(search.toLowerCase())) &&
     (!statusFilter || o.status === statusFilter) &&
     (!contactFilter || o.contactId === contactFilter)
+  );
+
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const aVal = sortBy === 'totalAmount' ? parseFloat(a.totalAmount) : (a[sortBy as keyof Order] ?? '');
+      const bVal = sortBy === 'totalAmount' ? parseFloat(b.totalAmount) : (b[sortBy as keyof Order] ?? '');
+      if (typeof aVal === 'number' && typeof bVal === 'number') return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+      return sortOrder === 'asc' ? String(aVal).localeCompare(String(bVal)) : String(bVal).localeCompare(String(aVal));
+    });
+  }, [filtered, sortBy, sortOrder]);
+
+  useEffect(() => { setPage(0); }, [search, statusFilter, contactFilter]);
+
+  const paginated = sorted.slice(page * pageSize, (page + 1) * pageSize);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+
+  const toggleSort = (field: string) => {
+    if (sortBy === field) setSortOrder(o => o === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(field); setSortOrder('asc'); }
+  };
+
+  const SortHeader = ({ field, children }: { field: string; children: React.ReactNode }) => (
+    <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => toggleSort(field)}>
+      <span className="inline-flex items-center gap-1">{children}{sortBy === field ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+    </th>
   );
 
   const totalRevenue = orders.reduce((sum, o) => sum + parseFloat(o.totalAmount), 0).toFixed(2);
@@ -176,7 +206,7 @@ function OrdersPageInner() {
 
       {/* Table */}
       {loading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading orders...</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Package className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
@@ -188,17 +218,17 @@ function OrdersPageInner() {
             <table className="w-full min-w-[700px]">
               <thead className="border-b border-border bg-muted/30">
                 <tr>
-                  <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Order #</th>
+                  <SortHeader field="orderNumber">Order #</SortHeader>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Contact</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Title</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider hidden md:table-cell">Date</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Amount</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Status</th>
+                  <SortHeader field="title"><span className="hidden sm:inline">Title</span></SortHeader>
+                  <SortHeader field="orderDate"><span className="hidden md:inline">Date</span></SortHeader>
+                  <SortHeader field="totalAmount">Amount</SortHeader>
+                  <SortHeader field="status"><span className="hidden sm:inline">Status</span></SortHeader>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map((order) => (
+                {paginated.map((order) => (
                   <tr key={order.id} className="hover:bg-accent/30 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs">{order.orderNumber}</td>
                     <td className="px-4 py-3 text-xs">{getContactName(order.contactId)}</td>
@@ -224,6 +254,30 @@ function OrdersPageInner() {
               </tbody>
             </table>
           </div>
+          {/* Pagination */}
+          {sorted.length > pageSize && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/10">
+              <p className="text-xs text-muted-foreground">
+                Showing <span className="font-semibold text-foreground">{page * pageSize + 1}–{Math.min((page + 1) * pageSize, sorted.length)}</span> of <span className="font-semibold text-foreground">{sorted.length}</span> orders
+              </p>
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+                  className="px-2.5 py-1 text-xs rounded-lg border border-border hover:bg-accent disabled:opacity-40 transition-colors">← Prev</button>
+                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                  const start = Math.max(0, Math.min(page - 2, totalPages - 5));
+                  const pg = start + i;
+                  return pg < totalPages ? (
+                    <button key={pg} onClick={() => setPage(pg)}
+                      className={cn('px-2.5 py-1 text-xs rounded-lg border transition-colors', pg === page ? 'bg-violet-600 text-white border-violet-600' : 'border-border hover:bg-accent')}>
+                      {pg + 1}
+                    </button>
+                  ) : null;
+                })}
+                <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+                  className="px-2.5 py-1 text-xs rounded-lg border border-border hover:bg-accent disabled:opacity-40 transition-colors">Next →</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
