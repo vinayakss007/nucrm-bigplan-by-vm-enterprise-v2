@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Plus, Zap, X, Loader2, Trash2 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -115,11 +116,14 @@ export default function AssignmentRulesPage() {
   };
 
   const del = async (id: string) => {
-    const res = await fetch(`/api/tenant/assignment-rules?id=${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      setRules(prev => prev.filter(x => x.id !== id));
-      toast.success('Rule deleted');
-    }
+    const rule = rules.find(r => r.id === id);
+    await confirmThen(`Delete assignment rule "${rule?.name || 'this rule'}"?`, async () => {
+      const res = await fetch(`/api/tenant/assignment-rules?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setRules(prev => prev.filter(x => x.id !== id));
+        toast.success('Rule deleted');
+      }
+    });
   };
 
   return (
