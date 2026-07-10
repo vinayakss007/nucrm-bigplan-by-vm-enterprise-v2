@@ -48,6 +48,8 @@ function QuotesPageInner() {
   const [contactFilter, setContactFilter] = useState(initialContactId);
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('desc');
+  const [page, setPage] = useState(0);
+  const pageSize = 25;
   const [form, setForm] = useState({
     title: '', contactId: initialContactId, dealId: '', expiresAt: '',
     notes: '', terms: '', items: [{ description: '', quantity: '1', unitPrice: '0' }],
@@ -116,6 +118,11 @@ function QuotesPageInner() {
       return sortOrder === 'asc' ? String(aVal).localeCompare(String(bVal)) : String(bVal).localeCompare(String(aVal));
     });
   }, [filtered, sortBy, sortOrder]);
+
+  useEffect(() => { setPage(0); }, [search, statusFilter, contactFilter]);
+
+  const paginated = sorted.slice(page * pageSize, (page + 1) * pageSize);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
 
   const toggleSort = (field: string) => {
     if (sortBy === field) setSortOrder(o => o === 'asc' ? 'desc' : 'asc');
@@ -207,7 +214,7 @@ function QuotesPageInner() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {sorted.map((quote) => (
+                {paginated.map((quote) => (
                   <tr key={quote.id} className="hover:bg-accent/30 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs">{quote.quoteNumber || '-'}</td>
                     <td className="px-4 py-3 text-xs">{getContactName(quote.contactId)}</td>
@@ -228,6 +235,30 @@ function QuotesPageInner() {
               </tbody>
             </table>
           </div>
+          {/* Pagination */}
+          {sorted.length > pageSize && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/10">
+              <p className="text-xs text-muted-foreground">
+                Showing <span className="font-semibold text-foreground">{page * pageSize + 1}–{Math.min((page + 1) * pageSize, sorted.length)}</span> of <span className="font-semibold text-foreground">{sorted.length}</span> quotes
+              </p>
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+                  className="px-2.5 py-1 text-xs rounded-lg border border-border hover:bg-accent disabled:opacity-40 transition-colors">← Prev</button>
+                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                  const start = Math.max(0, Math.min(page - 2, totalPages - 5));
+                  const pg = start + i;
+                  return pg < totalPages ? (
+                    <button key={pg} onClick={() => setPage(pg)}
+                      className={cn('px-2.5 py-1 text-xs rounded-lg border transition-colors', pg === page ? 'bg-violet-600 text-white border-violet-600' : 'border-border hover:bg-accent')}>
+                      {pg + 1}
+                    </button>
+                  ) : null;
+                })}
+                <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+                  className="px-2.5 py-1 text-xs rounded-lg border border-border hover:bg-accent disabled:opacity-40 transition-colors">Next →</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
