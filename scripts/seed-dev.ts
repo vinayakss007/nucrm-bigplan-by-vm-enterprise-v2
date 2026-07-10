@@ -984,7 +984,7 @@ async function main() {
         name: 'Deal Events Webhook',
         url: 'https://example.com/webhooks/deals',
         events: ['deal.created', 'deal.updated', 'deal.won', 'deal.lost'],
-        secret: 'whsec_dev_secret_123',
+        secret: process.env.WEBHOOK_SECRET_1 || `whsec_dev_${crypto.randomUUID()}`,
         isActive: true,
       },
       {
@@ -993,7 +993,7 @@ async function main() {
         name: 'Contact Events Webhook',
         url: 'https://example.com/webhooks/contacts',
         events: ['contact.created', 'contact.updated'],
-        secret: 'whsec_dev_secret_456',
+        secret: process.env.WEBHOOK_SECRET_2 || `whsec_dev_${crypto.randomUUID()}`,
         isActive: true,
       },
     ]);
@@ -1188,10 +1188,10 @@ async function main() {
     console.log('║                                                  ║');
     console.log('║  Login Credentials:                             ║');
     console.log('║  ─────────────────                              ║');
-    console.log('║  Super Admin:  admin@test.com / password123     ║');
-    console.log('║  Admin:        manager@test.com / password123   ║');
-    console.log('║  Sales Rep 1:  rep1@test.com / password123      ║');
-    console.log('║  Sales Rep 2:  rep2@test.com / password123      ║');
+    console.log('║  Super Admin:  admin@test.com                    ║');
+    console.log('║  Admin:        manager@test.com                  ║');
+    console.log('║  Sales Rep 1:  rep1@test.com                     ║');
+    console.log('║  Sales Rep 2:  rep2@test.com                     ║');
     console.log('║                                                  ║');
     console.log('║  Tenant: NuCRM Demo Workspace (slug: demo)      ║');
     console.log('║                                                  ║');
