@@ -180,8 +180,7 @@ export async function POST(req: NextRequest) {
 
     const _storageType = 'local';
 
-    const ext = extname(file.name).toLowerCase() || '.bin';
-    const filename = `${randomBytes(16).toString('hex')}${ext}`;
+    const filename = `${randomBytes(16).toString('hex')}${ext || '.bin'}`;
 
     // Local storage (simplified for now)
     const uploadDir = join(process.cwd(), 'uploads', ctx.tenantId, resource_type, resource_id);
