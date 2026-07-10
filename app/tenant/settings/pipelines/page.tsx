@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, GripVertical, Save, Loader2, X, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 const _DEFAULT_STAGES = [
@@ -65,10 +66,13 @@ export default function PipelinesSettingsPage() {
   };
 
   const deletePipeline = async (id: string) => {
-    const r = await fetch(`/api/tenant/pipelines/${id}`, { method:'DELETE' });
-    const d = await r.json();
-    if (r.ok) { toast.success('Deleted'); load(); }
-    else toast.error(d.error);
+    const pipeline = selected?.id === id ? selected : pipelines?.find(p => p.id === id);
+    await confirmThen(`Delete pipeline "${pipeline?.name || 'this pipeline'}"?`, async () => {
+      const r = await fetch(`/api/tenant/pipelines/${id}`, { method:'DELETE' });
+      const d = await r.json();
+      if (r.ok) { toast.success('Deleted'); load(); }
+      else toast.error(d.error);
+    });
   };
 
   const addStage = () => {

@@ -4,6 +4,7 @@ import { Bell, BellOff, CheckCheck, Trash2, CheckCircle, TrendingUp,
   AtSign, AlertTriangle, Zap, Clock, Users } from 'lucide-react';
 import { cn, formatRelativeTime, toSnakeCase } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,16 +57,28 @@ export default function NotificationsPage() {
   };
 
   const del = async (id: string) => {
-    await fetch('/api/tenant/notifications', {
-      method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id }),
+    await confirmThen('Delete this notification?', async () => {
+      await fetch('/api/tenant/notifications', {
+        method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id }),
+      });
+      setNotifications(prev => prev.filter(n => n.id!==id));
     });
-    setNotifications(prev => prev.filter(n => n.id!==id));
   };
 
   const clearAll = async () => {
+    await confirmThen('Clear all notifications?', async () => {
       await fetch('/api/tenant/notifications', { method:'DELETE' });
-    setNotifications([]);
-    toast.success('Cleared');
+      setNotifications([]);
+      toast.success('Cleared');
+    });
+  };
+
+  const clearAll = async () => {
+    await confirmThen('Delete all notifications?', async () => {
+      await fetch('/api/tenant/notifications', { method:'DELETE' });
+      setNotifications([]);
+      toast.success('Cleared');
+    });
   };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
