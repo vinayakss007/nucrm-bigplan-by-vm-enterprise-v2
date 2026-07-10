@@ -247,6 +247,16 @@ export class TenantDataImporter {
       errors: [],
     };
 
+    // Block destructive SQL statements — only allow INSERT/UPDATE/DELETE on known tenant tables
+    const BLOCKED_KEYWORDS = /\b(DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|EXEC|EXECUTE|INTO\s+OUTFILE|INTO\s+DUMPFILE|LOAD_FILE|COPY|CALL|PREPARE|DEALLOCATE)\b/i;
+
+    // Allowed tables for data import (tenant-scoped)
+    const ALLOWED_TABLES = new Set([
+      'contacts', 'leads', 'deals', 'companies', 'tasks', 'notes',
+      'activities', 'tags', 'pipelines', 'deal_stages', 'forms',
+      'workflows', 'automations', 'email_templates', 'webhooks',
+    ]);
+
     try {
       await db.transaction(async (tx) => {
         // Split by semicolons and execute each statement
@@ -257,6 +267,23 @@ export class TenantDataImporter {
 
         for (const statement of statements) {
           try {
+            // Block destructive statements
+            if (BLOCKED_KEYWORDS.test(statement)) {
+              result.errors.push({ table: 'sql', error: `Blocked destructive SQL: ${statement.substring(0, 80)}...` });
+              continue;
+            }
+
+            // Validate that the statement targets only allowed tables
+            const upperStmt = statement.toUpperCase();
+            const tableMatch = upperStmt.match(/\b(?:INTO|FROM|UPDATE|JOIN)\s+(\w+)/i);
+            if (tableMatch) {
+              const targetTable = tableMatch[1].toLowerCase();
+              if (!ALLOWED_TABLES.has(targetTable)) {
+                result.errors.push({ table: targetTable, error: `Table '${targetTable}' is not allowed for SQL import` });
+                continue;
+              }
+            }
+
             const res = await tx.execute(sql.raw(statement));
             if (res.rowCount) {
               result.recordsRestored += res.rowCount;
