@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Tag, Search, Pencil, GitMerge, Trash2, RefreshCw, Loader2, ShieldX, X, AlertCircle, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 
 type TagRow = { tag: string; leads: number; contacts: number; companies: number; total: number };
 
@@ -85,20 +86,22 @@ export default function TagsManagerPage() {
 
   const doMerge = async () => {
     if (selected.size < 2 || !mergeTarget.trim()) return;
-    setBusy(true);
-    const res = await fetch('/api/tenant/admin/tags', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'merge', tags: Array.from(selected), new_tag: mergeTarget.trim() }),
+    await confirmThen(`Merge ${selected.size} tag(s) into "${mergeTarget.trim()}"?`, async () => {
+      setBusy(true);
+      const res = await fetch('/api/tenant/admin/tags', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'merge', tags: Array.from(selected), new_tag: mergeTarget.trim() }),
+      });
+      const d = await res.json();
+      setBusy(false);
+      if (res.ok) {
+        toast.success(`Merged ${selected.size} tag(s) → "${mergeTarget.trim()}" across ${d.total} record(s)`);
+        setSelected(new Set()); setMergeTarget(''); setMergeOpen(false);
+        reload();
+      } else {
+        toast.error(d.error ?? 'Failed');
+      }
     });
-    const d = await res.json();
-    setBusy(false);
-    if (res.ok) {
-      toast.success(`Merged ${selected.size} tag(s) → "${mergeTarget.trim()}" across ${d.total} record(s)`);
-      setSelected(new Set()); setMergeTarget(''); setMergeOpen(false);
-      reload();
-    } else {
-      toast.error(d.error ?? 'Failed');
-    }
   };
 
   if (!isAdmin) return (
