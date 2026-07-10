@@ -5,6 +5,7 @@ import { CheckSquare, Plus, X, User, Clock, CheckCircle, Trash2, Edit } from 'lu
 import { cn, formatDate } from '@/lib/utils';
 import { Swipeable } from '@/components/ui/swipeable';
 import toast from 'react-hot-toast';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 
 const PRIORITY_CFG = {
   high:   { label:'High',   dot:'bg-red-500',   badge:'text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400' },
@@ -53,16 +54,20 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
 
   const bulkComplete = async () => {
     const ids = [...selected];
-    setTasks(prev => prev.map(t => ids.includes(t.id) ? { ...t, completed: true } : t));
-    await Promise.all(ids.map(id => fetch(`/api/tenant/tasks/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ completed:true }) })));
-    setSelected(new Set()); toast.success(`${ids.length} tasks completed`);
+    await confirmThen(`Mark ${ids.length} task(s) complete?`, async () => {
+      setTasks(prev => prev.map(t => ids.includes(t.id) ? { ...t, completed: true } : t));
+      await Promise.all(ids.map(id => fetch(`/api/tenant/tasks/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ completed:true }) })));
+      setSelected(new Set()); toast.success(`${ids.length} tasks completed`);
+    }, 'always');
   };
 
   const bulkDelete = async () => {
     const ids = [...selected];
-    setTasks(prev => prev.filter(t => !ids.includes(t.id)));
-    await Promise.all(ids.map(id => fetch(`/api/tenant/tasks/${id}`, { method:'DELETE' })));
-    setSelected(new Set()); toast.success(`${ids.length} tasks deleted`);
+    await confirmThen(`Delete ${ids.length} task(s)?`, async () => {
+      setTasks(prev => prev.filter(t => !ids.includes(t.id)));
+      await Promise.all(ids.map(id => fetch(`/api/tenant/tasks/${id}`, { method:'DELETE' })));
+      setSelected(new Set()); toast.success(`${ids.length} tasks deleted`);
+    });
   };
 
   const addTask = async (e: React.FormEvent) => {
