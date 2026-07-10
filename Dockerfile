@@ -13,20 +13,23 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# Non-sensitive build args — safe to store in image history
 ARG DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
-ARG JWT_SECRET
 ARG SENTRY_DSN=""
 ARG NEXT_PUBLIC_SENTRY_DSN=""
 ARG SENTRY_ORG=""
 ARG SENTRY_PROJECT=""
-ARG SENTRY_AUTH_TOKEN=""
-RUN DATABASE_URL=$DATABASE_URL \
-    JWT_SECRET=$JWT_SECRET \
+# Sensitive values passed via BuildKit secret mounts (not in image history)
+# --mount=type=secret requires: DOCKER_BUILDKIT=1 or docker buildx build
+RUN --mount=type=secret,id=jwt_secret \
+    --mount=type=secret,id=sentry_auth_token \
+    DATABASE_URL=$DATABASE_URL \
+    JWT_SECRET=$(cat /run/secrets/jwt_secret 2>/dev/null || echo "build-only-not-runtime") \
     SENTRY_DSN=$SENTRY_DSN \
     NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN \
     SENTRY_ORG=$SENTRY_ORG \
     SENTRY_PROJECT=$SENTRY_PROJECT \
-    SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN \
+    SENTRY_AUTH_TOKEN=$(cat /run/secrets/sentry_auth_token 2>/dev/null) \
     NEXT_PUBLIC_APP_URL=http://localhost:3000 \
     npm run build && \
     echo "build-$(date +%s)" > /app/.next/BUILD_ID
