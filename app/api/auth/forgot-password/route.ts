@@ -4,7 +4,7 @@ import { validateBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { users, passwordResets } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import { sendEmail } from '@/lib/email/service';
 import { checkRateLimit } from '@/lib/rate-limit';
 
@@ -28,12 +28,13 @@ export async function POST(request: NextRequest) {
     
     if (!user) return NextResponse.json({ ok: true });
 
-    // Create reset token
+    // Create reset token — hash before storing so DB never holds raw tokens
     const token = randomBytes(32).toString('hex');
+    const tokenHash = createHash('sha256').update(token).digest('hex');
 
     await db.insert(passwordResets).values({
       userId: user.id,
-      token: token, // Store raw token (not hashed)
+      token: tokenHash,
       expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
     });
 
