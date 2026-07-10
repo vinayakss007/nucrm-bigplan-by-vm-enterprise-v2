@@ -170,6 +170,17 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
         </form>
       )}
 
+      {/* Select all toggle */}
+      {filtered.length > 0 && (
+        <label className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors w-fit">
+          <input type="checkbox"
+            checked={selected.size === filtered.length}
+            onChange={e => setSelected(e.target.checked ? new Set(filtered.map(t => t.id)) : new Set())}
+            className="accent-violet-600 w-3.5 h-3.5 rounded cursor-pointer" />
+          {selected.size === filtered.length ? `${selected.size} selected` : `Select all ${filtered.length} task${filtered.length !== 1 ? 's' : ''}`}
+        </label>
+      )}
+
       {/* Task list */}
       <div className="admin-card overflow-hidden divide-y divide-border">
         {!filtered.length ? (
