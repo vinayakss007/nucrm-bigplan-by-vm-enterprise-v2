@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, Calendar, DollarSign, CreditCard, RefreshCw, Pause, Play } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -94,34 +95,52 @@ export default function SubscriptionDetailPage() {
   const handleStatusAction = async (action: 'pause' | 'resume' | 'cancel') => {
     const statusMap = { pause: 'paused', resume: 'active', cancel: 'cancelled' };
     const newStatus = statusMap[action];
-    if (action === 'cancel' && !confirm('Are you sure you want to cancel this subscription?')) return;
+    if (action === 'cancel') {
+      await confirmThen('Are you sure you want to cancel this subscription?', async () => {
+        try {
+          const body: Record<string, unknown> = { status: newStatus };
+          body['cancelledAt'] = new Date().toISOString();
+          const res = await fetch(`/api/tenant/subscriptions/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) throw new Error('Failed');
+          const data = await res.json();
+          setSubscription(data.data);
+          toast.success(`Subscription cancelled`);
+        } catch {
+          toast.error(`Failed to cancel subscription`);
+        }
+      });
+      return;
+    }
     try {
-      const body: Record<string, unknown> = { status: newStatus };
-      if (action === 'cancel') body['cancelledAt'] = new Date().toISOString();
       const res = await fetch(`/api/tenant/subscriptions/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ status: newStatus }),
       });
       if (!res.ok) throw new Error('Failed');
       const data = await res.json();
       setSubscription(data.data);
-      toast.success(`Subscription ${action === 'cancel' ? 'cancelled' : action === 'pause' ? 'paused' : 'resumed'}`);
+      toast.success(`Subscription ${action}d`);
     } catch {
       toast.error(`Failed to ${action} subscription`);
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this subscription?')) return;
-    try {
-      const res = await fetch(`/api/tenant/subscriptions/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
-      toast.success('Subscription deleted');
-      router.push('/tenant/subscriptions');
-    } catch {
-      toast.error('Failed to delete subscription');
-    }
+    await confirmThen('Are you sure you want to delete this subscription?', async () => {
+      try {
+        const res = await fetch(`/api/tenant/subscriptions/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Failed');
+        toast.success('Subscription deleted');
+        router.push('/tenant/subscriptions');
+      } catch {
+        toast.error('Failed to delete subscription');
+      }
+    });
   };
 
   if (loading) {

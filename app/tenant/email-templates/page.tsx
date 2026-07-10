@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Mail, Plus, Pencil, Trash2, Eye, Copy, Save, X, Variable } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { sanitizeHTML } from '@/lib/sanitize';
@@ -198,10 +199,11 @@ export default function EmailTemplatesPage() {
   };
 
   const del = async (id: string) => {
-    if (!confirm('Delete this template?')) return;
-    const res = await fetch(`/api/tenant/email-templates/${id}`, { method: 'DELETE' });
-    if (res.ok) { toast.success('Deleted'); setTemplates(ts => ts.filter(t => t.id !== id)); }
-    else toast.error('Failed to delete');
+    await confirmThen('Delete this template?', async () => {
+      const res = await fetch(`/api/tenant/email-templates/${id}`, { method: 'DELETE' });
+      if (res.ok) { toast.success('Deleted'); setTemplates(ts => ts.filter(t => t.id !== id)); }
+      else toast.error('Failed to delete');
+    });
   };
 
   const duplicate = async (t: Template) => {

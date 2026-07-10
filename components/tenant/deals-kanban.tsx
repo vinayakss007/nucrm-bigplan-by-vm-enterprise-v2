@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo, useRef } from 'react'
 import { Plus, MoreHorizontal, Edit, User, Building, Calendar, GripVertical, Trash2 } from 'lucide-react'
 import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
+import { confirmThen } from '@/components/ui/confirm-dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -167,18 +168,19 @@ export default function DealsKanban({ initialDeals, stages, contacts, companies,
   }, [stages])
 
   const deleteDeal = useCallback(async (dealId: string, title: string) => {
-    if (!confirm(`Delete "${title}"?`)) return
-    try {
-      const res = await fetch(`/api/tenant/deals/${dealId}`, { method: 'DELETE' })
-      if (res.ok) {
-        toast.success('Deal deleted')
-        setDeals((prev) => prev.filter((d) => d.id !== dealId))
-      } else {
-        toast.error('Failed to delete')
+    await confirmThen(`Delete "${title}"?`, async () => {
+      try {
+        const res = await fetch(`/api/tenant/deals/${dealId}`, { method: 'DELETE' })
+        if (res.ok) {
+          toast.success('Deal deleted')
+          setDeals((prev) => prev.filter((d) => d.id !== dealId))
+        } else {
+          toast.error('Failed to delete')
+        }
+      } catch {
+        toast.error('Failed to delete deal')
       }
-    } catch {
-      toast.error('Failed to delete deal')
-    }
+    })
   }, [])
 
   // Drag and Drop handlers

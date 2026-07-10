@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, Calendar, DollarSign, FileText, User } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -108,15 +109,16 @@ export default function ContractDetailPage() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this contract?')) return;
-    try {
-      const res = await fetch(`/api/tenant/contracts/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
-      toast.success('Contract deleted');
-      router.push('/tenant/contracts');
-    } catch {
-      toast.error('Failed to delete contract');
-    }
+    await confirmThen('Are you sure you want to delete this contract?', async () => {
+      try {
+        const res = await fetch(`/api/tenant/contracts/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Failed');
+        toast.success('Contract deleted');
+        router.push('/tenant/contracts');
+      } catch {
+        toast.error('Failed to delete contract');
+      }
+    });
   };
 
   if (loading) {

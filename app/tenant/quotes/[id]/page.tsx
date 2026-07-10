@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, FileText, Send, CheckCircle, XCircle, Calendar, ShoppingCart } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -111,15 +112,16 @@ export default function QuoteDetailPage() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this quote?')) return;
-    try {
-      const res = await fetch(`/api/tenant/quotes/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
-      toast.success('Quote deleted');
-      router.push('/tenant/quotes');
-    } catch {
-      toast.error('Failed to delete quote');
-    }
+    await confirmThen('Are you sure you want to delete this quote?', async () => {
+      try {
+        const res = await fetch(`/api/tenant/quotes/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Failed');
+        toast.success('Quote deleted');
+        router.push('/tenant/quotes');
+      } catch {
+        toast.error('Failed to delete quote');
+      }
+    });
   };
 
   if (loading) {
