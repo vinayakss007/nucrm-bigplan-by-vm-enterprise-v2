@@ -47,7 +47,7 @@ export default function TenantShell({ tenant, profile, roleSlug, permissions, is
       const focusable = drawer.querySelectorAll<HTMLElement>(
         'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
       );
-      if (focusable.length > 0) focusable[0].focus();
+      if (focusable.length > 0) focusable[0]?.focus();
     }, 100);
 
     const handleTabTrap = (e: KeyboardEvent) => {
