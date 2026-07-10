@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Users, Plus, Mail, UserMinus, AlertTriangle, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import { cn, formatDate, formatRelativeTime, getInitials } from '@/lib/utils';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 interface TeamMember {
@@ -187,8 +188,10 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
   };
 
   const cancelInvite = async (inviteId: string) => {
-    await fetch(`/api/tenant/invite/${inviteId}`,{ method:'DELETE' });
-    toast.success('Invitation cancelled'); reload();
+    await confirmThen('Cancel this invitation?', async () => {
+      await fetch(`/api/tenant/invite/${inviteId}`,{ method:'DELETE' });
+      toast.success('Invitation cancelled'); reload();
+    });
   };
 
   return (
