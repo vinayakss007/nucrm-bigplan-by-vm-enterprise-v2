@@ -239,7 +239,18 @@ export async function POST(req: NextRequest) {
         const fieldKey = payload['field_key'] as string | undefined;
         const fieldValue = payload['field_value'];
         if (!fieldKey) return NextResponse.json({ error: 'field_key required' }, { status: 400 });
-        
+
+        // Allowlist of safe metadata keys + alphanumeric/underscore only
+        const ALLOWED_FIELD_KEYS = new Set([
+          'source', 'priority', 'deal_type', 'custom_fields', 'tags', 'notes',
+          'expected_close', 'probability', 'next_action', 'competitor', 'loss_reason',
+          'closed_amount', 'assigned_team', 'region', 'segment',
+        ]);
+        const safeFieldKey = fieldKey.replace(/[^a-zA-Z0-9_]/g, '');
+        if (safeFieldKey !== fieldKey || !ALLOWED_FIELD_KEYS.has(safeFieldKey)) {
+          return NextResponse.json({ error: `field_key '${fieldKey}' is not allowed` }, { status: 400 });
+        }
+
         const res = await db
           .update(deals)
           .set({
