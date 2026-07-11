@@ -11,7 +11,7 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
           <AlertTriangle className="w-8 h-8 text-red-500" />
         </div>
         <h1 className="text-xl font-bold mb-2">Something went wrong</h1>
-        <p className="text-sm text-muted-foreground mb-2">{error.message || 'An unexpected error occurred.'}</p>
+        <p className="text-sm text-muted-foreground mb-2">An unexpected error occurred.</p>
         {error.digest && <p className="text-xs text-muted-foreground/50 mb-6 font-mono">Error ID: {error.digest}</p>}
         <div className="flex items-center justify-center gap-3">
           <button onClick={reset} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-colors">
