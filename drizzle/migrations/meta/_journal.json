@@ -219,6 +219,16 @@
       "when": 1782600000000,
       "tag": "0034_rls_remaining_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1783761529000,
+      "tag": "0035_missing_db_functions",
+      "breakpoints": {
+        "when": 1783761529000,
+        "tag": "0035_missing_db_functions"
+      }
     }
   ]
 }

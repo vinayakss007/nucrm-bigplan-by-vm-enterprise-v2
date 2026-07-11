@@ -13,7 +13,7 @@ if (distDir !== '.next' && !fs.existsSync(distDir)) {
 /** @type {import('next').NextConfig} */
 let nextConfig = {
   distDir,
-  allowedDevOrigins: ['localhost:3000'],
+  allowedDevOrigins: ['localhost:3000', '34.70.191.180'],
   typescript: { ignoreBuildErrors: false },
   devIndicators: { buildActivity: false },
   cacheMaxMemorySize: 50 * 1024 * 1024,
