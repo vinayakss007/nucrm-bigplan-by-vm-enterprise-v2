@@ -5,7 +5,7 @@ import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { sendAdminTelegram } from '@/lib/telegram-admin';
-import { acquireLock } from '@/lib/cache';
+import { acquireLock } from '@/lib/cache/index';
 
 const IDEMPOTENCY_TTL = 3600 * 24; // 24 hours
 
