@@ -107,7 +107,6 @@ async function main() {
 
   console.log('[seed-fresh] Done!');
   console.log(`  Email: admin@nucrm.com`);
-  console.log(`  Password: Admin123!`);
   console.log(`  Tenant: ${tenant.name} (${tenant.id})`);
 }
 
