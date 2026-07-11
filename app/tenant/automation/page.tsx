@@ -105,7 +105,7 @@ export default function AutomationPage() {
   };
 
   const deleteCustom = async (id: string) => {
-    const automation = [...prebuilt, ...customs].find(a => a.id === id);
+    const automation = [...prebuilts, ...customs].find(a => a.id === id);
     await confirmThen(`Delete automation "${automation?.name || 'this automation'}"?`, async () => {
       setDeleting(id);
       await fetch(`/api/tenant/automations/${id}`, { method:'DELETE' });
