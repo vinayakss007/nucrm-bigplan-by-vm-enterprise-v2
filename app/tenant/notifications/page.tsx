@@ -73,14 +73,6 @@ export default function NotificationsPage() {
     });
   };
 
-  const clearAll = async () => {
-    await confirmThen('Delete all notifications?', async () => {
-      await fetch('/api/tenant/notifications', { method:'DELETE' });
-      setNotifications([]);
-      toast.success('Cleared');
-    });
-  };
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleClick = async (n: any) => {
     if (isUnread(n)) await markRead(n.id);
