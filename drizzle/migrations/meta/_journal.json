@@ -203,6 +203,22 @@
       "when": 1782400000000,
       "tag": "0032_rename_announcement_body_to_content",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "dialect": "postgresql",
+      "when": 1782500000000,
+      "tag": "0033_add_fk_constraints_billing_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "dialect": "postgresql",
+      "when": 1782600000000,
+      "tag": "0034_rls_remaining_tables",
+      "breakpoints": true
     }
   ]
 }

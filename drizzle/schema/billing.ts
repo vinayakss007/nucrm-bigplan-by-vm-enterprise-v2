@@ -2,6 +2,7 @@ import { uniqueIndex, pgTable, uuid, text, timestamp, jsonb, decimal, integer, b
 import { sql } from 'drizzle-orm';
 import * as utils from './utils';
 import { companies as _companies, contacts as _contacts } from './crm';
+import { users as _users } from './core';
 
 // Aliases to match existing references in table definitions
 const companies = _companies;
@@ -128,7 +129,8 @@ export const invoices = pgTable('invoices', {
 
 export const invoiceLineItems = pgTable('invoice_line_items', {
   id: utils.pk(),
-  invoiceId: uuid('invoice_id').notNull(),
+  tenantId: utils.tenantId(),
+  invoiceId: uuid('invoice_id').notNull().references(() => invoices.id, { onDelete: 'cascade' }),
   productId: uuid('product_id'),
   serviceId: uuid('service_id'),
   description: text('description').notNull(),
@@ -144,20 +146,23 @@ export const invoiceLineItems = pgTable('invoice_line_items', {
   sortOrder: integer('sort_order').default(0),
   ...utils.lifecycle(),
 }, (table) => ({
+  tenantIdx: utils.tenantIdx(table),
   invoiceIdx: index('idx_invoice_line_items_invoice').on(table.invoiceId),
 }));
 
 export const invoicePayments = pgTable('invoice_payments', {
   id: utils.pk(),
-  invoiceId: uuid('invoice_id').notNull(),
+  tenantId: utils.tenantId(),
+  invoiceId: uuid('invoice_id').notNull().references(() => invoices.id, { onDelete: 'cascade' }),
   amount: decimal('amount', { precision: 15, scale: 2 }).notNull(),
   paymentDate: date('payment_date').notNull(),
   paymentMethod: text('payment_method'),
   reference: text('reference'),
   notes: text('notes'),
-  recordedBy: uuid('recorded_by'),
+  recordedBy: uuid('recorded_by').references(() => _users.id, { onDelete: 'set null' }),
   ...utils.audit(),
 }, (table) => ({
+  tenantIdx: utils.tenantIdx(table),
   invoiceIdx: index('idx_invoice_payments_invoice').on(table.invoiceId),
   dateIdx: index('idx_invoice_payments_date').on(table.paymentDate),
 }));
@@ -219,7 +224,8 @@ export const orders = pgTable('orders', {
 
 export const orderLineItems = pgTable('order_line_items', {
   id: utils.pk(),
-  orderId: uuid('order_id').notNull(),
+  tenantId: utils.tenantId(),
+  orderId: uuid('order_id').notNull().references(() => orders.id, { onDelete: 'cascade' }),
   productId: uuid('product_id'),
   serviceId: uuid('service_id'),
   description: text('description').notNull(),
@@ -230,6 +236,7 @@ export const orderLineItems = pgTable('order_line_items', {
   sortOrder: integer('sort_order').default(0),
   ...utils.lifecycle(),
 }, (table) => ({
+  tenantIdx: utils.tenantIdx(table),
   orderIdx: index('idx_order_line_items_order').on(table.orderId),
 }));
 
@@ -277,8 +284,8 @@ export const serviceSubscriptions = pgTable('service_subscriptions', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
 
-  contactId: uuid('contact_id'),
-  companyId: uuid('company_id'),
+  contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
 
   name: text('name').notNull(),
   planName: text('plan_name'),

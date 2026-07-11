@@ -103,6 +103,7 @@ export async function POST(request: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const lineItems = items.map((item: any, idx: number) => ({
+        tenantId: ctx.tenantId,
         orderId: order.id,
         productId: null,
         serviceId: null,
