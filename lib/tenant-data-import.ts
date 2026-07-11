@@ -348,6 +348,7 @@ function parseAndBuildInsert(sqlString: string): any {
   if (!match) return null;
 
   const [, tableName, columnsStr, valuesStr] = match;
+  if (!columnsStr || !valuesStr) return null;
   if (!ALLOWED_IMPORT_TABLES.includes(tableName.toLowerCase())) return null;
 
   const columns = columnsStr.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
