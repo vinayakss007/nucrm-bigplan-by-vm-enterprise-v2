@@ -141,7 +141,7 @@ export default function TenantCustomFields() {
 
   const handleDelete = async (fieldId: string) => {
     const field = fields?.find(f => f.id === fieldId);
-    await confirmThen(`Delete custom field "${field?.name || fieldId}"?`, async () => {
+    await confirmThen(`Delete custom field "${field?.field_label || fieldId}"?`, async () => {
       try {
         await fetch(`/api/tenant/custom-fields?fieldId=${fieldId}`, { method: 'DELETE' });
         loadFields();
