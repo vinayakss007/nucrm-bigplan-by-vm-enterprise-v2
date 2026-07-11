@@ -4,6 +4,7 @@ import {
   AlertTriangle, Plus, Save, AlertCircle, Loader2, Trash2, Edit2, 
   Clock, Zap, MessageSquare, Info
 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 
 type AtRiskRule = {
@@ -83,14 +84,15 @@ export default function AtRiskRulesPage() {
   }
 
   async function remove(id: string) {
-    if (!confirm('Delete this rule?')) return;
-    setBusy('delete:' + id);
-    try {
-      const r = await fetch(`/api/tenant/admin/at-risk/${id}`, { method: 'DELETE' });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-      load();
-    } catch (e) { setError((e as Error).message); }
-    finally { setBusy(null); }
+    await confirmThen('Delete this rule?', async () => {
+      setBusy('delete:' + id);
+      try {
+        const r = await fetch(`/api/tenant/admin/at-risk/${id}`, { method: 'DELETE' });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+        load();
+      } catch (e) { setError((e as Error).message); }
+      finally { setBusy(null); }
+    });
   }
 
   const allStages = pipelines.flatMap(p => p.stages.map(s => ({ ...s, pipelineName: p.name })));

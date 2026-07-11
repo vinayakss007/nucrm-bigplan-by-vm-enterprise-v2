@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Shield, Plus, Edit, Trash2, Save, Lock, ChevronDown, Check, Crown, X, Loader2 } from 'lucide-react';
 import { PERMISSIONS, PERMISSION_CATEGORIES } from '@/lib/permissions/definitions';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -86,23 +87,24 @@ export default function TenantRolesPage() {
   };
 
   const deleteRole = async (roleId: string, roleName: string) => {
-    if (!confirm(`Delete role "${roleName}"? Users with this role will need reassignment.`)) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/superadmin/tenants/roles/${roleId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to delete');
-      toast.success('Role deleted');
-      load();
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Failed to delete');
-    } finally {
-      setSaving(false);
-    }
+    await confirmThen(`Delete role "${roleName}"? Users with this role will need reassignment.`, async () => {
+      setSaving(true);
+      try {
+        const res = await fetch(`/api/superadmin/tenants/roles/${roleId}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tenantId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to delete');
+        toast.success('Role deleted');
+        load();
+      } catch (error: unknown) {
+        toast.error(error instanceof Error ? error.message : 'Failed to delete');
+      } finally {
+        setSaving(false);
+      }
+    });
   };
 
   if (loading) {

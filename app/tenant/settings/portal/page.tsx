@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Globe, Save, Loader2, Plus, Trash2, CheckCircle, Users } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import SettingsEmptyState from '@/components/shared/settings-empty-state';
@@ -94,16 +95,17 @@ export default function PortalSettingsPage() {
   };
 
   const deleteClient = async (id: string) => {
-    if (!confirm('Remove this client access?')) return;
-    const res = await fetch('/api/tenant/portal/clients', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
+    await confirmThen('Remove this client access?', async () => {
+      const res = await fetch('/api/tenant/portal/clients', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        setClients(clients.filter(c => c.id !== id));
+        toast.success('Client removed');
+      }
     });
-    if (res.ok) {
-      setClients(clients.filter(c => c.id !== id));
-      toast.success('Client removed');
-    }
   };
 
   if (loading) {

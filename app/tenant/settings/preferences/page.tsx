@@ -1,9 +1,9 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
-import {
-  Save, Palette, Calendar, Clock, Loader2, RotateCcw, Mail, Lock, Zap, Search,
+import { Save, Palette, Calendar, Clock, Loader2, RotateCcw, Mail, Lock, Zap, Search,
   PanelLeftClose, ShieldCheck,
 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { useTheme } from 'next-themes';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
@@ -108,19 +108,20 @@ export default function PreferencesPage() {
   };
 
   const resetToWorkspace = async () => {
-    if (!window.confirm('Reset all your preferences to the workspace defaults?')) return;
-    setSaving(true);
-    const res = await fetch('/api/user/preferences', { method: 'DELETE' });
-    if (res.ok) {
-      toast.success('Reset to workspace defaults');
-      const refresh = await fetch('/api/user/preferences');
-      const d = await refresh.json();
-      setPrefs(d.preferences ?? {}); setOriginal(d.preferences ?? {});
-      window.dispatchEvent(new Event('nucrm:prefs-changed'));
-    } else {
-      toast.error('Failed to reset');
-    }
-    setSaving(false);
+    await confirmThen('Reset all your preferences to the workspace defaults?', async () => {
+      setSaving(true);
+      const res = await fetch('/api/user/preferences', { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('Reset to workspace defaults');
+        const refresh = await fetch('/api/user/preferences');
+        const d = await refresh.json();
+        setPrefs(d.preferences ?? {}); setOriginal(d.preferences ?? {});
+        window.dispatchEvent(new Event('nucrm:prefs-changed'));
+      } else {
+        toast.error('Failed to reset');
+      }
+      setSaving(false);
+    });
   };
 
   if (loading) {

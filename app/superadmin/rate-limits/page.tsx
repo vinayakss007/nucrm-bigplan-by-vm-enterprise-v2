@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Shield, Save, Loader2, RotateCcw, Users, CreditCard, Zap, Info, Check, Globe } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
@@ -129,30 +130,31 @@ export default function SuperAdminRateLimitsPage() {
   };
 
   const resetToDefaults = async () => {
-    if (!confirm('Reset this plan to use global defaults?')) return;
-    setSaving(selectedPlan);
-    try {
-      const res = await fetch('/api/superadmin/rate-limits', {
+    await confirmThen('Reset this plan to use global defaults?', async () => {
+      setSaving(selectedPlan);
+      try {
+        const res = await fetch('/api/superadmin/rate-limits', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'reset_to_defaults', planId: selectedPlan }),
-      });
-      const d = await res.json();
-      if (res.ok) {
-        const plan = plans.find(p => p.id === selectedPlan);
-        if (plan) {
-          setEditLimits({});
-          setPlans(prev => prev.map(p => p.id === selectedPlan ? { ...p, rateLimits: {} } : p));
+        });
+        const d = await res.json();
+        if (res.ok) {
+          const plan = plans.find(p => p.id === selectedPlan);
+          if (plan) {
+            setEditLimits({});
+            setPlans(prev => prev.map(p => p.id === selectedPlan ? { ...p, rateLimits: {} } : p));
+          }
+          toast.success('Reset to global defaults');
+          setHasChanges(false);
+        } else {
+          toast.error(d.error || 'Reset failed');
         }
-        toast.success('Reset to global defaults');
-        setHasChanges(false);
-      } else {
-        toast.error(d.error || 'Reset failed');
+      } catch {
+        toast.error('Network error');
       }
-    } catch {
-      toast.error('Network error');
-    }
-    setSaving(null);
+      setSaving(null);
+    });
   };
 
   const toggleSuperAdminUnlimited = async (userId: string, current: boolean) => {

@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { AlertTriangle, CheckCheck, RefreshCw, X, ChevronDown, ChevronRight, Search, Book, Copy, Check } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -118,7 +119,7 @@ export default function ErrorsPage() {
         <div className="flex items-center gap-2">
           <button onClick={() => load()} className="p-2 rounded-lg border border-white/10 text-white/30 hover:text-white transition-colors"><RefreshCw className="w-3.5 h-3.5"/></button>
           {resolved==='false' && (
-            <button onClick={() => { if(confirm('Mark all unresolved errors as resolved?')) resolve(undefined, true); }}
+            <button onClick={() => confirmThen('Mark all unresolved errors as resolved?', () => resolve(undefined, true))}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 text-xs font-medium hover:bg-emerald-600/30 transition-colors">
               <CheckCheck className="w-3.5 h-3.5"/>Resolve All
             </button>

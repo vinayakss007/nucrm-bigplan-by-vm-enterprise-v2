@@ -4,6 +4,7 @@ import {
   Target, Plus, Save, X, AlertCircle, Loader2, Trash2, Edit2, RefreshCw, Play,
   CheckCircle2, HelpCircle, Sparkles
 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 
 type Rule = {
@@ -68,14 +69,15 @@ export default function LeadScoringRulesPage() {
   }
 
   async function remove(id: string) {
-    if (!confirm('Delete this rule?')) return;
-    setBusy('delete:' + id);
-    try {
-      const r = await fetch(`/api/tenant/admin/lead-scoring/${id}`, { method: 'DELETE' });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-      load();
-    } catch (e) { setError((e as Error).message); }
-    finally { setBusy(null); }
+    await confirmThen('Delete this rule?', async () => {
+      setBusy('delete:' + id);
+      try {
+        const r = await fetch(`/api/tenant/admin/lead-scoring/${id}`, { method: 'DELETE' });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+        load();
+      } catch (e) { setError((e as Error).message); }
+      finally { setBusy(null); }
+    });
   }
 
   async function installStarters() {
