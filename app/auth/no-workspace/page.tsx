@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Zap, Building2, Loader2, LogOut } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 export default function NoWorkspacePage() {
@@ -25,8 +26,10 @@ export default function NoWorkspacePage() {
   };
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.push('/auth/login');
+    await confirmThen('Are you sure you want to log out?', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/auth/login');
+    });
   };
 
   return (

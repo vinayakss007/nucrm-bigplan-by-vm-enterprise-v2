@@ -7,6 +7,7 @@ import { Bell, Sun, Moon, Search, LogOut, X, Users, TrendingUp,
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { cn, formatCurrency, getInitials, formatRelativeTime, toSnakeCase } from '@/lib/utils';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 
 export default function TenantHeader({ tenant, profile, roleSlug, onToggleSidebar }: {
   tenant: any; profile: any; roleSlug: string; onToggleSidebar?: () => void;
@@ -99,10 +100,12 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   };
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    try { new BroadcastChannel('nucrm_auth').postMessage('logout'); } catch {}
-    router.push('/auth/login');
-    router.refresh();
+    await confirmThen('Are you sure you want to log out?', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      try { new BroadcastChannel('nucrm_auth').postMessage('logout'); } catch {}
+      router.push('/auth/login');
+      router.refresh();
+    });
   };
 
   const total = results ? (results.contacts?.length??0)+(results.deals?.length??0)+(results.companies?.length??0) : 0;
