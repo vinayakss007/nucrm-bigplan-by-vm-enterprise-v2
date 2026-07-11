@@ -428,7 +428,7 @@ function buildSafeInsertQuery(statement: string): SQL | null {
   if (!insertMatch) return null;
   
   const [, tableName, columnsStr, valuesStr] = insertMatch;
-  if (!columnsStr || !valuesStr) return null;
+  if (!tableName || !columnsStr || !valuesStr) return null;
   const columns = columnsStr.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
   const values = parseInsertValues(valuesStr);
   
