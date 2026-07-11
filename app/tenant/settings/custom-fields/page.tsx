@@ -16,6 +16,7 @@ import {
   Lightbulb,
   Code,
 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
