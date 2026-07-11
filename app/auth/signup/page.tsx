@@ -7,7 +7,7 @@ import { Loader2, Eye, EyeOff, Mail, Lock, User, Building2,
   Cpu, CheckCircle, ArrowRight, Shield, Rocket, Target
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-
+import { useFormValidation } from '@/lib/hooks/use-form-validation';
 
 function getPasswordStrength(password: string): { level: 'weak' | 'medium' | 'strong'; score: number } {
   let score = 0;
@@ -34,6 +34,24 @@ const strengthLabels = {
   strong: 'Strong',
 };
 
+const validationRules = {
+  workspace_name: {
+    required: true,
+    minLength: 2,
+  },
+  full_name: {
+    required: true,
+    minLength: 2,
+  },
+  email: {
+    required: true,
+    pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+  },
+  password: {
+    required: true,
+    minLength: 12,
+  },
+};
 
 export default function SignupPage() {
   const router = useRouter();
@@ -45,6 +63,7 @@ export default function SignupPage() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { errors, touched, validate, touch, validateAll } = useFormValidation(validationRules);
 
   const passwordStrength = getPasswordStrength(password);
 
@@ -52,6 +71,16 @@ export default function SignupPage() {
     e.preventDefault();
     if (!agreedToTerms) {
       setError('Please agree to the Terms of Service');
+      return;
+    }
+    const values = {
+      workspace_name: workspaceName,
+      full_name: name,
+      email,
+      password,
+    };
+    if (!validateAll(values)) {
+      setLoading(false);
       return;
     }
     setLoading(true);
@@ -175,11 +204,21 @@ export default function SignupPage() {
                   <input
                     value={workspaceName}
                     onChange={(e) => setWorkspaceName(e.target.value)}
+                    onBlur={() => touch('workspace_name') && validate('workspace_name', workspaceName)}
                     required
                     placeholder="Acme Corp"
-                    className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 placeholder:text-slate-400 transition-all min-h-[44px]"
+                    aria-invalid={!!errors.workspace_name}
+                    aria-describedby={errors.workspace_name ? 'workspace-error' : undefined}
+                    className={`w-full pl-11 pr-4 py-3.5 rounded-xl border bg-white text-sm font-medium focus:outline-none focus:ring-2 placeholder:text-slate-400 transition-all min-h-[44px] ${
+                      errors.workspace_name && touched.workspace_name
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
+                        : 'border-slate-200 focus:border-violet-500 focus:ring-violet-500/20'
+                    }`}
                   />
                 </div>
+                {errors.workspace_name && touched.workspace_name && (
+                  <p id="workspace-error" className="mt-1.5 text-xs text-red-600" role="alert">{errors.workspace_name}</p>
+                )}
               </div>
 
               {/* Full name */}
@@ -190,11 +229,21 @@ export default function SignupPage() {
                   <input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    onBlur={() => touch('full_name') && validate('full_name', name)}
                     required
                     placeholder="Jane Smith"
-                    className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 placeholder:text-slate-400 transition-all min-h-[44px]"
+                    aria-invalid={!!errors.full_name}
+                    aria-describedby={errors.full_name ? 'name-error' : undefined}
+                    className={`w-full pl-11 pr-4 py-3.5 rounded-xl border bg-white text-sm font-medium focus:outline-none focus:ring-2 placeholder:text-slate-400 transition-all min-h-[44px] ${
+                      errors.full_name && touched.full_name
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
+                        : 'border-slate-200 focus:border-violet-500 focus:ring-violet-500/20'
+                    }`}
                   />
                 </div>
+                {errors.full_name && touched.full_name && (
+                  <p id="name-error" className="mt-1.5 text-xs text-red-600" role="alert">{errors.full_name}</p>
+                )}
               </div>
 
 
@@ -207,11 +256,21 @@ export default function SignupPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    onBlur={() => touch('email') && validate('email', email)}
                     required
                     placeholder="jane@company.com"
-                    className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 placeholder:text-slate-400 transition-all min-h-[44px]"
+                    aria-invalid={!!errors.email}
+                    aria-describedby={errors.email ? 'signup-email-error' : undefined}
+                    className={`w-full pl-11 pr-4 py-3.5 rounded-xl border bg-white text-sm font-medium focus:outline-none focus:ring-2 placeholder:text-slate-400 transition-all min-h-[44px] ${
+                      errors.email && touched.email
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
+                        : 'border-slate-200 focus:border-violet-500 focus:ring-violet-500/20'
+                    }`}
                   />
                 </div>
+                {errors.email && touched.email && (
+                  <p id="signup-email-error" className="mt-1.5 text-xs text-red-600" role="alert">{errors.email}</p>
+                )}
               </div>
 
               {/* Password */}
@@ -223,10 +282,17 @@ export default function SignupPage() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    onBlur={() => touch('password') && validate('password', password)}
                     required
                     minLength={12}
                     placeholder="Create a strong password"
-                    className="w-full pl-11 pr-12 py-3.5 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 placeholder:text-slate-400 transition-all min-h-[44px]"
+                    aria-invalid={!!errors.password}
+                    aria-describedby={errors.password ? 'signup-password-error' : undefined}
+                    className={`w-full pl-11 pr-12 py-3.5 rounded-xl border bg-white text-sm font-medium focus:outline-none focus:ring-2 placeholder:text-slate-400 transition-all min-h-[44px] ${
+                      errors.password && touched.password
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
+                        : 'border-slate-200 focus:border-violet-500 focus:ring-violet-500/20'
+                    }`}
                   />
                   <button
                     type="button"
@@ -237,6 +303,9 @@ export default function SignupPage() {
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {errors.password && touched.password && (
+                  <p id="signup-password-error" className="mt-1.5 text-xs text-red-600" role="alert">{errors.password}</p>
+                )}
 
 
                 {/* Password strength indicator */}
