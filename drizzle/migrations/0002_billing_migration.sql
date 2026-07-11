@@ -1,4 +1,4 @@
-CREATE TABLE "contracts" (
+CREATE TABLE IF NOT EXISTS "contracts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -26,7 +26,7 @@ CREATE TABLE "contracts" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "invoice_line_items" (
+CREATE TABLE IF NOT EXISTS "invoice_line_items" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"invoice_id" uuid NOT NULL,
 	"product_id" uuid,
@@ -47,7 +47,7 @@ CREATE TABLE "invoice_line_items" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "invoice_payments" (
+CREATE TABLE IF NOT EXISTS "invoice_payments" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"invoice_id" uuid NOT NULL,
 	"amount" numeric(15, 2) NOT NULL,
@@ -64,7 +64,7 @@ CREATE TABLE "invoice_payments" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "invoices" (
+CREATE TABLE IF NOT EXISTS "invoices" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -108,7 +108,7 @@ CREATE TABLE "invoices" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "order_line_items" (
+CREATE TABLE IF NOT EXISTS "order_line_items" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"order_id" uuid NOT NULL,
 	"product_id" uuid,
@@ -124,7 +124,7 @@ CREATE TABLE "order_line_items" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "orders" (
+CREATE TABLE IF NOT EXISTS "orders" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -167,7 +167,7 @@ CREATE TABLE "orders" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "service_categories" (
+CREATE TABLE IF NOT EXISTS "service_categories" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -183,7 +183,7 @@ CREATE TABLE "service_categories" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "services" (
+CREATE TABLE IF NOT EXISTS "services" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,

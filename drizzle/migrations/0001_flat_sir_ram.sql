@@ -1,4 +1,4 @@
-CREATE TABLE "storage_documents" (
+CREATE TABLE IF NOT EXISTS "storage_documents" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE "storage_documents" (
 	CONSTRAINT "storage_documents_storage_key_unique" UNIQUE("storage_key")
 );
 --> statement-breakpoint
-CREATE TABLE "api_key_usage" (
+CREATE TABLE IF NOT EXISTS "api_key_usage" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"api_key_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -31,7 +31,7 @@ CREATE TABLE "api_key_usage" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "api_keys" (
+CREATE TABLE IF NOT EXISTS "api_keys" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid,
@@ -51,7 +51,7 @@ CREATE TABLE "api_keys" (
 	CONSTRAINT "api_keys_key_hash_unique" UNIQUE("key_hash")
 );
 --> statement-breakpoint
-CREATE TABLE "approval_requests" (
+CREATE TABLE IF NOT EXISTS "approval_requests" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"entity_type" text NOT NULL,
@@ -67,7 +67,7 @@ CREATE TABLE "approval_requests" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "audit_logs" (
+CREATE TABLE IF NOT EXISTS "audit_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid,
@@ -87,7 +87,7 @@ CREATE TABLE "audit_logs" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "feature_registry" (
+CREATE TABLE IF NOT EXISTS "feature_registry" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"feature_name" text NOT NULL,
 	"description" text,
@@ -103,7 +103,7 @@ CREATE TABLE "feature_registry" (
 	CONSTRAINT "feature_registry_feature_name_unique" UNIQUE("feature_name")
 );
 --> statement-breakpoint
-CREATE TABLE "field_permissions" (
+CREATE TABLE IF NOT EXISTS "field_permissions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"role_id" uuid,
@@ -115,7 +115,7 @@ CREATE TABLE "field_permissions" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "impersonation_sessions" (
+CREATE TABLE IF NOT EXISTS "impersonation_sessions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"impersonator_id" uuid NOT NULL,
 	"target_user_id" uuid NOT NULL,
@@ -129,7 +129,7 @@ CREATE TABLE "impersonation_sessions" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "invitations" (
+CREATE TABLE IF NOT EXISTS "invitations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"email" text NOT NULL,
@@ -144,7 +144,7 @@ CREATE TABLE "invitations" (
 	CONSTRAINT "invitations_token_unique" UNIQUE("token")
 );
 --> statement-breakpoint
-CREATE TABLE "notifications" (
+CREATE TABLE IF NOT EXISTS "notifications" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -159,7 +159,7 @@ CREATE TABLE "notifications" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "password_resets" (
+CREATE TABLE IF NOT EXISTS "password_resets" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
 	"token" text NOT NULL,
@@ -170,7 +170,7 @@ CREATE TABLE "password_resets" (
 	CONSTRAINT "password_resets_token_unique" UNIQUE("token")
 );
 --> statement-breakpoint
-CREATE TABLE "record_permissions" (
+CREATE TABLE IF NOT EXISTS "record_permissions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"role_id" uuid,
@@ -184,7 +184,7 @@ CREATE TABLE "record_permissions" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "refresh_tokens" (
+CREATE TABLE IF NOT EXISTS "refresh_tokens" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
 	"token" text NOT NULL,
@@ -195,7 +195,7 @@ CREATE TABLE "refresh_tokens" (
 	CONSTRAINT "refresh_tokens_token_unique" UNIQUE("token")
 );
 --> statement-breakpoint
-CREATE TABLE "roles" (
+CREATE TABLE IF NOT EXISTS "roles" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -209,7 +209,7 @@ CREATE TABLE "roles" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "sessions" (
+CREATE TABLE IF NOT EXISTS "sessions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
 	"token_hash" text NOT NULL,
@@ -220,7 +220,7 @@ CREATE TABLE "sessions" (
 	CONSTRAINT "sessions_token_hash_unique" UNIQUE("token_hash")
 );
 --> statement-breakpoint
-CREATE TABLE "tenant_members" (
+CREATE TABLE IF NOT EXISTS "tenant_members" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -238,7 +238,7 @@ CREATE TABLE "tenant_members" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "tenants" (
+CREATE TABLE IF NOT EXISTS "tenants" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
 	"slug" text NOT NULL,
@@ -276,7 +276,7 @@ CREATE TABLE "tenants" (
 	CONSTRAINT "tenants_custom_domain_unique" UNIQUE("custom_domain")
 );
 --> statement-breakpoint
-CREATE TABLE "users" (
+CREATE TABLE IF NOT EXISTS "users" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"email" text NOT NULL,
 	"password_hash" text,
@@ -315,7 +315,7 @@ CREATE TABLE "users" (
 	CONSTRAINT "users_email_unique" UNIQUE("email")
 );
 --> statement-breakpoint
-CREATE TABLE "call_notes" (
+CREATE TABLE IF NOT EXISTS "call_notes" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"contact_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -331,7 +331,7 @@ CREATE TABLE "call_notes" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "call_recordings" (
+CREATE TABLE IF NOT EXISTS "call_recordings" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"contact_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -346,7 +346,7 @@ CREATE TABLE "call_recordings" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "churn_predictions" (
+CREATE TABLE IF NOT EXISTS "churn_predictions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid NOT NULL,
@@ -362,7 +362,7 @@ CREATE TABLE "churn_predictions" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "companies" (
+CREATE TABLE IF NOT EXISTS "companies" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -400,7 +400,7 @@ CREATE TABLE "companies" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "contact_emails" (
+CREATE TABLE IF NOT EXISTS "contact_emails" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"contact_id" uuid NOT NULL,
 	"email" text NOT NULL,
@@ -411,7 +411,7 @@ CREATE TABLE "contact_emails" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "contact_lifecycle_history" (
+CREATE TABLE IF NOT EXISTS "contact_lifecycle_history" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"contact_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -426,7 +426,7 @@ CREATE TABLE "contact_lifecycle_history" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "contact_merge_history" (
+CREATE TABLE IF NOT EXISTS "contact_merge_history" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"primary_contact_id" uuid NOT NULL,
@@ -441,7 +441,7 @@ CREATE TABLE "contact_merge_history" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "contact_scores" (
+CREATE TABLE IF NOT EXISTS "contact_scores" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"contact_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -457,13 +457,13 @@ CREATE TABLE "contact_scores" (
 	CONSTRAINT "contact_scores_contact_id_unique" UNIQUE("contact_id")
 );
 --> statement-breakpoint
-CREATE TABLE "contact_tags" (
+CREATE TABLE IF NOT EXISTS "contact_tags" (
 	"contact_id" uuid NOT NULL,
 	"tag_id" uuid NOT NULL,
 	CONSTRAINT "contact_tags_contact_id_tag_id_pk" PRIMARY KEY("contact_id","tag_id")
 );
 --> statement-breakpoint
-CREATE TABLE "contacts" (
+CREATE TABLE IF NOT EXISTS "contacts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"company_id" uuid,
@@ -520,7 +520,7 @@ CREATE TABLE "contacts" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "conversation_keywords" (
+CREATE TABLE IF NOT EXISTS "conversation_keywords" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"keyword" text NOT NULL,
@@ -532,7 +532,7 @@ CREATE TABLE "conversation_keywords" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "conversation_metrics" (
+CREATE TABLE IF NOT EXISTS "conversation_metrics" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"contact_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -546,7 +546,7 @@ CREATE TABLE "conversation_metrics" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "custom_field_defs" (
+CREATE TABLE IF NOT EXISTS "custom_field_defs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"entity_type" text NOT NULL,
@@ -565,7 +565,7 @@ CREATE TABLE "custom_field_defs" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "deal_forecasts" (
+CREATE TABLE IF NOT EXISTS "deal_forecasts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"deal_id" uuid NOT NULL,
@@ -584,7 +584,7 @@ CREATE TABLE "deal_forecasts" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "deal_products" (
+CREATE TABLE IF NOT EXISTS "deal_products" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"deal_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -597,7 +597,7 @@ CREATE TABLE "deal_products" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "deal_stages" (
+CREATE TABLE IF NOT EXISTS "deal_stages" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"pipeline_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -608,7 +608,7 @@ CREATE TABLE "deal_stages" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "deals" (
+CREATE TABLE IF NOT EXISTS "deals" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -629,7 +629,7 @@ CREATE TABLE "deals" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "entity_tags" (
+CREATE TABLE IF NOT EXISTS "entity_tags" (
 	"tenant_id" uuid NOT NULL,
 	"tag_id" uuid NOT NULL,
 	"entity_type" text NOT NULL,
@@ -640,7 +640,7 @@ CREATE TABLE "entity_tags" (
 	CONSTRAINT "entity_tags_tag_id_entity_id_pk" PRIMARY KEY("tag_id","entity_id")
 );
 --> statement-breakpoint
-CREATE TABLE "file_attachments" (
+CREATE TABLE IF NOT EXISTS "file_attachments" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"entity_type" text NOT NULL,
@@ -655,7 +655,7 @@ CREATE TABLE "file_attachments" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "follow_ups" (
+CREATE TABLE IF NOT EXISTS "follow_ups" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"lead_id" uuid,
@@ -678,7 +678,7 @@ CREATE TABLE "follow_ups" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "form_submissions" (
+CREATE TABLE IF NOT EXISTS "form_submissions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"form_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -691,7 +691,7 @@ CREATE TABLE "form_submissions" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "forms" (
+CREATE TABLE IF NOT EXISTS "forms" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -715,7 +715,7 @@ CREATE TABLE "forms" (
 	CONSTRAINT "forms_slug_unique" UNIQUE("slug")
 );
 --> statement-breakpoint
-CREATE TABLE "lead_activities" (
+CREATE TABLE IF NOT EXISTS "lead_activities" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"lead_id" uuid NOT NULL,
@@ -733,7 +733,7 @@ CREATE TABLE "lead_activities" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "lead_assignments" (
+CREATE TABLE IF NOT EXISTS "lead_assignments" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"lead_id" uuid,
@@ -746,7 +746,7 @@ CREATE TABLE "lead_assignments" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "lead_offers" (
+CREATE TABLE IF NOT EXISTS "lead_offers" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"lead_id" uuid NOT NULL,
@@ -767,13 +767,13 @@ CREATE TABLE "lead_offers" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "lead_tags" (
+CREATE TABLE IF NOT EXISTS "lead_tags" (
 	"lead_id" uuid NOT NULL,
 	"tag_id" uuid NOT NULL,
 	CONSTRAINT "lead_tags_lead_id_tag_id_pk" PRIMARY KEY("lead_id","tag_id")
 );
 --> statement-breakpoint
-CREATE TABLE "leads" (
+CREATE TABLE IF NOT EXISTS "leads" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"first_name" text NOT NULL,
@@ -835,7 +835,7 @@ CREATE TABLE "leads" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "meetings" (
+CREATE TABLE IF NOT EXISTS "meetings" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid,
@@ -856,7 +856,7 @@ CREATE TABLE "meetings" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "notes" (
+CREATE TABLE IF NOT EXISTS "notes" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"entity_type" text NOT NULL,
@@ -870,7 +870,7 @@ CREATE TABLE "notes" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "pipeline_health_metrics" (
+CREATE TABLE IF NOT EXISTS "pipeline_health_metrics" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"pipeline_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -885,7 +885,7 @@ CREATE TABLE "pipeline_health_metrics" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "pipeline_stages" (
+CREATE TABLE IF NOT EXISTS "pipeline_stages" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"pipeline_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -896,7 +896,7 @@ CREATE TABLE "pipeline_stages" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "pipelines" (
+CREATE TABLE IF NOT EXISTS "pipelines" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -908,7 +908,7 @@ CREATE TABLE "pipelines" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "price_book_entries" (
+CREATE TABLE IF NOT EXISTS "price_book_entries" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"price_book_id" uuid NOT NULL,
 	"product_id" uuid NOT NULL,
@@ -919,7 +919,7 @@ CREATE TABLE "price_book_entries" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "price_books" (
+CREATE TABLE IF NOT EXISTS "price_books" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -936,7 +936,7 @@ CREATE TABLE "price_books" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "products" (
+CREATE TABLE IF NOT EXISTS "products" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -952,7 +952,7 @@ CREATE TABLE "products" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "quote_line_items" (
+CREATE TABLE IF NOT EXISTS "quote_line_items" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"quote_id" uuid NOT NULL,
 	"product_id" uuid,
@@ -968,7 +968,7 @@ CREATE TABLE "quote_line_items" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "quotes" (
+CREATE TABLE IF NOT EXISTS "quotes" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -995,7 +995,7 @@ CREATE TABLE "quotes" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "revenue_projections" (
+CREATE TABLE IF NOT EXISTS "revenue_projections" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"period_start" date NOT NULL,
@@ -1009,7 +1009,7 @@ CREATE TABLE "revenue_projections" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "saved_views" (
+CREATE TABLE IF NOT EXISTS "saved_views" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -1025,7 +1025,7 @@ CREATE TABLE "saved_views" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "tags" (
+CREATE TABLE IF NOT EXISTS "tags" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -1036,7 +1036,7 @@ CREATE TABLE "tags" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "call_logs" (
+CREATE TABLE IF NOT EXISTS "call_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -1055,7 +1055,7 @@ CREATE TABLE "call_logs" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "comm_email_drafts" (
+CREATE TABLE IF NOT EXISTS "comm_email_drafts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -1073,7 +1073,7 @@ CREATE TABLE "comm_email_drafts" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "email_log" (
+CREATE TABLE IF NOT EXISTS "email_log" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -1092,7 +1092,7 @@ CREATE TABLE "email_log" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "email_templates" (
+CREATE TABLE IF NOT EXISTS "email_templates" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -1106,7 +1106,7 @@ CREATE TABLE "email_templates" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "email_tracking" (
+CREATE TABLE IF NOT EXISTS "email_tracking" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -1125,7 +1125,7 @@ CREATE TABLE "email_tracking" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "email_verifications" (
+CREATE TABLE IF NOT EXISTS "email_verifications" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
 	"token_hash" text NOT NULL,
@@ -1137,7 +1137,7 @@ CREATE TABLE "email_verifications" (
 	CONSTRAINT "email_verifications_token_hash_unique" UNIQUE("token_hash")
 );
 --> statement-breakpoint
-CREATE TABLE "email_warmup_configs" (
+CREATE TABLE IF NOT EXISTS "email_warmup_configs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"is_active" boolean DEFAULT false,
@@ -1156,7 +1156,7 @@ CREATE TABLE "email_warmup_configs" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "email_warmup_logs" (
+CREATE TABLE IF NOT EXISTS "email_warmup_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"config_id" uuid NOT NULL,
 	"participant_id" uuid,
@@ -1173,7 +1173,7 @@ CREATE TABLE "email_warmup_logs" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "email_warmup_pool" (
+CREATE TABLE IF NOT EXISTS "email_warmup_pool" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"config_id" uuid NOT NULL,
 	"participant_email" text NOT NULL,
@@ -1188,7 +1188,7 @@ CREATE TABLE "email_warmup_pool" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "integrations" (
+CREATE TABLE IF NOT EXISTS "integrations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -1202,7 +1202,7 @@ CREATE TABLE "integrations" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "voice_calls" (
+CREATE TABLE IF NOT EXISTS "voice_calls" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -1224,7 +1224,7 @@ CREATE TABLE "voice_calls" (
 	"completed_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "webhook_inbound_logs" (
+CREATE TABLE IF NOT EXISTS "webhook_inbound_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"webhook_id" uuid,
 	"api_key_id" uuid,
@@ -1247,7 +1247,7 @@ CREATE TABLE "webhook_inbound_logs" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "whatsapp_conversations" (
+CREATE TABLE IF NOT EXISTS "whatsapp_conversations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -1264,7 +1264,7 @@ CREATE TABLE "whatsapp_conversations" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "whatsapp_messages" (
+CREATE TABLE IF NOT EXISTS "whatsapp_messages" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"conversation_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -1283,7 +1283,7 @@ CREATE TABLE "whatsapp_messages" (
 	"read_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "whatsapp_templates" (
+CREATE TABLE IF NOT EXISTS "whatsapp_templates" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -1300,7 +1300,7 @@ CREATE TABLE "whatsapp_templates" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "ai_email_drafts" (
+CREATE TABLE IF NOT EXISTS "ai_email_drafts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -1323,7 +1323,7 @@ CREATE TABLE "ai_email_drafts" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "ai_insights" (
+CREATE TABLE IF NOT EXISTS "ai_insights" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"entity_type" text NOT NULL,
@@ -1341,7 +1341,7 @@ CREATE TABLE "ai_insights" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "ai_module_configs" (
+CREATE TABLE IF NOT EXISTS "ai_module_configs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"module_name" text NOT NULL,
@@ -1354,7 +1354,7 @@ CREATE TABLE "ai_module_configs" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "ai_usage_logs" (
+CREATE TABLE IF NOT EXISTS "ai_usage_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid,
@@ -1372,7 +1372,7 @@ CREATE TABLE "ai_usage_logs" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "ai_usage_aggregated" (
+CREATE TABLE IF NOT EXISTS "ai_usage_aggregated" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"module_name" text NOT NULL,
@@ -1388,7 +1388,7 @@ CREATE TABLE "ai_usage_aggregated" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "automation_runs" (
+CREATE TABLE IF NOT EXISTS "automation_runs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"automation_id" uuid,
 	"tenant_id" uuid NOT NULL,
@@ -1408,7 +1408,7 @@ CREATE TABLE "automation_runs" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "automation_workflows" (
+CREATE TABLE IF NOT EXISTS "automation_workflows" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"workflow_id" uuid,
@@ -1424,7 +1424,7 @@ CREATE TABLE "automation_workflows" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "automations" (
+CREATE TABLE IF NOT EXISTS "automations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -1445,7 +1445,7 @@ CREATE TABLE "automations" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "content_generations" (
+CREATE TABLE IF NOT EXISTS "content_generations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid,
@@ -1465,7 +1465,7 @@ CREATE TABLE "content_generations" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "dead_letter_queue" (
+CREATE TABLE IF NOT EXISTS "dead_letter_queue" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"job_type" text NOT NULL,
@@ -1487,7 +1487,7 @@ CREATE TABLE "dead_letter_queue" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "revenue_opportunities" (
+CREATE TABLE IF NOT EXISTS "revenue_opportunities" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"opportunity_type" text NOT NULL,
@@ -1505,7 +1505,7 @@ CREATE TABLE "revenue_opportunities" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "scheduled_reports" (
+CREATE TABLE IF NOT EXISTS "scheduled_reports" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -1525,7 +1525,7 @@ CREATE TABLE "scheduled_reports" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "webhook_deliveries" (
+CREATE TABLE IF NOT EXISTS "webhook_deliveries" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"webhook_id" uuid,
@@ -1541,7 +1541,7 @@ CREATE TABLE "webhook_deliveries" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "webhooks" (
+CREATE TABLE IF NOT EXISTS "webhooks" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -1555,7 +1555,7 @@ CREATE TABLE "webhooks" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "workflow_action_logs" (
+CREATE TABLE IF NOT EXISTS "workflow_action_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"execution_id" uuid NOT NULL,
 	"action_id" uuid,
@@ -1570,7 +1570,7 @@ CREATE TABLE "workflow_action_logs" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "workflow_actions" (
+CREATE TABLE IF NOT EXISTS "workflow_actions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"workflow_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -1584,7 +1584,7 @@ CREATE TABLE "workflow_actions" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "workflow_execution_logs" (
+CREATE TABLE IF NOT EXISTS "workflow_execution_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"workflow_execution_id" uuid,
 	"tenant_id" uuid NOT NULL,
@@ -1597,7 +1597,7 @@ CREATE TABLE "workflow_execution_logs" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "workflow_executions" (
+CREATE TABLE IF NOT EXISTS "workflow_executions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"workflow_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -1615,7 +1615,7 @@ CREATE TABLE "workflow_executions" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "workflows" (
+CREATE TABLE IF NOT EXISTS "workflows" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -1636,7 +1636,7 @@ CREATE TABLE "workflows" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "activities" (
+CREATE TABLE IF NOT EXISTS "activities" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid,
@@ -1654,7 +1654,7 @@ CREATE TABLE "activities" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "announcements" (
+CREATE TABLE IF NOT EXISTS "announcements" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"title" text NOT NULL,
 	"body" text NOT NULL,
@@ -1672,7 +1672,7 @@ CREATE TABLE "announcements" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "api_key_usage_infra" (
+CREATE TABLE IF NOT EXISTS "api_key_usage_infra" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"api_key_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -1687,7 +1687,7 @@ CREATE TABLE "api_key_usage_infra" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "backup_alerts" (
+CREATE TABLE IF NOT EXISTS "backup_alerts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"alert_type" text NOT NULL,
 	"message" text NOT NULL,
@@ -1698,7 +1698,7 @@ CREATE TABLE "backup_alerts" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "backup_records" (
+CREATE TABLE IF NOT EXISTS "backup_records" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"backup_type" text DEFAULT 'full' NOT NULL,
 	"status" text DEFAULT 'pending' NOT NULL,
@@ -1719,7 +1719,7 @@ CREATE TABLE "backup_records" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "backup_schedules" (
+CREATE TABLE IF NOT EXISTS "backup_schedules" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid,
 	"schedule_type" text DEFAULT 'monthly' NOT NULL,
@@ -1733,7 +1733,7 @@ CREATE TABLE "backup_schedules" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "billing_events" (
+CREATE TABLE IF NOT EXISTS "billing_events" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"event_type" text NOT NULL,
@@ -1749,7 +1749,7 @@ CREATE TABLE "billing_events" (
 	CONSTRAINT "billing_events_stripe_event_id_unique" UNIQUE("stripe_event_id")
 );
 --> statement-breakpoint
-CREATE TABLE "critical_data_backups" (
+CREATE TABLE IF NOT EXISTS "critical_data_backups" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"table_name" text NOT NULL,
@@ -1767,7 +1767,7 @@ CREATE TABLE "critical_data_backups" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "dashboard_templates" (
+CREATE TABLE IF NOT EXISTS "dashboard_templates" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
 	"slug" text NOT NULL,
@@ -1782,7 +1782,7 @@ CREATE TABLE "dashboard_templates" (
 	CONSTRAINT "dashboard_templates_slug_unique" UNIQUE("slug")
 );
 --> statement-breakpoint
-CREATE TABLE "dashboards" (
+CREATE TABLE IF NOT EXISTS "dashboards" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -1797,7 +1797,7 @@ CREATE TABLE "dashboards" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "file_uploads" (
+CREATE TABLE IF NOT EXISTS "file_uploads" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"entity_type" text NOT NULL,
@@ -1812,7 +1812,7 @@ CREATE TABLE "file_uploads" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "health_checks" (
+CREATE TABLE IF NOT EXISTS "health_checks" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"service" text NOT NULL,
 	"status" text DEFAULT 'ok' NOT NULL,
@@ -1824,7 +1824,7 @@ CREATE TABLE "health_checks" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "limit_violations" (
+CREATE TABLE IF NOT EXISTS "limit_violations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"violation_type" text NOT NULL,
@@ -1840,7 +1840,7 @@ CREATE TABLE "limit_violations" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "onboarding_progress" (
+CREATE TABLE IF NOT EXISTS "onboarding_progress" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -1852,7 +1852,7 @@ CREATE TABLE "onboarding_progress" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "permission_overrides" (
+CREATE TABLE IF NOT EXISTS "permission_overrides" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"role_id" uuid NOT NULL,
@@ -1864,7 +1864,7 @@ CREATE TABLE "permission_overrides" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "plans" (
+CREATE TABLE IF NOT EXISTS "plans" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"slug" text NOT NULL,
@@ -1889,7 +1889,7 @@ CREATE TABLE "plans" (
 	CONSTRAINT "plans_slug_unique" UNIQUE("slug")
 );
 --> statement-breakpoint
-CREATE TABLE "platform_settings" (
+CREATE TABLE IF NOT EXISTS "platform_settings" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid,
 	"key" text NOT NULL,
@@ -1899,7 +1899,7 @@ CREATE TABLE "platform_settings" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "report_executions" (
+CREATE TABLE IF NOT EXISTS "report_executions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid,
@@ -1913,7 +1913,7 @@ CREATE TABLE "report_executions" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "report_templates" (
+CREATE TABLE IF NOT EXISTS "report_templates" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
 	"slug" text NOT NULL,
@@ -1928,7 +1928,7 @@ CREATE TABLE "report_templates" (
 	CONSTRAINT "report_templates_slug_unique" UNIQUE("slug")
 );
 --> statement-breakpoint
-CREATE TABLE "restore_snapshots" (
+CREATE TABLE IF NOT EXISTS "restore_snapshots" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"snapshot_data" jsonb NOT NULL,
@@ -1939,7 +1939,7 @@ CREATE TABLE "restore_snapshots" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "revenue_forecast_summary" (
+CREATE TABLE IF NOT EXISTS "revenue_forecast_summary" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"forecast_date" date DEFAULT CURRENT_DATE NOT NULL,
@@ -1952,7 +1952,7 @@ CREATE TABLE "revenue_forecast_summary" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "saved_reports" (
+CREATE TABLE IF NOT EXISTS "saved_reports" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -1969,7 +1969,7 @@ CREATE TABLE "saved_reports" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "selective_restore_audit_log" (
+CREATE TABLE IF NOT EXISTS "selective_restore_audit_log" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"action" text NOT NULL,
@@ -1984,7 +1984,7 @@ CREATE TABLE "selective_restore_audit_log" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "selective_restore_logs" (
+CREATE TABLE IF NOT EXISTS "selective_restore_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"backup_id" uuid NOT NULL,
@@ -1998,7 +1998,7 @@ CREATE TABLE "selective_restore_logs" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "sso_providers" (
+CREATE TABLE IF NOT EXISTS "sso_providers" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"provider_type" text NOT NULL,
@@ -2010,7 +2010,7 @@ CREATE TABLE "sso_providers" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "sso_sessions" (
+CREATE TABLE IF NOT EXISTS "sso_sessions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -2024,7 +2024,7 @@ CREATE TABLE "sso_sessions" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "subscriptions" (
+CREATE TABLE IF NOT EXISTS "subscriptions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"plan_id" text,
@@ -2040,7 +2040,7 @@ CREATE TABLE "subscriptions" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "super_admin_backups" (
+CREATE TABLE IF NOT EXISTS "super_admin_backups" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"backup_name" text NOT NULL,
 	"backup_type" text DEFAULT 'full',
@@ -2053,7 +2053,7 @@ CREATE TABLE "super_admin_backups" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "system_settings" (
+CREATE TABLE IF NOT EXISTS "system_settings" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"key" text NOT NULL,
 	"value" jsonb NOT NULL,
@@ -2064,7 +2064,7 @@ CREATE TABLE "system_settings" (
 	CONSTRAINT "system_settings_key_unique" UNIQUE("key")
 );
 --> statement-breakpoint
-CREATE TABLE "tasks" (
+CREATE TABLE IF NOT EXISTS "tasks" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"title" text NOT NULL,
@@ -2086,7 +2086,7 @@ CREATE TABLE "tasks" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "tenant_backup_records" (
+CREATE TABLE IF NOT EXISTS "tenant_backup_records" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"status" text DEFAULT 'pending' NOT NULL,
@@ -2109,7 +2109,7 @@ CREATE TABLE "tenant_backup_records" (
 	"completed_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "tenant_backups" (
+CREATE TABLE IF NOT EXISTS "tenant_backups" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"filename" text NOT NULL,
@@ -2124,7 +2124,7 @@ CREATE TABLE "tenant_backups" (
 	"expires_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "tenant_restore_records" (
+CREATE TABLE IF NOT EXISTS "tenant_restore_records" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"backup_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -2139,7 +2139,7 @@ CREATE TABLE "tenant_restore_records" (
 	"completed_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "tenant_restores" (
+CREATE TABLE IF NOT EXISTS "tenant_restores" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"backup_id" uuid,
@@ -2152,7 +2152,7 @@ CREATE TABLE "tenant_restores" (
 	"completed_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "usage_snapshots" (
+CREATE TABLE IF NOT EXISTS "usage_snapshots" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"snapshot_date" text DEFAULT CURRENT_DATE::text NOT NULL,
@@ -2169,7 +2169,7 @@ CREATE TABLE "usage_snapshots" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "user_departures" (
+CREATE TABLE IF NOT EXISTS "user_departures" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid,
@@ -2192,7 +2192,7 @@ CREATE TABLE "user_departures" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "api_keys_registry" (
+CREATE TABLE IF NOT EXISTS "api_keys_registry" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"service" text NOT NULL,
 	"key_name" text NOT NULL,
@@ -2213,7 +2213,7 @@ CREATE TABLE "api_keys_registry" (
 	"created_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "cost_anomalies" (
+CREATE TABLE IF NOT EXISTS "cost_anomalies" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"service" text NOT NULL,
@@ -2227,7 +2227,7 @@ CREATE TABLE "cost_anomalies" (
 	"created_at" timestamp with time zone DEFAULT now()
 );
 --> statement-breakpoint
-CREATE TABLE "oauth_clients" (
+CREATE TABLE IF NOT EXISTS "oauth_clients" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid,
 	"client_id" text NOT NULL,
@@ -2240,7 +2240,7 @@ CREATE TABLE "oauth_clients" (
 	CONSTRAINT "oauth_clients_client_id_unique" UNIQUE("client_id")
 );
 --> statement-breakpoint
-CREATE TABLE "oauth_codes" (
+CREATE TABLE IF NOT EXISTS "oauth_codes" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"client_id" uuid,
 	"user_id" uuid,
@@ -2253,7 +2253,7 @@ CREATE TABLE "oauth_codes" (
 	CONSTRAINT "oauth_codes_code_unique" UNIQUE("code")
 );
 --> statement-breakpoint
-CREATE TABLE "oauth_tokens" (
+CREATE TABLE IF NOT EXISTS "oauth_tokens" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"client_id" uuid,
 	"user_id" uuid,
@@ -2267,7 +2267,7 @@ CREATE TABLE "oauth_tokens" (
 	CONSTRAINT "oauth_tokens_refresh_token_unique" UNIQUE("refresh_token")
 );
 --> statement-breakpoint
-CREATE TABLE "portal_clients" (
+CREATE TABLE IF NOT EXISTS "portal_clients" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -2281,7 +2281,7 @@ CREATE TABLE "portal_clients" (
 	CONSTRAINT "portal_clients_access_token_unique" UNIQUE("access_token")
 );
 --> statement-breakpoint
-CREATE TABLE "tenant_token_limits" (
+CREATE TABLE IF NOT EXISTS "tenant_token_limits" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"openai_monthly_limit" bigint DEFAULT -1,
@@ -2301,7 +2301,7 @@ CREATE TABLE "tenant_token_limits" (
 	CONSTRAINT "tenant_token_limits_tenant_id_unique" UNIQUE("tenant_id")
 );
 --> statement-breakpoint
-CREATE TABLE "token_budgets" (
+CREATE TABLE IF NOT EXISTS "token_budgets" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"service" text NOT NULL,
 	"monthly_budget_cents" bigint DEFAULT 0 NOT NULL,
@@ -2318,7 +2318,7 @@ CREATE TABLE "token_budgets" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "usage_alerts" (
+CREATE TABLE IF NOT EXISTS "usage_alerts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"alert_type" text NOT NULL,
 	"target_type" text NOT NULL,
@@ -2334,7 +2334,7 @@ CREATE TABLE "usage_alerts" (
 	"created_at" timestamp with time zone DEFAULT now()
 );
 --> statement-breakpoint
-CREATE TABLE "user_token_limits" (
+CREATE TABLE IF NOT EXISTS "user_token_limits" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -2345,7 +2345,7 @@ CREATE TABLE "user_token_limits" (
 	"created_at" timestamp with time zone DEFAULT now()
 );
 --> statement-breakpoint
-CREATE TABLE "modules" (
+CREATE TABLE IF NOT EXISTS "modules" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"version" text DEFAULT '1.0.0' NOT NULL,
@@ -2359,7 +2359,7 @@ CREATE TABLE "modules" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "tenant_modules" (
+CREATE TABLE IF NOT EXISTS "tenant_modules" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"module_id" text NOT NULL,
@@ -2375,7 +2375,7 @@ CREATE TABLE "tenant_modules" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "error_logs" (
+CREATE TABLE IF NOT EXISTS "error_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid,
 	"user_id" uuid,
@@ -2390,7 +2390,7 @@ CREATE TABLE "error_logs" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "failed_webhooks" (
+CREATE TABLE IF NOT EXISTS "failed_webhooks" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"webhook_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -2403,7 +2403,7 @@ CREATE TABLE "failed_webhooks" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "support_tickets" (
+CREATE TABLE IF NOT EXISTS "support_tickets" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -2423,7 +2423,7 @@ CREATE TABLE "support_tickets" (
 	"resolved_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "ticket_replies" (
+CREATE TABLE IF NOT EXISTS "ticket_replies" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"ticket_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -2435,7 +2435,7 @@ CREATE TABLE "ticket_replies" (
 	"created_at" timestamp with time zone DEFAULT now()
 );
 --> statement-breakpoint
-CREATE TABLE "webhook_queue" (
+CREATE TABLE IF NOT EXISTS "webhook_queue" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"webhook_id" uuid NOT NULL,
 	"url" text NOT NULL,
@@ -2455,7 +2455,7 @@ CREATE TABLE "webhook_queue" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "sequence_enrollments" (
+CREATE TABLE IF NOT EXISTS "sequence_enrollments" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"sequence_id" uuid NOT NULL,
@@ -2472,7 +2472,7 @@ CREATE TABLE "sequence_enrollments" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "sequence_step_logs" (
+CREATE TABLE IF NOT EXISTS "sequence_step_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"enrollment_id" uuid NOT NULL,
 	"step_id" uuid,
@@ -2486,7 +2486,7 @@ CREATE TABLE "sequence_step_logs" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "sequence_steps" (
+CREATE TABLE IF NOT EXISTS "sequence_steps" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"sequence_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -2506,7 +2506,7 @@ CREATE TABLE "sequence_steps" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "sequences" (
+CREATE TABLE IF NOT EXISTS "sequences" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -2522,14 +2522,14 @@ CREATE TABLE "sequences" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "segment_members" (
+CREATE TABLE IF NOT EXISTS "segment_members" (
 	"segment_id" uuid NOT NULL,
 	"entity_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"added_at" timestamp with time zone DEFAULT now()
 );
 --> statement-breakpoint
-CREATE TABLE "segments" (
+CREATE TABLE IF NOT EXISTS "segments" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -2547,7 +2547,7 @@ CREATE TABLE "segments" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "contracts" (
+CREATE TABLE IF NOT EXISTS "contracts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -2575,7 +2575,7 @@ CREATE TABLE "contracts" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "invoice_line_items" (
+CREATE TABLE IF NOT EXISTS "invoice_line_items" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"invoice_id" uuid NOT NULL,
 	"product_id" uuid,
@@ -2596,7 +2596,7 @@ CREATE TABLE "invoice_line_items" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "invoice_payments" (
+CREATE TABLE IF NOT EXISTS "invoice_payments" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"invoice_id" uuid NOT NULL,
 	"amount" numeric(15, 2) NOT NULL,
@@ -2613,7 +2613,7 @@ CREATE TABLE "invoice_payments" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "invoices" (
+CREATE TABLE IF NOT EXISTS "invoices" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -2657,7 +2657,7 @@ CREATE TABLE "invoices" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "order_line_items" (
+CREATE TABLE IF NOT EXISTS "order_line_items" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"order_id" uuid NOT NULL,
 	"product_id" uuid,
@@ -2673,7 +2673,7 @@ CREATE TABLE "order_line_items" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "orders" (
+CREATE TABLE IF NOT EXISTS "orders" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -2716,7 +2716,7 @@ CREATE TABLE "orders" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "service_categories" (
+CREATE TABLE IF NOT EXISTS "service_categories" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -2732,7 +2732,7 @@ CREATE TABLE "service_categories" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "service_subscriptions" (
+CREATE TABLE IF NOT EXISTS "service_subscriptions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -2760,7 +2760,7 @@ CREATE TABLE "service_subscriptions" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "services" (
+CREATE TABLE IF NOT EXISTS "services" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -2794,7 +2794,7 @@ CREATE TABLE "services" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "edit_history" (
+CREATE TABLE IF NOT EXISTS "edit_history" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"entity_type" text NOT NULL,
@@ -2812,7 +2812,7 @@ CREATE TABLE "edit_history" (
 	"user_agent" text
 );
 --> statement-breakpoint
-CREATE TABLE "field_snapshots" (
+CREATE TABLE IF NOT EXISTS "field_snapshots" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"entity_type" text NOT NULL,
@@ -2825,7 +2825,7 @@ CREATE TABLE "field_snapshots" (
 	"expires_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "kb_articles" (
+CREATE TABLE IF NOT EXISTS "kb_articles" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"category_id" uuid,
@@ -2848,7 +2848,7 @@ CREATE TABLE "kb_articles" (
 	"published_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "kb_categories" (
+CREATE TABLE IF NOT EXISTS "kb_categories" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -2865,7 +2865,7 @@ CREATE TABLE "kb_categories" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "login_attempts" (
+CREATE TABLE IF NOT EXISTS "login_attempts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"email" text NOT NULL,
 	"ip_address" text NOT NULL,
@@ -2878,7 +2878,7 @@ CREATE TABLE "login_attempts" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "login_blocks" (
+CREATE TABLE IF NOT EXISTS "login_blocks" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"identifier" text NOT NULL,
 	"identifier_type" text NOT NULL,
@@ -2890,7 +2890,7 @@ CREATE TABLE "login_blocks" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "security_events" (
+CREATE TABLE IF NOT EXISTS "security_events" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid,
 	"user_id" uuid,
@@ -2903,7 +2903,7 @@ CREATE TABLE "security_events" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "plan_limits" (
+CREATE TABLE IF NOT EXISTS "plan_limits" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"plan_id" text NOT NULL,
 	"max_users" integer,
@@ -2925,7 +2925,7 @@ CREATE TABLE "plan_limits" (
 	CONSTRAINT "plan_limits_plan_id_unique" UNIQUE("plan_id")
 );
 --> statement-breakpoint
-CREATE TABLE "user_usage" (
+CREATE TABLE IF NOT EXISTS "user_usage" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -2941,7 +2941,7 @@ CREATE TABLE "user_usage" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "compliance_requests" (
+CREATE TABLE IF NOT EXISTS "compliance_requests" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"type" text NOT NULL,
@@ -2956,7 +2956,7 @@ CREATE TABLE "compliance_requests" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "data_retention_policies" (
+CREATE TABLE IF NOT EXISTS "data_retention_policies" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"entity_type" text NOT NULL,
@@ -2970,7 +2970,7 @@ CREATE TABLE "data_retention_policies" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "sla_breaches" (
+CREATE TABLE IF NOT EXISTS "sla_breaches" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"policy_id" text NOT NULL,
@@ -2986,7 +2986,7 @@ CREATE TABLE "sla_breaches" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "sla_policies" (
+CREATE TABLE IF NOT EXISTS "sla_policies" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -3000,7 +3000,7 @@ CREATE TABLE "sla_policies" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "assignment_logs" (
+CREATE TABLE IF NOT EXISTS "assignment_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"rule_id" text NOT NULL,
@@ -3013,7 +3013,7 @@ CREATE TABLE "assignment_logs" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "assignment_rules" (
+CREATE TABLE IF NOT EXISTS "assignment_rules" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -3027,7 +3027,7 @@ CREATE TABLE "assignment_rules" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "document_folders" (
+CREATE TABLE IF NOT EXISTS "document_folders" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -3038,7 +3038,7 @@ CREATE TABLE "document_folders" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "documents" (
+CREATE TABLE IF NOT EXISTS "documents" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -3056,7 +3056,7 @@ CREATE TABLE "documents" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "sms_messages" (
+CREATE TABLE IF NOT EXISTS "sms_messages" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -3073,7 +3073,7 @@ CREATE TABLE "sms_messages" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "sms_templates" (
+CREATE TABLE IF NOT EXISTS "sms_templates" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -3084,7 +3084,7 @@ CREATE TABLE "sms_templates" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "ai_activity" (
+CREATE TABLE IF NOT EXISTS "ai_activity" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid,
@@ -3105,7 +3105,7 @@ CREATE TABLE "ai_activity" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "ai_draft_templates" (
+CREATE TABLE IF NOT EXISTS "ai_draft_templates" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"slug" text NOT NULL,
@@ -3125,7 +3125,7 @@ CREATE TABLE "ai_draft_templates" (
 	"updated_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "ai_provider_secrets" (
+CREATE TABLE IF NOT EXISTS "ai_provider_secrets" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"provider" text NOT NULL,
@@ -3139,7 +3139,7 @@ CREATE TABLE "ai_provider_secrets" (
 	"rotated_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "at_risk_rules" (
+CREATE TABLE IF NOT EXISTS "at_risk_rules" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"stage_id" uuid,
@@ -3156,7 +3156,7 @@ CREATE TABLE "at_risk_rules" (
 	"updated_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "lead_scoring_rules" (
+CREATE TABLE IF NOT EXISTS "lead_scoring_rules" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"factor" text NOT NULL,
@@ -3171,7 +3171,7 @@ CREATE TABLE "lead_scoring_rules" (
 	"updated_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "chat_messages" (
+CREATE TABLE IF NOT EXISTS "chat_messages" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"session_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -3183,7 +3183,7 @@ CREATE TABLE "chat_messages" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "chat_sessions" (
+CREATE TABLE IF NOT EXISTS "chat_sessions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"visitor_id" text NOT NULL,
@@ -3198,7 +3198,7 @@ CREATE TABLE "chat_sessions" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "email_clicks" (
+CREATE TABLE IF NOT EXISTS "email_clicks" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -3209,7 +3209,7 @@ CREATE TABLE "email_clicks" (
 	"ip_address" text
 );
 --> statement-breakpoint
-CREATE TABLE "email_opens" (
+CREATE TABLE IF NOT EXISTS "email_opens" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid,
@@ -3220,7 +3220,7 @@ CREATE TABLE "email_opens" (
 	"user_agent" text
 );
 --> statement-breakpoint
-CREATE TABLE "exchange_rates" (
+CREATE TABLE IF NOT EXISTS "exchange_rates" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"base_currency" text NOT NULL,
 	"target_currency" text NOT NULL,
@@ -3232,7 +3232,7 @@ CREATE TABLE "exchange_rates" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "tax_exemptions" (
+CREATE TABLE IF NOT EXISTS "tax_exemptions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"entity_type" text NOT NULL,
@@ -3243,7 +3243,7 @@ CREATE TABLE "tax_exemptions" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "tax_rates" (
+CREATE TABLE IF NOT EXISTS "tax_rates" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -3258,7 +3258,7 @@ CREATE TABLE "tax_rates" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "signing_events" (
+CREATE TABLE IF NOT EXISTS "signing_events" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"request_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -3268,7 +3268,7 @@ CREATE TABLE "signing_events" (
 	"metadata" jsonb DEFAULT '{}'::jsonb
 );
 --> statement-breakpoint
-CREATE TABLE "signing_requests" (
+CREATE TABLE IF NOT EXISTS "signing_requests" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"document_id" uuid NOT NULL,
@@ -3282,7 +3282,7 @@ CREATE TABLE "signing_requests" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "territories" (
+CREATE TABLE IF NOT EXISTS "territories" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -3295,7 +3295,7 @@ CREATE TABLE "territories" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "territory_assignments" (
+CREATE TABLE IF NOT EXISTS "territory_assignments" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"territory_id" uuid NOT NULL,
@@ -3306,7 +3306,7 @@ CREATE TABLE "territory_assignments" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "hierarchy_permissions" (
+CREATE TABLE IF NOT EXISTS "hierarchy_permissions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"hierarchy_id" uuid NOT NULL,
 	"permission" text NOT NULL,
@@ -3315,7 +3315,7 @@ CREATE TABLE "hierarchy_permissions" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "tenant_hierarchy" (
+CREATE TABLE IF NOT EXISTS "tenant_hierarchy" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"parent_tenant_id" uuid NOT NULL,
 	"child_tenant_id" uuid NOT NULL,
@@ -3325,7 +3325,7 @@ CREATE TABLE "tenant_hierarchy" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "page_views" (
+CREATE TABLE IF NOT EXISTS "page_views" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"visitor_id" uuid NOT NULL,
@@ -3336,7 +3336,7 @@ CREATE TABLE "page_views" (
 	"viewed_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "visitors" (
+CREATE TABLE IF NOT EXISTS "visitors" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"fingerprint_id" text NOT NULL,
@@ -3350,7 +3350,7 @@ CREATE TABLE "visitors" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "product_templates" (
+CREATE TABLE IF NOT EXISTS "product_templates" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
 	"slug" text,
@@ -3370,7 +3370,7 @@ CREATE TABLE "product_templates" (
 	CONSTRAINT "product_templates_slug_unique" UNIQUE("slug")
 );
 --> statement-breakpoint
-CREATE TABLE "tenant_templates" (
+CREATE TABLE IF NOT EXISTS "tenant_templates" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"template_id" uuid NOT NULL,
@@ -3381,7 +3381,7 @@ CREATE TABLE "tenant_templates" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "lead_warming_campaigns" (
+CREATE TABLE IF NOT EXISTS "lead_warming_campaigns" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -3411,7 +3411,7 @@ CREATE TABLE "lead_warming_campaigns" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "lead_warming_events" (
+CREATE TABLE IF NOT EXISTS "lead_warming_events" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid,
 	"name" text NOT NULL,
@@ -3437,7 +3437,7 @@ CREATE TABLE "lead_warming_events" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "lead_warming_messages" (
+CREATE TABLE IF NOT EXISTS "lead_warming_messages" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"campaign_id" uuid NOT NULL,
@@ -3464,7 +3464,7 @@ CREATE TABLE "lead_warming_messages" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "lead_warming_replies" (
+CREATE TABLE IF NOT EXISTS "lead_warming_replies" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"message_id" uuid NOT NULL,
@@ -3493,7 +3493,7 @@ CREATE TABLE "lead_warming_replies" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "lead_warming_schedule" (
+CREATE TABLE IF NOT EXISTS "lead_warming_schedule" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"contact_id" uuid NOT NULL,
@@ -3512,7 +3512,7 @@ CREATE TABLE "lead_warming_schedule" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "custom_plugins" (
+CREATE TABLE IF NOT EXISTS "custom_plugins" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -3534,7 +3534,7 @@ CREATE TABLE "custom_plugins" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "plugin_execution_logs" (
+CREATE TABLE IF NOT EXISTS "plugin_execution_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"plugin_id" uuid NOT NULL,
@@ -3552,7 +3552,7 @@ CREATE TABLE "plugin_execution_logs" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "milestones" (
+CREATE TABLE IF NOT EXISTS "milestones" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"project_id" uuid NOT NULL,
@@ -3566,7 +3566,7 @@ CREATE TABLE "milestones" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "project_tasks" (
+CREATE TABLE IF NOT EXISTS "project_tasks" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"project_id" uuid NOT NULL,
@@ -3575,7 +3575,7 @@ CREATE TABLE "project_tasks" (
 	"added_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "projects" (
+CREATE TABLE IF NOT EXISTS "projects" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -3593,7 +3593,7 @@ CREATE TABLE "projects" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "dashboard_layouts" (
+CREATE TABLE IF NOT EXISTS "dashboard_layouts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"user_id" uuid,
@@ -3609,7 +3609,7 @@ CREATE TABLE "dashboard_layouts" (
 	"deleted_by" uuid
 );
 --> statement-breakpoint
-CREATE TABLE "super_admin_audit_logs" (
+CREATE TABLE IF NOT EXISTS "super_admin_audit_logs" (
 	"id" text PRIMARY KEY NOT NULL,
 	"admin_id" text NOT NULL,
 	"admin_email" text NOT NULL,
