@@ -76,12 +76,13 @@ services:
       dockerfile: Dockerfile
       args:
         DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
-        JWT_SECRET: "build-only-not-runtime"
         SENTRY_DSN: "${SENTRY_DSN:-}"
         NEXT_PUBLIC_SENTRY_DSN: "${NEXT_PUBLIC_SENTRY_DSN:-}"
         SENTRY_ORG: "${SENTRY_ORG:-}"
         SENTRY_PROJECT: "${SENTRY_PROJECT:-}"
-        SENTRY_AUTH_TOKEN: "${SENTRY_AUTH_TOKEN:-}"
+      secrets:
+        - jwt_secret
+        - sentry_auth_token
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -512,6 +513,15 @@ volumes:
     driver: local
   lokidata:
     driver: local
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  SECRETS — BuildKit secret mounts (not in image history)
+# ═══════════════════════════════════════════════════════════════════════════
+secrets:
+  jwt_secret:
+    environment: JWT_SECRET
+  sentry_auth_token:
+    environment: SENTRY_AUTH_TOKEN
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  NETWORK
