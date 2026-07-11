@@ -107,23 +107,11 @@ export async function GET(request: NextRequest) {
     console.error('Failed to get DB stats:', error);
   }
 
-  // Get memory usage
-  const memoryUsage = process.memoryUsage();
-  const memory = {
-    rss: Math.round(memoryUsage.rss / 1024 / 1024 * 100) / 100,
-    heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024 * 100) / 100,
-    heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024 * 100) / 100,
-    external: Math.round(memoryUsage.external / 1024 / 1024 * 100) / 100,
-  };
-
   return NextResponse.json({
     timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    nodeVersion: process.version,
     stats,
     logs,
     dbStats,
-    memory,
     environment: {
       nodeEnv: process.env.NODE_ENV,
       databaseUrl: (process.env as Record<string, string | undefined>).DATABASE_URL ? 'configured' : 'not configured',
@@ -224,7 +212,6 @@ export async function GET_ERRORS(request: NextRequest) {
       message: e.message,
       context: e.context,
       timestamp: new Date(e.timestamp).toISOString(),
-      stack: e.stack,
     })),
     total: logs.errors.length,
   });
