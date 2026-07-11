@@ -70,6 +70,7 @@ function detectMimeFromBuffer(buf: Buffer): string | null {
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 const RESOURCE_TYPES = ['contact','deal','company','task','note'];
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function GET(req: NextRequest) {
   try {
@@ -79,6 +80,7 @@ export async function GET(req: NextRequest) {
     const resource_type = searchParams.get('resource_type');
     const resource_id   = searchParams.get('resource_id');
     if (!resource_type || !resource_id) return NextResponse.json({ error: 'resource_type and resource_id required' }, { status: 400 });
+    if (!UUID_RE.test(resource_id)) return NextResponse.json({ error: 'Invalid resource_id format' }, { status: 400 });
 
     const files = await db
       .select({
@@ -124,6 +126,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `resource_type must be one of: ${RESOURCE_TYPES.join(', ')}` }, { status: 400 });
     }
     if (!resource_id) return NextResponse.json({ error: 'resource_id required' }, { status: 400 });
+    if (!UUID_RE.test(resource_id)) return NextResponse.json({ error: 'Invalid resource_id format' }, { status: 400 });
     if (file.size > MAX_FILE_SIZE) return NextResponse.json({ error: 'File too large (max 25 MB)' }, { status: 413 });
 
     const bytes = await file.arrayBuffer();
@@ -238,6 +241,7 @@ export async function DELETE(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     const id = new URL(req.url).searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+    if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id format' }, { status: 400 });
 
     const file = await db.query.fileAttachments.findFirst({
       where: and(eq(fileAttachments.id, id), eq(fileAttachments.tenantId, ctx.tenantId))
