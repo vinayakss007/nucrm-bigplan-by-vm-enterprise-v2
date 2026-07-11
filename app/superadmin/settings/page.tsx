@@ -6,6 +6,7 @@ import {
   ToggleLeft, ToggleRight, Info,
   Database, Zap, Eye, EyeOff,
 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
@@ -206,12 +207,16 @@ export default function SuperAdminSettingsPage() {
           <div className="space-y-2">
             {[
               { label:'Purge Trash (30+ days old)', action:async()=>{
-      const r=await fetch('/api/tenant/trash',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({purge_all:true})});
-                const d=await r.json(); toast.success(`Purged ${d.purged??0} items`);
+                await confirmThen('Permanently purge all trash items older than 30 days? This cannot be undone.', async()=>{
+                  const r=await fetch('/api/tenant/trash',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({purge_all:true})});
+                  const d=await r.json(); toast.success(`Purged ${d.purged??0} items`);
+                });
               }},
               { label:'Run Cleanup (sessions/rate limits)', action:async()=>{
-                await fetch('/api/cron/cleanup',{method:'POST',headers:{'x-cron-secret':''}});
-                toast.success('Cleanup triggered');
+                await confirmThen('Run cleanup to remove stale sessions and rate limit entries?', async()=>{
+                  await fetch('/api/cron/cleanup',{method:'POST',headers:{'x-cron-secret':''}});
+                  toast.success('Cleanup triggered');
+                });
               }},
             ].map(a=>(
               <div key={a.label} className="flex items-center justify-between p-3 rounded-lg border border-red-500/15 bg-red-500/5">
