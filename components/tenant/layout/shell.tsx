@@ -56,8 +56,8 @@ export default function TenantShell({ tenant, profile, roleSlug, permissions, is
         'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
       );
       if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
       if (e.shiftKey) {
         if (document.activeElement === first) {
           e.preventDefault();
