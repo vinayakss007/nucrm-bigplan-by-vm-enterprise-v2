@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { drizzle } from 'drizzle-orm/node-postgres';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { sql } from 'drizzle-orm';
 import { Pool } from 'pg';
 import * as schema from '../drizzle/schema';
@@ -30,11 +31,12 @@ async function main() {
   const db = drizzle(pool, { schema });
 
   console.log('[migrate] Connecting to database...');
-  console.log('[migrate] Applying pending migrations from ./drizzle/migrations...');
 
+  // Recovery: if __drizzle_migrations is empty/missing but schema tables already
+  // exist, the tracking table was lost (e.g. DB restore). Pre-populate it so
+  // that migrate() does not try to re-apply all migrations on existing objects.
   const journalPath = path.resolve('./drizzle/migrations/meta/_journal.json');
   const journal = JSON.parse(fs.readFileSync(journalPath, 'utf-8'));
-  const allEntries = journal.entries;
 
   await db.execute(sql.raw(`
     CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
@@ -44,66 +46,39 @@ async function main() {
     );
   `));
 
-  const applied = await db.execute<{ hash: string }>(
-    sql.raw(`SELECT hash FROM "__drizzle_migrations"`),
+  const count = await db.execute<{ cnt: string }>(
+    sql.raw(`SELECT COUNT(*)::text AS cnt FROM "__drizzle_migrations"`),
   );
-  const appliedHashes = new Set(applied.rows.map(r => r.hash));
+  const rowCount = parseInt(count.rows[0].cnt, 10);
 
-  let appliedCount = 0;
-  let skippedCount = 0;
-  let failedCount = 0;
-
-  for (const entry of allEntries) {
-    if (appliedHashes.has(entry.tag)) {
-      skippedCount++;
-      continue;
-    }
-
-    const migrationFile = path.resolve(`./drizzle/migrations/${entry.tag}.sql`);
-    if (!fs.existsSync(migrationFile)) {
-      console.warn(`[migrate] Migration file not found: ${migrationFile}`);
-      failedCount++;
-      continue;
-    }
-
-    const fileContent = fs.readFileSync(migrationFile, 'utf-8').trim();
-    if (!fileContent) {
-      console.warn(`[migrate] Empty migration: ${entry.tag}`);
-      continue;
-    }
-
-    // Execute each statement, tolerating failures (schema may already have objects)
-    const statements = fileContent.split('--> statement-breakpoint').map(s => s.trim()).filter(Boolean);
-    let hadError = false;
-
-    if (statements.length > 1) {
-      for (const stmt of statements) {
-        try {
-          await db.execute(sql.raw(stmt));
-        } catch (innerErr: any) {
-          console.warn(`[migrate]   ${entry.tag}: ${innerErr.message}`);
-          hadError = true;
-        }
-      }
-    } else {
-      try {
-        await db.execute(sql.raw(fileContent));
-      } catch (err: any) {
-        console.warn(`[migrate]   ${entry.tag}: ${err.message}`);
-        hadError = true;
-      }
-    }
-
-    // Record as applied regardless (so it's not retried)
-    await db.execute(
-      sql`INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES (${entry.tag}, ${entry.when})`,
+  if (rowCount === 0 && journal.entries.length > 0) {
+    // Check whether this is a recovery scenario (schema exists) or a fresh DB
+    const schemaExists = await db.execute<{ exists: boolean }>(
+      sql.raw(`SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'api_key_usage')`),
     );
-    appliedCount++;
-    console.log(`[migrate] ${hadError ? 'Applied (with warnings)' : 'Applied'}: ${entry.tag}`);
+
+    if (schemaExists.rows[0].exists) {
+      console.log(`[migrate] Recovery: schema exists but tracking table is empty.`);
+      console.log(`[migrate] Seeding __drizzle_migrations with ${journal.entries.length} entries...`);
+      for (const entry of journal.entries) {
+        await db.execute(
+          sql`INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES (${entry.tag}, ${entry.when})`,
+        );
+      }
+      console.log('[migrate] Recovery complete.');
+    } else {
+      console.log('[migrate] Fresh database detected. Running all migrations...');
+    }
   }
 
-  console.log(`[migrate] Done: ${appliedCount} applied, ${skippedCount} already applied, ${failedCount} failed`);
+  console.log('[migrate] Applying pending migrations with drizzle-orm migrator...');
+  await migrate(db, { migrationsFolder: './drizzle/migrations' });
+
+  console.log('[migrate] Done.');
   await pool.end();
 }
 
-main();
+main().catch((err) => {
+  console.error('[migrate] Fatal:', err);
+  process.exit(1);
+});

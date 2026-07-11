@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS "email_warmup_logs" (
+CREATE TABLE "email_warmup_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"config_id" uuid NOT NULL,
 	"participant_id" uuid,
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS "email_warmup_logs" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "restore_snapshots" (
+CREATE TABLE "restore_snapshots" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"snapshot_data" jsonb NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS "restore_snapshots" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "tenant_backup_records" (
+CREATE TABLE "tenant_backup_records" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"status" text DEFAULT 'pending' NOT NULL,
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS "tenant_backup_records" (
 	"completed_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "tenant_restore_records" (
+CREATE TABLE "tenant_restore_records" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"backup_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
