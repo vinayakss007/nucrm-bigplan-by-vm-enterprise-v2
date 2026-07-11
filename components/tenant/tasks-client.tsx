@@ -6,7 +6,6 @@ import { cn, formatDate } from '@/lib/utils';
 import { Swipeable } from '@/components/ui/swipeable';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
-import { confirmThen } from '@/components/ui/confirm-dialog';
 
 const PRIORITY_CFG = {
   high:   { label:'High',   dot:'bg-red-500',   badge:'text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400' },
