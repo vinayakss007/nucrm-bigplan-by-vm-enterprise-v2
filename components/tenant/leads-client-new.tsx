@@ -370,7 +370,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
             placeholder="Search by name, email, phone, company, city..." 
             className="w-full pl-9 pr-4 py-2 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40 shadow-sm"
           />
-          {search&&<button onClick={()=>handleSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5"/></button>}
+          {search&&<button onClick={()=>handleSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 min-h-11 min-w-11 flex items-center justify-center text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5"/></button>}
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <DropdownMenu>

@@ -30,20 +30,20 @@ export default function Pagination({ total, offset, limit, onChange }: Props) {
       <p className="text-xs text-muted-foreground" suppressHydrationWarning>{from}–{to} of {total.toLocaleString()}</p>
       <div className="flex items-center gap-1">
         <button onClick={() => go(page - 1)} disabled={page === 1}
-          className="w-8 h-8 flex items-center justify-center rounded-lg border border-border hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+          className="min-h-11 min-w-11 flex items-center justify-center rounded-lg border border-border hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
           <ChevronLeft className="w-4 h-4" />
         </button>
         {pageNums().map((p, i) => (
           typeof p === 'string'
-            ? <span key={i} className="w-8 h-8 flex items-center justify-center text-xs text-muted-foreground">…</span>
+            ? <span key={i} className="min-h-11 min-w-11 flex items-center justify-center text-xs text-muted-foreground">…</span>
             : <button key={i} onClick={() => go(p)}
-                className={cn('w-8 h-8 flex items-center justify-center rounded-lg text-xs font-medium transition-colors',
+                className={cn('min-h-11 min-w-11 flex items-center justify-center rounded-lg text-xs font-medium transition-colors',
                   p === page ? 'bg-violet-600 text-white' : 'hover:bg-accent border border-border')}>
                 {p}
               </button>
         ))}
         <button onClick={() => go(page + 1)} disabled={page === pages}
-          className="w-8 h-8 flex items-center justify-center rounded-lg border border-border hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+          className="min-h-11 min-w-11 flex items-center justify-center rounded-lg border border-border hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
