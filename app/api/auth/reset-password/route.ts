@@ -9,6 +9,7 @@ import { createHash } from 'crypto';
 import { hashPassword, createToken, hashToken, setSessionCookie, validatePassword } from '@/lib/auth/session';
 import { sendTelegramToUser } from '@/lib/email/service';
 import { logError } from '@/lib/errors-server';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 const schema = z.object({
   token: z.string().min(1),
@@ -17,6 +18,9 @@ const schema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimited = await checkRateLimit(request, { action: 'reset-password', max: 5, windowMinutes: 15 });
+    if (rateLimited) return rateLimited;
+
     const body = await request.json();
     const validated = validateBody(schema, body);
     if (validated instanceof NextResponse) return validated;
