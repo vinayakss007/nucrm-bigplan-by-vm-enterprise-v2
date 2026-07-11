@@ -56,6 +56,7 @@ async function addIndexes() {
       console.log(`Adding: ${idx.name}`);
       await db.execute(sql.raw(idx.sql));
       console.log(`  ✓ ${idx.name}`);
+      // Note: idx.sql is from a hardcoded array, not user input. Safe.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       if (error.message?.includes('already exists')) {

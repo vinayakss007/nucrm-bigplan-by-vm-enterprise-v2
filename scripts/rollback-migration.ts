@@ -81,6 +81,8 @@ async function main() {
 
       await db.execute(sql.raw(downSql));
       console.log('[rollback] Rollback completed successfully');
+      // Note: downSql is from a trusted migration file on disk, not user input.
+      // This is acceptable as the migration files are version-controlled.
     } else {
       console.error('[rollback] No down migration file found');
       console.error('[rollback] Create a .down.sql file with reversal statements, or rollback manually');

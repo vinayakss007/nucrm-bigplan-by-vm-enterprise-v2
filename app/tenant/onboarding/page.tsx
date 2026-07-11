@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import {
   FileText, Brain, MessageCircle, LifeBuoy, Users, Home, ShoppingCart, Receipt,
-  CheckCircle, ArrowRight, ArrowLeft, Rocket, Package, Building2, GitBranch,
+  CheckCircle, ArrowRight, ArrowLeft, Rocket, Package, GitBranch,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PRODUCT_REGISTRY } from '@/lib/products/registry';
@@ -22,7 +22,6 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(0);
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
   const [enabledModules, setEnabledModules] = useState<string[]>([]);
-  const [companyName, setCompanyName] = useState('');
   const [pipelineName, setPipelineName] = useState('');
 
   const products = Object.values(PRODUCT_REGISTRY);
@@ -56,7 +55,7 @@ export default function OnboardingPage() {
   const canProceed = () => {
     if (step === 0) return selectedProduct !== null;
     if (step === 1) return enabledModules.length > 0;
-    if (step === 2) return companyName.trim().length > 0 && !isSubmitting;
+    if (step === 2) return !isSubmitting;
     return true;
   };
 
@@ -71,7 +70,6 @@ export default function OnboardingPage() {
         body: JSON.stringify({
           templateId: selected?.templateId ?? selectedProduct,
           modules: enabledModules,
-          companyName: companyName.trim(),
           pipelineName: pipelineName.trim() || 'Sales Pipeline',
         }),
       });
@@ -89,7 +87,6 @@ export default function OnboardingPage() {
         body: JSON.stringify({
           product_id: selectedProduct,
           modules: enabledModules,
-          company_name: companyName.trim(),
           pipeline_name: pipelineName.trim() || 'Sales Pipeline',
         }),
       });
@@ -253,19 +250,6 @@ export default function OnboardingPage() {
             </p>
           </div>
           <div className="max-w-md mx-auto space-y-4">
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">
-                <Building2 className="w-4 h-4 inline mr-1.5" />
-                Company Name
-              </label>
-              <input
-                type="text"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Your company name"
-                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500"
-              />
-            </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">
                 <GitBranch className="w-4 h-4 inline mr-1.5" />

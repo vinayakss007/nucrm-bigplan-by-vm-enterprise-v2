@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, FileText, ExternalLink, Copy, Check, ToggleLeft, ToggleRight,
   Trash2, Loader2, X, Eye, ChevronRight } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 interface FormFieldDef {
@@ -87,9 +88,12 @@ export default function FormsPage() {
   };
 
   const del = async (id: string) => {
+    const form = forms.find(f => f.id === id);
+    await confirmThen(`Delete form "${form?.name || 'this form'}"?`, async () => {
       await fetch(`/api/tenant/forms/${id}`, { method:'DELETE' });
-    setForms(f => f.filter(x => x.id !== id));
-    toast.success('Deleted');
+      setForms(f => f.filter(x => x.id !== id));
+      toast.success('Deleted');
+    });
   };
 
   const [viewingSubmissions, setViewingSubmissions] = useState<FormItem | null>(null);
