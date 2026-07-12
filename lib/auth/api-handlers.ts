@@ -30,7 +30,7 @@ export async function POST_login(request: NextRequest) {
         icon: '🛡️',
         title: 'IP Blocked — Brute Force',
         message: `IP: \`${ip}\`\nBlocked until: ${ipBlockCheck.blockedUntil?.toISOString() ?? 'N/A'}\nUser-Agent: ${userAgent ?? 'N/A'}`,
-      }).catch(() => {});
+      }).catch((e) => console.error('[api-handlers] Error:', e));
       return NextResponse.json({ 
         error: 'Too many login attempts. Please try again later.',
         blocked_until: ipBlockCheck.blockedUntil?.toISOString(),
@@ -53,7 +53,7 @@ export async function POST_login(request: NextRequest) {
         icon: '🛡️',
         title: 'Account Blocked — Brute Force',
         message: `Email: \`${email}\`\nIP: \`${ip}\`\nBlocked until: ${emailBlockCheck.blockedUntil?.toISOString() ?? 'N/A'}`,
-      }).catch(() => {});
+      }).catch((e) => console.error('[api-handlers] Error:', e));
       return NextResponse.json({ 
         error: 'Too many login attempts for this account. Please try again later.',
         blocked_until: emailBlockCheck.blockedUntil?.toISOString(),

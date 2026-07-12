@@ -155,7 +155,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
     try {
       const prefs = _profile?.metadata?.prefs;
       if (Array.isArray(prefs?.hidden_nav_items)) return prefs.hidden_nav_items;
-    } catch { /* fallback */ }
+    } catch (e) { console.error('[sidebar] Error:', e); }
     return [];
   })();
   const [hiddenItems, setHiddenItems] = useState<string[]>(initialHidden);
@@ -172,7 +172,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           if (data?.sections) setOpenSections(data.sections);
           else setOpenSections(Object.fromEntries(NAV_SECTIONS.map(s => [s.id, !!s.defaultOpen])));
         }
-      } catch { /* fallback to localStorage */ }
+      } catch (e) { console.error('[sidebar] Error:', e); }
 
       // localStorage fallback for pinned
       try {
@@ -195,7 +195,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
             setHiddenItems(prefs.hidden_nav_items);
           }
         }
-      } catch { /* fallback */ }
+      } catch (e) { console.error('[sidebar] Error:', e); }
     })();
     return () => abort.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -210,7 +210,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           const prefs = JSON.parse(cached);
           setHiddenItems(Array.isArray(prefs?.hidden_nav_items) ? prefs.hidden_nav_items : []);
         }
-      } catch { /* Fallback to default on corrupted storage data */ }
+      } catch (e) { console.error('[sidebar] Error:', e); }
     };
     window.addEventListener('nucrm:prefs-changed', handler);
     return () => window.removeEventListener('nucrm:prefs-changed', handler);
@@ -250,13 +250,13 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(prefs),
       });
-    } catch { /* server persistence is best-effort */ }
+    } catch (e) { console.error('[sidebar] Error:', e); }
   }, []);
 
   const toggleSection = (id: string) => {
     setOpenSections(prev => {
       const next = { ...prev, [id]: !prev[id] };
-      try { localStorage.setItem(SECTION_KEY, JSON.stringify(next)); } catch { /* Fallback to default on corrupted storage data */ }
+      try { localStorage.setItem(SECTION_KEY, JSON.stringify(next)); } catch (e) { console.error('[sidebar] Error:', e); }
       persistSidebarPrefs({ sections: next });
       return next;
     });
@@ -265,7 +265,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
   const togglePin = useCallback((href: string) => {
     setPinned(prev => {
       const next = prev.includes(href) ? prev.filter(h => h !== href) : [...prev, href];
-      try { localStorage.setItem(PIN_KEY, JSON.stringify(next)); } catch { /* Fallback to default on corrupted storage data */ }
+      try { localStorage.setItem(PIN_KEY, JSON.stringify(next)); } catch (e) { console.error('[sidebar] Error:', e); }
       persistSidebarPrefs({ pinned: next });
       return next;
     });

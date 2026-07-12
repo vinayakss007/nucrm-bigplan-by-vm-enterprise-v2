@@ -46,7 +46,7 @@ export default function LiveLogsPage() {
         try {
           const entry: LogEntry = JSON.parse(e.data);
           setLogs(prev => [...prev.slice(-999), entry]);
-        } catch { /* ignore parse errors */ }
+        } catch (e) { console.error('[logs] Parse error:', e); }
       };
       es.onerror = () => {
         if (mounted) setConnected(false);

@@ -18,7 +18,7 @@ function sendReply(chatId: number, text: string) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
-  }).catch(() => {});
+  }).catch((e) => console.error('[telegram bot] Error:', e));
 }
 
 export async function POST(req: NextRequest) {

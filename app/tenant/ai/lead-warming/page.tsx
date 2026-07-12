@@ -54,7 +54,7 @@ export default function LeadWarmingPage() {
     ]).then(([statsData, repliesData]) => {
       if (statsData) setStats(statsData);
       if (repliesData?.data) setReplies(repliesData.data);
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).catch((e) => console.error('[lead-warming] Error:', e)).finally(() => setLoading(false));
   }, []);
 
   const filtered = filter === 'all' ? replies : replies.filter(r => r.intent === filter);

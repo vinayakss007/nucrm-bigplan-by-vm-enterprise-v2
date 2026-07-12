@@ -61,7 +61,7 @@ export async function logError(opts: {
   }
 
   if (opts.level === 'fatal') {
-    sendCriticalErrorAlert({ error: opts.error, level: opts.level, context: opts.context }).catch(() => {});
+    sendCriticalErrorAlert({ error: opts.error, level: opts.level, context: opts.context }).catch((e) => console.error('[errors-server] Failed to send critical alert:', e));
   }
 }
 

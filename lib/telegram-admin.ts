@@ -22,5 +22,5 @@ export async function sendAdminTelegram(opts: {
     message: opts.message,
     icon: opts.icon,
     url: opts.url,
-  }).catch(() => {});
+  }).catch((e) => console.error('[telegram-admin] Error:', e));
 }

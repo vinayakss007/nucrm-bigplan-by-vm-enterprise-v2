@@ -61,5 +61,5 @@ export async function sendCriticalErrorAlert(opts: {
     icon: '🚨',
     title: `Critical Error (${opts.level ?? 'fatal'})`,
     message: `*${message}*\nContext: ${opts.context ?? 'N/A'}\nEnvironment: ${environment}`,
-  }).catch(() => {});
+  }).catch((e) => console.error('[critical-error-alert] Error:', e));
 }
