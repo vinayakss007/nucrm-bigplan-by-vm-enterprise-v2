@@ -203,21 +203,21 @@ export default function SuperAdminTenantsPage() {
       toast.success('Deleted'); load();
     });
   };
-  const impersonate = async (tenantId:string) => {
-    setImpersonating(tenantId);
-    const res = await fetch('/api/superadmin/impersonate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tenantId})});
-    const d = await res.json();
-    if(res.ok) {
-      // Set the impersonation session cookie
-      if (d.cookie) {
-        document.cookie = `session=${d.cookie}; Path=/; SameSite=Lax`;
-      }
-      // Flag that we're impersonating so we can show the banner
-      sessionStorage.setItem('isImpersonating', 'true');
-      sessionStorage.setItem('impersonateSessionId', d.sessionId || '');
-      window.location.href = `/tenant/dashboard`;
-    } else toast.error(d.error);
-    setImpersonating(null);
+  const impersonate = async (tenantId:string, tenantName:string) => {
+    await confirmThen(`Enter "${tenantName}" as superadmin? You will see everything as if you are them.`, async () => {
+      setImpersonating(tenantId);
+      const res = await fetch('/api/superadmin/impersonate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tenantId})});
+      const d = await res.json();
+      if(res.ok) {
+        if (d.cookie) {
+          document.cookie = `session=${d.cookie}; Path=/; SameSite=Lax`;
+        }
+        sessionStorage.setItem('isImpersonating', 'true');
+        sessionStorage.setItem('impersonateSessionId', d.sessionId || '');
+        window.location.href = `/tenant/dashboard`;
+      } else toast.error(d.error);
+      setImpersonating(null);
+    });
   };
   const copyEmail = (email: string | undefined) => { if (email) { navigator.clipboard.writeText(email); toast.success('Copied!'); } };
 
@@ -365,7 +365,7 @@ export default function SuperAdminTenantsPage() {
                   {/* Actions */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <button onClick={()=>impersonate(t.id)} disabled={impersonating===t.id} title="Open as this tenant (view their CRM)"
+                      <button onClick={()=>impersonate(t.id, t.name)} disabled={impersonating===t.id} title="Open as this tenant (view their CRM)"
                         className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-[10px] text-muted-foreground hover:text-foreground hover:border-violet-300 transition-colors disabled:opacity-40">
                         {impersonating===t.id?<Loader2 className="w-3 h-3 animate-spin"/>:<LogIn className="w-3 h-3"/>}View
                       </button>
