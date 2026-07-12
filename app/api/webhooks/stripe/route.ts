@@ -233,7 +233,7 @@ async function handlePaymentFailed(invoice: any) {
       icon: '💳',
       title: 'Payment Failed',
       message: `Tenant: \`${tenant.id}\`\nAmount: ${invoice.amount_paid ? `$${(invoice.amount_paid / 100).toFixed(2)}` : 'N/A'}\nStatus: past_due`,
-    }).catch(() => {});
+    }).catch((e) => console.error('[stripe webhook] Error:', e));
   }
 }
 

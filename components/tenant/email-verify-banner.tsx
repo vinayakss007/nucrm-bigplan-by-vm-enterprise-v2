@@ -18,8 +18,8 @@ export default function EmailVerifyBanner({ email }: { email: string; emailVerif
           setServerVerified(true);
         }
       }
-    } catch {
-      // Silently ignore
+    } catch (e) {
+      console.error('[email-verify-banner] Error:', e);
     }
   }, []);
 

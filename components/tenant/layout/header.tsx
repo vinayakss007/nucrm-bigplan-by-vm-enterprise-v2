@@ -102,7 +102,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   const logout = async () => {
     await confirmThen('Are you sure you want to log out?', async () => {
       await fetch('/api/auth/logout', { method: 'POST' });
-      try { new BroadcastChannel('nucrm_auth').postMessage('logout'); } catch {}
+      try { new BroadcastChannel('nucrm_auth').postMessage('logout'); } catch (e) { console.error('[header] BroadcastChannel error:', e); }
       router.push('/auth/login');
       router.refresh();
     });
