@@ -7,6 +7,123 @@ const requiredString = z.string().trim().min(1);
 const _optionalDate = z.string().datetime().optional().nullable();
 const _optionalNumber = z.number().optional().nullable();
 
+// ── Announcement schemas (superadmin) ──
+export const createAnnouncementSchema = z.object({
+  title: requiredString.max(200),
+  body: z.string().max(10000).optional().nullable(),
+  content: z.string().max(10000).optional().nullable(),
+  type: z.enum(['info', 'warning', 'critical', 'maintenance']).default('info'),
+  target: z.enum(['all', 'superadmin', 'tenant_admin']).default('all'),
+  is_active: z.boolean().default(true),
+  starts_at: z.string().datetime().optional().nullable(),
+  ends_at: z.string().datetime().optional().nullable(),
+});
+
+export const updateAnnouncementSchema = z.object({
+  id: z.string().uuid(),
+  is_active: z.boolean().default(true),
+});
+
+export const deleteAnnouncementSchema = z.object({
+  id: z.string().uuid(),
+});
+
+// ── AI System Key schema (superadmin) ──
+export const setSystemKeySchema = z.object({
+  tenantId: z.string().uuid(),
+  provider: requiredString.max(50),
+  api_key: z.string().max(4000).default(''),
+  base_url: z.string().max(500).optional(),
+  model: z.string().max(200).optional(),
+});
+
+// ── Rate limit schema (superadmin) ──
+const rateLimitsRecord = z.record(z.string(), z.number().int().min(0).max(100000));
+export const updateRateLimitsSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('update_global'),
+    rateLimits: rateLimitsRecord,
+  }),
+  z.object({
+    action: z.literal('update_plan_limits'),
+    planId: z.string().uuid(),
+    rateLimits: rateLimitsRecord,
+  }),
+  z.object({
+    action: z.literal('toggle_super_admin_unlimited'),
+    userId: z.string().uuid(),
+    unlimited: z.boolean(),
+  }),
+  z.object({
+    action: z.literal('reset_to_defaults'),
+    planId: z.string().uuid(),
+  }),
+]);
+
+// ── AI Provider config schema (tenant admin) ──
+const providerConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  default_model: z.string().max(200).optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  max_tokens: z.number().int().min(16).max(32000).optional(),
+  fallback_priority: z.number().int().min(1).max(99).optional(),
+  api_key: z.string().max(4000).optional(),
+  base_url: z.string().url().max(500).optional(),
+});
+
+export const updateAiProvidersSchema = z.object({
+  providers: z.record(z.string().max(100), providerConfigSchema),
+});
+
+// ── Lead Scoring schemas (tenant admin) ──
+export const createLeadScoringRuleSchema = z.object({
+  factor: requiredString.max(500),
+  weight: z.number().min(-100).max(100).default(10),
+  condition: z.string().max(1000).optional().nullable(),
+  sortOrder: z.number().int().min(0).max(9999).default(0),
+  active: z.boolean().default(true),
+});
+
+export const updateLeadScoringRuleSchema = z.object({
+  id: z.string().uuid(),
+  factor: z.string().max(500).optional(),
+  weight: z.number().min(-100).max(100).optional(),
+  condition: z.string().max(1000).optional().nullable(),
+  sortOrder: z.number().int().min(0).max(9999).optional(),
+  active: z.boolean().optional(),
+});
+
+// ── AI Draft Template schemas (tenant admin) ──
+const validTemplateKinds = z.enum(['email', 'note', 'reply', 'call_prep']);
+export const createAiTemplateSchema = z.object({
+  slug: z.string().max(60).optional(),
+  name: requiredString.max(120),
+  description: z.string().max(500).optional().nullable(),
+  kind: validTemplateKinds.default('email'),
+  entity_types: z.union([z.string(), z.array(z.string())]).optional(),
+  system_prompt: requiredString.max(8000),
+  user_prompt: requiredString.max(8000),
+  tone: z.string().max(50).default('professional'),
+  default_subject: z.string().max(200).optional().nullable(),
+  active: z.boolean().default(true),
+});
+
+// ── Hierarchy schemas (tenant admin) ──
+export const createHierarchySchema = z.object({
+  childTenantId: z.string().uuid(),
+  relationship: z.enum(['parent', 'child', 'partner']).default('parent'),
+  permissions: z.array(z.string().max(100)).optional(),
+});
+
+export const updateHierarchySchema = z.object({
+  id: z.string().uuid(),
+  relationship: z.enum(['parent', 'child', 'partner']),
+});
+
+export const deleteHierarchySchema = z.object({
+  id: z.string().uuid(),
+});
+
 // Accept URLs with or without protocol — auto-prepend https://
 const urlField = z.string().max(500).optional().nullable().or(z.literal('')).transform(v => {
   if (!v) return v;
@@ -622,7 +739,10 @@ export const updateScheduledReportSchema = createScheduledReportSchema.partial()
 
 // ── Backup schemas ──
 export const createBackupSchema = z.object({
-  backup_type: z.enum(['full', 'schema']).optional().default('full'),
+  backup_type: z.enum(['full', 'schema', 'selective']).default('full'),
+  action: z.literal('restore').optional(),
+  backupId: z.string().uuid().optional(),
+  tenant_id: z.string().uuid().optional(),
 });
 
 export const backupConfigSchema = z.object({
