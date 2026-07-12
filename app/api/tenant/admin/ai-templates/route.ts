@@ -19,6 +19,8 @@ import { eq, and, isNull, desc } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { SEED_DRAFT_TEMPLATES } from '@/lib/ai/draft';
+import { validateBody } from '@/lib/api/validate';
+import { createAiTemplateSchema } from '@/lib/api/schemas';
 
 const VALID_KINDS = new Set(['email', 'note', 'reply', 'call_prep']);
 
@@ -122,24 +124,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `unknown seed slug '${body.slug}'` }, { status: 400 });
     }
 
-    const err = validate(body);
-    if (err) return NextResponse.json(err, { status: 400 });
+    const parsed = validateBody(createAiTemplateSchema, body);
+    if (parsed instanceof NextResponse) return parsed;
 
-    const name = String(body.name).trim().slice(0, 120);
-    const slug = (typeof body.slug === 'string' && body.slug.trim()) ? body.slug.trim().slice(0, 60) : slugify(name);
+    const slug = parsed.data.slug?.trim() || slugify(parsed.data.name);
 
     const [row] = await db.insert(aiDraftTemplates).values({
       tenantId: ctx.tenantId,
       slug,
-      name,
-      description: body.description?.toString().slice(0, 500) ?? null,
-      kind: body.kind ?? 'email',
-      entityTypes: normaliseEntityTypes(body.entity_types),
-      systemPrompt: String(body.system_prompt).slice(0, 8000),
-      userPrompt: String(body.user_prompt).slice(0, 8000),
-      tone: body.tone ?? 'professional',
-      defaultSubject: body.default_subject?.toString().slice(0, 200) ?? null,
-      active: body.active !== false,
+      name: parsed.data.name,
+      description: parsed.data.description ?? null,
+      kind: parsed.data.kind,
+      entityTypes: normaliseEntityTypes(parsed.data.entity_types),
+      systemPrompt: parsed.data.system_prompt,
+      userPrompt: parsed.data.user_prompt,
+      tone: parsed.data.tone,
+      defaultSubject: parsed.data.default_subject ?? null,
+      active: parsed.data.active,
       createdBy: ctx.userId,
       updatedBy: ctx.userId,
     }).returning();

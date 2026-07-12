@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, boolean, integer, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, boolean, integer, index, uniqueIndex, jsonb } from 'drizzle-orm/pg-core';
 import * as utils from './utils';
 import { tenants, users } from './core';
 
@@ -45,3 +45,38 @@ export const securityEvents = pgTable('security_events', {
   typeIdx: index('idx_security_events_type').on(table.eventType),
   timeIdx: index('idx_security_events_time').on(table.createdAt),
 }));
+
+// ── SSO PROVIDERS ─────────────────────────────────────
+export const ssoProviders = pgTable('sso_providers', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  providerType: text('provider_type').notNull(),
+  name: text('name').notNull(),
+  config: jsonb('config').notNull().default({}),
+  isActive: boolean('is_active').notNull().default(false),
+  ...utils.lifecycle(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    activeIdx: utils.activeIdx(table),
+  };
+});
+
+// ── SSO SESSIONS ──────────────────────────────────────
+export const ssoSessions = pgTable('sso_sessions', {
+  id: utils.pk(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  tenantId: utils.tenantId(),
+  providerId: uuid('provider_id').references(() => ssoProviders.id, { onDelete: 'set null' }),
+  sessionId: text('session_id').notNull(),
+  idToken: text('id_token'),
+  samlAssertion: text('saml_assertion'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  ...utils.lifecycle(),
+}, (table) => {
+  return {
+    userIdx: index('idx_sso_sessions_user').on(table.userId, table.createdAt),
+    sessionIdx: index('idx_sso_sessions_id').on(table.sessionId),
+    tenantIdx: utils.tenantIdx(table),
+  };
+});

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, jsonb, integer, bigint, boolean, date, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, jsonb, integer, bigint, boolean, date, uniqueIndex, index, numeric } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from './core';
 import * as utils from './utils';
@@ -39,4 +39,47 @@ export const planLimits = pgTable('plan_limits', {
   maxFileUploadBytes: integer('max_file_upload_bytes'),
   isActive: boolean('is_active').default(true),
   ...utils.lifecycle(),
+});
+
+// ── 3. USAGE SNAPSHOTS ────────────────────────────────
+export const usageSnapshots = pgTable('usage_snapshots', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  snapshotDate: text('snapshot_date').notNull().default(sql`CURRENT_DATE::text`),
+  contactsCount: integer('contacts_count').default(0),
+  leadsCount: integer('leads_count').default(0),
+  dealsCount: integer('deals_count').default(0),
+  usersCount: integer('users_count').default(0),
+  storageUsedMb: numeric('storage_used_mb', { precision: 10, scale: 2 }).default('0'),
+  apiCallsCount: integer('api_calls_count').default(0),
+  emailSentCount: integer('email_sent_count').default(0),
+  metadata: utils.metadata(),
+  ...utils.lifecycle(),
+}, (table) => {
+  return {
+    tenantDateIdx: index('idx_usage_snapshots_tenant_date').on(table.tenantId, table.snapshotDate),
+    dateIdx: index('idx_usage_snapshots_date').on(table.snapshotDate),
+    tenantIdx: utils.tenantIdx(table),
+    metadataGinIdx: utils.metadataIdx(table),
+  };
+});
+
+// ── 4. LIMIT VIOLATIONS ───────────────────────────────
+export const limitViolations = pgTable('limit_violations', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  violationType: text('violation_type').notNull(),
+  limitValue: integer('limit_value'),
+  actualValue: integer('actual_value'),
+  exceededAt: timestamp('exceeded_at', { withTimezone: true }).defaultNow(),
+  notified: boolean('notified').default(false),
+  notifiedAt: timestamp('notified_at', { withTimezone: true }),
+  resolved: boolean('resolved').default(false),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  ...utils.lifecycle(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    unresolvedIdx: index('idx_limit_violations_unresolved').on(table.resolved, table.exceededAt).where(sql`resolved = false`),
+  };
 });

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { sql } from 'drizzle-orm';
 import { Pool } from 'pg';
 import * as schema from '../drizzle/schema';
 import * as fs from 'fs';
@@ -86,21 +87,47 @@ async function main() {
   const db = drizzle(pool, { schema });
 
   console.log('[migrate] Connecting to database...');
-  console.log('[migrate] Applying pending migrations from ./drizzle/migrations...');
 
-  try {
-    await migrate(db, {
-      migrationsFolder: './drizzle/migrations',
-      migrationsTable: '__drizzle_migrations',
-    });
+  await db.execute(sql.raw(`
+    CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
+      id SERIAL PRIMARY KEY,
+      hash text NOT NULL,
+      created_at bigint NOT NULL
+    );
+  `));
 
-    console.log('[migrate] All migrations applied successfully');
-  } catch (error: any) {
-    console.error('[migrate] Migration failed:', error);
-    process.exit(1);
-  } finally {
-    await pool.end();
+  const count = await db.execute<{ cnt: string }>(
+    sql.raw(`SELECT COUNT(*)::text AS cnt FROM "__drizzle_migrations"`),
+  );
+  const rowCount = parseInt(count.rows[0].cnt, 10);
+
+  if (rowCount === 0 && journal.entries.length > 0) {
+    const schemaExists = await db.execute<{ exists: boolean }>(
+      sql.raw(`SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'api_key_usage')`),
+    );
+
+    if (schemaExists.rows[0].exists) {
+      console.log(`[migrate] Recovery: schema exists but tracking table is empty.`);
+      console.log(`[migrate] Seeding __drizzle_migrations with ${journal.entries.length} entries...`);
+      for (const entry of journal.entries) {
+        await db.execute(
+          sql`INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES (${entry.tag}, ${entry.when})`,
+        );
+      }
+      console.log('[migrate] Recovery complete.');
+    } else {
+      console.log('[migrate] Fresh database detected. Running all migrations...');
+    }
   }
+
+  console.log('[migrate] Applying pending migrations with drizzle-orm migrator...');
+  await migrate(db, { migrationsFolder: './drizzle/migrations' });
+
+  console.log('[migrate] All migrations applied successfully');
+  await pool.end();
 }
 
-main();
+main().catch((err) => {
+  console.error('[migrate] Fatal:', err);
+  process.exit(1);
+});
