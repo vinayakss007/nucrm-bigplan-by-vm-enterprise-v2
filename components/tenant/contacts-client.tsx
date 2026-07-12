@@ -190,15 +190,20 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
 
   const load = useCallback(async (newOffset=0, q=search, status=statusFilter) => {
     setLoading(true);
-    const params = new URLSearchParams({ offset:String(newOffset), limit: String(limit) });
-    if (q) params.set('q', q);
-    if (status !== 'all') params.set('status', status);
-    router.push(`/tenant/contacts?${params.toString()}`, { scroll: false });
-    const res = await fetch('/api/tenant/contacts?'+params.toString());
-    const data = await res.json();
-    setContacts(normalize(data.data));
-    setTotal(data.total ?? 0);
-    setOffset(newOffset);
+    try {
+      const params = new URLSearchParams({ offset:String(newOffset), limit: String(limit) });
+      if (q) params.set('q', q);
+      if (status !== 'all') params.set('status', status);
+      router.push(`/tenant/contacts?${params.toString()}`, { scroll: false });
+      const res = await fetch('/api/tenant/contacts?'+params.toString());
+      const data = await res.json();
+      setContacts(normalize(data.data));
+      setTotal(data.total ?? 0);
+      setOffset(newOffset);
+    } catch (error) {
+      console.error('Failed to load contacts:', error);
+      toast.error('Failed to load contacts');
+    }
     setLoading(false);
   }, [search, statusFilter, router]);
 
@@ -404,7 +409,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
         <div className="relative w-full sm:flex-1 sm:max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"/>
           <input value={search} onChange={e=>handleSearch(e.target.value)} placeholder="Search by name, email, company..." className="w-full pl-9 pr-4 py-2 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40 shadow-sm"/>
-          {search&&<button onClick={()=>handleSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5"/></button>}
+          {search&&<button onClick={()=>handleSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 min-h-11 min-w-11 flex items-center justify-center text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5"/></button>}
         </div>
       </div>
 

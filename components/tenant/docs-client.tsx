@@ -954,7 +954,7 @@ https://your-domain.com/api
 ## Examples
 \`\`\`bash
 curl -X GET https://domain.com/api/tenant/contacts \\
-  -H "Authorization: Bearer sk_live_xxx"
+  -H "Authorization: Bearer YOUR_API_KEY"
 \`\`\``
     },
     'settings/team': {
@@ -1131,7 +1131,7 @@ Generate keys for external integrations.
 ## Usage
 Include in header:
 \`\`\`
-Authorization: Bearer sk_live_xxx
+Authorization: Bearer YOUR_API_KEY
 \`\`\``
     },
     'integrations/whatsapp': {

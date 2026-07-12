@@ -282,7 +282,7 @@ export function ContactTimeline({ contactId, limit = 50, compact = false }: Cont
                         {event.metadata && Object.keys(event.metadata).length > 0 && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                              <Button variant="ghost" size="icon" className="min-h-11 min-w-11 shrink-0">
                                 <MoreHorizontal className="w-4 h-4" />
                               </Button>
                             </DropdownMenuTrigger>

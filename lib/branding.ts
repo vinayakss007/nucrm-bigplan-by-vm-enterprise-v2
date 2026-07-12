@@ -132,7 +132,15 @@ export function generateCSSVariables(config: BrandingConfig): string {
   vars.push(`--brand-accent: ${config.accentColor};`);
 
   if (config.logoUrl) {
-    vars.push(`--brand-logo-url: url(${config.logoUrl});`);
+    // Only allow http/https URLs to prevent CSS injection via url()
+    try {
+      const parsed = new URL(config.logoUrl);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        vars.push(`--brand-logo-url: url(${parsed.toString()});`);
+      }
+    } catch {
+      // Invalid URL — skip silently
+    }
   }
 
   if (config.customCss) {

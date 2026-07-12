@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 const PIPELINE_CONFIG = {
@@ -114,6 +115,42 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
     setBantSaving(false);
   };
 
+  const [showConvert, setShowConvert] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [convertDraft, setConvertDraft] = useState({ create_deal: false, deal_title: '', deal_value: '' });
+
+  const submitConvert = async () => {
+    setConverting(true);
+    try {
+      const res = await fetch(`/api/tenant/leads/${lead.id}/convert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          create_deal: convertDraft.create_deal,
+          deal_title: convertDraft.deal_title || null,
+          deal_value: convertDraft.deal_value ? Number(convertDraft.deal_value) : 0,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        toast.success('Lead already converted. Redirecting to contact...');
+        router.push(`/tenant/contacts/${data.contact_id}`);
+        return;
+      }
+      if (!res.ok) {
+        toast.error(data.error || 'Conversion failed');
+        return;
+      }
+      toast.success(data.message || 'Lead converted');
+      router.push(`/tenant/contacts/${data.contact_id}`);
+    } catch {
+      toast.error('Conversion failed');
+    } finally {
+      setConverting(false);
+      setShowConvert(false);
+    }
+  };
+
   const [showHandoff, setShowHandoff] = useState(false);
   const [handoffSaving, setHandoffSaving] = useState(false);
   const [handoffDraft, setHandoffDraft] = useState({ assigned_to: '', reason: '' });
@@ -170,14 +207,12 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
   };
 
   const deleteLead = async () => {
-    try {
+    await confirmThen(`Delete lead "${lead.first_name} ${lead.last_name}"?`, async () => {
       const res = await fetch(`/api/tenant/leads/${lead.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
       toast.success('Lead deleted');
       router.push('/tenant/leads');
-    } catch {
-      toast.error('Failed to delete lead');
-    }
+    });
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -253,6 +288,10 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
           <Button variant="outline" onClick={() => setShowEdit(true)}>
             <Edit className="w-4 h-4 mr-2" />
             Edit
+          </Button>
+          <Button variant="default" onClick={() => setShowConvert(true)} title="Convert this lead to a contact">
+            <Zap className="w-4 h-4 mr-2" />
+            Convert
           </Button>
           <Button variant="outline" onClick={() => setShowHandoff(true)} title="Hand this lead off to another team member">
             <User className="w-4 h-4 mr-2" />
@@ -741,6 +780,77 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
                 <ExternalLink className="w-4 h-4 text-muted-foreground" />
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Convert dialog */}
+      {showConvert && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => !converting && setShowConvert(false)}
+        >
+          <div className="admin-card p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold flex items-center gap-2 mb-4">
+              <Zap className="w-4 h-4" />
+              Convert lead to contact
+            </h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              This will create a contact from this lead and mark the lead as converted.
+              BANT discovery fields will be carried over automatically.
+            </p>
+            <div className="space-y-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 rounded border-border accent-violet-600"
+                  checked={convertDraft.create_deal}
+                  onChange={(e) => setConvertDraft((p) => ({ ...p, create_deal: e.target.checked }))}
+                  disabled={converting}
+                />
+                <span className="text-sm font-medium">Create a deal from this lead</span>
+              </label>
+              {convertDraft.create_deal && (
+                <div className="space-y-3 pl-7">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                      Deal title <span className="font-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                      placeholder="e.g. ACME Corp — Q3 Proposal"
+                      value={convertDraft.deal_title}
+                      onChange={(e) => setConvertDraft((p) => ({ ...p, deal_title: e.target.value }))}
+                      disabled={converting}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                      Deal value <span className="font-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                      placeholder="e.g. 50000"
+                      value={convertDraft.deal_value}
+                      onChange={(e) => setConvertDraft((p) => ({ ...p, deal_value: e.target.value }))}
+                      disabled={converting}
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="outline" size="sm" disabled={converting} onClick={() => setShowConvert(false)}>
+                  Cancel
+                </Button>
+                <Button size="sm" disabled={converting} onClick={() => void submitConvert()}>
+                  {converting ? 'Converting…' : 'Convert'}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}

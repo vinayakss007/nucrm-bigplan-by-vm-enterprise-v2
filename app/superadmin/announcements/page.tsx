@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Megaphone, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 const TYPE_CFG: Record<string,{badge:string;border:string}> = {
@@ -38,9 +39,12 @@ export default function AnnouncementsPage() {
   };
 
   const del = async (id: string) => {
+    const announcement = items.find(a => a.id === id);
+    await confirmThen(`Delete announcement "${announcement?.title || 'this announcement'}"?`, async () => {
       await fetch('/api/superadmin/announcements',{ method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id}) });
-    setItems(prev => prev.filter(a => a.id!==id));
-    toast.success('Deleted');
+      setItems(prev => prev.filter(a => a.id!==id));
+      toast.success('Deleted');
+    });
   };
 
   return (

@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Plus, Search, FileText, X, Calendar, DollarSign, User } from 'lucide-react';
+import { Plus, Search, FileText, X, Calendar, DollarSign, User, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -28,7 +28,7 @@ const statusColors: Record<string, string> = {
 
 export default function ContractsPage() {
   return (
-    <Suspense fallback={<div className="p-4 sm:p-6 text-center">Loading...</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center p-4 sm:p-6 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading...</div>}>
       <ContractsPageInner />
     </Suspense>
   );
@@ -53,7 +53,7 @@ function ContractsPageInner() {
       const res = await fetch('/api/tenant/contacts');
       const data = await res.json();
       setContacts(data.contacts || []);
-    } catch (error) { console.error('Failed to fetch contacts', error); }
+    } catch (error) { console.error('Failed to fetch contacts', error); toast.error('Failed to load contacts'); }
   };
 
   const fetchContracts = async () => {
@@ -63,6 +63,7 @@ function ContractsPageInner() {
       setContracts(data.contracts || []);
     } catch (error) {
       console.error('Failed to fetch contracts', error);
+      toast.error('Failed to load contracts');
     } finally { setLoading(false); }
   };
 
@@ -150,7 +151,7 @@ function ContractsPageInner() {
 
       {/* Cards Grid */}
       {loading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading contracts...</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <FileText className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />

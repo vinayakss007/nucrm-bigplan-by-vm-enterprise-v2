@@ -1,8 +1,10 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Monitor, Smartphone, Globe, LogOut, Shield, Trash2 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import SettingsEmptyState from '@/components/shared/settings-empty-state';
 
 export default function SessionsPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -16,17 +18,21 @@ export default function SessionsPage() {
   useEffect(load, []);
 
   const revoke = async (sessionId: string) => {
-    setRevoking(sessionId);
-    await fetch('/api/user/sessions', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sessionId}) });
-    toast.success('Session revoked');
-    load();
-    setRevoking(null);
+    await confirmThen('Revoke this session? The device will be signed out.', async () => {
+      setRevoking(sessionId);
+      await fetch('/api/user/sessions', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sessionId}) });
+      toast.success('Session revoked');
+      load();
+      setRevoking(null);
+    });
   };
 
   const revokeAll = async () => {
-    await fetch('/api/user/sessions', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({revokeAll:true}) });
-    toast.success('All other sessions revoked');
-    load();
+    await confirmThen('Sign out all other devices? You will remain signed in here.', async () => {
+      await fetch('/api/user/sessions', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({revokeAll:true}) });
+      toast.success('All other sessions revoked');
+      load();
+    });
   };
 
   const getIcon = (ua: string) => {
@@ -70,7 +76,7 @@ export default function SessionsPage() {
           ))}
         </div>
       ) : !sessions.length ? (
-        <p className="text-sm text-muted-foreground">No sessions found</p>
+        <SettingsEmptyState icon={Monitor} title="No sessions found" description="Active sessions will appear here" />
       ) : (
         <div className="admin-card divide-y divide-border overflow-hidden">
           {sessions.map(s => {

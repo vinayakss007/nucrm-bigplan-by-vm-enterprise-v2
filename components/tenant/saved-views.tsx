@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { Bookmark, BookmarkPlus, X, Trash2, Share2, Loader2 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -80,11 +81,14 @@ export function SavedViews({ entityType, currentFilters, currentQuery, onApplyVi
 
   const deleteView = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const res = await fetch(`/api/tenant/views/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      toast.success('View deleted');
-      setViews(p => p.filter(v => v.id !== id));
-    } else toast.error('Failed to delete');
+    const view = views.find(v => v.id === id);
+    await confirmThen(`Delete view "${view?.name || 'this view'}"?`, async () => {
+      const res = await fetch(`/api/tenant/views/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('View deleted');
+        setViews(p => p.filter(v => v.id !== id));
+      } else toast.error('Failed to delete');
+    });
   };
 
   const applyView = (view: SavedView) => {

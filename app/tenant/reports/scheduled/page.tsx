@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Clock, Plus, Play, Pause, Trash2, Mail, FileText, X } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 const FREQUENCIES = [
@@ -51,15 +52,18 @@ export default function ScheduledReportsPage() {
   };
 
   const deleteReport = async (id: string) => {
-    try {
-      const res = await fetch('/api/tenant/reports/scheduled', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      });
-      if (res.ok) { toast.success('Deleted'); load(); }
-      else toast.error('Failed');
-    } catch { toast.error('Failed'); }
+    const report = reports.find(r => r.id === id);
+    await confirmThen(`Delete scheduled report "${report?.name || 'this report'}"?`, async () => {
+      try {
+        const res = await fetch('/api/tenant/reports/scheduled', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id }),
+        });
+        if (res.ok) { toast.success('Deleted'); load(); }
+        else toast.error('Failed');
+      } catch { toast.error('Failed'); }
+    });
   };
 
   return (

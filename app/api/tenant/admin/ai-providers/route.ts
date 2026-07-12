@@ -21,6 +21,8 @@ import { tenants } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
+import { validateBody } from '@/lib/api/validate';
+import { updateAiProvidersSchema } from '@/lib/api/schemas';
 import {
   setProviderKey,
   deleteProviderKey,
@@ -102,10 +104,9 @@ export async function PATCH(req: NextRequest) {
 
     let body;
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
-    const incoming = body.providers;
-    if (!incoming || typeof incoming !== 'object') {
-      return NextResponse.json({ error: 'providers object required' }, { status: 400 });
-    }
+    const parsed = validateBody(updateAiProvidersSchema, body);
+    if (parsed instanceof NextResponse) return parsed;
+    const incoming = parsed.data.providers;
 
     // Split incoming payload into:
     //   - configPatch (written to tenants.settings.ai_providers via jsonb_set)
@@ -127,24 +128,13 @@ export async function PATCH(req: NextRequest) {
         cfg['default_model'] = p['default_model'].trim().slice(0, 200);
       }
       if (typeof p['temperature'] === 'number') {
-        if (p['temperature'] < 0 || p['temperature'] > 2) {
-          return NextResponse.json({ error: `${id}.temperature must be 0-2` }, { status: 400 });
-        }
         cfg['temperature'] = p['temperature'];
       }
       if (typeof p['max_tokens'] === 'number') {
-        const mt = p['max_tokens'];
-        if (!Number.isInteger(mt) || mt < 16 || mt > 32000) {
-          return NextResponse.json({ error: `${id}.max_tokens must be 16-32000` }, { status: 400 });
-        }
-        cfg['max_tokens'] = mt;
+        cfg['max_tokens'] = p['max_tokens'];
       }
       if (typeof p['fallback_priority'] === 'number') {
-        const fp = p['fallback_priority'];
-        if (!Number.isInteger(fp) || fp < 1 || fp > 99) {
-          return NextResponse.json({ error: `${id}.fallback_priority must be 1-99` }, { status: 400 });
-        }
-        cfg['fallback_priority'] = fp;
+        cfg['fallback_priority'] = p['fallback_priority'];
       }
       if (Object.keys(cfg).length > 0) configPatch[id] = cfg;
 
@@ -161,9 +151,6 @@ export async function PATCH(req: NextRequest) {
       // base_url accepted for ALL providers (not just ollama/opencode)
       if (typeof p['base_url'] === 'string') {
         const url = p['base_url'].trim();
-        if (url && !/^https?:\/\//.test(url)) {
-          return NextResponse.json({ error: `${id}.base_url must start with http(s)://` }, { status: 400 });
-        }
         update.baseUrl = url;
         // If provider has a base_url but no API key, store empty key (for self-hosted)
         if (!update.apiKey) update.apiKey = '';

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import {
   FileEdit, Plus, Save, X, Sparkles, AlertCircle, Loader2, Trash2, Eye, RefreshCw,
 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 
 type Template = {
@@ -132,15 +133,16 @@ export default function AITemplatesPage() {
 
   async function remove(t: Template) {
     if (!t.id) return;
-    if (!confirm(`Delete "${t.name}"? This soft-deletes the template (draft history is preserved).`)) return;
-    setBusy('delete:' + t.id);
-    setError(null);
-    try {
-      const r = await fetch(`/api/tenant/admin/ai-templates/${t.id}`, { method: 'DELETE' });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-      load();
-    } catch (e) { setError((e as Error).message); }
-    finally { setBusy(null); }
+    await confirmThen(`Delete "${t.name}"? This soft-deletes the template (draft history is preserved).`, async () => {
+      setBusy('delete:' + t.id);
+      setError(null);
+      try {
+        const r = await fetch(`/api/tenant/admin/ai-templates/${t.id}`, { method: 'DELETE' });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+        load();
+      } catch (e) { setError((e as Error).message); }
+      finally { setBusy(null); }
+    });
   }
 
   const installed = data?.templates ?? [];

@@ -77,6 +77,9 @@ import {
   notifications,
   invitations,
   featureRegistry,
+  permissionOverrides,
+  onboardingProgress,
+  userDepartures,
 } from './core';
 
 import {
@@ -120,6 +123,7 @@ import {
   leadOffers,
   leadTags,
   followUps,
+  revenueForecastSummary,
 } from './crm';
 
 import {
@@ -164,18 +168,10 @@ import {
 
 import {
   systemSettings,
-  plans,
-  subscriptions,
-  activities,
-  tasks,
   tenantBackups,
   tenantRestores,
   dashboards,
   savedReports,
-  billingEvents,
-  usageSnapshots,
-  limitViolations,
-  fileUploads,
   announcements,
   tenantBackupRecords,
   tenantRestoreRecords,
@@ -183,22 +179,15 @@ import {
   backupRecords,
   backupSchedules,
   criticalDataBackups,
-  permissionOverrides,
   healthChecks,
-  onboardingProgress,
-  platformSettings,
   reportExecutions,
-  revenueForecastSummary,
   restoreSnapshots,
   selectiveRestoreAuditLog,
   selectiveRestoreLogs,
   superAdminBackups,
-  userDepartures,
   apiKeyUsageInfra,
   dashboardTemplates,
   reportTemplates,
-  ssoProviders,
-  ssoSessions,
 } from './infra';
 
 import {
@@ -253,6 +242,8 @@ import {
   loginAttempts,
   loginBlocks,
   securityEvents,
+  ssoProviders,
+  ssoSessions,
 } from './security';
 
 import {
@@ -265,6 +256,9 @@ import {
   orderLineItems,
   contracts,
   serviceSubscriptions,
+  plans,
+  subscriptions,
+  billingEvents,
 } from './billing';
 
 import {
@@ -289,6 +283,18 @@ import {
   assignmentRules,
   assignmentLogs,
 } from './assignment';
+
+import {
+  tasks,
+} from './tasks';
+
+import {
+  activities,
+} from './activity';
+
+import {
+  platformSettings,
+} from './platform';
 
 import {
   chatSessions,
@@ -362,6 +368,8 @@ import {
 import {
   userUsage,
   planLimits,
+  usageSnapshots,
+  limitViolations,
 } from './usage';
 
 import {
@@ -371,6 +379,7 @@ import {
 
 import {
   documents as storageDocuments,
+  fileUploads,
 } from './files';
 
 import {

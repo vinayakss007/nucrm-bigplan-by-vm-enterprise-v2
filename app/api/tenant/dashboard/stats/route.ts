@@ -59,8 +59,8 @@ export async function GET(request: NextRequest) {
     const terminalStageIds = terminalStages.map(s => s.id);
     const counts = combinedStats.rows?.[0] || {};
 
-    // Query 2: Recent data (parallel — 3 lightweight queries)
-    const [recentActivities, recentContacts, upcomingDeals] = await Promise.all([
+    // Query 2: Recent data (parallel — 4 lightweight queries)
+    const [recentActivities, recentContacts, upcomingDeals, pendingTasksList] = await Promise.all([
       db.select({
         id: activities.id, description: activities.description,
         eventType: activities.eventType, createdAt: activities.createdAt,
@@ -90,6 +90,18 @@ export async function GET(request: NextRequest) {
         ...(terminalStageIds.length > 0 ? [notInArray(deals.stageId, terminalStageIds)] : []),
       ))
       .orderBy(asc(deals.closeDate))
+        .limit(5),
+
+      db.select({
+        id: tasks.id, title: tasks.title, dueDate: tasks.dueDate, priority: tasks.priority,
+      })
+      .from(tasks)
+      .where(and(
+        eq(tasks.tenantId, tid),
+        isNull(tasks.deletedAt),
+        sql`${tasks.status} != 'completed'`,
+      ))
+      .orderBy(asc(tasks.dueDate))
       .limit(5),
     ]);
 
@@ -110,7 +122,7 @@ export async function GET(request: NextRequest) {
           `)).rows?.[0]?.['sum'] ?? 0)
         : 0,
       activities: recentActivities,
-      tasks: [],
+      tasks: pendingTasksList,
       dealsByStage: dealsByStage.map(s => ({ stage: s.stageName, count: s.count, total: s.total })),
       recentContacts: recentContacts,
       upcomingDeals: upcomingDeals,
@@ -130,6 +142,6 @@ export async function GET(request: NextRequest) {
       },
       error: "Internal server error",
       status: 'error'
-    }, { status: 200 });
+    }, { status: 500 });
   }
 }

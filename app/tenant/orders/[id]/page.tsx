@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, Package, Truck, CheckCircle, Clock, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 interface Order {
@@ -123,15 +124,16 @@ export default function OrderDetailPage() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this order?')) return;
-    try {
-      const res = await fetch(`/api/tenant/orders/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
-      toast.success('Order deleted');
-      router.push('/tenant/orders');
-    } catch {
-      toast.error('Failed to delete order');
-    }
+    await confirmThen('Are you sure you want to delete this order?', async () => {
+      try {
+        const res = await fetch(`/api/tenant/orders/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Failed');
+        toast.success('Order deleted');
+        router.push('/tenant/orders');
+      } catch {
+        toast.error('Failed to delete order');
+      }
+    });
   };
 
   const getNextStatus = () => {

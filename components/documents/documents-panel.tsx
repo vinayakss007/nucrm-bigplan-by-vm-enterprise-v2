@@ -15,6 +15,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, FileText, Loader2, Trash2, Upload } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 export type DocumentEntityType = 'contact' | 'deal' | 'company' | 'lead' | 'ticket';
@@ -133,16 +134,17 @@ export default function DocumentsPanel({ entityType, entityId, readOnly = false 
   };
 
   const deleteDocument = async (doc: DocumentRow) => {
-    if (!confirm(`Delete "${doc.name}"? This cannot be undone.`)) return;
-    try {
-      const res = await fetch(`/api/tenant/documents/${doc.id}`, { method: 'DELETE' });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Delete failed');
-      toast.success('Deleted');
-      load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Delete failed');
-    }
+    await confirmThen(`Delete "${doc.name}"? This cannot be undone.`, async () => {
+      try {
+        const res = await fetch(`/api/tenant/documents/${doc.id}`, { method: 'DELETE' });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Delete failed');
+        toast.success('Deleted');
+        load();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Delete failed');
+      }
+    });
   };
 
   return (

@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Puzzle, Plus, Trash2, X, Loader2, ToggleLeft, ToggleRight, Zap, TestTube, Copy, ChevronDown, ChevronUp, Clock, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 type Tab = 'my_plugins' | 'create' | 'templates';
@@ -95,11 +96,14 @@ export default function PluginsPage() {
   };
 
   const deletePlugin = async (id: string) => {
-    const res = await fetch(`/api/tenant/plugins/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      setPlugins((prev) => prev.filter((p) => p.id !== id));
-      toast.success('Plugin deleted');
-    }
+    const plugin = plugins.find(p => p.id === id);
+    await confirmThen(`Delete plugin "${plugin?.name || 'this plugin'}"?`, async () => {
+      const res = await fetch(`/api/tenant/plugins/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setPlugins((prev) => prev.filter((p) => p.id !== id));
+        toast.success('Plugin deleted');
+      }
+    });
   };
 
   const testAction = async (pluginId: string, actionName: string) => {

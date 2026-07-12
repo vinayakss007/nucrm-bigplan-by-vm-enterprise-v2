@@ -14,7 +14,7 @@ export default function LogsError({ error, reset }: { error: Error; reset: () =>
           An unexpected error occurred while rendering the logs page.
         </p>
         <p className="text-xs font-mono text-red-400/60 bg-red-500/10 rounded-lg p-3 mb-4 overflow-x-auto text-left">
-          {error.message}
+          An unexpected error occurred.
         </p>
         <button
           onClick={reset}

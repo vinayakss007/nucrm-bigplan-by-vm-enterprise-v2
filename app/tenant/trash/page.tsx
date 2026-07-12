@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Trash2, RotateCcw, AlertTriangle, X, Clock } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
@@ -39,27 +40,31 @@ export default function TrashPage() {
   useEffect(() => { load(); }, [filter, load]);
 
   const restore = async (item: TrashItem) => {
-    setRestoring(item.id);
-    const res = await fetch('/api/tenant/trash', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: item.id, resource_type: item.resource_type }),
+    await confirmThen(`Restore "${item.name}"?`, async () => {
+      setRestoring(item.id);
+      const res = await fetch('/api/tenant/trash', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id, resource_type: item.resource_type }),
+      });
+      const data = await res.json();
+      if (res.ok) { toast.success(`${item.name} restored`); load(); }
+      else toast.error(data.error);
+      setRestoring(null);
     });
-    const data = await res.json();
-    if (res.ok) { toast.success(`${item.name} restored`); load(); }
-    else toast.error(data.error);
-    setRestoring(null);
   };
 
   const permanentDelete = async (item: TrashItem) => {
-    setDeleting(item.id);
-    const res = await fetch('/api/tenant/trash', {
-      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: item.id, resource_type: item.resource_type }),
+    await confirmThen(`Permanently delete "${item.name}"? This CANNOT be undone.`, async () => {
+      setDeleting(item.id);
+      const res = await fetch('/api/tenant/trash', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id, resource_type: item.resource_type }),
+      });
+      const data = await res.json();
+      if (res.ok) { toast.success('Permanently deleted'); load(); }
+      else toast.error(data.error);
+      setDeleting(null);
     });
-    const data = await res.json();
-    if (res.ok) { toast.success('Permanently deleted'); load(); }
-    else toast.error(data.error);
-    setDeleting(null);
   };
 
   const filtered = filter === 'all' ? items : items.filter(i => i.resource_type === filter);

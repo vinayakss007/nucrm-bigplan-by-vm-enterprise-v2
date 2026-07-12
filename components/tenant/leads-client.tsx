@@ -128,7 +128,7 @@ export default function LeadsClient({
     fetch('/api/tenant/custom-fields?entityType=lead', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { fields: [] })
       .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads-client] Failed to load custom fields:', err); });
     return () => abort.abort();
   }, []);
 
@@ -137,7 +137,7 @@ export default function LeadsClient({
     fetch('/api/tenant/segments?entity_type=lead', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads-client] Failed to load segments:', err); });
     return () => abort.abort();
   }, []);
 
@@ -146,7 +146,7 @@ export default function LeadsClient({
     fetch('/api/tenant/sequences', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSequences(d.data ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads-client] Failed to load sequences:', err); });
     return () => abort.abort();
   }, []);
 

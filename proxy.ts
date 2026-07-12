@@ -50,7 +50,7 @@ const PUBLIC_PREFIXES = ['/_next', '/favicon', '/images', '/static', '/icons', '
 
 const ALLOWED_ORIGINS = (process.env['ALLOWED_ORIGINS'] || 'http://localhost:3000').split(',').map(s => s.trim());
 if (ALLOWED_ORIGINS.includes('*') && process.env['NODE_ENV'] === 'production') {
-  console.warn('WARNING: ALLOWED_ORIGINS=* in production! Restrict to specific origins.');
+  console.error('FATAL: ALLOWED_ORIGINS=* in production. CORS is wide-open. Set specific origins.');
 }
 
 function isPublic(pathname: string): boolean {
@@ -68,8 +68,8 @@ function setCORS(response: NextResponse, origin: string | null, pathname: string
   });
   if (allowed && origin) {
     response.headers.set('Access-Control-Allow-Origin', origin);
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
   }
-  response.headers.set('Access-Control-Allow-Credentials', 'true');
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token, X-Requested-With, x-cron-secret, x-auth-method');
   response.headers.set('Vary', 'Origin');

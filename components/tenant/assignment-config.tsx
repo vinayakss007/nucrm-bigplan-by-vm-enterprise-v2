@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Settings, Trash2, ToggleLeft, ToggleRight, Loader2, Users, MapPin, Brain, Shuffle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 
@@ -58,11 +59,14 @@ export default function AssignmentConfig({ teamMembers = [] }: { teamMembers?: {
   };
 
   const deleteRule = async (id: string) => {
-    const res = await fetch(`/api/tenant/assignment-rules?id=${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      setRules(p => p.filter(r => r.id !== id));
-      toast.success('Rule deleted');
-    } else toast.error('Failed to delete');
+    const rule = rules.find(r => r.id === id);
+    await confirmThen(`Delete assignment rule "${rule?.name || 'this rule'}"?`, async () => {
+      const res = await fetch(`/api/tenant/assignment-rules?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setRules(p => p.filter(r => r.id !== id));
+        toast.success('Rule deleted');
+      } else toast.error('Failed to delete');
+    });
   };
 
   return (

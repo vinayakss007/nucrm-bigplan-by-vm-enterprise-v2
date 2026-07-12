@@ -179,31 +179,37 @@ export function validateEnv(): EnvConfig {
 export function initEnv(): EnvConfig {
   const config = validateEnv();
   
-  console.log('✅ Environment validated successfully');
-  console.log(`   NODE_ENV: ${config.nodeEnv}`);
-  console.log(`   Database: ${config.databaseUrl.split('@').pop()?.split('/')[0] || 'configured'}`);
-  console.log(`   Pool Size: ${config.databasePoolSize}`);
-  console.log(`   SSL: ${config.databaseSsl}`);
-  
-  if (config.resendApiKey) {
-    console.log(`   Email: ${config.resendApiKey.startsWith('re_test_') ? 'Resend (test mode)' : 'Resend (live)'}`);
-  } else if (process.env.SMTP_HOST) {
-    console.log(`   Email: SMTP (${process.env.SMTP_HOST})`);
+  // Only log environment details in development; never in production
+  if (config.nodeEnv !== 'production') {
+    console.log('✅ Environment validated successfully');
+    console.log(`   NODE_ENV: ${config.nodeEnv}`);
+    console.log(`   Database: ${config.databaseUrl.split('@').pop()?.split('/')[0] || 'configured'}`);
+    console.log(`   Pool Size: ${config.databasePoolSize}`);
+    console.log(`   SSL: ${config.databaseSsl}`);
+    
+    if (config.resendApiKey) {
+      console.log(`   Email: ${config.resendApiKey.startsWith('re_test_') ? 'Resend (test mode)' : 'Resend (live)'}`);
+    } else if (process.env.SMTP_HOST) {
+      console.log(`   Email: SMTP (${process.env.SMTP_HOST})`);
+    } else {
+      console.log(`   Email: Not configured (dev console mode)`);
+    }
+    
+    if (config.sentryDsn) {
+      console.log(`   Sentry: Configured`);
+    }
   } else if (config.nodeEnv === 'production') {
-    console.error('');
-    console.error('  ╔══════════════════════════════════════════════════════════════╗');
-    console.error('  ║  ⚠️  WARNING: NO EMAIL PROVIDER CONFIGURED                   ║');
-    console.error('  ║                                                              ║');
-    console.error('  ║  Password resets, invitations, notifications will NOT send.  ║');
-    console.error('  ║  Set RESEND_API_KEY or SMTP_HOST in your .env file.          ║');
-    console.error('  ╚══════════════════════════════════════════════════════════════╝');
-    console.error('');
-  } else {
-    console.log(`   Email: Not configured (dev console mode)`);
-  }
-  
-  if (config.sentryDsn) {
-    console.log(`   Sentry: Configured`);
+    // Production: warn only about missing critical config
+    if (!config.resendApiKey && !process.env.SMTP_HOST) {
+      console.error('');
+      console.error('  ╔══════════════════════════════════════════════════════════════╗');
+      console.error('  ║  ⚠️  WARNING: NO EMAIL PROVIDER CONFIGURED                   ║');
+      console.error('  ║                                                              ║');
+      console.error('  ║  Password resets, invitations, notifications will NOT send.  ║');
+      console.error('  ║  Set RESEND_API_KEY or SMTP_HOST in your .env file.          ║');
+      console.error('  ╚══════════════════════════════════════════════════════════════╝');
+      console.error('');
+    }
   }
   
   return config;

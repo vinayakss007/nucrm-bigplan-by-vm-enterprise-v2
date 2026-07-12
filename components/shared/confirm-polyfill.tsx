@@ -15,7 +15,7 @@ export function useAppConfirm() {
   return useContext(Ctx).confirm;
 }
 
-export function ConfirmPolyfill({ children }: { children: React.ReactNode }) {
+export function ConfirmPolyfill({ children }: { children?: React.ReactNode }) {
   const [state, setState] = useState<ConfirmState | null>(null);
 
   const confirm = useCallback((message: string): Promise<boolean> => {

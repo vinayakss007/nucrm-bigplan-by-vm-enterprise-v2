@@ -1,0 +1,16 @@
+# Gitleaks false-positive allowlist
+# Test fixtures, docs with example curl commands, and deploy script placeholders.
+
+title = "gitleaks config"
+
+[allowlist]
+  description = "Exclude test, doc, and script files with placeholder credentials"
+  paths = [
+    '''docs/''',
+    '''postman/''',
+    '''scripts/deploy-vm\.sh''',
+    '''scripts/security-test\.sh''',
+    '''components/tenant/docs-client\.tsx''',
+    '''tests/''',
+    '''\.github/''',
+  ]

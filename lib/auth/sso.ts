@@ -304,12 +304,12 @@ export async function validateOIDCToken(
         // If verification succeeds, token is valid
         return { valid: true, payload };
       } catch (verifyError) {
-        // JWKS verification failed, fall back to basic claims check
-        console.warn('[SSO] JWKS verification failed, falling back to claims validation:', verifyError);
+        console.error('[SSO] JWKS verification failed — rejecting token:', verifyError);
+        return { valid: false, error: 'Token signature verification failed' };
       }
     }
 
-    // Check issuer
+    // Check issuer (only reached when no JWKS endpoint is configured)
     if (payload['iss'] !== config.issuer) {
       return { valid: false, error: `Invalid issuer: expected ${config.issuer}, got ${String(payload['iss'])}` };
     }

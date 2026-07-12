@@ -46,7 +46,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href:'/tenant/tasks',     label:'Tasks',      icon:CheckSquare,     shortcut:'⌘6', keywords:'todo activities' },
       { href:'/tenant/projects',  label:'Projects',   icon:FolderKanban,    keywords:'project milestone tracking' },
       { href:'/tenant/calendar',  label:'Calendar',   icon:Calendar,        keywords:'meetings events' },
-      { href:'/tenant/follow-ups/missed', label:'Follow-Ups', icon:ListChecks, keywords:'follow up missed overdue reminders' },
+      { href:'/tenant/follow-ups', label:'Follow-Ups', icon:ListChecks, keywords:'follow up missed overdue reminders' },
     ],
   },
   {
@@ -155,7 +155,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
     try {
       const prefs = _profile?.metadata?.prefs;
       if (Array.isArray(prefs?.hidden_nav_items)) return prefs.hidden_nav_items;
-    } catch { /* fallback */ }
+    } catch (e) { console.error('[sidebar] Error:', e); }
     return [];
   })();
   const [hiddenItems, setHiddenItems] = useState<string[]>(initialHidden);
@@ -172,7 +172,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           if (data?.sections) setOpenSections(data.sections);
           else setOpenSections(Object.fromEntries(NAV_SECTIONS.map(s => [s.id, !!s.defaultOpen])));
         }
-      } catch { /* fallback to localStorage */ }
+      } catch (e) { console.error('[sidebar] Error:', e); }
 
       // localStorage fallback for pinned
       try {
@@ -195,7 +195,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
             setHiddenItems(prefs.hidden_nav_items);
           }
         }
-      } catch { /* fallback */ }
+      } catch (e) { console.error('[sidebar] Error:', e); }
     })();
     return () => abort.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -210,7 +210,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           const prefs = JSON.parse(cached);
           setHiddenItems(Array.isArray(prefs?.hidden_nav_items) ? prefs.hidden_nav_items : []);
         }
-      } catch { /* Fallback to default on corrupted storage data */ }
+      } catch (e) { console.error('[sidebar] Error:', e); }
     };
     window.addEventListener('nucrm:prefs-changed', handler);
     return () => window.removeEventListener('nucrm:prefs-changed', handler);
@@ -250,13 +250,13 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(prefs),
       });
-    } catch { /* server persistence is best-effort */ }
+    } catch (e) { console.error('[sidebar] Error:', e); }
   }, []);
 
   const toggleSection = (id: string) => {
     setOpenSections(prev => {
       const next = { ...prev, [id]: !prev[id] };
-      try { localStorage.setItem(SECTION_KEY, JSON.stringify(next)); } catch { /* Fallback to default on corrupted storage data */ }
+      try { localStorage.setItem(SECTION_KEY, JSON.stringify(next)); } catch (e) { console.error('[sidebar] Error:', e); }
       persistSidebarPrefs({ sections: next });
       return next;
     });
@@ -265,7 +265,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
   const togglePin = useCallback((href: string) => {
     setPinned(prev => {
       const next = prev.includes(href) ? prev.filter(h => h !== href) : [...prev, href];
-      try { localStorage.setItem(PIN_KEY, JSON.stringify(next)); } catch { /* Fallback to default on corrupted storage data */ }
+      try { localStorage.setItem(PIN_KEY, JSON.stringify(next)); } catch (e) { console.error('[sidebar] Error:', e); }
       persistSidebarPrefs({ pinned: next });
       return next;
     });
@@ -352,7 +352,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePin(href); }}
           aria-label={isPinned ? `Unpin ${label}` : `Pin ${label}`}
           className={cn(
-            'absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded transition-opacity',
+            'absolute right-1 top-1/2 -translate-y-1/2 min-h-11 min-w-11 flex items-center justify-center rounded transition-opacity',
             isPinned
               ? 'opacity-100 text-amber-500'
               : 'opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-amber-500'
@@ -373,10 +373,10 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           {tenant?.name?.charAt(0)?.toUpperCase() ?? 'W'}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-lg font-extrabold truncate leading-tight">{tenant?.name ?? 'Workspace'}</p>
+          <h1 className="text-lg font-extrabold truncate leading-tight">{tenant?.name ?? 'Workspace'}</h1>
         </div>
         {onToggle && (
-          <button onClick={onToggle} className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md hover:bg-accent text-muted-foreground transition-colors" aria-label="Collapse sidebar">
+          <button onClick={onToggle} className="shrink-0 min-h-11 min-w-11 flex items-center justify-center rounded-md hover:bg-accent text-muted-foreground transition-colors" aria-label="Collapse sidebar">
             <X className="w-3 h-3" />
           </button>
         )}
@@ -395,7 +395,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           />
           {query && (
             <button onClick={() => setQuery('')} aria-label="Clear filter"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-foreground/60 hover:text-foreground">
+              className="absolute right-2 top-1/2 -translate-y-1/2 min-h-11 min-w-11 flex items-center justify-center text-foreground/60 hover:text-foreground">
               <X className="w-3 h-3" />
             </button>
           )}
@@ -407,9 +407,9 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
         {/* Pinned shortcuts */}
         {pinnedItems.length > 0 && (
           <div className="mb-2">
-            <p className="px-2.5 py-1 text-xs font-bold text-amber-600/80 dark:text-amber-400/80 uppercase tracking-wider flex items-center gap-1.5">
+            <h2 className="px-2.5 py-1 text-xs font-bold text-amber-600/80 dark:text-amber-400/80 uppercase tracking-wider flex items-center gap-1.5">
               <Star className="w-3 h-3 fill-current" /> Pinned
-            </p>
+            </h2>
             {pinnedItems.map(navItem)}
             <div className="h-px bg-border my-2" />
           </div>
@@ -429,6 +429,8 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           return (
             <div key={section.id} className="mb-1">
               <button onClick={() => !q && toggleSection(section.id)}
+                role="heading"
+                aria-level={2}
                 className={cn(
                   'flex items-center gap-1.5 w-full px-2.5 py-1.5 rounded-md text-sm font-extrabold uppercase tracking-wider transition-all duration-200',
                   q ? 'text-violet-600 dark:text-violet-400' : 'text-foreground/80 hover:text-foreground hover:scale-[1.01]'
@@ -452,6 +454,8 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
             <div className="h-px bg-border my-2" />
             <div>
               <button onClick={() => setSettingsOpen(o => !o)}
+                role="heading"
+                aria-level={2}
                 className={cn('flex items-center gap-1.5 w-full px-2.5 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200',
                   pathname.startsWith('/tenant/settings')
                     ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300'

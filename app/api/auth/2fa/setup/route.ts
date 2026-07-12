@@ -9,6 +9,7 @@ import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { createHmac, randomBytes } from 'crypto';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 function generateTOTPSecret(): string {
   // 20-byte random secret, base32-encoded
@@ -65,6 +66,9 @@ export async function POST(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const rateLimited = await checkRateLimit(req, { action: '2fa-setup', max: 3, windowMinutes: 15 });
+    if (rateLimited) return rateLimited;
     
     const user = await db.query.users.findFirst({
       where: eq(users.id, ctx.userId),

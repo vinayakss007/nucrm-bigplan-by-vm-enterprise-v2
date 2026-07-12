@@ -8,6 +8,7 @@ import {
   Database, AlertTriangle, MessageSquare, Megaphone, TrendingUp, Gauge, Zap,
   X, Menu, RotateCcw, ChevronDown, Search, Book, Shield, Terminal,
 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -112,9 +113,11 @@ export default function SuperAdminSidebar({ profile, collapsed, onToggle }: Prop
   };
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.push('/auth/login');
-    router.refresh();
+    await confirmThen('Are you sure you want to log out?', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/auth/login');
+      router.refresh();
+    });
   };
 
   const q = query.trim().toLowerCase();

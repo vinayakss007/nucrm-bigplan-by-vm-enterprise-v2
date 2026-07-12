@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { CheckSquare, Plus, X, User, Clock, CheckCircle, Trash2, Edit } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { Swipeable } from '@/components/ui/swipeable';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 const PRIORITY_CFG = {
@@ -46,23 +47,30 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
   };
 
   const deleteTask = async (id: string) => {
-    const res = await fetch(`/api/tenant/tasks/${id}`, { method:'DELETE' });
-    if (res.ok) { setTasks(prev => prev.filter(t => t.id !== id)); toast.success('Task deleted'); }
-    else toast.error('Failed to delete');
+    const task = tasks.find(t => t.id === id);
+    confirmThen(`Delete "${task?.title || 'this task'}"?`, async () => {
+      const res = await fetch(`/api/tenant/tasks/${id}`, { method:'DELETE' });
+      if (res.ok) { setTasks(prev => prev.filter(t => t.id !== id)); toast.success('Task deleted'); }
+      else toast.error('Failed to delete');
+    });
   };
 
   const bulkComplete = async () => {
     const ids = [...selected];
-    setTasks(prev => prev.map(t => ids.includes(t.id) ? { ...t, completed: true } : t));
-    await Promise.all(ids.map(id => fetch(`/api/tenant/tasks/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ completed:true }) })));
-    setSelected(new Set()); toast.success(`${ids.length} tasks completed`);
+    await confirmThen(`Mark ${ids.length} task(s) complete?`, async () => {
+      setTasks(prev => prev.map(t => ids.includes(t.id) ? { ...t, completed: true } : t));
+      await Promise.all(ids.map(id => fetch(`/api/tenant/tasks/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ completed:true }) })));
+      setSelected(new Set()); toast.success(`${ids.length} tasks completed`);
+    }, 'always');
   };
 
   const bulkDelete = async () => {
     const ids = [...selected];
-    setTasks(prev => prev.filter(t => !ids.includes(t.id)));
-    await Promise.all(ids.map(id => fetch(`/api/tenant/tasks/${id}`, { method:'DELETE' })));
-    setSelected(new Set()); toast.success(`${ids.length} tasks deleted`);
+    await confirmThen(`Delete ${ids.length} task(s)?`, async () => {
+      setTasks(prev => prev.filter(t => !ids.includes(t.id)));
+      await Promise.all(ids.map(id => fetch(`/api/tenant/tasks/${id}`, { method:'DELETE' })));
+      setSelected(new Set()); toast.success(`${ids.length} tasks deleted`);
+    });
   };
 
   const addTask = async (e: React.FormEvent) => {
@@ -163,6 +171,17 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
             <button type="submit" disabled={saving} className="px-5 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 disabled:opacity-50 transition-colors">{saving?'Creating...':'Create Task'}</button>
           </div>
         </form>
+      )}
+
+      {/* Select all toggle */}
+      {filtered.length > 0 && (
+        <label className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors w-fit">
+          <input type="checkbox"
+            checked={selected.size === filtered.length}
+            onChange={e => setSelected(e.target.checked ? new Set(filtered.map(t => t.id)) : new Set())}
+            className="accent-violet-600 w-3.5 h-3.5 rounded cursor-pointer" />
+          {selected.size === filtered.length ? `${selected.size} selected` : `Select all ${filtered.length} task${filtered.length !== 1 ? 's' : ''}`}
+        </label>
       )}
 
       {/* Task list */}

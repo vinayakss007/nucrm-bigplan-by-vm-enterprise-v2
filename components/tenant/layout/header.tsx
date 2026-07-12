@@ -7,6 +7,7 @@ import { Bell, Sun, Moon, Search, LogOut, X, Users, TrendingUp,
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { cn, formatCurrency, getInitials, formatRelativeTime, toSnakeCase } from '@/lib/utils';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 
 export default function TenantHeader({ tenant, profile, roleSlug, onToggleSidebar }: {
   tenant: any; profile: any; roleSlug: string; onToggleSidebar?: () => void;
@@ -99,10 +100,12 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   };
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    try { new BroadcastChannel('nucrm_auth').postMessage('logout'); } catch {}
-    router.push('/auth/login');
-    router.refresh();
+    await confirmThen('Are you sure you want to log out?', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      try { new BroadcastChannel('nucrm_auth').postMessage('logout'); } catch (e) { console.error('[header] BroadcastChannel error:', e); }
+      router.push('/auth/login');
+      router.refresh();
+    });
   };
 
   const total = results ? (results.contacts?.length??0)+(results.deals?.length??0)+(results.companies?.length??0) : 0;
@@ -112,7 +115,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
     <header className="h-14 border-b border-border bg-card flex items-center gap-3 px-4 shrink-0">
       {/* Hamburger to toggle sidebar */}
       <button onClick={onToggleSidebar}
-        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground transition-colors shrink-0">
+        className="min-h-11 min-w-11 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground transition-colors shrink-0">
         <Menu className="w-4 h-4" />
       </button>
 
@@ -135,7 +138,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
             data-testid="search-input"
             className="w-full pl-8 pr-8 py-1.5 text-sm bg-muted/40 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-background transition-colors"
           />
-          {query && <button onClick={()=>{setQuery('');setResults(null);setShowDrop(false);}} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5"/></button>}
+          {query && <button onClick={()=>{setQuery('');setResults(null);setShowDrop(false);}} className="absolute right-2 top-1/2 -translate-y-1/2 min-h-11 min-w-11 flex items-center justify-center text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5"/></button>}
         </div>
 
         {/* Search dropdown */}
@@ -207,13 +210,13 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
       <div className="flex items-center gap-1 ml-auto shrink-0">
         {/* Refresh button */}
         <button onClick={()=>router.refresh()} title="Refresh page"
-          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent transition-colors text-muted-foreground">
+          className="min-h-11 min-w-11 flex items-center justify-center rounded-lg hover:bg-accent transition-colors text-muted-foreground">
           <RefreshCw className="w-4 h-4"/>
         </button>
 
         {/* Dark mode toggle */}
         <button onClick={()=>setTheme(theme==='dark'?'light':'dark')}
-          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent transition-colors text-muted-foreground">
+          className="min-h-11 min-w-11 flex items-center justify-center rounded-lg hover:bg-accent transition-colors text-muted-foreground">
           <Sun className="w-4 h-4 hidden dark:block" />
           <Moon className="w-4 h-4 block dark:hidden" />
         </button>
@@ -221,7 +224,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
         {/* Notifications bell */}
         <div className="relative" ref={notifRef}>
           <button onClick={() => setShowNotifPanel(s => !s)}
-            className={cn("relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent transition-colors", showNotifPanel ? "bg-accent text-violet-600" : "text-muted-foreground")}>
+            className={cn("relative min-h-11 min-w-11 flex items-center justify-center rounded-lg hover:bg-accent transition-colors", showNotifPanel ? "bg-accent text-violet-600" : "text-muted-foreground")}>
             <Bell className="w-4 h-4"/>
             {unread > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-violet-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-in zoom-in">{unread > 99 ? '99+' : unread}</span>}
           </button>

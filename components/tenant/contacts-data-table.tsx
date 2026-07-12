@@ -274,7 +274,7 @@ export default function ContactsDataTable({
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
+              <Button variant="ghost" className="min-h-11 min-w-11 p-0">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -321,7 +321,7 @@ export default function ContactsDataTable({
     fetch('/api/tenant/custom-fields?entityType=contact', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { fields: [] })
       .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[contacts-data-table] Failed to load custom fields:', err); });
     return () => abort.abort();
   }, [])
 
@@ -330,7 +330,7 @@ export default function ContactsDataTable({
     fetch('/api/tenant/segments?entity_type=contact', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[contacts-data-table] Failed to load segments:', err); });
     return () => abort.abort();
   }, [])
 
@@ -339,7 +339,7 @@ export default function ContactsDataTable({
     fetch('/api/tenant/sequences', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSequences(d.data ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[contacts-data-table] Failed to load sequences:', err); });
     return () => abort.abort();
   }, [])
 
@@ -348,7 +348,7 @@ export default function ContactsDataTable({
     fetch('/api/tenant/email-templates', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setEmailTemplates(d.data ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[contacts-data-table] Failed to load email templates:', err); });
     return () => abort.abort();
   }, [])
 
@@ -607,6 +607,8 @@ export default function ContactsDataTable({
     ...(emailTemplates.length > 0 ? [{
       id: 'send_email',
       label: 'Send Email',
+      requiresConfirmation: true,
+      confirmationMessage: 'Send emails to the selected contacts? This action cannot be undone.',
       requiresSelect: true,
       selectOptions: emailTemplates.map(t => ({ value: t.id, label: t.name })),
       onClick: async (selectedIds: string[], templateId?: string) => {

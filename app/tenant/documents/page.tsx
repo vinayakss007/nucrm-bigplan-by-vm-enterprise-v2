@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 
 interface DocumentFile {
   id: string;
@@ -124,15 +125,17 @@ export default function DocumentsPage() {
   }
 
   async function deleteDocument(id: string) {
-    try {
-      const res = await fetch(`/api/tenant/documents?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setDocuments(prev => prev.filter(d => d.id !== id));
-        setMessage({ type: 'success', text: 'Document deleted' });
+    await confirmThen('Delete this document?', async () => {
+      try {
+        const res = await fetch(`/api/tenant/documents?id=${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          setDocuments(prev => prev.filter(d => d.id !== id));
+          setMessage({ type: 'success', text: 'Document deleted' });
+        }
+      } catch {
+        setMessage({ type: 'error', text: 'Failed to delete document' });
       }
-    } catch {
-      setMessage({ type: 'error', text: 'Failed to delete document' });
-    }
+    });
   }
 
   function formatSize(bytes: number): string {
