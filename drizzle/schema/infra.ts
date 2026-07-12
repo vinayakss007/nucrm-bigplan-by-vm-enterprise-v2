@@ -3,6 +3,10 @@ import { sql } from 'drizzle-orm';
 import { tenants, users } from './core';
 import * as utils from './utils';
 
+export { activities } from './activity';
+export { onboardingProgress } from './core';
+export { ssoProviders, ssoSessions } from './security';
+
 // ── 1. SYSTEM SETTINGS ────────────────────────────────
 export const systemSettings = pgTable('system_settings', {
   id: utils.pk(),
