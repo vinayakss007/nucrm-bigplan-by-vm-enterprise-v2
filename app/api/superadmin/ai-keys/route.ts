@@ -16,6 +16,8 @@ import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
+import { validateBody } from '@/lib/api/validate';
+import { setSystemKeySchema } from '@/lib/api/schemas';
 import {
   setSystemKey,
   deleteProviderKey,
@@ -80,17 +82,9 @@ export async function POST(req: NextRequest) {
     let body;
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
-    const { tenantId, provider, api_key, base_url, model } = body as {
-      tenantId?: string;
-      provider?: string;
-      api_key?: string;
-      base_url?: string;
-      model?: string;
-    };
-
-    if (!tenantId || !provider) {
-      return NextResponse.json({ error: 'tenantId and provider are required' }, { status: 400 });
-    }
+    const parsed = validateBody(setSystemKeySchema, body);
+    if (parsed instanceof NextResponse) return parsed;
+    const { tenantId, provider, api_key, base_url, model } = parsed.data;
 
     // Verify tenant exists
     const [t] = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
@@ -98,7 +92,7 @@ export async function POST(req: NextRequest) {
 
     let result;
     try {
-      result = await setSystemKey(tenantId, provider, api_key ?? '', {
+      result = await setSystemKey(tenantId, provider, api_key, {
         baseUrl: base_url,
         modelOverride: model,
       });

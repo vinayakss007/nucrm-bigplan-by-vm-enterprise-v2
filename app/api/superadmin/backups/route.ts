@@ -5,6 +5,8 @@ import { db } from '@/drizzle/db';
 import { backupRecords, backupSchedules, criticalDataBackups, tenants, users } from '@/drizzle/schema';
 import { eq, sql, desc } from 'drizzle-orm';
 import { createBackup } from '@/lib/backups/backup-service';
+import { validateBody } from '@/lib/api/validate';
+import { createBackupSchema } from '@/lib/api/schemas';
 
 export async function GET(request: NextRequest) {
   try {
@@ -119,24 +121,25 @@ export async function POST(request: NextRequest) {
     let body;
     try { body = await request.json(); } catch (err) { console.error('[backups] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
+    const parsed = validateBody(createBackupSchema, body);
+    if (parsed instanceof NextResponse) return parsed;
+
     // Handle restore action from frontend
-    if (body.action === 'restore' && body.backupId) {
+    if (parsed.data.action === 'restore' && parsed.data.backupId) {
       const { CriticalDataCapture } = await import('@/lib/critical-data-capture');
       const capture = new CriticalDataCapture();
-      const result = await capture.restoreFromBackup(body.backupId);
+      const result = await capture.restoreFromBackup(parsed.data.backupId);
       return NextResponse.json(result);
     }
 
-    const { backup_type = 'full', tenant_id } = body;
-
     const backup = await createBackup({
-      backupType: backup_type as 'full' | 'schema' | 'selective',
+      backupType: parsed.data.backup_type,
       initiatedBy: ctx.userId,
       initiatedAuto: false,
     });
 
     // If tenant_id was provided, update the record
-    if (tenant_id) {
+    if (parsed.data.tenant_id) {
       await db
         .update(backupRecords)
         .set({ 

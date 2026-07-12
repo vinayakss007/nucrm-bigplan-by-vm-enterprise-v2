@@ -5,6 +5,8 @@ import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { tenantHierarchy, hierarchyPermissions } from '@/drizzle/schema/hierarchy';
 import { eq, and, isNull } from 'drizzle-orm';
+import { validateBody } from '@/lib/api/validate';
+import { createHierarchySchema, updateHierarchySchema } from '@/lib/api/schemas';
 
 export async function GET(req: NextRequest) {
   try {
@@ -57,21 +59,18 @@ export async function POST(req: NextRequest) {
     if (gate) return gate;
 
     const body = await req.json();
-    const { childTenantId, relationship, permissions } = body;
-
-    if (!childTenantId) {
-      return NextResponse.json({ error: 'childTenantId is required' }, { status: 400 });
-    }
+    const parsed = validateBody(createHierarchySchema, body);
+    if (parsed instanceof NextResponse) return parsed;
 
     const [row] = await db.insert(tenantHierarchy).values({
       parentTenantId: ctx.tenantId,
-      childTenantId,
-      relationship: relationship || 'parent',
+      childTenantId: parsed.data.childTenantId,
+      relationship: parsed.data.relationship,
     }).returning();
 
     // Add permissions if provided
-    if (permissions && Array.isArray(permissions) && row) {
-      for (const perm of permissions) {
+    if (parsed.data.permissions && parsed.data.permissions.length > 0 && row) {
+      for (const perm of parsed.data.permissions) {
         await db.insert(hierarchyPermissions).values({
           hierarchyId: row.id,
           permission: perm,
@@ -99,17 +98,14 @@ export async function PUT(req: NextRequest) {
     if (gate) return gate;
 
     const body = await req.json();
-    const { id, relationship } = body;
-
-    if (!id) {
-      return NextResponse.json({ error: 'id is required' }, { status: 400 });
-    }
+    const parsed = validateBody(updateHierarchySchema, body);
+    if (parsed instanceof NextResponse) return parsed;
 
     const [row] = await db
       .update(tenantHierarchy)
-      .set({ relationship, updatedAt: new Date() })
+      .set({ relationship: parsed.data.relationship, updatedAt: new Date() })
       .where(and(
-        eq(tenantHierarchy.id, id),
+        eq(tenantHierarchy.id, parsed.data.id),
         eq(tenantHierarchy.parentTenantId, ctx.tenantId)
       ))
       .returning();

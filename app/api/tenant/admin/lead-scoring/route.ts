@@ -15,6 +15,8 @@ import { leadScoringRules } from '@/drizzle/schema/ai';
 import { eq, and, isNull, desc, asc } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
+import { validateBody } from '@/lib/api/validate';
+import { createLeadScoringRuleSchema, updateLeadScoringRuleSchema } from '@/lib/api/schemas';
 
 export async function GET(req: NextRequest) {
   try {
@@ -42,19 +44,16 @@ export async function POST(req: NextRequest) {
 
     let body;
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
-    const { factor, weight, condition, active, sortOrder } = body;
-
-    if (typeof factor !== 'string' || !factor.trim()) {
-      return NextResponse.json({ error: 'factor required' }, { status: 400 });
-    }
+    const parsed = validateBody(createLeadScoringRuleSchema, body);
+    if (parsed instanceof NextResponse) return parsed;
 
     const [row] = await db.insert(leadScoringRules).values({
       tenantId: ctx.tenantId,
-      factor: factor.trim().slice(0, 500),
-      weight: typeof weight === 'number' ? weight : 10,
-      condition: typeof condition === 'string' ? condition.trim().slice(0, 1000) : null,
-      sortOrder: typeof sortOrder === 'number' ? sortOrder : 0,
-      active: active !== false,
+      factor: parsed.data.factor,
+      weight: parsed.data.weight,
+      condition: parsed.data.condition ?? null,
+      sortOrder: parsed.data.sortOrder,
+      active: parsed.data.active,
       createdBy: ctx.userId,
       updatedBy: ctx.userId,
     }).returning();
@@ -79,21 +78,19 @@ export async function PATCH(req: NextRequest) {
 
     let body;
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
-    if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+    const parsed = validateBody(updateLeadScoringRuleSchema, body);
+    if (parsed instanceof NextResponse) return parsed;
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       updatedAt: new Date(),
       updatedBy: ctx.userId,
     };
 
-    if (body.factor !== undefined) updateData.factor = String(body.factor).trim().slice(0, 200);
-    if (body.weight !== undefined) updateData.weight = Number(body.weight);
-    if (body.condition !== undefined) updateData.condition = body.condition ? String(body.condition).trim().slice(0, 1000) : null;
-    if (body.sortOrder !== undefined) updateData.sortOrder = Number(body.sortOrder);
-    if (body.active !== undefined) updateData.active = Boolean(body.active);
+    if (parsed.data.factor !== undefined) updateData.factor = parsed.data.factor;
+    if (parsed.data.weight !== undefined) updateData.weight = parsed.data.weight;
+    if (parsed.data.condition !== undefined) updateData.condition = parsed.data.condition;
+    if (parsed.data.sortOrder !== undefined) updateData.sortOrder = parsed.data.sortOrder;
+    if (parsed.data.active !== undefined) updateData.active = parsed.data.active;
 
     const [row] = await db
       .update(leadScoringRules)
