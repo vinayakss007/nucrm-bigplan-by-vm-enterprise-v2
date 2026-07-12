@@ -181,7 +181,7 @@ services:
 
   # ── PgBouncer (Connection Pooling) ──────────────────────────────────────
   pgbouncer:
-    image: edoburu/pgbouncer:1.23
+    image: pgbouncer/pgbouncer:latest
     container_name: nucrm-pgbouncer
     environment:
       - DB_USER=${POSTGRES_USER:-nucrm}

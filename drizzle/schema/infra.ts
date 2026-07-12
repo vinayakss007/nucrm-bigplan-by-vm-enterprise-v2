@@ -1,4 +1,4 @@
-import { uniqueIndex, pgTable, uuid, text, jsonb, timestamp, boolean, integer, index, bigint, numeric, date } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, jsonb, timestamp, boolean, integer, index, bigint } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { tenants, users } from './core';
 import * as utils from './utils';
