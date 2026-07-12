@@ -6,6 +6,28 @@ import { Pool } from 'pg';
 import * as schema from '../drizzle/schema';
 import * as fs from 'fs';
 import * as path from 'path';
+import { createInterface } from 'readline';
+
+const args = process.argv.slice(2);
+const isDryRun = args.includes('--dry-run');
+const isYes = args.includes('--yes') || args.includes('-y');
+
+function detectEnv(url: string): string {
+  if (url.includes('localhost') || url.includes('127.0.0.1')) return 'local';
+  if (url.includes('staging') || url.includes('dev.')) return 'staging';
+  if (url.includes('prod') || url.includes('production')) return 'production';
+  return 'unknown';
+}
+
+async function confirm(prompt: string): Promise<boolean> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(`${prompt} `, (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
+    });
+  });
+}
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -20,6 +42,40 @@ async function main() {
     process.exit(1);
   }
 
+  const env = detectEnv(databaseUrl);
+  console.log(`[migrate] Target database environment: ${env}`);
+
+  const journalPath = path.resolve('./drizzle/migrations/meta/_journal.json');
+  if (!fs.existsSync(journalPath)) {
+    console.error('ERROR: Migration journal not found at', journalPath);
+    process.exit(1);
+  }
+  const journal = JSON.parse(fs.readFileSync(journalPath, 'utf-8'));
+  const pendingCount = journal.entries.length;
+
+  if (pendingCount === 0) {
+    console.log('[migrate] No pending migrations.');
+    process.exit(0);
+  }
+
+  console.log(`[migrate] ${pendingCount} pending migration(s):`);
+  for (const entry of journal.entries) {
+    console.log(`  - ${entry.tag}`);
+  }
+
+  if (isDryRun) {
+    console.log('[migrate] Dry-run complete. No migrations applied.');
+    process.exit(0);
+  }
+
+  if (!isYes) {
+    const ok = await confirm(`Apply ${pendingCount} migration(s) to the "${env}" database? (y/N)`);
+    if (!ok) {
+      console.log('[migrate] Aborted by user.');
+      process.exit(0);
+    }
+  }
+
   const useSsl = process.env.DATABASE_SSL === 'true';
 
   const pool = new Pool({
@@ -31,12 +87,6 @@ async function main() {
   const db = drizzle(pool, { schema });
 
   console.log('[migrate] Connecting to database...');
-
-  // Recovery: if __drizzle_migrations is empty/missing but schema tables already
-  // exist, the tracking table was lost (e.g. DB restore). Pre-populate it so
-  // that migrate() does not try to re-apply all migrations on existing objects.
-  const journalPath = path.resolve('./drizzle/migrations/meta/_journal.json');
-  const journal = JSON.parse(fs.readFileSync(journalPath, 'utf-8'));
 
   await db.execute(sql.raw(`
     CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
@@ -52,7 +102,6 @@ async function main() {
   const rowCount = parseInt(count.rows[0].cnt, 10);
 
   if (rowCount === 0 && journal.entries.length > 0) {
-    // Check whether this is a recovery scenario (schema exists) or a fresh DB
     const schemaExists = await db.execute<{ exists: boolean }>(
       sql.raw(`SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'api_key_usage')`),
     );
@@ -74,7 +123,7 @@ async function main() {
   console.log('[migrate] Applying pending migrations with drizzle-orm migrator...');
   await migrate(db, { migrationsFolder: './drizzle/migrations' });
 
-  console.log('[migrate] Done.');
+  console.log('[migrate] All migrations applied successfully');
   await pool.end();
 }
 
