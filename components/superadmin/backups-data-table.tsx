@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo } from 'react'
 import { MoreHorizontal, Download, Trash2, RefreshCw, Database, Cloud, HardDrive, CheckCircle, Clock, AlertTriangle } from 'lucide-react'
+import { confirmThen } from '@/components/ui/confirm-dialog'
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
@@ -104,15 +105,17 @@ export default function BackupsDataTable({ initialBackups }: Props) {
   }
 
   const deleteBackup = useCallback(async (id: string) => {
-    const res = await fetch(`/api/superadmin/backups/${id}`, {
-      method: 'DELETE',
+    await confirmThen('Delete this backup permanently?', async () => {
+      const res = await fetch(`/api/superadmin/backups/${id}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        toast.success('Backup deleted')
+        loadData(pagination.pageIndex)
+      } else {
+        toast.error('Failed to delete')
+      }
     })
-    if (res.ok) {
-      toast.success('Backup deleted')
-      loadData(pagination.pageIndex)
-    } else {
-      toast.error('Failed to delete')
-    }
   }, [loadData, pagination.pageIndex])
 
   const downloadBackup = async (id: string, _filePath: string) => {

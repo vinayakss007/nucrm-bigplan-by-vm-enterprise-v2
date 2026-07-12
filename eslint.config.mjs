@@ -18,6 +18,7 @@ export default tseslint.config(
       "playwright-report/",
       "test-results/",
       "drizzle/migrations/",
+      ".next-build/",
       "public/",
       "next-env.d.ts",
       "**/*.stories.tsx",

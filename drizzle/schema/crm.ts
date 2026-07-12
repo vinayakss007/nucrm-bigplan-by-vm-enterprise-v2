@@ -910,6 +910,23 @@ export const savedViews = pgTable('saved_views', {
   };
 });
 
+// ── 24b. REVENUE FORECAST SUMMARY ─────────────────────
+export const revenueForecastSummary = pgTable('revenue_forecast_summary', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  forecastDate: date('forecast_date').notNull().default(sql`CURRENT_DATE`),
+  totalExpectedRevenue: numeric('total_expected_revenue', { precision: 15, scale: 2 }).default('0'),
+  totalDeals: integer('total_deals').default(0),
+  avgDealValue: numeric('avg_deal_value', { precision: 12, scale: 2 }).default('0'),
+  winRate: numeric('win_rate', { precision: 5, scale: 2 }).default('0'),
+  ...utils.lifecycle(),
+}, (table) => {
+  return {
+    tenantDateIdx: index('idx_revenue_forecast_tenant_date').on(table.tenantId, table.forecastDate),
+    tenantIdx: utils.tenantIdx(table),
+  };
+});
+
 // ── 25. FOLLOW-UPS ────────────────────────────────────
 export const followUps = pgTable('follow_ups', {
   id: utils.pk(),

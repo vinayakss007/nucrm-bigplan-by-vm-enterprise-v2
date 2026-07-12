@@ -1,7 +1,6 @@
 import { uniqueIndex, pgTable, uuid, text, jsonb, timestamp, boolean, integer, index, bigint, numeric, date } from 'drizzle-orm/pg-core';
-import { sql, isNull, isNotNull } from 'drizzle-orm';
-import { tenants, users, roles } from './core';
-import { contacts, deals, companies } from './crm';
+import { sql } from 'drizzle-orm';
+import { tenants, users } from './core';
 import * as utils from './utils';
 
 // ── 1. SYSTEM SETTINGS ────────────────────────────────
@@ -13,142 +12,7 @@ export const systemSettings = pgTable('system_settings', {
   ...utils.lifecycle(),
 });
 
-// ── 2. PLANS (Billing plans) ────────────────────────────
-export const plans = pgTable('plans', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  slug: text('slug').notNull().unique(),
-  description: text('description'),
-  priceMonthly: numeric('price_monthly', { precision: 10, scale: 2 }).default('0'),
-  priceYearly: numeric('price_yearly', { precision: 10, scale: 2 }).default('0'),
-  priceCents: integer('price_cents').default(0),
-  price: numeric('price', { precision: 10, scale: 2 }).default('0'),
-  maxUsers: integer('max_users').default(5),
-  maxContacts: integer('max_contacts').default(1000),
-  maxDeals: integer('max_deals').default(500),
-  maxStorageGb: numeric('max_storage_gb', { precision: 6, scale: 2 }).default('1'),
-  maxAutomations: integer('max_automations').default(5),
-  maxForms: integer('max_forms').default(3),
-  maxApiCallsDay: integer('max_api_calls_day').default(1000),
-  rateLimitConfig: jsonb('rate_limit_config').default({
-    api: 60,
-    auth: 5,
-    contacts: 30,
-    deals: 30,
-    export: 10,
-    import: 5,
-    ai: 30,
-    webhook: 1000,
-    passwordReset: 3,
-    emailVerification: 10,
-    bulk: 5,
-  }),
-  features: jsonb('features').default([]),
-  isActive: boolean('is_active').default(true),
-  sortOrder: integer('sort_order').default(0),
-  ...utils.lifecycle(),
-}, (table) => {
-  return {
-    nameIdx: index('idx_plans_name').on(table.name),
-    slugIdx: index('idx_plans_slug').on(table.slug),
-    activeIdx: index('idx_plans_active').on(table.isActive, table.sortOrder),
-  };
-});
-
-// ── 3. BILLING & SUBSCRIPTIONS ────────────────────────
-export const subscriptions = pgTable('subscriptions', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  
-  planId: text('plan_id').references(() => plans.id),
-  status: text('status').notNull().default('active'),
-  
-  stripeCustomerId: text('stripe_customer_id'),
-  stripeSubscriptionId: text('stripe_subscription_id'),
-  
-  currentPeriodStart: timestamp('current_period_start', { withTimezone: true }),
-  currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
-  cancelAtPeriodEnd: boolean('cancel_at_period_end').default(false),
-  
-  metadata: utils.metadata(), // usage data, overage tracking
-  
-  ...utils.lifecycle(),
-}, (table) => {
-  return {
-    tenantIdx: utils.tenantIdx(table),
-    metadataGinIdx: utils.metadataIdx(table),
-  };
-});
-
-// ── 3. ACTIVITY TIMELINE ──────────────────────────────
-export const activities = pgTable('activities', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
-  
-  // Polymorphic References (Systematic)
-  entityType: text('entity_type').notNull(), // 'contact', 'deal', 'company', 'lead', 'task', etc.
-  entityId: uuid('entity_id').notNull(),
-  
-  // Specific References (Legacy Compatibility)
-  contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'cascade' }),
-  dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'cascade' }),
-  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'cascade' }),
-  
-  eventType: text('event_type').notNull(), // 'contact_created', 'email_opened', etc
-  action: text('action'), // for legacy compatibility
-  description: text('description'),
-  
-  metadata: utils.metadata(), // full event details
-  
-  ...utils.lifecycle(),
-}, (table) => {
-  return {
-    tenantIdx: utils.tenantIdx(table),
-    entityIdx: index('idx_activities_entity').on(table.entityType, table.entityId),
-    contactIdx: index('idx_activities_contact').on(table.contactId),
-    dealIdx: index('idx_activities_deal').on(table.dealId),
-    metadataGinIdx: utils.metadataIdx(table),
-  };
-});
-
-// ── 4. TASKS & REMINDERS ──────────────────────────────
-export const tasks = pgTable('tasks', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  
-  title: text('title').notNull(),
-  description: text('description'),
-  priority: text('priority').notNull().default('medium'), // 'low', 'medium', 'high', 'urgent'
-  status: text('status').notNull().default('pending'), // 'pending', 'completed', 'cancelled'
-  
-  dueDate: timestamp('due_date', { withTimezone: true }),
-  completed: boolean('completed').default(false),
-  completedAt: timestamp('completed_at', { withTimezone: true }),
-  
-  contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
-  dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'set null' }),
-  assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }),
-  
-  metadata: utils.metadata(), // recurrence, AI suggestions
-  
-  ...utils.audit(),
-}, (table) => {
-  return {
-    tenantIdx: utils.tenantIdx(table),
-    tenantStatusIdx: index('idx_tasks_tenant_status').on(table.tenantId, table.status),
-    assignedIdx: index('idx_tasks_assigned').on(table.assignedTo),
-    createdByIdx: index('idx_tasks_created_by').on(table.createdBy),
-    dueIdx: index('idx_tasks_due').on(table.dueDate),
-    contactIdx: index('idx_tasks_contact').on(table.contactId),
-    dealIdx: index('idx_tasks_deal').on(table.dealId),
-    tenantDueActiveIdx: index('idx_tasks_tenant_due_active').on(table.tenantId, table.dueDate, table.createdAt).where(sql`deleted_at IS NULL`),
-    metadataGinIdx: utils.metadataIdx(table),
-    activeIdx: utils.activeIdx(table),
-  };
-});
-
-// ── 5. BACKUP & RESTORE ───────────────────────────────
+// ── 2. BACKUP & RESTORE ───────────────────────────────
 export const tenantBackups = pgTable('tenant_backups', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
@@ -190,7 +54,7 @@ export const tenantRestores = pgTable('tenant_restores', {
   };
 });
 
-// ── 6. ANALYTICS & DASHBOARDS ─────────────────────────
+// ── 3. ANALYTICS & DASHBOARDS ─────────────────────────
 export const dashboards = pgTable('dashboards', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
@@ -222,91 +86,7 @@ export const savedReports = pgTable('saved_reports', {
   };
 });
 
-// ── 7. BILLING EVENTS ─────────────────────────────────
-export const billingEvents = pgTable('billing_events', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  eventType: text('event_type').notNull(), // 'invoice.payment_succeeded', 'subscription.created', etc.
-  amount: numeric('amount', { precision: 10, scale: 2 }),
-  currency: text('currency').default('usd'),
-  stripeEventId: text('stripe_event_id').unique(),
-  stripeInvoiceId: text('stripe_invoice_id'),
-  stripeSubscriptionId: text('stripe_subscription_id'),
-  metadata: utils.metadata(),
-  ...utils.lifecycle(),
-}, (table) => {
-  return {
-    tenantIdx: utils.tenantIdx(table),
-    typeIdx: index('idx_billing_events_type').on(table.eventType, table.createdAt),
-    stripeEventIdx: index('idx_billing_events_stripe_event').on(table.stripeEventId).where(sql`stripe_event_id IS NOT NULL`),
-    metadataGinIdx: utils.metadataIdx(table),
-  };
-});
-
-// ── 8. USAGE SNAPSHOTS ───────────────────────────────
-export const usageSnapshots = pgTable('usage_snapshots', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  snapshotDate: text('snapshot_date').notNull().default(sql`CURRENT_DATE::text`),
-  contactsCount: integer('contacts_count').default(0),
-  leadsCount: integer('leads_count').default(0),
-  dealsCount: integer('deals_count').default(0),
-  usersCount: integer('users_count').default(0),
-  storageUsedMb: numeric('storage_used_mb', { precision: 10, scale: 2 }).default('0'),
-  apiCallsCount: integer('api_calls_count').default(0),
-  emailSentCount: integer('email_sent_count').default(0),
-  metadata: utils.metadata(),
-  ...utils.lifecycle(),
-}, (table) => {
-  return {
-    tenantDateIdx: index('idx_usage_snapshots_tenant_date').on(table.tenantId, table.snapshotDate),
-    dateIdx: index('idx_usage_snapshots_date').on(table.snapshotDate),
-    tenantIdx: utils.tenantIdx(table),
-    metadataGinIdx: utils.metadataIdx(table),
-  };
-});
-
-// ── 9. LIMIT VIOLATIONS ───────────────────────────────
-export const limitViolations = pgTable('limit_violations', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  violationType: text('violation_type').notNull(), // 'contacts_exceeded', 'users_exceeded', 'storage_exceeded'
-  limitValue: integer('limit_value'),
-  actualValue: integer('actual_value'),
-  exceededAt: timestamp('exceeded_at', { withTimezone: true }).defaultNow(),
-  notified: boolean('notified').default(false),
-  notifiedAt: timestamp('notified_at', { withTimezone: true }),
-  resolved: boolean('resolved').default(false),
-  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
-  ...utils.lifecycle(),
-}, (table) => {
-  return {
-    tenantIdx: utils.tenantIdx(table),
-    unresolvedIdx: index('idx_limit_violations_unresolved').on(table.resolved, table.exceededAt).where(sql`resolved = false`),
-  };
-});
-
-// ── 10. FILE UPLOADS ─────────────────────────────────
-export const fileUploads = pgTable('file_uploads', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  entityType: text('entity_type').notNull(), // 'contact', 'deal', 'company', 'note', 'etc.'
-  entityId: uuid('entity_id').notNull(),
-  fileName: text('file_name').notNull(),
-  filePath: text('file_path').notNull(),
-  fileSize: bigint('file_size', { mode: 'number' }),
-  mimeType: text('mime_type'),
-  uploadedBy: uuid('uploaded_by').references(() => users.id),
-  ...utils.lifecycle(),
-}, (table) => {
-  return {
-    entityIdx: index('idx_file_uploads_entity').on(table.entityType, table.entityId),
-    tenantIdx: utils.tenantIdx(table),
-    activeIdx: utils.activeIdx(table),
-  };
-});
-
-// ── 11. ANNOUNCEMENTS ─────────────────────────────────
+// ── 4. ANNOUNCEMENTS ─────────────────────────────────
 export const announcements = pgTable('announcements', {
   id: utils.pk(),
   title: text('title').notNull(),
@@ -325,7 +105,7 @@ export const announcements = pgTable('announcements', {
   };
 });
 
-// ── 12. TENANT BACKUP RECORDS ────────────────────────
+// ── 5. TENANT BACKUP RECORDS ────────────────────────
 export const tenantBackupRecords = pgTable('tenant_backup_records', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
@@ -353,7 +133,7 @@ export const tenantBackupRecords = pgTable('tenant_backup_records', {
   };
 });
 
-// ── 13. TENANT RESTORE RECORDS ────────────────────────
+// ── 6. TENANT RESTORE RECORDS ────────────────────────
 export const tenantRestoreRecords = pgTable('tenant_restore_records', {
   id: utils.pk(),
   backupId: uuid('backup_id').notNull().references(() => tenantBackupRecords.id, { onDelete: 'cascade' }),
@@ -374,7 +154,7 @@ export const tenantRestoreRecords = pgTable('tenant_restore_records', {
   };
 });
 
-// ── 14. BACKUP ALERTS ────────────────────────────────
+// ── 7. BACKUP ALERTS ────────────────────────────────
 export const backupAlerts = pgTable('backup_alerts', {
   id: utils.pk(),
   alertType: text('alert_type').notNull(),
@@ -408,7 +188,7 @@ export const backupRecords = pgTable('backup_records', {
   };
 });
 
-// ── 15. BACKUP SCHEDULES ─────────────────────────────
+// ── 8. BACKUP SCHEDULES ─────────────────────────────
 export const backupSchedules = pgTable('backup_schedules', {
   id: utils.pk(),
   tenantId: uuid('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }),
@@ -426,7 +206,7 @@ export const backupSchedules = pgTable('backup_schedules', {
 });
 
 
-// ── 15. CRITICAL DATA BACKUPS ────────────────────────
+// ── 9. CRITICAL DATA BACKUPS ────────────────────────
 export const criticalDataBackups = pgTable('critical_data_backups', {
   id: utils.pk(),
   tenantId: uuid('tenant_id').notNull(),
@@ -447,26 +227,7 @@ export const criticalDataBackups = pgTable('critical_data_backups', {
   };
 });
 
-// ── 16. PERMISSION OVERRIDES ─────────────────────────
-export const permissionOverrides = pgTable('permission_overrides', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
-  // entity_type + entity_id for row-level permissions
-  entityType: text('entity_type').notNull(),
-  entityId: uuid('entity_id').notNull(),
-  //LEGACY permissions override (read, write, delete, manage)
-  permissions: jsonb('permissions').default({}),
-  ...utils.lifecycle(),
-}, (table) => {
-  return {
-    tenantIdx: utils.tenantIdx(table),
-    roleIdx: index('idx_permission_overrides_role').on(table.roleId),
-    entityIdx: index('idx_permission_overrides_entity').on(table.entityType, table.entityId),
-  };
-});
-
-// ── 17. HEALTH CHECKS ─────────────────────────────────
+// ── 10. HEALTH CHECKS ─────────────────────────────────
 export const healthChecks = pgTable('health_checks', {
   id: utils.pk(),
   service: text('service').notNull(),
@@ -481,41 +242,7 @@ export const healthChecks = pgTable('health_checks', {
   };
 });
 
-// ── 18. ONBOARDING PROGRESS ───────────────────────────
-export const onboardingProgress = pgTable('onboarding_progress', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  stepName: text('step_name').notNull(),
-  isCompleted: boolean('is_completed').default(false),
-  completedAt: timestamp('completed_at', { withTimezone: true }),
-  ...utils.lifecycle(),
-}, (table) => {
-  return {
-    tenantUserStepIdx: uniqueIndex('idx_onboarding_progress_unique').on(table.tenantId, table.userId, table.stepName),
-    tenantUserIdx: index('idx_onboarding_tenant_user').on(table.tenantId, table.userId),
-    stepIdx: index('idx_onboarding_step').on(table.stepName, table.isCompleted),
-    tenantIdx: utils.tenantIdx(table),
-  };
-});
-
-// ── 19. PLATFORM SETTINGS ────────────────────────────
-export const platformSettings = pgTable('platform_settings', {
-  id: utils.pk(),
-  tenantId: uuid('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }),
-  key: text('key').notNull(),
-  value: jsonb('value').default({}),
-  ...utils.lifecycle(),
-}, (table) => {
-  return {
-    keyIdx: index('idx_platform_settings_key').on(table.key).where(sql`key IS NOT NULL`),
-    tenantIdx: utils.tenantIdx(table),
-    uniqueGlobalKey: uniqueIndex('idx_platform_settings_global_unique').on(table.key).where(isNull(table.tenantId)),
-    uniqueTenantKey: uniqueIndex('idx_platform_settings_tenant_unique').on(table.key, table.tenantId).where(isNotNull(table.tenantId)),
-  };
-});
-
-// ── 20. REPORT EXECUTIONS ────────────────────────────
+// ── 11. REPORT EXECUTIONS ────────────────────────────
 export const reportExecutions = pgTable('report_executions', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
@@ -533,24 +260,7 @@ export const reportExecutions = pgTable('report_executions', {
   };
 });
 
-// ── 21. REVENUE FORECAST SUMMARY ─────────────────────
-export const revenueForecastSummary = pgTable('revenue_forecast_summary', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  forecastDate: date('forecast_date').notNull().default(sql`CURRENT_DATE`),
-  totalExpectedRevenue: numeric('total_expected_revenue', { precision: 15, scale: 2 }).default('0'),
-  totalDeals: integer('total_deals').default(0),
-  avgDealValue: numeric('avg_deal_value', { precision: 12, scale: 2 }).default('0'),
-  winRate: numeric('win_rate', { precision: 5, scale: 2 }).default('0'),
-  ...utils.lifecycle(),
-}, (table) => {
-  return {
-    tenantDateIdx: index('idx_revenue_forecast_tenant_date').on(table.tenantId, table.forecastDate),
-    tenantIdx: utils.tenantIdx(table),
-  };
-});
-
-// ── 22. RESTORE SNAPSHOTS ────────────────────────────
+// ── 12. RESTORE SNAPSHOTS ────────────────────────────
 export const restoreSnapshots = pgTable('restore_snapshots', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
@@ -564,7 +274,7 @@ export const restoreSnapshots = pgTable('restore_snapshots', {
   };
 });
 
-// ── 23. SELECTIVE RESTORE AUDIT LOG ───────────────────
+// ── 13. SELECTIVE RESTORE AUDIT LOG ───────────────────
 export const selectiveRestoreAuditLog = pgTable('selective_restore_audit_log', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
@@ -582,7 +292,7 @@ export const selectiveRestoreAuditLog = pgTable('selective_restore_audit_log', {
   };
 });
 
-// ── 23. SELECTIVE RESTORE LOGS ────────────────────────
+// ── 14. SELECTIVE RESTORE LOGS ────────────────────────
 export const selectiveRestoreLogs = pgTable('selective_restore_logs', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
@@ -600,7 +310,7 @@ export const selectiveRestoreLogs = pgTable('selective_restore_logs', {
 });
 
 
-// ── 24. SUPER ADMIN BACKUPS ──────────────────────────
+// ── 15. SUPER ADMIN BACKUPS ──────────────────────────
 export const superAdminBackups = pgTable('super_admin_backups', {
   id: utils.pk(),
   backupName: text('backup_name').notNull(),
@@ -617,32 +327,7 @@ export const superAdminBackups = pgTable('super_admin_backups', {
   };
 });
 
-// ── 25. USER DEPARTURES ───────────────────────────────
-export const userDepartures = pgTable('user_departures', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
-  userEmail: text('user_email'),
-  userName: text('user_name'),
-  departureDate: date('departure_date'),
-  departedBy: uuid('departed_by').references(() => users.id, { onDelete: 'set null' }),
-  reason: text('reason'),
-  notes: text('notes'),
-  isRehirable: boolean('is_rehirable').default(false),
-  contactsReassignedTo: uuid('contacts_reassigned_to').references(() => users.id, { onDelete: 'set null' }),
-  contactsCount: integer('contacts_count').default(0),
-  dealsCount: integer('deals_count').default(0),
-  tasksCount: integer('tasks_count').default(0),
-  ...utils.audit(),
-}, (table) => {
-  return {
-    tenantIdx: utils.tenantIdx(table),
-    userIdx: index('idx_user_departures_user').on(table.userId),
-    dateIdx: index('idx_user_departures_date').on(table.departureDate),
-  };
-});
-
-// ── 26. API USAGE ─────────────────────────────────────
+// ── 16. API USAGE ─────────────────────────────────────
 export const apiKeyUsageInfra = pgTable('api_key_usage_infra', {
   id: utils.pk(),
   apiKeyId: uuid('api_key_id').notNull(), 
@@ -661,7 +346,7 @@ export const apiKeyUsageInfra = pgTable('api_key_usage_infra', {
   };
 });
 
-// ── 27. TEMPLATES (System-wide) ──────────────────────
+// ── 17. TEMPLATES (System-wide) ──────────────────────
 export const dashboardTemplates = pgTable('dashboard_templates', {
   id: utils.pk(),
   name: text('name').notNull(),
@@ -694,36 +379,4 @@ export const reportTemplates = pgTable('report_templates', {
   };
 });
 
-// ── 28. ENTERPRISE AUTH (SSO) ────────────────────────
-export const ssoProviders = pgTable('sso_providers', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  providerType: text('provider_type').notNull(), // 'saml', 'oidc', 'oauth2'
-  name: text('name').notNull(),
-  config: jsonb('config').notNull().default({}),
-  isActive: boolean('is_active').notNull().default(false),
-  ...utils.lifecycle(),
-}, (table) => {
-  return {
-    tenantIdx: utils.tenantIdx(table).where(sql`is_active = true`),
-    activeIdx: utils.activeIdx(table),
-  };
-});
 
-export const ssoSessions = pgTable('sso_sessions', {
-  id: utils.pk(),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  tenantId: utils.tenantId(),
-  providerId: uuid('provider_id').references(() => ssoProviders.id, { onDelete: 'set null' }),
-  sessionId: text('session_id').notNull(),
-  idToken: text('id_token'),
-  samlAssertion: text('saml_assertion'),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  ...utils.lifecycle(),
-}, (table) => {
-  return {
-    userIdx: index('idx_sso_sessions_user').on(table.userId, table.createdAt),
-    sessionIdx: index('idx_sso_sessions_id').on(table.sessionId),
-    tenantIdx: utils.tenantIdx(table),
-  };
-});

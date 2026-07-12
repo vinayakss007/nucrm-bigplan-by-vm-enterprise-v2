@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Zap, ToggleLeft, ToggleRight, Trash2,
   Mail, Users, Calendar, TrendingUp, X, Loader2, Workflow } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 const TRIGGER_LABELS: Record<string,string> = {
@@ -104,11 +105,14 @@ export default function AutomationPage() {
   };
 
   const deleteCustom = async (id: string) => {
+    const automation = [...prebuilts, ...customs].find(a => a.id === id);
+    await confirmThen(`Delete automation "${automation?.name || 'this automation'}"?`, async () => {
       setDeleting(id);
-    await fetch(`/api/tenant/automations/${id}`, { method:'DELETE' });
-    setCustoms(c => c.filter(a => a.id !== id));
-    toast.success('Deleted');
-    setDeleting(null);
+      await fetch(`/api/tenant/automations/${id}`, { method:'DELETE' });
+      setCustoms(c => c.filter(a => a.id !== id));
+      toast.success('Deleted');
+      setDeleting(null);
+    });
   };
 
   const createCustom = async (e: React.FormEvent) => {

@@ -12,6 +12,7 @@ import { cn, formatCurrency, formatDateTimeShort, formatDate, formatRelativeTime
 import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
 import { ContactTimeline } from '@/components/tenant/contact-timeline';
 import toast from 'react-hot-toast';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import type { Task, Deal, Company } from '@/types';
 
 // ── Types ─────────────────────────────────────────────────────
@@ -318,13 +319,15 @@ export default function ContactDetailClient({
 
   // ── Delete note ──────────────────────────────────────────────
   const deleteNote = async (noteId: string) => {
-    await fetch(`/api/tenant/contacts/${contact.id}/notes`, {
-      method:'DELETE', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ noteId }),
+    await confirmThen('Delete this note?', async () => {
+      await fetch(`/api/tenant/contacts/${contact.id}/notes`, {
+        method:'DELETE', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ noteId }),
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setActivities((prev: any[]) => prev.filter((a: any) => a.id !== noteId));
+      toast.success('Note deleted');
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setActivities((prev: any[]) => prev.filter((a: any) => a.id !== noteId));
-    toast.success('Note deleted');
   };
 
   // ── Change lead status ───────────────────────────────────────

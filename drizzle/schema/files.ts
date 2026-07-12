@@ -67,5 +67,25 @@ export const documents = pgTable(
   }),
 );
 
+// ── FILE UPLOADS ──────────────────────────────────────
+export const fileUploads = pgTable('file_uploads', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  entityType: text('entity_type').notNull(),
+  entityId: uuid('entity_id').notNull(),
+  fileName: text('file_name').notNull(),
+  filePath: text('file_path').notNull(),
+  fileSize: bigint('file_size', { mode: 'number' }),
+  mimeType: text('mime_type'),
+  uploadedBy: uuid('uploaded_by').references(() => users.id),
+  ...utils.lifecycle(),
+}, (table) => {
+  return {
+    entityIdx: index('idx_file_uploads_entity').on(table.entityType, table.entityId),
+    tenantIdx: utils.tenantIdx(table),
+    activeIdx: utils.activeIdx(table),
+  };
+});
+
 export type Document = typeof documents.$inferSelect;
 export type NewDocument = typeof documents.$inferInsert;

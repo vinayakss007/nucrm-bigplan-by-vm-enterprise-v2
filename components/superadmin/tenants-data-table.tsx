@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import toast from 'react-hot-toast';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 
 const STATUS_COLORS: Record<string, string> = {
   active: 'bg-emerald-500/15 text-emerald-400',
@@ -89,18 +90,20 @@ export default function TenantsDataTable({ initialTenants }: Props) {
     loadData(0)
   }, [loadData])
 
-  const impersonate = async (tenantId: string) => {
-    const res = await fetch('/api/superadmin/impersonate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tenantId }),
+  const impersonate = async (tenantId: string, tenantName: string) => {
+    await confirmThen(`Enter "${tenantName}" as superadmin? You will see everything as if you are them.`, async () => {
+      const res = await fetch('/api/superadmin/impersonate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId }),
+      })
+      if (res.ok) {
+        toast.success('Impersonating tenant...')
+        window.location.href = '/tenant/dashboard'
+      } else {
+        toast.error('Failed to impersonate')
+      }
     })
-    if (res.ok) {
-      toast.success('Impersonating tenant...')
-      window.location.href = '/tenant/dashboard'
-    } else {
-      toast.error('Failed to impersonate')
-    }
   }
 
   const suspendTenant = useCallback(async (tenantId: string, _name: string) => {
@@ -193,7 +196,7 @@ export default function TenantsDataTable({ initialTenants }: Props) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => impersonate(tenant.id)}>
+              <DropdownMenuItem onClick={() => impersonate(tenant.id, tenant.name)}>
                 <LogIn className="mr-2 h-4 w-4" />
                 Impersonate
               </DropdownMenuItem>

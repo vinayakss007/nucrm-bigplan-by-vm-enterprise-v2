@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Plus, Mail, Pause, Play, Trash2, Users, TrendingUp, Edit } from 'lucide-react'
+import { confirmThen } from '@/components/ui/confirm-dialog'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -94,20 +95,20 @@ export default function SequencesClient({ sequences, permissions, _tenantId, _us
   }
 
   const handleDeleteSequence = async (sequenceId: string) => {
-    if (!confirm('Delete this sequence? This cannot be undone.')) return
-    
-    const res = await fetch(`/api/tenant/sequences/${sequenceId}`, {
-      method: 'DELETE',
+    await confirmThen('Delete this sequence? This cannot be undone.', async () => {
+      const res = await fetch(`/api/tenant/sequences/${sequenceId}`, {
+        method: 'DELETE',
+      })
+      
+      if (!res.ok) {
+        const data = await res.json()
+        toast.error(data.error || 'Failed to delete')
+        return
+      }
+      
+      toast.success('Sequence deleted')
+      setSequencesList(prev => prev.filter(s => s.id !== sequenceId))
     })
-    
-    if (!res.ok) {
-      const data = await res.json()
-      toast.error(data.error || 'Failed to delete')
-      return
-    }
-    
-    toast.success('Sequence deleted')
-    setSequencesList(prev => prev.filter(s => s.id !== sequenceId))
   }
 
   if (showBuilder || editingSequence) {

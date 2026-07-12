@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Shield, Plus, Edit, Trash2, Save, Lock, ChevronDown, Check, Crown } from 'lucide-react';
 import { PERMISSIONS, PERMISSION_CATEGORIES } from '@/lib/permissions/definitions';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -102,9 +103,11 @@ export default function RolesPermissionsPage() {
   useEffect(() => { load(); }, []);
 
   const del = async (id: string) => {
-    await fetch(`/api/tenant/roles/${id}`, { method: 'DELETE' });
-    setRoles(prev => prev.filter(r => r.id!==id));
-    toast.success('Deleted');
+    await confirmThen('Delete this role? Users assigned this role will lose their permissions.', async () => {
+      await fetch(`/api/tenant/roles/${id}`, { method: 'DELETE' });
+      setRoles(prev => prev.filter(r => r.id!==id));
+      toast.success('Deleted');
+    });
   };
 
   return (

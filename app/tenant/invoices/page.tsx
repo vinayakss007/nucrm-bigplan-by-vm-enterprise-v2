@@ -1,7 +1,7 @@
 'use client';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Plus, Search, Eye, Download, FileText, X } from 'lucide-react';
+import { Plus, Search, Eye, Download, FileText, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -38,7 +38,11 @@ function InvoicesPageInner() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [contactFilter, setContactFilter] = useState(initialContactId);
+  const [sortBy, setSortBy] = useState('issueDate');
+  const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('desc');
+  const [page, setPage] = useState(0);
   const [showModal, setShowModal] = useState(false);
+  const pageSize = 25;
   const [form, setForm] = useState({
     title: '',
     contactId: initialContactId,
@@ -58,7 +62,7 @@ function InvoicesPageInner() {
       const res = await fetch('/api/tenant/contacts');
       const data = await res.json();
       setContacts(data.contacts || []);
-    } catch (error) { console.error('Failed to fetch contacts', error); }
+    } catch (error) { console.error('Failed to fetch contacts', error); toast.error('Failed to load contacts'); }
   };
 
   const fetchInvoices = async () => {
@@ -68,6 +72,7 @@ function InvoicesPageInner() {
       setInvoices(data.invoices || []);
     } catch (error) {
       console.error('Failed to fetch invoices', error);
+      toast.error('Failed to load invoices');
     } finally {
       setLoading(false);
     }
@@ -112,7 +117,32 @@ function InvoicesPageInner() {
     (!contactFilter || i.contactId === contactFilter)
   );
 
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const aVal = sortBy === 'totalAmount' || sortBy === 'balanceDue' ? parseFloat(a[sortBy as keyof Invoice] as string) : (a[sortBy as keyof Invoice] ?? '');
+      const bVal = sortBy === 'totalAmount' || sortBy === 'balanceDue' ? parseFloat(b[sortBy as keyof Invoice] as string) : (b[sortBy as keyof Invoice] ?? '');
+      if (typeof aVal === 'number' && typeof bVal === 'number') return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+      return sortOrder === 'asc' ? String(aVal).localeCompare(String(bVal)) : String(bVal).localeCompare(String(aVal));
+    });
+  }, [filtered, sortBy, sortOrder]);
+
+  useEffect(() => { setPage(0); }, [search, statusFilter, contactFilter]);
+
+  const paginated = sorted.slice(page * pageSize, (page + 1) * pageSize);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+
   const totalOutstanding = filtered.filter(i => !['paid', 'cancelled'].includes(i.status)).reduce((sum, i) => sum + parseFloat(i.balanceDue), 0);
+
+  const toggleSort = (field: string) => {
+    if (sortBy === field) setSortOrder(o => o === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(field); setSortOrder('asc'); }
+  };
+
+  const SortHeader = ({ field, children }: { field: string; children: React.ReactNode }) => (
+    <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => toggleSort(field)}>
+      <span className="inline-flex items-center gap-1">{children}{sortBy === field ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+    </th>
+  );
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
@@ -170,7 +200,7 @@ function InvoicesPageInner() {
 
       {/* Table */}
       {loading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading invoices...</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <FileText className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
@@ -182,17 +212,17 @@ function InvoicesPageInner() {
             <table className="w-full min-w-[700px]">
               <thead className="border-b border-border bg-muted/30">
                 <tr>
-                  <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Invoice #</th>
+                  <SortHeader field="invoiceNumber">Invoice #</SortHeader>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Contact</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Title</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider hidden md:table-cell">Date</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Amount</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Status</th>
+                  <SortHeader field="title"><span className="hidden sm:inline">Title</span></SortHeader>
+                  <SortHeader field="issueDate"><span className="hidden md:inline">Date</span></SortHeader>
+                  <SortHeader field="totalAmount">Amount</SortHeader>
+                  <SortHeader field="status"><span className="hidden sm:inline">Status</span></SortHeader>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map((invoice) => (
+                {paginated.map((invoice) => (
                   <tr key={invoice.id} className="hover:bg-accent/30 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs">{invoice.invoiceNumber}</td>
                     <td className="px-4 py-3 text-xs">{getContactName(invoice.contactId)}</td>
@@ -215,6 +245,30 @@ function InvoicesPageInner() {
               </tbody>
             </table>
           </div>
+          {/* Pagination */}
+          {sorted.length > pageSize && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/10">
+              <p className="text-xs text-muted-foreground">
+                Showing <span className="font-semibold text-foreground">{page * pageSize + 1}–{Math.min((page + 1) * pageSize, sorted.length)}</span> of <span className="font-semibold text-foreground">{sorted.length}</span> invoices
+              </p>
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+                  className="px-2.5 py-1 text-xs rounded-lg border border-border hover:bg-accent disabled:opacity-40 transition-colors">← Prev</button>
+                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                  const start = Math.max(0, Math.min(page - 2, totalPages - 5));
+                  const pg = start + i;
+                  return pg < totalPages ? (
+                    <button key={pg} onClick={() => setPage(pg)}
+                      className={cn('px-2.5 py-1 text-xs rounded-lg border transition-colors', pg === page ? 'bg-violet-600 text-white border-violet-600' : 'border-border hover:bg-accent')}>
+                      {pg + 1}
+                    </button>
+                  ) : null;
+                })}
+                <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+                  className="px-2.5 py-1 text-xs rounded-lg border border-border hover:bg-accent disabled:opacity-40 transition-colors">Next →</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -313,7 +367,7 @@ function InvoicesPageInner() {
 
 export default function InvoicesPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-center">Loading...</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center p-6 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading...</div>}>
       <InvoicesPageInner />
     </Suspense>
   );

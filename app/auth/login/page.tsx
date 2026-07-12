@@ -6,29 +6,43 @@ import { Loader2, Eye, EyeOff, Mail, Lock, Shield, BarChart3,
   Users, Cpu, CheckCircle, ArrowRight, X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useFormValidation } from '@/lib/hooks/use-form-validation';
 
+const validationRules = {
+  email: {
+    required: true,
+    pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+  },
+  password: {
+    required: true,
+    minLength: 1,
+  },
+};
 
 export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const { errors, touched, validate, touch, validateAll } = useFormValidation(validationRules);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const values = { email, password };
+    if (!validateAll(values)) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError('');
-
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
-    const remember_me = formData.get('remember_me') === 'on';
 
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email, password, remember_me }),
+        body: JSON.stringify({ email, password, remember_me: false }),
       });
 
       const data = await res.json();
@@ -142,9 +156,21 @@ export default function LoginPage() {
                     required
                     autoComplete="email"
                     placeholder="you@company.com"
-                    className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 placeholder:text-slate-400 transition-all min-h-[44px]"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onBlur={() => touch('email') && validate('email', email)}
+                    aria-invalid={!!errors.email}
+                    aria-describedby={errors.email ? 'email-error' : undefined}
+                    className={`w-full pl-11 pr-4 py-3.5 rounded-xl border bg-white text-sm font-medium focus:outline-none focus:ring-2 placeholder:text-slate-400 transition-all min-h-[44px] ${
+                      errors.email && touched.email
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
+                        : 'border-slate-200 focus:border-violet-500 focus:ring-violet-500/20'
+                    }`}
                   />
                 </div>
+                {errors.email && touched.email && (
+                  <p id="email-error" className="mt-1.5 text-xs text-red-600" role="alert">{errors.email}</p>
+                )}
               </div>
 
               {/* Password field */}
@@ -163,7 +189,16 @@ export default function LoginPage() {
                     required
                     autoComplete="current-password"
                     placeholder="Enter your password"
-                    className="w-full pl-11 pr-12 py-3.5 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 placeholder:text-slate-400 transition-all min-h-[44px]"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onBlur={() => touch('password') && validate('password', password)}
+                    aria-invalid={!!errors.password}
+                    aria-describedby={errors.password ? 'password-error' : undefined}
+                    className={`w-full pl-11 pr-12 py-3.5 rounded-xl border bg-white text-sm font-medium focus:outline-none focus:ring-2 placeholder:text-slate-400 transition-all min-h-[44px] ${
+                      errors.password && touched.password
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
+                        : 'border-slate-200 focus:border-violet-500 focus:ring-violet-500/20'
+                    }`}
                   />
                   <button
                     type="button"
@@ -174,6 +209,9 @@ export default function LoginPage() {
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {errors.password && touched.password && (
+                  <p id="password-error" className="mt-1.5 text-xs text-red-600" role="alert">{errors.password}</p>
+                )}
               </div>
 
               {/* Remember me checkbox */}

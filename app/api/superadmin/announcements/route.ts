@@ -4,6 +4,8 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { announcements } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
+import { validateBody } from '@/lib/api/validate';
+import { createAnnouncementSchema, updateAnnouncementSchema, deleteAnnouncementSchema } from '@/lib/api/schemas';
 
 export async function GET(request: NextRequest) {
   try {
@@ -46,19 +48,21 @@ export async function POST(request: NextRequest) {
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     
     const b = await request.json();
-    const content = b.body || b.content; // Accept both 'body' and 'content' fields
-    if (!b.title || !content) return NextResponse.json({ error: 'title and body (or content) required' }, { status: 400 });
+    const result = validateBody(createAnnouncementSchema, b);
+    if (result instanceof NextResponse) return result;
+    const content = result.data.body || result.data.content;
+    if (!content) return NextResponse.json({ error: 'body or content is required' }, { status: 400 });
 
     const [row] = await db
       .insert(announcements)
       .values({
-        title: b.title,
+        title: result.data.title,
         content: content,
-        type: b.type || 'info',
-        target: b.target || 'all',
-        isActive: b.is_active ?? true,
-        startsAt: b.starts_at ? new Date(b.starts_at) : new Date(),
-        endsAt: b.ends_at ? new Date(b.ends_at) : null,
+        type: result.data.type,
+        target: result.data.target,
+        isActive: result.data.is_active,
+        startsAt: result.data.starts_at ? new Date(result.data.starts_at) : new Date(),
+        endsAt: result.data.ends_at ? new Date(result.data.ends_at) : null,
         createdBy: ctx.userId,
       })
       .returning();
@@ -79,13 +83,14 @@ export async function PATCH(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const { id, is_active } = await request.json();
-    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+    const b = await request.json();
+    const result = validateBody(updateAnnouncementSchema, b);
+    if (result instanceof NextResponse) return result;
 
     const [row] = await db
       .update(announcements)
-      .set({ isActive: is_active ?? true, updatedAt: new Date() })
-      .where(eq(announcements.id, id))
+      .set({ isActive: result.data.is_active, updatedAt: new Date() })
+      .where(eq(announcements.id, result.data.id))
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -105,10 +110,11 @@ export async function DELETE(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     
-    const { id } = await request.json();
-    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+    const b = await request.json();
+    const result = validateBody(deleteAnnouncementSchema, b);
+    if (result instanceof NextResponse) return result;
 
-    await db.delete(announcements).where(eq(announcements.id, id));
+    await db.delete(announcements).where(eq(announcements.id, result.data.id));
     return NextResponse.json({ ok: true });
  
  

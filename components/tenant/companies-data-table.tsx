@@ -192,7 +192,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
+              <Button variant="ghost" className="min-h-11 min-w-11 p-0">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -236,7 +236,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
     fetch('/api/tenant/custom-fields?entityType=company', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { fields: [] })
       .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[companies-data-table] Failed to load custom fields:', err); });
     return () => abort.abort();
   }, [])
 
@@ -245,7 +245,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
     fetch('/api/tenant/segments?entity_type=company', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[companies-data-table] Failed to load segments:', err); });
     return () => abort.abort();
   }, [])
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

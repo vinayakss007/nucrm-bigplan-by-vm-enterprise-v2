@@ -6,6 +6,7 @@ import { cn, formatDate, formatCurrency } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { getFromCache, setInCache } from '@/lib/client-cache';
+import SettingsEmptyState from '@/components/shared/settings-empty-state';
 
 export default function OrganizationAdminPage() {
   const cacheKey = 'org:admin:overview';
@@ -335,9 +336,7 @@ export default function OrganizationAdminPage() {
             </div>
           ))}
           {members.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No team members yet. Invite your first member!
-            </p>
+            <SettingsEmptyState icon={Users} title="No team members yet" description="Invite your first member to get started" />
           )}
         </div>
       </div>

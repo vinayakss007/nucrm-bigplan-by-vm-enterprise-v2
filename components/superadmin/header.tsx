@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Crown, LogOut, Settings,
   ChevronDown, ArrowLeft, Bell, Menu } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, getInitials } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -25,8 +26,10 @@ export default function SuperAdminHeader({ profile, stats, onToggleSidebar }: { 
   }, []);
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method:'POST' });
-    router.push('/auth/login');
+    await confirmThen('Are you sure you want to log out?', async () => {
+      await fetch('/api/auth/logout', { method:'POST' });
+      router.push('/auth/login');
+    });
   };
 
   return (

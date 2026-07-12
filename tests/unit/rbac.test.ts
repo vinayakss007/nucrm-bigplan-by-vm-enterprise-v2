@@ -71,7 +71,10 @@ vi.mock('@/drizzle/schema/infra', () => ({
 }));
 
 vi.mock('drizzle-orm', () => {
-  const sqlFn = Object.assign(vi.fn(), { raw: vi.fn((val: string) => val) });
+  const sqlFn = Object.assign(vi.fn(() => 'mocked_sql'), {
+    raw: vi.fn((val: string) => val),
+    identifier: vi.fn((val: string) => val),
+  });
   return {
     eq: vi.fn((...args: unknown[]) => args),
     and: vi.fn((...args: unknown[]) => args),

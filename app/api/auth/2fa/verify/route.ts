@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 import { createHmac, randomBytes, createHash } from 'crypto';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 const verify2faBodySchema = z.object({
   token: z.string().regex(/^\d{6}$/, 'Token must be a 6-digit number'),
@@ -48,6 +49,9 @@ export async function POST(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const rateLimited = await checkRateLimit(req, { action: '2fa-verify', max: 5, windowMinutes: 15 });
+    if (rateLimited) return rateLimited;
     
     const body = await req.json();
     const parsed = validateBody(verify2faBodySchema, body);

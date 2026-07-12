@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import TenantSidebar from './sidebar';
 import TenantHeader from './header';
@@ -23,6 +23,69 @@ export default function TenantShell({ tenant, profile, roleSlug, permissions, is
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openCommandPalette, setOpenCommandPalette] = useState(false);
   const [openShortcutsModal, setOpenShortcutsModal] = useState(false);
+  const mobileDrawerRef = useRef<HTMLDivElement>(null);
+
+  // Escape key to close mobile drawer
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setMobileOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [mobileOpen]);
+
+  // Focus trap inside mobile drawer
+  useEffect(() => {
+    if (!mobileOpen || !mobileDrawerRef.current) return;
+    const drawer = mobileDrawerRef.current;
+
+    // Focus first focusable element on open
+    const timer = setTimeout(() => {
+      const focusable = drawer.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length > 0) focusable[0]?.focus();
+    }, 100);
+
+    const handleTabTrap = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const focusable = drawer.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleTabTrap);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('keydown', handleTabTrap);
+    };
+  }, [mobileOpen]);
+
+  // Return focus to hamburger button when mobile drawer closes
+  useEffect(() => {
+    if (!mobileOpen) {
+      // Find the hamburger button by aria-label in the header
+      const hamburger = document.querySelector('button[aria-label="Toggle sidebar"]') as HTMLElement;
+      hamburger?.focus();
+    }
+  }, [mobileOpen]);
 
   // Close mobile sidebar on navigation
   useEffect(() => { setMobileOpen(false); }, [pathname]);
@@ -192,7 +255,13 @@ export default function TenantShell({ tenant, profile, roleSlug, permissions, is
 
         {/* Sidebar — mobile drawer with slide animation */}
         {mobileOpen && (
-          <div className="fixed left-0 top-0 h-full z-50 md:hidden animate-in slide-in-from-left duration-300">
+          <div
+            ref={mobileDrawerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation menu"
+            className="fixed left-0 top-0 h-full z-50 md:hidden animate-in slide-in-from-left duration-300"
+          >
             <TenantSidebar
               tenant={tenant} profile={profile} roleSlug={roleSlug}
               permissions={permissions} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin}

@@ -16,6 +16,7 @@ import {
   Lightbulb,
   Code,
 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -139,12 +140,15 @@ export default function TenantCustomFields() {
   };
 
   const handleDelete = async (fieldId: string) => {
-    try {
-      await fetch(`/api/tenant/custom-fields?fieldId=${fieldId}`, { method: 'DELETE' });
-      loadFields();
-    } catch (err) {
-      console.error('Failed to delete field:', err);
-    }
+    const field = fields?.find(f => f.id === fieldId);
+    await confirmThen(`Delete custom field "${field?.field_label || fieldId}"?`, async () => {
+      try {
+        await fetch(`/api/tenant/custom-fields?fieldId=${fieldId}`, { method: 'DELETE' });
+        loadFields();
+      } catch (err) {
+        console.error('Failed to delete field:', err);
+      }
+    });
   };
 
   useEffect(() => {

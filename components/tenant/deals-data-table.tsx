@@ -224,7 +224,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
+              <Button variant="ghost" className="min-h-11 min-w-11 p-0">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -268,7 +268,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
     fetch('/api/tenant/custom-fields?entityType=deal', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { fields: [] })
       .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[deals-data-table] Failed to load custom fields:', err); });
     return () => abort.abort();
   }, [])
 
@@ -277,7 +277,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
     fetch('/api/tenant/segments?entity_type=deal', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[deals-data-table] Failed to load segments:', err); });
     return () => abort.abort();
   }, [])
   const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, unknown> = {}) => {

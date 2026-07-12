@@ -1,4 +1,4 @@
-import { uniqueIndex, pgTable, uuid, text, timestamp, boolean, jsonb, index, inet, integer, bigint } from 'drizzle-orm/pg-core';
+import { uniqueIndex, pgTable, uuid, text, timestamp, boolean, jsonb, index, inet, integer, bigint, date } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import * as utils from './utils';
 
@@ -360,6 +360,66 @@ export const featureRegistry = pgTable('feature_registry', {
       enabledIdx: index('idx_feature_registry_enabled').on(table.enabled),
     };
   });
+
+// ── 8. PERMISSION OVERRIDES ───────────────────────────
+export const permissionOverrides = pgTable('permission_overrides', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+  entityType: text('entity_type').notNull(),
+  entityId: uuid('entity_id').notNull(),
+  permissions: jsonb('permissions').default({}),
+  ...utils.lifecycle(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    roleIdx: index('idx_permission_overrides_role').on(table.roleId),
+    entityIdx: index('idx_permission_overrides_entity').on(table.entityType, table.entityId),
+  };
+});
+
+// ── 9. ONBOARDING PROGRESS ────────────────────────────
+export const onboardingProgress = pgTable('onboarding_progress', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  stepName: text('step_name').notNull(),
+  isCompleted: boolean('is_completed').default(false),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  ...utils.lifecycle(),
+}, (table) => {
+  return {
+    tenantUserStepIdx: uniqueIndex('idx_onboarding_progress_unique').on(table.tenantId, table.userId, table.stepName),
+    tenantUserIdx: index('idx_onboarding_tenant_user').on(table.tenantId, table.userId),
+    stepIdx: index('idx_onboarding_step').on(table.stepName, table.isCompleted),
+    tenantIdx: utils.tenantIdx(table),
+  };
+});
+
+// ── 10. USER DEPARTURES ──────────────────────────────
+export const userDepartures = pgTable('user_departures', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  userEmail: text('user_email'),
+  userName: text('user_name'),
+  departureDate: date('departure_date'),
+  departedBy: uuid('departed_by').references(() => users.id, { onDelete: 'set null' }),
+  reason: text('reason'),
+  notes: text('notes'),
+  isRehirable: boolean('is_rehirable').default(false),
+  contactsReassignedTo: uuid('contacts_reassigned_to').references(() => users.id, { onDelete: 'set null' }),
+  contactsCount: integer('contacts_count').default(0),
+  dealsCount: integer('deals_count').default(0),
+  tasksCount: integer('tasks_count').default(0),
+  ...utils.audit(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    userIdx: index('idx_user_departures_user').on(table.userId),
+    dateIdx: index('idx_user_departures_date').on(table.departureDate),
+  };
+});
 
 // Register FK table references (lazy, broken after circular dep init)
 utils._registerFkRefs(tenants, users);

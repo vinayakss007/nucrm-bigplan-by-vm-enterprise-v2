@@ -5,6 +5,9 @@ import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { sendAdminTelegram } from '@/lib/telegram-admin';
+import { acquireLock } from '@/lib/cache/index';
+
+const IDEMPOTENCY_TTL = 3600 * 24; // 24 hours
 
 /**
  * Stripe Webhook Handler
@@ -47,8 +50,18 @@ export async function POST(request: NextRequest) {
 
   const eventType = event.type;
   const data = event.data?.object;
+  const eventId = event.id;
 
-  console.log(`[Stripe Webhook] Processing event: ${eventType}`);
+  // ── Idempotency check ──────────────────────────────────────────────────────
+  // Stripe guarantees at-least-once delivery; prevent duplicate processing
+  const lockKey = `stripe:evt:${eventId}`;
+  const { acquired } = await acquireLock(lockKey, IDEMPOTENCY_TTL);
+  if (!acquired) {
+    console.log(`[Stripe Webhook] Duplicate event ${eventId} — skipping`);
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+
+  console.log(`[Stripe Webhook] Processing event: ${eventType} (${eventId})`);
 
   try {
     switch (eventType) {
@@ -220,7 +233,7 @@ async function handlePaymentFailed(invoice: any) {
       icon: '💳',
       title: 'Payment Failed',
       message: `Tenant: \`${tenant.id}\`\nAmount: ${invoice.amount_paid ? `$${(invoice.amount_paid / 100).toFixed(2)}` : 'N/A'}\nStatus: past_due`,
-    }).catch(() => {});
+    }).catch((e) => console.error('[stripe webhook] Error:', e));
   }
 }
 

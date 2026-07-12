@@ -12,6 +12,13 @@
     {
       "idx": 1,
       "version": "7",
+      "when": 1783769189681,
+      "tag": "0001_flat_sir_ram",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
       "when": 1778251492391,
       "tag": "0001_perpetual_the_stranger",
       "breakpoints": true
@@ -49,6 +56,13 @@
       "version": "7",
       "when": 1746989100000,
       "tag": "0006_super_admin_audit_logs",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783769189681,
+      "tag": "0007_documents",
       "breakpoints": true
     },
     {
@@ -119,6 +133,13 @@
       "version": "7",
       "when": 1746990300000,
       "tag": "0014_missing_ai_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1783769189681,
+      "tag": "0016_fix_rls_notifications",
       "breakpoints": true
     },
     {
@@ -203,6 +224,32 @@
       "when": 1782400000000,
       "tag": "0032_rename_announcement_body_to_content",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "dialect": "postgresql",
+      "when": 1782500000000,
+      "tag": "0033_add_fk_constraints_billing_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "dialect": "postgresql",
+      "when": 1782600000000,
+      "tag": "0034_rls_remaining_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1783761529000,
+      "tag": "0035_missing_db_functions",
+      "breakpoints": {
+        "when": 1783761529000,
+        "tag": "0035_missing_db_functions"
+      }
     }
   ]
 }

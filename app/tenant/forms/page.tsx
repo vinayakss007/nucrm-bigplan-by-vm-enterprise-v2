@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { Plus, FileText, ExternalLink, Copy, Check, ToggleLeft, ToggleRight,
   Trash2, Loader2, X, Eye, ChevronRight } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import { confirmThen } from '@/components/ui/confirm-dialog';
+import Pagination from '@/components/tenant/pagination';
 import toast from 'react-hot-toast';
 
 interface FormFieldDef {
@@ -48,6 +50,9 @@ export default function FormsPage() {
   const [_selected, _setSelected] = useState<FormItem | null>(null);
   const [saving, setSaving]     = useState(false);
   const [copiedId, setCopiedId] = useState<string|null>(null);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const limit = 20;
   const [form, setForm] = useState({
     name:'', description:'',
     fields:[
@@ -60,11 +65,11 @@ export default function FormsPage() {
 
   const load = async () => {
     setLoading(true);
-    const res = await fetch('/api/tenant/forms');
-    if (res.ok) { const d = await res.json(); setForms(d.data ?? []); }
+    const res = await fetch(`/api/tenant/forms?limit=${limit}&offset=${offset}`);
+    if (res.ok) { const d = await res.json(); setForms(d.data ?? []); setTotal(d.total ?? 0); }
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [offset]);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
@@ -79,17 +84,29 @@ export default function FormsPage() {
   };
 
   const toggle = async (f: { id: string; is_active?: boolean }) => {
-    await fetch(`/api/tenant/forms/${f.id}`, {
-      method:'PATCH', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ is_active: !f.is_active }),
-    });
-    setForms((prev) => prev.map((x) => x.id === f.id ? {...x, is_active: !f.is_active} : x));
+    const becomingActive = !f.is_active;
+    await confirmThen(
+      becomingActive
+        ? 'Publish this form? It will become publicly accessible immediately.'
+        : 'Unpublish this form? The public link will stop working.',
+      async () => {
+        await fetch(`/api/tenant/forms/${f.id}`, {
+          method:'PATCH', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ is_active: !f.is_active }),
+        });
+        setForms((prev) => prev.map((x) => x.id === f.id ? {...x, is_active: !f.is_active} : x));
+      },
+      'always'
+    );
   };
 
   const del = async (id: string) => {
+    const form = forms.find(f => f.id === id);
+    await confirmThen(`Delete form "${form?.name || 'this form'}"?`, async () => {
       await fetch(`/api/tenant/forms/${id}`, { method:'DELETE' });
-    setForms(f => f.filter(x => x.id !== id));
-    toast.success('Deleted');
+      setForms(f => f.filter(x => x.id !== id));
+      toast.success('Deleted');
+    });
   };
 
   const [viewingSubmissions, setViewingSubmissions] = useState<FormItem | null>(null);
@@ -196,33 +213,21 @@ export default function FormsPage() {
                       </button>
                     )}
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Settings */}
-            <div>
-              <h4 className="text-sm font-semibold mb-3">Settings</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">Success message</label>
-                  <input value={form.settings.success_message} onChange={e => setForm(f => ({...f, settings:{...f.settings, success_message:e.target.value}}))} className={inp} />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">Notify email (on submission)</label>
-                  <input type="email" value={form.settings.notify_email} onChange={e => setForm(f => ({...f, settings:{...f.settings, notify_email:e.target.value}}))} className={inp} placeholder="your@email.com" />
+          ))}
                 </div>
               </div>
-            </div>
 
-            <div className="flex gap-2 justify-end">
-              <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-accent">Cancel</button>
-              <button type="submit" disabled={saving||!form.name} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50">
-                {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}Create Form
-              </button>
-            </div>
-          </form>
-        </div>
+              <div className="flex gap-2 justify-end">
+                <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-accent">Cancel</button>
+                <button type="submit" disabled={saving||!form.name} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50">
+                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}Create Form
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+      {!loading && forms.length > 0 && (
+        <Pagination total={total} offset={offset} limit={limit} onChange={setOffset} />
       )}
 
       {/* Forms list */}

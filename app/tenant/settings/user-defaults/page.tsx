@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Settings as SettingsIcon, Save, Loader2, RotateCcw, ShieldX, AlertCircle,
+import { Settings as SettingsIcon, Save, Loader2, RotateCcw, ShieldX, AlertCircle,
   Palette, Calendar, Zap, Mail, Lock,
 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -69,16 +69,17 @@ export default function UserDefaultsPage() {
   };
 
   const clearAll = async () => {
-    if (!window.confirm('Remove every workspace user-default? Each user will fall back to platform defaults.')) return;
-    setSaving(true);
-    const res = await fetch('/api/tenant/admin/user-defaults', { method: 'DELETE' });
-    if (res.ok) {
-      toast.success('Workspace defaults cleared');
-      setDefaults({}); setOriginal({});
-    } else {
-      toast.error('Failed');
-    }
-    setSaving(false);
+    await confirmThen('Remove every workspace user-default? Each user will fall back to platform defaults.', async () => {
+      setSaving(true);
+      const res = await fetch('/api/tenant/admin/user-defaults', { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('Workspace defaults cleared');
+        setDefaults({}); setOriginal({});
+      } else {
+        toast.error('Failed');
+      }
+      setSaving(false);
+    });
   };
 
   if (loading) return <div className="flex items-center justify-center h-48 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>;

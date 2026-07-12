@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, timestamp, boolean, index, uniqueIndex, date } from 'drizzle-orm/pg-core';
 import { users } from './core';
-import { tasks } from './infra';
+import { tasks } from './tasks';
 import * as utils from './utils';
 
 // ── 1. PROJECTS ───────────────────────────────────────

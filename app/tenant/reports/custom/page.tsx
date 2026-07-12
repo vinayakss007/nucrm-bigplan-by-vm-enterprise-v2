@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { FilePlus, Play, Save, Trash2, Download, Plus, X, Filter, Columns } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { logError } from '@/lib/errors';
 
@@ -118,11 +119,14 @@ export default function CustomReportBuilder() {
   };
 
   const deleteSaved = async (id: string) => {
-    try {
-      await fetch('/api/tenant/reports/custom', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-      toast.success('Deleted');
-      loadSaved();
-    } catch { toast.error('Failed'); }
+    const report = savedReports.find(r => r.id === id);
+    await confirmThen(`Delete saved report "${report?.name || 'this report'}"?`, async () => {
+      try {
+        await fetch('/api/tenant/reports/custom', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+        toast.success('Deleted');
+        loadSaved();
+      } catch { toast.error('Failed'); }
+    });
   };
 
   const downloadCSV = () => {

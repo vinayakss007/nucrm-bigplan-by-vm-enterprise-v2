@@ -246,7 +246,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
+              <Button variant="ghost" className="min-h-11 min-w-11 p-0">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -293,7 +293,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
     fetch('/api/tenant/custom-fields?entityType=task', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { fields: [] })
       .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[tasks-data-table] Failed to load custom fields:', err); });
     return () => abort.abort();
   }, [])
 
@@ -302,7 +302,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
     fetch('/api/tenant/segments?entity_type=task', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
-      .catch(() => {});
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[tasks-data-table] Failed to load segments:', err); });
     return () => abort.abort();
   }, [])
 

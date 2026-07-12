@@ -5,6 +5,7 @@ import {
   ArrowLeft, Send, Copy, Check, X, Eye, CheckCircle2, XCircle, Clock,
   AlertCircle, Mail, Calendar, Loader2, ExternalLink, Ban,
 } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 
 interface Quote {
@@ -93,39 +94,42 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
       setError('Provide a buyer email or attach a contact');
       return;
     }
-    setBusy('send');
-    setError(null);
-    try {
-      const res = await fetch(`/api/tenant/offers/${id}/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sendForm),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      setShowSendModal(false);
-      load();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+    await confirmThen('Send this offer? The buyer link will become public immediately.', async () => {
+      setBusy('send');
+      setError(null);
+      try {
+        const res = await fetch(`/api/tenant/offers/${id}/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(sendForm),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+        setShowSendModal(false);
+        load();
+      } catch (e) {
+        setError((e as Error).message);
+      } finally {
+        setBusy(null);
+      }
+    });
   }
 
   async function cancel() {
-    if (!confirm('Cancel this offer? The buyer link will stop working.')) return;
-    setBusy('cancel');
-    setError(null);
-    try {
-      const res = await fetch(`/api/tenant/offers/${id}/cancel`, { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      load();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+    await confirmThen('Cancel this offer? The buyer link will stop working.', async () => {
+      setBusy('cancel');
+      setError(null);
+      try {
+        const res = await fetch(`/api/tenant/offers/${id}/cancel`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+        load();
+      } catch (e) {
+        setError((e as Error).message);
+      } finally {
+        setBusy(null);
+      }
+    });
   }
 
   function copyLink() {

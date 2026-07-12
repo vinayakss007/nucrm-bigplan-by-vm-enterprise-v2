@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Plus, Search, Trash2, X, DollarSign, Clock, Package, Building2, User, Users } from 'lucide-react';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
 interface Service {
@@ -264,16 +265,18 @@ export default function ServicesPage() {
   };
 
   const deleteService = async (service: Service) => {
-    try {
-      const res = await fetch(`/api/tenant/services/${service.id}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) throw new Error('Failed to delete');
-      toast.success('Service deleted');
-      fetchServices();
-    } catch {
-      toast.error('Failed to delete service');
-    }
+    await confirmThen(`Delete service "${service.name}"?`, async () => {
+      try {
+        const res = await fetch(`/api/tenant/services/${service.id}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('Failed to delete');
+        toast.success('Service deleted');
+        fetchServices();
+      } catch {
+        toast.error('Failed to delete service');
+      }
+    });
   };
 
   const filteredServices = services.filter(s => s.name.toLowerCase().includes(search.toLowerCase()));

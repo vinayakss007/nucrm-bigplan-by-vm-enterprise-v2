@@ -30,7 +30,7 @@ export async function POST_login(request: NextRequest) {
         icon: '🛡️',
         title: 'IP Blocked — Brute Force',
         message: `IP: \`${ip}\`\nBlocked until: ${ipBlockCheck.blockedUntil?.toISOString() ?? 'N/A'}\nUser-Agent: ${userAgent ?? 'N/A'}`,
-      }).catch(() => {});
+      }).catch((e) => console.error('[api-handlers] Error:', e));
       return NextResponse.json({ 
         error: 'Too many login attempts. Please try again later.',
         blocked_until: ipBlockCheck.blockedUntil?.toISOString(),
@@ -53,7 +53,7 @@ export async function POST_login(request: NextRequest) {
         icon: '🛡️',
         title: 'Account Blocked — Brute Force',
         message: `Email: \`${email}\`\nIP: \`${ip}\`\nBlocked until: ${emailBlockCheck.blockedUntil?.toISOString() ?? 'N/A'}`,
-      }).catch(() => {});
+      }).catch((e) => console.error('[api-handlers] Error:', e));
       return NextResponse.json({ 
         error: 'Too many login attempts for this account. Please try again later.',
         blocked_until: emailBlockCheck.blockedUntil?.toISOString(),
@@ -187,7 +187,9 @@ export async function POST_signup(request: NextRequest) {
     if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 });
 
     const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
-    if (existing) return NextResponse.json({ error:'An account with this email already exists' }, { status:409 });
+    if (existing) {
+      return NextResponse.json({ message: 'If an account with this email does not exist, a new account has been created. Please check your email for verification.' }, { status: 200 });
+    }
 
     const trialDays = parseInt(process.env.DEFAULT_TRIAL_DAYS ?? '14');
     
@@ -370,7 +372,7 @@ export async function POST_signup(request: NextRequest) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err:any) {
     devLogger.error(err as Error, '[auth/signup]');
-    return NextResponse.json({ error: err.message ?? 'Signup failed.' }, { status:500 });
+    return NextResponse.json({ error: 'Signup failed. Please try again.' }, { status:500 });
   }
 }
 

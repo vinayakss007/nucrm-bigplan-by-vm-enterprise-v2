@@ -47,6 +47,22 @@ vi.mock('@/drizzle/schema', () => ({
     id: 'id',
     isSuperAdmin: 'is_super_admin',
   },
+  tenantMembers: {
+    id: 'id',
+    tenantId: 'tenant_id',
+    userId: 'user_id',
+    status: 'status',
+  },
+  sessions: {
+    userId: 'user_id',
+    tokenHash: 'token_hash',
+    expiresAt: 'expires_at',
+  },
+}));
+
+vi.mock('@/lib/auth/session', () => ({
+  verifyToken: vi.fn().mockResolvedValue({ userId: 'user-123' }),
+  hashToken: vi.fn().mockResolvedValue('hashed-token'),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -110,6 +126,7 @@ describe('API Gateway', () => {
     });
 
     it('resolves tenant from X-Tenant-ID header', async () => {
+      dbReturnValue = [{ id: 'membership-1' }];
       const { resolveGatewayTenant } = await import('@/lib/api/gateway');
 
       const request = new Request('http://localhost:3000/api/v2/contacts', {

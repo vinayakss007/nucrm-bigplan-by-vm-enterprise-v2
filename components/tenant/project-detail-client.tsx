@@ -8,6 +8,7 @@ import {
   CheckCircle2, Circle, Target,
 } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import toast from 'react-hot-toast';
@@ -195,17 +196,19 @@ export default function ProjectDetailClient({
   };
 
   const deleteMilestone = async (milestone: Milestone) => {
-    const res = await fetch(`/api/tenant/projects/${project.id}/milestones`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ milestone_id: milestone.id }),
+    await confirmThen(`Delete milestone "${milestone.title}"?`, async () => {
+      const res = await fetch(`/api/tenant/projects/${project.id}/milestones`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ milestone_id: milestone.id }),
+      });
+      if (res.ok) {
+        setMilestones(prev => prev.filter(m => m.id !== milestone.id));
+        toast.success('Milestone removed');
+      } else {
+        toast.error('Failed to delete milestone');
+      }
     });
-    if (res.ok) {
-      setMilestones(prev => prev.filter(m => m.id !== milestone.id));
-      toast.success('Milestone removed');
-    } else {
-      toast.error('Failed to delete milestone');
-    }
   };
 
   // ---- Link/unlink tasks ----

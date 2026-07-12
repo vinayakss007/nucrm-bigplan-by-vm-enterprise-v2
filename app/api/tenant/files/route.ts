@@ -24,8 +24,53 @@ const ALLOWED_TYPES = new Set([
   'text/plain','text/csv',
 ]);
 
+// Extension → MIME type mapping for server-side validation
+const EXT_MIME_MAP: Record<string, string> = {
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp',
+  '.svg': 'image/svg+xml', '.pdf': 'application/pdf',
+  '.doc': 'application/msword',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls': 'application/vnd.ms-excel',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.ppt': 'application/vnd.ms-powerpoint',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.txt': 'text/plain', '.csv': 'text/csv',
+};
+
+// Magic bytes → MIME type detection (first 8 bytes)
+function detectMimeFromBuffer(buf: Buffer): string | null {
+  const head = buf.subarray(0, 8);
+  // JPEG: FF D8 FF
+  if (head[0] === 0xFF && head[1] === 0xD8 && head[2] === 0xFF) return 'image/jpeg';
+  // PNG: 89 50 4E 47
+  if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4E && head[3] === 0x47) return 'image/png';
+  // GIF: 47 49 46 38
+  if (head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x38) return 'image/gif';
+  // WebP: RIFF....WEBP
+  if (head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46 &&
+      head[8] === 0x57 && head[9] === 0x45 && head[10] === 0x42 && head[11] === 0x50) return 'image/webp';
+  // PDF: 25 50 44 46
+  if (head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46) return 'application/pdf';
+  // DOCX/XLSX/PPTX: PK (ZIP) — check extension later
+  if (head[0] === 0x50 && head[1] === 0x4B && head[2] === 0x03 && head[3] === 0x04) return 'application/zip';
+  // DOC: D0 CF 11 E0 (OLE2)
+  if (head[0] === 0xD0 && head[1] === 0xCF && head[2] === 0x11 && head[3] === 0xE0) return 'application/msword';
+  // Plain text / CSV: heuristic — no binary marker in first 8 bytes
+  if (buf.length > 0) {
+    let isText = true;
+    for (let i = 0; i < Math.min(buf.length, 512); i++) {
+      const c = buf[i];
+      if (c === 0) { isText = false; break; }
+    }
+    if (isText) return 'text/plain';
+  }
+  return null;
+}
+
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 const RESOURCE_TYPES = ['contact','deal','company','task','note'];
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function GET(req: NextRequest) {
   try {
@@ -35,6 +80,7 @@ export async function GET(req: NextRequest) {
     const resource_type = searchParams.get('resource_type');
     const resource_id   = searchParams.get('resource_id');
     if (!resource_type || !resource_id) return NextResponse.json({ error: 'resource_type and resource_id required' }, { status: 400 });
+    if (!UUID_RE.test(resource_id)) return NextResponse.json({ error: 'Invalid resource_id format' }, { status: 400 });
 
     const files = await db
       .select({
@@ -80,13 +126,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `resource_type must be one of: ${RESOURCE_TYPES.join(', ')}` }, { status: 400 });
     }
     if (!resource_id) return NextResponse.json({ error: 'resource_id required' }, { status: 400 });
+    if (!UUID_RE.test(resource_id)) return NextResponse.json({ error: 'Invalid resource_id format' }, { status: 400 });
     if (file.size > MAX_FILE_SIZE) return NextResponse.json({ error: 'File too large (max 25 MB)' }, { status: 413 });
-    if (!ALLOWED_TYPES.has(file.type)) {
-      return NextResponse.json({ error: 'File type not allowed' }, { status: 415 });
-    }
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+
+    // --- Server-side MIME detection (magic bytes + extension) ---
+    const ext = extname(file.name).toLowerCase();
+    const detectedMime = detectMimeFromBuffer(buffer);
+    const extensionMime = EXT_MIME_MAP[ext];
+
+    // Resolve MIME: prefer magic-byte detection, fall back to extension map
+    let finalMime: string | null = detectedMime;
+
+    // For ZIP-based Office formats, trust extension (magic bytes only say "zip")
+    if (detectedMime === 'application/zip' && extensionMime) {
+      finalMime = extensionMime;
+    }
+
+    // If magic-byte detection failed, try extension map
+    if (!finalMime && extensionMime) {
+      finalMime = extensionMime;
+    }
+
+    // Reject if detected MIME is not in allowlist
+    if (!finalMime || !ALLOWED_TYPES.has(finalMime)) {
+      return NextResponse.json(
+        { error: 'File type not allowed', detected: finalMime || 'unknown' },
+        { status: 415 }
+      );
+    }
+
+    // Reject dangerous extensions even if MIME matches
+    const DANGEROUS_EXTS = new Set(['.exe','.bat','.cmd','.com','.msi','.scr','.pif','.vbs','.js','.ws','.wsf','.ps1','.sh','.bash','.csh','.ksh','.rb','.py','.pl','.php','.jsp','.asp','.aspx','.jar','.class','.war','.ear','.dll','.so','.dylib','.bin','.cmd','.com','.scr','.pif']);
+    if (DANGEROUS_EXTS.has(ext)) {
+      return NextResponse.json({ error: 'File extension not allowed' }, { status: 415 });
+    }
 
     // Check plan storage quota
     const [tenantWithPlan] = await db
@@ -107,8 +183,7 @@ export async function POST(req: NextRequest) {
 
     const _storageType = 'local';
 
-    const ext = extname(file.name).toLowerCase() || '.bin';
-    const filename = `${randomBytes(16).toString('hex')}${ext}`;
+    const filename = `${randomBytes(16).toString('hex')}${ext || '.bin'}`;
 
     // Local storage (simplified for now)
     const uploadDir = join(process.cwd(), 'uploads', ctx.tenantId, resource_type, resource_id);
@@ -128,7 +203,7 @@ export async function POST(req: NextRequest) {
           fileName: file.name.slice(0, 255),
           filePath: storagePath,
           fileSize: file.size,
-          mimeType: file.type,
+          mimeType: finalMime,
         })
         .returning();
 
@@ -166,6 +241,7 @@ export async function DELETE(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     const id = new URL(req.url).searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+    if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id format' }, { status: 400 });
 
     const file = await db.query.fileAttachments.findFirst({
       where: and(eq(fileAttachments.id, id), eq(fileAttachments.tenantId, ctx.tenantId))
