@@ -9,6 +9,7 @@ import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import Pagination from '@/components/tenant/pagination';
 
 interface Ticket {
   id: string;
@@ -30,15 +31,20 @@ export default function TicketsPage() {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const limit = 50;
 
   const loadTickets = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/tenant/tickets');
+      const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+      if (filter !== 'all') params.set('status', filter);
+      if (search) params.set('q', search);
+      const res = await fetch(`/api/tenant/tickets?${params}`);
       const d = await res.json();
-      if (res.ok) setTickets(d.data || []);
+      if (res.ok) { setTickets(d.data || []); setTotal(d.total ?? 0); }
       else if (res.status === 403) {
-        // Module not active
         setTickets([]);
       }
     } catch {
@@ -48,14 +54,9 @@ export default function TicketsPage() {
     }
   };
 
-  useEffect(() => { loadTickets(); }, []);
+  useEffect(() => { loadTickets(); }, [offset, filter, search]);
 
-  const filtered = tickets.filter(t => {
-    const matchesFilter = filter === 'all' || t.status === filter;
-    const matchesSearch = t.subject.toLowerCase().includes(search.toLowerCase()) || 
-                         (t.first_name + ' ' + t.last_name).toLowerCase().includes(search.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
+  const filtered = tickets;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -174,45 +175,50 @@ export default function TicketsPage() {
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-border">
-            {filtered.map(ticket => (
-              <div key={ticket.id} onClick={() => router.push(`/tenant/tickets/${ticket.id}`)} className="p-4 hover:bg-accent/50 transition-colors group cursor-pointer">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full", getStatusColor(ticket.status))}>
-                        {ticket.status.replace('_', ' ')}
-                      </span>
-                      <span className={cn("text-[10px] font-bold uppercase tracking-wider", getPriorityColor(ticket.priority))}>
-                        {ticket.priority}
-                      </span>
-                      <span className="text-xs text-muted-foreground">• {ticket.category}</span>
+          <>
+            <div className="divide-y divide-border">
+              {filtered.map(ticket => (
+                <div key={ticket.id} onClick={() => router.push(`/tenant/tickets/${ticket.id}`)} className="p-4 hover:bg-accent/50 transition-colors group cursor-pointer">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full", getStatusColor(ticket.status))}>
+                          {ticket.status.replace('_', ' ')}
+                        </span>
+                        <span className={cn("text-[10px] font-bold uppercase tracking-wider", getPriorityColor(ticket.priority))}>
+                          {ticket.priority}
+                        </span>
+                        <span className="text-xs text-muted-foreground">• {ticket.category}</span>
+                      </div>
+                      <h3 className="font-semibold text-sm truncate group-hover:text-violet-600 transition-colors">
+                        {ticket.subject}
+                      </h3>
+                      <div className="flex items-center gap-4 mt-2">
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <User className="w-3 h-3" />
+                          {ticket.first_name ? `${ticket.first_name} ${ticket.last_name || ''}` : 'System'}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <MessageSquare className="w-3 h-3" />
+                          {ticket.assigned_name ? `Assigned: ${ticket.assigned_name}` : 'Unassigned'}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Clock className="w-3 h-3" />
+                          {formatDate(ticket.created_at)}
+                        </div>
+                      </div>
                     </div>
-                    <h3 className="font-semibold text-sm truncate group-hover:text-violet-600 transition-colors">
-                      {ticket.subject}
-                    </h3>
-                    <div className="flex items-center gap-4 mt-2">
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <User className="w-3 h-3" />
-                        {ticket.first_name ? `${ticket.first_name} ${ticket.last_name || ''}` : 'System'}
-                      </div>
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <MessageSquare className="w-3 h-3" />
-                        {ticket.assigned_name ? `Assigned: ${ticket.assigned_name}` : 'Unassigned'}
-                      </div>
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Clock className="w-3 h-3" />
-                        {formatDate(ticket.created_at)}
-                      </div>
-                    </div>
+                    <button className="p-2 rounded-lg hover:bg-muted text-muted-foreground max-md:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all">
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
                   </div>
-                  <button className="p-2 rounded-lg hover:bg-muted text-muted-foreground max-md:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all">
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            <div className="px-4 py-2 border-t border-border">
+              <Pagination total={total} offset={offset} limit={limit} onChange={setOffset} />
+            </div>
+          </>
         )}
       </div>
 

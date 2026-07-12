@@ -15,14 +15,24 @@ export async function GET(req: NextRequest) {
     const modErr = await requireModule(ctx, 'forms-builder');
     if (modErr) return modErr;
 
+    const { searchParams } = new URL(req.url);
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '20')));
+    const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
+
+    const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(forms)
+      .where(and(eq(forms.tenantId, ctx.tenantId), sql`${forms.deletedAt} IS NULL`));
+
     const allForms = await db.query.forms.findMany({
-        limit: 200,
+      limit,
+      offset,
       where: and(eq(forms.tenantId, ctx.tenantId), sql`${forms.deletedAt} IS NULL`),
       orderBy: [desc(forms.createdAt)]
     });
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
- 
+  
+    const total = countResult?.count ?? 0;
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const formsWithEmbed = allForms.map((f: any) => ({
@@ -34,7 +44,7 @@ export async function GET(req: NextRequest) {
       public_url: `${appUrl}/lead-capture?form=${f.slug}`
     }));
 
-    return NextResponse.json({ data: formsWithEmbed });
+    return NextResponse.json({ data: formsWithEmbed, total, limit, offset, hasMore: offset + allForms.length < total });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
