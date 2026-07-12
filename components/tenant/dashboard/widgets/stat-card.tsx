@@ -14,7 +14,7 @@ export function StatCard({
   color: string
   href?: string
 }) {
-  const isEmpty = value === 0 || value === undefined || value === null || value === '';
+  const isEmpty = value === undefined || value === null || value === '';
   const content = (
     <div className="flex flex-col h-full cursor-pointer">
       <div className="flex items-start justify-between mb-4">
