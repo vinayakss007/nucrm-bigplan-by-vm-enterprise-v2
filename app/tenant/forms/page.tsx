@@ -80,11 +80,20 @@ export default function FormsPage() {
   };
 
   const toggle = async (f: { id: string; is_active?: boolean }) => {
-    await fetch(`/api/tenant/forms/${f.id}`, {
-      method:'PATCH', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ is_active: !f.is_active }),
-    });
-    setForms((prev) => prev.map((x) => x.id === f.id ? {...x, is_active: !f.is_active} : x));
+    const becomingActive = !f.is_active;
+    await confirmThen(
+      becomingActive
+        ? 'Publish this form? It will become publicly accessible immediately.'
+        : 'Unpublish this form? The public link will stop working.',
+      async () => {
+        await fetch(`/api/tenant/forms/${f.id}`, {
+          method:'PATCH', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ is_active: !f.is_active }),
+        });
+        setForms((prev) => prev.map((x) => x.id === f.id ? {...x, is_active: !f.is_active} : x));
+      },
+      'always'
+    );
   };
 
   const del = async (id: string) => {
