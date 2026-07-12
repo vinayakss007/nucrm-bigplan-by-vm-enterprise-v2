@@ -1,8 +1,7 @@
-import { uniqueIndex, pgTable, uuid, text, timestamp, jsonb, decimal, integer, boolean, index, date } from 'drizzle-orm/pg-core';
+import { uniqueIndex, pgTable, uuid, text, timestamp, jsonb, decimal, integer, boolean, index, date, numeric } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import * as utils from './utils';
 import { companies as _companies, contacts as _contacts } from './crm';
-import { users as _users } from './core';
 
 // Aliases to match existing references in table definitions
 const companies = _companies;
@@ -129,8 +128,7 @@ export const invoices = pgTable('invoices', {
 
 export const invoiceLineItems = pgTable('invoice_line_items', {
   id: utils.pk(),
-  tenantId: utils.tenantId(),
-  invoiceId: uuid('invoice_id').notNull().references(() => invoices.id, { onDelete: 'cascade' }),
+  invoiceId: uuid('invoice_id').notNull(),
   productId: uuid('product_id'),
   serviceId: uuid('service_id'),
   description: text('description').notNull(),
@@ -146,23 +144,20 @@ export const invoiceLineItems = pgTable('invoice_line_items', {
   sortOrder: integer('sort_order').default(0),
   ...utils.lifecycle(),
 }, (table) => ({
-  tenantIdx: utils.tenantIdx(table),
   invoiceIdx: index('idx_invoice_line_items_invoice').on(table.invoiceId),
 }));
 
 export const invoicePayments = pgTable('invoice_payments', {
   id: utils.pk(),
-  tenantId: utils.tenantId(),
-  invoiceId: uuid('invoice_id').notNull().references(() => invoices.id, { onDelete: 'cascade' }),
+  invoiceId: uuid('invoice_id').notNull(),
   amount: decimal('amount', { precision: 15, scale: 2 }).notNull(),
   paymentDate: date('payment_date').notNull(),
   paymentMethod: text('payment_method'),
   reference: text('reference'),
   notes: text('notes'),
-  recordedBy: uuid('recorded_by').references(() => _users.id, { onDelete: 'set null' }),
+  recordedBy: uuid('recorded_by'),
   ...utils.audit(),
 }, (table) => ({
-  tenantIdx: utils.tenantIdx(table),
   invoiceIdx: index('idx_invoice_payments_invoice').on(table.invoiceId),
   dateIdx: index('idx_invoice_payments_date').on(table.paymentDate),
 }));
@@ -224,8 +219,7 @@ export const orders = pgTable('orders', {
 
 export const orderLineItems = pgTable('order_line_items', {
   id: utils.pk(),
-  tenantId: utils.tenantId(),
-  orderId: uuid('order_id').notNull().references(() => orders.id, { onDelete: 'cascade' }),
+  orderId: uuid('order_id').notNull(),
   productId: uuid('product_id'),
   serviceId: uuid('service_id'),
   description: text('description').notNull(),
@@ -236,7 +230,6 @@ export const orderLineItems = pgTable('order_line_items', {
   sortOrder: integer('sort_order').default(0),
   ...utils.lifecycle(),
 }, (table) => ({
-  tenantIdx: utils.tenantIdx(table),
   orderIdx: index('idx_order_line_items_order').on(table.orderId),
 }));
 
@@ -277,15 +270,101 @@ export const contracts = pgTable('contracts', {
   activeIdx: utils.activeIdx(table),
 }));
 
-// ── SUBSCRIPTIONS MODULE ───────────────────────────────
-// Renamed: Was conflicting with infra.subscriptions
-// This table tracks service/product subscriptions (e.g., monthly hosting)
+// ── PLANS (Billing plans) ────────────────────────────
+export const plans = pgTable('plans', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  description: text('description'),
+  priceMonthly: numeric('price_monthly', { precision: 10, scale: 2 }).default('0'),
+  priceYearly: numeric('price_yearly', { precision: 10, scale: 2 }).default('0'),
+  priceCents: integer('price_cents').default(0),
+  price: numeric('price', { precision: 10, scale: 2 }).default('0'),
+  maxUsers: integer('max_users').default(5),
+  maxContacts: integer('max_contacts').default(1000),
+  maxDeals: integer('max_deals').default(500),
+  maxStorageGb: numeric('max_storage_gb', { precision: 6, scale: 2 }).default('1'),
+  maxAutomations: integer('max_automations').default(5),
+  maxForms: integer('max_forms').default(3),
+  maxApiCallsDay: integer('max_api_calls_day').default(1000),
+  rateLimitConfig: jsonb('rate_limit_config').default({
+    api: 60,
+    auth: 5,
+    contacts: 30,
+    deals: 30,
+    export: 10,
+    import: 5,
+    ai: 30,
+    webhook: 1000,
+    passwordReset: 3,
+    emailVerification: 10,
+    bulk: 5,
+  }),
+  features: jsonb('features').default([]),
+  isActive: boolean('is_active').default(true),
+  sortOrder: integer('sort_order').default(0),
+  ...utils.lifecycle(),
+}, (table) => {
+  return {
+    nameIdx: index('idx_plans_name').on(table.name),
+    slugIdx: index('idx_plans_slug').on(table.slug),
+    activeIdx: index('idx_plans_active').on(table.isActive, table.sortOrder),
+  };
+});
+
+// ── BILLING SUBSCRIPTIONS (tenant billing) ─────────────
+export const subscriptions = pgTable('subscriptions', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+
+  planId: text('plan_id').references(() => plans.id),
+  status: text('status').notNull().default('active'),
+
+  stripeCustomerId: text('stripe_customer_id'),
+  stripeSubscriptionId: text('stripe_subscription_id'),
+
+  currentPeriodStart: timestamp('current_period_start', { withTimezone: true }),
+  currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+  cancelAtPeriodEnd: boolean('cancel_at_period_end').default(false),
+
+  metadata: utils.metadata(),
+
+  ...utils.lifecycle(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    metadataGinIdx: utils.metadataIdx(table),
+  };
+});
+
+// ── BILLING EVENTS ─────────────────────────────────────
+export const billingEvents = pgTable('billing_events', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  eventType: text('event_type').notNull(),
+  amount: numeric('amount', { precision: 10, scale: 2 }),
+  currency: text('currency').default('usd'),
+  stripeEventId: text('stripe_event_id').unique(),
+  stripeInvoiceId: text('stripe_invoice_id'),
+  stripeSubscriptionId: text('stripe_subscription_id'),
+  metadata: utils.metadata(),
+  ...utils.lifecycle(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    typeIdx: index('idx_billing_events_type').on(table.eventType, table.createdAt),
+    stripeEventIdx: index('idx_billing_events_stripe_event').on(table.stripeEventId).where(sql`stripe_event_id IS NOT NULL`),
+    metadataGinIdx: utils.metadataIdx(table),
+  };
+});
+
+// ── SERVICE SUBSCRIPTIONS (product/service subscriptions) ──
 export const serviceSubscriptions = pgTable('service_subscriptions', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
 
-  contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
-  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
+  contactId: uuid('contact_id'),
+  companyId: uuid('company_id'),
 
   name: text('name').notNull(),
   planName: text('plan_name'),
