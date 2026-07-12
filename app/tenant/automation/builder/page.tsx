@@ -1,24 +1,26 @@
 'use client'
 
+import { Suspense } from 'react'
+import dynamic from 'next/dynamic'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
-import WorkflowBuilder from '@/components/tenant/workflow-builder'
 
-export default function WorkflowBuilderPage() {
+const WorkflowBuilder = dynamic(() => import('@/components/tenant/workflow-builder'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-[600px]">
+      <div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+    </div>
+  ),
+})
+
+function BuilderInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const workflowId = searchParams.get('id') || undefined
 
-  const handleSave = () => {
-    if (!workflowId) {
-      // After creating a new workflow, we'd need to reload with the new ID
-      // For now, just show a success toast (handled by builder)
-    }
-  }
-
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col">
-      {/* Back button */}
       <div className="px-4 py-2 border-b border-border bg-card">
         <button
           onClick={() => router.push('/tenant/automation')}
@@ -28,11 +30,21 @@ export default function WorkflowBuilderPage() {
           Back to Automation
         </button>
       </div>
-
-      {/* Builder */}
       <div className="flex-1">
-        <WorkflowBuilder workflowId={workflowId} onSave={handleSave} />
+        <WorkflowBuilder workflowId={workflowId} />
       </div>
     </div>
+  )
+}
+
+export default function WorkflowBuilderPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center h-[600px]">
+        <div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <BuilderInner />
+    </Suspense>
   )
 }

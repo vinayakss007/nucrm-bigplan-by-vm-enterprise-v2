@@ -4,6 +4,7 @@ import {
   CheckCircle2, XCircle, Clock, AlertCircle, Loader2,
   ShieldCheck, FileText, Eye,
 } from 'lucide-react';
+import { OptimizedImage } from '@/components/ui/optimized-image';
 
 interface OfferData {
   offer: {
@@ -161,8 +162,7 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
       >
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
           {seller.logo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={seller.logo} alt={seller.name} className="h-8 w-8 rounded-lg object-cover" />
+            <OptimizedImage src={seller.logo} alt={seller.name} width={32} height={32} className="h-8 w-8 rounded-lg object-cover" />
           ) : (
             <div className="h-8 w-8 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ background: seller.primary_color }}>
               {seller.name.slice(0, 1).toUpperCase()}

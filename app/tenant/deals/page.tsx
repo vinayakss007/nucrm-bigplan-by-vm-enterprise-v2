@@ -3,7 +3,15 @@ import { db } from '@/drizzle/db';
 import { deals, contacts, companies, users, tenantMembers, pipelines, dealStages } from '@/drizzle/schema';
 import { eq, and, or, isNull, desc, asc } from 'drizzle-orm';
 import { getUserDefaultView } from '@/lib/user-defaults';
-import DealsPageClient from './deals-page-client';
+import dynamic from 'next/dynamic';
+
+const DealsPageClient = dynamic(() => import('./deals-page-client'), {
+  loading: () => (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+    </div>
+  ),
+});
 
 export default async function DealsPage() {
   const ctx = await requireTenantCtx();
