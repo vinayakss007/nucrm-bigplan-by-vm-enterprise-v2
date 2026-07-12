@@ -607,6 +607,8 @@ export default function ContactsDataTable({
     ...(emailTemplates.length > 0 ? [{
       id: 'send_email',
       label: 'Send Email',
+      requiresConfirmation: true,
+      confirmationMessage: 'Send emails to the selected contacts? This action cannot be undone.',
       requiresSelect: true,
       selectOptions: emailTemplates.map(t => ({ value: t.id, label: t.name })),
       onClick: async (selectedIds: string[], templateId?: string) => {
