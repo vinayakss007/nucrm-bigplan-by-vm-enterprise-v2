@@ -5,6 +5,7 @@ import { Bell, BellOff, CheckCheck, Trash2, CheckCircle, TrendingUp,
 import { cn, formatRelativeTime, toSnakeCase } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import Pagination from '@/components/tenant/pagination';
 import toast from 'react-hot-toast';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,16 +28,20 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all'|'unread'>('all');
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const limit = 20;
   const router = useRouter();
 
   const load = async () => {
-    const res = await fetch('/api/tenant/notifications');
+    const res = await fetch(`/api/tenant/notifications?limit=${limit}&offset=${offset}`);
     const d = await res.json();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     setNotifications((d.data ?? []).map((n: any) => toSnakeCase(n)));
+    setTotal(d.total ?? 0);
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [offset]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const isUnread = (n: any) => !n.read_at && !n.is_read;
@@ -138,41 +143,44 @@ export default function NotificationsPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-1.5">
-          {visible.map(n => {
-            const cfg = TYPE_CFG[n.type] ?? { icon: Bell, color: 'text-slate-600', bg: 'bg-slate-100 dark:bg-slate-800', label: 'System' };
-            const Icon = cfg.icon;
-            return (
-              <div key={n.id}
-                className={cn('flex items-start gap-3 p-4 rounded-xl border transition-all cursor-pointer group',
-                  isUnread(n)
-                    ? 'border-violet-200 dark:border-violet-800/50 bg-violet-50/50 dark:bg-violet-950/10 hover:border-violet-300'
-                    : 'border-border hover:bg-accent/30')}
-                onClick={() => handleClick(n)}>
-                <div className={cn('w-9 h-9 rounded-full flex items-center justify-center shrink-0', cfg.bg)}>
-                  <Icon className={cn('w-4 h-4', cfg.color)} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className={cn('text-sm', isUnread(n) && 'font-semibold')}>{n.title}</p>
-                    {isUnread(n) && <div className="w-2 h-2 rounded-full bg-violet-500 shrink-0 mt-1.5" />}
+        <>
+          <div className="space-y-1.5">
+            {visible.map(n => {
+              const cfg = TYPE_CFG[n.type] ?? { icon: Bell, color: 'text-slate-600', bg: 'bg-slate-100 dark:bg-slate-800', label: 'System' };
+              const Icon = cfg.icon;
+              return (
+                <div key={n.id}
+                  className={cn('flex items-start gap-3 p-4 rounded-xl border transition-all cursor-pointer group',
+                    isUnread(n)
+                      ? 'border-violet-200 dark:border-violet-800/50 bg-violet-50/50 dark:bg-violet-950/10 hover:border-violet-300'
+                      : 'border-border hover:bg-accent/30')}
+                  onClick={() => handleClick(n)}>
+                  <div className={cn('w-9 h-9 rounded-full flex items-center justify-center shrink-0', cfg.bg)}>
+                    <Icon className={cn('w-4 h-4', cfg.color)} />
                   </div>
-                  {n.body && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>}
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full', cfg.bg, cfg.color)}>{cfg.label}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {formatRelativeTime(n.created_at)}
-                    </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={cn('text-sm', isUnread(n) && 'font-semibold')}>{n.title}</p>
+                      {isUnread(n) && <div className="w-2 h-2 rounded-full bg-violet-500 shrink-0 mt-1.5" />}
+                    </div>
+                    {n.body && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>}
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full', cfg.bg, cfg.color)}>{cfg.label}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatRelativeTime(n.created_at)}
+                      </span>
+                    </div>
                   </div>
+                  <button onClick={e => { e.stopPropagation(); del(n.id); }}
+                    className="max-md:opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 rounded hover:bg-muted transition-all shrink-0 text-muted-foreground hover:text-destructive">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-                <button onClick={e => { e.stopPropagation(); del(n.id); }}
-                  className="max-md:opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 rounded hover:bg-muted transition-all shrink-0 text-muted-foreground hover:text-destructive">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+          <Pagination total={total} offset={offset} limit={limit} onChange={setOffset} />
+        </>
       )}
     </div>
   );
