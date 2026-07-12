@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Check, Download, Settings, ChevronRight, Loader2, X, Puzzle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 
 const CATEGORY_LABELS: Record<string,string> = {
   all:'All', utility:'Core Tools', automation:'Automation',
@@ -58,11 +59,13 @@ export default function ModulesPage() {
   };
 
   const disable = async (mod: ModuleData) => {
-    const res = await fetch('/api/tenant/modules', {
-      method: 'PATCH', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ module_id: mod.id, action: 'disable' }),
+    await confirmThen(`Disable "${mod.name}"? Related data may be affected.`, async () => {
+      const res = await fetch('/api/tenant/modules', {
+        method: 'PATCH', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ module_id: mod.id, action: 'disable' }),
+      });
+      if (res.ok) { toast.success(`${mod.name} disabled`); load(); setSelected(null); }
     });
-    if (res.ok) { toast.success(`${mod.name} disabled`); load(); setSelected(null); }
   };
 
   const saveSettings = async (mod: ModuleData) => {
