@@ -214,8 +214,18 @@ export default function FormsPage() {
                     )}
                   </div>
           ))}
-        </div>
-      )}
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-accent">Cancel</button>
+                <button type="submit" disabled={saving||!form.name} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50">
+                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}Create Form
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       {!loading && forms.length > 0 && (
         <Pagination total={total} offset={offset} limit={limit} onChange={setOffset} />
       )}
