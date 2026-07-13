@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ListChecks, ArrowRight, Calendar, CheckCircle2, Clock, AlertCircle, Plus } from 'lucide-react';
+import { ListChecks, Calendar, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface FollowUp {
