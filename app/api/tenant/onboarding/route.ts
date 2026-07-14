@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 const provisionSchema = z.object({
   templateId: z.string().min(1),
   modules: z.array(z.string()).min(1),
-  companyName: z.string().min(1).max(255),
+  companyName: z.string().min(1).max(255).optional(),
   pipelineName: z.string().min(1).max(100),
 });
 
