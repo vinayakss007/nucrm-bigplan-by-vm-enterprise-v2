@@ -87,6 +87,10 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
     fireWebhooks(ctx.tenantId, 'product.updated', { id }).catch(e => logError({ error: e, context: "async-catch:[context]" }));
 
+    if (!updated) {
+      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+    }
+
     return NextResponse.json({
       id: updated.id,
       name: updated.name,

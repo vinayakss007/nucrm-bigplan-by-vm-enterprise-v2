@@ -70,11 +70,14 @@ export async function POST(req: NextRequest) {
 
     // Add permissions if provided
     if (parsed.data.permissions && parsed.data.permissions.length > 0 && row) {
+      const allowedPerms = ['view_data', 'manage_users', 'share_contacts', 'aggregate_reports'] as const;
       for (const perm of parsed.data.permissions) {
-        await db.insert(hierarchyPermissions).values({
-          hierarchyId: row.id,
-          permission: perm,
-        });
+        if (allowedPerms.includes(perm as typeof allowedPerms[number])) {
+          await db.insert(hierarchyPermissions).values({
+            hierarchyId: row.id,
+            permission: perm as typeof allowedPerms[number],
+          });
+        }
       }
     }
 

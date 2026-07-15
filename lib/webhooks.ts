@@ -32,6 +32,7 @@ export type WebhookEvent =
   | 'lead.created'    | 'lead.updated'     | 'lead.deleted' | 'lead.converted'
   | 'ticket.created'  | 'ticket.resolved'
   | 'invoice.created' | 'invoice.paid'
+  | 'product.created' | 'product.updated'  | 'product.deleted'
   | 'form.submitted'
   | 'automation.triggered'
   | 'module.installed' | 'module.disabled';

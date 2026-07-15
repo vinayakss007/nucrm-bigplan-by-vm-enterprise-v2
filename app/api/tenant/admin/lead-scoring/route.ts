@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
       action: 'create_lead_scoring_rule', entityType: 'lead_scoring_rule',
-      entityId: row?.id, newData: { factor, weight },
+      entityId: row?.id, newData: { factor: parsed.data.factor, weight: parsed.data.weight },
     });
 
     return NextResponse.json({ rule: row });
