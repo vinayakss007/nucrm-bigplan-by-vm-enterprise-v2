@@ -203,7 +203,7 @@ test_contacts() {
     
     # Create (with CSRF)
     RESPONSE=$(auth_post "$BASE_URL/api/tenant/contacts" \
-        '{"firstName":"Test","lastName":"User","email":"test@example.com"}')
+        '{"first_name":"Test","last_name":"User","email":"test@example.com"}')
     HTTP_CODE=$(echo "$RESPONSE" | tail -1)
     BODY=$(echo "$RESPONSE" | head -n -1)
     CONTACT_ID=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
