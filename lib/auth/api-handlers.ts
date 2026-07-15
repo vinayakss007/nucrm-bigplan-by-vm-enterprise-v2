@@ -4,7 +4,7 @@ import { users, sessions, tenants, roles, tenantMembers, emailVerifications, pip
 import { onboardingProgress } from '@/drizzle/schema';
 import { isNull } from 'drizzle-orm';
 import { eq, and } from 'drizzle-orm';
-import { hashPassword, verifyPassword, createToken, hashToken, setSessionCookie, clearSessionCookie, validatePassword } from '@/lib/auth/session';
+import { hashPassword, verifyPassword, createToken, hashToken, setSessionCookie, makeSessionCookieString, clearSessionCookie, validatePassword } from '@/lib/auth/session';
 import { generateCsrfToken, setCsrfCookie } from '@/lib/auth/csrf';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendEmail, sendWebhookNotification, sendTelegram } from '@/lib/email/service';
@@ -18,10 +18,43 @@ import { validateBody } from '@/lib/api/validate';
 import { loginSchema, signupSchema } from '@/lib/api/schemas';
 
 // ── Login ─────────────────────────────────────────────────────
+function loginRespond(request: NextRequest, isForm: boolean, data: Record<string, unknown>, status = 200) {
+  if (isForm && status >= 400) {
+    const dest = new URL('/auth/login', request.url);
+    dest.searchParams.set('error', String(data.error || 'Login failed'));
+    return NextResponse.redirect(dest);
+  }
+  return NextResponse.json(data, { status });
+}
+
 export async function POST_login(request: NextRequest) {
+  const contentType = request.headers.get('content-type') || '';
+  const isForm = contentType.includes('application/x-www-form-urlencoded');
   try {
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
     const userAgent = request.headers.get('user-agent') ?? undefined;
+
+    let email: string, password: string, remember_me = false;
+    let totpToken: string | undefined;
+
+    if (isForm) {
+      const formData = await request.formData();
+      email = (formData.get('email') as string) || '';
+      password = (formData.get('password') as string) || '';
+      remember_me = formData.get('remember_me') === 'on';
+      totpToken = (formData.get('totp_token') as string) || undefined;
+      if (!email || !password) {
+        return NextResponse.redirect(new URL('/auth/login?error=missing_fields', request.url));
+      }
+    } else {
+      const body = await request.json();
+      const parsed = validateBody(loginSchema, body);
+      if (parsed instanceof NextResponse) return parsed;
+      email = parsed.data.email;
+      password = parsed.data.password;
+      remember_me = parsed.data.remember_me;
+      totpToken = parsed.data.totp_token;
+    }
 
     // Check if IP is blocked
     const ipBlockCheck = await isBlocked(ip, 'ip');
@@ -31,20 +64,15 @@ export async function POST_login(request: NextRequest) {
         title: 'IP Blocked — Brute Force',
         message: `IP: \`${ip}\`\nBlocked until: ${ipBlockCheck.blockedUntil?.toISOString() ?? 'N/A'}\nUser-Agent: ${userAgent ?? 'N/A'}`,
       }).catch((e) => console.error('[api-handlers] Error:', e));
-      return NextResponse.json({ 
+      return loginRespond(request, isForm, { 
         error: 'Too many login attempts. Please try again later.',
         blocked_until: ipBlockCheck.blockedUntil?.toISOString(),
         retry_after: Math.ceil((ipBlockCheck.blockedUntil?.getTime() ?? Date.now() - Date.now()) / 1000 / 60),
-      }, { status: 429 });
+      }, 429);
     }
 
     const limited = await checkRateLimit(request, { action:'login', max:10, windowMinutes:15 });
     if (limited) return limited;
-
-    const body = await request.json();
-    const parsed = validateBody(loginSchema, body);
-    if (parsed instanceof NextResponse) return parsed;
-    const { email, password, remember_me } = parsed.data;
 
     // Check if email is blocked
     const emailBlockCheck = await isBlocked(email, 'email');
@@ -54,11 +82,11 @@ export async function POST_login(request: NextRequest) {
         title: 'Account Blocked — Brute Force',
         message: `Email: \`${email}\`\nIP: \`${ip}\`\nBlocked until: ${emailBlockCheck.blockedUntil?.toISOString() ?? 'N/A'}`,
       }).catch((e) => console.error('[api-handlers] Error:', e));
-      return NextResponse.json({ 
+      return loginRespond(request, isForm, { 
         error: 'Too many login attempts for this account. Please try again later.',
         blocked_until: emailBlockCheck.blockedUntil?.toISOString(),
         retry_after: Math.ceil((emailBlockCheck.blockedUntil?.getTime() ?? Date.now() - Date.now()) / 1000 / 60),
-      }, { status: 429 });
+      }, 429);
     }
 
     const [user] = await db.select()
@@ -69,7 +97,7 @@ export async function POST_login(request: NextRequest) {
     if (!user || !user.passwordHash || !await verifyPassword(password, user.passwordHash)) {
       await recordFailedAttempt(email, ip, userAgent, 'Invalid credentials');
       logger.warn('Login failed', { email, ip });
-      return NextResponse.json({ error:'Invalid email or password' }, { status:401 });
+      return loginRespond(request, isForm, { error:'Invalid email or password' }, 401);
     }
 
     // Record successful login
@@ -78,18 +106,17 @@ export async function POST_login(request: NextRequest) {
     // Email verification check (soft — warn but don't block, unless platform requires it)
     const requireVerify = process.env['REQUIRE_EMAIL_VERIFY'] === 'true';
     if (requireVerify && !user.emailVerified && !user.isSuperAdmin) {
-      return NextResponse.json({
+      return loginRespond(request, isForm, {
         error: 'Please verify your email address before signing in.',
         needs_verification: true,
         email: user.email,
-      }, { status: 403 });
+      }, 403);
     }
 
     // 2FA check
     if (user.totpEnabled) {
-      const totpToken = body.totp_token;
       if (!totpToken) {
-        return NextResponse.json({ requires_2fa: true, email: user.email }, { status: 200 });
+        return loginRespond(request, isForm, { requires_2fa: true, email: user.email }, 200);
       }
       
       const b32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -121,7 +148,7 @@ export async function POST_login(request: NextRequest) {
             .catch((e) => devLogger.warn('[Auth] Failed to update backup codes', e));
         }
       }
-      if (!valid) return NextResponse.json({ error:'Invalid 2FA code', requires_2fa:true }, { status:401 });
+      if (!valid) return loginRespond(request, isForm, { error:'Invalid 2FA code', requires_2fa:true }, 401);
     }
 
     // Create session
@@ -136,20 +163,28 @@ export async function POST_login(request: NextRequest) {
       userAgent: userAgent?.slice(0, 255),
     });
 
+    const sessionCookieStr = makeSessionCookieString(token, sessionDays);
     await setSessionCookie(token, sessionDays);
     const csrfToken = generateCsrfToken();
+    if (isForm) {
+      const dest = new URL('/tenant/dashboard', request.url);
+      const redirectRes = NextResponse.redirect(dest);
+      redirectRes.headers.set('Set-Cookie', sessionCookieStr);
+      redirectRes.headers.append('Set-Cookie', setCsrfCookie(csrfToken, process.env.NODE_ENV === 'production'));
+      return redirectRes;
+    }
     const response = NextResponse.json({ 
       ok:true,
       user:{ id:user.id, email:user.email, full_name:user.fullName, is_super_admin:user.isSuperAdmin } 
     });
     response.headers.append('Set-Cookie', setCsrfCookie(csrfToken, process.env.NODE_ENV === 'production'));
     return response;
- 
- 
+  
+  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err:any) {
     devLogger.error(err as Error, '[auth/login]');
-    return NextResponse.json({ error:'Login failed. Please try again.' }, { status:500 });
+    return loginRespond(request, isForm, { error:'Login failed. Please try again.' }, 500);
   }
 }
 

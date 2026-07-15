@@ -10,6 +10,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
+import { cache } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -67,9 +68,12 @@ export async function GET(request: NextRequest) {
     .limit(limit)
     .offset(offset);
 
-    return NextResponse.json({ data, total: countRes?.count ?? 0 });
- 
- 
+    const response = { data, total: countRes?.count ?? 0 };
+    const cacheKey = `tenant:${ctx.tenantId}:tasks:${searchParams.toString()}`;
+    cache.set(cacheKey, response, 30);
+    return NextResponse.json(response);
+  
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[tasks GET]', err);

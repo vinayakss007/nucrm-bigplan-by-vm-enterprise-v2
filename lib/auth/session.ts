@@ -79,6 +79,12 @@ export async function setSessionCookie(token: string, maxAgeDays?: number) {
   });
 }
 
+export function makeSessionCookieString(token: string, maxAgeDays?: number): string {
+  const maxAge = (maxAgeDays ?? SESSION_EXPIRES_DAYS) * 24 * 60 * 60;
+  const secure = process.env['COOKIE_SECURE'] === 'false' ? false : process.env['NODE_ENV'] === 'production';
+  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
+}
+
 export async function getSessionToken(): Promise<string | null> {
   const cookieStore = await cookies();
   return cookieStore.get(SESSION_COOKIE)?.value ?? null;
