@@ -1,51 +1,13 @@
-'use client';
-export const dynamic = 'force-dynamic';
-
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { Loader2, Eye, EyeOff, Mail, Lock, Shield, BarChart3,
-  Users, Cpu, CheckCircle, ArrowRight, X
-} from 'lucide-react';
-import toast from 'react-hot-toast';
-import { useFormValidation } from '@/lib/hooks/use-form-validation';
-
-
-const validationRules = {
-  email: {
-    required: true,
-    pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-  },
-  password: {
-    required: true,
-    minLength: 1,
-  },
-};
+import { Suspense } from 'react';
+import LoginForm from './login-form';
 
 export default function LoginPage() {
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
-  const searchParams = useSearchParams();
-  const { errors, touched, validate, touch, validateAll } = useFormValidation(validationRules);
-
-  useEffect(() => {
-    const errMsg = searchParams.get('error');
-    if (errMsg) setError(errMsg);
-  }, [searchParams]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('nucrm_remember');
-    if (saved) {
-      try {
-        const { email: savedEmail } = JSON.parse(saved);
-        if (savedEmail) { setEmail(savedEmail); setRememberMe(true); }
-      } catch { /* ignore corrupted */ }
-    }
-  }, []);
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
 
   async function handleLogin() {
     const values = { email, password };
