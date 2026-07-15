@@ -446,6 +446,7 @@ export function DataTable<TData, TValue>({
                   <td colSpan={columns.length} style={{ padding: 0, height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
                     {virtualizer.getVirtualItems().map((virtualRow) => {
                       const row = table.getRowModel().rows[virtualRow.index]
+                      if (!row) return null
                       return (
                         <div
                           key={row.id}
