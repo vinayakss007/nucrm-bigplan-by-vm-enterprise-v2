@@ -12,6 +12,7 @@ import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
+import { cache } from '@/lib/cache';
 
  
  
@@ -94,9 +95,12 @@ export async function GET(request: NextRequest) {
     .limit(limit)
     .offset(offset);
 
-    return NextResponse.json({ data, total: countResult?.count ?? 0, offset, limit });
- 
- 
+    const response = { data, total: countResult?.count ?? 0, offset, limit };
+    const cacheKey = `tenant:${ctx.tenantId}:contacts:${searchParams.toString()}`;
+    cache.set(cacheKey, response, 30);
+    return NextResponse.json(response);
+  
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[contacts GET]', err);

@@ -10,6 +10,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
+import { cache } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,6 +27,10 @@ export async function GET(request: NextRequest) {
     });
     if (query instanceof NextResponse) return query;
     const { offset, limit, stage_id, stage: _stage, pipeline_id, q } = query.data;
+
+    const cacheKey = `tenant:${ctx.tenantId}:deals:${searchParams.toString()}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return NextResponse.json(cached);
 
     const filters = [
       eq(deals.tenantId, ctx.tenantId),
@@ -72,9 +77,10 @@ export async function GET(request: NextRequest) {
     .limit(limit)
     .offset(offset);
 
-    return NextResponse.json({ data, total: countResult?.count ?? 0 });
- 
- 
+    const response = { data, total: countResult?.count ?? 0 };
+    cache.set(cacheKey, response, 30);
+    return NextResponse.json(response);
+  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[tenant deals GET]', err);
@@ -188,9 +194,9 @@ export async function POST(request: NextRequest) {
 
     fireWebhooks(ctx.tenantId, 'deal.created', { id: deal.id, title: deal.title, amount }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
+    cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`);
     return NextResponse.json({ data: deal }, { status: 201 });
- 
- 
+  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[tenant deals POST]', err);

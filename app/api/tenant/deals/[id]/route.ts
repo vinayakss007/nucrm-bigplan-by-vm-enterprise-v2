@@ -10,6 +10,7 @@ import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { notifyTenantMembers } from '@/lib/notifications';
 import { logError } from '@/lib/errors-server';
+import { cache } from '@/lib/cache';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -189,9 +190,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
 
+    cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`);
     return NextResponse.json({ data: row });
- 
- 
+  
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[deals [id] PATCH]', err);
@@ -237,6 +239,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     fireWebhooks(ctx.tenantId, 'deal.deleted', { id: dealId }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
+    cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`);
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
  
  

@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Loader2, Eye, EyeOff, Mail, Lock, Shield, BarChart3,
   Users, Cpu, CheckCircle, ArrowRight, X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFormValidation } from '@/lib/hooks/use-form-validation';
+
 
 const validationRules = {
   email: {
@@ -25,13 +27,28 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const searchParams = useSearchParams();
   const { errors, touched, validate, touch, validateAll } = useFormValidation(validationRules);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  useEffect(() => {
+    const errMsg = searchParams.get('error');
+    if (errMsg) setError(errMsg);
+  }, [searchParams]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('nucrm_remember');
+    if (saved) {
+      try {
+        const { email: savedEmail } = JSON.parse(saved);
+        if (savedEmail) { setEmail(savedEmail); setRememberMe(true); }
+      } catch { /* ignore corrupted */ }
+    }
+  }, []);
+
+  async function handleLogin() {
     const values = { email, password };
     if (!validateAll(values)) {
-      setLoading(false);
       return;
     }
     setLoading(true);
@@ -42,11 +59,16 @@ export default function LoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email, password, remember_me: false }),
+        body: JSON.stringify({ email, password, remember_me: rememberMe }),
       });
 
       const data = await res.json();
       if (res.ok) {
+        if (rememberMe) {
+          localStorage.setItem('nucrm_remember', JSON.stringify({ email }));
+        } else {
+          localStorage.removeItem('nucrm_remember');
+        }
         toast.success('Welcome back!');
         setLoading(false);
         setTimeout(() => {
@@ -144,7 +166,7 @@ export default function LoginPage() {
             )}
 
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form noValidate onSubmit={(e) => e.preventDefault()} className="space-y-5">
               {/* Email field */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Email address</label>
@@ -192,9 +214,10 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onBlur={() => touch('password') && validate('password', password)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                     aria-invalid={!!errors.password}
                     aria-describedby={errors.password ? 'password-error' : undefined}
-                    className={`w-full pl-11 pr-12 py-3.5 rounded-xl border bg-white text-sm font-medium focus:outline-none focus:ring-2 placeholder:text-slate-400 transition-all min-h-[44px] ${
+                    className={`w-full pl-11 pr-14 py-3.5 rounded-xl border bg-white text-sm font-medium focus:outline-none focus:ring-2 placeholder:text-slate-400 transition-all min-h-[44px] ${
                       errors.password && touched.password
                         ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
                         : 'border-slate-200 focus:border-violet-500 focus:ring-violet-500/20'
@@ -204,7 +227,7 @@ export default function LoginPage() {
                     type="button"
                     tabIndex={-1}
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all flex items-center justify-center"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -220,6 +243,8 @@ export default function LoginPage() {
                   <input
                     type="checkbox"
                     name="remember_me"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
                     className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-violet-600 focus:ring-violet-500 dark:bg-slate-800"
                   />
                   <span className="text-sm text-slate-600 dark:text-slate-400">Remember me</span>
@@ -228,7 +253,8 @@ export default function LoginPage() {
 
               {/* Submit button */}
               <button
-                type="submit"
+                type="button"
+                onClick={handleLogin}
                 disabled={loading}
                 className="w-full py-3.5 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 disabled:opacity-50 disabled:hover:bg-slate-900 transition-all duration-200 flex items-center justify-center gap-2.5 min-h-[44px]"
               >

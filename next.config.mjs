@@ -10,10 +10,29 @@ if (distDir !== '.next' && !fs.existsSync(distDir)) {
   console.log(`[next.config] Created distDir: ${distDir}`);
 }
 
+// allowedDevOrigins — auto-detect external IP so dev server works from any network
+const origins = ['localhost:3000'];
+let externalIp = process.env.EXTERNAL_IP;
+if (!externalIp) {
+  try {
+    externalIp = (await import('node:child_process')).execSync('curl -s ifconfig.me --connect-timeout 5').toString().trim();
+  } catch {
+    try {
+      externalIp = (await import('node:child_process')).execSync('dig +short myip.opendns.com @resolver1.opendns.com -4 2>/dev/null').toString().trim();
+    } catch {}
+  }
+}
+if (externalIp) {
+  origins.push(externalIp, `${externalIp}:3000`);
+  console.log(`[next.config] External IP detected: ${externalIp}`);
+} else {
+  console.warn('[next.config] Could not detect external IP — add EXTERNAL_IP env var if needed');
+}
+
 /** @type {import('next').NextConfig} */
 let nextConfig = {
   distDir,
-  allowedDevOrigins: ['localhost:3000', '34.70.191.180'],
+  allowedDevOrigins: origins,
   typescript: { ignoreBuildErrors: false },
   devIndicators: { buildActivity: false },
   cacheMaxMemorySize: 50 * 1024 * 1024,
@@ -58,7 +77,9 @@ let nextConfig = {
       headers: [{ key: 'Cache-Control', value: 'public, max-age=60' }],
     }, {
       source: '/_next/static/:path*',
-      headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      headers: process.env.NODE_ENV === 'production'
+        ? [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }]
+        : [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }],
     }];
   },
 };
@@ -68,4 +89,15 @@ if (process.env.SENTRY_ORG && process.env.SENTRY_PROJECT && process.env.SENTRY_A
     nextConfig = withSentryConfig(nextConfig, { org: process.env.SENTRY_ORG, project: process.env.SENTRY_PROJECT, authToken: process.env.SENTRY_AUTH_TOKEN, silent: true, widenClientFileUpload: true, hideSourceMaps: true });
   } catch (e) { console.error('[next.config] Sentry config failed:', e); }
 }
+// Bundle analyzer for `ANALYZE=true npm run build`
+if (process.env.ANALYZE === 'true') {
+  const withBundleAnalyzer = (await import('@next/bundle-analyzer')).default({
+    enabled: true,
+    openAnalyzer: true,
+    analyzerMode: 'static',
+    reportTitle: 'NuCRM Bundle Analysis',
+  });
+  nextConfig = withBundleAnalyzer(nextConfig);
+}
+
 export default nextConfig;
