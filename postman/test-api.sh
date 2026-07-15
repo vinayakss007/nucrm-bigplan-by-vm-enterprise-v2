@@ -219,7 +219,7 @@ test_contacts() {
                 -H "Authorization: Bearer $API_KEY" \
                 -H "Content-Type: application/json" \
                 -X POST "$BASE_URL/api/tenant/contacts" \
-                -d '{"firstName":"Test","lastName":"User","email":"test@example.com"}')
+                -d '{"first_name":"Test","last_name":"User","email":"test@example.com"}')
             HTTP_CODE=$(echo "$RESPONSE" | tail -1)
             BODY=$(echo "$RESPONSE" | head -n -1)
             CONTACT_ID=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
@@ -236,7 +236,7 @@ test_contacts() {
         [ "$HTTP_CODE" = "200" ] && pass "GET /contacts/$CONTACT_ID" || fail "GET /contacts/$CONTACT_ID (HTTP $HTTP_CODE)"
         
         # Update
-        RESPONSE=$(auth_put "$BASE_URL/api/tenant/contacts/$CONTACT_ID" '{"firstName":"Updated"}')
+        RESPONSE=$(auth_put "$BASE_URL/api/tenant/contacts/$CONTACT_ID" '{"first_name":"Updated"}')
         HTTP_CODE=$(echo "$RESPONSE" | tail -1)
         [ "$HTTP_CODE" = "200" ] && pass "PUT /contacts/$CONTACT_ID" || warn "PUT /contacts → HTTP $HTTP_CODE (use API key)"
         
@@ -258,7 +258,7 @@ test_leads() {
     [ "$HTTP_CODE" = "200" ] && pass "GET /leads" || fail "GET /leads (HTTP $HTTP_CODE)"
     
     RESPONSE=$(auth_post "$BASE_URL/api/tenant/leads" \
-        '{"firstName":"New","lastName":"Lead","email":"newlead@test.com","source":"test"}')
+        '{"first_name":"New","last_name":"Lead","email":"newlead@test.com","source":"test"}')
     HTTP_CODE=$(echo "$RESPONSE" | tail -1)
     [ "$HTTP_CODE" = "201" ] && pass "POST /leads" || warn "POST /leads → HTTP $HTTP_CODE (CSRF or use API key)"
 }
@@ -343,7 +343,7 @@ test_security() {
     RESPONSE=$(curl -s -w "\n%{http_code}" -b "$COOKIE_FILE" \
         -X POST "$BASE_URL/api/tenant/contacts" \
         -H "Content-Type: application/json" \
-        -d '{"firstName":"Hacker","lastName":"Test"}')
+        -d '{"first_name":"Hacker","last_name":"Test"}')
     HTTP_CODE=$(echo "$RESPONSE" | tail -1)
     [ "$HTTP_CODE" = "403" ] && pass "CSRF protection active (403 without token)" || warn "CSRF response: HTTP $HTTP_CODE"
     
