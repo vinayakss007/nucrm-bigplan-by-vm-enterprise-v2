@@ -1,169 +1,149 @@
 const CACHE_PREFIX = 'nucrm_cache_';
 const DEFAULT_TTL = 5 * 60 * 1000;
 
-export interface CacheEntry<T> {
+interface CacheEntry<T> {
   data: T;
   timestamp: number;
   ttl: number;
-  userId: string;
 }
 
-export interface CacheConfig {
+interface CacheConfig {
   ttl?: number;
-  staleWhileRevalidate?: boolean;
+  skipCache?: boolean;
+  forceRefresh?: boolean;
 }
 
-function getCacheKey(key: string, userId?: string): string {
-  return `${CACHE_PREFIX}${userId ? `${userId}_` : ''}${key}`;
+const store = new Map<string, CacheEntry<unknown>>();
+
+function getKey(key: string): string {
+  return `${CACHE_PREFIX}${key}`;
 }
 
-function isValid<T>(entry: CacheEntry<T>, userId: string): boolean {
+function isValid<T>(entry: CacheEntry<T>): boolean {
   if (!entry) return false;
-  if (entry.userId !== userId) return false;
-  const age = Date.now() - entry.timestamp;
-  return age < entry.ttl;
+  return Date.now() - entry.timestamp < entry.ttl;
 }
 
-function isStale<T>(entry: CacheEntry<T>): boolean {
-  if (!entry) return true;
-  const age = Date.now() - entry.timestamp;
-  return age >= entry.ttl;
-}
-
-export function getFromCache<T>(key: string, userId: string): T | null {
+export function getFromCache<T>(key: string): T | null {
   try {
-    const cacheKey = getCacheKey(key, userId);
-    const item = localStorage.getItem(cacheKey);
-    if (!item) return null;
-    const entry = JSON.parse(item) as CacheEntry<T>;
-    if (!isValid(entry, userId)) {
-      localStorage.removeItem(cacheKey);
+    const entry = localStorage.getItem(getKey(key));
+    if (!entry) return null;
+    const parsed = JSON.parse(entry) as CacheEntry<T>;
+    if (!isValid(parsed)) {
+      localStorage.removeItem(getKey(key));
       return null;
     }
-    return entry.data;
-  } catch (err) {
-    console.error('[Cache] Get error:', err);
+    return parsed.data;
+  } catch {
     return null;
   }
 }
 
-export function setInCache<T>(key: string, data: T, userId: string, config?: CacheConfig): void {
+export function setInCache<T>(key: string, data: T, config?: { ttl?: number }): void {
   try {
-    const cacheKey = getCacheKey(key, userId);
-    const entry: CacheEntry<T> = {
-      data,
-      timestamp: Date.now(),
-      ttl: config?.ttl ?? DEFAULT_TTL,
-      userId,
-    };
-    localStorage.setItem(cacheKey, JSON.stringify(entry));
+    const entry: CacheEntry<T> = { data, timestamp: Date.now(), ttl: config?.ttl ?? DEFAULT_TTL };
+    localStorage.setItem(getKey(key), JSON.stringify(entry));
     console.log(`[Cache] Stored: ${key}`);
   } catch (err) {
-    console.error('[Cache] Set error:', err);
-    if (err instanceof DOMException && err.name === 'QuotaExceededError') {
-      console.warn('[Cache] Storage quota exceeded, clearing old entries...');
-      clearExpiredCache();
+    const isQuota = (err as Error)?.name === 'QuotaExceededError';
+    if (isQuota) {
+      if (typeof console.warn === 'function') console.warn('[Cache] Storage quota exceeded, clearing old entries...');
+      clearExpired();
+    } else {
+      if (typeof console.error === 'function') console.error('[Cache] Set error:', err);
     }
   }
 }
 
-export function getStaleData<T>(key: string, userId: string): T | null {
+export function removeFromCache(key: string): void {
   try {
-    const cacheKey = getCacheKey(key, userId);
-    const item = localStorage.getItem(cacheKey);
-    if (!item) return null;
-    const entry = JSON.parse(item) as CacheEntry<T>;
-    return entry.data ?? null;
-  } catch (err) {
-    console.error('[Cache] Get stale error:', err);
-    return null;
-  }
-}
-
-export function removeFromCache(key: string, userId: string): void {
-  try {
-    const cacheKey = getCacheKey(key, userId);
-    localStorage.removeItem(cacheKey);
+    localStorage.removeItem(getKey(key));
     console.log(`[Cache] Removed: ${key}`);
   } catch (err) {
-    console.error('[Cache] Remove error:', err);
+    if (typeof console.error === 'function') console.error('[Cache] Remove error:', err);
   }
 }
 
-export function clearUserCache(userId: string): void {
+export function clearAll(): void {
   try {
-    const prefix = getCacheKey('', userId);
-    const keysToRemove: string[] = [];
+    const keys: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(prefix)) {
-        keysToRemove.push(key);
-      }
+      const k = localStorage.key(i);
+      if (k?.startsWith(CACHE_PREFIX)) keys.push(k);
     }
-    keysToRemove.forEach(key => localStorage.removeItem(key));
-  } catch (err) {
-    console.error('[Cache] Clear user error:', err);
-  }
-}
-
-export function clearExpiredCache(): void {
-  try {
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key?.startsWith(CACHE_PREFIX)) continue;
-      try {
-        const item = localStorage.getItem(key);
-        if (!item) continue;
-        const entry = JSON.parse(item) as CacheEntry<unknown>;
-        if (isStale(entry)) {
-          keysToRemove.push(key);
-        }
-      } catch {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach(key => localStorage.removeItem(key));
-  } catch (err) {
-    console.error('[Cache] Clear expired error:', err);
-  }
-}
-
-export function clearAllCache(): void {
-  try {
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(CACHE_PREFIX)) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach(key => localStorage.removeItem(key));
+    keys.forEach(k => localStorage.removeItem(k));
     console.log('[Cache] Cleared all cache');
   } catch (err) {
-    console.error('[Cache] Clear all error:', err);
+    if (typeof console.error === 'function') console.error('[Cache] Clear all error:', err);
   }
 }
 
-export function getCacheStats(): { total: number; size: number; entries: Array<{ key: string; age: number }> } {
-  const entries: Array<{ key: string; age: number }> = [];
-  let totalSize = 0;
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key?.startsWith(CACHE_PREFIX)) continue;
-    const item = localStorage.getItem(key);
-    if (item) {
-      totalSize += item.length;
-      try {
-        const entry = JSON.parse(item) as CacheEntry<unknown>;
-        entries.push({
-          key: key.replace(CACHE_PREFIX, ''),
-          age: Date.now() - entry.timestamp,
-        });
-      } catch {
-        entries.push({ key: key.replace(CACHE_PREFIX, ''), age: -1 });
+export function invalidateByPattern(pattern: string): void {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(CACHE_PREFIX) && k.includes(pattern)) keys.push(k);
+    }
+    keys.forEach(k => localStorage.removeItem(k));
+  } catch (err) {
+    console.error('[Cache] Invalidate error:', err);
+  }
+}
+
+export function getCacheStats(): { entries: number; enabled: boolean; size: number } {
+  let entries = 0;
+  let size = 0;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(CACHE_PREFIX)) {
+        entries++;
+        const item = localStorage.getItem(k);
+        if (item) size += item.length;
       }
     }
-  }
-  return { total: entries.length, size: totalSize, entries };
+  } catch { /* ignore */ }
+  return { entries, enabled: true, size };
 }
+
+export async function fetchWithCache<T>(key: string, fetcher: () => Promise<T>, options?: CacheConfig): Promise<T> {
+  if (!options?.skipCache && !options?.forceRefresh) {
+    const cached = getFromCache<T>(key);
+    if (cached !== null) return cached;
+  }
+  const data = await fetcher();
+  if (!options?.skipCache) setInCache(key, data);
+  return data;
+}
+
+function clearExpired(): void {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k?.startsWith(CACHE_PREFIX)) continue;
+      try {
+        const item = localStorage.getItem(k);
+        if (!item) continue;
+        const entry = JSON.parse(item) as CacheEntry<unknown>;
+        if (Date.now() - entry.timestamp >= entry.ttl) keys.push(k);
+      } catch { keys.push(k); }
+    }
+    keys.forEach(k => localStorage.removeItem(k));
+  } catch { /* ignore */ }
+}
+
+export const CacheKeys = {
+  userProfile: (userId: string) => `user:${userId}:profile`,
+  tenantInfo: (tenantId: string) => `tenant:${tenantId}:info`,
+  contactsList: (tenantId: string, filters?: Record<string, unknown>) =>
+    `tenant:${tenantId}:contacts:${JSON.stringify(filters ?? {})}`,
+  dealsList: (tenantId: string, pipelineId?: string) =>
+    `tenant:${tenantId}:deals:${pipelineId ?? 'all'}`,
+  platformStats: () => 'superadmin:platform:stats',
+  tenantSettings: (tenantId: string) => `tenant:${tenantId}:settings`,
+  dashboardStats: (tenantId: string) => `tenant:${tenantId}:dashboard:stats`,
+  orgSettings: (tenantId: string) => `org:${tenantId}:settings`,
+  notifications: (userId: string) => `user:${userId}:notifications`,
+};
