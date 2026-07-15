@@ -111,13 +111,13 @@ export const createAiTemplateSchema = z.object({
 // ── Hierarchy schemas (tenant admin) ──
 export const createHierarchySchema = z.object({
   childTenantId: z.string().uuid(),
-  relationship: z.enum(['parent', 'child', 'partner']).default('parent'),
+  relationship: z.enum(['parent', 'division', 'franchise', 'branch']).default('parent'),
   permissions: z.array(z.string().max(100)).optional(),
 });
 
 export const updateHierarchySchema = z.object({
   id: z.string().uuid(),
-  relationship: z.enum(['parent', 'child', 'partner']),
+  relationship: z.enum(['parent', 'division', 'franchise', 'branch']),
 });
 
 export const deleteHierarchySchema = z.object({
