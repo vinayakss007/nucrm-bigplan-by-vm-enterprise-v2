@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import useSWR from 'swr';
 import { TrendingUp, DollarSign, BarChart3, Target } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
