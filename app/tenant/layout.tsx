@@ -4,6 +4,7 @@ import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import TenantShell from '@/components/tenant/layout/shell';
 import BrandingProvider from '@/components/branding/branding-provider';
+import PlanFeatureScript from '@/components/tenant/layout/plan-feature-script';
 import { tenantToBranding } from '@/lib/branding';
 
 export const dynamic = 'force-dynamic';
@@ -43,11 +44,7 @@ export default async function TenantLayout({ children }: { children: React.React
 
   return (
     <BrandingProvider branding={branding}>
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `window.__NUCRM_PLAN_FEATURES__=${planFeatures};window.__NUCRM_IS_SUPER_ADMIN__=${isSuperAdmin};`,
-        }}
-      />
+      <PlanFeatureScript planFeatures={planFeatures} isSuperAdmin={isSuperAdmin} />
       <TenantShell
         tenant={tenant} 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
