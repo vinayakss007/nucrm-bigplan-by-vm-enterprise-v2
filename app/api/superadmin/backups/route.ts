@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
       await db
         .update(backupRecords)
         .set({ 
-          metadata: { ...((backup as { metadata?: Record<string, unknown> }).metadata || {}), tenant_id } 
+          metadata: { ...((backup as { metadata?: Record<string, unknown> }).metadata || {}), tenant_id: parsed.data.tenant_id } 
         })
         .where(eq(backupRecords.id, backup.id));
     }
