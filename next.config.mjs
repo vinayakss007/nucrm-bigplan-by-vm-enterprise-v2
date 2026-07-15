@@ -32,7 +32,6 @@ if (externalIp) {
 /** @type {import('next').NextConfig} */
 let nextConfig = {
   distDir,
-<<<<<<< HEAD
   allowedDevOrigins: origins,
   typescript: { ignoreBuildErrors: false },
   devIndicators: { buildActivity: false },
@@ -80,7 +79,6 @@ let nextConfig = {
       source: '/_next/static/:path*',
       headers: process.env.NODE_ENV === 'production'
         ? [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }]
-<<<<<<< HEAD
         : [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }],
     }];
   },

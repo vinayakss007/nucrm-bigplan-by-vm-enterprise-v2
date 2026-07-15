@@ -42,11 +42,11 @@ afterEach(() => {
 });
 
 describe('cache', () => {
-  let cache: typeof import('@/lib/cache');
+  let cache: typeof import('@/lib/client-cache');
 
   beforeEach(async () => {
     vi.resetModules();
-    cache = await import('@/lib/cache');
+    cache = await import('@/lib/client-cache');
   });
 
   describe('getFromCache', () => {

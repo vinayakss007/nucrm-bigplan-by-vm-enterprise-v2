@@ -9,7 +9,6 @@ import CsrfProvider from '@/components/shared/csrf-provider';
 import { ServiceWorkerRegistration } from '@/components/shared/service-worker-registration';
 import { SkipLink } from '@/components/ui/skip-link';
 import { I18nProvider } from '@/lib/i18n/provider';
-import Script from 'next/script';
 import { ConfirmPolyfill } from '@/components/shared/confirm-polyfill';
 import './globals.css';
 
