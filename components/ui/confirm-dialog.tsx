@@ -113,7 +113,7 @@ export async function confirmThen(message: string, action: () => void | Promise<
           </div>
         </div>
       ),
-      { duration: 8000, onClose: () => { if (activeConfirmToastId === toastId) activeConfirmToastId = null; } }
+      { duration: 8000 }
     );
     activeConfirmToastId = toastId;
   });
