@@ -29,7 +29,7 @@ export default function SuperAdminHeader({ profile, stats, onToggleSidebar }: { 
     await confirmThen('Are you sure you want to log out?', async () => {
       await fetch('/api/auth/logout', { method:'POST' });
       router.push('/auth/login');
-    });
+    }, 'danger_only', 'Log out');
   };
 
   return (

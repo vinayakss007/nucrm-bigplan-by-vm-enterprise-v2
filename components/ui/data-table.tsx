@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useVirtualizer } from "@tanstack/react-virtual"
 import {
   flexRender,
   getCoreRowModel,
@@ -73,6 +74,7 @@ export interface DataTableProps<TData, TValue> {
   manualPagination?: boolean
   pageIndex?: number
   onPaginationChange?: (page: number) => void
+  virtualize?: boolean
 }
 
 export interface BulkAction {
@@ -121,6 +123,7 @@ export function DataTable<TData, TValue>({
   manualPagination = false,
   pageIndex: externalPageIndex,
   onPaginationChange,
+  virtualize = false,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = React.useState(externalGlobalFilter || "")
@@ -128,10 +131,8 @@ export function DataTable<TData, TValue>({
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
   const [internalPageIndex, _setInternalPageIndex] = React.useState(0)
   const [internalPageSize, setInternalPageSize] = React.useState(pageSize)
-  const [focusedRow, setFocusedRow] = React.useState(-1)
   const [bulkActionInput, setBulkActionInput] = React.useState<Record<string, string>>({})
   const [activeBulkAction, setActiveBulkAction] = React.useState<string | null>(null)
-  const tableRef = React.useRef<HTMLDivElement>(null)
 
   const pageIndex = externalPageIndex ?? internalPageIndex
   const currentPageSize = onPageSizeChange ? pageSize : internalPageSize
@@ -142,19 +143,6 @@ export function DataTable<TData, TValue>({
       setGlobalFilter(externalGlobalFilter)
     }
   }, [externalGlobalFilter])
-
-  // Sync focused row with DOM
-  React.useEffect(() => {
-    const rows = tableRef.current?.querySelectorAll('[data-row-index]');
-    rows?.forEach((row, i) => {
-      if (i === focusedRow) {
-        (row as HTMLElement).focus();
-        (row as HTMLElement).setAttribute('data-focused', 'true');
-      } else {
-        (row as HTMLElement).setAttribute('data-focused', 'false');
-      }
-    });
-  }, [focusedRow, data]);
 
   const table = useReactTable({
     data,
@@ -186,6 +174,16 @@ export function DataTable<TData, TValue>({
     rowCount: total ?? data.length,
     enableRowSelection,
     enableMultiRowSelection: enableRowSelection,
+  })
+
+  const tableContainerRef = React.useRef<HTMLDivElement>(null)
+
+  const virtualizer = useVirtualizer({
+    count: virtualize ? table.getRowModel().rows.length : 0,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => 48,
+    overscan: 5,
+    enabled: virtualize,
   })
 
   const selectedIds = React.useMemo(() => {
@@ -424,14 +422,8 @@ export function DataTable<TData, TValue>({
       )}
 
       {/* Table */}
-      <div ref={tableRef} tabIndex={-1} className="rounded-md border overflow-x-auto scrollbar-thin focus:outline-none"
-        onKeyDown={(e) => {
-          const rows = tableRef.current?.querySelectorAll('[data-row-index]');
-          if (!rows?.length) return;
-          if (e.key === 'ArrowDown') { e.preventDefault(); setFocusedRow(i => Math.min(i + 1, rows.length - 1)); }
-          else if (e.key === 'ArrowUp') { e.preventDefault(); setFocusedRow(i => Math.max(i - 1, 0)); }
-          else if (e.key === 'Enter' && focusedRow >= 0) { (rows[focusedRow] as HTMLElement)?.click(); }
-        }}>
+      <div ref={tableContainerRef} className="rounded-md border overflow-x-auto overflow-y-auto scrollbar-thin focus:outline-none"
+        style={virtualize ? { maxHeight: 600 } : undefined}>
         <div className="sm:min-w-[600px] min-w-[400px]">
         <Table>
           <TableHeader>
@@ -449,21 +441,59 @@ export function DataTable<TData, TValue>({
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row, idx) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                  data-row-index={idx}
-                  tabIndex={0}
-                  className="focus:outline-none focus:bg-accent/50 cursor-pointer"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              virtualize ? (
+                <tr>
+                  <td colSpan={columns.length} style={{ padding: 0, height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
+                    {virtualizer.getVirtualItems().map((virtualRow) => {
+                      const row = table.getRowModel().rows[virtualRow.index]
+                      return (
+                        <div
+                          key={row.id}
+                          ref={virtualizer.measureElement}
+                          data-index={virtualRow.index}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: `${virtualRow.size}px`,
+                            transform: `translateY(${virtualRow.start}px)`,
+                          }}
+                        >
+                          <TableRow
+                            data-state={row.getIsSelected() && "selected"}
+                            data-row-index={virtualRow.index}
+                            tabIndex={0}
+                            className="focus:outline-none focus:bg-accent/50 cursor-pointer"
+                          >
+                            {row.getVisibleCells().map((cell) => (
+                              <TableCell key={cell.id}>
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        </div>
+                      )
+                    })}
+                  </td>
+                </tr>
+              ) : (
+                table.getRowModel().rows.map((row, idx) => (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() && "selected"}
+                    data-row-index={idx}
+                    tabIndex={0}
+                    className="focus:outline-none focus:bg-accent/50 cursor-pointer"
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              )
             ) : (
               <TableRow>
                 <TableCell

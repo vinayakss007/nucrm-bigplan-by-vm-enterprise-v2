@@ -26,7 +26,7 @@ export default function SuperAdminShell({ user, stats, children }: { user: any; 
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="dark flex h-screen overflow-hidden bg-background">
       {/* Mobile overlay */}
       {mobileOpen && (
         <div 

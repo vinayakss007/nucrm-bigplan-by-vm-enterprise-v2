@@ -208,3 +208,26 @@ jobs:
           name: build-output
           path: .next/
           retention-days: 3
+
+  perf-budget:
+    name: Performance Budget
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: .next/
+
+      - name: Check bundle size thresholds
+        run: npx tsx scripts/analyze-bundle.ts

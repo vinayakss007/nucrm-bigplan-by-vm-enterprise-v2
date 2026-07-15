@@ -13,7 +13,7 @@ export default function PlanLimitBanner() {
     const abort = new AbortController();
     fetch('/api/tenant/usage-status', { signal: abort.signal }).then(r => r.json()).then(d => {
       if (!abort.signal.aborted && d.data) setStatus(d.data);
-    }).catch((e) => console.error('[plan-limit-banner] Error:', e));
+    }).catch((e) => { if (e.name !== 'AbortError') console.error('[plan-limit-banner] Error:', e); });
     return () => abort.abort();
   }, []);
 
