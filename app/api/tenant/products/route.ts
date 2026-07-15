@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { products } from '@/drizzle/schema';
-import { eq, and, desc, sql, isNull, ilike } from 'drizzle-orm';
+import { eq, and, desc, sql, isNull, ilike, type SQL } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
     const q = searchParams.get('q')?.trim() ?? '';
 
-    const filters: (typeof import('drizzle-orm').eq)[] = [
+    const filters: SQL<unknown>[] = [
       eq(products.tenantId, ctx.tenantId),
       isNull(products.deletedAt),
     ];
@@ -88,6 +88,10 @@ export async function POST(request: NextRequest) {
       sku: v.sku ?? null,
       basePrice: String(v.base_price),
     }).returning();
+
+    if (!inserted) {
+      return NextResponse.json({ error: 'Failed to create product' }, { status: 500 });
+    }
 
     logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,

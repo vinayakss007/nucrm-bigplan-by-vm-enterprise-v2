@@ -13,7 +13,7 @@ if (distDir !== '.next' && !fs.existsSync(distDir)) {
 /** @type {import('next').NextConfig} */
 let nextConfig = {
   distDir,
-  allowedDevOrigins: ['localhost:3000', '34.70.191.180'],
+  allowedDevOrigins: ['localhost:3000', '34.173.162.165', '34.132.97.229'],
   typescript: { ignoreBuildErrors: false },
   devIndicators: { buildActivity: false },
   cacheMaxMemorySize: 50 * 1024 * 1024,
@@ -47,7 +47,7 @@ let nextConfig = {
         { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
         { key: 'X-DNS-Prefetch-Control', value: 'on' },
-        { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+        ...(process.env.NODE_ENV === 'production' ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }] : []),
         { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; form-action 'self'" },
       ],
     }, {
@@ -58,7 +58,9 @@ let nextConfig = {
       headers: [{ key: 'Cache-Control', value: 'public, max-age=60' }],
     }, {
       source: '/_next/static/:path*',
-      headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      headers: process.env.NODE_ENV === 'production'
+        ? [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }]
+        : [{ key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate' }],
     }];
   },
 };

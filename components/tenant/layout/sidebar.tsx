@@ -172,7 +172,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           if (data?.sections) setOpenSections(data.sections);
           else setOpenSections(Object.fromEntries(NAV_SECTIONS.map(s => [s.id, !!s.defaultOpen])));
         }
-      } catch (e) { console.error('[sidebar] Error:', e); }
+      } catch (e) { if (e instanceof DOMException && e.name === 'AbortError') return; console.error('[sidebar] Error:', e); }
 
       // localStorage fallback for pinned
       try {
@@ -195,7 +195,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
             setHiddenItems(prefs.hidden_nav_items);
           }
         }
-      } catch (e) { console.error('[sidebar] Error:', e); }
+      } catch (e) { if (e instanceof DOMException && e.name === 'AbortError') return; console.error('[sidebar] Error:', e); }
     })();
     return () => abort.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps

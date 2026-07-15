@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import ReportBuilderClient from './client-page';
 
 export const metadata: Metadata = {
@@ -6,6 +7,20 @@ export const metadata: Metadata = {
   description: 'Build custom reports with real-time aggregations',
 };
 
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-6 animate-pulse max-w-6xl">
+      <div className="h-8 w-48 bg-muted rounded" />
+      <div className="h-40 bg-muted rounded-xl" />
+      <div className="h-80 bg-muted rounded-xl" />
+    </div>
+  );
+}
+
 export default function ReportBuilderPage() {
-  return <ReportBuilderClient />
+  return (
+    <Suspense fallback={<LoadingSkeleton />}>
+      <ReportBuilderClient />
+    </Suspense>
+  );
 }
