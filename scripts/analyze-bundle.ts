@@ -13,7 +13,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as glob from 'glob';
 
 const BUILD_DIR = '.next';
 const OUTPUT_FILE = 'bundle-report.json';
@@ -146,7 +145,7 @@ function analyzeBuild(): void {
   // Analyze static chunks
   const staticDir = path.join(BUILD_DIR, 'static');
   if (fs.existsSync(staticDir)) {
-    const chunks = glob.sync('**/*.js', { cwd: staticDir });
+    const chunks = findJsFiles(staticDir);
     for (const chunk of chunks) {
       const filePath = path.join(staticDir, chunk);
       const stats = fs.statSync(filePath);
@@ -210,3 +209,17 @@ function analyzeBuild(): void {
 }
 
 analyzeBuild();
+
+function findJsFiles(dir: string, prefix = ''): string[] {
+  const files: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name);
+    const relativePath = path.join(prefix, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...findJsFiles(fullPath, relativePath));
+    } else if (entry.name.endsWith('.js')) {
+      files.push(relativePath);
+    }
+  }
+  return files;
+}
