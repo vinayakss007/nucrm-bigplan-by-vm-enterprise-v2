@@ -3,7 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users, contacts, deals, tasks, activities, tenantMembers } from '@/drizzle/schema';
-import { eq, and, or, ilike, sql, desc } from 'drizzle-orm';
+import { eq, and, or, ilike, sql, desc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 
@@ -75,17 +75,29 @@ export async function GET(request: NextRequest) {
         .orderBy(desc(users.createdAt))
         .limit(20);
 
-      // Get memberships for each user
-      const results = await Promise.all(foundUsers.map(async (u) => {
-        const memberships = await db.select({
-          tenantId: tenantMembers.tenantId,
-          roleSlug: tenantMembers.roleSlug,
-          status: tenantMembers.status,
-        })
-          .from(tenantMembers)
-          .where(eq(tenantMembers.userId, u.id));
+      // Get memberships for all users in a single query
+      const userIds = foundUsers.map(u => u.id);
+      const allMemberships = userIds.length > 0
+        ? await db.select({
+            userId: tenantMembers.userId,
+            tenantId: tenantMembers.tenantId,
+            roleSlug: tenantMembers.roleSlug,
+            status: tenantMembers.status,
+          })
+            .from(tenantMembers)
+            .where(inArray(tenantMembers.userId, userIds))
+        : [];
 
-        return { ...u, memberships };
+      const membershipsByUserId = new Map<string, typeof allMemberships>();
+      for (const m of allMemberships) {
+        const list = membershipsByUserId.get(m.userId);
+        if (list) list.push(m);
+        else membershipsByUserId.set(m.userId, [m]);
+      }
+
+      const results = foundUsers.map(u => ({
+        ...u,
+        memberships: membershipsByUserId.get(u.id) ?? [],
       }));
 
       return NextResponse.json({ users: results, total: results.length });

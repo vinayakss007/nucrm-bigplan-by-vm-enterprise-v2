@@ -1,6 +1,4 @@
-import IORedis from 'ioredis';
-
-const REDIS_URL = process.env['REDIS_URL'] || 'redis://localhost:6379';
+import { cache } from '@/lib/cache/index';
 
 export interface FlagDefinition {
   key: string;
@@ -31,15 +29,6 @@ const DEFINED_FLAGS: FlagDefinition[] = [
 
 const CACHE_TTL = 30;
 
-function getRedis(): IORedis {
-  return new IORedis(REDIS_URL, {
-    maxRetriesPerRequest: 1,
-    retryStrategy: () => null,
-    lazyConnect: true,
-    enableOfflineQueue: false,
-  });
-}
-
 function hashUserId(id: string): number {
   let hash = 0;
   for (let i = 0; i < id.length; i++) {
@@ -50,16 +39,12 @@ function hashUserId(id: string): number {
 }
 
 async function getFlagOverrides(): Promise<Record<string, FlagOverride>> {
-  const redis = getRedis();
   try {
-    await redis.connect();
-    const raw = await redis.get('flags:overrides');
-    return raw ? JSON.parse(raw) : {};
+    const raw = await cache.get<Record<string, FlagOverride>>('flags:overrides');
+    return raw ?? {};
   } catch (e) {
     console.error('[Flags] Failed to get flag overrides', e);
     return {};
-  } finally {
-    redis.disconnect();
   }
 }
 
@@ -96,29 +81,17 @@ export async function setOverride(
   key: string,
   override: FlagOverride
 ): Promise<void> {
-  const redis = getRedis();
-  try {
-    await redis.connect();
-    const raw = await redis.get('flags:overrides');
-    const overrides: Record<string, FlagOverride> = raw ? JSON.parse(raw) : {};
-    overrides[key] = override;
-    await redis.setex('flags:overrides', CACHE_TTL * 10, JSON.stringify(overrides));
-  } finally {
-    redis.disconnect();
-  }
+  const raw = await cache.get<Record<string, FlagOverride>>('flags:overrides');
+  const overrides = raw ?? {};
+  overrides[key] = override;
+  await cache.set('flags:overrides', overrides, CACHE_TTL * 10);
 }
 
 export async function deleteOverride(key: string): Promise<void> {
-  const redis = getRedis();
-  try {
-    await redis.connect();
-    const raw = await redis.get('flags:overrides');
-    const overrides: Record<string, FlagOverride> = raw ? JSON.parse(raw) : {};
-    delete overrides[key];
-    await redis.setex('flags:overrides', CACHE_TTL * 10, JSON.stringify(overrides));
-  } finally {
-    redis.disconnect();
-  }
+  const raw = await cache.get<Record<string, FlagOverride>>('flags:overrides');
+  const overrides = raw ?? {};
+  delete overrides[key];
+  await cache.set('flags:overrides', overrides, CACHE_TTL * 10);
 }
 
 export async function getAllFlags(
