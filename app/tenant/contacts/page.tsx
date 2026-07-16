@@ -3,12 +3,13 @@ import { db } from '@/drizzle/db';
 import { companies, tenantMembers, users } from '@/drizzle/schema';
 import { eq, and, isNull, asc } from 'drizzle-orm';
 import { getContacts } from '@/lib/db/services/contacts';
-import { Suspense, lazy } from 'react';
+import { Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import { getUserDefaultView } from '@/lib/user-defaults';
 import { toSnakeCase } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const ContactsClient = lazy(() => import('@/components/tenant/contacts-client'));
+const ContactsClient = dynamic(() => import('@/components/tenant/contacts-client'), { ssr: false });
 
 function LoadingSkeleton() {
   return (

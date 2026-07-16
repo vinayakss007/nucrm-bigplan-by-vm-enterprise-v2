@@ -5,7 +5,7 @@ import { validateBody } from '@/lib/api/validate';
 import { createPipelineSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { pipelines, dealStages, deals } from '@/drizzle/schema';
-import { eq, asc, desc, sql } from 'drizzle-orm';
+import { eq, asc, desc, sql, inArray } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   try {
@@ -24,14 +24,26 @@ export async function GET(req: NextRequest) {
     .where(eq(pipelines.tenantId, ctx.tenantId))
     .orderBy(desc(pipelines.isDefault), asc(pipelines.createdAt));
 
-    // Get stages for each pipeline
-    const pipelinesWithStages = await Promise.all(pipelineList.map(async (pipeline) => {
-      const stages = await db.query.dealStages.findMany({
-        limit: 200,
-        where: eq(dealStages.pipelineId, pipeline.id),
-        orderBy: [asc(dealStages.order)]
-      });
-      return { ...pipeline, stages };
+    // Get stages for all pipelines in a single query
+    const pipelineIds = pipelineList.map(p => p.id);
+    const allStages = pipelineIds.length > 0
+      ? await db.query.dealStages.findMany({
+          limit: 200,
+          where: inArray(dealStages.pipelineId, pipelineIds),
+          orderBy: [asc(dealStages.order)]
+        })
+      : [];
+
+    const stagesByPipelineId = new Map<string, typeof allStages>();
+    for (const stage of allStages) {
+      const list = stagesByPipelineId.get(stage.pipelineId);
+      if (list) list.push(stage);
+      else stagesByPipelineId.set(stage.pipelineId, [stage]);
+    }
+
+    const pipelinesWithStages = pipelineList.map(pipeline => ({
+      ...pipeline,
+      stages: stagesByPipelineId.get(pipeline.id) ?? []
     }));
 
     return NextResponse.json({ data: pipelinesWithStages });
