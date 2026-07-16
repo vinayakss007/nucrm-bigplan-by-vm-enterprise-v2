@@ -1,0 +1,26 @@
+#!/usr/bin/env sh
+
+# Gitleaks: detect secrets in staged files
+GITLEAKS_BIN=""
+if command -v gitleaks >/dev/null 2>&1; then
+  GITLEAKS_BIN="gitleaks"
+elif [ -x "$HOME/bin/gitleaks" ]; then
+  GITLEAKS_BIN="$HOME/bin/gitleaks"
+fi
+
+if [ -n "$GITLEAKS_BIN" ]; then
+  echo "Running gitleaks on staged files..."
+  $GITLEAKS_BIN protect --staged --redact
+  if [ $? -ne 0 ]; then
+    echo "Gitleaks detected secrets! Commit aborted."
+    echo "Use 'git commit --no-verify' to bypass (not recommended)."
+    exit 1
+  fi
+else
+  echo "WARNING: gitleaks not found - skipping secret scan. Install: https://github.com/gitleaks/gitleaks"
+fi
+
+# Lint-staged: run linters on staged files
+if [ -f node_modules/.bin/lint-staged ]; then
+  npx lint-staged
+fi

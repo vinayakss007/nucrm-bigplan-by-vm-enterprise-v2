@@ -96,7 +96,7 @@ login_super_admin() {
     RESPONSE=$(curl -s -c "$COOKIE_FILE" -w "\n%{http_code}" \
         -X POST "$BASE_URL/api/auth/login" \
         -H "Content-Type: application/json" \
-        -d '{"email":"t@t.com","password":"password123"}')
+        -d '{"email":"admin@test.com","password":"password123"}')
     
     HTTP_CODE=$(echo "$RESPONSE" | tail -1)
     BODY=$(echo "$RESPONSE" | head -n -1)

@@ -181,6 +181,15 @@ export async function proxy(request: NextRequest) {
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
   const token = cookieToken || bearerToken;
 
+  // FIX: API keys (ak_*) are not JWTs — skip JWT verification and pass through
+  // to route handlers where tryApiKeyAuth() handles them properly.
+  if (bearerToken?.startsWith('ak_')) {
+    const response = NextResponse.next();
+    response.headers.set('x-request-id', requestId);
+    setCORS(response, origin, pathname);
+    return response;
+  }
+
   if (!token) {
     if (isApiRequest(pathname)) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401, headers: { 'x-request-id': requestId } });
