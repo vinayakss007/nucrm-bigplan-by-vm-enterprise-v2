@@ -13,7 +13,7 @@
 
 import lighthouse from 'lighthouse';
 import chromeLauncher from 'chrome-launcher';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, writeFileSync } from 'fs';
 import path from 'path';
 
 const BASE_URL = process.env['BASE_URL'] || 'http://localhost:3000';
