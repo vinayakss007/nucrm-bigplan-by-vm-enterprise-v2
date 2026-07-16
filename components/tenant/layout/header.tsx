@@ -105,7 +105,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
       try { new BroadcastChannel('nucrm_auth').postMessage('logout'); } catch (e) { console.error('[header] BroadcastChannel error:', e); }
       router.push('/auth/login');
       router.refresh();
-    });
+    }, 'danger_only', 'Log out');
   };
 
   const total = results ? (results.contacts?.length??0)+(results.deals?.length??0)+(results.companies?.length??0) : 0;

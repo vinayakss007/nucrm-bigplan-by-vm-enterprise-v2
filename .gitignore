@@ -62,3 +62,4 @@ ngrok.out
 
 # Build artifacts
 .next-build/
+bundle-report.json

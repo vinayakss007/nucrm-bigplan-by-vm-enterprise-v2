@@ -117,7 +117,7 @@ export default function SuperAdminSidebar({ profile, collapsed, onToggle }: Prop
       await fetch('/api/auth/logout', { method: 'POST' });
       router.push('/auth/login');
       router.refresh();
-    });
+    }, 'danger_only', 'Log out');
   };
 
   const q = query.trim().toLowerCase();

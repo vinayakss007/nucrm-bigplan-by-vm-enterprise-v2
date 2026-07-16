@@ -74,7 +74,9 @@ export function ConfirmDialog({ open, onOpenChange, title, message, confirmLabel
 import toast from 'react-hot-toast';
 import { captureError } from '@/lib/capture-error';
 
-export async function confirmThen(message: string, action: () => void | Promise<void>, riskLevel: 'always' | 'danger_only' = 'danger_only'): Promise<boolean> {
+let activeConfirmToastId: string | null = null;
+
+export async function confirmThen(message: string, action: () => void | Promise<void>, riskLevel: 'always' | 'danger_only' = 'danger_only', confirmLabel = 'Delete'): Promise<boolean> {
   const pref = await getConfirmDestructivePref();
   if (pref === 'never') {
     await action();
@@ -84,30 +86,36 @@ export async function confirmThen(message: string, action: () => void | Promise<
     await action();
     return true;
   }
+  if (activeConfirmToastId) toast.dismiss(activeConfirmToastId);
   return new Promise((resolve) => {
-    toast((t) => (
-      <div className="flex items-center gap-3">
-        <span className="text-sm">{message}</span>
-        <div className="flex gap-1.5">
-          <button
-            onClick={() => { toast.dismiss(t.id); resolve(false); }}
-            className="px-2.5 py-1 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={async () => {
-              toast.dismiss(t.id);
-              try { await action(); } catch (e) { captureError(e, 'confirmThen'); toast.error('Action failed'); }
-              resolve(true);
-            }}
-            className="px-2.5 py-1 text-xs font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
-          >
-            Delete
-          </button>
+    const toastId = toast(
+      (t) => (
+        <div className="flex items-center gap-4 p-1">
+          <span className="text-base">{message}</span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { toast.dismiss(t.id); activeConfirmToastId = null; resolve(false); }}
+              className="px-4 py-2 text-sm font-medium rounded-lg border border-border hover:bg-accent transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                toast.dismiss(t.id);
+                activeConfirmToastId = null;
+                try { await action(); } catch (e) { captureError(e, 'confirmThen'); toast.error('Action failed'); }
+                resolve(true);
+              }}
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+            >
+              {confirmLabel}
+            </button>
+          </div>
         </div>
-      </div>
-    ), { duration: 8000 });
+      ),
+      { duration: 8000 }
+    );
+    activeConfirmToastId = toastId;
   });
 }
 

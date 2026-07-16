@@ -1,6 +1,6 @@
-import { Metadata } from 'next';
+import type { Metadata } from 'next';
 import { Suspense } from 'react';
-import ReportBuilderClient from './report-builder-client';
+import ReportBuilderClient from './client-page';
 
 export const metadata: Metadata = {
   title: 'Report Builder - NuCRM',
