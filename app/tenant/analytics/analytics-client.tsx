@@ -21,23 +21,19 @@ const TIP_STYLE   = { background:'hsl(var(--card))', border:'1px solid hsl(var(-
 export default function TenantAnalyticsPage() {
   const [range, setRange] = useState(30);
 
-  const { data: dealsRes, error: dealsErr } = useSWR('/api/tenant/deals?limit=500');
-  const { data: contactsRes } = useSWR('/api/tenant/contacts?limit=500');
-  const { data: tasksRes } = useSWR('/api/tenant/tasks?limit=500');
-  const { data: pipelinesRes } = useSWR('/api/tenant/pipelines');
+  const { data: overviewRes, error: overviewErr } = useSWR('/api/tenant/analytics/overview');
 
-  const deals = (dealsRes?.data || []) as { created_at?: string; stageId?: string; stage_name?: string; amount?: string; value?: string }[];
-  const contacts = (contactsRes?.data || []) as { created_at?: string; lead_source?: string; lead_status?: string }[];
-  const tasks = (tasksRes?.data || []) as { created_at?: string; completed?: boolean; due_date?: string }[];
-  const stages = ((pipelinesRes?.data || []).flatMap((pl: { stages?: { id: string; name: string }[] }) => (pl.stages || [])) as { id: string; name: string }[]);
+  const deals = ((overviewRes?.data?.deals || []) as { created_at?: string; stageId?: string; amount?: string; value?: string }[]).map(d => ({ ...d, value: d.value || d.amount || 0 }));
+  const contacts = (overviewRes?.data?.contacts || []) as { created_at?: string; lead_source?: string; lead_status?: string }[];
+  const tasks = (overviewRes?.data?.tasks || []) as { created_at?: string; completed?: boolean; due_date?: string }[];
+  const stages = ((overviewRes?.data?.pipelines || []).flatMap((pl: { stages?: { id: string; name: string }[] }) => (pl.stages || [])) as { id: string; name: string }[]);
 
-  const loading = !dealsRes && !dealsErr;
+  const loading = !overviewRes && !overviewErr;
 
   const dealsWithStage = useMemo(() =>
     deals.map(d => ({
       ...d,
-      stageName: d.stage_name || stages.find(s => s.id === d.stageId)?.name || '',
-      value: d.amount || d.value || 0,
+      stageName: stages.find(s => s.id === d.stageId)?.name || '',
     })),
     [deals, stages],
   );

@@ -50,13 +50,14 @@ async function getFlagOverrides(): Promise<Record<string, FlagOverride>> {
 
 export async function isEnabled(
   key: string,
-  context?: { tenantId?: string; userId?: string }
+  context?: { tenantId?: string; userId?: string },
+  overrides?: Record<string, FlagOverride>
 ): Promise<boolean> {
   const def = DEFINED_FLAGS.find(f => f.key === key);
   if (!def) return false;
 
-  const overrides = await getFlagOverrides();
-  const override = overrides[key];
+  const flagOverrides = overrides ?? await getFlagOverrides();
+  const override = flagOverrides[key];
   if (!override) return def.default;
 
   if (!override.enabled) return false;
@@ -97,14 +98,11 @@ export async function deleteOverride(key: string): Promise<void> {
 export async function getAllFlags(
   context?: { tenantId?: string; userId?: string }
 ): Promise<Array<FlagDefinition & { enabled: boolean; override?: FlagOverride }>> {
-  const results: Array<FlagDefinition & { enabled: boolean; override?: FlagOverride }> = [];
-  for (const def of DEFINED_FLAGS) {
-    results.push({
-      ...def,
-      enabled: await isEnabled(def.key, context),
-    });
-  }
-  return results;
+  const overrides = await getFlagOverrides();
+  return Promise.all(DEFINED_FLAGS.map(async def => ({
+    ...def,
+    enabled: await isEnabled(def.key, context, overrides),
+  })));
 }
 
 export { DEFINED_FLAGS, CACHE_TTL };
