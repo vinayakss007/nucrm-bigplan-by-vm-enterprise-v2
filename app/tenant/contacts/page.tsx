@@ -9,7 +9,7 @@ import { getUserDefaultView } from '@/lib/user-defaults';
 import { toSnakeCase } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const ContactsClient = dynamic(() => import('@/components/tenant/contacts-client'), { ssr: false });
+const ContactsClient = dynamic(() => import('@/components/tenant/contacts-client'));
 
 function LoadingSkeleton() {
   return (
