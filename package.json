@@ -83,7 +83,9 @@
     "quality:full": "npm run typecheck && npm run quality:lint && npm run test && npm run quality:report",
     "lighthouse:audit": "npx tsx scripts/lighthouse-audit.ts",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build -o storybook-static"
+    "build-storybook": "storybook build -o storybook-static",
+    "prepare": "husky",
+    "lint-staged": "lint-staged"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1024.0",
@@ -169,8 +171,10 @@
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
     "eslint-plugin-unused-imports": "^4.4.1",
+    "husky": "^9.1.7",
     "jsdom": "26.1.0",
     "lighthouse": "^13.4.0",
+    "lint-staged": "^15.5.2",
     "playwright": "^1.59.1",
     "typescript": "5.9.3",
     "vitest": "2.1.8"

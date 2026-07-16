@@ -16,7 +16,9 @@ import { createHash } from 'crypto';
  */
 export async function tryApiKeyAuth(request: NextRequest): Promise<AuthContext | null> {
   const auth = request.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ak_')) return null;
+  if (!auth?.startsWith('Bearer ak_')) {
+    return null;
+  }
 
   const rawKey = auth.slice(7);
   const keyHash = createHash('sha256').update(rawKey).digest('hex');
@@ -33,7 +35,9 @@ export async function tryApiKeyAuth(request: NextRequest): Promise<AuthContext |
   ));
 
   const row = results[0];
-  if (!row) return null;
+  if (!row) {
+    return null;
+  }
 
   const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] ?? null;
 
