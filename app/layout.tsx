@@ -10,6 +10,7 @@ import { ServiceWorkerRegistration } from '@/components/shared/service-worker-re
 import { SkipLink } from '@/components/ui/skip-link';
 import { I18nProvider } from '@/lib/i18n/provider';
 import { ConfirmPolyfill } from '@/components/shared/confirm-polyfill';
+import { SWRProvider } from '@/lib/swr-config';
 import './globals.css';
 
 const inter = Inter({
@@ -50,7 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ThemeProvider>
             <ErrorWrapper>
               <CsrfProvider />
-              {children}
+              <SWRProvider>{children}</SWRProvider>
             </ErrorWrapper>
             <Toaster position="bottom-right" toastOptions={{
               style: { background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', border: '1px solid hsl(var(--border))', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', minWidth: '280px' },
