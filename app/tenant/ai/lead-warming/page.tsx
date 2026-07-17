@@ -1,10 +1,12 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   Heart, Loader2, Mail, MessageSquare, Phone, ArrowRight,
-  ThumbsUp, Clock, CheckCircle2,
+  ThumbsUp, Clock, CheckCircle2, Plus, Pause, Play, Archive, Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { CampaignBuilder } from '@/components/lead-warming/campaign-builder';
 
 type WarmingStats = {
   campaigns: { total: number; active: number };
@@ -27,6 +29,29 @@ type Reply = {
   contactName: string;
 };
 
+type Campaign = {
+  id: string;
+  name: string;
+  description: string | null;
+  status: string;
+  enableEmail: boolean;
+  enableWhatsapp: boolean;
+  enableSms: boolean;
+  aiGenerateMessages: boolean;
+  aiTone: string;
+  totalSent: number;
+  totalReplies: number;
+  totalPositiveIntent: number;
+  createdAt: string;
+};
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: typeof Play }> = {
+  active:   { label: 'Active',   color: 'text-emerald-700', bg: 'bg-emerald-50 dark:bg-emerald-950/30', icon: Play },
+  paused:   { label: 'Paused',   color: 'text-amber-700',   bg: 'bg-amber-50 dark:bg-amber-950/30',     icon: Pause },
+  draft:    { label: 'Draft',    color: 'text-slate-700',   bg: 'bg-slate-50 dark:bg-slate-950/30',     icon: null },
+  archived: { label: 'Archived', color: 'text-gray-700',    bg: 'bg-gray-50 dark:bg-gray-950/30',       icon: Archive },
+};
+
 const INTENT_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   interested:       { label: 'Interested',      color: 'text-emerald-700', bg: 'bg-emerald-50 dark:bg-emerald-950/30' },
   not_interested:   { label: 'Not Interested',  color: 'text-red-700',     bg: 'bg-red-50 dark:bg-red-950/30' },
@@ -41,21 +66,45 @@ const INTENT_CONFIG: Record<string, { label: string; color: string; bg: string }
 
 const CHANNEL_ICONS: Record<string, typeof Mail> = { email: Mail, whatsapp: MessageSquare, sms: Phone };
 
+type Tab = 'campaigns' | 'replies';
+
 export default function LeadWarmingPage() {
   const [stats, setStats] = useState<WarmingStats | null>(null);
   const [replies, setReplies] = useState<Reply[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [tab, setTab] = useState<Tab>('campaigns');
+  const [showBuilder, setShowBuilder] = useState(false);
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
     Promise.all([
       fetch('/api/tenant/lead-warming/stats').then(r => r.ok ? r.json() : null),
       fetch('/api/tenant/lead-warming/replies?limit=50').then(r => r.ok ? r.json() : null),
-    ]).then(([statsData, repliesData]) => {
+      fetch('/api/tenant/lead-warming/campaigns').then(r => r.ok ? r.json() : null),
+    ]).then(([statsData, repliesData, campaignsData]) => {
       if (statsData) setStats(statsData);
       if (repliesData?.data) setReplies(repliesData.data);
+      if (campaignsData?.data) setCampaigns(campaignsData.data);
     }).catch((e) => console.error('[lead-warming] Error:', e)).finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const toggleCampaignStatus = async (id: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'active' ? 'paused' : 'active';
+    await fetch(`/api/tenant/lead-warming/campaigns/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    loadData();
+  };
+
+  const archiveCampaign = async (id: string) => {
+    await fetch(`/api/tenant/lead-warming/campaigns/${id}`, { method: 'DELETE' });
+    loadData();
+  };
 
   const filtered = filter === 'all' ? replies : replies.filter(r => r.intent === filter);
   const intentCounts = replies.reduce((acc, r) => { acc[r.intent] = (acc[r.intent] || 0) + 1; return acc; }, {} as Record<string, number>);
@@ -66,13 +115,18 @@ export default function LeadWarmingPage() {
 
   return (
     <div className="space-y-5 animate-fade-in pb-12">
-      <div>
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <Heart className="w-5 h-5 text-rose-600" /> Lead Warming
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1 max-w-3xl">
-          AI-powered reply analysis and personalized festival/birthday messages. Classifies intent, extracts entities, and suggests next actions.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <Heart className="w-5 h-5 text-rose-600" /> Lead Warming
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1 max-w-3xl">
+            AI-powered reply analysis and personalized festival/birthday messages. Classifies intent, extracts entities, and suggests next actions.
+          </p>
+        </div>
+        <Button size="sm" onClick={() => setShowBuilder(true)} leftIcon={<Plus className="w-4 h-4" />}>
+          New Campaign
+        </Button>
       </div>
 
       {/* Stats grid */}
@@ -87,70 +141,166 @@ export default function LeadWarmingPage() {
         </div>
       )}
 
-      {/* Intent filter pills */}
-      <div className="flex flex-wrap gap-1.5">
-        <FilterPill label="All" count={replies.length} active={filter === 'all'} onClick={() => setFilter('all')} />
-        {Object.entries(intentCounts).sort((a, b) => b[1] - a[1]).map(([intent, count]) => {
-          const cfg = INTENT_CONFIG[intent] ?? INTENT_CONFIG.unknown!;
-          return (
-            <FilterPill
-              key={intent}
-              label={cfg.label}
-              count={count}
-              active={filter === intent}
-              onClick={() => setFilter(intent)}
-            />
-          );
-        })}
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-border">
+        <button
+          onClick={() => setTab('campaigns')}
+          className={cn(
+            'px-3 py-2 text-xs font-medium border-b-2 transition-colors -mb-px',
+            tab === 'campaigns' ? 'border-violet-500 text-violet-700' : 'border-transparent text-muted-foreground hover:text-foreground',
+          )}
+        >
+          Campaigns ({campaigns.length})
+        </button>
+        <button
+          onClick={() => setTab('replies')}
+          className={cn(
+            'px-3 py-2 text-xs font-medium border-b-2 transition-colors -mb-px',
+            tab === 'replies' ? 'border-violet-500 text-violet-700' : 'border-transparent text-muted-foreground hover:text-foreground',
+          )}
+        >
+          Replies ({replies.length})
+        </button>
       </div>
 
-      {/* Replies list */}
-      <div className="space-y-2">
-        {filtered.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground text-sm">
-            No replies found. Lead warming replies will appear here once campaigns start receiving responses.
+      {/* Campaigns tab */}
+      {tab === 'campaigns' && (
+        <div className="space-y-2">
+          {campaigns.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground text-sm">
+              No campaigns yet. Create your first warming campaign to start sending personalized messages.
+            </div>
+          ) : (
+            campaigns.map(campaign => {
+              const statusCfg = STATUS_CONFIG[campaign.status] ?? STATUS_CONFIG.draft!;
+              const StatusIcon = statusCfg.icon;
+              return (
+                <div key={campaign.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold truncate">{campaign.name}</span>
+                        <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-bold uppercase', statusCfg.bg, statusCfg.color)}>
+                          {StatusIcon && <StatusIcon className="w-2.5 h-2.5 inline mr-0.5" />}
+                          {statusCfg.label}
+                        </span>
+                      </div>
+                      {campaign.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{campaign.description}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {campaign.status !== 'archived' && (
+                        <>
+                          <button
+                            onClick={() => toggleCampaignStatus(campaign.id, campaign.status)}
+                            className="p-1.5 rounded-lg hover:bg-accent transition-colors"
+                            title={campaign.status === 'active' ? 'Pause' : 'Activate'}
+                          >
+                            {campaign.status === 'active' ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                          </button>
+                          <button
+                            onClick={() => archiveCampaign(campaign.id)}
+                            className="p-1.5 rounded-lg hover:bg-accent transition-colors text-muted-foreground hover:text-red-600"
+                            title="Archive"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+                    <span>Sent: <span className="font-bold text-foreground">{campaign.totalSent}</span></span>
+                    <span>Replies: <span className="font-bold text-foreground">{campaign.totalReplies}</span></span>
+                    <span>Positive: <span className="font-bold text-foreground">{campaign.totalPositiveIntent}</span></span>
+                    <span className="ml-auto">{new Date(campaign.createdAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* Replies tab */}
+      {tab === 'replies' && (
+        <>
+          {/* Intent filter pills */}
+          <div className="flex flex-wrap gap-1.5">
+            <FilterPill label="All" count={replies.length} active={filter === 'all'} onClick={() => setFilter('all')} />
+            {Object.entries(intentCounts).sort((a, b) => b[1] - a[1]).map(([intent, count]) => {
+              const cfg = INTENT_CONFIG[intent] ?? INTENT_CONFIG.unknown!;
+              return (
+                <FilterPill
+                  key={intent}
+                  label={cfg.label}
+                  count={count}
+                  active={filter === intent}
+                  onClick={() => setFilter(intent)}
+                />
+              );
+            })}
           </div>
-        ) : (
-          filtered.map(reply => {
-            const intentCfg = INTENT_CONFIG[reply.intent] ?? INTENT_CONFIG.unknown!;
-            const ChannelIcon = CHANNEL_ICONS[reply.channel] ?? Mail;
-            return (
-              <div key={reply.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <ChannelIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <span className="text-sm font-semibold truncate">{reply.contactName}</span>
-                    <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-bold uppercase', intentCfg.bg, intentCfg.color)}>
-                      {intentCfg.label}
-                    </span>
-                    {reply.requiresFollowUp && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-bold">Follow-up</span>
+
+          {/* Replies list */}
+          <div className="space-y-2">
+            {filtered.length === 0 ? (
+              <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground text-sm">
+                No replies found. Lead warming replies will appear here once campaigns start receiving responses.
+              </div>
+            ) : (
+              filtered.map(reply => {
+                const intentCfg = INTENT_CONFIG[reply.intent] ?? INTENT_CONFIG.unknown!;
+                const ChannelIcon = CHANNEL_ICONS[reply.channel] ?? Mail;
+                return (
+                  <div key={reply.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <ChannelIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span className="text-sm font-semibold truncate">{reply.contactName}</span>
+                        <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-bold uppercase', intentCfg.bg, intentCfg.color)}>
+                          {intentCfg.label}
+                        </span>
+                        {reply.requiresFollowUp && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-bold">Follow-up</span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        {new Date(reply.receivedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground line-clamp-2">{reply.replyContent}</p>
+
+                    {reply.aiSummary && (
+                      <div className="rounded-lg bg-muted/50 px-3 py-2">
+                        <p className="text-xs"><span className="font-semibold">AI:</span> {reply.aiSummary}</p>
+                      </div>
+                    )}
+
+                    {reply.aiSuggestedAction && (
+                      <div className="flex items-center gap-1.5 text-xs text-violet-600">
+                        <ArrowRight className="w-3 h-3" />
+                        <span>{reply.aiSuggestedAction}</span>
+                      </div>
                     )}
                   </div>
-                  <span className="text-[10px] text-muted-foreground shrink-0">
-                    {new Date(reply.receivedAt).toLocaleDateString()}
-                  </span>
-                </div>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
 
-                <p className="text-xs text-muted-foreground line-clamp-2">{reply.replyContent}</p>
-
-                {reply.aiSummary && (
-                  <div className="rounded-lg bg-muted/50 px-3 py-2">
-                    <p className="text-xs"><span className="font-semibold">AI:</span> {reply.aiSummary}</p>
-                  </div>
-                )}
-
-                {reply.aiSuggestedAction && (
-                  <div className="flex items-center gap-1.5 text-xs text-violet-600">
-                    <ArrowRight className="w-3 h-3" />
-                    <span>{reply.aiSuggestedAction}</span>
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
+      {/* Campaign builder modal */}
+      {showBuilder && (
+        <CampaignBuilder
+          onCreated={() => { setShowBuilder(false); loadData(); }}
+          onClose={() => setShowBuilder(false)}
+        />
+      )}
     </div>
   );
 }
