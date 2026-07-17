@@ -116,6 +116,8 @@ export async function POST(request: NextRequest) {
       } as typeof supportTickets.$inferInsert)
       .returning();
 
+    if (!row) throw new Error('Failed to create ticket');
+
     fireWebhooks(ctx.tenantId, 'ticket.created', {
       id: row.id,
       subject: row.subject,
