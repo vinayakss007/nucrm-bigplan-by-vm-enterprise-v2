@@ -1,23 +1,24 @@
 /**
  * Bulk Company Operations
  * POST /api/tenant/companies/bulk
- * Body: { action, company_ids, payload? }
+ * Body: { action, company_ids?, payload?, selectAll?, filters? }
  * Actions: assign, status, delete, tag
+ * When selectAll=true, company_ids is optional; companies are resolved from filters.
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { companies, tenantMembers, segments, segmentMembers } from '@/drizzle/schema';
-import { eq, and, sql, inArray } from 'drizzle-orm';
+import { eq, and, sql, inArray, or, ilike } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 
 const MAX_BULK = 500;
 
 export async function POST(req: NextRequest) {
- 
- 
+  
+  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let ctx: any;
   try {
@@ -25,12 +26,32 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
 
     const body = await req.json();
-    const { action, company_ids, payload = {} } = body;
+    const { action, payload = {} } = body;
+    const selectAll = body.selectAll === true;
+    const filters = body.filters as { q?: string } | undefined;
 
-    if (!Array.isArray(company_ids) || !company_ids.length)
-      return NextResponse.json({ error: 'company_ids array required' }, { status: 400 });
-    if (company_ids.length > MAX_BULK)
-      return NextResponse.json({ error: `Max ${MAX_BULK} companies per bulk operation` }, { status: 400 });
+    let company_ids: string[] = body.company_ids ?? [];
+
+    if (selectAll) {
+      const whereConditions = [
+        eq(companies.tenantId, ctx.tenantId),
+        sql`${companies.deletedAt} IS NULL`,
+      ];
+      if (filters?.q) {
+        whereConditions.push(or(
+          ilike(companies.name, `%${filters.q}%`),
+        )!);
+      }
+      const matched = await db.select({ id: companies.id }).from(companies).where(and(...whereConditions));
+      company_ids = matched.map(r => r.id);
+      if (!company_ids.length) return NextResponse.json({ error: 'No companies match the provided filters' }, { status: 404 });
+      if (company_ids.length > MAX_BULK) return NextResponse.json({ error: `Max ${MAX_BULK} companies per bulk operation (matched ${company_ids.length})` }, { status: 400 });
+    } else {
+      if (!Array.isArray(company_ids) || !company_ids.length)
+        return NextResponse.json({ error: 'company_ids array required' }, { status: 400 });
+      if (company_ids.length > MAX_BULK)
+        return NextResponse.json({ error: `Max ${MAX_BULK} companies per bulk operation` }, { status: 400 });
+    }
 
     // Validate all IDs belong to this tenant
     const valid = await db
