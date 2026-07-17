@@ -49,6 +49,7 @@ import {
   Settings2,
   Search,
   X,
+  AlertTriangle,
 } from "lucide-react"
 
 export { ColumnDef }
@@ -75,13 +76,17 @@ export interface DataTableProps<TData, TValue> {
   pageIndex?: number
   onPaginationChange?: (page: number) => void
   virtualize?: boolean
+  // Select all matching support
+  matchingCount?: number
+  onSelectAllMatching?: (select: boolean) => void
+  selectAllMatching?: boolean
 }
 
 export interface BulkAction {
   id: string
   label: string
   icon?: React.ReactNode
-  onClick: (selectedRowIds: string[], input?: string) => void | string | Promise<void | string | undefined> | undefined
+  onClick: (selectedRowIds: string[], input?: string, selectAllMatching?: boolean) => void | string | Promise<void | string | undefined> | undefined
   requiresConfirmation?: boolean
   confirmationMessage?: string
   disabled?: boolean
@@ -124,6 +129,9 @@ export function DataTable<TData, TValue>({
   pageIndex: externalPageIndex,
   onPaginationChange,
   virtualize = false,
+  matchingCount,
+  onSelectAllMatching,
+  selectAllMatching = false,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = React.useState(externalGlobalFilter || "")
@@ -143,6 +151,14 @@ export function DataTable<TData, TValue>({
       setGlobalFilter(externalGlobalFilter)
     }
   }, [externalGlobalFilter])
+
+  // Reset select all matching when filters or page changes
+  React.useEffect(() => {
+    if (selectAllMatching) {
+      onSelectAllMatching?.(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalGlobalFilter, externalPageIndex, pageIndex])
 
   const table = useReactTable({
     data,
@@ -178,7 +194,7 @@ export function DataTable<TData, TValue>({
 
   const tableContainerRef = React.useRef<HTMLDivElement>(null)
 
-  const virtualizer = useVirtualizer({
+const virtualizer = useVirtualizer({
     count: virtualize ? table.getRowModel().rows.length : 0,
     getScrollElement: () => tableContainerRef.current,
     estimateSize: () => 48,
@@ -188,11 +204,20 @@ export function DataTable<TData, TValue>({
 
   const selectedIds = React.useMemo(() => {
     const selectedRows = table.getFilteredSelectedRowModel().rows
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return selectedRows.map(row => row.original as any).map(row => row.id || row.id)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return selectedRows.map(row => row.original as any).map(row => row.id)
   }, [table])
 
-  const handleBulkAction = async (action: BulkAction) => {
+  // Derived values for select-all-matching feature (must be after table and selectedIds)
+  const allPageSelected = table.getIsAllPageRowsSelected()
+  const effectiveMatchingCount = matchingCount ?? total ?? data.length
+  const showSelectAllMatchingPrompt = enableBulkActions &&
+    allPageSelected &&
+    selectedIds.length > 0 &&
+    !selectAllMatching &&
+    effectiveMatchingCount > selectedIds.length
+
+const handleBulkAction = async (action: BulkAction) => {
     if (action.requiresConfirmation) {
       let proceed = false;
       await confirmThen(
@@ -204,9 +229,10 @@ export function DataTable<TData, TValue>({
 
     try {
       const input = action.requiresSelect || action.requiresInput ? bulkActionInput[action.id] : undefined;
-      await action.onClick(selectedIds, input)
+      await action.onClick(selectedIds, input, selectAllMatching)
       // Clear selection after successful action
       table.toggleAllRowsSelected(false)
+      onSelectAllMatching?.(false)
       setBulkActionInput(prev => { const next = { ...prev }; delete next[action.id]; return next; })
     } catch (error) {
       console.error(`Bulk action "${action.label}" failed:`, error)
@@ -290,10 +316,56 @@ export function DataTable<TData, TValue>({
             )}
             {enableBulkActions && selectedIds.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="info" className="h-8">
-                  {selectedIds.length} selected
-                </Badge>
-                {bulkActions.map((action) => (
+                {selectAllMatching ? (
+                  <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-1.5">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                      All {effectiveMatchingCount} matching items selected
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        onSelectAllMatching?.(false)
+                        table.toggleAllRowsSelected(false)
+                      }}
+                      className="h-7 px-2 text-xs"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                ) : showSelectAllMatchingPrompt ? (
+                  <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-1.5">
+                    <span className="text-sm text-blue-700 dark:text-blue-300">
+                      All {selectedIds.length} items on this page selected.
+                    </span>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="h-7 text-sm"
+                      onClick={() => {
+                        onSelectAllMatching?.(true)
+                      }}
+                    >
+                      Select all {effectiveMatchingCount} matching items
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => {
+                        table.toggleAllRowsSelected(false)
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Badge variant="info" className="h-8">
+                      {selectedIds.length} selected
+                    </Badge>
+                    {bulkActions.map((action) => (
                   <div key={action.id} className="flex items-center gap-1">
                     {(action.requiresInput || action.requiresSelect) && activeBulkAction === action.id ? (
                       <>
@@ -359,7 +431,9 @@ export function DataTable<TData, TValue>({
                       </Button>
                     )}
                   </div>
-                ))}
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -632,7 +706,7 @@ export function DataTable<TData, TValue>({
 }
 
 // Helper to create sortable column headers
-export function createSortableHeader<_TData, _TValue>(
+export function createSortableHeader(
   label: string,
   accessorKey: string
 ) {
