@@ -7,8 +7,10 @@
  *
  * Supports trigger types:
  *   contact.created | contact.updated
- *   deal.created    | deal.updated | deal.won | deal.lost
+ *   deal.created    | deal.updated | deal.stage_changed | deal.won | deal.lost
  *   task.created    | task.completed
+ *   ticket.created
+ *   invoice.created | invoice.paid
  */
 
 import { db } from '@/drizzle/db';
@@ -28,8 +30,10 @@ import { captureError } from '@/lib/capture-error';
 
 export type TriggerEvent =
   | 'contact.created' | 'contact.updated'
-  | 'deal.created'    | 'deal.updated' | 'deal.won' | 'deal.lost'
-  | 'task.created'    | 'task.completed';
+  | 'deal.created'    | 'deal.updated' | 'deal.stage_changed' | 'deal.won' | 'deal.lost'
+  | 'task.created'    | 'task.completed'
+  | 'ticket.created'
+  | 'invoice.created' | 'invoice.paid';
 
 export interface TriggerPayload {
   tenantId: string;

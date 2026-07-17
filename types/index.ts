@@ -187,6 +187,8 @@ export type TriggerType =
   | 'deal.created' | 'deal.stage_changed' | 'deal.won' | 'deal.lost'
   | 'task.created' | 'task.completed' | 'task.overdue'
   | 'company.created'
+  | 'ticket.created'
+  | 'invoice.created' | 'invoice.paid'
   | 'form.submitted' | 'tag.added'
   | 'schedule.daily' | 'schedule.weekly';
 

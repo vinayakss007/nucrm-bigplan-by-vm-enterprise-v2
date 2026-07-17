@@ -7,6 +7,8 @@ import { requireAuth, requirePerm, requireModule } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { supportTickets, contacts, users } from '@/drizzle/schema';
 import { eq, and, desc, sql, isNull } from 'drizzle-orm';
+import { fireWebhooks } from '@/lib/webhooks';
+import { logError } from '@/lib/errors-server';
 
 /**
  * Tenant Ticket Management
@@ -113,6 +115,25 @@ export async function POST(request: NextRequest) {
         status: v.status,
       } as typeof supportTickets.$inferInsert)
       .returning();
+
+    fireWebhooks(ctx.tenantId, 'ticket.created', {
+      id: row.id,
+      subject: row.subject,
+      priority: row.priority,
+      contact_id: row.contactId,
+    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+
+    try {
+      const { evaluateAutomations } = await import('@/lib/automation/engine');
+      evaluateAutomations({
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        event: 'ticket.created',
+        data: { ...row, id: row.id },
+      }).catch(err => console.error('[tickets POST] ticket.created automation failed:', err));
+    } catch (e) {
+      console.error('[tickets POST] automation import failed:', e);
+    }
 
     return NextResponse.json({ data: row }, { status: 201 });
  
