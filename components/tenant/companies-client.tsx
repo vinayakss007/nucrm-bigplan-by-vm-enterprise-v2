@@ -2,8 +2,8 @@
 import { useState, useCallback } from 'react';
 import { Plus, Search, Building2, Globe, Users, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
+import { useDeleteWithUndo } from '@/lib/use-delete-with-undo';
 
 interface Company { id: string; name: string; industry?: string; size?: string; website?: string; phone?: string; address?: string; notes?: string; contact_count?: number }
 
@@ -23,14 +23,12 @@ export default function TenantCompaniesClient({ initialCompanies, permissions, t
     setShowForm(false); setEditCo(null);
   }, []);
 
+  const { deleteEntity } = useDeleteWithUndo('company', reload);
+
   const del = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const company = companies.find(c => c.id === id);
-    await confirmThen(`Delete "${company?.name || 'this company'}"?`, async () => {
-      const res = await fetch(`/api/tenant/companies/${id}`, { method: 'DELETE' });
-      if (res.ok) { setCompanies((p) => p.filter(c => c.id !== id)); toast.success('Deleted'); }
-      else toast.error('Failed to delete');
-    });
+    await deleteEntity(id, `Delete "${company?.name || 'this company'}"?`);
   };
 
   return (

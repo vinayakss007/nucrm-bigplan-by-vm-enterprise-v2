@@ -1,11 +1,13 @@
 'use client';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckSquare, Plus, X, User, Clock, CheckCircle, Trash2, Edit } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { Swipeable } from '@/components/ui/swipeable';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
+import { useDeleteWithUndo } from '@/lib/use-delete-with-undo';
+import { showUndoToast } from '@/lib/undo';
 
 const PRIORITY_CFG = {
   high:   { label:'High',   dot:'bg-red-500',   badge:'text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400' },
@@ -30,6 +32,13 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
   const today = new Date().toISOString().split('T')[0] || '';
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
+  const refreshTasks = useCallback(async () => {
+    const res = await fetch('/api/tenant/tasks');
+    if (res.ok) { const data = await res.json(); setTasks(data.data || []); }
+  }, []);
+
+  const { deleteEntity } = useDeleteWithUndo('task', refreshTasks);
+
   const filtered = tasks.filter(t => {
     if (filter === 'open')   return !t.completed;
     if (filter === 'done')   return t.completed;
@@ -48,11 +57,7 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
 
   const deleteTask = async (id: string) => {
     const task = tasks.find(t => t.id === id);
-    confirmThen(`Delete "${task?.title || 'this task'}"?`, async () => {
-      const res = await fetch(`/api/tenant/tasks/${id}`, { method:'DELETE' });
-      if (res.ok) { setTasks(prev => prev.filter(t => t.id !== id)); toast.success('Task deleted'); }
-      else toast.error('Failed to delete');
-    });
+    await deleteEntity(id, `Delete "${task?.title || 'this task'}"?`);
   };
 
   const bulkComplete = async () => {
@@ -67,9 +72,17 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
   const bulkDelete = async () => {
     const ids = [...selected];
     await confirmThen(`Delete ${ids.length} task(s)?`, async () => {
-      setTasks(prev => prev.filter(t => !ids.includes(t.id)));
       await Promise.all(ids.map(id => fetch(`/api/tenant/tasks/${id}`, { method:'DELETE' })));
-      setSelected(new Set()); toast.success(`${ids.length} tasks deleted`);
+      setSelected(new Set()); 
+      showUndoToast(`${ids.length} tasks deleted`, async () => {
+        await Promise.all(ids.map(id => fetch('/api/tenant/trash', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, resource_type: 'task' }),
+        })));
+        toast.success('Restored');
+        refreshTasks();
+      });
+      refreshTasks();
     });
   };
 

@@ -16,7 +16,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import toast from 'react-hot-toast'
-import { confirmThen } from '@/components/ui/confirm-dialog'
+
+import { useDeleteWithUndo } from '@/lib/use-delete-with-undo'
 
 const STAGES = [
   { id: 'lead', label: 'Lead', color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
@@ -90,6 +91,8 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
     }
     setLoading(false)
   }, [pagination.pageSize, globalFilter])
+
+  const { deleteEntity } = useDeleteWithUndo('deal', loadData)
 
   const handlePaginationChange = useCallback((page: number) => {
     setPagination(prev => ({ ...prev, pageIndex: page }))
@@ -238,15 +241,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
               <DropdownMenuItem
                 className="text-red-600 dark:text-red-400"
                 onClick={async () => {
-                  await confirmThen(`Delete "${deal.title}"?`, async () => {
-                    const res = await fetch(`/api/tenant/deals/${deal.id}`, { method: 'DELETE' })
-                    if (res.ok) {
-                      toast.success('Deal deleted')
-                      loadData(pagination.pageIndex)
-                    } else {
-                      toast.error('Failed to delete')
-                    }
-                  })
+                  await deleteEntity(deal.id, `Delete "${deal.title}"?`)
                 }}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
@@ -257,7 +252,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
         )
       },
     },
-  ], [pagination.pageIndex, loadData])
+  ], [deleteEntity])
 
   // ── Bulk actions ──────────────────────────────────────────
   const [_bulkBusy, setBulkBusy] = useState(false)
