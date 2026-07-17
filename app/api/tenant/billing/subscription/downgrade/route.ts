@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     // Update subscription in database to reflect pending downgrade
     await db.update(subscriptions).set({
       metadata: {
-        ...currentSub.metadata,
+        ...(currentSub.metadata as Record<string, unknown> || {}),
         pending_plan_id: planId,
         scheduled_downgrade: true,
         scheduled_downgrade_at: new Date(stripeSub.current_period_end * 1000).toISOString(),

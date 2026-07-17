@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
       currentPeriodEnd: new Date(stripeSub.current_period_end * 1000),
       cancelAtPeriodEnd: false,
       metadata: {
-        ...currentSub.metadata,
+        ...(currentSub.metadata as Record<string, unknown> || {}),
         upgraded_at: new Date().toISOString(),
         upgraded_by: ctx.userId,
         previous_plan_id: currentSub.planId,
