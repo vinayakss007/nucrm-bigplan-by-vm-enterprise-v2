@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
     await db.insert(billingEvents).values({
       tenantId: ctx.tenantId,
       eventType: 'subscription.upgraded',
-      amount: newPlan.priceMonthly,
+      amount: String(newPlan.priceMonthly || '0'),
       currency: 'usd',
       stripeSubscriptionId: currentSub.stripeSubscriptionId,
       metadata: {
