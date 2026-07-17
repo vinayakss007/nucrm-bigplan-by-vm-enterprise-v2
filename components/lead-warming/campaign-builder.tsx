@@ -197,7 +197,7 @@ export function CampaignBuilder({ onCreated, onClose }: Props) {
           </div>
           <div className="flex gap-2">
             {canNext && (
-              <Button size="sm" onClick={() => setStep(STEPS[stepIdx + 1].key)}>
+              <Button size="sm" onClick={() => { const next = STEPS[stepIdx + 1]; if (next) setStep(next.key); }}>
                 Next <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             )}
