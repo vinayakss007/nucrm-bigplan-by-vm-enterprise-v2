@@ -11,6 +11,7 @@ import {
   Tag, Library, ShieldUser, Crown, Receipt, Lock, ShieldCheck, KeyRound,
   Network, MapPin, Repeat, Timer, Mail, Webhook, History,
   Scale, Shield, Save, ArrowRightLeft, Upload, Send, BrainCircuit, FileEdit, Target, AlertTriangle, Activity, Heart,
+  BarChart3, MessageSquare,
 } from 'lucide-react';
 
 export type SettingsItem = {
@@ -102,12 +103,14 @@ export const GROUPS: SettingsGroup[] = [
       { href: '/tenant/settings/territories',     label: 'Territories',       icon: MapPin,     desc: 'Regional ownership',             keywords: 'region territory geo' },
       { href: '/tenant/settings/assignment-rules', label: 'Assignment Rules', icon: Repeat,     desc: 'Round-robin & rules',           keywords: 'round robin rules assignment' },
       { href: '/tenant/settings/sla',             label: 'SLA Policies',      icon: Timer,      desc: 'Response & resolution',          keywords: 'sla response time' },
+      { href: '/tenant/settings/csat',             label: 'CSAT Dashboard',    icon: BarChart3,  desc: 'Satisfaction scores & trends',   keywords: 'csat satisfaction survey score feedback' },
     ],
   },
   {
     id: 'ws-channels', label: 'Channels & Customer-Facing', scope: 'workspace',
     items: [
       { href: '/tenant/settings/email',           label: 'Email Sending',    icon: Mail,        desc: 'From address, signatures, SPF/DKIM', keywords: 'email smtp signature spf dkim sending' },
+      { href: '/tenant/settings/canned-responses', label: 'Canned Responses', icon: MessageSquare, desc: 'Reusable reply templates',      keywords: 'canned response template reply shortcut' },
       { href: '/tenant/settings/portal',          label: 'Customer Portal',  icon: Globe,       desc: 'Branding, access',              adminOnly: true, keywords: 'portal customer self-service' },
     ],
   },
