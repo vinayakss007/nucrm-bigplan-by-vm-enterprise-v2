@@ -188,7 +188,7 @@ export function CampaignBuilder({ onCreated, onClose }: Props) {
         <div className="flex items-center justify-between px-6 py-4 border-t border-border">
           <div>
             {canPrev ? (
-              <Button variant="ghost" size="sm" onClick={() => setStep(STEPS[stepIdx - 1].key)}>
+              <Button variant="ghost" size="sm" onClick={() => { const prev = STEPS[stepIdx - 1]; if (prev) setStep(prev.key); }}>
                 <ChevronLeft className="w-4 h-4 mr-1" /> Back
               </Button>
             ) : (
