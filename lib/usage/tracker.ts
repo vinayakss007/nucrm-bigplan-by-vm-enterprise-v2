@@ -146,10 +146,10 @@ export async function checkLimit(
   resource: string
 ): Promise<LimitCheckResult> {
   try {
-    // Get the tenant's plan
+    // Get the tenant's plan and per-tenant overrides
     const tenant = await db.query.tenants.findFirst({
       where: eq(tenants.id, tenantId),
-      columns: { planId: true, currentUsers: true, currentContacts: true, currentDeals: true, storageUsedBytes: true },
+      columns: { planId: true, currentUsers: true, currentContacts: true, currentDeals: true, storageUsedBytes: true, settings: true },
     });
 
     if (!tenant) {
@@ -161,8 +161,17 @@ export async function checkLimit(
       where: eq(planLimits.planId, tenant.planId),
     });
 
-    // If no plan limits row exists, allow (unlimited)
-    if (!limits) {
+    // Per-tenant limit overrides from settings.limitOverrides JSONB
+    const overrides = ((tenant.settings as Record<string, unknown>)?.limitOverrides as Record<string, number | null>) ?? {};
+
+    // Helper: resolve effective limit — override wins over plan default
+    const eff = (planField: string | null | undefined, overrideField: string): number | null => {
+      if (overrideField in overrides) return overrides[overrideField];
+      return planField != null ? Number(planField) : null;
+    };
+
+    // If no plan limits row and no overrides, allow (unlimited)
+    if (!limits && !Object.keys(overrides).length) {
       return { allowed: true, current: 0, limit: null };
     }
 
@@ -170,47 +179,47 @@ export async function checkLimit(
     const resourceMap: Record<string, { current: number; limit: number | null }> = {
       users: {
         current: tenant.currentUsers ?? 0,
-        limit: limits.maxUsers,
+        limit: eff(limits?.maxUsers, 'maxUsers'),
       },
       contacts: {
         current: tenant.currentContacts ?? 0,
-        limit: limits.maxContacts,
+        limit: eff(limits?.maxContacts, 'maxContacts'),
       },
       deals: {
         current: tenant.currentDeals ?? 0,
-        limit: limits.maxDeals,
+        limit: eff(limits?.maxDeals, 'maxDeals'),
       },
       storage_bytes: {
         current: tenant.storageUsedBytes ?? 0,
-        limit: limits.maxStorageBytes,
+        limit: eff(limits?.maxStorageBytes, 'maxStorageBytes'),
       },
       api_calls_per_day: {
         current: 0, // Will be computed from aggregate below
-        limit: limits.maxApiCallsPerDay,
+        limit: eff(limits?.maxApiCallsPerDay, 'maxApiCallsPerDay'),
       },
       ai_tokens_per_day: {
         current: 0,
-        limit: limits.maxAiTokensPerDay,
+        limit: eff(limits?.maxAiTokensPerDay, 'maxAiTokensPerDay'),
       },
       emails_per_day: {
         current: 0,
-        limit: limits.maxEmailsPerDay,
+        limit: eff(limits?.maxEmailsPerDay, 'maxEmailsPerDay'),
       },
       active_automations: {
         current: 0,
-        limit: limits.maxActiveAutomations,
+        limit: eff(limits?.maxActiveAutomations, 'maxActiveAutomations'),
       },
       tickets: {
         current: 0,
-        limit: limits.maxTickets,
+        limit: eff(limits?.maxTickets, 'maxTickets'),
       },
       forms: {
         current: 0,
-        limit: limits.maxForms,
+        limit: eff(limits?.maxForms, 'maxForms'),
       },
       custom_fields_per_entity: {
         current: 0,
-        limit: limits.maxCustomFieldsPerEntity,
+        limit: eff(limits?.maxCustomFieldsPerEntity, 'maxCustomFieldsPerEntity'),
       },
     };
 
