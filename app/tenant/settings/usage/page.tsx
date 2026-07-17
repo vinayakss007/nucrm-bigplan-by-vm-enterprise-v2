@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 interface UsageData {
   thisMonth: {
     contacts: number; deals: number; tasks: number; tickets: number;
-    companies: number; emails: number; dealValue: number; dealsWon: number;
+    companies: number; emails: number; dealValue: number;
   };
   lastMonth: { contacts: number; deals: number; tasks: number };
   totals: {
@@ -117,10 +117,6 @@ export default function UsageDashboardPage() {
               <div>
                 <p className="text-muted-foreground">This Month</p>
                 <p className="font-semibold">{formatCurrency(data.thisMonth.dealValue)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Deals Won (MTD)</p>
-                <p className="font-semibold">{data.thisMonth.dealsWon}</p>
               </div>
             </div>
           </div>

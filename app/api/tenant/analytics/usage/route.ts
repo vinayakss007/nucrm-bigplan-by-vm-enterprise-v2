@@ -50,10 +50,6 @@ export async function GET(request: NextRequest) {
     const [totalDealValue] = await db.select({ total: sql<string>`coalesce(sum(${deals.amount})::numeric, 0)` })
       .from(deals).where(eq(deals.tenantId, ctx.tenantId));
 
-    // Deals won this month
-    const [dealsWon] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(deals).where(and(eq(deals.tenantId, ctx.tenantId), eq(deals.status, 'won'), gte(deals.createdAt, thisMonthStart)));
-
     // Recent activity
     const recentActivity = await db.select({
       id: activities.id,
@@ -77,7 +73,6 @@ export async function GET(request: NextRequest) {
           companies: thisMonthCompanies?.count ?? 0,
           emails: thisMonthEmails?.count ?? 0,
           dealValue: Number(thisMonthDealValue?.total ?? 0),
-          dealsWon: dealsWon?.count ?? 0,
         },
         lastMonth: {
           contacts: lastMonthContacts?.count ?? 0,
