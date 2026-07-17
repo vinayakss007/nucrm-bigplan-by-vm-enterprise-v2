@@ -13,7 +13,7 @@ interface CacheConfig {
   forceRefresh?: boolean;
 }
 
-const store = new Map<string, CacheEntry<unknown>>();
+const _store = new Map<string, CacheEntry<unknown>>();
 
 function getKey(key: string): string {
   return `${CACHE_PREFIX}${key}`;

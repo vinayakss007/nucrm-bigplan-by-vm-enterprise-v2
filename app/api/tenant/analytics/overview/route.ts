@@ -4,7 +4,7 @@ import { db } from '@/drizzle/db';
 import { contacts, deals, tasks, pipelines, dealStages } from '@/drizzle/schema';
 import { eq, and, sql, asc, desc, inArray } from 'drizzle-orm';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const ctx = await requireTenantCtx();
     if (ctx instanceof NextResponse) return ctx;

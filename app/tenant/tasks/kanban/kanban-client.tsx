@@ -137,10 +137,11 @@ const TaskColumn = memo(function TaskColumn({ column, tasks }: { column: Column;
 
 export default function TasksKanbanPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const { data: res, error, isLoading } = useSWR('/api/tenant/tasks');
+  const { data: res, isLoading } = useSWR('/api/tenant/tasks');
   const [tasks, setTasks] = useState<Task[]>([]);
   const loading = isLoading && tasks.length === 0;
 
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (res?.data && tasks.length === 0) {
       setTasks(res.data as Task[]);

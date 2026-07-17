@@ -79,7 +79,7 @@
     "analyze:bundle": "ANALYZE=true npm run build && npx tsx scripts/analyze-bundle.ts",
     "analyze:visual": "ANALYZE=true npm run build",
     "quality:report": "npx tsx scripts/quality-report.ts",
-    "quality:lint": "npx eslint . --max-warnings 3300",
+    "quality:lint": "npx eslint . --max-warnings 46",
     "quality:full": "npm run typecheck && npm run quality:lint && npm run test && npm run quality:report",
     "lighthouse:audit": "npx tsx scripts/lighthouse-audit.ts",
     "storybook": "storybook dev -p 6006",
