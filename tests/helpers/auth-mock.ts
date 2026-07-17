@@ -46,17 +46,41 @@ export function createAuthenticatedRequest(
   });
 }
 
+// vi.hoisted ensures this reference exists before vi.mock factory runs
+const { mockRequireAuthFn } = vi.hoisted(() => ({
+  mockRequireAuthFn: vi.fn(async () => ({
+    userId: 'test-user-001',
+    tenantId: 'test-tenant-001',
+    email: 'test@nucrm.com',
+    isAdmin: true,
+    isSuperAdmin: false,
+    permissions: { all: true },
+    roleSlug: 'admin',
+  })),
+}));
+
+vi.mock('@/lib/auth/middleware', () => ({
+  requireAuth: mockRequireAuthFn,
+  requirePerm: vi.fn(() => null),
+  requireModule: vi.fn().mockResolvedValue(null),
+  can: vi.fn(() => true),
+}));
+
+/**
+ * Return the current auth context (used in vi.mock factories).
+ * Must be called inside the factory, not at module scope.
+ */
+export function requireAuthContext(): MockAuthContext {
+  return { ...DEFAULT_AUTH_CONTEXT };
+}
+
 /**
  * Mock the requireAuth middleware to return a specific context.
  * Call this in beforeEach() to bypass real JWT verification.
  */
 export function mockRequireAuth(context: Partial<MockAuthContext> = {}) {
   const ctx = { ...DEFAULT_AUTH_CONTEXT, ...context };
-
-  vi.mock('@/lib/auth/middleware', () => ({
-    requireAuth: vi.fn(async () => ctx),
-  }));
-
+  mockRequireAuthFn.mockResolvedValue(ctx);
   return ctx;
 }
 
