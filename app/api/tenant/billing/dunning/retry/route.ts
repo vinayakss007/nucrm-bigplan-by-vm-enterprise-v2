@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       attemptNumber: attemptNumber,
       status: 'pending',
       scheduledAt: new Date(),
-      paymentAmount: 0, // Will be populated from Stripe invoice
+      paymentAmount: '0', // Will be populated from Stripe invoice
       metadata: {
         created_by: ctx.userId,
         manual_retry: true,
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     await db.insert(billingEvents).values({
       tenantId: ctx.tenantId,
       eventType: 'dunning.retry_initiated',
-      amount: 0,
+      amount: '0',
       currency: 'usd',
       metadata: {
         subscription_id: subscriptionId,
