@@ -11,6 +11,7 @@ import {
 import { cn, formatCurrency, formatDateTimeShort, formatDate, formatRelativeTime } from '@/lib/utils';
 import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
 import { ContactTimeline } from '@/components/tenant/contact-timeline';
+import { CallLogger, CallLogList } from '@/components/tenant/call-logger';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import type { Task, Deal, Company } from '@/types';
@@ -233,19 +234,21 @@ export default function ContactDetailClient({
   contact: initialContact, initialActivities, deals: initialDeals,
   tasks: initialTasks, companies, teamMembers, permissions, userId,
   invoices=[], orders=[], contracts=[], subscriptions=[], quotes=[],
+  callLogs: initialCallLogs=[],
 }: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contact: any; initialActivities: any[]; deals: any[]; tasks: any[];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   companies: any[]; teamMembers: any[]; permissions: any; userId: string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  invoices?: any[]; orders?: any[]; contracts?: any[]; subscriptions?: any[]; quotes?: any[];
+  invoices?: any[]; orders?: any[]; contracts?: any[]; subscriptions?: any[]; quotes?: any[]; callLogs?: any[];
 }) {
   const [contact, setContact]       = useState(initialContact);
   const [activities, setActivities] = useState(initialActivities);
   const [deals, setDeals]           = useState(initialDeals);
   const [tasks, setTasks]           = useState(initialTasks);
-  const [activeTab, setActiveTab]   = useState('activity'); // 'activity' | 'tasks' | 'deals' | 'history' | 'billing'
+  const [callLogs, setCallLogs]     = useState(initialCallLogs);
+  const [activeTab, setActiveTab]   = useState('activity'); // 'activity' | 'tasks' | 'deals' | 'calls' | 'history' | 'billing'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [history, setHistory]           = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -572,6 +575,7 @@ export default function ContactDetailClient({
               { id:'leads',    label:`Leads${contactLeads.length ? ` (${contactLeads.length})` : ''}` },
               { id:'tasks',    label:`Tasks (${tasks.filter(t=>!t.completed).length} open)` },
               { id:'deals',    label:`Deals (${deals.length})` },
+              { id:'calls',    label:`Calls (${callLogs.length})`, icon: PhoneCall },
               { id:'billing',  label:`Billing (${invoices.length + orders.length + contracts.length + subscriptions.length + quotes.length})`, icon: DollarSign },
               { id:'history', label:'History', icon: History },
             ].map(tab => (
@@ -780,6 +784,33 @@ export default function ContactDetailClient({
                     {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     <span className="text-sm font-bold">{formatCurrency(deals.filter((d: any)=>!['lost'].includes(d.stage)).reduce((s: any, d: any)=>s+Number(d.value),0))}</span>
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── CALLS TAB ── */}
+          {activeTab === 'calls' && (
+            <div className="admin-card overflow-hidden">
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                <p className="text-sm font-semibold">Call Logs</p>
+                <CallLogger
+                  contactId={contact.id}
+                  companyId={contact.company_id}
+                  teamMembers={teamMembers}
+                  onLogged={() => {
+                    fetch(`/api/tenant/calls?contact_id=${contact.id}`)
+                      .then(r => r.json())
+                      .then(d => setCallLogs(d.data || []))
+                      .catch(() => {});
+                  }}
+                />
+              </div>
+              {!callLogs.length ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">No calls logged yet</div>
+              ) : (
+                <div className="p-2">
+                  <CallLogList calls={callLogs} />
                 </div>
               )}
             </div>
