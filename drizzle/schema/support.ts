@@ -94,6 +94,9 @@ export const supportTickets = pgTable('support_tickets', {
   
   assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }),
   
+  slaPolicyId: uuid('sla_policy_id'),
+  firstResponseAt: timestamp('first_response_at', { withTimezone: true }),
+  
   metadata: utils.metadata(),
   ...utils.audit(),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
