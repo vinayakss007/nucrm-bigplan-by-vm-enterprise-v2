@@ -3,7 +3,8 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { Plus, MoreHorizontal, Edit, Trash2, Building2, Globe, Tag, UserPlus, Archive, RotateCcw } from 'lucide-react'
-import { confirmThen } from '@/components/ui/confirm-dialog'
+
+import { useDeleteWithUndo } from '@/lib/use-delete-with-undo'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -75,6 +76,8 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
     }
     setLoading(false)
   }, [pagination.pageSize, globalFilter])
+
+  const { deleteEntity } = useDeleteWithUndo('company', loadData)
 
   const handlePaginationChange = useCallback((page: number) => {
     setPagination(prev => ({ ...prev, pageIndex: page }))
@@ -206,15 +209,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
               <DropdownMenuItem
                 className="text-red-600 dark:text-red-400"
                 onClick={async () => {
-                  await confirmThen(`Delete ${company.name}?`, async () => {
-                    const res = await fetch(`/api/tenant/companies/${company.id}`, { method: 'DELETE' })
-                    if (res.ok) {
-                      toast.success('Company deleted')
-                      loadData(pagination.pageIndex)
-                    } else {
-                      toast.error('Failed to delete')
-                    }
-                  })
+                  await deleteEntity(company.id, `Delete ${company.name}?`)
                 }}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
@@ -225,7 +220,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
         )
       },
     },
-  ], [pagination.pageIndex, loadData])
+  ], [deleteEntity])
 
   // ── Bulk actions ──────────────────────────────────────────
   const [_bulkBusy, setBulkBusy] = useState(false)

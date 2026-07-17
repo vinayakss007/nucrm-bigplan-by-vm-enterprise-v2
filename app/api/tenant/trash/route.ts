@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, deals, tasks, companies } from '@/drizzle/schema';
+import { contacts, deals, tasks, companies, leads, projects } from '@/drizzle/schema';
 import { eq, and, isNotNull, sql, desc } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 
@@ -68,6 +68,34 @@ export async function GET(req: NextRequest) {
       .from(companies)
       .where(and(eq(companies.tenantId, ctx.tenantId), isNotNull(companies.deletedAt)));
 
+    const leadQuery = db
+      .select({
+        resource_type: sql<string>`'lead'`,
+        id: leads.id,
+        tenant_id: leads.tenantId,
+        deleted_at: leads.deletedAt,
+        deleted_by: leads.deletedBy,
+        name: sql<string>`${leads.firstName} || ' ' || ${leads.lastName}`,
+        extra: leads.leadStatus,
+        email: sql<string>`NULL`,
+      })
+      .from(leads)
+      .where(and(eq(leads.tenantId, ctx.tenantId), isNotNull(leads.deletedAt)));
+
+    const projectQuery = db
+      .select({
+        resource_type: sql<string>`'project'`,
+        id: projects.id,
+        tenant_id: projects.tenantId,
+        deleted_at: projects.deletedAt,
+        deleted_by: projects.deletedBy,
+        name: projects.name,
+        extra: projects.status,
+        email: sql<string>`NULL`,
+      })
+      .from(projects)
+      .where(and(eq(projects.tenantId, ctx.tenantId), isNotNull(projects.deletedAt)));
+
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -77,12 +105,16 @@ export async function GET(req: NextRequest) {
       else if (type === 'deal') items = await dealQuery.orderBy(desc(deals.deletedAt)).limit(200);
       else if (type === 'task') items = await taskQuery.orderBy(desc(tasks.deletedAt)).limit(200);
       else if (type === 'company') items = await companyQuery.orderBy(desc(companies.deletedAt)).limit(200);
+      else if (type === 'lead') items = await leadQuery.orderBy(desc(leads.deletedAt)).limit(200);
+      else if (type === 'project') items = await projectQuery.orderBy(desc(projects.deletedAt)).limit(200);
     } else {
       const results = await Promise.all([
         contactQuery.limit(100),
         dealQuery.limit(100),
         taskQuery.limit(100),
-        companyQuery.limit(100)
+        companyQuery.limit(100),
+        leadQuery.limit(100),
+        projectQuery.limit(100),
       ]);
       items = results.flat().sort((a, b) => 
         new Date(b.deleted_at!).getTime() - new Date(a.deleted_at!).getTime()
@@ -119,13 +151,13 @@ export async function PATCH(req: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tableMap: Record<string, any> = {
-      contact: contacts, deal: deals, task: tasks, company: companies,
+      contact: contacts, deal: deals, task: tasks, company: companies, lead: leads, project: projects,
     };
     const table = tableMap[resource_type];
     if (!table) return NextResponse.json({ error: 'Invalid resource_type' }, { status: 400 });
 
  
- 
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = { deletedAt: null, deletedBy: null, updatedAt: new Date() };
     if (resource_type === 'contact') updateData.isArchived = false;
@@ -165,7 +197,7 @@ export async function DELETE(req: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tableMap: Record<string, any> = {
-      contact: contacts, deal: deals, task: tasks, company: companies,
+      contact: contacts, deal: deals, task: tasks, company: companies, lead: leads, project: projects,
     };
     const table = tableMap[resource_type];
     if (!table) return NextResponse.json({ error: 'Invalid resource_type' }, { status: 400 });

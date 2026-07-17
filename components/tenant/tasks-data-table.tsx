@@ -16,7 +16,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import toast from 'react-hot-toast'
-import { confirmThen } from '@/components/ui/confirm-dialog'
+
+import { useDeleteWithUndo } from '@/lib/use-delete-with-undo'
 
 const PRIORITY_CFG = {
   high: { label: 'High', dot: 'bg-red-500', badge: 'text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400' },
@@ -86,6 +87,8 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
     }
     setLoading(false)
   }, [pagination.pageSize, globalFilter])
+
+  const { deleteEntity } = useDeleteWithUndo('task', loadData)
 
   const handlePaginationChange = useCallback((page: number) => {
     setPagination(prev => ({ ...prev, pageIndex: page }))
@@ -264,15 +267,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
               <DropdownMenuItem
                 className="text-red-600 dark:text-red-400"
                 onClick={async () => {
-                  await confirmThen(`Delete "${task.title}"?`, async () => {
-                    const res = await fetch(`/api/tenant/tasks/${task.id}`, { method: 'DELETE' })
-                    if (res.ok) {
-                      toast.success('Task deleted')
-                      loadData(pagination.pageIndex)
-                    } else {
-                      toast.error('Failed to delete')
-                    }
-                  })
+                  await deleteEntity(task.id, `Delete "${task.title}"?`)
                 }}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
@@ -283,7 +278,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
         )
       },
     },
-  ], [pagination.pageIndex, loadData, today])
+  ], [deleteEntity, today])
 
   // ── Bulk actions ──────────────────────────────────────────
   const [customFields, setCustomFields] = useState<{ fieldKey: string; fieldLabel: string }[]>([])

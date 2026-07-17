@@ -18,7 +18,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import toast from 'react-hot-toast'
-import { confirmThen } from '@/components/ui/confirm-dialog'
+
+import { useDeleteWithUndo } from '@/lib/use-delete-with-undo'
 
 const STATUS_CFG: Record<string, { label: string; badge: string }> = {
   active: { label: 'Active', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
@@ -96,6 +97,8 @@ export default function ProjectsDataTable({ initialProjects, teamMembers, permis
     setLoading(false)
   }, [pagination.pageSize])
 
+  const { deleteEntity } = useDeleteWithUndo('project', loadData)
+
   const handlePaginationChange = useCallback((page: number) => {
     setPagination(prev => ({ ...prev, pageIndex: page }))
     loadData(page)
@@ -166,16 +169,8 @@ export default function ProjectsDataTable({ initialProjects, teamMembers, permis
   }
 
   const handleDelete = useCallback(async (project: Project) => {
-    await confirmThen(`Delete "${project.name}"?`, async () => {
-      const res = await fetch(`/api/tenant/projects/${project.id}`, { method: 'DELETE' })
-      if (res.ok) {
-        toast.success('Project deleted')
-        loadData(pagination.pageIndex)
-      } else {
-        toast.error('Failed to delete project')
-      }
-    })
-  }, [loadData, pagination.pageIndex])
+    await deleteEntity(project.id, `Delete "${project.name}"?`)
+  }, [deleteEntity])
 
   const columns: ColumnDef<Project>[] = useMemo(() => [
     {
