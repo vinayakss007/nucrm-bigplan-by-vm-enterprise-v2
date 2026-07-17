@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     await db.insert(billingEvents).values({
       tenantId: ctx.tenantId,
       eventType: cancelAtPeriodEnd ? 'subscription.cancel_scheduled' : 'subscription.cancelled',
-      amount: currentSub.planId ? 0 : undefined,
+      amount: currentSub.planId ? '0' : undefined,
       currency: 'usd',
       stripeSubscriptionId: currentSub.stripeSubscriptionId,
       metadata: {
