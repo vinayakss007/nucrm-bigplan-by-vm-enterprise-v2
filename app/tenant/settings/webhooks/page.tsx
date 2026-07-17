@@ -355,23 +355,25 @@ export default function WebhooksPage() {
                 {/* Delivery log */}
                 {expanded === wh.id && (
                   <div className="mt-4 border-t border-border pt-4">
-                    {testResult[wh.id] && (
-                      <div className={cn('mb-3 p-3 rounded-lg border text-xs',
-                        testResult[wh.id].status === 'delivered'
-                          ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800'
-                          : 'bg-red-50 border-red-200 dark:bg-red-950/20 dark:bg-red-950/20 dark:border-red-800')}>
-                        <p className="font-semibold mb-1">Test Result</p>
-                        <div className="flex items-center gap-3">
-                          <span className={cn('font-bold',
-                            testResult[wh.id].status === 'delivered' ? 'text-emerald-700' : 'text-red-700')}>
-                            {testResult[wh.id].status === 'delivered' ? 'Delivered' : 'Failed'}
-                          </span>
-                          {testResult[wh.id].statusCode && <span className="font-mono">HTTP {testResult[wh.id].statusCode}</span>}
-                          <span>{testResult[wh.id].duration}ms</span>
-                          {testResult[wh.id].errorMessage && <span className="text-red-500">{testResult[wh.id].errorMessage}</span>}
+                    {testResult[wh.id] && (() => {
+                      const tr = testResult[wh.id]!;
+                      return (
+                        <div className={cn('mb-3 p-3 rounded-lg border text-xs',
+                          tr.status === 'delivered'
+                            ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800'
+                            : 'bg-red-50 border-red-200 dark:bg-red-950/20 dark:bg-red-950/20 dark:border-red-800')}>
+                          <p className="font-semibold mb-1">Test Result</p>
+                          <div className="flex items-center gap-3">
+                            <span className={cn('font-bold', tr.status === 'delivered' ? 'text-emerald-700' : 'text-red-700')}>
+                              {tr.status === 'delivered' ? 'Delivered' : 'Failed'}
+                            </span>
+                            {tr.statusCode && <span className="font-mono">HTTP {tr.statusCode}</span>}
+                            <span>{tr.duration}ms</span>
+                            {tr.errorMessage && <span className="text-red-500">{tr.errorMessage}</span>}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                     <p className="text-xs font-semibold text-muted-foreground mb-2">Recent Deliveries</p>
                     {(() => {
                       const dels = deliveries[wh.id];
