@@ -8,24 +8,25 @@
 
 ## PLATFORM STATS
 
-| Metric | Count |
-|--------|-------|
-| API Routes | 266 |
-| Tenant Pages | 74 |
-| Super Admin Pages | 22 |
-| Library Modules | 154 files |
-| Drizzle Schema Tables | 221 |
-| Schema Files | 31 |
-| Test Files | 58 |
-| Tests Passing | 380 |
-| SDK Files | 32 |
-| TypeScript Errors | 0 |
+| Metric                | Count     |
+| --------------------- | --------- |
+| API Routes            | 266       |
+| Tenant Pages          | 74        |
+| Super Admin Pages     | 22        |
+| Library Modules       | 154 files |
+| Drizzle Schema Tables | 221       |
+| Schema Files          | 31        |
+| Test Files            | 58        |
+| Tests Passing         | 380       |
+| SDK Files             | 32        |
+| TypeScript Errors     | 0         |
 
 ---
 
 ## WHAT'S FULLY BUILT
 
 ### Core CRM (also works as normal CRM)
+
 - [x] Contacts, Companies, Leads, Deals (CRUD + pipeline)
 - [x] Tasks, Calendar, Meetings, Activities
 - [x] Invoices, Orders, Quotes, Contracts, Subscriptions
@@ -36,6 +37,7 @@
 - [x] Tags, Notes, Custom Fields
 
 ### Module System (CRM-as-Backend-Engine)
+
 - [x] Module Registry (13 built-in modules with pricing per plan)
 - [x] Module Enforcement Middleware (`requireModule()` + `requireFeature()`)
 - [x] Auto-Install on Tenant Signup (based on plan + template)
@@ -45,6 +47,7 @@
 - [x] Feature-Level Toggles per module
 
 ### Product System (Multiple Small SaaS)
+
 - [x] Product Registry (8 products defined)
 - [x] Dedicated Product Entry Pages (`/tenant/products/[templateId]`)
 - [x] 8 Product Types: Proposal Generator, AI Sales CRM, WhatsApp Automation, Helpdesk, Recruitment ATS, Real Estate CRM, E-Commerce CRM, Invoice & Billing
@@ -53,6 +56,7 @@
 - [x] Template Schema in DB (custom templates storable, not just hardcoded)
 
 ### SDK (For People/Yourself to Build Services On Top)
+
 - [x] NuCRMClient (typed client with API key auth)
 - [x] 20 Resource Classes (contacts, deals, leads, companies, tasks, tickets, invoices, documents, quotes, orders, contracts, subscriptions, services, meetings, activities, forms, sequences, automations, reports)
 - [x] Bulk Operations (createMany, updateMany, deleteMany)
@@ -67,12 +71,14 @@
 - [x] Full README.md with docs + examples
 
 ### Multi-Frontend API Gateway
+
 - [x] `/api/v2/` gateway with catch-all routing
 - [x] Tenant resolution via: API key, X-Tenant-ID header, custom domain, subdomain
 - [x] CORS validation per tenant
 - [x] Gateway tenant header injection for downstream validation
 
 ### Enterprise Features
+
 - [x] SSO / SAML / OIDC (Google Workspace, Azure AD, Okta)
 - [x] White-Label Branding (custom logo, colors, domain, CSS injection)
 - [x] GDPR Data Export + Right to Deletion
@@ -82,6 +88,7 @@
 - [x] Multi-Tenant Hierarchy (parent-child orgs)
 
 ### Billing & Monetization
+
 - [x] Stripe Integration (checkout, portal, webhooks)
 - [x] Module Add-On Purchases (per-module billing)
 - [x] Plan Limits Table (free/starter/pro/enterprise)
@@ -90,6 +97,7 @@
 - [x] Usage Notifications (80/90/100% thresholds)
 
 ### Vertical Feature Modules
+
 - [x] SLA Management (response targets, escalation, breach detection)
 - [x] Auto-Assignment Rules (round-robin, territory, skill-based, weighted)
 - [x] Document Management (S3 presigned URLs, folders, per-entity files)
@@ -105,6 +113,7 @@
 - [x] Visitor Tracking (page-view scoring, identification)
 
 ### Infrastructure
+
 - [x] Docker + docker-compose (dev + prod)
 - [x] CI/CD Pipeline (GitHub Actions)
 - [x] Sentry Error Tracking
@@ -118,6 +127,7 @@
 - [x] Backup System + Selective Restore (per-user)
 
 ### Security
+
 - [x] JWT Auth + Refresh Tokens
 - [x] API Key Authentication with scopes
 - [x] TOTP 2FA + Backup Codes
@@ -130,6 +140,7 @@
 - [x] Webhook HMAC Signature Verification
 
 ### Frontend
+
 - [x] Full-width Settings Layout (no wasted space)
 - [x] SSO Settings Page
 - [x] RBAC Settings Page
@@ -147,22 +158,23 @@
 
 Every feature from the original plans has been implemented:
 
-| Originally Missing | Status |
-|-------------------|--------|
-| Saved Views / Filter Presets (FEAT-03) | DONE - `app/api/tenant/views/` with CRUD + sharing |
-| Call Logging Page (FEAT-09) | DONE - `app/tenant/calls/` with data table + log modal |
-| Contact Scoring UI (FEAT-01) | DONE - Hot/Warm/Cold badges on contact detail |
-| Meeting Scheduling Page | DONE - Enhanced calendar with hourly timeline + booking form |
-| Revenue Forecasting Page (FEAT-08) | DONE - `app/tenant/analytics/forecast/` with recharts |
-| Sentry Error Tracking | DONE - All 500 errors captured via `apiError()` + error boundaries |
+| Originally Missing                     | Status                                                             |
+| -------------------------------------- | ------------------------------------------------------------------ |
+| Saved Views / Filter Presets (FEAT-03) | DONE - `app/api/tenant/views/` with CRUD + sharing                 |
+| Call Logging Page (FEAT-09)            | DONE - `app/tenant/calls/` with data table + log modal             |
+| Contact Scoring UI (FEAT-01)           | DONE - Hot/Warm/Cold badges on contact detail                      |
+| Meeting Scheduling Page                | DONE - Enhanced calendar with hourly timeline + booking form       |
+| Revenue Forecasting Page (FEAT-08)     | DONE - `app/tenant/analytics/forecast/` with recharts              |
+| Sentry Error Tracking                  | DONE - All 500 errors captured via `apiError()` + error boundaries |
 
 ### Only infrastructure-level items remain (not code):
-| Item | Type |
-|------|------|
-| K8s manifests / Terraform | Deployment config (Docker works without it) |
-| Actual Stripe/Twilio/DocuSign accounts | Third-party service signup |
-| Database deployment | Supabase/Neon/Railway setup |
-| Domain configuration | DNS setup per product |
+
+| Item                                   | Type                                        |
+| -------------------------------------- | ------------------------------------------- |
+| K8s manifests / Terraform              | Deployment config (Docker works without it) |
+| Actual Stripe/Twilio/DocuSign accounts | Third-party service signup                  |
+| Database deployment                    | Supabase/Neon/Railway setup                 |
+| Domain configuration                   | DNS setup per product                       |
 
 ---
 
@@ -216,6 +228,7 @@ EXTERNAL DEVELOPERS (via SDK)
 ## ALSO WORKS AS NORMAL CRM
 
 The product entry pages are CURATED views. Every tenant still has full CRM access:
+
 - `/tenant/dashboard` - Full CRM dashboard
 - `/tenant/contacts` - All contacts
 - `/tenant/deals` - All deals + Kanban
@@ -228,18 +241,18 @@ The product entry pages are CURATED views. Every tenant still has full CRM acces
 
 ## DEPLOYMENT CHECKLIST (What you need to go live)
 
-| Step | Status | Action |
-|------|--------|--------|
-| Code | DONE | All features built, tested, passing |
-| Database | NEEDS SETUP | Deploy PostgreSQL (Supabase/Neon/Railway) |
-| Redis | NEEDS SETUP | Deploy Redis (Upstash free tier works) |
-| S3/R2 | NEEDS SETUP | Create Cloudflare R2 bucket (free 10GB) |
-| Stripe | NEEDS CONFIG | Add Stripe keys to .env |
-| Domain | NEEDS SETUP | Point domains to Vercel/Railway |
-| Sentry | NEEDS CONFIG | Add Sentry DSN to .env |
-| Deploy | NEEDS SETUP | `npm run build` + deploy to Vercel/Railway |
-| DB Migration | NEEDS RUN | `npm run db:push` after database is connected |
-| Seed Data | NEEDS RUN | `npm run db:seed` for plan limits + modules |
+| Step         | Status       | Action                                        |
+| ------------ | ------------ | --------------------------------------------- |
+| Code         | DONE         | All features built, tested, passing           |
+| Database     | NEEDS SETUP  | Deploy PostgreSQL (Supabase/Neon/Railway)     |
+| Redis        | NEEDS SETUP  | Deploy Redis (Upstash free tier works)        |
+| S3/R2        | NEEDS SETUP  | Create Cloudflare R2 bucket (free 10GB)       |
+| Stripe       | NEEDS CONFIG | Add Stripe keys to .env                       |
+| Domain       | NEEDS SETUP  | Point domains to Vercel/Railway               |
+| Sentry       | NEEDS CONFIG | Add Sentry DSN to .env                        |
+| Deploy       | NEEDS SETUP  | `npm run build` + deploy to Vercel/Railway    |
+| DB Migration | NEEDS RUN    | `npm run db:push` after database is connected |
+| Seed Data    | NEEDS RUN    | `npm run db:seed` for plan limits + modules   |
 
 **Estimated time to go live: 2-3 hours of configuration (no code changes needed)**
 
@@ -248,6 +261,7 @@ The product entry pages are CURATED views. Every tenant still has full CRM acces
 ## FINAL VERDICT
 
 **Platform Status: PRODUCTION READY**
+
 - 221 database tables
 - 266 API routes
 - 397 passing tests
