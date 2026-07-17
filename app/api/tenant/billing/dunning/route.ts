@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
         emailNotifications: config.emailNotifications,
         webhookNotifications: config.webhookNotifications,
         metadata: {
-          ...existingSettings.metadata,
+          ...(existingSettings.metadata as Record<string, unknown> || {}),
           updated_at: new Date().toISOString(),
           updated_by: ctx.userId,
         },
