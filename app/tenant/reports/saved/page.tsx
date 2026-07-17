@@ -32,6 +32,8 @@ const REPORT_TYPE_LABELS: Record<string, string> = {
 export default function SavedReportsPage() {
   const [reports, setReports] = useState<SavedReport[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
 
   const load = async () => {
     try {
@@ -45,6 +47,12 @@ export default function SavedReportsPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const filtered = reports.filter(r => {
+    const matchesSearch = !search || r.name.toLowerCase().includes(search.toLowerCase()) || r.createdByName?.toLowerCase().includes(search.toLowerCase());
+    const matchesType = !typeFilter || r.reportType === typeFilter;
+    return matchesSearch && matchesType;
+  });
 
   const handleDelete = async (id: string, name: string) => {
     await confirmThen(
@@ -106,6 +114,28 @@ export default function SavedReportsPage() {
         </Link>
       </div>
 
+      {reports.length > 0 && (
+        <div className="flex gap-3">
+          <input
+            type="text"
+            placeholder="Search reports..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="flex-1 px-3 py-2 border rounded-md bg-background text-sm"
+          />
+          <select
+            value={typeFilter}
+            onChange={e => setTypeFilter(e.target.value)}
+            className="px-3 py-2 border rounded-md bg-background text-sm"
+          >
+            <option value="">All types</option>
+            {Object.entries(REPORT_TYPE_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {reports.length === 0 ? (
         <div className="text-center py-16 border rounded-lg bg-card">
           <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -123,7 +153,11 @@ export default function SavedReportsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {reports.map(report => (
+          {filtered.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              No reports match your filters
+            </div>
+          ) : filtered.map(report => (
             <div
               key={report.id}
               className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors"
