@@ -1,17 +1,20 @@
 "use client"
 
 import { useState } from 'react'
-import { Mail, Calendar, Clock, Phone, Trash2, Users } from 'lucide-react'
+import { Mail, Calendar, Clock, Phone, Trash2, Users, GripVertical, FlaskConical, Split } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import toast from 'react-hot-toast'
 
 interface SequenceStep {
   id?: string
   step_number: number
-  type: 'email' | 'task' | 'wait' | 'call'
+  type: 'email' | 'task' | 'wait' | 'call' | 'ab_test'
   subject?: string
   body?: string
   delay_days?: number
@@ -19,6 +22,11 @@ interface SequenceStep {
   task_title?: string
   task_description?: string
   call_script?: string
+  ab_variant?: 'a' | 'b'
+  ab_subject_a?: string
+  ab_body_a?: string
+  ab_subject_b?: string
+  ab_body_b?: string
 }
 
 interface Sequence {
@@ -42,6 +50,7 @@ const STEP_TYPES = [
   { value: 'task', label: 'Task', icon: Calendar, color: 'text-violet-600' },
   { value: 'wait', label: 'Wait', icon: Clock, color: 'text-amber-600' },
   { value: 'call', label: 'Call', icon: Phone, color: 'text-green-600' },
+  { value: 'ab_test', label: 'A/B Test', icon: Split, color: 'text-rose-600' },
 ]
 
 export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderProps) {
@@ -51,7 +60,11 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
   const [saving, setSaving] = useState(false)
   const [expandedStep, setExpandedStep] = useState<number | null>(null)
 
-  const addStep = (type: 'email' | 'task' | 'wait' | 'call') => {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  )
+
+  const addStep = (type: SequenceStep['type']) => {
     const newStep: SequenceStep = {
       step_number: steps.length + 1,
       type,
@@ -62,6 +75,10 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
       task_title: type === 'task' ? '' : undefined,
       task_description: type === 'task' ? '' : undefined,
       call_script: type === 'call' ? '' : undefined,
+      ab_subject_a: type === 'ab_test' ? '' : undefined,
+      ab_body_a: type === 'ab_test' ? '' : undefined,
+      ab_subject_b: type === 'ab_test' ? '' : undefined,
+      ab_body_b: type === 'ab_test' ? '' : undefined,
     }
     setSteps([...steps, newStep])
     setExpandedStep(steps.length)
@@ -75,25 +92,18 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
 
   const deleteStep = (index: number) => {
     const newSteps = steps.filter((_, i) => i !== index)
-    newSteps.forEach((step, i) => {
-      step.step_number = i + 1
-    })
+    newSteps.forEach((step, i) => { step.step_number = i + 1 })
     setSteps(newSteps)
   }
 
-  const moveStep = (index: number, direction: 'up' | 'down') => {
-    if ((direction === 'up' && index === 0) || 
-        (direction === 'down' && index === steps.length - 1)) {
-      return
-    }
-    const newSteps = [...steps]
-    const temp = newSteps[index]!
-    const swapIndex = direction === 'up' ? index - 1 : index + 1
-    newSteps[index] = newSteps[swapIndex]!
-    newSteps[swapIndex] = temp
-    newSteps.forEach((step, i) => {
-      step.step_number = i + 1
-    })
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = steps.findIndex((_, i) => String(i) === String(active.id))
+    const newIndex = steps.findIndex((_, i) => String(i) === String(over.id))
+    if (oldIndex === -1 || newIndex === -1) return
+    const newSteps = arrayMove(steps, oldIndex, newIndex)
+    newSteps.forEach((step, i) => { step.step_number = i + 1 })
     setSteps(newSteps)
   }
 
@@ -239,192 +249,32 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
-            {steps.map((step, index) => {
-              const StepIcon = STEP_TYPES.find(t => t.value === step.type)?.icon || Mail
-              const stepColor = STEP_TYPES.find(t => t.value === step.type)?.color || 'text-gray-600'
-              const isExpanded = expandedStep === index
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={steps.map((_, i) => String(i))} strategy={verticalListSortingStrategy}>
+              <div className="space-y-3">
+                {steps.map((step, index) => {
+                  const StepIcon = STEP_TYPES.find(t => t.value === step.type)?.icon || Mail
+                  const stepColor = STEP_TYPES.find(t => t.value === step.type)?.color || 'text-gray-600'
+                  const isExpanded = expandedStep === index
 
-              return (
-                <div
-                  key={step.id || index}
-                  className={cn(
-                    'admin-card overflow-hidden transition-all',
-                    isExpanded && 'ring-2 ring-violet-500/20'
-                  )}
-                >
-                  {/* Step Header */}
-                  <div className="flex items-center gap-3 p-4 border-b border-border bg-muted/30">
-                    <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', stepColor.replace('text-', 'bg-').replace('600', '100'))}>
-                      <StepIcon className={cn('w-4 h-4', stepColor)} />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-muted-foreground">Step {step.step_number}</span>
-                        <Badge variant="outline" className="text-xs capitalize">{step.type}</Badge>
-                        {step.type === 'email' && step.subject && (
-                          <span className="text-xs text-muted-foreground truncate max-w-md">
-                            {step.subject}
-                          </span>
-                        )}
-                        {step.type === 'task' && step.task_title && (
-                          <span className="text-xs text-muted-foreground truncate max-w-md">
-                            {step.task_title}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="min-h-11 min-w-11"
-                        onClick={() => moveStep(index, 'up')}
-                        disabled={index === 0}
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                        </svg>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="min-h-11 min-w-11"
-                        onClick={() => moveStep(index, 'down')}
-                        disabled={index === steps.length - 1}
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="min-h-11 min-w-11"
-                        onClick={() => setExpandedStep(isExpanded ? null : index)}
-                      >
-                        <svg 
-                          className={cn('w-4 h-4 transition-transform', isExpanded && 'rotate-180')} 
-                          fill="none" 
-                          viewBox="0 0 24 24" 
-                          stroke="currentColor"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="min-h-11 min-w-11 text-red-600 hover:text-red-700"
-                        onClick={() => deleteStep(index)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Step Content */}
-                  {isExpanded && (
-                    <div className="p-4 space-y-4">
-                      {/* Delay Settings */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                            Wait (days)
-                          </label>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={step.delay_days || 0}
-                            onChange={(e) => updateStep(index, { delay_days: parseInt(e.target.value) || 0 })}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                            Wait (hours)
-                          </label>
-                          <Input
-                            type="number"
-                            min="0"
-                            max="23"
-                            value={step.delay_hours || 0}
-                            onChange={(e) => updateStep(index, { delay_hours: parseInt(e.target.value) || 0 })}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Type-Specific Fields */}
-                      {step.type === 'email' && (
-                        <>
-                          <div>
-                            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                              Subject *
-                            </label>
-                            <Input
-                              value={step.subject || ''}
-                              onChange={(e) => updateStep(index, { subject: e.target.value })}
-                              placeholder="Email subject line"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                              Body
-                            </label>
-                            <textarea
-                              value={step.body || ''}
-                              onChange={(e) => updateStep(index, { body: e.target.value })}
-                              placeholder="Email body (supports {{first_name}}, {{company}}, etc.)"
-                              className="w-full min-h-[200px] px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-                            />
-                          </div>
-                        </>
-                      )}
-
-                      {step.type === 'task' && (
-                        <>
-                          <div>
-                            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                              Task Title *
-                            </label>
-                            <Input
-                              value={step.task_title || ''}
-                              onChange={(e) => updateStep(index, { task_title: e.target.value })}
-                              placeholder="e.g., Follow up call"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                              Description
-                            </label>
-                            <textarea
-                              value={step.task_description || ''}
-                              onChange={(e) => updateStep(index, { task_description: e.target.value })}
-                              placeholder="Task details"
-                              className="w-full min-h-[100px] px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-                            />
-                          </div>
-                        </>
-                      )}
-
-                      {step.type === 'call' && (
-                        <div>
-                          <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                            Call Script
-                          </label>
-                          <textarea
-                            value={step.call_script || ''}
-                            onChange={(e) => updateStep(index, { call_script: e.target.value })}
-                            placeholder="Call talking points"
-                            className="w-full min-h-[200px] px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+                  return (
+                    <SortableStepCard
+                      key={step.id || index}
+                      id={String(index)}
+                      step={step}
+                      index={index}
+                      StepIcon={StepIcon}
+                      stepColor={stepColor}
+                      isExpanded={isExpanded}
+                      onToggle={() => setExpandedStep(isExpanded ? null : index)}
+                      onDelete={() => deleteStep(index)}
+                      onUpdate={(updates) => updateStep(index, updates)}
+                    />
+                  )
+                })}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
       </div>
 
@@ -440,6 +290,171 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
               {saving ? 'Saving...' : 'Save Sequence'}
             </Button>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Sortable Step Card ──────────────────────────────────────────────
+
+interface SortableStepCardProps {
+  id: string
+  step: SequenceStep
+  StepIcon: React.ComponentType<{ className?: string }>
+  stepColor: string
+  isExpanded: boolean
+  onToggle: () => void
+  onDelete: () => void
+  onUpdate: (updates: Partial<SequenceStep>) => void
+}
+
+function SortableStepCard({ id, step, StepIcon, stepColor, isExpanded, onToggle, onDelete, onUpdate }: SortableStepCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn('admin-card overflow-hidden transition-all', isExpanded && 'ring-2 ring-violet-500/20')}
+    >
+      {/* Step Header */}
+      <div className="flex items-center gap-3 p-4 border-b border-border bg-muted/30">
+        <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground touch-none">
+          <GripVertical className="w-4 h-4" />
+        </button>
+        <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', stepColor.replace('text-', 'bg-').replace('600', '100'))}>
+          <StepIcon className={cn('w-4 h-4', stepColor)} />
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-muted-foreground">Step {step.step_number}</span>
+            <Badge variant="outline" className="text-xs capitalize">{step.type === 'ab_test' ? 'A/B Test' : step.type}</Badge>
+            {step.type === 'email' && step.subject && (
+              <span className="text-xs text-muted-foreground truncate max-w-md">{step.subject}</span>
+            )}
+            {step.type === 'task' && step.task_title && (
+              <span className="text-xs text-muted-foreground truncate max-w-md">{step.task_title}</span>
+            )}
+            {step.type === 'ab_test' && (
+              <span className="text-xs text-muted-foreground">50/50 split</span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="min-h-11 min-w-11" onClick={onToggle}>
+            <svg className={cn('w-4 h-4 transition-transform', isExpanded && 'rotate-180')} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </Button>
+          <Button variant="ghost" size="icon" className="min-h-11 min-w-11 text-red-600 hover:text-red-700" onClick={onDelete}>
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Step Content */}
+      {isExpanded && (
+        <div className="p-4 space-y-4">
+          {/* Delay Settings */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1.5">Wait (days)</label>
+              <Input type="number" min="0" value={step.delay_days || 0}
+                onChange={(e) => onUpdate({ delay_days: parseInt(e.target.value) || 0 })} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1.5">Wait (hours)</label>
+              <Input type="number" min="0" max="23" value={step.delay_hours || 0}
+                onChange={(e) => onUpdate({ delay_hours: parseInt(e.target.value) || 0 })} />
+            </div>
+          </div>
+
+          {/* Email fields */}
+          {step.type === 'email' && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Subject *</label>
+                <Input value={step.subject || ''} onChange={(e) => onUpdate({ subject: e.target.value })} placeholder="Email subject line" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Body</label>
+                <textarea value={step.body || ''} onChange={(e) => onUpdate({ body: e.target.value })}
+                  placeholder="Email body (supports {{first_name}}, {{company}}, etc.)"
+                  className="w-full min-h-[200px] px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </div>
+              <p className="text-[10px] text-muted-foreground">An unsubscribe link will be automatically injected into all email steps.</p>
+            </>
+          )}
+
+          {/* Task fields */}
+          {step.type === 'task' && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Task Title *</label>
+                <Input value={step.task_title || ''} onChange={(e) => onUpdate({ task_title: e.target.value })} placeholder="e.g., Follow up call" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Description</label>
+                <textarea value={step.task_description || ''} onChange={(e) => onUpdate({ task_description: e.target.value })}
+                  placeholder="Task details"
+                  className="w-full min-h-[100px] px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </div>
+            </>
+          )}
+
+          {/* Call fields */}
+          {step.type === 'call' && (
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1.5">Call Script</label>
+              <textarea value={step.call_script || ''} onChange={(e) => onUpdate({ call_script: e.target.value })}
+                placeholder="Call talking points"
+                className="w-full min-h-[200px] px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            </div>
+          )}
+
+          {/* A/B Test fields */}
+          {step.type === 'ab_test' && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <FlaskConical className="w-4 h-4 text-rose-600" />
+                <span className="text-sm font-medium">A/B Test — contacts will be split 50/50</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <p className="text-xs font-bold text-muted-foreground uppercase">Variant A</p>
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">Subject</label>
+                    <Input value={step.ab_subject_a || ''} onChange={(e) => onUpdate({ ab_subject_a: e.target.value })} placeholder="Subject A" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">Body</label>
+                    <textarea value={step.ab_body_a || ''} onChange={(e) => onUpdate({ ab_body_a: e.target.value })}
+                      placeholder="Email body A"
+                      className="w-full min-h-[120px] px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <p className="text-xs font-bold text-muted-foreground uppercase">Variant B</p>
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">Subject</label>
+                    <Input value={step.ab_subject_b || ''} onChange={(e) => onUpdate({ ab_subject_b: e.target.value })} placeholder="Subject B" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">Body</label>
+                    <textarea value={step.ab_body_b || ''} onChange={(e) => onUpdate({ ab_body_b: e.target.value })}
+                      placeholder="Email body B"
+                      className="w-full min-h-[120px] px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
