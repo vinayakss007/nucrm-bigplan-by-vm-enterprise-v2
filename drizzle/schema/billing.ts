@@ -393,3 +393,57 @@ export const serviceSubscriptions = pgTable('service_subscriptions', {
   statusIdx: index('idx_service_subscriptions_status').on(table.tenantId, table.status),
   activeIdx: utils.activeIdx(table),
 }));
+
+// ── DUNNING SETTINGS ──────────────────────────────────
+export const dunningSettings = pgTable('dunning_settings', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  
+  maxRetries: integer('max_retries').notNull().default(3),
+  retryIntervalDays: integer('retry_interval_days').notNull().default(1),
+  gracePeriodDays: integer('grace_period_days').notNull().default(7),
+  suspensionAction: text('suspension_action').notNull().default('downgrade'),
+  
+  retrySchedule: jsonb('retry_schedule').default([1, 3, 7, 14]),
+  
+  emailNotifications: boolean('email_notifications').default(true),
+  webhookNotifications: boolean('webhook_notifications').default(false),
+  
+  isActive: boolean('is_active').default(true),
+  
+  metadata: utils.metadata(),
+  ...utils.audit(),
+}, (table) => ({
+  tenantIdx: utils.tenantIdx(table),
+  activeIdx: index('idx_dunning_settings_active').on(table.tenantId, table.isActive),
+}));
+
+// ── DUNNING ATTEMPTS ──────────────────────────────────
+export const dunningAttempts = pgTable('dunning_attempts', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  
+  subscriptionId: uuid('subscription_id').references(() => subscriptions.id),
+  attemptNumber: integer('attempt_number').notNull(),
+  status: text('status').notNull().default('pending'),
+  
+  scheduledAt: timestamp('scheduled_at', { withTimezone: true }).notNull(),
+  executedAt: timestamp('executed_at', { withTimezone: true }),
+  
+  paymentAmount: numeric('payment_amount', { precision: 10, scale: 2 }),
+  paymentCurrency: text('payment_currency').default('usd'),
+  
+  stripeInvoiceId: text('stripe_invoice_id'),
+  stripePaymentIntentId: text('stripe_payment_intent_id'),
+  
+  errorMessage: text('error_message'),
+  retryCount: integer('retry_count').default(0),
+  
+  metadata: utils.metadata(),
+  ...utils.lifecycle(),
+}, (table) => ({
+  tenantIdx: utils.tenantIdx(table),
+  subscriptionIdx: index('idx_dunning_attempts_subscription').on(table.subscriptionId),
+  statusIdx: index('idx_dunning_attempts_status').on(table.tenantId, table.status),
+  scheduledIdx: index('idx_dunning_attempts_scheduled').on(table.scheduledAt),
+}));
