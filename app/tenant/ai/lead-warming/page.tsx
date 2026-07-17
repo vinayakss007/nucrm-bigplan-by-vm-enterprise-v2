@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Heart, Loader2, Mail, MessageSquare, Phone, ArrowRight,
-  ThumbsUp, Clock, CheckCircle2, Plus, Pause, Play, Archive, Trash2,
+  ThumbsUp, Clock, CheckCircle2, Plus, Pause, Play, Archive, Trash2, FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -48,7 +48,7 @@ type Campaign = {
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: typeof Play }> = {
   active:   { label: 'Active',   color: 'text-emerald-700', bg: 'bg-emerald-50 dark:bg-emerald-950/30', icon: Play },
   paused:   { label: 'Paused',   color: 'text-amber-700',   bg: 'bg-amber-50 dark:bg-amber-950/30',     icon: Pause },
-  draft:    { label: 'Draft',    color: 'text-slate-700',   bg: 'bg-slate-50 dark:bg-slate-950/30',     icon: null },
+  draft:    { label: 'Draft',    color: 'text-slate-700',   bg: 'bg-slate-50 dark:bg-slate-950/30',     icon: FileText },
   archived: { label: 'Archived', color: 'text-gray-700',    bg: 'bg-gray-50 dark:bg-gray-950/30',       icon: Archive },
 };
 
