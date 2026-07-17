@@ -1,15 +1,16 @@
 /**
  * Bulk Task Operations
  * POST /api/tenant/tasks/bulk
- * Body: { action, task_ids, payload? }
+ * Body: { action, task_ids?, payload?, selectAll?, filters? }
  * Actions: assign, priority, complete, reopen, due, delete
+ * When selectAll=true, task_ids is optional; tasks are resolved from filters.
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tasks, tenantMembers, segments, segmentMembers } from '@/drizzle/schema';
-import { eq, and, inArray, sql } from 'drizzle-orm';
+import { eq, and, inArray, sql, or, ilike } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 
@@ -17,8 +18,8 @@ const MAX_BULK = 500;
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 
 export async function POST(req: NextRequest) {
- 
- 
+  
+  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let ctx: any;
   try {
@@ -26,12 +27,35 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
 
     const body = await req.json();
-    const { action, task_ids, payload = {} } = body;
+    const { action, payload = {} } = body;
+    const selectAll = body.selectAll === true;
+    const filters = body.filters as { q?: string; status?: string; assigned_to?: string; priority?: string } | undefined;
 
-    if (!Array.isArray(task_ids) || !task_ids.length)
-      return NextResponse.json({ error: 'task_ids array required' }, { status: 400 });
-    if (task_ids.length > MAX_BULK)
-      return NextResponse.json({ error: `Max ${MAX_BULK} tasks per bulk operation` }, { status: 400 });
+    let task_ids: string[] = body.task_ids ?? [];
+
+    if (selectAll) {
+      const whereConditions = [
+        eq(tasks.tenantId, ctx.tenantId),
+        sql`${tasks.deletedAt} IS NULL`,
+      ];
+      if (filters?.status) whereConditions.push(eq(tasks.status, filters.status));
+      if (filters?.assigned_to) whereConditions.push(eq(tasks.assignedTo, filters.assigned_to));
+      if (filters?.priority) whereConditions.push(eq(tasks.priority, filters.priority));
+      if (filters?.q) {
+        whereConditions.push(or(
+          ilike(tasks.title, `%${filters.q}%`),
+        )!);
+      }
+      const matched = await db.select({ id: tasks.id }).from(tasks).where(and(...whereConditions));
+      task_ids = matched.map(r => r.id);
+      if (!task_ids.length) return NextResponse.json({ error: 'No tasks match the provided filters' }, { status: 404 });
+      if (task_ids.length > MAX_BULK) return NextResponse.json({ error: `Max ${MAX_BULK} tasks per bulk operation (matched ${task_ids.length})` }, { status: 400 });
+    } else {
+      if (!Array.isArray(task_ids) || !task_ids.length)
+        return NextResponse.json({ error: 'task_ids array required' }, { status: 400 });
+      if (task_ids.length > MAX_BULK)
+        return NextResponse.json({ error: `Max ${MAX_BULK} tasks per bulk operation` }, { status: 400 });
+    }
 
     // Validate IDs belong to this tenant
     const valid = await db

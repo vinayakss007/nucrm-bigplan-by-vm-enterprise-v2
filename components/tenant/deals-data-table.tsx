@@ -71,6 +71,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
     description: '',
   })
   const [saving, setSaving] = useState(false)
+  const [selectAllMatching, setSelectAllMatching] = useState(false)
 
   const loadData = useCallback(async (page = 0) => {
     setLoading(true)
@@ -280,13 +281,20 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
       .catch((err) => { if (err?.name !== 'AbortError') console.warn('[deals-data-table] Failed to load segments:', err); });
     return () => abort.abort();
   }, [])
-  const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, unknown> = {}) => {
+  const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, unknown> = {}, isSelectAll = false) => {
     setBulkBusy(true)
     try {
+      const body = isSelectAll
+        ? (() => {
+            const filters: Record<string, string> = {};
+            if (globalFilter) filters.q = globalFilter;
+            return { action, selectAll: true, filters, ...(Object.keys(payload).length ? { payload } : {}) };
+          })()
+        : { action, deal_ids: ids, ...(Object.keys(payload).length ? { payload } : {}) };
       const res = await fetch('/api/tenant/deals/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, deal_ids: ids, payload }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (res.ok) {
@@ -298,18 +306,19 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
     } finally {
       setBulkBusy(false)
     }
-  }, [loadData, pagination.pageIndex])
+  }, [loadData, pagination.pageIndex, globalFilter])
 
-  const bulkActions = useMemo(() => [
+  const bulkActions = useMemo(() => {
+    return [
     {
       id: 'assign',
       label: 'Assign',
       icon: <UserPlus className="w-3.5 h-3.5" />,
       requiresSelect: true,
       selectOptions: teamMembers.map((m) => ({ value: m.user_id, label: m.full_name })),
-      onClick: async (ids: string[], input?: string) => {
+      onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) return toast.error('Pick a teammate')
-        await callBulk('assign', ids, { assigned_to: input })
+        await callBulk('assign', ids, { assigned_to: input }, isSelectAllMatching)
       },
     },
     {
@@ -318,9 +327,9 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
       icon: <ArrowRightLeft className="w-3.5 h-3.5" />,
       requiresSelect: true,
       selectOptions: teamMembers.map((m) => ({ value: m.user_id, label: m.full_name })),
-      onClick: async (ids: string[], input?: string) => {
+      onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) return toast.error('Pick a teammate')
-        await callBulk('transfer', ids, { assigned_to: input })
+        await callBulk('transfer', ids, { assigned_to: input }, isSelectAllMatching)
       },
     },
     {
@@ -332,9 +341,9 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
         value: s.id,
         label: stages.filter(x => x.pipeline === s.pipeline).length > 1 ? `${s.pipeline} → ${s.name}` : s.name,
       })),
-      onClick: async (ids: string[], input?: string) => {
+      onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) return toast.error('Pick a stage')
-        await callBulk('stage', ids, { stage_id: input })
+        await callBulk('stage', ids, { stage_id: input }, isSelectAllMatching)
       },
     },
     {
@@ -343,9 +352,9 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
       icon: <Tag className="w-3.5 h-3.5" />,
       requiresInput: true,
       inputPlaceholder: 'Tag name',
-      onClick: async (ids: string[], input?: string) => {
+      onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input?.trim()) return toast.error('Tag name required')
-        await callBulk('tag', ids, { tag: input.trim() })
+        await callBulk('tag', ids, { tag: input.trim() }, isSelectAllMatching)
       },
     },
     {
@@ -356,12 +365,12 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
       selectOptions: stages
         .filter(s => /won|lost|closed/i.test(s.name))
         .map(s => ({ value: s.id, label: `${s.pipeline} → ${s.name}` })),
-      onClick: async (ids: string[], input?: string) => {
+      onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) return toast.error('Pick a close stage (Won / Lost)')
         const reason = window.prompt('Close reason (optional)') ?? null
         const stage = stages.find(s => s.id === input)
         const outcome = stage && (/lost/i.test(stage.name) ? 'lost' : /won/i.test(stage.name) ? 'won' : undefined)
-        await callBulk('close', ids, { stage_id: input, reason, outcome })
+        await callBulk('close', ids, { stage_id: input, reason, outcome }, isSelectAllMatching)
       },
     },
     {
@@ -370,12 +379,12 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
       icon: <Tag className="w-3.5 h-3.5" />,
       requiresSelect: true,
       selectOptions: customFields.map(f => ({ value: f.fieldKey, label: f.fieldLabel })),
-      onClick: async (ids: string[], fieldKey?: string) => {
+      onClick: async (ids: string[], fieldKey?: string, isSelectAllMatching?: boolean) => {
         if (!fieldKey) return toast.error('Select a field')
         const field = customFields.find(f => f.fieldKey === fieldKey)
         const value = window.prompt(`Enter value for "${field?.fieldLabel || fieldKey}":`)
         if (value === null) return
-        await callBulk('update_field', ids, { field_key: fieldKey, field_value: value })
+        await callBulk('update_field', ids, { field_key: fieldKey, field_value: value }, isSelectAllMatching)
       },
     },
     {
@@ -384,7 +393,9 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
       icon: <Archive className="w-3.5 h-3.5" />,
       requiresConfirmation: true,
       confirmationMessage: 'Archive the selected deals? They will be hidden from active views.',
-      onClick: async (ids: string[]) => callBulk('archive', ids),
+      onClick: async (ids: string[], _input?: string, isSelectAllMatching?: boolean) => {
+        await callBulk('archive', ids, {}, isSelectAllMatching)
+      },
     },
     {
       id: 'restore',
@@ -392,7 +403,9 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
       icon: <RotateCcw className="w-3.5 h-3.5" />,
       requiresConfirmation: true,
       confirmationMessage: 'Restore the selected deals from archive?',
-      onClick: async (ids: string[]) => callBulk('restore', ids),
+      onClick: async (ids: string[], _input?: string, isSelectAllMatching?: boolean) => {
+        await callBulk('restore', ids, {}, isSelectAllMatching)
+      },
     },
     {
       id: 'delete',
@@ -400,19 +413,22 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
       icon: <Trash2 className="w-3.5 h-3.5" />,
       requiresConfirmation: true,
       confirmationMessage: 'Soft-delete the selected deals? They can be restored from Trash.',
-      onClick: async (ids: string[]) => callBulk('delete', ids),
+      onClick: async (ids: string[], _input?: string, isSelectAllMatching?: boolean) => {
+        await callBulk('delete', ids, {}, isSelectAllMatching)
+      },
     },
     ...(segments.length > 0 ? [{
       id: 'add_to_segment',
       label: 'Add to Segment',
       requiresSelect: true,
       selectOptions: segments.map(s => ({ value: s.id, label: s.name })),
-      onClick: async (ids: string[], input?: string) => {
+      onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) return toast.error('Select a segment')
-        await callBulk('add_to_segment', ids, { segment_id: input })
+        await callBulk('add_to_segment', ids, { segment_id: input }, isSelectAllMatching)
       },
     }] : []),
-  ], [teamMembers, stages, callBulk, customFields, segments])
+  ];
+  }, [teamMembers, stages, callBulk, customFields, segments])
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
 
@@ -547,6 +563,9 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
         enableRowSelection
         enableBulkActions
         bulkActions={bulkActions}
+        matchingCount={total}
+        selectAllMatching={selectAllMatching}
+        onSelectAllMatching={setSelectAllMatching}
         searchPlaceholder="Search deals by title, contact, or company..."
         manualPagination
         pageIndex={pagination.pageIndex}

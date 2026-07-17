@@ -1,23 +1,24 @@
 /**
  * Bulk Deal Operations
  * POST /api/tenant/deals/bulk
- * Body: { action, deal_ids, payload? }
+ * Body: { action, deal_ids?, payload?, selectAll?, filters? }
  * Actions: assign, stage, delete, close, transfer
+ * When selectAll=true, deal_ids is optional; deals are resolved from filters.
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines, tenantMembers, segments, segmentMembers } from '@/drizzle/schema';
-import { eq, and, inArray, sql } from 'drizzle-orm';
+import { eq, and, inArray, sql, or, ilike } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 
 const MAX_BULK = 500;
 
 export async function POST(req: NextRequest) {
- 
- 
+  
+  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let ctx: any;
   try {
@@ -25,12 +26,35 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
 
     const body = await req.json();
-    const { action, deal_ids, payload = {} } = body;
+    const { action, payload = {} } = body;
+    const selectAll = body.selectAll === true;
+    const filters = body.filters as { q?: string; pipeline_id?: string; stage_id?: string; assigned_to?: string } | undefined;
 
-    if (!Array.isArray(deal_ids) || !deal_ids.length)
-      return NextResponse.json({ error: 'deal_ids array required' }, { status: 400 });
-    if (deal_ids.length > MAX_BULK)
-      return NextResponse.json({ error: `Max ${MAX_BULK} deals per bulk operation` }, { status: 400 });
+    let deal_ids: string[] = body.deal_ids ?? [];
+
+    if (selectAll) {
+      const whereConditions = [
+        eq(deals.tenantId, ctx.tenantId),
+        sql`${deals.deletedAt} IS NULL`,
+      ];
+      if (filters?.pipeline_id) whereConditions.push(eq(deals.pipelineId, filters.pipeline_id));
+      if (filters?.stage_id) whereConditions.push(eq(deals.stageId, filters.stage_id));
+      if (filters?.assigned_to) whereConditions.push(eq(deals.assignedTo, filters.assigned_to));
+      if (filters?.q) {
+        whereConditions.push(or(
+          ilike(deals.title, `%${filters.q}%`),
+        )!);
+      }
+      const matched = await db.select({ id: deals.id }).from(deals).where(and(...whereConditions));
+      deal_ids = matched.map(r => r.id);
+      if (!deal_ids.length) return NextResponse.json({ error: 'No deals match the provided filters' }, { status: 404 });
+      if (deal_ids.length > MAX_BULK) return NextResponse.json({ error: `Max ${MAX_BULK} deals per bulk operation (matched ${deal_ids.length})` }, { status: 400 });
+    } else {
+      if (!Array.isArray(deal_ids) || !deal_ids.length)
+        return NextResponse.json({ error: 'deal_ids array required' }, { status: 400 });
+      if (deal_ids.length > MAX_BULK)
+        return NextResponse.json({ error: `Max ${MAX_BULK} deals per bulk operation` }, { status: 400 });
+    }
 
     // Validate IDs belong to this tenant
     const valid = await db
