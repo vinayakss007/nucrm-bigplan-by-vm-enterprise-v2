@@ -99,6 +99,7 @@ export default function ContactsDataTable({
   const [globalFilter, setGlobalFilter] = useState(initialQ ?? '')
   const [pagination, setPagination] = useState({ pageIndex: (initialOffset ?? 0) / 25, pageSize: 25 })
   const [initialized, setInitialized] = useState(false)
+  const [selectAllMatching, setSelectAllMatching] = useState(false)
   const router = useRouter()
 
   const loadData = useCallback(async (page = 0, search = globalFilter) => {
@@ -352,19 +353,30 @@ export default function ContactsDataTable({
     return () => abort.abort();
   }, [])
 
-  const bulkActions = useMemo(() => [
+  const bulkActions = useMemo(() => {
+    const buildBody = (action: string, selectedIds: string[], payload?: Record<string, unknown>, isSelectAll = false) => {
+      if (isSelectAll) {
+        const filters: Record<string, string> = {};
+        if (globalFilter) filters.q = globalFilter;
+        if (initialStatus && initialStatus !== 'all') filters.lead_status = initialStatus;
+        return { action, selectAll: true, filters, ...(payload ? { payload } : {}) };
+      }
+      return { action, contact_ids: selectedIds, ...(payload ? { payload } : {}) };
+    };
+
+    return [
     {
       id: 'tag',
       label: 'Add Tag',
       requiresInput: true,
       inputPlaceholder: 'Enter tag name',
-      onClick: async (selectedIds: string[], input?: string) => {
+      onClick: async (selectedIds: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input?.trim()) { toast.error('Tag name required'); return; }
         setBulkActionLoading(true)
         const res = await fetch('/api/tenant/contacts/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'tag', contact_ids: selectedIds, payload: { tag: input.trim() } }),
+          body: JSON.stringify(buildBody('tag', selectedIds, { tag: input.trim() }, isSelectAllMatching)),
         })
         const data = await res.json()
         if (res.ok) {
@@ -381,13 +393,13 @@ export default function ContactsDataTable({
       label: 'Remove Tag',
       requiresInput: true,
       inputPlaceholder: 'Enter tag to remove',
-      onClick: async (selectedIds: string[], input?: string) => {
+      onClick: async (selectedIds: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input?.trim()) { toast.error('Tag name required'); return; }
         setBulkActionLoading(true)
         const res = await fetch('/api/tenant/contacts/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'untag', contact_ids: selectedIds, payload: { tag: input.trim() } }),
+          body: JSON.stringify(buildBody('untag', selectedIds, { tag: input.trim() }, isSelectAllMatching)),
         })
         const data = await res.json()
         if (res.ok) {
@@ -404,13 +416,13 @@ export default function ContactsDataTable({
       label: 'Assign To',
       requiresSelect: true,
       selectOptions: teamMembers.map(m => ({ value: m.user_id, label: m.full_name })),
-      onClick: async (selectedIds: string[], input?: string) => {
+      onClick: async (selectedIds: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) { toast.error('Select a team member'); return; }
         setBulkActionLoading(true)
         const res = await fetch('/api/tenant/contacts/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'assign', contact_ids: selectedIds, payload: { assign_to: input } }),
+          body: JSON.stringify(buildBody('assign', selectedIds, { assign_to: input }, isSelectAllMatching)),
         })
         const data = await res.json()
         if (res.ok) {
@@ -427,13 +439,13 @@ export default function ContactsDataTable({
       label: 'Change Status',
       requiresSelect: true,
       selectOptions: ['new', 'contacted', 'qualified', 'unqualified', 'converted', 'lost'].map(s => ({ value: s, label: s })),
-      onClick: async (selectedIds: string[], input?: string) => {
+      onClick: async (selectedIds: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) { toast.error('Select a status'); return; }
         setBulkActionLoading(true)
         const res = await fetch('/api/tenant/contacts/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'status', contact_ids: selectedIds, payload: { lead_status: input } }),
+          body: JSON.stringify(buildBody('status', selectedIds, { lead_status: input }, isSelectAllMatching)),
         })
         const data = await res.json()
         if (res.ok) {
@@ -450,12 +462,12 @@ export default function ContactsDataTable({
       label: 'Archive',
       requiresConfirmation: true,
       confirmationMessage: 'Archive the selected contacts? They will be hidden from active views.',
-      onClick: async (selectedIds: string[]) => {
+      onClick: async (selectedIds: string[], _input?: string, isSelectAllMatching?: boolean) => {
         setBulkActionLoading(true)
         const res = await fetch('/api/tenant/contacts/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'archive', contact_ids: selectedIds }),
+          body: JSON.stringify(buildBody('archive', selectedIds, undefined, isSelectAllMatching)),
         })
         const data = await res.json()
         if (res.ok) {
@@ -472,12 +484,12 @@ export default function ContactsDataTable({
       label: 'Restore',
       requiresConfirmation: true,
       confirmationMessage: 'Restore the selected contacts from archive?',
-      onClick: async (selectedIds: string[]) => {
+      onClick: async (selectedIds: string[], _input?: string, isSelectAllMatching?: boolean) => {
         setBulkActionLoading(true)
         const res = await fetch('/api/tenant/contacts/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'restore', contact_ids: selectedIds }),
+          body: JSON.stringify(buildBody('restore', selectedIds, undefined, isSelectAllMatching)),
         })
         const data = await res.json()
         if (res.ok) {
@@ -494,12 +506,12 @@ export default function ContactsDataTable({
       label: 'Delete',
       requiresConfirmation: true,
       confirmationMessage: 'Delete the selected contacts?',
-      onClick: async (selectedIds: string[]) => {
+      onClick: async (selectedIds: string[], _input?: string, isSelectAllMatching?: boolean) => {
         setBulkActionLoading(true)
         const res = await fetch('/api/tenant/contacts/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'delete', contact_ids: selectedIds }),
+          body: JSON.stringify(buildBody('delete', selectedIds, undefined, isSelectAllMatching)),
         })
         const data = await res.json()
         if (res.ok) {
@@ -516,7 +528,7 @@ export default function ContactsDataTable({
       label: 'Update Field',
       requiresSelect: true,
       selectOptions: customFields.map(f => ({ value: f.fieldKey, label: f.fieldLabel })),
-      onClick: async (selectedIds: string[], fieldKey?: string) => {
+      onClick: async (selectedIds: string[], fieldKey?: string, isSelectAllMatching?: boolean) => {
         if (!fieldKey) { toast.error('Select a field'); return; }
         const field = customFields.find(f => f.fieldKey === fieldKey);
         const value = window.prompt(`Enter value for "${field?.fieldLabel || fieldKey}":`);
@@ -525,7 +537,7 @@ export default function ContactsDataTable({
         const res = await fetch('/api/tenant/contacts/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'update_field', contact_ids: selectedIds, payload: { field_key: fieldKey, field_value: value } }),
+          body: JSON.stringify(buildBody('update_field', selectedIds, { field_key: fieldKey, field_value: value }, isSelectAllMatching)),
         })
         const data = await res.json()
         if (res.ok) {
@@ -586,13 +598,13 @@ export default function ContactsDataTable({
       label: 'Add to Sequence',
       requiresSelect: true,
       selectOptions: sequences.map(s => ({ value: s.id, label: s.name })),
-      onClick: async (selectedIds: string[], sequenceId?: string) => {
+      onClick: async (selectedIds: string[], sequenceId?: string, isSelectAllMatching?: boolean) => {
         if (!sequenceId) { toast.error('Select a sequence'); return; }
         setBulkActionLoading(true)
         const res = await fetch('/api/tenant/contacts/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'add_to_sequence', contact_ids: selectedIds, payload: { sequence_id: sequenceId } }),
+          body: JSON.stringify(buildBody('add_to_sequence', selectedIds, { sequence_id: sequenceId }, isSelectAllMatching)),
         })
         const data = await res.json()
         if (res.ok) {
@@ -634,13 +646,13 @@ export default function ContactsDataTable({
       label: 'Add to Segment',
       requiresSelect: true,
       selectOptions: segments.map(s => ({ value: s.id, label: s.name })),
-      onClick: async (ids: string[], input?: string) => {
+      onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) { toast.error('Select a segment'); return; }
         setBulkActionLoading(true)
         const res = await fetch('/api/tenant/contacts/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'add_to_segment', contact_ids: ids, payload: { segment_id: input } }),
+          body: JSON.stringify(buildBody('add_to_segment', ids, { segment_id: input }, isSelectAllMatching)),
         })
         const data = await res.json()
         if (res.ok) {
@@ -652,7 +664,8 @@ export default function ContactsDataTable({
         setBulkActionLoading(false)
       },
     }] : []),
-  ], [teamMembers, pagination.pageIndex, loadData, customFields, sequences, segments, emailTemplates])
+    ];
+  }, [globalFilter, initialStatus, teamMembers, pagination.pageIndex, loadData, customFields, sequences, segments, emailTemplates])
 
   const handleAddContact = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -885,6 +898,9 @@ export default function ContactsDataTable({
         manualPagination
         pageIndex={pagination.pageIndex}
         onPaginationChange={handlePaginationChange}
+        matchingCount={total}
+        selectAllMatching={selectAllMatching}
+        onSelectAllMatching={setSelectAllMatching}
         emptyState={{
           icon: <UserPlus className="w-6 h-6 text-muted-foreground" />,
           title: "No contacts yet",
