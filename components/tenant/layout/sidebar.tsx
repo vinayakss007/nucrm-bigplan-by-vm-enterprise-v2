@@ -311,7 +311,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
     const flatTop = NAV_SECTIONS[0]?.items.filter(i => hasPerm(i)) ?? [];
     return (
       <aside className="tenant-sidebar w-[3.25rem] shrink-0 h-full flex flex-col items-center py-3 gap-1 transition-all duration-300 overflow-hidden border-r border-border">
-        <button onClick={onToggle} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground transition-colors mb-1">
+        <button onClick={onToggle} aria-label="Expand sidebar" className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground transition-colors mb-1">
           <Menu className="w-4 h-4" />
         </button>
         {flatTop.map(({href, icon:Icon, label, exact}) => {
@@ -341,6 +341,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
     return (
       <div key={href} className="group relative flex items-stretch">
         <Link href={href} onClick={onMobileClose}
+          aria-current={active ? 'page' : undefined}
           className={cn('flex-1 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[15px] font-extrabold transition-all duration-200',
             active
               ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 shadow-sm shadow-violet-500/20'
@@ -408,7 +409,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
       </div>
 
       {/* Scrollable nav */}
-      <nav className="flex-1 px-2 py-2 overflow-y-auto scrollbar-thin space-y-0.5">
+      <nav aria-label="Main navigation" className="flex-1 px-2 py-2 overflow-y-auto scrollbar-thin space-y-0.5">
         {/* Pinned shortcuts */}
         {pinnedItems.length > 0 && (
           <div className="mb-2">
@@ -434,8 +435,8 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           return (
             <div key={section.id} className="mb-1">
               <button onClick={() => !q && toggleSection(section.id)}
-                role="heading"
-                aria-level={2}
+                aria-expanded={isOpen}
+                aria-controls={`section-${section.id}`}
                 className={cn(
                   'flex items-center gap-1.5 w-full px-2.5 py-1.5 rounded-md text-sm font-extrabold uppercase tracking-wider transition-all duration-200',
                   q ? 'text-violet-600 dark:text-violet-400' : 'text-foreground/80 hover:text-foreground hover:scale-[1.01]'
@@ -445,7 +446,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
                 <span suppressHydrationWarning className="text-sm text-foreground/80 font-bold normal-case">{section.items.length}</span>
               </button>
               {isOpen && (
-                <div className="space-y-0.5 mt-0.5">
+                <div id={`section-${section.id}`} className="space-y-0.5 mt-0.5">
                   {section.items.map(navItem)}
                 </div>
               )}
