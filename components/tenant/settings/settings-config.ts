@@ -11,6 +11,7 @@ import {
   Tag, Library, ShieldUser, Crown, Receipt, Lock, ShieldCheck, KeyRound,
   Network, MapPin, Repeat, Timer, Mail, Webhook, History,
   Scale, Shield, Save, ArrowRightLeft, Upload, Send, BrainCircuit, FileEdit, Target, AlertTriangle, Activity, Heart,
+  MessageSquare,
 } from 'lucide-react';
 
 export type SettingsItem = {
