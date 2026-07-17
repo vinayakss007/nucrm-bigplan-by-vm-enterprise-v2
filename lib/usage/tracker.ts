@@ -166,7 +166,7 @@ export async function checkLimit(
 
     // Helper: resolve effective limit — override wins over plan default
     const eff = (planField: string | null | undefined, overrideField: string): number | null => {
-      if (overrideField in overrides) return overrides[overrideField];
+      if (overrideField in overrides) return overrides[overrideField] ?? null;
       return planField != null ? Number(planField) : null;
     };
 
