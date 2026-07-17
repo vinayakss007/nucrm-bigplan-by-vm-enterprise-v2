@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       where: eq(plans.id, currentSub.planId || ''),
     });
 
-    if (currentPlan && newPlan.priceMonthly <= currentPlan.priceMonthly) {
+    if (currentPlan && (Number(newPlan.priceMonthly) || 0) <= (Number(currentPlan.priceMonthly) || 0)) {
       return NextResponse.json({ error: 'This is not an upgrade. Use downgrade endpoint instead.' }, { status: 400 });
     }
 
