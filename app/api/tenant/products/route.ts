@@ -16,7 +16,7 @@ const createProductSchema = z.object({
   base_price: z.coerce.number().min(0).optional().default(0),
 });
 
-const updateProductSchema = createProductSchema.partial();
+const _updateProductSchema = createProductSchema.partial();
 
 export async function GET(request: NextRequest) {
   try {
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
       offset,
       hasMore: offset + data.length < total,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[products GET]', error);
     return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 });
   }
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
       base_price: inserted.basePrice,
       created_at: inserted.createdAt,
     }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[products POST]', error);
     return NextResponse.json({ error: 'Failed to create product' }, { status: 500 });
   }

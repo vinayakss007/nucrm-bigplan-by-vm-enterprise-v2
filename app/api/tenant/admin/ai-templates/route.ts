@@ -37,7 +37,7 @@ interface UpsertBody {
   active?: boolean;
 }
 
-function validate(body: UpsertBody): { error: string } | null {
+function _validate(body: UpsertBody): { error: string } | null {
   if (typeof body.name !== 'string' || !body.name.trim()) return { error: 'name required' };
   if (typeof body.system_prompt !== 'string' || !body.system_prompt.trim()) return { error: 'system_prompt required' };
   if (typeof body.user_prompt !== 'string' || !body.user_prompt.trim()) return { error: 'user_prompt required' };

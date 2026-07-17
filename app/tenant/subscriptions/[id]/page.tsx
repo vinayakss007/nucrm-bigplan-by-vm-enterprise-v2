@@ -39,7 +39,7 @@ const statusColors: Record<string, string> = {
 
 export default function SubscriptionDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
+  const _router = useRouter();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);

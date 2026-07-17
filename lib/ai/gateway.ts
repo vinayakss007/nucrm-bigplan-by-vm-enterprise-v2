@@ -271,7 +271,7 @@ async function callOllama(
     }),
   });
   if (!res.ok) {
-    const text = await res.text().catch(() => '');
+    const _text = await res.text().catch(() => '');
     throw new GatewayError('all_providers_failed', `Provider returned status ${res.status}`, { status: res.status });
   }
   const data = await res.json();

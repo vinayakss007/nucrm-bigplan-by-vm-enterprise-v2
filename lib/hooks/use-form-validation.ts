@@ -67,7 +67,7 @@ export function useFormValidation(rules: ValidationRules) {
     const newErrors: ValidationErrors = {};
     let valid = true;
 
-    for (const [name, rule] of Object.entries(rules)) {
+    for (const [name, _rule] of Object.entries(rules)) {
       const value = values[name] || '';
       const error = validateField(name, value);
       if (error) {

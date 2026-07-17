@@ -152,10 +152,11 @@ export default function DealsKanbanPage() {
   const [stages] = useState<Stage[]>(DEFAULT_STAGES);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
-  const { data: res, error, isLoading } = useSWR('/api/tenant/deals');
+  const { data: res, isLoading } = useSWR('/api/tenant/deals');
   const [deals, setDeals] = useState<Deal[]>([]);
   const loading = isLoading && deals.length === 0;
 
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (res?.deals && deals.length === 0) {
       setDeals(res.deals as Deal[]);

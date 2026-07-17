@@ -127,10 +127,11 @@ const TicketColumn = memo(function TicketColumn({ column, tickets }: { column: C
 
 export default function TicketsKanbanPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const { data: res, error, isLoading } = useSWR('/api/tenant/tickets');
+  const { data: res, isLoading } = useSWR('/api/tenant/tickets');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const loading = isLoading && tickets.length === 0;
 
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (res?.data && tickets.length === 0) {
       setTickets(res.data as Ticket[]);

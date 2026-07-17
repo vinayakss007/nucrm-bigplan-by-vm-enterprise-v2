@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, Sun, Moon, Search, LogOut, X, Users, TrendingUp,
@@ -21,7 +22,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const { theme, setTheme }       = useTheme();
-  const [mounted, setMounted]     = useState(false);
+  const [_mounted, setMounted]     = useState(false);
   const router                    = useRouter();
   const inputRef                  = useRef<HTMLInputElement>(null);
   const timerRef                  = useRef<NodeJS.Timeout>(undefined);

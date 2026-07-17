@@ -341,7 +341,7 @@ export class TenantDataImporter {
 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseAndBuildInsert(sqlString: string): any {
+function _parseAndBuildInsert(sqlString: string): any {
   const match = sqlString.trim().match(
     /^\s*INSERT\s+INTO\s+(?:public\.)?(\w+)\s*\(([^)]+)\)\s*VALUES\s*\(([\s\S]*)\)\s*$/i
   );
