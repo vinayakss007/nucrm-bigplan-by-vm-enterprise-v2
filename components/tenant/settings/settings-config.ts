@@ -110,6 +110,7 @@ export const GROUPS: SettingsGroup[] = [
     id: 'ws-channels', label: 'Channels & Customer-Facing', scope: 'workspace',
     items: [
       { href: '/tenant/settings/email',           label: 'Email Sending',    icon: Mail,        desc: 'From address, signatures, SPF/DKIM', keywords: 'email smtp signature spf dkim sending' },
+      { href: '/tenant/settings/email/warmup',    label: 'Email Warmup',     icon: Mail,        desc: 'Sender reputation ramp-up',       badge: 'new', keywords: 'warmup sender reputation deliverability ramp' },
       { href: '/tenant/settings/canned-responses', label: 'Canned Responses', icon: MessageSquare, desc: 'Reusable reply templates',      keywords: 'canned response template reply shortcut' },
       { href: '/tenant/settings/portal',          label: 'Customer Portal',  icon: Globe,       desc: 'Branding, access',              adminOnly: true, keywords: 'portal customer self-service' },
     ],
