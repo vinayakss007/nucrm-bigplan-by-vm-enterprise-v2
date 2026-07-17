@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50')));
     const statusFilter = searchParams.get('status');
+    const eventFilter = searchParams.get('event');
     const offset = (page - 1) * limit;
 
     // Get the tenant's webhook integration IDs
@@ -34,6 +35,9 @@ export async function GET(req: NextRequest) {
     const conditions = [inArray(webhookQueue.webhookId, webhookIds)];
     if (statusFilter) {
       conditions.push(eq(webhookQueue.status, statusFilter));
+    }
+    if (eventFilter) {
+      conditions.push(sql`(webhook_queue.payload->>'event') = ${eventFilter}`);
     }
 
     // Count total

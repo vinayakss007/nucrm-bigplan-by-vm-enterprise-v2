@@ -116,6 +116,8 @@ const NAV_SECTIONS: NavSection[] = [
       { href:'/tenant/modules',              label:'Modules',         icon:Boxes, keywords:'features toggles' },
       { href:'/tenant/plugins',              label:'Plugins',         icon:Sparkles, keywords:'extensions' },
       { href:'/tenant/settings/webhooks',    label:'Webhooks',        icon:Zap,   keywords:'events callbacks', adminOnly:true },
+      { href:'/tenant/settings/webhooks/logs', label:'Webhook Logs',  icon:Zap,   keywords:'delivery attempts', adminOnly:true },
+      { href:'/tenant/settings/webhooks/dlq', label:'Dead Letters',  icon:Zap,   keywords:'failed retries', adminOnly:true },
       { href:'/tenant/settings/api-keys',    label:'API Keys',        icon:Database, keywords:'tokens auth', adminOnly:true },
       { href:'/tenant/docs',                 label:'API Docs',        icon:Book,  keywords:'reference openapi' },
     ],
