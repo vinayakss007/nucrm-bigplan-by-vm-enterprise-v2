@@ -262,7 +262,6 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
                       key={step.id || index}
                       id={String(index)}
                       step={step}
-                      index={index}
                       StepIcon={StepIcon}
                       stepColor={stepColor}
                       isExpanded={isExpanded}
