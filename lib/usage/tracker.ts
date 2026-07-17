@@ -165,7 +165,7 @@ export async function checkLimit(
     const overrides = ((tenant.settings as Record<string, unknown>)?.limitOverrides as Record<string, number | null>) ?? {};
 
     // Helper: resolve effective limit — override wins over plan default
-    const eff = (planField: string | null | undefined, overrideField: string): number | null => {
+    const eff = (planField: number | string | null | undefined, overrideField: string): number | null => {
       if (overrideField in overrides) return overrides[overrideField] ?? null;
       return planField != null ? Number(planField) : null;
     };
