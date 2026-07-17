@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useModules } from '@/lib/modules/client-gate';
 
 type NavItem = {
   href: string;
@@ -22,6 +23,8 @@ type NavItem = {
   perm?: string;
   adminOnly?: boolean;
   keywords?: string;
+  /** Module ID that must be active for this item to appear. Omit = always visible. */
+  module?: string;
 };
 
 type NavSection = {
@@ -44,7 +47,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href:'/tenant/companies', label:'Companies',  icon:Building2,       shortcut:'⌘4', keywords:'accounts orgs' },
       { href:'/tenant/deals',     label:'Deals',      icon:TrendingUp,      shortcut:'⌘5', keywords:'opportunities pipeline' },
       { href:'/tenant/tasks',     label:'Tasks',      icon:CheckSquare,     shortcut:'⌘6', keywords:'todo activities' },
-      { href:'/tenant/projects',  label:'Projects',   icon:FolderKanban,    keywords:'project milestone tracking' },
+      { href:'/tenant/projects',  label:'Projects',   icon:FolderKanban,    keywords:'project milestone tracking', module:'project-management' },
       { href:'/tenant/calendar',  label:'Calendar',   icon:Calendar,        keywords:'meetings events' },
       { href:'/tenant/follow-ups', label:'Follow-Ups', icon:ListChecks, keywords:'follow up missed overdue reminders' },
     ],
@@ -52,17 +55,17 @@ const NAV_SECTIONS: NavSection[] = [
   {
     id: 'intelligence', label: 'Intelligence', defaultOpen: true,
     items: [
-      { href:'/tenant/ai',           label:'AI Hub',         icon:Sparkles,     keywords:'ai artificial intelligence draft scoring at-risk summarize' },
-      { href:'/tenant/ai/draft',     label:'Auto-Draft',     icon:Mail,         keywords:'ai draft email follow-up reply' },
-      { href:'/tenant/ai/lead-scoring', label:'Lead Scoring', icon:Trophy,      keywords:'ai score leads ranking next-best-action' },
-      { href:'/tenant/ai/at-risk',   label:'At-Risk Deals',  icon:Zap,          keywords:'ai stalled deal risk pipeline' },
+      { href:'/tenant/ai',           label:'AI Hub',         icon:Sparkles,     keywords:'ai artificial intelligence draft scoring at-risk summarize', module:'ai-assistant' },
+      { href:'/tenant/ai/draft',     label:'Auto-Draft',     icon:Mail,         keywords:'ai draft email follow-up reply', module:'ai-assistant' },
+      { href:'/tenant/ai/lead-scoring', label:'Lead Scoring', icon:Trophy,      keywords:'ai score leads ranking next-best-action', module:'ai-assistant' },
+      { href:'/tenant/ai/at-risk',   label:'At-Risk Deals',  icon:Zap,          keywords:'ai stalled deal risk pipeline', module:'ai-assistant' },
     ],
   },
   {
     id: 'sales', label: 'Sales',
     items: [
-      { href:'/tenant/quotes',        label:'Quotes',        icon:FileText,      keywords:'proposal estimate' },
-      { href:'/tenant/offers',        label:'Offers',        icon:Send,          keywords:'buyer link accept decline public' },
+      { href:'/tenant/quotes',        label:'Quotes',        icon:FileText,      keywords:'proposal estimate', module:'sales-quotes' },
+      { href:'/tenant/offers',        label:'Offers',        icon:Send,          keywords:'buyer link accept decline public', module:'sales-quotes' },
       { href:'/tenant/approvals',     label:'Approvals',     icon:ShieldCheck,   keywords:'pending review approve reject', adminOnly:true },
       { href:'/tenant/orders',        label:'Orders',        icon:ShoppingCart,  keywords:'sales order' },
       { href:'/tenant/contracts',     label:'Contracts',     icon:FileSignature, keywords:'agreements legal' },
@@ -75,26 +78,26 @@ const NAV_SECTIONS: NavSection[] = [
   {
     id: 'support', label: 'Support & Knowledge',
     items: [
-      { href:'/tenant/tickets', label:'Helpdesk',  icon:LifeBuoy,        keywords:'support tickets cases' },
+      { href:'/tenant/tickets', label:'Helpdesk',  icon:LifeBuoy,        keywords:'support tickets cases', module:'service-helpdesk' },
       { href:'/tenant/kb',      label:'Knowledge', icon:Library,         keywords:'docs articles' },
-      { href:'/tenant/chat',    label:'Live Chat', icon:MessageSquare,   keywords:'inbox messaging' },
+      { href:'/tenant/chat',    label:'Live Chat', icon:MessageSquare,   keywords:'inbox messaging', module:'service-helpdesk' },
       { href:'/tenant/sms',     label:'SMS',       icon:MessageSquare,   keywords:'text messages' },
     ],
   },
   {
     id: 'automate', label: 'Automate',
     items: [
-      { href:'/tenant/sequences',    label:'Sequences',    icon:Mail,     keywords:'cadence drip email' },
-      { href:'/tenant/automation',   label:'Workflows',    icon:Workflow, keywords:'automation rules triggers' },
-      { href:'/tenant/forms',        label:'Forms',        icon:FileBarChart, keywords:'capture lead forms' },
-      { href:'/tenant/email-templates', label:'Email Templates', icon:Mail, keywords:'snippets' },
+      { href:'/tenant/sequences',    label:'Sequences',    icon:Mail,     keywords:'cadence drip email', module:'automation-pro' },
+      { href:'/tenant/automation',   label:'Workflows',    icon:Workflow, keywords:'automation rules triggers', module:'automation-pro' },
+      { href:'/tenant/forms',        label:'Forms',        icon:FileBarChart, keywords:'capture lead forms', module:'forms-builder' },
+      { href:'/tenant/email-templates', label:'Email Templates', icon:Mail, keywords:'snippets', module:'email-sync' },
     ],
   },
   {
     id: 'analyze', label: 'Analyze',
     items: [
       { href:'/tenant/reports',       label:'Reports',      icon:FileBarChart, perm:'reports.view', keywords:'dashboards charts' },
-      { href:'/tenant/analytics',     label:'Analytics',    icon:BarChart3,    perm:'reports.view', keywords:'metrics insights' },
+      { href:'/tenant/analytics',     label:'Analytics',    icon:BarChart3,    perm:'reports.view', keywords:'metrics insights', module:'analytics-pro' },
       { href:'/tenant/leaderboards',  label:'Leaderboards', icon:Trophy,       keywords:'gamification ranking' },
     ],
   },
@@ -147,6 +150,7 @@ const SECTION_KEY = 'nucrm.sidebar.sections';
 
 export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions, isAdmin, isSuperAdmin, collapsed=false, onToggle, onMobileClose }: Props) {
   const pathname = usePathname();
+  const { hasModule, loaded: modulesLoaded } = useModules();
   const [query, setQuery] = useState('');
   const [pinned, setPinned] = useState<string[]>([]);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
@@ -274,9 +278,10 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
   const hasPerm = useCallback((item: NavItem) => {
     if (item.adminOnly && !isAdmin) return false;
     if (hiddenItems.includes(item.href)) return false;
+    if (item.module && modulesLoaded && !hasModule(item.module)) return false;
     if (!item.perm) return true;
     return isAdmin || permissions?.['all'] || permissions?.[item.perm];
-  }, [isAdmin, hiddenItems, permissions]);
+  }, [isAdmin, hiddenItems, permissions, modulesLoaded, hasModule]);
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : href !== '/tenant/dashboard' && pathname.startsWith(href);
