@@ -6,6 +6,8 @@ import { eq } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { sendAdminTelegram } from '@/lib/telegram-admin';
 import { acquireLock } from '@/lib/cache/index';
+import { fireWebhooks } from '@/lib/webhooks';
+import { logError } from '@/lib/errors-server';
 
 const IDEMPOTENCY_TTL = 3600 * 24; // 24 hours
 
@@ -205,6 +207,27 @@ async function handlePaymentSucceeded(invoice: any) {
     await db.update(tenants)
       .set({ status: 'active', updatedAt: new Date() })
       .where(eq(tenants.id, tenant.id));
+
+    fireWebhooks(tenant.id, 'invoice.paid', {
+      stripe_invoice_id: invoice.id,
+      amount_paid: invoice.amount_paid,
+      customer: invoice.customer,
+    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+
+    try {
+      const { evaluateAutomations } = await import('@/lib/automation/engine');
+      evaluateAutomations({
+        tenantId: tenant.id,
+        event: 'invoice.paid',
+        data: {
+          stripe_invoice_id: invoice.id,
+          amount_paid: invoice.amount_paid,
+          customer: invoice.customer,
+        },
+      }).catch(err => console.error('[Stripe] invoice.paid automation failed:', err));
+    } catch (e) {
+      console.error('[Stripe] automation import failed:', e);
+    }
 
     console.log(`[Stripe] Payment succeeded for tenant ${tenant.id}`);
   }

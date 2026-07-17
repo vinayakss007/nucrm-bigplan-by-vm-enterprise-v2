@@ -194,6 +194,18 @@ export async function POST(request: NextRequest) {
 
     fireWebhooks(ctx.tenantId, 'deal.created', { id: deal.id, title: deal.title, amount }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
+    try {
+      const { evaluateAutomations } = await import('@/lib/automation/engine');
+      evaluateAutomations({
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        event: 'deal.created',
+        data: { ...deal, id: deal.id },
+      }).catch(err => console.error('[deals POST] deal.created automation failed:', err));
+    } catch (e) {
+      console.error('[deals POST] automation import failed:', e);
+    }
+
     cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`);
     return NextResponse.json({ data: deal }, { status: 201 });
   
