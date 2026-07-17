@@ -210,7 +210,7 @@ async function sendEscalationNotification(
     .where(and(
       eq(tenantMembers.tenantId, ticket.tenantId),
       eq(tenantMembers.status, 'active'),
-      sql`${tenantMembers.role} IN ('owner', 'admin')`,
+      sql`${tenantMembers.roleSlug} IN ('owner', 'admin')`,
     ));
 
   for (const admin of admins) {
