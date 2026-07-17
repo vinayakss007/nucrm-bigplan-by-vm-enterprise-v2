@@ -16,8 +16,6 @@ export default function TenantCompaniesClient({ initialCompanies, permissions, t
 
   const filtered = companies.filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()));
 
-  const { deleteEntity } = useDeleteWithUndo('company', reload);
-
   const reload = useCallback(async () => {
     const res = await fetch('/api/tenant/companies');
     const data = await res.json();

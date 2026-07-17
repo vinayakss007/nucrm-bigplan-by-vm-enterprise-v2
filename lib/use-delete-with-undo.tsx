@@ -3,10 +3,10 @@ import { confirmThen } from '@/components/ui/confirm-dialog';
 import { showUndoToast } from '@/lib/undo';
 import toast from 'react-hot-toast';
 
-type ResourceType = 'contact' | 'deal' | 'task' | 'company' | 'lead';
+type ResourceType = 'contact' | 'deal' | 'task' | 'company' | 'lead' | 'project';
 
 const API_PATH: Record<string, string> = {
-  contact: 'contacts', deal: 'deals', task: 'tasks', company: 'companies', lead: 'leads',
+  contact: 'contacts', deal: 'deals', task: 'tasks', company: 'companies', lead: 'leads', project: 'projects',
 };
 
 /**
