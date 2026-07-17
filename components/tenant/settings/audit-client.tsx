@@ -25,8 +25,10 @@ interface AuditLogEntry {
   resource_id: string | null;
   created_at: string;
   ip_address: string | null;
-  old_data: unknown;
-  new_data: unknown;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  old_data: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  new_data: any;
   full_name: string | null;
   email: string | null;
   user_id: string | null;
@@ -199,10 +201,10 @@ export default function AuditLogClient() {
             {logs.map(log => {
               const word = log.action?.split('_')[0] ?? 'action';
               const cfg  = ACTION_CFG[log.action] ?? ACTION_CFG[word] ?? { color:'text-muted-foreground', bg:'bg-muted/40' };
-              const hasDetail = log.old_data || log.new_data;
+              const hasDetail = Boolean(log.old_data || log.new_data);
               const isOpen = expanded === log.id;
               return (
-                <div key={log.id} className={cn('hover:bg-accent/20 transition-colors', hasDetail && 'cursor-pointer')}
+                  <div key={log.id} className={cn('hover:bg-accent/20 transition-colors', hasDetail ? 'cursor-pointer' : undefined)}
                   onClick={() => hasDetail && setExpanded(isOpen ? null : log.id)}>
                   <div className="flex items-start gap-3 px-5 py-3">
                     <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide shrink-0 mt-0.5 whitespace-nowrap', cfg.bg, cfg.color)}>
@@ -231,7 +233,7 @@ export default function AuditLogClient() {
                       <ChevronDown className={cn('w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform', isOpen && 'rotate-180')} />
                     )}
                   </div>
-                  {isOpen && (log.old_data || log.new_data) && (
+                  {isOpen && hasDetail && (
                     <div className="px-5 pb-3 grid grid-cols-2 gap-3">
                       {log.old_data && (
                         <div>
