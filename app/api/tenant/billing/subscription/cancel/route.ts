@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
       status: cancelAtPeriodEnd ? 'active' : 'canceled',
       cancelAtPeriodEnd: cancelAtPeriodEnd,
       metadata: {
-        ...currentSub.metadata,
+        ...(currentSub.metadata as Record<string, unknown> || {}),
         cancelled_at: new Date().toISOString(),
         cancelled_by: ctx.userId,
         cancellation_reason: reason || 'not_specified',
