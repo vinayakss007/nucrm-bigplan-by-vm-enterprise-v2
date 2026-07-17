@@ -86,6 +86,10 @@ export async function POST(request: NextRequest) {
       },
     }).returning();
 
+    if (!attempt) {
+      return NextResponse.json({ error: 'Failed to create dunning attempt' }, { status: 500 });
+    }
+
     // TODO: In a real implementation, this would trigger a background job
     // to retry the payment via Stripe. For now, we'll just record the attempt.
     
