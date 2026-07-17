@@ -18,6 +18,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import { useDeleteWithUndo } from '@/lib/use-delete-with-undo';
 import LeadImportModal from '@/components/tenant/lead-import-modal';
 
 const PIPELINE_CONFIG = {
@@ -268,6 +269,9 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
     }
   },[sortBy,sortOrder,limit, debouncedSearch, activeStatus]);
 
+  const refreshLeads = useCallback(() => { load(offset, activeStatus, debouncedSearch); }, [load, offset, activeStatus, debouncedSearch]);
+  const { deleteEntity } = useDeleteWithUndo('lead', refreshLeads);
+
   // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -294,10 +298,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, st
   };
 
   const deleteLead=async(id:string,name:string)=>{
-    await confirmThen(`Delete ${name}?`, async () => {
-      const res=await fetch(`/api/tenant/leads/${id}`,{method:'DELETE'});
-      if(res.ok){toast.success('Lead deleted');load(offset,activeStatus,debouncedSearch);}else toast.error('Failed');
-    });
+    await deleteEntity(id, `Delete ${name}?`);
   };
 
   const toggleSelect=(id:string)=>setSelectedLeads(prev=>{const n=new Set(prev);if(n.has(id)){n.delete(id);}else{n.add(id);}return n;});

@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Edit2, Trash2, Save, X, FileText, Send, CheckCircle, XCircle, Calendar, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, Edit2, Trash2, Save, X, FileText, Send, CheckCircle, XCircle, Calendar, ShoppingCart, Download, Mail } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -174,6 +174,37 @@ export default function QuoteDetailPage() {
 
       {/* Actions */}
       <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => window.open(`/api/tenant/quotes/${id}/pdf`, '_blank')}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-accent transition-colors"
+        >
+          <Download className="w-3 h-3" /> Download PDF
+        </button>
+        <button
+          onClick={async () => {
+            const email = window.prompt('Send quote to email address:');
+            if (!email) return;
+            try {
+              const res = await fetch(`/api/tenant/offers/${id}/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }),
+              });
+              if (res.ok) {
+                toast.success(`Quote sent to ${email}`);
+                setQuote(prev => prev ? { ...prev, status: 'sent' } : prev);
+              } else {
+                const data = await res.json();
+                toast.error(data.error || 'Failed to send');
+              }
+            } catch {
+              toast.error('Failed to send email');
+            }
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-accent transition-colors"
+        >
+          <Mail className="w-3 h-3" /> Send via Email
+        </button>
         {quote.status === 'draft' && (
           <button onClick={() => handleStatusChange('sent')} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
             <Send className="w-3 h-3" /> Send Quote

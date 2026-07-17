@@ -91,6 +91,10 @@ export default function ReportsPage() {
           <p className="text-sm text-muted-foreground">Generate reports, analyze data, and export your CRM</p>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/tenant/reports/saved"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-accent text-xs font-medium transition-colors">
+            <FileText className="w-3.5 h-3.5" />Saved
+          </Link>
           <Link href="/tenant/reports/scheduled"
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-accent text-xs font-medium transition-colors">
             <Clock className="w-3.5 h-3.5" />Scheduled

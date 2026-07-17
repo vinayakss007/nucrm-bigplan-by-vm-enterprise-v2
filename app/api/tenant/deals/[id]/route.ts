@@ -176,6 +176,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         newData: { stage: body.stageId }
       });
 
+      // Fire deal.stage_changed automation + webhooks
+      fireWebhooks(ctx.tenantId, 'deal.stage_changed', {
+        id: dealId,
+        title: row!.title,
+        stage_from: prev.stageId,
+        stage_to: body.stageId,
+        contact_id: row!.contactId,
+      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+
+      try {
+        const { evaluateAutomations } = await import('@/lib/automation/engine');
+        evaluateAutomations({
+          tenantId: ctx.tenantId,
+          userId: ctx.userId,
+          event: 'deal.stage_changed',
+          data: { ...row, id: dealId, stage_from: prev.stageId, stage_to: body.stageId },
+        }).catch(err => console.error('[deals PATCH] deal.stage_changed automation failed:', err));
+      } catch (e) {
+        console.error('[deals PATCH] automation import failed:', e);
+      }
+
       // Check if 'won' stage - get stage name to compare
       if (body.stageId) {
         const [stageInfo] = await db

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { ticketReplies } from '@/drizzle/schema';
+import { ticketReplies, supportTickets } from '@/drizzle/schema';
+import { eq, and, isNull } from 'drizzle-orm';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -16,6 +17,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const body = await request.json();
     if (!body.body?.trim()) return NextResponse.json({ error: 'Body is required' }, { status: 400 });
 
+    // Check if this is the first reply (for SLA first-response tracking)
+    const [ticket] = await db.select({ firstResponseAt: supportTickets.firstResponseAt })
+      .from(supportTickets)
+      .where(and(eq(supportTickets.id, id), isNull(supportTickets.deletedAt)))
+      .limit(1);
+
+    const isFirstResponse = ticket && !ticket.firstResponseAt && !body.is_internal;
+
     await db.insert(ticketReplies).values({
       tenantId: ctx.tenantId,
       ticketId: id,
@@ -23,6 +32,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       body: body.body,
       isInternal: body.is_internal || false,
     });
+
+    // Set first_response_at on the ticket if this is the first non-internal reply
+    if (isFirstResponse) {
+      await db.update(supportTickets)
+        .set({ firstResponseAt: new Date() })
+        .where(eq(supportTickets.id, id));
+    }
 
     return NextResponse.json({ success: true }, { status: 201 });
  

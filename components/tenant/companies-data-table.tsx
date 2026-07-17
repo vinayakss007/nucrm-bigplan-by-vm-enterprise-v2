@@ -3,7 +3,8 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { Plus, MoreHorizontal, Edit, Trash2, Building2, Globe, Tag, UserPlus, Archive, RotateCcw } from 'lucide-react'
-import { confirmThen } from '@/components/ui/confirm-dialog'
+
+import { useDeleteWithUndo } from '@/lib/use-delete-with-undo'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -56,6 +57,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
     notes: '',
   })
   const [saving, setSaving] = useState(false)
+  const [selectAllMatching, setSelectAllMatching] = useState(false)
 
   const loadData = useCallback(async (page = 0) => {
     setLoading(true)
@@ -74,6 +76,8 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
     }
     setLoading(false)
   }, [pagination.pageSize, globalFilter])
+
+  const { deleteEntity } = useDeleteWithUndo('company', loadData)
 
   const handlePaginationChange = useCallback((page: number) => {
     setPagination(prev => ({ ...prev, pageIndex: page }))
@@ -205,15 +209,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
               <DropdownMenuItem
                 className="text-red-600 dark:text-red-400"
                 onClick={async () => {
-                  await confirmThen(`Delete ${company.name}?`, async () => {
-                    const res = await fetch(`/api/tenant/companies/${company.id}`, { method: 'DELETE' })
-                    if (res.ok) {
-                      toast.success('Company deleted')
-                      loadData(pagination.pageIndex)
-                    } else {
-                      toast.error('Failed to delete')
-                    }
-                  })
+                  await deleteEntity(company.id, `Delete ${company.name}?`)
                 }}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
@@ -224,7 +220,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
         )
       },
     },
-  ], [pagination.pageIndex, loadData])
+  ], [deleteEntity])
 
   // ── Bulk actions ──────────────────────────────────────────
   const [_bulkBusy, setBulkBusy] = useState(false)
@@ -249,36 +245,46 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
     return () => abort.abort();
   }, [])
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, any> = {}) => {
+  const callBulk = useCallback(async (body: Record<string, any>) => {
     setBulkBusy(true)
     try {
       const res = await fetch('/api/tenant/companies/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, company_ids: ids, payload }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (res.ok) {
         toast.success(`${data.action}: ${data.affected} compan${data.affected === 1 ? 'y' : 'ies'}`)
         loadData(pagination.pageIndex)
       } else {
-        toast.error(data.error || `Failed to ${action} companies`)
+        toast.error(data.error || `Failed to ${body.action} companies`)
       }
     } finally {
       setBulkBusy(false)
     }
   }, [loadData, pagination.pageIndex])
 
-  const bulkActions = useMemo(() => [
+  const bulkActions = useMemo(() => {
+    const buildBody = (action: string, selectedIds: string[], payload?: Record<string, unknown>, isSelectAll = false) => {
+      if (isSelectAll) {
+        const filters: Record<string, string> = {};
+        if (globalFilter) filters.q = globalFilter;
+        return { action, selectAll: true, filters, ...(payload ? { payload } : {}) };
+      }
+      return { action, company_ids: selectedIds, ...(payload ? { payload } : {}) };
+    };
+
+    return [
     ...(teamMembers.length > 0 ? [{
       id: 'assign',
       label: 'Assign Owner',
       icon: <UserPlus className="w-3.5 h-3.5" />,
       requiresSelect: true,
       selectOptions: teamMembers.map(m => ({ value: m.user_id, label: m.full_name })),
-      onClick: async (ids: string[], input?: string) => {
+      onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) return toast.error('Pick a teammate')
-        await callBulk('assign', ids, { assigned_to: input })
+        await callBulk(buildBody('assign', ids, { assigned_to: input }, isSelectAllMatching))
       },
     }] : []),
     {
@@ -287,9 +293,9 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
       icon: <Tag className="w-3.5 h-3.5" />,
       requiresInput: true,
       inputPlaceholder: 'Tag name',
-      onClick: async (ids: string[], input?: string) => {
+      onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input?.trim()) return toast.error('Tag name required')
-        await callBulk('tag', ids, { tag: input.trim() })
+        await callBulk(buildBody('tag', ids, { tag: input.trim() }, isSelectAllMatching))
       },
     },
     {
@@ -302,9 +308,9 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
         { value: 'inactive', label: 'Inactive' },
         { value: 'archived', label: 'Archived' },
       ],
-      onClick: async (ids: string[], input?: string) => {
+      onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) return toast.error('Pick a status')
-        await callBulk('status', ids, { status: input })
+        await callBulk(buildBody('status', ids, { status: input }, isSelectAllMatching))
       },
     },
     {
@@ -313,12 +319,12 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
       icon: <Tag className="w-3.5 h-3.5" />,
       requiresSelect: true,
       selectOptions: customFields.map(f => ({ value: f.fieldKey, label: f.fieldLabel })),
-      onClick: async (ids: string[], fieldKey?: string) => {
+      onClick: async (ids: string[], fieldKey?: string, isSelectAllMatching?: boolean) => {
         if (!fieldKey) return toast.error('Select a field')
         const field = customFields.find(f => f.fieldKey === fieldKey)
         const value = window.prompt(`Enter value for "${field?.fieldLabel || fieldKey}":`)
         if (value === null) return
-        await callBulk('update_field', ids, { field_key: fieldKey, field_value: value })
+        await callBulk(buildBody('update_field', ids, { field_key: fieldKey, field_value: value }, isSelectAllMatching))
       },
     },
     {
@@ -327,7 +333,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
       icon: <Archive className="w-3.5 h-3.5" />,
       requiresConfirmation: true,
       confirmationMessage: 'Archive the selected companies? They will be hidden from active views.',
-      onClick: async (ids: string[]) => callBulk('archive', ids),
+      onClick: async (ids: string[], _input?: string, isSelectAllMatching?: boolean) => callBulk(buildBody('archive', ids, undefined, isSelectAllMatching)),
     },
     {
       id: 'restore',
@@ -335,7 +341,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
       icon: <RotateCcw className="w-3.5 h-3.5" />,
       requiresConfirmation: true,
       confirmationMessage: 'Restore the selected companies from archive?',
-      onClick: async (ids: string[]) => callBulk('restore', ids),
+      onClick: async (ids: string[], _input?: string, isSelectAllMatching?: boolean) => callBulk(buildBody('restore', ids, undefined, isSelectAllMatching)),
     },
     {
       id: 'delete',
@@ -343,19 +349,20 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
       icon: <Trash2 className="w-3.5 h-3.5" />,
       requiresConfirmation: true,
       confirmationMessage: 'Soft-delete the selected companies? They can be restored from Trash.',
-      onClick: async (ids: string[]) => callBulk('delete', ids),
+      onClick: async (ids: string[], _input?: string, isSelectAllMatching?: boolean) => callBulk(buildBody('delete', ids, undefined, isSelectAllMatching)),
     },
     ...(segments.length > 0 ? [{
       id: 'add_to_segment',
       label: 'Add to Segment',
       requiresSelect: true,
       selectOptions: segments.map(s => ({ value: s.id, label: s.name })),
-      onClick: async (ids: string[], input?: string) => {
+      onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) return toast.error('Select a segment')
-        await callBulk('add_to_segment', ids, { segment_id: input })
+        await callBulk(buildBody('add_to_segment', ids, { segment_id: input }, isSelectAllMatching))
       },
     }] : []),
-  ], [teamMembers, callBulk, customFields, segments])
+    ]
+  }, [teamMembers, callBulk, customFields, segments, globalFilter])
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
 
@@ -447,6 +454,9 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
         enableRowSelection
         enableBulkActions
         bulkActions={bulkActions}
+        matchingCount={total}
+        selectAllMatching={selectAllMatching}
+        onSelectAllMatching={setSelectAllMatching}
         searchPlaceholder="Search companies by name, industry, or website..."
         manualPagination
         pageIndex={pagination.pageIndex}

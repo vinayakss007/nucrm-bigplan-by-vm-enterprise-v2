@@ -11,6 +11,7 @@ export type NotificationType =
   | 'invite_accepted'  | 'team_joined'
   | 'limit_warning'    | 'trial_expiring'
   | 'lead_warming'
+  | 'sla_breach'       | 'sla_escalation'
   | 'system';
 
 export async function createNotification(opts: {

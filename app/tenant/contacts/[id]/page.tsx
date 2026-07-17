@@ -14,8 +14,9 @@ import {
   contracts,
   serviceSubscriptions,
   quotes,
+  callLogs,
 } from '@/drizzle/schema';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import ContactDetailClient from '@/components/tenant/contact-detail-client';
 
@@ -23,7 +24,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   const ctx = await requireTenantCtx();
   const { id: contactId } = await params;
 
-  const [contactResult, activities, deals, tasks, _notes, companies, teamMembers, billingData] = await Promise.all([
+  const [contactResult, activities, deals, tasks, _notes, companies, teamMembers, billingData, callLogsList] = await Promise.all([
     db.select({
       contact: contactsTable,
       company_name: companiesTable.name,
@@ -142,6 +143,22 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
         safe(db.select().from(quotes).where(eq(quotes.contactId, contactId)).orderBy(desc(quotes.createdAt)).limit(50), []),
       ]);
     })(),
+
+    db.select({
+      id: callLogs.id,
+      contactId: callLogs.contactId,
+      direction: callLogs.direction,
+      duration: callLogs.duration,
+      notes: callLogs.notes,
+      phoneNumber: callLogs.phoneNumber,
+      createdAt: callLogs.createdAt,
+      userName: usersTable.fullName,
+    })
+    .from(callLogs)
+    .leftJoin(usersTable, eq(usersTable.id, callLogs.userId))
+    .where(and(eq(callLogs.contactId, contactId), isNull(callLogs.deletedAt)))
+    .orderBy(desc(callLogs.createdAt))
+    .limit(50),
   ]);
 
   if (!contactResult.length) notFound();
@@ -177,6 +194,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       contracts={contractsList}
       subscriptions={subscriptionsList}
       quotes={quotesList}
+      callLogs={callLogsList}
     />
   );
 }

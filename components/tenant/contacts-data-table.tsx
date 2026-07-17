@@ -471,7 +471,35 @@ export default function ContactsDataTable({
         })
         const data = await res.json()
         if (res.ok) {
-          toast.success(`Archived ${data.affected} contacts`)
+          const archivedIds = isSelectAllMatching ? [] : selectedIds
+          toast.success(
+            (t) => (
+              <div className="flex items-center gap-2">
+                <span>Archived {data.affected} contacts</span>
+                <button
+                  onClick={async () => {
+                    toast.dismiss(t.id)
+                    const restoreRes = await fetch('/api/tenant/contacts/bulk', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(buildBody('restore', archivedIds, undefined, isSelectAllMatching)),
+                    })
+                    const restoreData = await restoreRes.json()
+                    if (restoreRes.ok) {
+                      toast.success(`Restored ${restoreData.affected} contacts`)
+                      loadData(pagination.pageIndex)
+                    } else {
+                      toast.error(restoreData.error || 'Failed to restore')
+                    }
+                  }}
+                  className="text-sm font-medium underline hover:no-underline"
+                >
+                  Undo
+                </button>
+              </div>
+            ),
+            { duration: 8000 }
+          )
           loadData(pagination.pageIndex)
         } else {
           toast.error(data.error || 'Failed to archive contacts')
@@ -515,7 +543,35 @@ export default function ContactsDataTable({
         })
         const data = await res.json()
         if (res.ok) {
-          toast.success(`Deleted ${data.affected} contacts`)
+          const deletedIds = isSelectAllMatching ? [] : selectedIds
+          toast.success(
+            (t) => (
+              <div className="flex items-center gap-2">
+                <span>Deleted {data.affected} contacts</span>
+                <button
+                  onClick={async () => {
+                    toast.dismiss(t.id)
+                    const restoreRes = await fetch('/api/tenant/contacts/bulk', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(buildBody('restore', deletedIds, undefined, isSelectAllMatching)),
+                    })
+                    const restoreData = await restoreRes.json()
+                    if (restoreRes.ok) {
+                      toast.success(`Restored ${restoreData.affected} contacts`)
+                      loadData(pagination.pageIndex)
+                    } else {
+                      toast.error(restoreData.error || 'Failed to restore')
+                    }
+                  }}
+                  className="text-sm font-medium underline hover:no-underline"
+                >
+                  Undo
+                </button>
+              </div>
+            ),
+            { duration: 8000 }
+          )
           loadData(pagination.pageIndex)
         } else {
           toast.error(data.error || 'Failed to delete contacts')

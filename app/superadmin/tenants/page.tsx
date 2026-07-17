@@ -26,6 +26,20 @@ const PLANS = ['free','starter','pro','enterprise'];
 const STATUSES = ['trialing','active','suspended','cancelled','past_due','trial_expired'];
 const BILLING_TYPES = ['trial','stripe','manual','lifetime','complimentary'];
 
+const LIMIT_FIELDS: { key: string; label: string; unit?: string }[] = [
+  { key: 'maxUsers', label: 'Users' },
+  { key: 'maxContacts', label: 'Contacts' },
+  { key: 'maxDeals', label: 'Deals' },
+  { key: 'maxStorageBytes', label: 'Storage', unit: 'bytes' },
+  { key: 'maxApiCallsPerDay', label: 'API Calls / Day' },
+  { key: 'maxAiTokensPerDay', label: 'AI Tokens / Day' },
+  { key: 'maxEmailsPerDay', label: 'Emails / Day' },
+  { key: 'maxActiveAutomations', label: 'Active Automations' },
+  { key: 'maxTickets', label: 'Tickets' },
+  { key: 'maxForms', label: 'Forms' },
+  { key: 'maxCustomFieldsPerEntity', label: 'Custom Fields / Entity' },
+];
+
 function EditModal({ tenant, onSave, onClose }: { tenant: TenantInfo; onSave: () => void; onClose: () => void }) {
   const [f, setF] = useState({
     plan_id: (tenant.plan_id as string)||'free',
@@ -39,6 +53,48 @@ function EditModal({ tenant, onSave, onClose }: { tenant: TenantInfo; onSave: ()
   });
   const [saving, setSaving] = useState(false);
   const inp = "w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white focus:outline-none focus:border-violet-500";
+
+  // Limit overrides state
+  type LimitEntry = { planDefault: number | null; override: number | null; effective: number | null };
+  const [limits, setLimits] = useState<Record<string, LimitEntry>>({});
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [limitsLoaded, setLimitsLoaded] = useState(false);
+  const [limitsSaving, setLimitsSaving] = useState(false);
+  const [showLimits, setShowLimits] = useState(false);
+
+  const loadLimits = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/superadmin/tenants/${tenant.id}/limits`);
+      const d = await res.json();
+      if (res.ok && d.data) {
+        setLimits(d.data);
+        const init: Record<string, string> = {};
+        for (const [k, v] of Object.entries(d.data) as [string, LimitEntry][]) {
+          init[k] = v.override != null ? String(v.override) : '';
+        }
+        setOverrides(init);
+      }
+    } catch { /* ignore */ }
+    setLimitsLoaded(true);
+  }, [tenant.id]);
+
+  useEffect(() => { if (showLimits && !limitsLoaded) loadLimits(); }, [showLimits, limitsLoaded, loadLimits]);
+
+  const saveLimits = async () => {
+    setLimitsSaving(true);
+    const body: Record<string, string | number | null> = {};
+    for (const [k, v] of Object.entries(overrides)) {
+      if (v === '' || v === undefined) body[k] = 'null';
+      else body[k] = v;
+    }
+    const res = await fetch(`/api/superadmin/tenants/${tenant.id}/limits`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) { toast.success('Limits updated'); loadLimits(); }
+    else { const d = await res.json(); toast.error(d.error); }
+    setLimitsSaving(false);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -92,6 +148,54 @@ function EditModal({ tenant, onSave, onClose }: { tenant: TenantInfo; onSave: ()
             <label className="block text-xs text-white/50 mb-1">Admin Notes (private)</label>
             <textarea value={f.admin_notes} onChange={e=>setF(p=>({...p,admin_notes:e.target.value}))} rows={3} className={inp+' resize-none'} placeholder="Payment history, special arrangements, contact notes..."/>
           </div>
+
+          {/* Limit Overrides */}
+          <div className="border-t border-white/10 pt-4">
+            <button onClick={()=>setShowLimits(s=>!s)} className="flex items-center gap-2 text-xs font-bold text-violet-400 hover:text-violet-300">
+              <Zap className="w-3.5 h-3.5"/>
+              {showLimits ? 'Hide' : 'Show'} Plan Limits
+              <span className="text-[10px] text-white/30 font-normal">(per-tenant overrides)</span>
+            </button>
+            {showLimits && (
+              <div className="mt-3 space-y-2">
+                {!limitsLoaded ? (
+                  <p className="text-xs text-white/30">Loading limits...</p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {LIMIT_FIELDS.map(({ key, label }) => {
+                        const entry = limits[key];
+                        const hasOverride = overrides[key] !== '';
+                        return (
+                          <div key={key} className="flex items-center gap-2">
+                            <label className="text-[10px] text-white/40 w-24 shrink-0 text-right">{label}</label>
+                            <input
+                              type="number"
+                              value={overrides[key] ?? ''}
+                              onChange={e=>setOverrides(p=>({...p,[key]:e.target.value}))}
+                              placeholder={entry?.planDefault != null ? String(entry.planDefault) : '∞'}
+                              min="0"
+                              className={"flex-1 px-2 py-1 rounded border text-[11px] focus:outline-none focus:border-violet-500 " + (hasOverride ? 'border-violet-500/50 bg-violet-500/10 text-white' : 'border-white/10 bg-white/5 text-white/60')}
+                            />
+                            {hasOverride && (
+                              <button onClick={()=>setOverrides(p=>({...p,[key]:''}))} className="text-[9px] text-white/30 hover:text-red-400 shrink-0" title="Remove override">✕</button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex justify-end pt-1">
+                      <button onClick={saveLimits} disabled={limitsSaving} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-[11px] font-bold text-white disabled:opacity-50">
+                        {limitsSaving && <Loader2 className="w-3 h-3 animate-spin"/>}
+                        Save Limits
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-2 justify-end pt-2 border-t border-white/10">
             <button onClick={onClose} className="px-4 py-2 rounded-xl border border-white/10 text-xs text-white/50 hover:text-white">Cancel</button>
             <button onClick={save} disabled={saving} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold disabled:opacity-50">

@@ -3,7 +3,8 @@ import { useState, useCallback } from 'react';
 import { TrendingUp, Plus, X, List, Columns, User, Calendar, Trash2 } from 'lucide-react';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { confirmThen } from '@/components/ui/confirm-dialog';
+;
+import { useDeleteWithUndo } from '@/lib/use-delete-with-undo';
 
 interface DealRecord {
   id: string;
@@ -42,6 +43,13 @@ export default function TenantDealsClient({ initialDeals, contacts, companies, t
   const [dragOver, setDragOver] = useState<string|null>(null);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
+  const refreshDeals = useCallback(async () => {
+    const res = await fetch('/api/tenant/deals');
+    if (res.ok) { const data = await res.json(); setDeals(data.data || []); }
+  }, []);
+
+  const { deleteEntity } = useDeleteWithUndo('deal', refreshDeals);
+
   const pipeline = deals.filter(d=>!['won','lost'].includes(d.stage)).reduce((s,d)=>s+Number(d.value),0);
   const wonTotal = deals.filter(d=>d.stage==='won').reduce((s,d)=>s+Number(d.value),0);
 
@@ -76,11 +84,7 @@ export default function TenantDealsClient({ initialDeals, contacts, companies, t
   }, [deals]);
 
   const deleteDeal = async (id: string) => {
-    await confirmThen('Delete this deal?', async () => {
-      const res = await fetch(`/api/tenant/deals/${id}`, { method:'DELETE' });
-      if (res.ok) { setDeals(prev => prev.filter(d => d.id !== id)); toast.success('Deal deleted'); }
-      else toast.error('Failed to delete');
-    });
+    await deleteEntity(id, 'Delete this deal?');
   };
 
   // Drag and drop

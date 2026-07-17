@@ -94,6 +94,9 @@ export const supportTickets = pgTable('support_tickets', {
   
   assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }),
   
+  slaPolicyId: uuid('sla_policy_id'),
+  firstResponseAt: timestamp('first_response_at', { withTimezone: true }),
+  
   metadata: utils.metadata(),
   ...utils.audit(),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
@@ -127,5 +130,49 @@ export const ticketReplies = pgTable('ticket_replies', {
   return {
     tenantIdx: utils.tenantIdx(table),
     ticketIdx: index('idx_ticket_replies_ticket').on(table.ticketId),
+  };
+});
+
+// ── 6. CSAT SURVEYS ────────────────────────────────────
+export const csatSurveys = pgTable('csat_surveys', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  ticketId: uuid('ticket_id').notNull().references(() => supportTickets.id, { onDelete: 'cascade' }),
+  contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+
+  score: integer('score'), // 1-5 star rating, null until responded
+  comment: text('comment'),
+
+  sentAt: timestamp('sent_at', { withTimezone: true }).defaultNow().notNull(),
+  respondedAt: timestamp('responded_at', { withTimezone: true }),
+  token: text('token').notNull().unique(), // unique token for public response URL
+
+  metadata: utils.metadata(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    ticketIdx: index('idx_csat_ticket').on(table.ticketId),
+    contactIdx: index('idx_csat_contact').on(table.contactId),
+    tokenIdx: index('idx_csat_token').on(table.token),
+    respondedIdx: index('idx_csat_responded').on(table.respondedAt),
+  };
+});
+
+// ── 7. CANNED RESPONSES ───────────────────────────────
+export const cannedResponses = pgTable('canned_responses', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  category: text('category').notNull().default('general'),
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  shortcut: text('shortcut'), // e.g., '/thanks' — type in composer to insert
+
+  metadata: utils.metadata(),
+  ...utils.audit(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    shortcutIdx: index('idx_canned_shortcut').on(table.tenantId, table.shortcut),
   };
 });

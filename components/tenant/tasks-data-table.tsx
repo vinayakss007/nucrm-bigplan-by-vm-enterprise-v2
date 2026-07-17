@@ -16,7 +16,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import toast from 'react-hot-toast'
-import { confirmThen } from '@/components/ui/confirm-dialog'
+
+import { useDeleteWithUndo } from '@/lib/use-delete-with-undo'
 
 const PRIORITY_CFG = {
   high: { label: 'High', dot: 'bg-red-500', badge: 'text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400' },
@@ -67,6 +68,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
     assigned_to: '',
   })
   const [saving, setSaving] = useState(false)
+  const [selectAllMatching, setSelectAllMatching] = useState(false)
 
   const loadData = useCallback(async (page = 0) => {
     setLoading(true)
@@ -85,6 +87,8 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
     }
     setLoading(false)
   }, [pagination.pageSize, globalFilter])
+
+  const { deleteEntity } = useDeleteWithUndo('task', loadData)
 
   const handlePaginationChange = useCallback((page: number) => {
     setPagination(prev => ({ ...prev, pageIndex: page }))
@@ -263,15 +267,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
               <DropdownMenuItem
                 className="text-red-600 dark:text-red-400"
                 onClick={async () => {
-                  await confirmThen(`Delete "${task.title}"?`, async () => {
-                    const res = await fetch(`/api/tenant/tasks/${task.id}`, { method: 'DELETE' })
-                    if (res.ok) {
-                      toast.success('Task deleted')
-                      loadData(pagination.pageIndex)
-                    } else {
-                      toast.error('Failed to delete')
-                    }
-                  })
+                  await deleteEntity(task.id, `Delete "${task.title}"?`)
                 }}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
@@ -282,7 +278,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
         )
       },
     },
-  ], [pagination.pageIndex, loadData, today])
+  ], [deleteEntity, today])
 
   // ── Bulk actions ──────────────────────────────────────────
   const [customFields, setCustomFields] = useState<{ fieldKey: string; fieldLabel: string }[]>([])
@@ -306,121 +302,132 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
     return () => abort.abort();
   }, [])
 
-  const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, unknown> = {}) => {
-    const res = await fetch('/api/tenant/tasks/bulk', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, task_ids: ids, payload }),
-    })
-    const data = await res.json()
-    if (res.ok) {
-      toast.success(`${data.action}: ${data.affected} task(s)`)
-      loadData(pagination.pageIndex)
-    } else {
-      toast.error(data.error || `Failed to ${action} tasks`)
-    }
-  }, [loadData, pagination.pageIndex])
+  const bulkActions = useMemo(() => {
+    const buildBody = (action: string, selectedIds: string[], payload?: Record<string, unknown>, isSelectAll = false) => {
+      if (isSelectAll) {
+        const filters: Record<string, string> = {};
+        if (globalFilter) filters.q = globalFilter;
+        return { action, selectAll: true, filters, ...(payload ? { payload } : {}) };
+      }
+      return { action, task_ids: selectedIds, ...(payload ? { payload } : {}) };
+    };
 
-  const bulkActions = useMemo(() => [
-    {
-      id: 'complete',
-      label: 'Mark Complete',
-      icon: <CheckCircle className="w-3.5 h-3.5" />,
-      onClick: async (ids: string[]) => callBulk('complete', ids),
-    },
-    {
-      id: 'reopen',
-      label: 'Reopen',
-      icon: <RotateCcw className="w-3.5 h-3.5" />,
-      onClick: async (ids: string[]) => callBulk('reopen', ids),
-    },
-    {
-      id: 'priority',
-      label: 'Priority',
-      icon: <Flag className="w-3.5 h-3.5" />,
-      requiresSelect: true,
-      selectOptions: [
-        { value: 'urgent', label: 'Urgent' },
-        { value: 'high',   label: 'High' },
-        { value: 'medium', label: 'Medium' },
-        { value: 'low',    label: 'Low' },
-      ],
-      onClick: async (ids: string[], input?: string) => {
-        if (!input) return toast.error('Pick a priority')
-        await callBulk('priority', ids, { priority: input })
+    const exec = async (action: string, ids: string[], payload?: Record<string, unknown>, isSelectAllMatching?: boolean) => {
+      const res = await fetch('/api/tenant/tasks/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildBody(action, ids, payload, isSelectAllMatching)),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`${data.action}: ${data.affected} task(s)`)
+        loadData(pagination.pageIndex)
+      } else {
+        toast.error(data.error || `Failed to ${action} tasks`)
+      }
+    };
+
+    return [
+      {
+        id: 'complete',
+        label: 'Mark Complete',
+        icon: <CheckCircle className="w-3.5 h-3.5" />,
+        onClick: async (ids: string[], _input?: string, isSelectAllMatching?: boolean) => exec('complete', ids, undefined, isSelectAllMatching),
       },
-    },
-    ...(teamMembers.length > 0 ? [{
-      id: 'assign',
-      label: 'Assign',
-      icon: <UserPlus className="w-3.5 h-3.5" />,
-      requiresSelect: true,
-      selectOptions: teamMembers.map((m) => ({ value: m.user_id, label: m.full_name })),
-      onClick: async (ids: string[], input?: string) => {
-        if (!input) return toast.error('Pick a teammate')
-        await callBulk('assign', ids, { assigned_to: input })
+      {
+        id: 'reopen',
+        label: 'Reopen',
+        icon: <RotateCcw className="w-3.5 h-3.5" />,
+        onClick: async (ids: string[], _input?: string, isSelectAllMatching?: boolean) => exec('reopen', ids, undefined, isSelectAllMatching),
       },
-    }] : []),
-    {
-      id: 'due',
-      label: 'Set Due Date',
-      icon: <CalendarIcon className="w-3.5 h-3.5" />,
-      requiresInput: true,
-      inputPlaceholder: 'YYYY-MM-DD',
-      onClick: async (ids: string[], input?: string) => {
-        if (!input?.trim()) return toast.error('Pick a date (YYYY-MM-DD)')
-        await callBulk('due', ids, { due_date: input.trim() })
+      {
+        id: 'priority',
+        label: 'Priority',
+        icon: <Flag className="w-3.5 h-3.5" />,
+        requiresSelect: true,
+        selectOptions: [
+          { value: 'urgent', label: 'Urgent' },
+          { value: 'high',   label: 'High' },
+          { value: 'medium', label: 'Medium' },
+          { value: 'low',    label: 'Low' },
+        ],
+        onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
+          if (!input) return toast.error('Pick a priority')
+          await exec('priority', ids, { priority: input }, isSelectAllMatching)
+        },
       },
-    },
-    {
-      id: 'update_field',
-      label: 'Update Field',
-      icon: <Flag className="w-3.5 h-3.5" />,
-      requiresSelect: true,
-      selectOptions: customFields.map(f => ({ value: f.fieldKey, label: f.fieldLabel })),
-      onClick: async (ids: string[], fieldKey?: string) => {
-        if (!fieldKey) return toast.error('Select a field')
-        const field = customFields.find(f => f.fieldKey === fieldKey)
-        const value = window.prompt(`Enter value for "${field?.fieldLabel || fieldKey}":`)
-        if (value === null) return
-        await callBulk('update_field', ids, { field_key: fieldKey, field_value: value })
+      ...(teamMembers.length > 0 ? [{
+        id: 'assign',
+        label: 'Assign',
+        icon: <UserPlus className="w-3.5 h-3.5" />,
+        requiresSelect: true,
+        selectOptions: teamMembers.map((m) => ({ value: m.user_id, label: m.full_name })),
+        onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
+          if (!input) return toast.error('Pick a teammate')
+          await exec('assign', ids, { assigned_to: input }, isSelectAllMatching)
+        },
+      }] : []),
+      {
+        id: 'due',
+        label: 'Set Due Date',
+        icon: <CalendarIcon className="w-3.5 h-3.5" />,
+        requiresInput: true,
+        inputPlaceholder: 'YYYY-MM-DD',
+        onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
+          if (!input?.trim()) return toast.error('Pick a date (YYYY-MM-DD)')
+          await exec('due', ids, { due_date: input.trim() }, isSelectAllMatching)
+        },
       },
-    },
-    {
-      id: 'archive',
-      label: 'Archive',
-      icon: <Archive className="w-3.5 h-3.5" />,
-      requiresConfirmation: true,
-      confirmationMessage: 'Archive the selected tasks? They will be hidden from active views.',
-      onClick: async (ids: string[]) => callBulk('archive', ids),
-    },
-    {
-      id: 'restore',
-      label: 'Restore',
-      icon: <RotateCcw className="w-3.5 h-3.5" />,
-      requiresConfirmation: true,
-      confirmationMessage: 'Restore the selected tasks from archive?',
-      onClick: async (ids: string[]) => callBulk('restore', ids),
-    },
-    {
-      id: 'delete',
-      label: 'Delete',
-      icon: <Trash2 className="w-3.5 h-3.5" />,
-      requiresConfirmation: true,
-      confirmationMessage: 'Soft-delete the selected tasks? They can be restored from Trash.',
-      onClick: async (ids: string[]) => callBulk('delete', ids),
-    },
-    ...(segments.length > 0 ? [{
-      id: 'add_to_segment',
-      label: 'Add to Segment',
-      requiresSelect: true,
-      selectOptions: segments.map(s => ({ value: s.id, label: s.name })),
-      onClick: async (ids: string[], input?: string) => {
-        if (!input) return toast.error('Select a segment')
-        await callBulk('add_to_segment', ids, { segment_id: input })
+      {
+        id: 'update_field',
+        label: 'Update Field',
+        icon: <Flag className="w-3.5 h-3.5" />,
+        requiresSelect: true,
+        selectOptions: customFields.map(f => ({ value: f.fieldKey, label: f.fieldLabel })),
+        onClick: async (ids: string[], fieldKey?: string, isSelectAllMatching?: boolean) => {
+          if (!fieldKey) return toast.error('Select a field')
+          const field = customFields.find(f => f.fieldKey === fieldKey)
+          const value = window.prompt(`Enter value for "${field?.fieldLabel || fieldKey}":`)
+          if (value === null) return
+          await exec('update_field', ids, { field_key: fieldKey, field_value: value }, isSelectAllMatching)
+        },
       },
-    }] : []),
-  ], [teamMembers, callBulk, customFields, segments])
+      {
+        id: 'archive',
+        label: 'Archive',
+        icon: <Archive className="w-3.5 h-3.5" />,
+        requiresConfirmation: true,
+        confirmationMessage: 'Archive the selected tasks? They will be hidden from active views.',
+        onClick: async (ids: string[], _input?: string, isSelectAllMatching?: boolean) => exec('archive', ids, undefined, isSelectAllMatching),
+      },
+      {
+        id: 'restore',
+        label: 'Restore',
+        icon: <RotateCcw className="w-3.5 h-3.5" />,
+        requiresConfirmation: true,
+        confirmationMessage: 'Restore the selected tasks from archive?',
+        onClick: async (ids: string[], _input?: string, isSelectAllMatching?: boolean) => exec('restore', ids, undefined, isSelectAllMatching),
+      },
+      {
+        id: 'delete',
+        label: 'Delete',
+        icon: <Trash2 className="w-3.5 h-3.5" />,
+        requiresConfirmation: true,
+        confirmationMessage: 'Soft-delete the selected tasks? They can be restored from Trash.',
+        onClick: async (ids: string[], _input?: string, isSelectAllMatching?: boolean) => exec('delete', ids, undefined, isSelectAllMatching),
+      },
+      ...(segments.length > 0 ? [{
+        id: 'add_to_segment',
+        label: 'Add to Segment',
+        requiresSelect: true,
+        selectOptions: segments.map(s => ({ value: s.id, label: s.name })),
+        onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
+          if (!input) return toast.error('Select a segment')
+          await exec('add_to_segment', ids, { segment_id: input }, isSelectAllMatching)
+        },
+      }] : []),
+    ]
+  }, [teamMembers, customFields, segments, globalFilter, loadData, pagination.pageIndex])
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
 
@@ -552,6 +559,9 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
         enableRowSelection
         enableBulkActions
         bulkActions={bulkActions}
+        matchingCount={total}
+        selectAllMatching={selectAllMatching}
+        onSelectAllMatching={setSelectAllMatching}
         searchPlaceholder="Search tasks by title, contact, or deal..."
         manualPagination
         pageIndex={pagination.pageIndex}

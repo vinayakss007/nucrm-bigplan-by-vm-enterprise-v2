@@ -11,7 +11,7 @@ import {
   Tag, Library, ShieldUser, Crown, Receipt, Lock, ShieldCheck, KeyRound,
   Network, MapPin, Repeat, Timer, Mail, Webhook, History,
   Scale, Shield, Save, ArrowRightLeft, Upload, Send, BrainCircuit, FileEdit, Target, AlertTriangle, Activity, Heart,
-  MessageSquare,
+  BarChart3, MessageSquare,
 } from 'lucide-react';
 
 export type SettingsItem = {
@@ -103,6 +103,7 @@ export const GROUPS: SettingsGroup[] = [
       { href: '/tenant/settings/territories',     label: 'Territories',       icon: MapPin,     desc: 'Regional ownership',             keywords: 'region territory geo' },
       { href: '/tenant/settings/assignment-rules', label: 'Assignment Rules', icon: Repeat,     desc: 'Round-robin & rules',           keywords: 'round robin rules assignment' },
       { href: '/tenant/settings/sla',             label: 'SLA Policies',      icon: Timer,      desc: 'Response & resolution',          keywords: 'sla response time' },
+      { href: '/tenant/settings/csat',             label: 'CSAT Dashboard',    icon: BarChart3,  desc: 'Satisfaction scores & trends',   keywords: 'csat satisfaction survey score feedback' },
     ],
   },
   {
@@ -121,6 +122,7 @@ export const GROUPS: SettingsGroup[] = [
     items: [
       { href: '/tenant/settings/admin',           label: 'Org Admin',        icon: Crown,       desc: 'Plan, usage, members',           adminOnly: true, keywords: 'overview admin' },
       { href: '/tenant/settings/billing',         label: 'Plan & Billing',   icon: Receipt,     desc: 'Subscription, invoices',         keywords: 'plan billing subscription invoice' },
+      { href: '/tenant/settings/usage',           label: 'Usage Dashboard',  icon: Activity,    desc: 'CRM usage metrics & activity',   keywords: 'usage activity metrics dashboard' },
     ],
   },
   {
