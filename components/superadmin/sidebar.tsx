@@ -138,7 +138,7 @@ export default function SuperAdminSidebar({ profile, collapsed, onToggle }: Prop
     const allItems = SECTIONS.flatMap(s => s.items);
     return (
       <aside className="w-[3.5rem] shrink-0 h-full flex flex-col items-center py-2 gap-0.5 transition-all duration-200 overflow-y-auto bg-card border-r border-border">
-        <button onClick={onToggle} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-accent text-foreground/80 transition-colors mt-1 mb-2" title="Open sidebar">
+        <button onClick={onToggle} aria-label="Expand sidebar" className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-accent text-foreground/80 transition-colors mt-1 mb-2" title="Open sidebar">
           <Menu className="w-4 h-4" />
         </button>
 
@@ -180,6 +180,7 @@ export default function SuperAdminSidebar({ profile, collapsed, onToggle }: Prop
           <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400">ADMIN</span>
         </div>
         <button onClick={onToggle}
+          aria-label="Minimize sidebar"
           className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-accent text-foreground/70 hover:text-foreground transition-colors"
           title="Minimize sidebar">
           <X className="w-4 h-4" />
@@ -213,7 +214,7 @@ export default function SuperAdminSidebar({ profile, collapsed, onToggle }: Prop
       </div>
 
       {/* Scrollable navigation */}
-      <nav className="flex-1 py-2 px-2.5 overflow-y-auto scrollbar-thin space-y-1">
+      <nav aria-label="Super admin navigation" className="flex-1 py-2 px-2.5 overflow-y-auto scrollbar-thin space-y-1">
         {q && filtered.length === 0 && (
           <p className="text-xs text-muted-foreground px-3 py-6 text-center">No matches for "{query}"</p>
         )}
@@ -226,6 +227,8 @@ export default function SuperAdminSidebar({ profile, collapsed, onToggle }: Prop
               <button
                 onClick={() => !q && toggleSection(section.id)}
                 disabled={!!q}
+                aria-expanded={isOpen}
+                aria-controls={`sa-section-${section.id}`}
                 className={cn(
                   'flex items-center justify-between w-full px-3 pt-2 pb-1 rounded-md transition-all duration-200 group',
                   q ? 'cursor-default' : 'hover:bg-accent/50'
@@ -242,17 +245,21 @@ export default function SuperAdminSidebar({ profile, collapsed, onToggle }: Prop
                 )}
               </button>
 
-              {/* Items */}
-              {isOpen && section.items.map(item => {
-                const active = isActive(item.href);
-                return (
-                  <Link key={item.href} href={item.href}
-                    className={cn('flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-bold transition-all duration-200',
-                      active ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 shadow-sm shadow-amber-500/20' : 'text-foreground hover:scale-[1.02] hover:bg-accent hover:shadow-sm hover:shadow-amber-500/10')}>
-                    <item.icon className="w-4 h-4 shrink-0" />{item.label}
-                  </Link>
-                );
-              })}
+              {isOpen && (
+                <div id={`sa-section-${section.id}`} className="space-y-0.5">
+                  {section.items.map(item => {
+                    const active = isActive(item.href);
+                    return (
+                      <Link key={item.href} href={item.href}
+                        aria-current={active ? 'page' : undefined}
+                        className={cn('flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-bold transition-all duration-200',
+                          active ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 shadow-sm shadow-amber-500/20' : 'text-foreground hover:scale-[1.02] hover:bg-accent hover:shadow-sm hover:shadow-amber-500/10')}>
+                        <item.icon className="w-4 h-4 shrink-0" />{item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}

@@ -293,6 +293,7 @@ const handleBulkAction = async (action: BulkAction) => {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder={searchPlaceholder}
+                  aria-label={searchPlaceholder || 'Search'}
                   value={globalFilter ?? ""}
                   onChange={(e) => {
                     const value = e.target.value
@@ -307,6 +308,7 @@ const handleBulkAction = async (action: BulkAction) => {
                       setGlobalFilter("")
                       onGlobalFilterChange?.("")
                     }}
+                    aria-label="Clear search"
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
                     <X className="h-4 w-4" />
@@ -618,6 +620,7 @@ const handleBulkAction = async (action: BulkAction) => {
               <p className="text-sm font-medium whitespace-nowrap">Rows per page</p>
               <select
                 value={currentPageSize}
+                aria-label="Rows per page"
                 onChange={(e) => {
                   const size = Number(e.target.value)
                   onPageSizeChange?.(size)
@@ -719,6 +722,7 @@ export function createSortableHeader(
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          aria-sort={sortState === "asc" ? "ascending" : sortState === "desc" ? "descending" : "none"}
           className="h-8 p-0 hover:bg-transparent"
         >
           {label}
