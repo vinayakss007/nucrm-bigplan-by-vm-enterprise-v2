@@ -34,6 +34,8 @@ export default function WebhookLogsPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [eventFilter, setEventFilter] = useState<string>('');
+  const [eventTypes, setEventTypes] = useState<string[]>([]);
   const limit = 20;
 
   const load = useCallback(async () => {
@@ -41,18 +43,22 @@ export default function WebhookLogsPage() {
     try {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
       if (statusFilter !== 'all') params.set('status', statusFilter);
+      if (eventFilter) params.set('event', eventFilter);
       const res = await fetch(`/api/tenant/webhooks/logs?${params}`);
       if (res.ok) {
         const d = await res.json();
         setLogs(d.data ?? []);
         setTotal(d.total ?? 0);
+        // Extract unique event types for filter dropdown
+        const events = [...new Set((d.data ?? []).map((l: WebhookLog) => l.eventType).filter(Boolean))] as string[];
+        if (events.length) setEventTypes(events);
       }
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter]);
+  }, [page, statusFilter, eventFilter]);
 
-  useEffect(() => { load(); }, [page, statusFilter, load]);
+  useEffect(() => { load(); }, [page, statusFilter, eventFilter, load]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
@@ -69,23 +75,40 @@ export default function WebhookLogsPage() {
         </div>
       </div>
 
-      {/* Filter */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">Status:</span>
-        {STATUS_FILTERS.map(f => (
-          <button
-            key={f}
-            onClick={() => { setStatusFilter(f); setPage(1); }}
-            className={cn(
-              'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize',
-              statusFilter === f
-                ? 'bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400'
-                : 'bg-muted text-muted-foreground hover:bg-accent'
-            )}
-          >
-            {f}
-          </button>
-        ))}
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Status:</span>
+          {STATUS_FILTERS.map(f => (
+            <button
+              key={f}
+              onClick={() => { setStatusFilter(f); setPage(1); }}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize',
+                statusFilter === f
+                  ? 'bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400'
+                  : 'bg-muted text-muted-foreground hover:bg-accent'
+              )}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+        {eventTypes.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Event:</span>
+            <select
+              value={eventFilter}
+              onChange={e => { setEventFilter(e.target.value); setPage(1); }}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-muted text-muted-foreground hover:bg-accent border-0 focus:ring-2 focus:ring-violet-500"
+            >
+              <option value="">All events</option>
+              {eventTypes.map(ev => (
+                <option key={ev} value={ev}>{ev}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {loading ? (

@@ -1,14 +1,21 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Plus, Globe, Check, X, Trash2, Loader2, ChevronDown, CheckCircle, XCircle, Clock, Copy } from 'lucide-react';
+import { Plus, Globe, Check, X, Trash2, Loader2, ChevronDown, CheckCircle, XCircle, Clock, Copy, Play, ExternalLink } from 'lucide-react';
+import Link from 'next/link';
+import { AlertTriangle } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-const WEBHOOK_EVENTS = [
-  'contact.created','contact.updated','contact.deleted',
-  'deal.created','deal.updated','deal.stage_changed','deal.won','deal.lost',
-  'task.created','task.completed','form.submitted',
+const WEBHOOK_EVENT_GROUPS = [
+  { label: 'Contacts', events: ['contact.created','contact.updated','contact.deleted','contact.restored'] },
+  { label: 'Deals', events: ['deal.created','deal.updated','deal.stage_changed','deal.won','deal.lost','deal.deleted'] },
+  { label: 'Tasks', events: ['task.created','task.completed','task.deleted'] },
+  { label: 'Companies', events: ['company.created','company.updated','company.deleted'] },
+  { label: 'Leads', events: ['lead.created','lead.updated','lead.deleted','lead.converted'] },
+  { label: 'Tickets', events: ['ticket.created','ticket.resolved'] },
+  { label: 'Finance', events: ['invoice.created','invoice.paid','product.created','product.updated','product.deleted'] },
+  { label: 'Other', events: ['form.submitted','automation.triggered','module.installed','module.disabled'] },
 ];
 
 interface Webhook {
@@ -40,6 +47,8 @@ export default function WebhooksPage() {
   const [saving, setSaving]       = useState(false);
   const [form, setForm]           = useState({ name:'', url:'', events:[] as string[] });
   const [secretVisible, setSecretVisible] = useState<Record<string,string>>({});
+  const [testing, setTesting] = useState<string|null>(null);
+  const [testResult, setTestResult] = useState<Record<string,{status:string; statusCode:number|null; duration:number; errorMessage?:string|null}>>({});
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   const load = async () => {
@@ -121,6 +130,26 @@ export default function WebhooksPage() {
     toast.success('Signing secret copied');
   };
 
+  const testWebhook = async (id: string) => {
+    setTesting(id);
+    try {
+      const res = await fetch(`/api/tenant/webhooks/${id}/test`, { method: 'POST' });
+      const d = await res.json();
+      if (res.ok) {
+        setTestResult(p => ({...p, [id]: d.data}));
+        if (d.data.status === 'delivered') {
+          toast.success(`Test delivered in ${d.data.duration}ms (${d.data.statusCode})`);
+        } else {
+          toast.error(`Test failed: ${d.data.errorMessage || d.data.statusCode}`);
+        }
+      } else {
+        toast.error(d.error);
+      }
+    } finally {
+      setTesting(null);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -128,10 +157,18 @@ export default function WebhooksPage() {
           <h1 className="text-xl font-bold">Webhooks</h1>
           <p className="text-sm text-muted-foreground">Send real-time events to external services when things happen in NuCRM</p>
         </div>
-        <button onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold">
-          <Plus className="w-4 h-4"/>Add Webhook
-        </button>
+        <div className="flex items-center gap-2">
+          <Link href="/tenant/settings/webhooks/logs" className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-sm font-medium hover:bg-accent hover:border-violet-300 transition-colors">
+            <ExternalLink className="w-3.5 h-3.5" />Logs
+          </Link>
+          <Link href="/tenant/settings/webhooks/dlq" className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-sm font-medium hover:bg-accent hover:border-violet-300 transition-colors">
+            <AlertTriangle className="w-3.5 h-3.5" />DLQ
+          </Link>
+          <button onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold">
+            <Plus className="w-4 h-4"/>Add Webhook
+          </button>
+        </div>
       </div>
 
       {/* Create form */}
@@ -151,21 +188,29 @@ export default function WebhooksPage() {
               <input type="url" value={form.url} onChange={e => setForm(f => ({...f, url:e.target.value}))} required className={inp} placeholder="https://hooks.zapier.com/..." />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-3">Events to listen to</label>
-              <div className="grid grid-cols-2 gap-2">
-                {WEBHOOK_EVENTS.map(event => (
-                  <label key={event} className={cn('flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors text-sm',
-                    form.events.includes(event) ? 'border-violet-300 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/20' : 'border-border hover:bg-accent')}>
-                    <input type="checkbox" checked={form.events.includes(event)} onChange={() => toggleEvent(event)} className="hidden" />
-                    <div className={cn('w-4 h-4 rounded border flex items-center justify-center',
-                      form.events.includes(event) ? 'bg-violet-600 border-violet-600' : 'border-border')}>
-                      {form.events.includes(event) && <Check className="w-3 h-3 text-white" />}
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Events to listen to</label>
+              <div className="space-y-3">
+                {WEBHOOK_EVENT_GROUPS.map(group => (
+                  <div key={group.label}>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{group.label}</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {group.events.map(event => (
+                        <label key={event} className={cn('flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors text-sm',
+                          form.events.includes(event) ? 'border-violet-300 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/20' : 'border-border hover:bg-accent')}>
+                          <input type="checkbox" checked={form.events.includes(event)} onChange={() => toggleEvent(event)} className="hidden" />
+                          <div className={cn('w-4 h-4 rounded border flex items-center justify-center',
+                            form.events.includes(event) ? 'bg-violet-600 border-violet-600' : 'border-border')}>
+                            {form.events.includes(event) && <Check className="w-3 h-3 text-white" />}
+                          </div>
+                          <span className="text-xs font-mono">{event}</span>
+                        </label>
+                      ))}
                     </div>
-                    <span className="text-xs font-mono">{event}</span>
-                  </label>
+                  </div>
                 ))}
               </div>
               {form.events.length === 0 && <p className="text-xs text-muted-foreground mt-2">Select at least one event to listen for</p>}
+              <p className="text-xs text-muted-foreground mt-1">{form.events.length} event{form.events.length !== 1 ? 's' : ''} selected</p>
             </div>
             <div className="flex gap-2 justify-end">
               <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-accent">Cancel</button>
@@ -195,21 +240,29 @@ export default function WebhooksPage() {
               <input type="url" value={form.url} onChange={e => setForm(f => ({...f, url:e.target.value}))} required className={inp} placeholder="https://hooks.zapier.com/..." />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-3">Events to listen to</label>
-              <div className="grid grid-cols-2 gap-2">
-                {WEBHOOK_EVENTS.map(event => (
-                  <label key={event} className={cn('flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors text-sm',
-                    form.events.includes(event) ? 'border-violet-300 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/20' : 'border-border hover:bg-accent')}>
-                    <input type="checkbox" checked={form.events.includes(event)} onChange={() => toggleEvent(event)} className="hidden" />
-                    <div className={cn('w-4 h-4 rounded border flex items-center justify-center',
-                      form.events.includes(event) ? 'bg-violet-600 border-violet-600' : 'border-border')}>
-                      {form.events.includes(event) && <Check className="w-3 h-3 text-white" />}
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Events to listen to</label>
+              <div className="space-y-3">
+                {WEBHOOK_EVENT_GROUPS.map(group => (
+                  <div key={group.label}>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{group.label}</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {group.events.map(event => (
+                        <label key={event} className={cn('flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors text-sm',
+                          form.events.includes(event) ? 'border-violet-300 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/20' : 'border-border hover:bg-accent')}>
+                          <input type="checkbox" checked={form.events.includes(event)} onChange={() => toggleEvent(event)} className="hidden" />
+                          <div className={cn('w-4 h-4 rounded border flex items-center justify-center',
+                            form.events.includes(event) ? 'bg-violet-600 border-violet-600' : 'border-border')}>
+                            {form.events.includes(event) && <Check className="w-3 h-3 text-white" />}
+                          </div>
+                          <span className="text-xs font-mono">{event}</span>
+                        </label>
+                      ))}
                     </div>
-                    <span className="text-xs font-mono">{event}</span>
-                  </label>
+                  </div>
                 ))}
               </div>
               {form.events.length === 0 && <p className="text-xs text-muted-foreground mt-2">Select at least one event to listen for</p>}
+              <p className="text-xs text-muted-foreground mt-1">{form.events.length} event{form.events.length !== 1 ? 's' : ''} selected</p>
             </div>
             <div className="flex gap-2 justify-end">
               <button type="button" onClick={() => { setShowEdit(false); setEditingWebhook(null); }} className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-accent">Cancel</button>
@@ -272,13 +325,24 @@ export default function WebhooksPage() {
                       {(wh.failed_count ?? 0) > 0 && <span className="text-red-500 font-medium">{wh.failed_count} failed</span>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     <button onClick={() => startEdit(wh)} className="text-xs font-medium text-muted-foreground hover:text-violet-600 border border-border rounded-lg px-2.5 py-1 hover:border-violet-300 transition-colors">
                       Edit
                     </button>
                     <button onClick={() => toggleActive(wh.id, wh.is_active)} className="text-xs font-medium text-muted-foreground hover:text-violet-600 border border-border rounded-lg px-2.5 py-1 hover:border-violet-300 transition-colors">
                       {wh.is_active ? 'Pause' : 'Enable'}
                     </button>
+                    <button
+                      onClick={() => testWebhook(wh.id)}
+                      disabled={testing === wh.id || !wh.is_active}
+                      title="Send test event"
+                      className="text-xs font-medium text-muted-foreground hover:text-emerald-600 border border-border rounded-lg px-2 py-1 hover:border-emerald-300 transition-colors disabled:opacity-50"
+                    >
+                      {testing === wh.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                    </button>
+                    <Link href="/tenant/settings/webhooks/logs" className="text-xs font-medium text-muted-foreground hover:text-violet-600 border border-border rounded-lg px-2 py-1 hover:border-violet-300 transition-colors">
+                      <ExternalLink className="w-3 h-3" />
+                    </Link>
                     <button onClick={() => toggleExpand(wh.id)} className="text-muted-foreground hover:text-foreground">
                       <ChevronDown className={cn('w-4 h-4 transition-transform', expanded === wh.id && 'rotate-180')} />
                     </button>
@@ -291,6 +355,23 @@ export default function WebhooksPage() {
                 {/* Delivery log */}
                 {expanded === wh.id && (
                   <div className="mt-4 border-t border-border pt-4">
+                    {testResult[wh.id] && (
+                      <div className={cn('mb-3 p-3 rounded-lg border text-xs',
+                        testResult[wh.id].status === 'delivered'
+                          ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800'
+                          : 'bg-red-50 border-red-200 dark:bg-red-950/20 dark:bg-red-950/20 dark:border-red-800')}>
+                        <p className="font-semibold mb-1">Test Result</p>
+                        <div className="flex items-center gap-3">
+                          <span className={cn('font-bold',
+                            testResult[wh.id].status === 'delivered' ? 'text-emerald-700' : 'text-red-700')}>
+                            {testResult[wh.id].status === 'delivered' ? 'Delivered' : 'Failed'}
+                          </span>
+                          {testResult[wh.id].statusCode && <span className="font-mono">HTTP {testResult[wh.id].statusCode}</span>}
+                          <span>{testResult[wh.id].duration}ms</span>
+                          {testResult[wh.id].errorMessage && <span className="text-red-500">{testResult[wh.id].errorMessage}</span>}
+                        </div>
+                      </div>
+                    )}
                     <p className="text-xs font-semibold text-muted-foreground mb-2">Recent Deliveries</p>
                     {(() => {
                       const dels = deliveries[wh.id];
