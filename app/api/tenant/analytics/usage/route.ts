@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, deals, tasks, supportTickets, companies, activities, emails } from '@/drizzle/schema';
+import { contacts, deals, tasks, supportTickets, companies, activities, emailLog } from '@/drizzle/schema';
 import { eq, and, sql, gte } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const [thisMonthCompanies] = await db.select({ count: sql<number>`count(*)::int` })
       .from(companies).where(and(eq(companies.tenantId, ctx.tenantId), gte(companies.createdAt, thisMonthStart)));
     const [thisMonthEmails] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(emails).where(and(eq(emails.tenantId, ctx.tenantId), gte(emails.createdAt, thisMonthStart)));
+      .from(emailLog).where(and(eq(emailLog.tenantId, ctx.tenantId), gte(emailLog.createdAt, thisMonthStart)));
 
     // Last month counts
     const [lastMonthContacts] = await db.select({ count: sql<number>`count(*)::int` })
