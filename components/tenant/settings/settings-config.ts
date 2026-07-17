@@ -118,6 +118,7 @@ export const GROUPS: SettingsGroup[] = [
     items: [
       { href: '/tenant/settings/admin',           label: 'Org Admin',        icon: Crown,       desc: 'Plan, usage, members',           adminOnly: true, keywords: 'overview admin' },
       { href: '/tenant/settings/billing',         label: 'Plan & Billing',   icon: Receipt,     desc: 'Subscription, invoices',         keywords: 'plan billing subscription invoice' },
+      { href: '/tenant/settings/usage',           label: 'Usage Dashboard',  icon: Activity,    desc: 'CRM usage metrics & activity',   keywords: 'usage activity metrics dashboard' },
     ],
   },
   {
