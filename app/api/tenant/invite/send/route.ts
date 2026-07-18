@@ -2,6 +2,7 @@ import { logAudit } from '@/lib/audit';
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, can } from '@/lib/auth/middleware';
+import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, plans, invitations, users, tenantMembers } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
@@ -59,19 +60,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'This person is already a team member' }, { status: 409 });
     }
 
-    // 2. Check plan user limits
-    const tenantRow = await db.query.tenants.findFirst({
-      where: eq(tenants.id, ctx.tenantId)
-    });
+    // 2. Check plan user limits (records a violation + alerts owner; only blocks when USAGE_LIMITS=on)
+    const overLimit = await checkLimit(ctx, 'users');
+    if (overLimit) return overLimit;
 
-    if (tenantRow?.planId) {
-      const planRow = await db.query.plans.findFirst({
-        where: eq(plans.id, tenantRow.planId)
-      });
-      if (planRow && planRow.maxUsers! > 0 && (tenantRow.currentUsers ?? 0) >= planRow.maxUsers!) {
-        return NextResponse.json({ error: `User limit (${planRow.maxUsers}) reached. Upgrade your plan.` }, { status: 403 });
-      }
-    }
+    // Tenant row used for branding/links in the invitation email
+    const tenantRow = await db.query.tenants.findFirst({
+      where: eq(tenants.id, ctx.tenantId),
+      columns: { name: true, primaryColor: true },
+    });
 
     // 3. Upsert invitation
     const token = randomBytes(32).toString('hex');
