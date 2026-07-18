@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
         const [contact] = await tx
           .select({ id: contacts.id })
           .from(contacts)
-          .where(and(eq(contacts.tenantId, ctx.tenantId), eq(sql`lower(${contacts.email})`, key), sql`${contacts.deletedAt} IS NULL`))
+          .where(and(eq(contacts.tenantId, ctx.tenantId), sql`lower(${contacts.email}) = ${key}`, sql`${contacts.deletedAt} IS NULL`))
           .limit(1);
 
         if (!contact) return null;
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
         const [company] = await tx
           .select({ id: companies.id })
           .from(companies)
-          .where(and(eq(companies.tenantId, ctx.tenantId), eq(sql`lower(${companies.name})`, key), sql`${companies.deletedAt} IS NULL`))
+          .where(and(eq(companies.tenantId, ctx.tenantId), sql`lower(${companies.name}) = ${key}`, sql`${companies.deletedAt} IS NULL`))
           .limit(1);
 
         if (!company) return null;
@@ -156,7 +156,8 @@ export async function POST(request: NextRequest) {
         const result = await tx.execute(sql`
           SELECT id FROM users WHERE lower(email) = ${key} LIMIT 1
         `);
-        const userId = result.rows[0]?.id ?? null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const userId = (result.rows[0] as any)?.id ?? null;
 
         if (!userId) return null;
         userCache[key] = userId;
