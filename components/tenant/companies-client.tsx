@@ -2,7 +2,6 @@
 import { useState, useCallback } from 'react';
 import { Plus, Search, Building2, Globe, Users, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo';
 
