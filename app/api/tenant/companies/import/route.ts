@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { companies, activities } from '@/drizzle/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { apiError } from '@/lib/api-error';
 
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
           const [existing] = await tx
             .select({ id: companies.id })
             .from(companies)
-            .where(eq(companies.tenantId, ctx.tenantId), sql`lower(${companies.name}) = ${mapped.name.toLowerCase().trim()}`, sql`${companies.deletedAt} IS NULL`)
+            .where(and(eq(companies.tenantId, ctx.tenantId), sql`lower(${companies.name}) = ${mapped.name.toLowerCase().trim()}`, sql`${companies.deletedAt} IS NULL`))
             .limit(1);
 
           if (existing) {
