@@ -15,8 +15,6 @@ import { eq } from 'drizzle-orm';
 import {
   isStripeConfigured,
   stripeFetch,
-  StripeNotConfiguredError,
-  StripeApiError,
   type StripeBillingPortalSession,
 } from '@/lib/stripe';
 
@@ -57,14 +55,12 @@ export async function POST(request: NextRequest) {
         return_url: `${appUrl}/tenant/settings/billing`,
       },
     });
-    const session = await res.json() as { url: string; error?: { message: string } };
-    if (!res.ok) return NextResponse.json({ error: session.error?.message ?? 'Stripe error' }, { status:400 });
-    
+
     return NextResponse.json({ url: session.url });
- 
- 
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { 
-    return apiError(err, "Internal server error", 500); 
+  } catch (err: any) {
+    console.error('[Billing Portal]', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -19,9 +19,43 @@
 
 const STRIPE_API = 'https://api.stripe.com/v1';
 
+// ── Error Classes ────────────────────────────────────────────────────────────
+
+export class StripeNotConfiguredError extends Error {
+  constructor() {
+    super('STRIPE_SECRET_KEY is not configured');
+    this.name = 'StripeNotConfiguredError';
+  }
+}
+
+export class StripeApiError extends Error {
+  constructor(
+    message: string,
+    public code?: string,
+    public statusCode?: number,
+  ) {
+    super(message);
+    this.name = 'StripeApiError';
+  }
+}
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface StripeBillingPortalSession {
+  url: string;
+}
+
+export interface StripeCustomer {
+  id: string;
+  object: string;
+  email: string | null;
+}
+
+// ── Core Stripe API Call ─────────────────────────────────────────────────────
+
 function getStripeKey(): string {
   const key = process.env['STRIPE_SECRET_KEY'];
-  if (!key) throw new Error('STRIPE_SECRET_KEY is not configured');
+  if (!key) throw new StripeNotConfiguredError();
   return key;
 }
 
@@ -117,6 +151,36 @@ export class StripeError extends Error {
     super(message);
     this.name = 'StripeError';
   }
+}
+
+/**
+ * Call any Stripe REST endpoint. Throws StripeNotConfiguredError when the
+ * secret is missing and StripeApiError on a non-2xx response.
+ */
+export async function stripeFetch<T = unknown>(
+  endpoint: string,
+  options: { method?: string; params?: Record<string, unknown> } = {},
+): Promise<T> {
+  const key = getStripeKey();
+  if (!key) throw new StripeNotConfiguredError();
+  const { method = 'GET', params } = options;
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${key}`,
+    'Content-Type': 'application/x-www-form-urlencoded',
+  };
+  const fetchOptions: RequestInit = { method, headers };
+  if (params && method !== 'GET') {
+    fetchOptions.body = new URLSearchParams(flattenObject(params)).toString();
+  }
+  const url = endpoint.startsWith('http') ? endpoint : `${STRIPE_API}${endpoint}`;
+  const res = await fetch(url, fetchOptions);
+  const parsed = await res.json() as Record<string, unknown>;
+  if (!res.ok) {
+    const errObj = parsed.error as { message?: string; code?: string } | undefined;
+    const message = errObj?.message ?? `Stripe API error ${res.status}`;
+    throw new StripeApiError(message, errObj?.code, res.status);
+  }
+  return parsed as T;
 }
 
 // ── Customer Management ──────────────────────────────────────────────────────
