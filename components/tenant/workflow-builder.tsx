@@ -162,7 +162,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
         e.preventDefault();
         const prev = undo();
         if (prev) {
-          setNodes(prev.nodes);
+          setNodes(prev.nodes as CustomNode[]);
           setEdges(prev.edges);
         }
       }
@@ -171,7 +171,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
         e.preventDefault();
         const next = redo();
         if (next) {
-          setNodes(next.nodes);
+          setNodes(next.nodes as CustomNode[]);
           setEdges(next.edges);
         }
       }
@@ -180,7 +180,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
         e.preventDefault();
         const next = redo();
         if (next) {
-          setNodes(next.nodes);
+          setNodes(next.nodes as CustomNode[]);
           setEdges(next.edges);
         }
       }
@@ -474,7 +474,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
               onClick={() => {
                 const prev = undo();
                 if (prev) {
-                  setNodes(prev.nodes);
+                  setNodes(prev.nodes as CustomNode[]);
                   setEdges(prev.edges);
                 }
               }}
@@ -489,7 +489,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
               onClick={() => {
                 const next = redo();
                 if (next) {
-                  setNodes(next.nodes);
+                  setNodes(next.nodes as CustomNode[]);
                   setEdges(next.edges);
                 }
               }}
