@@ -229,6 +229,9 @@ export default function FormsPage() {
       {!loading && forms.length > 0 && (
         <Pagination total={total} offset={offset} limit={limit} onChange={setOffset} />
       )}
+      {!loading && forms.length > 0 && (
+        <Pagination total={total} offset={offset} limit={limit} onChange={setOffset} />
+      )}
 
       {/* Forms list */}
       {loading ? [...Array(3)].map((_,i) => <div key={i} className="h-24 bg-muted rounded-2xl animate-pulse" />) :
