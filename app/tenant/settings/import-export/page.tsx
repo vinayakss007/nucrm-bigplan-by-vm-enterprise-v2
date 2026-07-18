@@ -97,6 +97,7 @@ export default function ImportExportPage() {
           const sheetName = workbook.SheetNames[0];
           if (!sheetName) { toast.error('No sheets found in file'); return; }
           const worksheet = workbook.Sheets[sheetName];
+          if (!worksheet) { toast.error('Failed to read sheet'); return; }
           const jsonData = XLSX.utils.sheet_to_json<ParsedRow>(worksheet, { raw: false, defval: '' });
           if (!jsonData.length) { toast.error('No data rows found in file'); return; }
 
