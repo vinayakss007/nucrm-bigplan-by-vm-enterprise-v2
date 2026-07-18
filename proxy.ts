@@ -41,6 +41,7 @@ const PUBLIC_PATHS = [
   '/api/webhooks/stripe', '/api/webhooks/resend', '/api/webhooks/whatsapp', '/api/webhooks/inbound',
   '/api/health', '/api/track/click', '/api/track/open', '/api/unsubscribe',
   '/api/keepalive', '/api/test-email', '/api/cron', '/api/metrics', '/api/embed', '/api/emergency',
+  '/api/flags', '/api/openapi',
   '/api/setup/check', '/api/setup/create-admin', '/api/lead-capture', '/api/lead-capture/submit',
   '/api/public/tickets', '/api/public/invoices', '/api/public/kb', '/api/public/offers',
   '/sw.js', '/manifest.json', '/robots.txt', '/sitemap.xml',
@@ -199,6 +200,15 @@ export async function proxy(request: NextRequest) {
     const redirect = NextResponse.redirect(url);
     redirect.headers.set('x-request-id', requestId);
     return redirect;
+  }
+
+  // API key tokens are validated by requireAuth in route handlers, not here.
+  // Skip JWT verification and pass through to let the route handler authenticate.
+  if (token.startsWith('ak_')) {
+    const response = NextResponse.next();
+    response.headers.set('x-request-id', requestId);
+    setCORS(response, origin, pathname);
+    return response;
   }
 
   try {

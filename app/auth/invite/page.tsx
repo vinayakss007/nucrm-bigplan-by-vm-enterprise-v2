@@ -89,7 +89,7 @@ function AcceptInviteContent() {
               <p className="text-xs text-muted-foreground">Invited as <strong className="capitalize">{invitation?.role_slug?.replace('_',' ')}</strong></p>
             </div>
           </div>
-          <form onSubmit={accept} className="space-y-4">
+          <form method="post" onSubmit={accept} className="space-y-4">
             {!isLoggedIn && (
               <>
                 <div><label className="block text-sm font-medium mb-1.5">Your Full Name</label><input required value={name} onChange={e=>setName(e.target.value)} placeholder="Jane Smith" className={inp}/></div>

@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     const v = validated.data;
 
     // Verify tenant has the service-helpdesk module enabled
-    const moduleGate = await requireModule(v.tenantId, 'service-helpdesk');
+    const moduleGate = await requireModule(v.tenantId, 'service-helpdesk', false);
     if (moduleGate) return moduleGate;
 
     const session = await createChatSession({

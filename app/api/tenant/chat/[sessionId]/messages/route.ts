@@ -20,7 +20,7 @@ export async function GET(
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const moduleGate = await requireModule(ctx.tenantId, 'service-helpdesk');
+    const moduleGate = await requireModule(ctx.tenantId, 'service-helpdesk', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
 
     const { sessionId } = await params;
@@ -43,7 +43,7 @@ export async function POST(
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const moduleGate = await requireModule(ctx.tenantId, 'service-helpdesk');
+    const moduleGate = await requireModule(ctx.tenantId, 'service-helpdesk', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
 
     const { sessionId } = await params;

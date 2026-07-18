@@ -21,8 +21,10 @@ import { eq, and } from 'drizzle-orm';
  */
 export async function requireModule(
   tenantId: string,
-  moduleId: string
+  moduleId: string,
+  isSuperAdmin?: boolean
 ): Promise<NextResponse | null> {
+  if (isSuperAdmin) return null;
   try {
     // Check if the module exists and is available in the registry
     const moduleRow = await db.query.modules.findFirst({
