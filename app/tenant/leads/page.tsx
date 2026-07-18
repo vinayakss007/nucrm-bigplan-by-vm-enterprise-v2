@@ -1,6 +1,6 @@
 import { requireTenantCtx, can } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
-import { leads, tenantMembers, users, companies } from '@/drizzle/schema';
+import { leads, tenantMembers, users, companies, contacts } from '@/drizzle/schema';
 import { eq, and, isNull, sql, desc, asc } from 'drizzle-orm';
 import { Suspense } from 'react';
 import { getUserDefaultView } from '@/lib/user-defaults';
@@ -43,7 +43,7 @@ export default async function LeadsPage() {
     canAssign: can(ctx, 'leads.assign'),
   };
 
-  const [statsRaw, teamMembers, companiesList, sourcesRaw] = await Promise.all([
+  const [statsRaw, teamMembers, companiesList, sourcesRaw, contactsList] = await Promise.all([
     // Get pipeline statistics
     db
       .select({
@@ -92,7 +92,25 @@ export default async function LeadsPage() {
       .from(leads)
       .where(and(eq(leads.tenantId, tid), isNull(leads.deletedAt)))
       .groupBy(leads.source)
-      .orderBy(desc(sql`count(*)`))
+      .orderBy(desc(sql`count(*)`)),
+
+    // Get contacts for linking to leads
+    db
+      .select({
+        id: contacts.id,
+        first_name: contacts.firstName,
+        last_name: contacts.lastName,
+        email: contacts.email,
+        phone: contacts.phone,
+        job_title: contacts.jobTitle,
+        company_id: contacts.companyId,
+        company_name: companies.name,
+      })
+      .from(contacts)
+      .leftJoin(companies, eq(companies.id, contacts.companyId))
+      .where(and(eq(contacts.tenantId, tid), isNull(contacts.deletedAt)))
+      .orderBy(asc(contacts.firstName))
+      .limit(200),
   ]);
 
   // Map camelCase to snake_case for frontend
@@ -109,6 +127,8 @@ export default async function LeadsPage() {
         teamMembers={teamMembers as any}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         companies={companiesList as any}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+        contacts={contactsList as any}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         stats={stats as any}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
