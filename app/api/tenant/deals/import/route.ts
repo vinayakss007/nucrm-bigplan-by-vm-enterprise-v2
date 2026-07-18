@@ -153,9 +153,10 @@ export async function POST(request: NextRequest) {
         const key = email.toLowerCase().trim();
         if (userCache[key]) return userCache[key];
 
-        const [{ id: userId } = { id: null }] = await tx.execute(sql`
+        const result = await tx.execute(sql`
           SELECT id FROM users WHERE lower(email) = ${key} LIMIT 1
         `);
+        const userId = result.rows[0]?.id ?? null;
 
         if (!userId) return null;
         userCache[key] = userId;
