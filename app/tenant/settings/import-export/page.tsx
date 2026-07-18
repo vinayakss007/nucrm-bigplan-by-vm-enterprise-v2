@@ -142,19 +142,6 @@ export default function ImportExportPage() {
     result.push(current); return result;
   }
 
-  const autoMapColumns = (cols: string[]) => {
-    const mapping: Record<string, string> = {};
-    const requiredCols = entityConfig.requiredCols;
-    const allCols = [...requiredCols, ...entityConfig.optionalCols];
-
-    for (const col of cols) {
-      const normalized = col.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-      const match = allCols.find(c => c === normalized || normalized.includes(c) || c.includes(normalized));
-      if (match) mapping[col] = match;
-    }
-    setColumnMapping(mapping);
-  };
-
   const updateMapping = (csvCol: string, dbCol: string) => {
     setColumnMapping(prev => ({ ...prev, [csvCol]: dbCol }));
   };
