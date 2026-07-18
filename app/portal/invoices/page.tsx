@@ -1,18 +1,28 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { FileText, Download } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
 
+interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; token: string; }
+
 export default function PortalInvoicesPage() {
+  const router = useRouter();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/public/invoices').then(r => r.json()).then(d => {
-      setInvoices(d.data || []); setLoading(false);
-    }).catch((err) => { console.error('[portal/invoices] fetch failed', err); setLoading(false); });
-  }, []);
+    const raw = localStorage.getItem('portal_session');
+    if (!raw) { router.replace('/portal/login'); return; }
+    try {
+      const s = JSON.parse(raw) as PortalSession;
+      if (!s.email || !s.token) { router.replace('/portal/login'); return; }
+      fetch(`/api/public/invoices?email=${encodeURIComponent(s.email)}`).then(r => r.json()).then(d => {
+        setInvoices(d.data || []); setLoading(false);
+      }).catch((err) => { console.error('[portal/invoices] fetch failed', err); setLoading(false); });
+    } catch { router.replace('/portal/login'); }
+  }, [router]);
 
   const statusColor: Record<string, string> = {
     paid: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',

@@ -766,6 +766,11 @@ export const meetings = pgTable('meetings', {
   location: text('location'),
   meetingUrl: text('meeting_url'),
   status: text('status').notNull().default('scheduled'),
+  // Calendar sync fields
+  externalId: text('external_id'),
+  syncProvider: text('sync_provider'),
+  syncDirection: text('sync_direction'),
+  syncedAt: timestamp('synced_at', { withTimezone: true }),
   ...utils.audit(),
 }, (table) => {
   return {
@@ -776,6 +781,7 @@ export const meetings = pgTable('meetings', {
     createdByIdx: index('idx_meetings_created_by').on(table.createdBy),
     statusIdx: index('idx_meetings_status').on(table.status),
     startTimeIdx: index('idx_meetings_start_time').on(table.startTime),
+    externalIdIdx: index('idx_meetings_external_id').on(table.externalId),
     tenantStartActiveIdx: index('idx_meetings_tenant_start_active').on(table.tenantId, table.startTime).where(sql`deleted_at IS NULL`),
     activeIdx: utils.activeIdx(table),
   };

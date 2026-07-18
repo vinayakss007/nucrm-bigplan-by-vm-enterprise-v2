@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Book, Search, ChevronRight, Clock, Eye } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
@@ -14,15 +15,23 @@ interface PortalArticle {
 }
 
 export default function PortalKBPage() {
+  const router = useRouter();
   const [articles, setArticles] = useState<PortalArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
+    const raw = localStorage.getItem('portal_session');
+    if (!raw) { router.replace('/portal/login'); return; }
+    try {
+      const s = JSON.parse(raw);
+      if (!s.email || !s.token) { router.replace('/portal/login'); return; }
+    } catch { router.replace('/portal/login'); return; }
+
     fetch('/api/public/kb/articles?status=published').then(r => r.json()).then(d => {
       setArticles(d.data || []); setLoading(false);
     }).catch((err) => { console.error('[portal/kb] fetch failed', err); setLoading(false); });
-  }, []);
+  }, [router]);
 
   const filtered = articles.filter(a =>
     !search || a.title.toLowerCase().includes(search.toLowerCase())

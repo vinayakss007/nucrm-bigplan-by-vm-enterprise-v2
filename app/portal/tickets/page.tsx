@@ -1,20 +1,32 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { LifeBuoy, Plus } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
+interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; token: string; }
+
 export default function PortalTicketsPage() {
+  const router = useRouter();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [session, setSession] = useState<PortalSession | null>(null);
 
   useEffect(() => {
-    fetch('/api/public/tickets').then(r => r.json()).then(d => {
-      setTickets(d.data || []); setLoading(false);
-    }).catch((err) => { console.error('[portal/tickets] fetch failed', err); setLoading(false); });
-  }, []);
+    const raw = localStorage.getItem('portal_session');
+    if (!raw) { router.replace('/portal/login'); return; }
+    try {
+      const s = JSON.parse(raw) as PortalSession;
+      if (!s.email || !s.token) { router.replace('/portal/login'); return; }
+      setSession(s);
+      fetch('/api/public/tickets', { headers: { 'x-portal-email': s.email } }).then(r => r.json()).then(d => {
+        setTickets(d.data || []); setLoading(false);
+      }).catch((err) => { console.error('[portal/tickets] fetch failed', err); setLoading(false); });
+    } catch { router.replace('/portal/login'); }
+  }, [router]);
 
   const statusColor: Record<string, string> = {
     open: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30',
@@ -67,13 +79,13 @@ export default function PortalTicketsPage() {
         </div>
       )}
 
-      {showCreate && <CreateTicketModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); /* reload */ }} />}
+      {showCreate && <CreateTicketModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); window.location.reload(); }} sessionEmail={session?.email} />}
     </div>
   );
 }
 
-function CreateTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const [form, setForm] = useState({ subject: '', body: '', priority: 'medium', category: 'other', email: '' });
+function CreateTicketModal({ onClose, onCreated, sessionEmail }: { onClose: () => void; onCreated: () => void; sessionEmail?: string }) {
+  const [form, setForm] = useState({ subject: '', body: '', priority: 'medium', category: 'other', email: sessionEmail || '' });
   const [saving, setSaving] = useState(false);
 
   const create = async (e: React.FormEvent) => {
