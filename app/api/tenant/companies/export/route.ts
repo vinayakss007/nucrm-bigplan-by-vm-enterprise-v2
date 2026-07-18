@@ -26,13 +26,12 @@ export async function GET(request: NextRequest) {
         domain: companies.domain,
         industry: companies.industry,
         phone: companies.phone,
-        email: companies.email,
         address: companies.address,
         city: companies.city,
         state: companies.state,
         country: companies.country,
         postalCode: companies.postalCode,
-        numberOfEmployees: companies.numberOfEmployees,
+        numberOfEmployees: companies.companySize,
         annualRevenue: companies.annualRevenue,
         notes: companies.notes,
         tags: companies.tags,
@@ -42,13 +41,12 @@ export async function GET(request: NextRequest) {
       .where(eq(companies.tenantId, ctx.tenantId))
       .orderBy(asc(companies.createdAt));
 
-    const headers = ['name', 'domain', 'industry', 'phone', 'email', 'address', 'city', 'state', 'country', 'postal_code', 'employees', 'annual_revenue', 'notes', 'tags', 'created_at'];
+    const headers = ['name', 'domain', 'industry', 'phone', 'address', 'city', 'state', 'country', 'postal_code', 'company_size', 'annual_revenue', 'notes', 'tags', 'created_at'];
     const csvRows = rows.map(r => [
       escapeCSV(r.name),
       escapeCSV(r.domain),
       escapeCSV(r.industry),
       escapeCSV(r.phone),
-      escapeCSV(r.email),
       escapeCSV(r.address),
       escapeCSV(r.city),
       escapeCSV(r.state),
