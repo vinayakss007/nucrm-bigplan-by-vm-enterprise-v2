@@ -321,6 +321,91 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
       break;
     }
 
+    case 'assign_contact': {
+      const contactId = enrichedData?.['contact_id'] || enrichedData?.['id'];
+      const assignTo = config.assigned_to || enrichedData?.['assigned_to'];
+      if (!contactId || !assignTo) return;
+      await db.update(contacts).set({ assignedTo: assignTo, updatedAt: new Date() })
+        .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, payload.tenantId)));
+      break;
+    }
+
+    case 'create_deal': {
+      const contactId = enrichedData?.['contact_id'] || enrichedData?.['id'];
+      const companyId = enrichedData?.['company_id'] || null;
+      const pipelineId = config.pipeline_id || null;
+      const stageId = config.stage_id || null;
+      if (!stageId) return;
+      await db.insert(deals).values({
+        tenantId: payload.tenantId,
+        title: interpolate(config.title || 'New Deal', enrichedData),
+        amount: config.amount || '0',
+        pipelineId,
+        stageId,
+        contactId: contactId || null,
+        companyId,
+        assignedTo: config.assigned_to || payload.userId || null,
+        createdBy: payload.userId || null,
+      });
+      break;
+    }
+
+    case 'remove_tag': {
+      const resource = config.resource || 'contacts';
+      const resourceId = enrichedData?.[config.id_field || 'id'];
+      const tagToRemove = config.tag;
+      if (!resourceId || !tagToRemove) return;
+
+      if (resource === 'contacts') {
+        const [existing] = await db.select({ tags: contacts.tags })
+          .from(contacts)
+          .where(and(eq(contacts.id, resourceId), eq(contacts.tenantId, payload.tenantId)))
+          .limit(1);
+        if (existing?.tags) {
+          const newTags = existing.tags.filter((t: string) => t !== tagToRemove);
+          await db.update(contacts).set({ tags: newTags, updatedAt: new Date() })
+            .where(eq(contacts.id, resourceId));
+        }
+      }
+      break;
+    }
+
+    case 'send_sms': {
+      const to = config.to || enrichedData?.['phone'];
+      if (!to) return;
+      const smsIntegration = await db.query.integrations.findFirst({
+        where: and(
+          eq(integrations.tenantId, payload.tenantId),
+          eq(integrations.type, 'sms'),
+          eq(integrations.isActive, true)
+        )
+      });
+      if (!smsIntegration) {
+        console.warn(`[automation] SMS not configured for tenant ${payload.tenantId}`);
+        return;
+      }
+      try {
+        const smsConfig = smsIntegration.config as { api_key?: string; from_number?: string };
+        await fetch('https://api.twilio.com/2010-04-01/Accounts.json/Messages.json', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${Buffer.from(`${smsConfig.api_key}`).toString('base64')}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            To: to,
+            From: smsConfig.from_number || '',
+            Body: interpolate(config.body || '', enrichedData),
+          }),
+          signal: AbortSignal.timeout(10_000),
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        captureError(new Error(`SMS send failed: ${message}`), 'automation:sms-send');
+      }
+      break;
+    }
+
     default:
       console.warn(`[automation] Unknown action type: ${type}`);
   }
