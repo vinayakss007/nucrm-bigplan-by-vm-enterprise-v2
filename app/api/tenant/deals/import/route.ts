@@ -233,7 +233,6 @@ export async function POST(request: NextRequest) {
             contactId,
             companyId,
             assignedTo: assignedTo || ctx.userId,
-            notes: mapped.notes?.slice(0, 5000) || null,
             tags: tags.length > 0 ? tags : undefined,
           });
 

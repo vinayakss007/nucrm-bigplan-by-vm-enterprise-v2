@@ -30,7 +30,6 @@ export async function GET(request: NextRequest) {
         contactEmail: contacts.email,
         companyName: companies.name,
         assignedTo: deals.assignedTo,
-        notes: deals.notes,
         createdAt: deals.createdAt,
       })
       .from(deals)
@@ -41,7 +40,7 @@ export async function GET(request: NextRequest) {
       .where(eq(deals.tenantId, ctx.tenantId))
       .orderBy(asc(deals.createdAt));
 
-    const headers = ['title', 'amount', 'close_date', 'pipeline', 'stage', 'contact_email', 'company', 'notes', 'created_at'];
+    const headers = ['title', 'amount', 'close_date', 'pipeline', 'stage', 'contact_email', 'company', 'assigned_to', 'created_at'];
     const csvRows = rows.map(r => [
       escapeCSV(r.title),
       escapeCSV(r.amount),
@@ -50,7 +49,7 @@ export async function GET(request: NextRequest) {
       escapeCSV(r.stageName),
       escapeCSV(r.contactEmail),
       escapeCSV(r.companyName),
-      escapeCSV(r.notes),
+      escapeCSV(r.assignedTo),
       escapeCSV(r.createdAt),
     ].join(','));
 
