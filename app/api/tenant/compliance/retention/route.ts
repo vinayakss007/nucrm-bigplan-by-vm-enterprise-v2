@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const moduleGate = await requireModule(ctx.tenantId, 'compliance');
+    const moduleGate = await requireModule(ctx.tenantId, 'compliance', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
 
     const policies = await db
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const moduleGate = await requireModule(ctx.tenantId, 'compliance');
+    const moduleGate = await requireModule(ctx.tenantId, 'compliance', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
 
     const body = await req.json();
@@ -95,7 +95,7 @@ export async function PUT(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const moduleGate = await requireModule(ctx.tenantId, 'compliance');
+    const moduleGate = await requireModule(ctx.tenantId, 'compliance', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
 
     const body = await req.json();

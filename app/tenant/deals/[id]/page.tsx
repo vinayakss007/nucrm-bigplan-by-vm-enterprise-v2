@@ -33,14 +33,12 @@ export default async function DealDetailPage({ params }: PageProps) {
     company_website: companiesTable.website,
     assigned_name: usersTable.fullName,
     assigned_avatar: usersTable.avatarUrl,
-    created_by_name: sql<string>`creator.full_name`,
     stage_name: dealStages.name
   })
   .from(dealsTable)
   .leftJoin(contactsTable, eq(contactsTable.id, dealsTable.contactId))
   .leftJoin(companiesTable, eq(companiesTable.id, dealsTable.companyId))
   .leftJoin(usersTable, eq(usersTable.id, dealsTable.assignedTo))
-  .leftJoin(sql`public.users creator`, eq(sql`creator.id`, dealsTable.createdBy))
   .leftJoin(dealStages, eq(dealStages.id, dealsTable.stageId))
   .where(and(
     eq(dealsTable.id, id),
@@ -51,6 +49,20 @@ export default async function DealDetailPage({ params }: PageProps) {
 
   if (!dealResult) {
     notFound();
+  }
+
+  // Look up creator name separately (avoids raw SQL join issue)
+  let createdByName: string | null = null;
+  if (dealResult.deal.createdBy) {
+    try {
+      const [creator] = await db.select({ fullName: usersTable.fullName })
+        .from(usersTable)
+        .where(eq(usersTable.id, dealResult.deal.createdBy))
+        .limit(1);
+      createdByName = creator?.fullName ?? null;
+    } catch {
+      // ignore - creator lookup is non-critical
+    }
   }
 
   const deal = {
@@ -64,7 +76,7 @@ export default async function DealDetailPage({ params }: PageProps) {
     company_website: dealResult.company_website,
     assigned_name: dealResult.assigned_name,
     assigned_avatar: dealResult.assigned_avatar,
-    created_by_name: dealResult.created_by_name,
+    created_by_name: createdByName,
     stage: dealResult.stage_name, // Map stage_name to stage for legacy compatibility
     value: dealResult.deal.amount, // Map amount to value
   };
@@ -88,25 +100,39 @@ export default async function DealDetailPage({ params }: PageProps) {
   ))
   .orderBy(desc(tasksTable.createdAt));
 
-  // Get activities
-  const activities = await db.select({
-    id: activitiesTable.id,
-    entity_type: sql`'deal'`,
-    action: activitiesTable.eventType, // Map eventType to action
-    description: sql<string>`(metadata->>'description')`, // Description might be in metadata or we use a custom sql
-    metadata: activitiesTable.metadata,
-    created_at: activitiesTable.createdAt,
-    performed_by_name: usersTable.fullName,
-    performed_by_avatar: usersTable.avatarUrl
-  })
-  .from(activitiesTable)
-  .leftJoin(usersTable, eq(usersTable.id, activitiesTable.userId))
-  .where(and(
-    eq(activitiesTable.dealId, id),
-    eq(activitiesTable.tenantId, ctx.tenantId)
-  ))
-  .orderBy(desc(activitiesTable.createdAt))
-  .limit(100);
+  // Get activities (graceful fallback if query fails)
+  let activities: Array<{
+    id: string;
+    entity_type: string;
+    action: string | null;
+    description: string | null;
+    metadata: unknown;
+    created_at: Date;
+    performed_by_name: string | null;
+    performed_by_avatar: string | null;
+  }> = [];
+  try {
+    activities = await db.select({
+      id: activitiesTable.id,
+      entity_type: activitiesTable.entityType,
+      action: activitiesTable.eventType,
+      description: activitiesTable.description,
+      metadata: activitiesTable.metadata,
+      created_at: activitiesTable.createdAt,
+      performed_by_name: usersTable.fullName,
+      performed_by_avatar: usersTable.avatarUrl
+    })
+    .from(activitiesTable)
+    .leftJoin(usersTable, eq(usersTable.id, activitiesTable.userId))
+    .where(and(
+      eq(activitiesTable.dealId, id),
+      eq(activitiesTable.tenantId, ctx.tenantId)
+    ))
+    .orderBy(desc(activitiesTable.createdAt))
+    .limit(100);
+  } catch (e) {
+    console.error('Failed to load deal activities:', e);
+  }
 
   const permissions = {
     canEdit: can(ctx, 'deals.edit'),

@@ -1,8 +1,9 @@
+import { verifySecret } from '@/lib/crypto';
 import { NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { tenants, subscriptions, billingEvents } from '@/drizzle/schema';
 import { eq, and, lt, ne, or, sql } from 'drizzle-orm';
-import { captureError } from '@/lib/capture-error';
+
 
 /**
  * POST /api/cron/subscription-check
@@ -24,9 +25,7 @@ import { captureError } from '@/lib/capture-error';
  * Schedule: daily at 05:00 UTC (see vercel.json / crontab)
  */
 export async function POST(request: Request) {
-  // Authenticate via cron secret
-  const cronSecret = request.headers.get('x-cron-secret');
-  if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+  if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -100,7 +99,7 @@ export async function POST(request: Request) {
  
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-        captureError(err, `subscription-check:${sub.tenantId}`);
+        console.error(`[subscription-check:${sub.tenantId}]`, err);
       }
     }
 
@@ -114,7 +113,7 @@ export async function POST(request: Request) {
     });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    captureError(err, 'subscription-check:cron');
+    console.error('[subscription-check:cron]', err);
     return NextResponse.json(
       { error: 'Internal error' },
       { status: 500 }

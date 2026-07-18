@@ -6,6 +6,11 @@ export async function POST(req: NextRequest) {
   if (!verifySecret(req.headers.get('x-cron-secret'), process.env.CRON_SECRET))
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const result = await processWarmUp();
-  return NextResponse.json({ ok: true, ...result });
+  try {
+    const result = await processWarmUp();
+    return NextResponse.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[WarmupEmails] Error:', err);
+    return NextResponse.json({ error: 'Failed to process warmup' }, { status: 500 });
+  }
 }

@@ -1,7 +1,5 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateBody } from '@/lib/api/validate';
-import { createTenantSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users, tenantMembers, roles } from '@/drizzle/schema';
@@ -14,10 +12,7 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
     
-    const rawBody = await request.json();
-    const validated = validateBody(createTenantSchema, rawBody);
-    if (validated instanceof NextResponse) return validated;
-    const { userId, tenantId, reason } = rawBody;
+    const { userId, tenantId, reason } = await request.json();
     if (!tenantId) return NextResponse.json({ error: 'tenantId required' }, { status: 400 });
 
     let targetUserId = userId;

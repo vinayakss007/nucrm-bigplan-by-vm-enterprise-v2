@@ -65,7 +65,7 @@ function ResetPasswordContent() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 p-8">
           <h1 className="text-xl font-bold mb-2">Set new password</h1>
           <p className="text-sm text-muted-foreground mb-6">Choose a strong password with at least 12 characters, uppercase, number, and special character.</p>
-          <form onSubmit={submit} className="space-y-4">
+          <form method="post" onSubmit={submit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1.5">New Password</label>
               <div className="relative">

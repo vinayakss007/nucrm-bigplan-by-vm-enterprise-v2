@@ -6,7 +6,15 @@ import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      return NextResponse.json(
+        { error: 'invalid_request', error_description: 'Request body must be application/x-www-form-urlencoded' },
+        { status: 400 }
+      );
+    }
     const grantType = formData.get('grant_type');
     const code = formData.get('code') as string;
     const clientId = formData.get('client_id') as string;

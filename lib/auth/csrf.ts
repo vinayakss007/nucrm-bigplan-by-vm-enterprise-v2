@@ -124,7 +124,8 @@ export function needsCsrfValidation(method: string, path: string, authMethod?: s
   if (path.startsWith('/api/forms/')) return false;
   if (path.startsWith('/api/leads/public/')) return false;
   if (path.startsWith('/api/setup/')) return false;
-  if (path.startsWith('/api/tenant/onboarding/')) return false;
+  if (path.startsWith('/api/auth/')) return false;
+  if (path.startsWith('/api/tenant/onboarding')) return false;
   
   return true;
 }

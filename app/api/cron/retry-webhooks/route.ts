@@ -6,6 +6,11 @@ export async function POST(req: NextRequest) {
   if (!verifySecret(req.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const retried = await retryFailedWebhooks();
-  return NextResponse.json({ ok: true, retried });
+  try {
+    const retried = await retryFailedWebhooks();
+    return NextResponse.json({ ok: true, retried });
+  } catch (err) {
+    console.error('[RetryWebhooks] Error:', err);
+    return NextResponse.json({ error: 'Failed to retry webhooks' }, { status: 500 });
+  }
 }
