@@ -42,7 +42,6 @@ export async function GET(request: NextRequest) {
         id: users.id,
         name: users.fullName,
         email: users.email,
-        status: users.status,
         type: sql<'user'>`'user'`,
       })
       .from(users)
