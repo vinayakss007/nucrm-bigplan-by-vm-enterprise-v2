@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, Building2, TrendingUp, CheckSquare,
   BarChart3, Settings, Calendar, FileBarChart,
   Crown, ChevronDown, UserCheck, Trash2, Search, X, Menu, Zap, Book,
-  LifeBuoy, Package, FileText, ShoppingCart, FileSignature, RefreshCw, Library,
+  LifeBuoy, FileText, ShoppingCart, FileSignature, RefreshCw, Library,
   Command, Star, Database, Upload, Workflow, Mail, MessageSquare,
   Trophy, Wrench, Boxes, Sparkles, ListChecks, ArrowRightLeft, Tag, Filter, Send, ShieldCheck, FolderKanban,
 } from 'lucide-react';
@@ -71,7 +71,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href:'/tenant/contracts',     label:'Contracts',     icon:FileSignature, keywords:'agreements legal' },
       { href:'/tenant/invoices',      label:'Invoices',      icon:FileText,      keywords:'billing receipts' },
       { href:'/tenant/subscriptions', label:'Subscriptions', icon:RefreshCw,     keywords:'recurring mrr' },
-      { href:'/tenant/products',      label:'Products',      icon:Package,       keywords:'catalog skus' },
       { href:'/tenant/services',      label:'Services',      icon:Wrench,        keywords:'offerings' },
     ],
   },
