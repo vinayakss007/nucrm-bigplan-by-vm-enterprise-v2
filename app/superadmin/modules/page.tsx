@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Package, Users, ToggleRight, ToggleLeft, Save } from 'lucide-react';
+import { Package, Users, ToggleRight, ToggleLeft, Save, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -10,6 +10,12 @@ const PLAN_COLORS: Record<string, string> = {
   starter: 'bg-blue-500/15 text-blue-400',
   pro: 'bg-violet-500/15 text-violet-400',
   enterprise: 'bg-amber-500/15 text-amber-400',
+};
+const PLAN_BORDER: Record<string, string> = {
+  free: 'border-slate-500/20',
+  starter: 'border-blue-500/20',
+  pro: 'border-violet-500/20',
+  enterprise: 'border-amber-500/20',
 };
 const CAT_COLORS: Record<string, string> = {
   utility: 'bg-slate-500/15 text-slate-400',
@@ -22,6 +28,7 @@ const CAT_COLORS: Record<string, string> = {
 
 interface PlanAccess {
   enabled: boolean;
+  price?: number;
 }
 
 interface Module {
@@ -33,7 +40,6 @@ interface Module {
   features: string[];
   total_installs: number;
   planAccess: Record<string, PlanAccess>;
-  pricing?: Record<string, PlanAccess>;
 }
 
 export default function SuperAdminModulesPage() {
@@ -41,6 +47,7 @@ export default function SuperAdminModulesPage() {
   const [loading, setLoading] = useState(true);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
 
   const load = async () => {
     const res = await fetch('/api/superadmin/modules');
@@ -59,6 +66,10 @@ export default function SuperAdminModulesPage() {
 
   useEffect(() => { load(); }, []);
 
+  const markDirty = (moduleId: string) => {
+    setDirty(prev => new Set(prev).add(moduleId));
+  };
+
   const togglePlan = (moduleId: string, plan: string) => {
     setModules(prev => prev.map(m => {
       if (m.id !== moduleId) return m;
@@ -66,7 +77,18 @@ export default function SuperAdminModulesPage() {
       newPricing[plan] = { ...newPricing[plan], enabled: !newPricing[plan]?.enabled };
       return { ...m, planAccess: newPricing };
     }));
-    setDirty(prev => new Set(prev).add(moduleId));
+    markDirty(moduleId);
+  };
+
+  const setPrice = (moduleId: string, plan: string, price: number | undefined) => {
+    setModules(prev => prev.map(m => {
+      if (m.id !== moduleId) return m;
+      const current = m.planAccess?.[plan] || { enabled: false };
+      const newPricing = { ...m.planAccess };
+      newPricing[plan] = { enabled: current.enabled, ...(price !== undefined ? { price } : {}) };
+      return { ...m, planAccess: newPricing };
+    }));
+    markDirty(moduleId);
   };
 
   const saveAll = async () => {
@@ -87,16 +109,21 @@ export default function SuperAdminModulesPage() {
     toast.success('Plan configurations saved');
   };
 
+  const filtered = modules.filter(m =>
+    !search || m.name.toLowerCase().includes(search.toLowerCase()) ||
+    m.id.toLowerCase().includes(search.toLowerCase()) ||
+    m.category.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
-    <div className="space-y-5 max-w-6xl">
+    <div className="space-y-5 max-w-7xl">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold text-white flex items-center gap-2">
-            <Package className="w-5 h-5 text-violet-400" />Module Marketplace
+            <Package className="w-5 h-5 text-violet-400" />Plan Offerings Matrix
           </h1>
           <p className="text-xs text-white/40 mt-0.5">
-            Control which modules are available at each plan level
+            Configure which modules are available per plan and set pricing
           </p>
         </div>
         {dirty.size > 0 && (
@@ -122,68 +149,124 @@ export default function SuperAdminModulesPage() {
         ))}
       </div>
 
-      {/* Plan legend */}
-      <div className="flex gap-3 text-xs">
-        {PLANS.map(p => (
-          <span key={p} className={cn('px-2 py-1 rounded-md font-semibold capitalize', PLAN_COLORS[p])}>{p}</span>
-        ))}
-      </div>
+      {/* Search */}
+      <input
+        type="text"
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder="Search modules..."
+        className="w-full max-w-xs px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-violet-500/50"
+      />
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[...Array(6)].map((_, i) => <div key={i} className="h-48 rounded-xl animate-pulse bg-white/5" />)}
+        <div className="space-y-2">
+          {[...Array(10)].map((_, i) => <div key={i} className="h-14 rounded-xl animate-pulse bg-white/5" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {modules.map(m => (
-            <div key={m.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-5 flex flex-col gap-3">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xl">{m.icon || '🔌'}</span>
-                  <div>
-                    <p className="text-sm font-semibold text-white">{m.name}</p>
-                    <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full capitalize', CAT_COLORS[m.category] || CAT_COLORS['utility'])}>
-                      {m.category}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 text-xs text-white/40">
-                  <Users className="w-3 h-3" />
-                  <span>{m.total_installs || 0}</span>
-                </div>
-              </div>
-
-              <p className="text-xs text-white/40 leading-relaxed flex-1">{m.description}</p>
-
-              {/* Plan toggles */}
-              <div className="flex flex-wrap gap-1.5 pt-2 border-t border-white/5">
-                {PLANS.map(plan => {
-                  const enabled = m.planAccess?.[plan]?.enabled;
-                  return (
-                    <button key={plan}
-                      onClick={() => togglePlan(m.id, plan)}
-                      className={cn('flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all capitalize',
-                        enabled
-                          ? PLAN_COLORS[plan] + ' border-transparent'
-                          : 'border-white/10 bg-white/5 text-white/30 hover:text-white/60'
-                      )}>
-                      {enabled ? <ToggleRight className="w-3 h-3" /> : <ToggleLeft className="w-3 h-3" />}
-                      {plan}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Features list */}
-              {m.features?.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {m.features.map((f: string) => (
-                    <span key={f} className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-white/30">{f}</span>
+        /* Matrix table */
+        <div className="rounded-xl border border-white/10 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-white/10 bg-white/[0.02]">
+                  <th className="text-left px-4 py-3 text-white/40 font-semibold w-[260px]">Module</th>
+                  <th className="text-center px-3 py-3 text-white/40 font-semibold w-[100px]">Installs</th>
+                  {PLANS.map(plan => (
+                    <th key={plan} className="text-center px-3 py-3 font-semibold">
+                      <span className={cn('px-2 py-1 rounded-md capitalize', PLAN_COLORS[plan])}>{plan}</span>
+                    </th>
                   ))}
-                </div>
-              )}
-            </div>
-          ))}
+                  <th className="text-left px-4 py-3 text-white/40 font-semibold">Features</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(m => (
+                  <tr key={m.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                    {/* Module info */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-lg">{m.icon || '🔌'}</span>
+                        <div>
+                          <p className="text-sm font-semibold text-white leading-tight">{m.name}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full capitalize', CAT_COLORS[m.category] || CAT_COLORS['utility'])}>
+                              {m.category}
+                            </span>
+                            <span className="text-[9px] text-white/20">{m.id}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Installs */}
+                    <td className="text-center px-3 py-3">
+                      <div className="flex items-center justify-center gap-1 text-white/40">
+                        <Users className="w-3 h-3" />
+                        <span>{m.total_installs || 0}</span>
+                      </div>
+                    </td>
+
+                    {/* Plan columns with toggle + price */}
+                    {PLANS.map(plan => {
+                      const pa = m.planAccess?.[plan] || { enabled: false };
+                      const enabled = pa.enabled;
+                      const price = pa.price;
+                      return (
+                        <td key={plan} className="text-center px-3 py-3">
+                          <div className={cn(
+                            'flex flex-col items-center gap-1.5 p-2 rounded-lg border transition-colors',
+                            enabled ? PLAN_BORDER[plan] + ' bg-white/[0.02]' : 'border-transparent'
+                          )}>
+                            <button
+                              onClick={() => togglePlan(m.id, plan)}
+                              className={cn(
+                                'flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border transition-all capitalize',
+                                enabled
+                                  ? PLAN_COLORS[plan] + ' border-transparent'
+                                  : 'border-white/10 bg-white/5 text-white/30 hover:text-white/60'
+                              )}>
+                              {enabled ? <ToggleRight className="w-3 h-3" /> : <ToggleLeft className="w-3 h-3" />}
+                              {enabled ? 'On' : 'Off'}
+                            </button>
+
+                            {enabled && (
+                              <div className="flex items-center gap-0.5">
+                                <DollarSign className="w-2.5 h-2.5 text-white/30" />
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={price ?? ''}
+                                  onChange={e => {
+                                    const v = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                                    setPrice(m.id, plan, v);
+                                  }}
+                                  placeholder="0"
+                                  className="w-14 px-1 py-0.5 rounded border border-white/10 bg-white/5 text-[10px] text-white text-center focus:outline-none focus:border-violet-500/50 placeholder:text-white/20"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      );
+                    })}
+
+                    {/* Features */}
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1 max-w-[200px]">
+                        {(m.features ?? []).slice(0, 4).map((f: string) => (
+                          <span key={f} className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-white/30">{f}</span>
+                        ))}
+                        {(m.features?.length ?? 0) > 4 && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-white/30">+{(m.features?.length ?? 0) - 4}</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
