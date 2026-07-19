@@ -38,6 +38,7 @@ const SECTIONS: NavSection[] = [
       { href: '/superadmin/backups',           label: 'Backups',           icon: Database,      keywords: 'backup data' },
       { href: '/superadmin/selective-restore', label: 'Selective Restore', icon: RotateCcw,     keywords: 'restore' },
       { href: '/superadmin/errors',            label: 'Error Logs',        icon: AlertTriangle, keywords: 'errors logs sentry' },
+      { href: '/superadmin/audit',             label: 'Super Admin Audit', icon: Shield,        keywords: 'audit trail superadmin admin actions' },
       { href: '/superadmin/logs',              label: 'Live Logs',         icon: Terminal,      keywords: 'live streaming realtime log stream' },
       { href: '/superadmin/tickets',           label: 'Support Tickets',   icon: MessageSquare, keywords: 'support help' },
       { href: '/superadmin/announcements',     label: 'Announcements',     icon: Megaphone,     keywords: 'banner news' },

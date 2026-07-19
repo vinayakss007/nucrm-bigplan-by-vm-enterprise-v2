@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, planLimits } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 const LIMIT_FIELDS = [
   'maxUsers', 'maxContacts', 'maxDeals', 'maxStorageBytes',
@@ -98,6 +99,15 @@ export async function PATCH(
       .update(tenants)
       .set({ settings: newSettings, updatedAt: new Date() })
       .where(eq(tenants.id, id));
+
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: 'tenant.settings_changed',
+      targetType: 'tenant',
+      targetId: id,
+      metadata: { limitOverrides: Object.keys(newOverrides) },
+    });
 
     return NextResponse.json({ ok: true, limitOverrides: newOverrides });
   } catch (error) {

@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
 import { isNull } from 'drizzle-orm';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 const ALLOWED = [
   'platform_name', 'support_email', 'app_url', 'allow_signups', 'require_email_verify',
@@ -101,6 +102,13 @@ export async function POST(request: NextRequest) {
             });
         }
       }
+    });
+
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: 'settings.changed',
+      metadata: { keys: Object.keys(v) },
     });
 
     return NextResponse.json({ ok: true });

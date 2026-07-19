@@ -25,6 +25,7 @@ import {
   listProviderKeyMeta,
   SecretsVaultError,
 } from '@/lib/ai/secrets';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 /** Accept any provider string — no hardcoded list. */
 
@@ -113,6 +114,15 @@ export async function POST(req: NextRequest) {
       newData: { provider, keyPrefix: result.keyPrefix },
     });
 
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: 'api_key.created',
+      targetType: 'tenant',
+      targetId: tenantId,
+      metadata: { provider, keyPrefix: result.keyPrefix },
+    });
+
     return NextResponse.json({ ok: true, provider, keyPrefix: result.keyPrefix });
   } catch (err) {
     console.error('[superadmin ai-keys POST]', err);
@@ -141,6 +151,15 @@ export async function DELETE(req: NextRequest) {
       action: 'delete_system_ai_key',
       entityType: 'tenant',
       newData: { provider },
+    });
+
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: 'api_key.revoked',
+      targetType: 'tenant',
+      targetId: tenantId,
+      metadata: { provider },
     });
 
     return NextResponse.json({ ok: true, tenantId, provider });

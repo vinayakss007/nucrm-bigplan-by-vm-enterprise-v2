@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 const schema = z.object({ sessionId: z.string().min(1) });
 
@@ -32,6 +33,14 @@ export async function POST(request: NextRequest) {
       .update(users)
       .set({ lastTenantId: null, updatedAt: new Date() })
       .where(eq(users.id, ctx.userId));
+
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: 'user.impersonation_ended',
+      targetType: 'user',
+      metadata: { sessionId },
+    });
 
     return NextResponse.json({ ok: true, message: 'Impersonation ended' });
  

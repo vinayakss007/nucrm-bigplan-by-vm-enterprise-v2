@@ -9,6 +9,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { spawn } from 'child_process';
 import { downloadFromS3, checkFileExists, deleteFile } from '@/lib/restore/runtime-fs';
 import { logError } from '@/lib/errors-server';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 /**
  * Safely run pg_restore with input validation.
@@ -161,6 +162,15 @@ export async function POST(request: NextRequest) {
       code: 'RESTORE_COMPLETED',
       message: `Database restore completed from ${backup.storagePath} in ${durationMs}ms`,
     }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: 'restore.executed',
+      targetType: 'backup',
+      targetId: backup.id,
+      metadata: { durationMs, storagePath: backup.storagePath },
+    });
 
     return NextResponse.json({
       ok: true,

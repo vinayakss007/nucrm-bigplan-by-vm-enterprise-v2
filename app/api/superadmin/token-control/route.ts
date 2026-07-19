@@ -6,6 +6,7 @@ import { tokenBudgets, tenantTokenLimits, usageAlerts, costAnomalies, tenants } 
 import { eq, sql, desc, asc } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 const tokenControlSchema = z.object({
   action: z.enum(['update_global_budget', 'update_tenant_limit', 'ack_alert']),
@@ -143,6 +144,13 @@ export async function POST(request: NextRequest) {
             updatedAt: new Date(),
           },
         });
+
+      logSuperAdminAction({
+        adminId: ctx.userId,
+        adminEmail: ctx.user?.email || "",
+        action: 'billing.overridden',
+        metadata: { service, monthly_budget_cents, hard_cap_enabled },
+      });
       
       return NextResponse.json({ success: true, message: `Updated ${service} global budget` });
     }
@@ -184,6 +192,15 @@ export async function POST(request: NextRequest) {
             updatedAt: new Date(),
           },
         });
+
+      logSuperAdminAction({
+        adminId: ctx.userId,
+        adminEmail: ctx.user?.email || "",
+        action: 'settings.changed',
+        targetType: 'tenant',
+        targetId: tenant_id,
+        metadata: { limitOverrides: Object.keys(limits) },
+      });
       
       return NextResponse.json({ success: true, message: 'Updated tenant AI limits' });
     }
@@ -202,6 +219,15 @@ export async function POST(request: NextRequest) {
           acknowledgedAt: new Date() 
         })
         .where(eq(usageAlerts.id, alert_id));
+
+      logSuperAdminAction({
+        adminId: ctx.userId,
+        adminEmail: ctx.user?.email || "",
+        action: 'settings.changed',
+        targetType: 'alert',
+        targetId: alert_id,
+        metadata: { acknowledged: true },
+      });
       
       return NextResponse.json({ success: true });
     }

@@ -6,6 +6,7 @@ import { announcements } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
 import { validateBody } from '@/lib/api/validate';
 import { createAnnouncementSchema, updateAnnouncementSchema, deleteAnnouncementSchema } from '@/lib/api/schemas';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 export async function GET(request: NextRequest) {
   try {
@@ -67,6 +68,16 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: 'settings.changed',
+      targetType: 'announcement',
+      targetId: row?.id,
+      targetName: result.data.title,
+      metadata: { type: result.data.type, target: result.data.target },
+    });
+
     return NextResponse.json({ data: row }, { status: 201 });
  
  
@@ -94,6 +105,17 @@ export async function PATCH(request: NextRequest) {
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: 'settings.changed',
+      targetType: 'announcement',
+      targetId: row.id,
+      targetName: row.title,
+      metadata: { is_active: result.data.is_active },
+    });
+
     return NextResponse.json({ ok: true, data: row });
  
  
@@ -115,6 +137,16 @@ export async function DELETE(request: NextRequest) {
     if (result instanceof NextResponse) return result;
 
     await db.delete(announcements).where(eq(announcements.id, result.data.id));
+
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: 'settings.changed',
+      targetType: 'announcement',
+      targetId: result.data.id,
+      metadata: { deleted: true },
+    });
+
     return NextResponse.json({ ok: true });
  
  
