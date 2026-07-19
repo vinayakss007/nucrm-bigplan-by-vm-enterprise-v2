@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { users, tenantMembers, roles } from '@/drizzle/schema';
 import { eq, and, sql, asc } from 'drizzle-orm';
 import { createToken, setSessionCookie } from '@/lib/auth/session';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 export async function POST(request: NextRequest) {
   try {
@@ -111,6 +112,20 @@ export async function POST(request: NextRequest) {
     });
     
     await setSessionCookie(token);
+
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: 'user.impersonation_started',
+      targetType: 'user',
+      targetId: targetUserId,
+      targetName: targetUser.fullName || targetUser.email,
+      tenantId,
+      ipAddress: clientIp ?? undefined,
+      userAgent,
+      metadata: { reason, sessionId },
+    });
+
     return response;
  
  

@@ -8,6 +8,7 @@ import { selectiveRestoreLogs, selectiveRestoreAuditLog, superAdminBackups } fro
 import { eq } from 'drizzle-orm';
 import { existsSync } from 'fs';
 import { executeSelectiveRestore, validateTenant, createPreRestoreSnapshot } from '@/lib/restore/restore-executor';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 
 const executeRestoreSchema = z.object({
@@ -168,11 +169,35 @@ export async function POST(request: NextRequest) {
               records_per_table: result.recordsPerTable,
               duration_ms: result.durationMs,
             });
+
+            logSuperAdminAction({
+              adminId: ctx.userId,
+              adminEmail: ctx.user?.email || "",
+              action: 'restore.executed',
+              targetType: 'tenant',
+              targetId: tenant_id,
+              metadata: {
+                backup_id,
+                tables,
+                restore_mode,
+                recordsAffected: result.recordsAffected,
+                durationMs: result.durationMs,
+              },
+            });
           } else {
             sendEvent('error', {
               success: false,
               error: result.error,
               message: 'Restore failed. Data has been rolled back to pre-restore state.',
+            });
+
+            logSuperAdminAction({
+              adminId: ctx.userId,
+              adminEmail: ctx.user?.email || "",
+              action: 'restore.executed',
+              targetType: 'tenant',
+              targetId: tenant_id,
+              metadata: { backup_id, tables, restore_mode, failed: true, error: result.error },
             });
           }
 

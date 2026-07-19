@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { plans, tenants } from '@/drizzle/schema';
 import { eq, sql, asc } from 'drizzle-orm';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 export async function GET(request: NextRequest) {
   try {
@@ -63,6 +64,16 @@ export async function POST(request: NextRequest) {
         price: (v.price_monthly ?? 0).toString(),
       })
       .returning();
+
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: 'subscription.plan_changed',
+      targetType: 'plan',
+      targetId: row?.id,
+      targetName: v.name || slug,
+      metadata: { slug, price_monthly: v.price_monthly },
+    });
 
     return NextResponse.json({ data: row }, { status: 201 });
  
@@ -126,6 +137,17 @@ export async function PATCH(request: NextRequest) {
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
+
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: 'subscription.plan_changed',
+      targetType: 'plan',
+      targetId: id,
+      targetName: row.name,
+      metadata: { changes: Object.keys(updateData).filter(k => k !== 'updatedAt') },
+    });
+
     return NextResponse.json({ data: row });
  
  
@@ -159,6 +181,15 @@ export async function DELETE(request: NextRequest) {
     }
 
     await db.delete(plans).where(eq(plans.id, id));
+
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: 'subscription.plan_changed',
+      targetType: 'plan',
+      targetId: id,
+    });
+
     return NextResponse.json({ ok: true });
  
  

@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { tenants, users, tenantMembers, plans } from '@/drizzle/schema';
 import { eq, and, sql, ilike, desc, or } from 'drizzle-orm';
 import { hashPassword } from '@/lib/auth/session';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 export async function GET(request: NextRequest) {
   try {
@@ -173,6 +174,16 @@ export async function POST(request: NextRequest) {
       return { tenant, owner: ownerId ? { id: ownerId, email: owner_email, temp_password } : null };
     });
 
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: 'tenant.created',
+      targetType: 'tenant',
+      targetId: result.tenant?.id,
+      targetName: name.trim(),
+      metadata: { plan_id, status, billing_email, owner_email, trial_days },
+    });
+
     return NextResponse.json({ data: result }, { status: 201 });
  
  
@@ -233,6 +244,18 @@ export async function PATCH(request: NextRequest) {
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: mappedUpdates.planId ? 'tenant.plan_changed' : 'tenant.settings_changed',
+      targetType: 'tenant',
+      targetId: id,
+      targetName: row.name,
+      tenantId: id,
+      metadata: { changes: Object.keys(mappedUpdates) },
+    });
+
     return NextResponse.json({ data: row });
  
  
@@ -254,11 +277,27 @@ export async function DELETE(request: NextRequest) {
 
     if (hard_delete) {
       await db.delete(tenants).where(eq(tenants.id, id));
+      logSuperAdminAction({
+        adminId: ctx.userId,
+        adminEmail: ctx.user?.email || "",
+        action: 'tenant.deleted',
+        targetType: 'tenant',
+        targetId: id,
+        metadata: { hard_delete: true },
+      });
     } else {
       await db
         .update(tenants)
         .set({ status: 'suspended', deletedAt: new Date(), updatedAt: new Date() })
         .where(eq(tenants.id, id));
+      logSuperAdminAction({
+        adminId: ctx.userId,
+        adminEmail: ctx.user?.email || "",
+        action: 'tenant.suspended',
+        targetType: 'tenant',
+        targetId: id,
+        metadata: { hard_delete: false },
+      });
     }
     return NextResponse.json({ ok: true });
  

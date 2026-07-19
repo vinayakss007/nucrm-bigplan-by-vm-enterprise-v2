@@ -7,6 +7,7 @@ import { eq, sql, desc } from 'drizzle-orm';
 import { createBackup } from '@/lib/backups/backup-service';
 import { validateBody } from '@/lib/api/validate';
 import { createBackupSchema } from '@/lib/api/schemas';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 export async function GET(request: NextRequest) {
   try {
@@ -129,6 +130,14 @@ export async function POST(request: NextRequest) {
       const { CriticalDataCapture } = await import('@/lib/critical-data-capture');
       const capture = new CriticalDataCapture();
       const result = await capture.restoreFromBackup(parsed.data.backupId);
+
+      logSuperAdminAction({
+        adminId: ctx.userId,
+        adminEmail: ctx.user?.email || "",
+        action: 'restore.executed',
+        metadata: { backupId: parsed.data.backupId, via: 'backup-route' },
+      });
+
       return NextResponse.json(result);
     }
 
@@ -136,6 +145,13 @@ export async function POST(request: NextRequest) {
       backupType: parsed.data.backup_type,
       initiatedBy: ctx.userId,
       initiatedAuto: false,
+    });
+
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: 'backup.created',
+      metadata: { backupType: parsed.data.backup_type, tenantId: parsed.data.tenant_id },
     });
 
     // If tenant_id was provided, update the record

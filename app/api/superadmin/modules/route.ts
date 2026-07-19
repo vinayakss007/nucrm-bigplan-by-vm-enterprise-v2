@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { modules, tenantModules } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 export async function GET(req: NextRequest) {
   try {
@@ -77,6 +78,15 @@ export async function PATCH(req: NextRequest) {
         })
         .where(eq(modules.id, v.module_id));
 
+      logSuperAdminAction({
+        adminId: ctx.userId,
+        adminEmail: ctx.user?.email || "",
+        action: 'settings.changed',
+        targetType: 'module',
+        targetId: v.module_id,
+        metadata: { pricing: true },
+      });
+
       return NextResponse.json({ ok: true });
     }
 
@@ -84,6 +94,16 @@ export async function PATCH(req: NextRequest) {
       await db.execute(sql`
         UPDATE public.modules SET is_available = ${v.is_available}, updated_at = now() WHERE id = ${v.module_id}
       `);
+
+      logSuperAdminAction({
+        adminId: ctx.userId,
+        adminEmail: ctx.user?.email || "",
+        action: 'settings.changed',
+        targetType: 'module',
+        targetId: v.module_id,
+        metadata: { is_available: v.is_available },
+      });
+
       return NextResponse.json({ ok: true });
     }
 

@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { tenantModules } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { BUILTIN_MODULES, ModuleRegistry } from '@/lib/modules/registry';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -78,11 +79,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       await db.update(tenantModules)
         .set({ forceEnabled: v.force_enabled !== false })
         .where(and(eq(tenantModules.tenantId, tenantId), eq(tenantModules.moduleId, v.module_id)));
+      logSuperAdminAction({
+        adminId: ctx.userId,
+        adminEmail: ctx.user?.email || "",
+        action: 'tenant.settings_changed',
+        targetType: 'tenant',
+        targetId: tenantId,
+        metadata: { module_install: v.module_id, force_enabled: v.force_enabled },
+      });
       return NextResponse.json({ success: true, message: 'Module installed for tenant' });
     }
 
     if (v.action === 'disable') {
       await ModuleRegistry.disable(tenantId, v.module_id);
+      logSuperAdminAction({
+        adminId: ctx.userId,
+        adminEmail: ctx.user?.email || "",
+        action: 'tenant.settings_changed',
+        targetType: 'tenant',
+        targetId: tenantId,
+        metadata: { module_disable: v.module_id },
+      });
       return NextResponse.json({ success: true });
     }
 
@@ -91,6 +108,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       await db.update(tenantModules)
         .set({ forceEnabled: v.force_enabled, status: v.force_enabled ? 'active' : 'disabled' })
         .where(and(eq(tenantModules.tenantId, tenantId), eq(tenantModules.moduleId, v.module_id)));
+      logSuperAdminAction({
+        adminId: ctx.userId,
+        adminEmail: ctx.user?.email || "",
+        action: 'tenant.settings_changed',
+        targetType: 'tenant',
+        targetId: tenantId,
+        metadata: { module_force: v.module_id, force_enabled: v.force_enabled },
+      });
       return NextResponse.json({ success: true });
     }
 

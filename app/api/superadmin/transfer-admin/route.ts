@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 const schema = z.object({ targetUserId: z.string().min(1) });
 
@@ -48,6 +49,16 @@ export async function POST(request: NextRequest) {
         .update(users)
         .set({ isSuperAdmin: false, updatedAt: new Date() })
         .where(eq(users.id, ctx.userId));
+    });
+
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || "",
+      action: 'role.updated',
+      targetType: 'user',
+      targetId: targetUserId,
+      targetName: target.fullName || target.email,
+      metadata: { transfer: true, demoted_admin: ctx.user?.email || "", promoted_user: target.email },
     });
 
     return NextResponse.json({
