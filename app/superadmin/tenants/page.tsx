@@ -5,7 +5,7 @@ import { Building2, Plus, Search, X, LogIn, Trash2, Loader2, Crown, Mail,
   DollarSign, Shield, RefreshCw, Edit, Save, Zap } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { confirmThen } from '@/components/ui/confirm-dialog';
+import { confirmThen, ConfirmDialog, ConfirmWithInput } from '@/components/ui/confirm-dialog';
 
 const STATUS_COLORS: Record<string,string> = {
   active:       'bg-emerald-500/15 text-emerald-400',
@@ -245,6 +245,8 @@ export default function SuperAdminTenantsPage() {
   const [meInfo, setMeInfo]       = useState<MeInfo | null>(null);
   const [form, setForm]           = useState({name:'',plan_id:'free',status:'trialing',billing_email:'',primary_color:'#7c3aed',owner_email:'',owner_name:'',owner_password:'',trial_days:'14',billing_type:'trial'});
   const [saving, setSaving]       = useState(false);
+  const [suspendTarget, setSuspendTarget] = useState<{id: string; name: string} | null>(null);
+  const [deleteTarget, setDeleteTarget]   = useState<{id: string; name: string} | null>(null);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-muted/30 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500";
   const lbl = "block text-xs font-medium text-muted-foreground mb-1";
 
@@ -279,10 +281,7 @@ export default function SuperAdminTenantsPage() {
   };
 
   const suspend   = async (id:string,name:string) => {
-    await confirmThen(`Suspend "${name}"?`, async () => {
-      await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,status:'suspended'})});
-      toast.success('Suspended'); load();
-    });
+    setSuspendTarget({id, name});
   };
   const activate  = async (id:string) => { await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,status:'active'})}); toast.success('Activated'); load(); };
   const grantLifetime = async (id:string,name:string) => {
@@ -301,11 +300,17 @@ export default function SuperAdminTenantsPage() {
   };
   const hardDelete = async (id:string,name:string) => {
     if(id===meInfo?.ownTenantId){toast.error("Can't delete your own org");return;}
-    await confirmThen(`PERMANENTLY DELETE "${name}" and ALL its data?`, async () => {
-      if(prompt(`Type the org name to confirm: "${name}"`)!==name){toast.error('Name mismatch');return;}
-      await fetch('/api/superadmin/tenants',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,hard_delete:true})});
-      toast.success('Deleted'); load();
-    });
+    setDeleteTarget({id, name});
+  };
+  const executeSuspend = async () => {
+    if (!suspendTarget) return;
+    await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:suspendTarget.id,status:'suspended'})});
+    toast.success('Suspended'); load();
+  };
+  const executeDelete = async () => {
+    if (!deleteTarget) return;
+    await fetch('/api/superadmin/tenants',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:deleteTarget.id,hard_delete:true})});
+    toast.success('Deleted'); load();
   };
   const impersonate = async (tenantId:string, tenantName:string) => {
     await confirmThen(`Enter "${tenantName}" as superadmin? You will see everything as if you are them.`, async () => {
@@ -336,6 +341,26 @@ export default function SuperAdminTenantsPage() {
   return (
     <div className="space-y-5 max-w-7xl">
       {editTenant && <EditModal tenant={editTenant} onSave={()=>{setEditTenant(null);load();}} onClose={()=>setEditTenant(null)}/>}
+
+      <ConfirmDialog
+        open={!!suspendTarget}
+        onOpenChange={(open) => { if (!open) setSuspendTarget(null); }}
+        title={`Suspend "${suspendTarget?.name}"?`}
+        message="This tenant will lose access to their workspace immediately. You can reactivate them later."
+        confirmLabel="Suspend"
+        variant="danger"
+        onConfirm={executeSuspend}
+      />
+
+      <ConfirmWithInput
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title={`Delete "${deleteTarget?.name}"?`}
+        message="This will permanently delete the organization and ALL its data. This action cannot be undone."
+        confirmLabel="Permanently Delete"
+        confirmText={deleteTarget?.name || ''}
+        onConfirm={executeDelete}
+      />
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
