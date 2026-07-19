@@ -80,17 +80,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       await db.insert(invoiceLineItems).values(
         items.map((item, idx) => ({
           invoiceId: invoice.id,
-          productId: item.productId,
-          description: item.description,
+          productId: item.productId ?? undefined,
+          description: item.description ?? '',
           itemType: 'product',
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
+          quantity: item.quantity ?? '1',
+          unitPrice: item.unitPrice ?? '0',
           discountType: 'percentage' as const,
-          discountValue: item.discountPercent,
-          discountAmount: 0,
-          taxRate: item.taxPercent,
-          taxAmount: 0,
-          total: item.total,
+          discountValue: item.discountPercent ?? '0',
+          discountAmount: '0',
+          taxRate: item.taxPercent ?? '0',
+          taxAmount: '0',
+          total: item.total ?? '0',
           sortOrder: idx,
         }))
       );
