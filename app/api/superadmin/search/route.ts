@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, users } from '@/drizzle/schema';
-import { ilike, or, desc } from 'drizzle-orm';
+import { ilike, or, desc, sql } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
         name: tenants.name,
         email: tenants.billingEmail,
         status: tenants.status,
-        type: 'tenant' as const,
+        type: sql<'tenant'>`'tenant'`,
       })
       .from(tenants)
       .where(or(
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
         name: users.fullName,
         email: users.email,
         status: users.status,
-        type: 'user' as const,
+        type: sql<'user'>`'user'`,
       })
       .from(users)
       .where(or(
