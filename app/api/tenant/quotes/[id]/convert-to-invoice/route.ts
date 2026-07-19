@@ -37,7 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     let body: { due_date?: string };
     try { body = await req.json() as { due_date?: string }; } catch { body = {}; }
 
-    const dueDate = body.due_date ? new Date(body.due_date) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const dueDate = body.due_date ? body.due_date : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
     // Generate invoice number
     const [countRow] = await db.select({ count: count() }).from(invoices).where(eq(invoices.tenantId, ctx.tenantId));
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       invoiceNumber,
       title: quote.title,
       status: 'draft',
-      issueDate: new Date(),
+      issueDate: new Date().toISOString().slice(0, 10),
       dueDate,
       subtotal: quote.subtotal,
       discountType: 'fixed',
