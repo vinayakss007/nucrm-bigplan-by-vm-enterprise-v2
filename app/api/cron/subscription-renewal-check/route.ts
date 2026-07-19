@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
         )
         .limit(5);
 
-        const endDate = new Date(sub.currentPeriodEnd);
+        const endDate = new Date(sub.currentPeriodEnd ?? new Date());
         const dateStr = endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
         for (const member of members) {
