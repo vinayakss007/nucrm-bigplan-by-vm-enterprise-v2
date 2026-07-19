@@ -22,10 +22,17 @@ export default function PortalKBArticlePage() {
   const [helpful, setHelpful] = useState<boolean | null>(null);
 
   useEffect(() => {
+    const raw = localStorage.getItem('portal_session');
+    if (!raw) { router.replace('/portal/login'); return; }
+    try {
+      const s = JSON.parse(raw);
+      if (!s.email || !s.token) { router.replace('/portal/login'); return; }
+    } catch { router.replace('/portal/login'); return; }
+
     fetch(`/api/public/kb/articles/${params.id}`).then(r => r.json()).then(d => {
       setArticle(d.data); setLoading(false);
     }).catch((err) => { console.error('[portal/kb/article] fetch failed', err); setLoading(false); });
-  }, [params.id]);
+  }, [params.id, router]);
 
   if (loading) return (
     <div className="space-y-4 animate-fade-in max-w-3xl">

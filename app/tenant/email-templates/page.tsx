@@ -1,10 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Mail, Plus, Pencil, Trash2, Eye, Copy, Save, X, Variable } from 'lucide-react';
+import { Mail, Plus, Pencil, Trash2, Eye, Copy, Save, X, Variable, Blocks } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { sanitizeHTML } from '@/lib/sanitize';
+import { EmailBuilder, type EmailBlock, blocksToHtml } from '@/components/tenant/email-builder';
 
 const VARIABLES = [
   { key: '{{first_name}}',    label: 'First Name' },
@@ -40,6 +41,7 @@ function TemplateEditor({ template, onSave, onCancel }: EditorProps) {
     category: template?.category ?? 'general',
   });
   const [preview, setPreview] = useState(false);
+  const [editorMode, setEditorMode] = useState<'code' | 'visual'>('code');
 
   const insert = (variable: string) => {
     setForm(f => ({ ...f, body: f.body + variable }));
@@ -59,6 +61,11 @@ function TemplateEditor({ template, onSave, onCancel }: EditorProps) {
       .replace(/{{deal_title}}/g, 'Enterprise Deal')
       .replace(/{{deal_value}}/g, '$12,000')
       .replace(/\n/g, '<br>');
+
+  const handleVisualChange = (_html: string, blocks: EmailBlock[]) => {
+    const fullHtml = blocksToHtml(blocks);
+    setForm(f => ({ ...f, body: fullHtml }));
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -102,7 +109,23 @@ function TemplateEditor({ template, onSave, onCancel }: EditorProps) {
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-sm font-medium">Body</label>
+              <div className="flex items-center gap-1">
+                <label className="text-sm font-medium">Body</label>
+                <div className="flex gap-0.5 bg-muted rounded-lg p-0.5 ml-2">
+                  <button
+                    onClick={() => setEditorMode('code')}
+                    className={cn('px-2 py-0.5 rounded text-[10px] font-medium transition-colors', editorMode === 'code' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground')}
+                  >
+                    Code
+                  </button>
+                  <button
+                    onClick={() => setEditorMode('visual')}
+                    className={cn('px-2 py-0.5 rounded text-[10px] font-medium transition-colors flex items-center gap-1', editorMode === 'visual' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground')}
+                  >
+                    <Blocks className="w-3 h-3" />Visual
+                  </button>
+                </div>
+              </div>
               <button
                 onClick={() => setPreview(p => !p)}
                 className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
@@ -117,6 +140,10 @@ function TemplateEditor({ template, onSave, onCancel }: EditorProps) {
                 className="min-h-48 rounded-xl border border-border p-4 text-sm bg-white dark:bg-slate-900 prose prose-sm max-w-none"
                 dangerouslySetInnerHTML={{ __html: sanitizeHTML(renderPreview(form.body)) }}
               />
+            ) : editorMode === 'visual' ? (
+              <div className="rounded-xl border border-border p-4 bg-muted/20">
+                <EmailBuilder onChange={handleVisualChange} />
+              </div>
             ) : (
               <textarea
                 value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))}

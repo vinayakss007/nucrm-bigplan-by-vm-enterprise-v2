@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { WidgetGrid } from '@/components/tenant/dashboard/widget-grid';
 import { getPlanDefaultLayout } from '@/lib/dashboard/layout-defaults';
 import type { DashboardLayout } from '@/types/dashboard';
@@ -50,38 +50,49 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
   const [loadingLayout, setLoadingLayout] = useState(true);
   const [isEmpty, setIsEmpty] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    const abort = new AbortController();
-    fetch('/api/tenant/dashboard/layout', { signal: abort.signal })
-      .then(r => r.json())
-      .then(res => {
-        if (abort.signal.aborted) return;
-        if (res.layout) {
-          setLayout(res.layout);
-        } else {
-          setLayout(getPlanDefaultLayout(planName));
-        }
-      })
-      .catch(() => {
-        if (!abort.signal.aborted) setLayout(getPlanDefaultLayout(planName));
-      })
-      .finally(() => { if (!abort.signal.aborted) setLoadingLayout(false); });
-    return () => abort.abort();
+  const fetchLayout = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tenant/dashboard/layout', { credentials: 'include' });
+      const data = await res.json();
+      if (data.layout) {
+        setLayout(data.layout);
+      } else {
+        setLayout(getPlanDefaultLayout(planName));
+      }
+    } catch {
+      setLayout(getPlanDefaultLayout(planName));
+    } finally {
+      setLoadingLayout(false);
+    }
   }, [planName]);
 
-  useEffect(() => {
-    const abort = new AbortController();
-    fetch('/api/tenant/dashboard/widgets/stats/contacts', { signal: abort.signal, credentials: 'include' })
-      .then(r => r.json())
-      .then(res => {
-        if (abort.signal.aborted) return;
-        const d = res.data ?? res;
-        const empty = (d?.count ?? 0) === 0 && (d?.companyCount ?? 0) === 0;
-        setIsEmpty(empty);
-      })
-      .catch(() => { if (!abort.signal.aborted) setIsEmpty(false); });
-    return () => abort.abort();
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tenant/dashboard/widgets/stats/contacts', { credentials: 'include' });
+      const data = await res.json();
+      const d = data.data ?? data;
+      const empty = (d?.count ?? 0) === 0 && (d?.companyCount ?? 0) === 0;
+      setIsEmpty(empty);
+    } catch {
+      setIsEmpty(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchLayout();
+    fetchStats();
+  }, [fetchLayout, fetchStats]);
+
+  useEffect(() => {
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        fetchLayout();
+        fetchStats();
+      }
+    };
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
+  }, [fetchLayout, fetchStats]);
 
   if (loadingLayout) {
     return (

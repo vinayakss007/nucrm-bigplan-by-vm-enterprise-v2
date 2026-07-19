@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Save, X, Calendar, DollarSign, CreditCard, RefreshCw, Pause, Play } from 'lucide-react';
-import { confirmThen } from '@/components/ui/confirm-dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -44,6 +44,7 @@ export default function SubscriptionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Subscription>>({});
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   useEffect(() => {
     const fetchSubscription = async () => {
@@ -96,28 +97,7 @@ export default function SubscriptionDetailPage() {
     const statusMap = { pause: 'paused', resume: 'active', cancel: 'cancelled' };
     const newStatus = statusMap[action];
     if (action === 'cancel') {
-      await confirmThen(
-        'Your subscription will be canceled at the end of the current billing period. Your data will be retained for 30 days after cancellation. You can reactivate within 30 days to restore access.',
-        async () => {
-          try {
-            const body: Record<string, unknown> = { status: newStatus };
-            body['cancelledAt'] = new Date().toISOString();
-            const res = await fetch(`/api/tenant/subscriptions/${id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(body),
-            });
-            if (!res.ok) throw new Error('Failed');
-            const data = await res.json();
-            setSubscription(data.data);
-            toast.success(`Subscription cancelled`);
-          } catch {
-            toast.error(`Failed to cancel subscription`);
-          }
-        },
-        'danger_only',
-        'Cancel Subscription'
-      );
+      setShowCancelConfirm(true);
       return;
     }
     try {
@@ -132,6 +112,24 @@ export default function SubscriptionDetailPage() {
       toast.success(`Subscription ${action}d`);
     } catch {
       toast.error(`Failed to ${action} subscription`);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    try {
+      const body: Record<string, unknown> = { status: 'cancelled' };
+      body['cancelledAt'] = new Date().toISOString();
+      const res = await fetch(`/api/tenant/subscriptions/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed');
+      const data = await res.json();
+      setSubscription(data.data);
+      toast.success('Subscription cancelled');
+    } catch {
+      toast.error('Failed to cancel subscription');
     }
   };
 
@@ -159,6 +157,15 @@ export default function SubscriptionDetailPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
+      <ConfirmDialog
+        open={showCancelConfirm}
+        onOpenChange={setShowCancelConfirm}
+        title="Cancel Subscription?"
+        message="Your subscription will be canceled at the end of the current billing period. Your data will be retained for 30 days. You can reactivate within 30 days to restore access."
+        confirmLabel="Cancel Subscription"
+        variant="danger"
+        onConfirm={handleCancelSubscription}
+      />
       {/* Back button */}
       <Link href="/tenant/subscriptions" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ArrowLeft className="w-4 h-4" /> Back to Subscriptions

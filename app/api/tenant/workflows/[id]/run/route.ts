@@ -5,11 +5,12 @@ import { triggerWorkflowSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { workflows } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
+import { executeWorkflow } from '@/lib/automation/workflow-executor';
 
 /**
  * POST /api/tenant/workflows/[id]/run
- * Manually trigger a workflow execution for testing
+ * Manually trigger a workflow execution
  */
 export async function POST(
   request: NextRequest,
@@ -37,29 +38,26 @@ export async function POST(
     const validated = validateBody(triggerWorkflowSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
-    const { trigger_entity_type, trigger_entity_id } = v;
 
-    if (!trigger_entity_type || !trigger_entity_id) {
-      return NextResponse.json(
-        { error: 'trigger_entity_type and trigger_entity_id are required' },
-        { status: 400 }
-      );
-    }
-
-    // Execute workflow
-    const result = await db.execute(
-      sql`SELECT public.execute_workflow(${id}, ${trigger_entity_type}, ${trigger_entity_id}) as execution_id`
-    );
+    // Execute workflow using the new engine
+    const executionId = await executeWorkflow({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      workflowId: id,
+      contactId: v.trigger_entity_type === 'contact' ? v.trigger_entity_id : undefined,
+      dealId: v.trigger_entity_type === 'deal' ? v.trigger_entity_id : undefined,
+      inputData: {
+        trigger_type: v.trigger_entity_type,
+        trigger_entity_id: v.trigger_entity_id,
+      },
+    });
 
     return NextResponse.json({
       ok: true,
-      execution_id: (result.rows[0] as Record<string, unknown>)?.execution_id as string,
-      message: 'Workflow execution started',
-    }, { status: 202 });
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+      execution_id: executionId,
+      message: 'Workflow execution completed',
+    });
+  } catch (err: unknown) {
     console.error('[Workflow Run] POST error:', err);
     return apiError(err);
   }

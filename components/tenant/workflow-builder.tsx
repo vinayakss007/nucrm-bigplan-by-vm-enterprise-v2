@@ -18,11 +18,12 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import {
-  Plus, Save, Play, Trash2, Mail, Bell, Users, Calendar, Zap, Tag, Clock, DollarSign, GitBranch, Loader2, X
+  Plus, Save, Play, Trash2, Mail, Bell, Users, Calendar, Zap, Tag, Clock, DollarSign, GitBranch, Loader2, X, Undo2, Redo2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import toast from 'react-hot-toast'
+import { useUndoRedo } from './use-undo-redo'
 
 // ─── Custom Node Data Type ─────────────────────────────────────────────────────
 
@@ -150,6 +151,45 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
   const [_nodeConfig, _setNodeConfig] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(!!workflowId)
 
+  // Undo/Redo
+  const { canUndo, canRedo, pushState, undo, redo, reset } = useUndoRedo([], [])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + Z = undo
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        const prev = undo();
+        if (prev) {
+          setNodes(prev.nodes as CustomNode[]);
+          setEdges(prev.edges);
+        }
+      }
+      // Ctrl/Cmd + Shift + Z = redo
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
+        e.preventDefault();
+        const next = redo();
+        if (next) {
+          setNodes(next.nodes as CustomNode[]);
+          setEdges(next.edges);
+        }
+      }
+      // Ctrl/Cmd + Y = redo (alternative)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
+        e.preventDefault();
+        const next = redo();
+        if (next) {
+          setNodes(next.nodes as CustomNode[]);
+          setEdges(next.edges);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo, setNodes, setEdges]);
+
   // Load existing workflow
   useEffect(() => {
     if (!workflowId) {
@@ -161,6 +201,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
         data: { label: 'Trigger', nodeType: 'trigger', description: TRIGGER_OPTIONS[0]?.label, config: {} },
       }
       setNodes([triggerNode])
+      reset([triggerNode], [])
       setLoading(false)
       return
     }
@@ -230,14 +271,43 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
 
     loadWorkflow()
     return () => abort.abort()
-  }, [workflowId, setNodes, setEdges])
+  }, [workflowId, setNodes, setEdges, reset])
 
   const onConnect: OnConnect = useCallback(
     (connection) => {
-      setEdges((eds) => addEdge({ ...connection, animated: true }, eds))
+      setEdges((eds) => {
+        const newEdges = addEdge({ ...connection, animated: true }, eds);
+        // Push to history after state updates
+        setTimeout(() => pushState(nodes, newEdges), 0);
+        return newEdges;
+      });
     },
-    [setEdges]
+    [setEdges, nodes, pushState]
   )
+
+  // Wrapped node/edge change handlers that push to undo history
+  const handleNodesChange: typeof onNodesChange = useCallback(
+    (changes) => {
+      onNodesChange(changes);
+      // Push to history on structural changes (add/remove)
+      setTimeout(() => {
+        const hasStructural = changes.some(c => c.type === 'add' || c.type === 'remove');
+        if (hasStructural) pushState(nodes, edges);
+      }, 0);
+    },
+    [onNodesChange, nodes, edges, pushState]
+  );
+
+  const handleEdgesChange: typeof onEdgesChange = useCallback(
+    (changes) => {
+      onEdgesChange(changes);
+      setTimeout(() => {
+        const hasStructural = changes.some(c => c.type === 'remove');
+        if (hasStructural) pushState(nodes, edges);
+      }, 0);
+    },
+    [onEdgesChange, nodes, edges, pushState]
+  );
 
   const addNode = (nodeType: string) => {
     const palette = NODE_PALETTE.find(p => p.type === nodeType)
@@ -258,11 +328,23 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
       },
     }
 
-    setNodes((nds) => [...nds, newNode])
+    setNodes((nds) => {
+      const newNodes = [...nds, newNode];
+      setTimeout(() => pushState(newNodes, edges), 0);
+      return newNodes;
+    });
   }
 
   const deleteNode = (nodeId: string) => {
-    setNodes((nds) => nds.filter(n => n.id !== nodeId))
+    setNodes((nds) => {
+      const newNodes = nds.filter(n => n.id !== nodeId);
+      setTimeout(() => {
+        const newEdges = edges.filter(e => e.source !== nodeId && e.target !== nodeId);
+        setEdges(newEdges);
+        pushState(newNodes, newEdges);
+      }, 0);
+      return newNodes;
+    });
     setEdges((eds) => eds.filter(e => e.source !== nodeId && e.target !== nodeId))
     if (selectedNode === nodeId) setSelectedNode(null)
   }
@@ -385,6 +467,38 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
           </select>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0.5 mr-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const prev = undo();
+                if (prev) {
+                  setNodes(prev.nodes as CustomNode[]);
+                  setEdges(prev.edges);
+                }
+              }}
+              disabled={!canUndo}
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo2 className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const next = redo();
+                if (next) {
+                  setNodes(next.nodes as CustomNode[]);
+                  setEdges(next.edges);
+                }
+              }}
+              disabled={!canRedo}
+              title="Redo (Ctrl+Shift+Z)"
+            >
+              <Redo2 className="w-4 h-4" />
+            </Button>
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -449,8 +563,8 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onNodesChange={handleNodesChange}
+            onEdgesChange={handleEdgesChange}
             onConnect={onConnect}
             nodeTypes={nodeTypes}
             defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
