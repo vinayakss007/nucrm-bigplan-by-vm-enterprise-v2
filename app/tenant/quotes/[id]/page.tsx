@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Edit2, Trash2, Save, X, FileText, Send, CheckCircle, XCircle, Calendar, ShoppingCart, Download, Mail } from 'lucide-react';
+import { ArrowLeft, Edit2, Trash2, Save, X, FileText, Send, CheckCircle, XCircle, Calendar, ShoppingCart, Download, Mail, Receipt } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -221,9 +221,31 @@ export default function QuoteDetailPage() {
           </>
         )}
         {quote.status === 'accepted' && (
-          <Link href={`/tenant/orders?fromQuote=${quote.id}`} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors">
-            <ShoppingCart className="w-3 h-3" /> Convert to Order
-          </Link>
+          <>
+            <Link href={`/tenant/orders?fromQuote=${quote.id}`} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors">
+              <ShoppingCart className="w-3 h-3" /> Convert to Order
+            </Link>
+            <button
+              onClick={async () => {
+                if (!confirm('Convert this quote to an invoice?')) return;
+                try {
+                  const res = await fetch(`/api/tenant/quotes/${id}/convert-to-invoice`, { method: 'POST' });
+                  const data = await res.json();
+                  if (res.ok) {
+                    toast.success(`Invoice ${data.invoiceNumber} created`);
+                    router.push(`/tenant/invoices/${data.invoiceId}`);
+                  } else {
+                    toast.error(data.error || 'Failed to convert');
+                  }
+                } catch {
+                  toast.error('Failed to convert quote');
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+            >
+              <Receipt className="w-3 h-3" /> Convert to Invoice
+            </button>
+          </>
         )}
       </div>
 
