@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
         .where(eq(users.isSuperAdmin, false))
         .limit(5);
 
-        const expiryDate = new Date(contract.endDate);
+        const expiryDate = new Date(contract.endDate ?? new Date());
         const dateStr = expiryDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
         for (const member of members) {
