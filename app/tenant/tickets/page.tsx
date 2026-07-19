@@ -4,7 +4,7 @@ import {
   LifeBuoy, Plus, Search,
   Clock, CheckCircle2, AlertCircle,
   User, MessageSquare, ChevronRight, Inbox, Columns,
-  Trash2, ArrowUpCircle,
+  UserPlus, Tag, ArrowUpCircle, Trash2, Archive,
 } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -38,6 +38,9 @@ export default function TicketsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const limit = 50;
 
+  // Bulk selection
+  const [selectAllMatching, setSelectAllMatching] = useState(false);
+
   const loadTickets = useCallback(async () => {
     try {
       setLoading(true);
@@ -58,9 +61,39 @@ export default function TicketsPage() {
   }, [offset, filter, search]);
 
   useEffect(() => { loadTickets(); }, [loadTickets]);
-  useEffect(() => { setSelectedIds(new Set()); }, [filter, search]);
 
-  const toggleOne = useCallback((id: string) => {
+  // Clear selection when page/filter changes
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setSelectAllMatching(false);
+  }, [offset, filter, search]);
+
+  const filtered = tickets;
+
+  // Selection helpers
+  const allPageSelected = filtered.length > 0 && filtered.every(t => selectedIds.has(t.id));
+  const somePageSelected = filtered.some(t => selectedIds.has(t.id));
+
+  const togglePageSelect = useCallback(() => {
+    if (allPageSelected) {
+      setSelectedIds(new Set());
+      setSelectAllMatching(false);
+    } else {
+      setSelectedIds(new Set(filtered.map(t => t.id)));
+    }
+  }, [allPageSelected, filtered]);
+
+  const toggleSelectAllMatching = useCallback(() => {
+    if (selectAllMatching) {
+      setSelectAllMatching(false);
+      setSelectedIds(new Set());
+    } else {
+      setSelectAllMatching(true);
+    }
+  }, [selectAllMatching]);
+
+  const toggleTicket = useCallback((id: string) => {
+    setSelectAllMatching(false);
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -69,35 +102,45 @@ export default function TicketsPage() {
     });
   }, []);
 
-  const toggleAllOnPage = useCallback(() => {
-    setSelectedIds(prev => {
-      if (prev.size === tickets.length) return new Set();
-      return new Set(tickets.map(t => t.id));
-    });
-  }, [tickets]);
+  const effectiveSelectedCount = selectAllMatching ? total : selectedIds.size;
 
-  const allOnPageSelected = tickets.length > 0 && tickets.every(t => selectedIds.has(t.id));
-
-  const bulkAction = useCallback(async (action: string, payload?: Record<string, unknown>) => {
-    const ids = Array.from(selectedIds);
-    if (!ids.length) return;
+  // Bulk action handler
+  const executeBulk = useCallback(async (action: string, payload?: Record<string, unknown>) => {
     try {
+      const body: Record<string, unknown> = {
+        action,
+        ticket_ids: selectAllMatching ? undefined : [...selectedIds],
+        selectAll: selectAllMatching,
+        filters: selectAllMatching ? { status: filter !== 'all' ? filter : undefined, q: search || undefined } : undefined,
+        payload,
+      };
       const res = await fetch('/api/tenant/tickets/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticket_ids: ids, action, payload }),
+        body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Bulk action failed');
-      toast.success(`${data.affected || ids.length} ticket(s) updated`);
-      setSelectedIds(new Set());
-      loadTickets();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Bulk action failed');
+      const d = await res.json();
+      if (res.ok) {
+        toast.success(`${d.affected ?? effectiveSelectedCount} ticket(s) updated`);
+        setSelectedIds(new Set());
+        setSelectAllMatching(false);
+        loadTickets();
+      } else {
+        toast.error(d.error || 'Bulk action failed');
+      }
+    } catch {
+      toast.error('Bulk action failed');
     }
-  }, [selectedIds, loadTickets]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectAllMatching, selectedIds, filter, search, effectiveSelectedCount]);
 
-  const filtered = tickets;
+  const bulkActions = [
+    { label: 'Assign', icon: UserPlus, onClick: () => executeBulk('assign', { assigned_to: 'placeholder' }) },
+    { label: 'Change Status', icon: ArrowUpCircle, onClick: () => executeBulk('status', { status: 'in_progress' }) },
+    { label: 'Change Priority', icon: Tag, onClick: () => executeBulk('priority', { priority: 'high' }) },
+    { label: 'Archive', icon: Archive, onClick: () => executeBulk('archive') },
+    { label: 'Delete', icon: Trash2, variant: 'danger' as const, onClick: () => executeBulk('delete') },
+  ];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -196,6 +239,18 @@ export default function TicketsPage() {
         </div>
       </div>
 
+      {/* Select All Matching Banner */}
+      {selectAllMatching && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-2.5 flex items-center justify-between">
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+            All {total} tickets matching this filter are selected.
+          </p>
+          <button onClick={() => { setSelectAllMatching(false); setSelectedIds(new Set()); }} className="text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline">
+            Clear selection
+          </button>
+        </div>
+      )}
+
       {/* Tickets List */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
         {loading ? (
@@ -217,81 +272,83 @@ export default function TicketsPage() {
           </div>
         ) : (
           <>
-            {/* Select all bar */}
-            <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-muted/20">
-              <button
-                onClick={toggleAllOnPage}
-                className={cn(
-                  "w-5 h-5 rounded border-2 flex items-center justify-center transition-all shrink-0",
-                  allOnPageSelected
-                    ? "bg-violet-600 border-violet-600"
-                    : "border-muted-foreground/30 hover:border-violet-400"
-                )}
-              >
-                {allOnPageSelected && <CheckCircle2 className="w-3 h-3 text-white" />}
-              </button>
+            {/* Select All Header */}
+            <div className="px-4 py-2 border-b border-border flex items-center gap-3 bg-muted/30">
+              <input
+                type="checkbox"
+                checked={allPageSelected}
+                ref={el => { if (el) el.indeterminate = somePageSelected && !allPageSelected; }}
+                onChange={togglePageSelect}
+                className="w-4 h-4 rounded border-border text-violet-600 focus:ring-violet-500"
+              />
               <span className="text-xs text-muted-foreground font-medium">
-                {selectedIds.size > 0
-                  ? `${selectedIds.size} of ${total} selected`
-                  : `${tickets.length} tickets on this page`}
+                {allPageSelected
+                  ? `All ${filtered.length} on this page selected`
+                  : somePageSelected
+                    ? `${selectedIds.size} of ${filtered.length} selected`
+                    : `Select all ${filtered.length} on this page`}
               </span>
+              {allPageSelected && total > filtered.length && !selectAllMatching && (
+                <button onClick={toggleSelectAllMatching} className="text-xs font-semibold text-violet-600 hover:underline ml-2">
+                  Select all {total} matching items
+                </button>
+              )}
             </div>
 
             <div className="divide-y divide-border">
-              {filtered.map(ticket => (
-                <div key={ticket.id} className={cn(
-                  "p-4 hover:bg-accent/50 transition-colors group",
-                  selectedIds.has(ticket.id) && "bg-violet-50 dark:bg-violet-950/10"
-                )}>
-                  <div className="flex items-start gap-3">
-                    <button
-                      onClick={() => toggleOne(ticket.id)}
-                      className={cn(
-                        "w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center transition-all shrink-0",
-                        selectedIds.has(ticket.id)
-                          ? "bg-violet-600 border-violet-600"
-                          : "border-muted-foreground/30 hover:border-violet-400"
-                      )}
-                    >
-                      {selectedIds.has(ticket.id) && <CheckCircle2 className="w-3 h-3 text-white" />}
-                    </button>
-                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => router.push(`/tenant/tickets/${ticket.id}`)}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full", getStatusColor(ticket.status))}>
-                          {ticket.status.replace('_', ' ')}
-                        </span>
-                        <span className={cn("text-[10px] font-bold uppercase tracking-wider", getPriorityColor(ticket.priority))}>
-                          {ticket.priority}
-                        </span>
-                        <span className="text-xs text-muted-foreground">• {ticket.category}</span>
+              {filtered.map(ticket => {
+                const isSelected = selectAllMatching || selectedIds.has(ticket.id);
+                return (
+                  <div key={ticket.id} className={cn("p-4 hover:bg-accent/50 transition-colors group", isSelected && "bg-violet-50/50 dark:bg-violet-950/20")}>
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleTicket(ticket.id)}
+                        onClick={e => e.stopPropagation()}
+                        className="w-4 h-4 mt-1 rounded border-border text-violet-600 focus:ring-violet-500 shrink-0"
+                      />
+                      <div
+                        className="flex-1 min-w-0 cursor-pointer"
+                        onClick={() => router.push(`/tenant/tickets/${ticket.id}`)}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full", getStatusColor(ticket.status))}>
+                            {ticket.status.replace('_', ' ')}
+                          </span>
+                          <span className={cn("text-[10px] font-bold uppercase tracking-wider", getPriorityColor(ticket.priority))}>
+                            {ticket.priority}
+                          </span>
+                          <span className="text-xs text-muted-foreground">• {ticket.category}</span>
+                        </div>
+                        <h3 className="font-semibold text-sm truncate group-hover:text-violet-600 transition-colors">
+                          {ticket.subject}
+                        </h3>
+                        <div className="flex items-center gap-4 mt-2">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <User className="w-3 h-3" />
+                            {ticket.first_name ? `${ticket.first_name} ${ticket.last_name || ''}` : 'System'}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <MessageSquare className="w-3 h-3" />
+                            {ticket.assigned_name ? `Assigned: ${ticket.assigned_name}` : 'Unassigned'}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Clock className="w-3 h-3" />
+                            {formatDate(ticket.created_at)}
+                          </div>
+                        </div>
                       </div>
-                      <h3 className="font-semibold text-sm truncate group-hover:text-violet-600 transition-colors">
-                        {ticket.subject}
-                      </h3>
-                      <div className="flex items-center gap-4 mt-2">
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <User className="w-3 h-3" />
-                          {ticket.first_name ? `${ticket.first_name} ${ticket.last_name || ''}` : 'System'}
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <MessageSquare className="w-3 h-3" />
-                          {ticket.assigned_name ? `Assigned: ${ticket.assigned_name}` : 'Unassigned'}
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <Clock className="w-3 h-3" />
-                          {formatDate(ticket.created_at)}
-                        </div>
-                      </div>
+                      <button
+                        onClick={() => router.push(`/tenant/tickets/${ticket.id}`)}
+                        className="p-2 rounded-lg hover:bg-muted text-muted-foreground max-md:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => router.push(`/tenant/tickets/${ticket.id}`)}
-                      className="p-2 rounded-lg hover:bg-muted text-muted-foreground max-md:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all"
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </button>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div className="px-4 py-2 border-t border-border">
               <Pagination total={total} offset={offset} limit={limit} onChange={setOffset} />
@@ -318,21 +375,9 @@ export default function TicketsPage() {
 
       {/* Bulk Action Bar */}
       <BulkActionBar
-        selectedCount={selectedIds.size}
-        onClear={() => setSelectedIds(new Set())}
-        actions={[
-          { label: 'Mark Open', icon: Inbox, onClick: () => bulkAction('status', { status: 'open' }) },
-          { label: 'In Progress', icon: Clock, onClick: () => bulkAction('status', { status: 'in_progress' }) },
-          { label: 'Resolve', icon: CheckCircle2, onClick: () => bulkAction('status', { status: 'resolved' }) },
-          { label: 'Close', icon: CheckCircle2, onClick: () => bulkAction('status', { status: 'closed' }) },
-          { label: 'Priority', icon: ArrowUpCircle, onClick: () => {
-            const p = prompt('Set priority (low, medium, high, urgent):');
-            if (p && ['low', 'medium', 'high', 'urgent'].includes(p)) bulkAction('priority', { priority: p });
-          }},
-          { label: 'Delete', icon: Trash2, variant: 'danger' as const, onClick: () => {
-            if (confirm(`Delete ${selectedIds.size} ticket(s)?`)) bulkAction('delete');
-          }},
-        ]}
+        selectedCount={effectiveSelectedCount}
+        onClear={() => { setSelectedIds(new Set()); setSelectAllMatching(false); }}
+        actions={bulkActions}
       />
 
       {/* Create Ticket Modal */}
