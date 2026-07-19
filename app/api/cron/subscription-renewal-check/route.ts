@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
       .where(and(
         eq(serviceSubscriptions.status, 'active'),
         eq(serviceSubscriptions.autoRenew, false),
-        lte(serviceSubscriptions.currentPeriodEnd, new Date()),
+        lte(serviceSubscriptions.currentPeriodEnd, new Date().toISOString().slice(0, 10)),
         isNull(serviceSubscriptions.deletedAt),
       ))
       .returning({ id: serviceSubscriptions.id });

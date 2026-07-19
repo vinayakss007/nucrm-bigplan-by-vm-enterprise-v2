@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
       .set({ status: 'expired', updatedAt: new Date() })
       .where(and(
         eq(contracts.status, 'active'),
-        lte(contracts.endDate, new Date()),
+        lte(contracts.endDate, new Date().toISOString().slice(0, 10)),
         isNull(contracts.deletedAt),
       ))
       .returning({ id: contracts.id });
