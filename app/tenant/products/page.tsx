@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Target, Briefcase, Calendar, GitBranch, Copy, Send,
   UserPlus, Mail, BarChart, Radio, Filter, Upload, Heart, Rocket,
   Zap, DollarSign, Clock, CheckCircle, AlertTriangle, Shield, Eye, Award,
-  Star, AlertCircle, CreditCard, Book, Ticket, TrendingUp,
+  Star, AlertCircle, CreditCard, Book, Ticket, TrendingUp, ArrowRight,
 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { PRODUCT_REGISTRY } from '@/lib/products/registry';
@@ -18,7 +18,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard, Target, Briefcase, Calendar, GitBranch, Copy, Send,
   UserPlus, Plus, Mail, BarChart, Radio, Filter, Upload, Heart, Rocket,
   Zap, DollarSign, Clock, CheckCircle, AlertTriangle, Shield, Eye, Award,
-  Star, AlertCircle, CreditCard, Book, Ticket, TrendingUp, Package,
+  Star, AlertCircle, CreditCard, Book, Ticket, TrendingUp, Package, ArrowRight,
 };
 
 interface Product {
