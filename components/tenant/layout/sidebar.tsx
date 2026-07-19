@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, Building2, TrendingUp, CheckSquare,
   BarChart3, Settings, Calendar, FileBarChart,
   Crown, ChevronDown, UserCheck, Trash2, Search, X, Menu, Zap, Book,
-  LifeBuoy, Package, FileText, ShoppingCart, FileSignature, RefreshCw, Library,
+  LifeBuoy, FileText, ShoppingCart, FileSignature, RefreshCw, Library,
   Command, Star, Database, Upload, Workflow, Mail, MessageSquare,
   Trophy, Wrench, Boxes, Sparkles, ListChecks, ArrowRightLeft, Tag, Filter, Send, ShieldCheck, FolderKanban,
 } from 'lucide-react';
