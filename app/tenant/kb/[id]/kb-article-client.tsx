@@ -7,7 +7,7 @@ import { ArrowLeft, Clock, Eye, ThumbsUp, ThumbsDown, Edit, Trash2, X } from 'lu
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
-import { logError } from '@/lib/errors-client';
+import { logError } from '@/lib/errors';
 
 interface KBArticle { id: string; title?: string; content?: string; excerpt?: string; categoryId?: string; status?: string; helpful?: number; notHelpful?: number; categoryName?: string; createdAt?: string; views?: number }
 

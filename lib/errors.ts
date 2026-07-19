@@ -1,10 +1,119 @@
-import 'server-only';
 import { NextResponse } from 'next/server';
-import { ErrorCode, type ApiError } from '@/lib/errors-shared';
 
-export { ErrorCode, type ApiError } from '@/lib/errors-shared';
-export type { ErrorLevel } from '@/lib/errors-shared';
+export type ErrorLevel = 'warning' | 'error' | 'fatal';
 
+/**
+ * Error codes for standardized API error responses
+ */
+export enum ErrorCode {
+  // Authentication & Authorization
+  AUTH_INVALID_CREDENTIALS = 'AUTH_INVALID_CREDENTIALS',
+  AUTH_TOKEN_EXPIRED = 'AUTH_TOKEN_EXPIRED',
+  AUTH_TOKEN_INVALID = 'AUTH_TOKEN_INVALID',
+  AUTH_UNAUTHORIZED = 'AUTH_UNAUTHORIZED',
+  AUTH_FORBIDDEN = 'AUTH_FORBIDDEN',
+  AUTH_SESSION_EXPIRED = 'AUTH_SESSION_EXPIRED',
+  AUTH_PASSWORD_WEAK = 'AUTH_PASSWORD_WEAK',
+  AUTH_EMAIL_NOT_VERIFIED = 'AUTH_EMAIL_NOT_VERIFIED',
+  AUTH_ACCOUNT_LOCKED = 'AUTH_ACCOUNT_LOCKED',
+
+  // User errors
+  USER_NOT_FOUND = 'USER_NOT_FOUND',
+  USER_ALREADY_EXISTS = 'USER_ALREADY_EXISTS',
+  USER_EMAIL_TAKEN = 'USER_EMAIL_TAKEN',
+  USER_CREATE_FAILED = 'USER_CREATE_FAILED',
+  USER_UPDATE_FAILED = 'USER_UPDATE_FAILED',
+  USER_DELETE_FAILED = 'USER_DELETE_FAILED',
+
+  // Tenant errors
+  TENANT_NOT_FOUND = 'TENANT_NOT_FOUND',
+  TENANT_ALREADY_EXISTS = 'TENANT_ALREADY_EXISTS',
+  TENANT_CREATE_FAILED = 'TENANT_CREATE_FAILED',
+  TENANT_UPDATE_FAILED = 'TENANT_UPDATE_FAILED',
+  TENANT_DELETE_FAILED = 'TENANT_DELETE_FAILED',
+  TENANT_SUBSCRIPTION_EXPIRED = 'TENANT_SUBSCRIPTION_EXPIRED',
+
+  // Contact errors
+  CONTACT_NOT_FOUND = 'CONTACT_NOT_FOUND',
+  CONTACT_ALREADY_EXISTS = 'CONTACT_ALREADY_EXISTS',
+  CONTACT_CREATE_FAILED = 'CONTACT_CREATE_FAILED',
+  CONTACT_UPDATE_FAILED = 'CONTACT_UPDATE_FAILED',
+  CONTACT_DELETE_FAILED = 'CONTACT_DELETE_FAILED',
+  CONTACT_EMAIL_TAKEN = 'CONTACT_EMAIL_TAKEN',
+
+  // Company errors
+  COMPANY_NOT_FOUND = 'COMPANY_NOT_FOUND',
+  COMPANY_CREATE_FAILED = 'COMPANY_CREATE_FAILED',
+  COMPANY_UPDATE_FAILED = 'COMPANY_UPDATE_FAILED',
+  COMPANY_DELETE_FAILED = 'COMPANY_DELETE_FAILED',
+
+  // Deal errors
+  DEAL_NOT_FOUND = 'DEAL_NOT_FOUND',
+  DEAL_CREATE_FAILED = 'DEAL_CREATE_FAILED',
+  DEAL_UPDATE_FAILED = 'DEAL_UPDATE_FAILED',
+  DEAL_DELETE_FAILED = 'DEAL_DELETE_FAILED',
+
+  // Task errors
+  TASK_NOT_FOUND = 'TASK_NOT_FOUND',
+  TASK_CREATE_FAILED = 'TASK_CREATE_FAILED',
+  TASK_UPDATE_FAILED = 'TASK_UPDATE_FAILED',
+  TASK_DELETE_FAILED = 'TASK_DELETE_FAILED',
+
+  // Email errors
+  EMAIL_SEND_FAILED = 'EMAIL_SEND_FAILED',
+  EMAIL_TEMPLATE_NOT_FOUND = 'EMAIL_TEMPLATE_NOT_FOUND',
+  EMAIL_INVALID_RECIPIENT = 'EMAIL_INVALID_RECIPIENT',
+  EMAIL_QUOTA_EXCEEDED = 'EMAIL_QUOTA_EXCEEDED',
+
+  // Database errors
+  DB_CONNECTION_FAILED = 'DB_CONNECTION_FAILED',
+  DB_QUERY_FAILED = 'DB_QUERY_FAILED',
+  DB_CONSTRAINT_VIOLATION = 'DB_CONSTRAINT_VIOLATION',
+  DB_DUPLICATE_KEY = 'DB_DUPLICATE_KEY',
+  DB_TRANSACTION_FAILED = 'DB_TRANSACTION_FAILED',
+
+  // Validation errors
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  VALIDATION_REQUIRED_FIELD = 'VALIDATION_REQUIRED_FIELD',
+  VALIDATION_INVALID_FORMAT = 'VALIDATION_INVALID_FORMAT',
+  VALIDATION_INVALID_LENGTH = 'VALIDATION_INVALID_LENGTH',
+  VALIDATION_INVALID_RANGE = 'VALIDATION_INVALID_RANGE',
+
+  // Rate limiting
+  RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
+
+  // File errors
+  FILE_UPLOAD_FAILED = 'FILE_UPLOAD_FAILED',
+  FILE_NOT_FOUND = 'FILE_NOT_FOUND',
+  FILE_TOO_LARGE = 'FILE_TOO_LARGE',
+  FILE_INVALID_TYPE = 'FILE_INVALID_TYPE',
+
+  // Webhook errors
+  WEBHOOK_DELIVERY_FAILED = 'WEBHOOK_DELIVERY_FAILED',
+  WEBHOOK_INVALID_SIGNATURE = 'WEBHOOK_INVALID_SIGNATURE',
+
+  // General errors
+  INTERNAL_ERROR = 'INTERNAL_ERROR',
+  SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
+  NOT_IMPLEMENTED = 'NOT_IMPLEMENTED',
+  RESOURCE_NOT_FOUND = 'RESOURCE_NOT_FOUND',
+  OPERATION_FAILED = 'OPERATION_FAILED',
+}
+
+/**
+ * Standardized API error response
+ */
+export interface ApiError {
+  error: string;
+  code: ErrorCode;
+  details?: string;
+  field?: string;
+  requestId?: string;
+}
+
+/**
+ * Custom error class with error codes
+ */
 export class AppError extends Error {
   constructor(
     message: string,
@@ -31,6 +140,9 @@ export class AppError extends Error {
   }
 }
 
+/**
+ * Authentication error
+ */
 export class AuthError extends AppError {
   constructor(
     message: string,
@@ -42,6 +154,9 @@ export class AuthError extends AppError {
   }
 }
 
+/**
+ * Authorization error
+ */
 export class ForbiddenError extends AppError {
   constructor(message: string = 'Access denied', details?: string) {
     super(message, ErrorCode.AUTH_FORBIDDEN, 403, details);
@@ -49,6 +164,9 @@ export class ForbiddenError extends AppError {
   }
 }
 
+/**
+ * Not found error
+ */
 export class NotFoundError extends AppError {
   constructor(resource: string = 'Resource', details?: string) {
     super(`${resource} not found`, ErrorCode.RESOURCE_NOT_FOUND, 404, details);
@@ -56,6 +174,9 @@ export class NotFoundError extends AppError {
   }
 }
 
+/**
+ * Validation error
+ */
 export class ValidationError extends AppError {
   constructor(message: string = 'Validation failed', field?: string, details?: string) {
     super(message, ErrorCode.VALIDATION_ERROR, 400, details, field);
@@ -75,6 +196,9 @@ export class ValidationError extends AppError {
   }
 }
 
+/**
+ * Conflict error (duplicate, already exists)
+ */
 export class ConflictError extends AppError {
   constructor(message: string, details?: string) {
     super(message, ErrorCode.USER_ALREADY_EXISTS, 409, details);
@@ -82,6 +206,9 @@ export class ConflictError extends AppError {
   }
 }
 
+/**
+ * Rate limit error
+ */
 export class RateLimitError extends AppError {
   constructor(retryAfter?: number) {
     super(
@@ -94,6 +221,9 @@ export class RateLimitError extends AppError {
   }
 }
 
+/**
+ * Database error
+ */
 export class DatabaseError extends AppError {
   constructor(message: string, details?: string) {
     super(message, ErrorCode.DB_QUERY_FAILED, 500, details);
@@ -101,6 +231,9 @@ export class DatabaseError extends AppError {
   }
 }
 
+/**
+ * Email error
+ */
 export class EmailError extends AppError {
   constructor(message: string, details?: string) {
     super(message, ErrorCode.EMAIL_SEND_FAILED, 500, details);
@@ -121,6 +254,9 @@ export async function withErrorLogging<T>(fn: () => Promise<T>, context: string,
   }
 }
 
+/**
+ * Error handler for API routes
+ */
 export function handleError(error: unknown): NextResponse<ApiError> {
   logError({ error, context: 'handleError' });
 
@@ -129,6 +265,7 @@ export function handleError(error: unknown): NextResponse<ApiError> {
   }
 
   if (error instanceof Error) {
+    // Handle specific error types
     if (error.name === 'DatabaseError' || error.message.includes('database')) {
       return new DatabaseError('Database operation failed').toResponse();
     }
@@ -138,6 +275,7 @@ export function handleError(error: unknown): NextResponse<ApiError> {
     }
   }
 
+  // Default to internal server error
   return new AppError(
     'An unexpected error occurred',
     ErrorCode.INTERNAL_ERROR,
@@ -145,6 +283,9 @@ export function handleError(error: unknown): NextResponse<ApiError> {
   ).toResponse();
 }
 
+/**
+ * Create error response helper
+ */
 export function createErrorResponse(
   code: ErrorCode,
   message: string,

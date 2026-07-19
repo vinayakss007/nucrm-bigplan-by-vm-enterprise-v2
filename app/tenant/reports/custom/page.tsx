@@ -4,7 +4,7 @@ import { FilePlus, Play, Save, Trash2, Download, Plus, X, Filter, Columns } from
 import { cn, formatDate } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
-import { logError } from '@/lib/errors-client';
+import { logError } from '@/lib/errors';
 
 const REPORT_TYPES = [
   { id: 'contacts', label: 'Contacts', columns: ['first_name','last_name','email','phone','job_title','lead_status','lead_source','score','lifecycle_stage','company_name','city','country','created_at'] },

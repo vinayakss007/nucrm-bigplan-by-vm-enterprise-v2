@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { logError } from '@/lib/errors-client';
+import { logError } from '@/lib/errors';
 
 type EntityHit = {
   id: string;

@@ -42,9 +42,6 @@ export default defineConfig({
     teardownTimeout: 5000,
   },
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './'),
-      'server-only': path.resolve(__dirname, './lib/server-only-shim.ts'),
-    },
+    alias: { '@': path.resolve(__dirname, './') },
   },
 });
