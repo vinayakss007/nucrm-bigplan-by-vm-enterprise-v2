@@ -1,6 +1,6 @@
 'use client';
 
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-client';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { useState, useRef, useEffect } from 'react';
 import {
