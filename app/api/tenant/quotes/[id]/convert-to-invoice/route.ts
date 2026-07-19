@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { quotes, quoteLineItems, invoices, invoiceLineItems, activities } from '@/drizzle/schema';
-import { eq, and, isNull, count } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const dueDate = body.due_date ? body.due_date : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
     // Generate invoice number
-    const [countRow] = await db.select({ count: count() }).from(invoices).where(eq(invoices.tenantId, ctx.tenantId));
+    const [countRow] = await db.select({ count: sql<number>`count(*)::int` }).from(invoices).where(eq(invoices.tenantId, ctx.tenantId));
     const seq = ((countRow?.count as number) ?? 0) + 1;
     const invoiceNumber = `INV-${String(seq).padStart(5, '0')}`;
 
