@@ -35,9 +35,66 @@
 | #552 | `fix/infra-missing-re-exports` | Add missing re-exports to `drizzle/schema/infra.ts` (build was failing with 6 missing export errors) |
 | #553 | `feat/start-clean-script` | Add `start-clean.sh` — single-command bootstrap: build → migrate → seed → start |
 
-## Remaining
+## Agent 1 vs Agent 2 Task Division
 
-- **#462 Performance optimization** (Open) — comprehensive perf pass: bundle size reduction, image optimization, lazy loading, Redis caching, SWR, N+1 fixes, virtual scrolling, Lighthouse ≥90. Large effort — decide if/when to tackle.
+### Agent 1 = Critical / Security / Infrastructure
+Handles anything marked CRITICAL, security-related, or infrastructure stability:
+
+| # | Issue | Effort | Status |
+|---|-------|--------|--------|
+| #396 | Revoke exposed Telegram bot token + rotate | Small | Open |
+| #428 | Module-aware sidebar — only show nav for installed modules | Medium | Open |
+| #432 | Tenant-level audit log page + API | Medium | Open |
+| #216 | Pre-Phase-4 Security/Fix tracker | Large | Open |
+
+### Agent 2 = Features / Enhancements
+Handles high/medium priority feature work:
+
+| # | Issue | Effort | Status |
+|---|-------|--------|--------|
+| #445 | Subscription self-service portal | Medium | ✅ Done (PR #594) |
+| #439 | Dunning workflow | Medium | ✅ Done (PR #595) |
+| #483 | Workflow automation gap analysis + executor | Medium | ✅ Done (PR #597) |
+| #479 | Undo/redo in workflow builder | Small | ✅ Done (PR #597) |
+| #471 | Import/export wizards (CSV/XLSX) | Medium | ✅ Done (PR #597) |
+| #470 | Calendar sync (Google/Outlook) | Medium | ✅ Done (PR #597) |
+| #467 | API documentation expanded | Medium | ✅ Done (PR #597) |
+| #458 | Email template drag-and-drop editor | Large | ✅ Done (PR #597) |
+| #449 | Customer portal pages + auth | Large | ✅ Done (PR #597) |
+| #440 | Quote/invoice email-send + PDF download | Medium | Open |
+| #431 | Quote-to-invoice conversion + PDF generation | Medium | Open |
+| #433 | Contract renewal reminders + expiry automation | Medium | Open |
+| #435 | Customer self-service portal (tickets + invoices) | Large | Open |
+| #436 | Embeddable form JS widget + form analytics | Large | Open |
+| #450 | Superadmin dashboard enhancements | Medium | Open |
+| #451 | Data explorer: visual query builder + CSV export | Large | Open |
+| #465 | Bulk actions on list pages | Medium | Open |
+| #482 | Bulk select-all matching | Small | Open |
+| #158 | Notification system + hydration + dashboard fixes | Medium | Open |
+| #152 | Follow-Up Intelligence system | Large | Open |
+| #154 | AI Auto-Follow-Up opt-in + autonomous cron | Large | Open |
+
+### Low Priority / Backlog
+
+| # | Issue | Effort |
+|---|-------|--------|
+| #462 | Performance optimization | Large |
+| #461 | Mobile/PWA support | Large |
+| #460 | i18n support | Large |
+| #422 | 25+ files exceed 500 lines (refactor) | Large |
+| #401 | BullMQ vs pg-boss redundancy | Medium |
+| #399 | Consolidate planning docs | Small |
+| #239 | MCP testing infrastructure | Large |
+| #219 | Schema migration split | Medium |
+| #173 | Real-time alerting | Large |
+| #98 | Prometheus metrics | Medium |
+| #93 | RequestId logging | Small |
+
+### Overlap Rules
+- Agent 1 takes CRITICAL/security first
+- Agent 2 takes feature/enhancement work
+- If unsure, ask before starting — no duplicate work
+- Last updated: 2026-07-19
 
 ## Other Context
 

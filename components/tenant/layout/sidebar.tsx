@@ -71,7 +71,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href:'/tenant/contracts',     label:'Contracts',     icon:FileSignature, keywords:'agreements legal' },
       { href:'/tenant/invoices',      label:'Invoices',      icon:FileText,      keywords:'billing receipts' },
       { href:'/tenant/subscriptions', label:'Subscriptions', icon:RefreshCw,     keywords:'recurring mrr' },
-      { href:'/tenant/products',      label:'Products',      icon:Package,       keywords:'catalog skus' },
       { href:'/tenant/services',      label:'Services',      icon:Wrench,        keywords:'offerings' },
     ],
   },
