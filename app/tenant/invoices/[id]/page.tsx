@@ -208,7 +208,7 @@ export default function InvoiceDetailPage() {
             const email = window.prompt('Send invoice to email address:');
             if (!email) return;
             try {
-              const res = await fetch(`/api/tenant/offers/${id}/send`, {
+              const res = await fetch(`/api/tenant/invoices/${id}/send`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ to_email: email }),
