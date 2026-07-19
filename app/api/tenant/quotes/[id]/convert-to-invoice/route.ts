@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const invoiceNumber = `INV-${String(seq).padStart(5, '0')}`;
 
     // Create invoice
-    const [invoice] = await db.insert(invoices).values({
+    const invoiceValues = {
       tenantId: ctx.tenantId,
       createdBy: ctx.userId,
       contactId: quote.contactId,
@@ -67,7 +67,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       quoteId: id,
       notes: quote.notes,
       terms: quote.terms,
-    }).returning();
+    };
+    const [invoice] = await db.insert(invoices).values([invoiceValues]).returning();
 
     if (!invoice) {
       return NextResponse.json({ error: 'Failed to create invoice' }, { status: 500 });
