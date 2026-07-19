@@ -1,15 +1,17 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { 
-  LifeBuoy, Plus, Search, 
-  Clock, CheckCircle2, AlertCircle, 
-  User, MessageSquare, ChevronRight, Inbox, Columns
+import { useState, useEffect, useCallback } from 'react';
+import {
+  LifeBuoy, Plus, Search,
+  Clock, CheckCircle2, AlertCircle,
+  User, MessageSquare, ChevronRight, Inbox, Columns,
+  Trash2, ArrowUpCircle,
 } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Pagination from '@/components/tenant/pagination';
+import { BulkActionBar } from '@/components/ui/bulk-action-bar';
 
 interface Ticket {
   id: string;
@@ -33,9 +35,10 @@ export default function TicketsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const limit = 50;
 
-  const loadTickets = async () => {
+  const loadTickets = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
@@ -52,9 +55,47 @@ export default function TicketsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [offset, filter, search]);
 
-  useEffect(() => { loadTickets(); }, [offset, filter, search]);
+  useEffect(() => { loadTickets(); }, [loadTickets]);
+  useEffect(() => { setSelectedIds(new Set()); }, [filter, search]);
+
+  const toggleOne = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAllOnPage = useCallback(() => {
+    setSelectedIds(prev => {
+      if (prev.size === tickets.length) return new Set();
+      return new Set(tickets.map(t => t.id));
+    });
+  }, [tickets]);
+
+  const allOnPageSelected = tickets.length > 0 && tickets.every(t => selectedIds.has(t.id));
+
+  const bulkAction = useCallback(async (action: string, payload?: Record<string, unknown>) => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    try {
+      const res = await fetch('/api/tenant/tickets/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket_ids: ids, action, payload }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Bulk action failed');
+      toast.success(`${data.affected || ids.length} ticket(s) updated`);
+      setSelectedIds(new Set());
+      loadTickets();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Bulk action failed');
+    }
+  }, [selectedIds, loadTickets]);
 
   const filtered = tickets;
 
@@ -93,7 +134,7 @@ export default function TicketsPage() {
             <Columns className="w-4 h-4" />
             <span className="hidden sm:inline">Kanban</span>
           </Link>
-          <button 
+          <button
             onClick={() => setShowCreate(true)}
             className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-all shadow-sm"
           >
@@ -129,9 +170,9 @@ export default function TicketsPage() {
       <div className="flex flex-col md:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input 
-            type="text" 
-            placeholder="Search tickets by subject or customer..." 
+          <input
+            type="text"
+            placeholder="Search tickets by subject or customer..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border bg-card focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-sm"
@@ -144,8 +185,8 @@ export default function TicketsPage() {
               onClick={() => setFilter(f)}
               className={cn(
                 "px-4 py-2.5 rounded-xl text-sm font-medium border transition-all capitalize",
-                filter === f 
-                  ? "bg-violet-600 border-violet-600 text-white" 
+                filter === f
+                  ? "bg-violet-600 border-violet-600 text-white"
                   : "bg-card border-border text-muted-foreground hover:bg-accent"
               )}
             >
@@ -169,18 +210,52 @@ export default function TicketsPage() {
             </div>
             <h3 className="text-lg font-bold">No tickets found</h3>
             <p className="text-muted-foreground max-w-xs mx-auto mt-1">
-              {search || filter !== 'all' 
-                ? "Try adjusting your filters or search terms." 
+              {search || filter !== 'all'
+                ? "Try adjusting your filters or search terms."
                 : "When customers have issues, they'll appear here as support tickets."}
             </p>
           </div>
         ) : (
           <>
+            {/* Select all bar */}
+            <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-muted/20">
+              <button
+                onClick={toggleAllOnPage}
+                className={cn(
+                  "w-5 h-5 rounded border-2 flex items-center justify-center transition-all shrink-0",
+                  allOnPageSelected
+                    ? "bg-violet-600 border-violet-600"
+                    : "border-muted-foreground/30 hover:border-violet-400"
+                )}
+              >
+                {allOnPageSelected && <CheckCircle2 className="w-3 h-3 text-white" />}
+              </button>
+              <span className="text-xs text-muted-foreground font-medium">
+                {selectedIds.size > 0
+                  ? `${selectedIds.size} of ${total} selected`
+                  : `${tickets.length} tickets on this page`}
+              </span>
+            </div>
+
             <div className="divide-y divide-border">
               {filtered.map(ticket => (
-                <div key={ticket.id} onClick={() => router.push(`/tenant/tickets/${ticket.id}`)} className="p-4 hover:bg-accent/50 transition-colors group cursor-pointer">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
+                <div key={ticket.id} className={cn(
+                  "p-4 hover:bg-accent/50 transition-colors group",
+                  selectedIds.has(ticket.id) && "bg-violet-50 dark:bg-violet-950/10"
+                )}>
+                  <div className="flex items-start gap-3">
+                    <button
+                      onClick={() => toggleOne(ticket.id)}
+                      className={cn(
+                        "w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center transition-all shrink-0",
+                        selectedIds.has(ticket.id)
+                          ? "bg-violet-600 border-violet-600"
+                          : "border-muted-foreground/30 hover:border-violet-400"
+                      )}
+                    >
+                      {selectedIds.has(ticket.id) && <CheckCircle2 className="w-3 h-3 text-white" />}
+                    </button>
+                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => router.push(`/tenant/tickets/${ticket.id}`)}>
                       <div className="flex items-center gap-2 mb-1">
                         <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full", getStatusColor(ticket.status))}>
                           {ticket.status.replace('_', ' ')}
@@ -208,7 +283,10 @@ export default function TicketsPage() {
                         </div>
                       </div>
                     </div>
-                    <button className="p-2 rounded-lg hover:bg-muted text-muted-foreground max-md:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all">
+                    <button
+                      onClick={() => router.push(`/tenant/tickets/${ticket.id}`)}
+                      className="p-2 rounded-lg hover:bg-muted text-muted-foreground max-md:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all"
+                    >
                       <ChevronRight className="w-5 h-5" />
                     </button>
                   </div>
@@ -237,6 +315,25 @@ export default function TicketsPage() {
           </Link>
         </div>
       )}
+
+      {/* Bulk Action Bar */}
+      <BulkActionBar
+        selectedCount={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        actions={[
+          { label: 'Mark Open', icon: Inbox, onClick: () => bulkAction('status', { status: 'open' }) },
+          { label: 'In Progress', icon: Clock, onClick: () => bulkAction('status', { status: 'in_progress' }) },
+          { label: 'Resolve', icon: CheckCircle2, onClick: () => bulkAction('status', { status: 'resolved' }) },
+          { label: 'Close', icon: CheckCircle2, onClick: () => bulkAction('status', { status: 'closed' }) },
+          { label: 'Priority', icon: ArrowUpCircle, onClick: () => {
+            const p = prompt('Set priority (low, medium, high, urgent):');
+            if (p && ['low', 'medium', 'high', 'urgent'].includes(p)) bulkAction('priority', { priority: p });
+          }},
+          { label: 'Delete', icon: Trash2, variant: 'danger' as const, onClick: () => {
+            if (confirm(`Delete ${selectedIds.size} ticket(s)?`)) bulkAction('delete');
+          }},
+        ]}
+      />
 
       {/* Create Ticket Modal */}
       {showCreate && <TicketCreateModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); loadTickets(); }} />}
