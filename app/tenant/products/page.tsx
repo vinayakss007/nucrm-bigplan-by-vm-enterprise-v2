@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Search, Trash2, X, Package, Edit2, ChevronDown } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import { PRODUCT_REGISTRY } from '@/lib/products/registry';
 import toast from 'react-hot-toast';
 
 interface Product {
