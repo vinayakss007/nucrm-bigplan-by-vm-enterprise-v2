@@ -79,9 +79,9 @@ const NAV_SECTIONS: NavSection[] = [
     id: 'support', label: 'Support & Knowledge',
     items: [
       { href:'/tenant/tickets', label:'Helpdesk',  icon:LifeBuoy,        keywords:'support tickets cases', module:'service-helpdesk' },
-      { href:'/tenant/kb',      label:'Knowledge', icon:Library,         keywords:'docs articles' },
+      { href:'/tenant/kb',      label:'Knowledge', icon:Library,         keywords:'docs articles', module:'service-helpdesk' },
       { href:'/tenant/chat',    label:'Live Chat', icon:MessageSquare,   keywords:'inbox messaging', module:'service-helpdesk' },
-      { href:'/tenant/sms',     label:'SMS',       icon:MessageSquare,   keywords:'text messages' },
+      { href:'/tenant/sms',     label:'SMS',       icon:MessageSquare,   keywords:'text messages', module:'service-helpdesk' },
     ],
   },
   {
@@ -90,7 +90,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href:'/tenant/sequences',    label:'Sequences',    icon:Mail,     keywords:'cadence drip email', module:'automation-pro' },
       { href:'/tenant/automation',   label:'Workflows',    icon:Workflow, keywords:'automation rules triggers', module:'automation-pro' },
       { href:'/tenant/forms',        label:'Forms',        icon:FileBarChart, keywords:'capture lead forms', module:'forms-builder' },
-      { href:'/tenant/email-templates', label:'Email Templates', icon:Mail, keywords:'snippets', module:'email-sync' },
+      { href:'/tenant/email-templates', label:'Email Templates', icon:Mail, keywords:'snippets templates', module:'email-sync' },
     ],
   },
   {
