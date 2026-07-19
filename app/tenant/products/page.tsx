@@ -1,9 +1,25 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Plus, Search, Trash2, X, Package, Edit2, ChevronDown } from 'lucide-react';
+import {
+  Plus, Search, Trash2, X, Package, Edit2, ChevronDown,
+  FileText, Brain, MessageCircle, LifeBuoy, Users, Home, ShoppingCart, Receipt,
+  LayoutDashboard, Target, Briefcase, Calendar, GitBranch, Copy, Send,
+  UserPlus, Mail, BarChart, Radio, Filter, Upload, Heart, Rocket,
+  Zap, DollarSign, Clock, CheckCircle, AlertTriangle, Shield, Eye, Award,
+  Star, AlertCircle, CreditCard, Book, Ticket, TrendingUp,
+} from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { PRODUCT_REGISTRY } from '@/lib/products/registry';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
+
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  FileText, Brain, MessageCircle, LifeBuoy, Users, Home, ShoppingCart, Receipt,
+  LayoutDashboard, Target, Briefcase, Calendar, GitBranch, Copy, Send,
+  UserPlus, Plus, Mail, BarChart, Radio, Filter, Upload, Heart, Rocket,
+  Zap, DollarSign, Clock, CheckCircle, AlertTriangle, Shield, Eye, Award,
+  Star, AlertCircle, CreditCard, Book, Ticket, TrendingUp, Package,
+};
 
 interface Product {
   id: string;
