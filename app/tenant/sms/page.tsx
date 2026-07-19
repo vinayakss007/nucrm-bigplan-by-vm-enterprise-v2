@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { MessageSquare, Plus, X, Loader2, Send, ArrowUpRight, ArrowDownLeft, FileText } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-client';
 
 interface SmsMessage {
   id: string;

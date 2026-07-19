@@ -1,5 +1,5 @@
 'use client';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-client';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
