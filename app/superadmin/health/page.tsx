@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, RefreshCw, Activity, Database, Mail, Server, Wifi } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
-import { logError } from '@/lib/errors';
+import { logError } from '@/lib/errors-client';
 
 interface HealthCheck {
   service: string;
