@@ -39,6 +39,14 @@
     {
       "path": "/api/cron/process-at-risk",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/contract-renewal-check",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/subscription-renewal-check",
+      "schedule": "0 7 * * *"
     }
   ]
 }

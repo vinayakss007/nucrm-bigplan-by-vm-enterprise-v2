@@ -12,6 +12,7 @@ export type NotificationType =
   | 'limit_warning'    | 'trial_expiring'
   | 'lead_warming'
   | 'sla_breach'       | 'sla_escalation'
+  | 'contract_renewal' | 'subscription_renewal'
   | 'system';
 
 export async function createNotification(opts: {
