@@ -13,6 +13,7 @@ export type NotificationType =
   | 'lead_warming'
   | 'sla_breach'       | 'sla_escalation'
   | 'contract_renewal' | 'subscription_renewal'
+  | 'ai_followup_sent'
   | 'system';
 
 export async function createNotification(opts: {
