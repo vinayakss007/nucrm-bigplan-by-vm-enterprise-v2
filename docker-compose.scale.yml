@@ -15,7 +15,7 @@
 #   docker compose -f docker-compose.scale.yml down                # Stop all
 ##############################################################################
 
-version: '3.9'
+version: "3.9"
 
 services:
   # ── Nginx Load Balancer ──────────────────────────────────────────────────
@@ -35,7 +35,15 @@ services:
     networks:
       - nucrm-net
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost/health",
+        ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -57,7 +65,7 @@ services:
       - CRON_SECRET=${CRON_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
-      - DATABASE_SSL=${DATABASE_SSL:-false}
+      - DATABASE_SSL=${DATABASE_SSL:-true}
       - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-10}
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost}
       - SENTRY_DSN=${SENTRY_DSN:-}
@@ -68,17 +76,25 @@ services:
       resources:
         limits:
           memory: ${NUCRM_WEB_MEMORY_LIMIT:-512M}
-          cpus: '${NUCRM_WEB_CPU_LIMIT:-1.0}'
+          cpus: "${NUCRM_WEB_CPU_LIMIT:-1.0}"
         reservations:
           memory: 256M
-          cpus: '0.25'
+          cpus: "0.25"
       restart_policy:
         condition: on-failure
         delay: 5s
         max_attempts: 5
         window: 60s
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/api/health",
+        ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -108,16 +124,16 @@ services:
       - SETUP_KEY=${SETUP_KEY}
       - CRON_SECRET=${CRON_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - DATABASE_SSL=${DATABASE_SSL:-false}
+      - DATABASE_SSL=${DATABASE_SSL:-true}
     deploy:
       replicas: ${NUCRM_WORKER_REPLICAS:-2}
       resources:
         limits:
           memory: ${NUCRM_WORKER_MEMORY_LIMIT:-768M}
-          cpus: '${NUCRM_WORKER_CPU_LIMIT:-1.0}'
+          cpus: "${NUCRM_WORKER_CPU_LIMIT:-1.0}"
         reservations:
           memory: 256M
-          cpus: '0.25'
+          cpus: "0.25"
       restart_policy:
         condition: on-failure
         delay: 5s
@@ -148,7 +164,7 @@ services:
       resources:
         limits:
           memory: 1G
-          cpus: '2.0'
+          cpus: "2.0"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nucrm}"]
       interval: 10s
@@ -176,7 +192,7 @@ services:
       resources:
         limits:
           memory: 512M
-          cpus: '1.0'
+          cpus: "1.0"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
