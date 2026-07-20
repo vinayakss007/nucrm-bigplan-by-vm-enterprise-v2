@@ -278,6 +278,9 @@ export class TenantDataImporter {
     // Block destructive SQL statements — only allow INSERT/UPDATE/DELETE on known tenant tables
     const BLOCKED_KEYWORDS = /\b(DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|EXEC|EXECUTE|INTO\s+OUTFILE|INTO\s+DUMPFILE|LOAD_FILE|COPY|CALL|PREPARE|DEALLOCATE)\b/i;
 
+    // Block subqueries and other injection vectors in statement body
+    const HAS_SUBQUERY = /\(\s*SELECT\b/i;
+
     // Allowed tables for data import (tenant-scoped)
     const ALLOWED_TABLES = new Set([
       'contacts', 'leads', 'deals', 'companies', 'tasks', 'notes',
@@ -297,6 +300,12 @@ export class TenantDataImporter {
             // Block destructive statements
             if (BLOCKED_KEYWORDS.test(statement)) {
               result.errors.push({ table: 'sql', error: `Blocked destructive SQL: ${statement.substring(0, 80)}...` });
+              continue;
+            }
+
+            // Block subqueries to prevent injection via VALUES clause
+            if (HAS_SUBQUERY.test(statement)) {
+              result.errors.push({ table: 'sql', error: `Blocked subquery in SQL import: ${statement.substring(0, 80)}...` });
               continue;
             }
 

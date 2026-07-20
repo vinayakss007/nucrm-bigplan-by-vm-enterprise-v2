@@ -37,6 +37,22 @@ describe('CSRF protection', () => {
     expect(needsCsrfValidation('POST', '/api/cron/task-reminders')).toBe(false);
   });
 
+  it('needsCsrfValidation exempts pre-auth routes (user has no CSRF cookie)', async () => {
+    const { needsCsrfValidation } = await import('@/lib/auth/csrf');
+    expect(needsCsrfValidation('POST', '/api/auth/login')).toBe(false);
+    expect(needsCsrfValidation('POST', '/api/auth/signup')).toBe(false);
+    expect(needsCsrfValidation('POST', '/api/auth/forgot-password')).toBe(false);
+    expect(needsCsrfValidation('POST', '/api/auth/resend-verification')).toBe(false);
+    expect(needsCsrfValidation('POST', '/api/auth/verify-email')).toBe(false);
+  });
+
+  it('needsCsrfValidation requires CSRF on authenticated state-changing auth routes', async () => {
+    const { needsCsrfValidation } = await import('@/lib/auth/csrf');
+    expect(needsCsrfValidation('POST', '/api/auth/accept-invite')).toBe(true);
+    expect(needsCsrfValidation('POST', '/api/auth/logout')).toBe(true);
+    expect(needsCsrfValidation('POST', '/api/auth/reset-password')).toBe(true);
+  });
+
   it('generateCsrfToken creates 32-char hex string', async () => {
     const { generateCsrfToken } = await import('@/lib/auth/csrf');
     const token = generateCsrfToken();

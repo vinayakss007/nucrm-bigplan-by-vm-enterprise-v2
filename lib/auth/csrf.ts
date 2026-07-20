@@ -115,6 +115,8 @@ export function isSafeMethod(method: string): boolean {
  * - Safe HTTP methods (GET, HEAD, OPTIONS)
  * - API key authenticated requests (already secure)
  * - Webhook endpoints (use signature verification)
+ * - Pre-auth routes (user has no CSRF cookie yet)
+ * - Public/form endpoints (no session)
  */
 export function needsCsrfValidation(method: string, path: string, authMethod?: string): boolean {
   if (isSafeMethod(method)) return false;
@@ -124,8 +126,20 @@ export function needsCsrfValidation(method: string, path: string, authMethod?: s
   if (path.startsWith('/api/forms/')) return false;
   if (path.startsWith('/api/leads/public/')) return false;
   if (path.startsWith('/api/setup/')) return false;
-  if (path.startsWith('/api/auth/')) return false;
   if (path.startsWith('/api/tenant/onboarding')) return false;
-  
+
+  // Pre-auth auth routes — user has no CSRF cookie when making these requests
+  // login/signup: session cookie not yet set
+  // forgot-password, resend-verification, verify-email: unauthenticated, no session
+  if (
+    path === '/api/auth/login' ||
+    path === '/api/auth/signup' ||
+    path === '/api/auth/forgot-password' ||
+    path === '/api/auth/resend-verification' ||
+    path === '/api/auth/verify-email'
+  ) {
+    return false;
+  }
+
   return true;
 }
