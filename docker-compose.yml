@@ -18,7 +18,15 @@ services:
     networks:
       - nucrm-net
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost/health",
+        ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -59,9 +67,17 @@ services:
       resources:
         limits:
           memory: 1G
-          cpus: '1.0'
+          cpus: "1.0"
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/api/health",
+        ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -97,7 +113,7 @@ services:
       resources:
         limits:
           memory: 512M
-          cpus: '0.5'
+          cpus: "0.5"
     depends_on:
       postgres:
         condition: service_healthy
@@ -137,7 +153,7 @@ services:
       - ./deploy/monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
       - lokidata:/loki
     command:
-      - '--config.file=/etc/loki/loki-config.yml'
+      - "--config.file=/etc/loki/loki-config.yml"
     ports:
       - "3100:3100"
     restart: unless-stopped
@@ -155,9 +171,10 @@ services:
     environment:
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
       - CRITICAL_ERROR_WEBHOOK_URL=${CRITICAL_ERROR_WEBHOOK_URL:-}
+      - PAGERDUTY_ROUTING_KEY=${PAGERDUTY_ROUTING_KEY:-}
     command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
     ports:
       - "9093:9093"
     restart: unless-stopped
@@ -172,7 +189,7 @@ services:
       - ./deploy/monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
       - /var/log:/var/log:ro
     command:
-      - '--config.file=/etc/promtail/promtail-config.yml'
+      - "--config.file=/etc/promtail/promtail-config.yml"
     depends_on:
       - loki
     restart: unless-stopped
@@ -201,7 +218,11 @@ services:
     networks:
       - nucrm-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U ${POSTGRES_USER:-nucrm}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -p 6432 -U ${POSTGRES_USER:-nucrm}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
