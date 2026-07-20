@@ -3,7 +3,7 @@ import dynamic from 'next/dynamic';
 import type { WidgetProps, DashboardLayoutItem } from '@/types/dashboard';
 import { LazyWidget } from './widget-wrapper';
 import { getWidget } from './widget-registry';
-import type { FC } from 'react';
+import type { ComponentType } from 'react';
 
 const StatsContactsWidget = dynamic(() => import('./widgets/stats-contacts-widget'), { ssr: false });
 const StatsPipelineWidget = dynamic(() => import('./widgets/stats-pipeline-widget'), { ssr: false });
@@ -18,7 +18,7 @@ const TicketsWidget = dynamic(() => import('./widgets/tickets-widget'), { ssr: f
 const InvoicesWidget = dynamic(() => import('./widgets/invoices-widget'), { ssr: false });
 const FollowUpsWidget = dynamic(() => import('./widgets/follow-ups-widget'), { ssr: false });
 
-const WIDGET_MAP: Record<string, FC<WidgetProps>> = {
+const WIDGET_MAP: Record<string, ComponentType<WidgetProps>> = {
   'stats-contacts': StatsContactsWidget,
   'stats-pipeline': StatsPipelineWidget,
   'stats-revenue': StatsRevenueWidget,
