@@ -232,34 +232,34 @@ export default function SuperAdminDataExplorer() {
     };
 
     if (results.results.tenants?.data) {
-      pushRows('Tenant', results.results.tenants.data, r => [
+      pushRows('Tenant', results.results.tenants.data as Record<string, unknown>[], r => [
         String(r.id).slice(0, 8), String(r.name ?? ''), String(r.subdomain ?? ''), '', '',
         String(r.plan ?? ''), String(r.status ?? ''), '', String(r.created_at ?? ''),
       ]);
     }
     if (results.results.contacts?.data) {
-      pushRows('Contact', results.results.contacts.data, r => [
+      pushRows('Contact', results.results.contacts.data as Record<string, unknown>[], r => [
         String(r.id).slice(0, 8), [r.first_name, r.last_name].filter(Boolean).join(' '),
         String(r.email ?? ''), String(r.phone ?? ''), String(r.tenant_name ?? ''),
         '', '', String(r.created_at ?? ''),
       ]);
     }
     if (results.results.deals?.data) {
-      pushRows('Deal', results.results.deals.data, r => [
+      pushRows('Deal', results.results.deals.data as Record<string, unknown>[], r => [
         String(r.id).slice(0, 8), String(r.title ?? ''),
         String(r.contact_name ?? ''), '', String(r.tenant_name ?? ''),
         String(r.stage ?? ''), String(r.value ?? ''), String(r.created_at ?? ''),
       ]);
     }
     if (results.results.companies?.data) {
-      pushRows('Company', results.results.companies.data, r => [
+      pushRows('Company', results.results.companies.data as Record<string, unknown>[], r => [
         String(r.id).slice(0, 8), String(r.name ?? ''),
         '', '', String(r.tenant_name ?? ''),
         '', '', String(r.created_at ?? ''),
       ]);
     }
     if (results.results.users?.data) {
-      pushRows('User', results.results.users.data, r => [
+      pushRows('User', results.results.users.data as Record<string, unknown>[], r => [
         String(r.id).slice(0, 8), String(r.full_name ?? ''),
         String(r.email ?? ''), '', String(r.tenant_name ?? ''),
         '', '', String(r.created_at ?? ''),
