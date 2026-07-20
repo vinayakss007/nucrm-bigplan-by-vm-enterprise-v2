@@ -462,7 +462,8 @@ export const publicFormSubmitSchema = z.object({
 
 // ── IP Whitelist schema ──
 export const ipWhitelistSchema = z.object({
-  ips: z.array(z.string().ip()).max(50),
+  ips: z.array(z.string().regex(/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/, 'Invalid IP address')).optional().default([]),
+  enabled: z.boolean().optional().default(true),
 });
 
 // ── Email Warmup Config schema ──
