@@ -1,40 +1,27 @@
 {
   "name": "NuCRM — Enterprise CRM",
   "short_name": "NuCRM",
-  "description": "The modern multi-tenant CRM platform for growing teams",
-  "start_url": "/tenant/dashboard",
-  "scope": "/",
+  "description": "Enterprise CRM with AI, automation, and full customer lifecycle management",
+  "start_url": "/auth/login",
   "display": "standalone",
-  "orientation": "any",
-  "background_color": "#ffffff",
+  "background_color": "#0f0f23",
   "theme_color": "#7c3aed",
-  "categories": ["business", "productivity"],
-  "lang": "en",
-  "dir": "ltr",
-  "prefer_related_applications": false,
+  "orientation": "any",
   "icons": [
-    { "src": "/icons/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/icons/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any maskable" }
-  ],
-  "screenshots": [],
-  "shortcuts": [
     {
-      "name": "Contacts",
-      "short_name": "Contacts",
-      "url": "/tenant/contacts",
-      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     },
     {
-      "name": "Deals",
-      "short_name": "Deals",
-      "url": "/tenant/deals",
-      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
-    },
-    {
-      "name": "Tasks",
-      "short_name": "Tasks",
-      "url": "/tenant/tasks",
-      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
-  ]
+  ],
+  "categories": ["business", "productivity"],
+  "scope": "/",
+  "lang": "en"
 }
