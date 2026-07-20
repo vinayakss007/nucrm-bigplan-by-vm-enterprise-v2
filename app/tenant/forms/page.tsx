@@ -1,8 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Plus, FileText, ExternalLink, Copy, Check, ToggleLeft, ToggleRight,
-  Trash2, Loader2, X, Eye, ChevronRight } from 'lucide-react';
+  Trash2, Loader2, X, Eye, ChevronRight, BarChart3 } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import Pagination from '@/components/tenant/pagination';
@@ -71,7 +72,7 @@ export default function FormsPage() {
     if (res.ok) { const d = await res.json(); setForms(d.data ?? []); setTotal(d.total ?? 0); }
     setLoading(false);
   };
-  useEffect(() => { load(); }, [offset]);
+  useEffect(() => { load(); }, [offset]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
@@ -271,6 +272,10 @@ export default function FormsPage() {
                   className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/60 text-xs font-medium transition-colors">
                   <FileText className="w-3.5 h-3.5" /> <span className="hidden md:inline">Submissions</span>
                 </button>
+                <Link href={`/tenant/forms/${f.id}/analytics`} title="Form analytics"
+                  className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border hover:bg-accent text-xs font-medium transition-colors">
+                  <BarChart3 className="w-3.5 h-3.5" /> <span className="hidden md:inline">Analytics</span>
+                </Link>
                 <button onClick={() => openPublicForm(f.id)} title="View public form"
                   className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border hover:bg-accent text-xs font-medium transition-colors">
                   <Eye className="w-3.5 h-3.5" /> <span className="hidden md:inline">View</span>
