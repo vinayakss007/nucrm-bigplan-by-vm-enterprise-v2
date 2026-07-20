@@ -44,6 +44,28 @@ describe('DashboardClient', () => {
     });
   });
 
+  it('calls the stats fetch with correct URL and AbortSignal', async () => {
+    render(<DashboardClient tenantId="t1" userId="u1" planName="starter" isAdmin={false} />);
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        '/api/tenant/dashboard/widgets/stats/contacts',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
+    });
+  });
+
+  it('shares a single AbortSignal between the layout and stats fetches', async () => {
+    render(<DashboardClient tenantId="t1" userId="u1" planName="starter" isAdmin={false} />);
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    });
+    const calls = (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const layoutCall = calls.find((c) => c[0] === '/api/tenant/dashboard/layout');
+    const statsCall = calls.find((c) => c[0] === '/api/tenant/dashboard/widgets/stats/contacts');
+    expect(layoutCall?.[1].signal).toBeInstanceOf(AbortSignal);
+    expect(layoutCall?.[1].signal).toBe(statsCall?.[1].signal);
+  });
+
   it('falls back to default layout on fetch failure', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'));
     render(<DashboardClient tenantId="t1" userId="u1" planName="pro" isAdmin={false} />);
@@ -59,6 +81,25 @@ describe('DashboardClient', () => {
     unmount();
     expect(abortSpy).toHaveBeenCalledTimes(1);
     abortSpy.mockRestore();
+  });
+
+  it('refetches without an AbortSignal when restored via pageshow', async () => {
+    render(<DashboardClient tenantId="t1" userId="u1" planName="pro" isAdmin={false} />);
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    });
+    (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mockClear();
+
+    const pageshowEvent = new Event('pageshow') as PageTransitionEvent;
+    Object.defineProperty(pageshowEvent, 'persisted', { value: true });
+    window.dispatchEvent(pageshowEvent);
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        '/api/tenant/dashboard/layout',
+        expect.objectContaining({ signal: undefined })
+      );
+    });
   });
 
   it('displays plan name correctly', async () => {
