@@ -3,6 +3,12 @@ import { z } from 'zod';
 const uuid = z.string().uuid().optional().nullable();
 const requiredString = z.string().trim().min(1);
 
+// ── Platform settings schema (superadmin) ──
+export const platformSettingsSchema = z.record(
+  z.string(),
+  z.union([z.string(), z.number(), z.boolean()])
+);
+
 // ── Announcement schemas (superadmin) ──
 export const createAnnouncementSchema = z.object({
   title: requiredString.max(200),
@@ -160,6 +166,8 @@ export const createSequenceSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+export const updateSequenceSchema = createSequenceSchema.partial();
+
 // ── Webhook schemas ──
 export const createWebhookSchema = z.object({
   name: requiredString.max(200),
@@ -168,6 +176,8 @@ export const createWebhookSchema = z.object({
   secret: z.string().max(200).optional(),
   isActive: z.boolean().optional(),
 });
+
+export const updateWebhookSchema = createWebhookSchema.partial();
 
 // ── API Key schemas ──
 export const createApiKeySchema = z.object({
@@ -197,6 +207,8 @@ export const createFormSchema = z.object({
   success_message: z.string().max(500).optional(),
 });
 
+export const updateFormSchema = createFormSchema.partial();
+
 // ── Email Template schemas ──
 export const createEmailTemplateSchema = z.object({
   name: requiredString.max(200),
@@ -206,12 +218,16 @@ export const createEmailTemplateSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+export const updateEmailTemplateSchema = createEmailTemplateSchema.partial();
+
 // ── Role schemas ──
 export const createRoleSchema = z.object({
   name: requiredString.max(100),
   description: z.string().max(500).optional(),
   permissions: z.array(z.string().max(100)).min(1),
 });
+
+export const updateRoleSchema = createRoleSchema.partial();
 
 // ── Member schemas ──
 export const inviteMemberSchema = z.object({
