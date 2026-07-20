@@ -320,6 +320,7 @@ export const forms = pgTable('forms', {
   theme: jsonb('theme').default({}),
   isActive: boolean('is_active').default(true),
   submissionsCount: integer('submissions_count').default(0),
+  viewsCount: integer('views_count').default(0),
   ...utils.audit(),
 }, (table) => {
   return {
