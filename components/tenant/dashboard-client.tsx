@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { WidgetGrid } from '@/components/tenant/dashboard/widget-grid';
 import { getPlanDefaultLayout } from '@/lib/dashboard/layout-defaults';
 import type { DashboardLayout } from '@/types/dashboard';
@@ -50,49 +50,63 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
   const [loadingLayout, setLoadingLayout] = useState(true);
   const [isEmpty, setIsEmpty] = useState<boolean | null>(null);
 
-  const fetchLayout = useCallback(async () => {
-    try {
-      const res = await fetch('/api/tenant/dashboard/layout', { credentials: 'include' });
-      const data = await res.json();
-      if (data.layout) {
-        setLayout(data.layout);
-      } else {
-        setLayout(getPlanDefaultLayout(planName));
-      }
-    } catch {
-      setLayout(getPlanDefaultLayout(planName));
-    } finally {
-      setLoadingLayout(false);
-    }
-  }, [planName]);
-
-  const fetchStats = useCallback(async () => {
-    try {
-      const res = await fetch('/api/tenant/dashboard/widgets/stats/contacts', { credentials: 'include' });
-      const data = await res.json();
-      const d = data.data ?? data;
-      const empty = (d?.count ?? 0) === 0 && (d?.companyCount ?? 0) === 0;
-      setIsEmpty(empty);
-    } catch {
-      setIsEmpty(false);
-    }
-  }, []);
-
   useEffect(() => {
-    fetchLayout();
-    fetchStats();
-  }, [fetchLayout, fetchStats]);
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    const load = async () => {
+      try {
+        const res = await fetch('/api/tenant/dashboard/layout', { credentials: 'include', signal });
+        const data = await res.json();
+        if (data.layout) {
+          setLayout(data.layout);
+        } else {
+          setLayout(getPlanDefaultLayout(planName));
+        }
+      } catch {
+        if (!signal.aborted) setLayout(getPlanDefaultLayout(planName));
+      } finally {
+        if (!signal.aborted) setLoadingLayout(false);
+      }
+    };
+
+    const loadStats = async () => {
+      try {
+        const res = await fetch('/api/tenant/dashboard/widgets/stats/contacts', { credentials: 'include', signal });
+        const data = await res.json();
+        const d = data.data ?? data;
+        const empty = (d?.count ?? 0) === 0 && (d?.companyCount ?? 0) === 0;
+        setIsEmpty(empty);
+      } catch {
+        if (!signal.aborted) setIsEmpty(false);
+      }
+    };
+
+    load();
+    loadStats();
+
+    return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const handlePageShow = (e: PageTransitionEvent) => {
       if (e.persisted) {
-        fetchLayout();
-        fetchStats();
+        const controller = new AbortController();
+        const { signal } = controller;
+        fetch('/api/tenant/dashboard/layout', { credentials: 'include', signal }).then(r => r.json()).then(data => {
+          if (!signal.aborted) setLayout(data.layout ?? getPlanDefaultLayout(planName));
+        }).catch(() => {});
+        fetch('/api/tenant/dashboard/widgets/stats/contacts', { credentials: 'include', signal }).then(r => r.json()).then(data => {
+          const d = data.data ?? data;
+          if (!signal.aborted) setIsEmpty((d?.count ?? 0) === 0 && (d?.companyCount ?? 0) === 0);
+        }).catch(() => {});
       }
     };
     window.addEventListener('pageshow', handlePageShow);
     return () => window.removeEventListener('pageshow', handlePageShow);
-  }, [fetchLayout, fetchStats]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (loadingLayout) {
     return (
