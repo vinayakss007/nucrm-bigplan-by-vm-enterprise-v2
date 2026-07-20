@@ -7,6 +7,7 @@ export const tenants = pgTable('tenants', {
   id: utils.pk(),
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
+  shortCode: text('short_code').unique(),
   subdomain: text('subdomain'),
   
   status: text('status').notNull().default('trialing'),

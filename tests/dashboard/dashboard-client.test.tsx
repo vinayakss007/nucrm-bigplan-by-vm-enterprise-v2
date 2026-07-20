@@ -34,12 +34,12 @@ describe('DashboardClient', () => {
     expect(screen.getByText(/pro plan/i)).toBeTruthy();
   });
 
-  it('calls fetch with correct URL and AbortSignal', async () => {
+  it('calls fetch with correct URL', async () => {
     render(<DashboardClient tenantId="t1" userId="u1" planName="starter" isAdmin={false} />);
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         '/api/tenant/dashboard/layout',
-        expect.objectContaining({ signal: expect.any(AbortSignal) })
+        expect.objectContaining({ credentials: 'include' })
       );
     });
   });
