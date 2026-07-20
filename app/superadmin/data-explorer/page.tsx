@@ -20,6 +20,7 @@ import {
   Copy,
   ArrowUpDown,
   BarChart3,
+  Download,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -221,6 +222,60 @@ export default function SuperAdminDataExplorer() {
     navigator.clipboard.writeText(text);
   };
 
+  const exportToCSV = () => {
+    if (!results) return;
+    const allRows: string[][] = [];
+    const allHeaders: string[] = ['Table', 'ID', 'Name/Title', 'Email', 'Phone', 'Tenant', 'Status', 'Value', 'Created'];
+
+    const pushRows = (table: string, rows: Record<string, unknown>[], map: (r: Record<string, unknown>) => string[]) => {
+      rows.forEach(r => allRows.push([table, ...map(r)]));
+    };
+
+    if (results.results.tenants?.data) {
+      pushRows('Tenant', results.results.tenants.data, r => [
+        String(r.id).slice(0, 8), String(r.name ?? ''), String(r.subdomain ?? ''), '', '',
+        String(r.plan ?? ''), String(r.status ?? ''), '', String(r.created_at ?? ''),
+      ]);
+    }
+    if (results.results.contacts?.data) {
+      pushRows('Contact', results.results.contacts.data, r => [
+        String(r.id).slice(0, 8), [r.first_name, r.last_name].filter(Boolean).join(' '),
+        String(r.email ?? ''), String(r.phone ?? ''), String(r.tenant_name ?? ''),
+        '', '', String(r.created_at ?? ''),
+      ]);
+    }
+    if (results.results.deals?.data) {
+      pushRows('Deal', results.results.deals.data, r => [
+        String(r.id).slice(0, 8), String(r.title ?? ''),
+        String(r.contact_name ?? ''), '', String(r.tenant_name ?? ''),
+        String(r.stage ?? ''), String(r.value ?? ''), String(r.created_at ?? ''),
+      ]);
+    }
+    if (results.results.companies?.data) {
+      pushRows('Company', results.results.companies.data, r => [
+        String(r.id).slice(0, 8), String(r.name ?? ''),
+        '', '', String(r.tenant_name ?? ''),
+        '', '', String(r.created_at ?? ''),
+      ]);
+    }
+    if (results.results.users?.data) {
+      pushRows('User', results.results.users.data, r => [
+        String(r.id).slice(0, 8), String(r.full_name ?? ''),
+        String(r.email ?? ''), '', String(r.tenant_name ?? ''),
+        '', '', String(r.created_at ?? ''),
+      ]);
+    }
+
+    const csv = [allHeaders, ...allRows].map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `data-explorer-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const formatCurrency = (val?: number) => {
     if (!val) return '$0';
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val);
@@ -250,10 +305,18 @@ export default function SuperAdminDataExplorer() {
           </h1>
           <p className="text-gray-400 mt-1">Search, view, and manage data across all tenants</p>
         </div>
-        <button onClick={loadSummary} className="px-3 py-2 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center gap-2">
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {results && results.totalAcrossAll > 0 && (
+            <button onClick={exportToCSV} className="px-3 py-2 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center gap-2">
+              <Download className="w-4 h-4" />
+              Export CSV
+            </button>
+          )}
+          <button onClick={loadSummary} className="px-3 py-2 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center gap-2">
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Platform Summary Cards */}
