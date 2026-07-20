@@ -250,6 +250,13 @@
         "when": 1783761529000,
         "tag": "0035_missing_db_functions"
       }
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1783800000000,
+      "tag": "0036_missing_tables",
+      "breakpoints": true
     }
   ]
 }
