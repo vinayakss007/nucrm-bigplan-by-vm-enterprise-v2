@@ -1,20 +1,22 @@
 'use client';
+import dynamic from 'next/dynamic';
 import type { WidgetProps, DashboardLayoutItem } from '@/types/dashboard';
 import { LazyWidget } from './widget-wrapper';
 import { getWidget } from './widget-registry';
 import type { FC } from 'react';
-import StatsContactsWidget from './widgets/stats-contacts-widget';
-import StatsPipelineWidget from './widgets/stats-pipeline-widget';
-import StatsRevenueWidget from './widgets/stats-revenue-widget';
-import StatsTasksWidget from './widgets/stats-tasks-widget';
-import ActivityFeedWidget from './widgets/activity-feed-widget';
-import TasksWidget from './widgets/tasks-widget';
-import DealsClosingWidget from './widgets/deals-closing-widget';
-import ContactsRecentWidget from './widgets/contacts-recent-widget';
-import LeadsPipelineWidget from './widgets/leads-pipeline-widget';
-import TicketsWidget from './widgets/tickets-widget';
-import InvoicesWidget from './widgets/invoices-widget';
-import FollowUpsWidget from './widgets/follow-ups-widget';
+
+const StatsContactsWidget = dynamic(() => import('./widgets/stats-contacts-widget'), { ssr: false });
+const StatsPipelineWidget = dynamic(() => import('./widgets/stats-pipeline-widget'), { ssr: false });
+const StatsRevenueWidget = dynamic(() => import('./widgets/stats-revenue-widget'), { ssr: false });
+const StatsTasksWidget = dynamic(() => import('./widgets/stats-tasks-widget'), { ssr: false });
+const ActivityFeedWidget = dynamic(() => import('./widgets/activity-feed-widget'), { ssr: false });
+const TasksWidget = dynamic(() => import('./widgets/tasks-widget'), { ssr: false });
+const DealsClosingWidget = dynamic(() => import('./widgets/deals-closing-widget'), { ssr: false });
+const ContactsRecentWidget = dynamic(() => import('./widgets/contacts-recent-widget'), { ssr: false });
+const LeadsPipelineWidget = dynamic(() => import('./widgets/leads-pipeline-widget'), { ssr: false });
+const TicketsWidget = dynamic(() => import('./widgets/tickets-widget'), { ssr: false });
+const InvoicesWidget = dynamic(() => import('./widgets/invoices-widget'), { ssr: false });
+const FollowUpsWidget = dynamic(() => import('./widgets/follow-ups-widget'), { ssr: false });
 
 const WIDGET_MAP: Record<string, FC<WidgetProps>> = {
   'stats-contacts': StatsContactsWidget,
