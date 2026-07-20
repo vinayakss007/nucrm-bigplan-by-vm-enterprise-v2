@@ -560,6 +560,7 @@ interface TenantModule {
   status: string;
   planAllowed: boolean;
   features?: string[];
+  enabledFeatures?: string[];
 }
 
 function ModulesModal({ tenant, onClose, _onSaved }: ModulesModalProps) {
@@ -567,6 +568,8 @@ function ModulesModal({ tenant, onClose, _onSaved }: ModulesModalProps) {
   const [plan, setPlan] = useState('');
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [expandedModule, setExpandedModule] = useState<string | null>(null);
+  const [featureSaving, setFeatureSaving] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/superadmin/tenants/${tenant.id}/modules`);
@@ -589,6 +592,26 @@ function ModulesModal({ tenant, onClose, _onSaved }: ModulesModalProps) {
       load();
     } else { const d = await res.json(); toast.error(d.error); }
     setToggling(null);
+  };
+
+  const toggleFeature = async (mod: TenantModule, feature: string) => {
+    if (mod.status !== 'active') return;
+    const current = new Set(mod.enabledFeatures ?? mod.features ?? []);
+    if (current.has(feature)) current.delete(feature); else current.add(feature);
+    const newFeatures = Array.from(current);
+    // optimistic update
+    setModules(prev => prev.map(m => m.id === mod.id ? { ...m, enabledFeatures: newFeatures } : m));
+    setFeatureSaving(`${mod.id}:${feature}`);
+    const res = await fetch(`/api/superadmin/tenants/${tenant.id}/modules`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ module_id: mod.id, action: 'update_features', features: newFeatures }),
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      toast.error(d.error || 'Failed to update features');
+      load(); // revert
+    }
+    setFeatureSaving(null);
   };
 
   const CAT_COLORS: Record<string, string> = {
@@ -621,35 +644,93 @@ function ModulesModal({ tenant, onClose, _onSaved }: ModulesModalProps) {
             modules.map(mod => {
               const isActive = mod.status === 'active';
               const planBlocks = !mod.planAllowed && !isActive;
+              const isExpanded = expandedModule === mod.id;
+              const hasFeatures = (mod.features?.length ?? 0) > 0;
+              const enabledSet = new Set(mod.enabledFeatures ?? mod.features ?? []);
               return (
-                <div key={mod.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                  <div className="flex items-start gap-3">
-                    <span className="text-lg mt-0.5">{mod.icon || '🔌'}</span>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-white">{mod.name}</p>
-                        <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full capitalize', CAT_COLORS[mod.category ?? ''] || CAT_COLORS['utility'])}>
-                          {mod.category}
-                        </span>
+                <div key={mod.id} className="rounded-xl border border-white/10 bg-white/[0.03] overflow-hidden">
+                  <div className="flex items-center justify-between p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="text-lg mt-0.5">{mod.icon || '🔌'}</span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-white">{mod.name}</p>
+                          <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full capitalize', CAT_COLORS[mod.category ?? ''] || CAT_COLORS['utility'])}>
+                            {mod.category}
+                          </span>
+                        </div>
+                        <p className="text-xs text-white/40 mt-0.5">{mod.description}</p>
+                        {planBlocks && (
+                          <p className="text-[10px] text-amber-400/70 mt-1">Not included in {plan} plan — force-enable as override</p>
+                        )}
+                        {isActive && hasFeatures && (
+                          <p className="text-[10px] text-white/30 mt-1">
+                            {(mod.enabledFeatures ?? mod.features ?? []).length}/{mod.features!.length} features enabled
+                          </p>
+                        )}
                       </div>
-                      <p className="text-xs text-white/40 mt-0.5">{mod.description}</p>
-                      {planBlocks && (
-                        <p className="text-[10px] text-amber-400/70 mt-1">Not included in {plan} plan — force-enable as override</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-3">
+                      {isActive && hasFeatures && (
+                        <button
+                          onClick={() => setExpandedModule(isExpanded ? null : mod.id)}
+                          className={cn('px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors',
+                            isExpanded ? 'border-violet-500/40 bg-violet-500/15 text-violet-400' : 'border-white/10 bg-white/5 text-white/40 hover:text-white'
+                          )}>
+                          Features
+                        </button>
                       )}
+                      <button
+                        onClick={() => toggleModule(mod)}
+                        disabled={toggling === mod.id}
+                        className={cn('flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-colors disabled:opacity-50',
+                          isActive
+                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                            : planBlocks
+                              ? 'border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
+                              : 'border-white/10 bg-white/5 text-white/30 hover:text-white'
+                        )}>
+                        {toggling === mod.id ? '...' : isActive ? 'Active' : planBlocks ? 'Override' : 'Install'}
+                      </button>
                     </div>
                   </div>
-                  <button
-                    onClick={() => toggleModule(mod)}
-                    disabled={toggling === mod.id}
-                    className={cn('flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-colors shrink-0 ml-3 disabled:opacity-50',
-                      isActive
-                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                        : planBlocks
-                          ? 'border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
-                          : 'border-white/10 bg-white/5 text-white/30 hover:text-white'
-                    )}>
-                    {toggling === mod.id ? '...' : isActive ? 'Active' : planBlocks ? 'Override' : 'Install'}
-                  </button>
+
+                  {/* Feature toggles (expandable) */}
+                  {isActive && hasFeatures && isExpanded && (
+                    <div className="px-4 pb-4 pt-0 border-t border-white/5">
+                      <p className="text-[10px] text-white/30 uppercase tracking-wider font-bold mb-2 mt-3">Per-Feature Control</p>
+                      <div className="space-y-1">
+                        {mod.features!.map(feature => {
+                          const on = enabledSet.has(feature);
+                          const saving = featureSaving === `${mod.id}:${feature}`;
+                          return (
+                            <button
+                              key={feature}
+                              disabled={saving}
+                              onClick={() => toggleFeature(mod, feature)}
+                              className={cn(
+                                'w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors border',
+                                saving && 'opacity-50 cursor-wait',
+                                on
+                                  ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-300 hover:bg-emerald-500/10'
+                                  : 'border-white/5 bg-white/[0.02] text-white/30 hover:text-white/60 hover:bg-white/5'
+                              )}>
+                              <span className="truncate">{feature}</span>
+                              <span className={cn(
+                                'w-7 h-4 rounded-full relative transition-colors shrink-0 ml-2',
+                                on ? 'bg-emerald-500' : 'bg-white/10'
+                              )}>
+                                <span className={cn(
+                                  'absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all',
+                                  on ? 'left-3.5' : 'left-0.5'
+                                )} />
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })

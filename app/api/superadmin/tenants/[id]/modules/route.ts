@@ -17,11 +17,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id: tenantId } = await params;
 
     // Get tenant's installed modules
-    const installed = await ModuleRegistry.getTenantModules(tenantId);
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const installedMap = new Map(installed.map((i: any) => [i.module_id, i]));
+    const installed = await db.query.tenantModules.findMany({
+      where: eq(tenantModules.tenantId, tenantId),
+      columns: {
+        moduleId: true,
+        status: true,
+        forceEnabled: true,
+        enabledFeatures: true,
+        installedAt: true,
+      },
+    });
+
+    const installedMap = new Map(installed.map(i => [i.moduleId, i]));
 
     // Get plan info
     const plan = await ModuleRegistry.getTenantPlan(tenantId);
@@ -38,7 +45,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         features: m.features,
         status: inst?.status || 'available',
         forceEnabled: inst?.forceEnabled || false,
-        installedAt: inst?.installed_at || null,
+        enabledFeatures: (inst?.enabledFeatures as string[]) ?? (m.features ?? []),
+        installedAt: inst?.installedAt || null,
         planAllowed: !!(m.pricing?.[plan]?.enabled),
         pricing: m.pricing,
       };
@@ -58,6 +66,7 @@ const moduleActionSchema = z.object({
   action: z.string().min(1),
   settings: z.record(z.string(), z.any()).optional(),
   force_enabled: z.boolean().optional(),
+  features: z.array(z.string()).optional(),
 });
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -115,6 +124,28 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         targetType: 'tenant',
         targetId: tenantId,
         metadata: { module_force: v.module_id, force_enabled: v.force_enabled },
+      });
+      return NextResponse.json({ success: true });
+    }
+
+    if (v.action === 'update_features') {
+      if (!v.features) return NextResponse.json({ error: 'features array required' }, { status: 400 });
+      // Validate features are valid for the module
+      const manifest = ModuleRegistry.get(v.module_id);
+      if (!manifest) return NextResponse.json({ error: 'Module not found' }, { status: 404 });
+      const validFeatures = new Set(manifest.features ?? []);
+      const invalid = v.features.filter(f => !validFeatures.has(f));
+      if (invalid.length) return NextResponse.json({ error: `Invalid features: ${invalid.join(', ')}` }, { status: 400 });
+      await db.update(tenantModules)
+        .set({ enabledFeatures: v.features, updatedAt: new Date() })
+        .where(and(eq(tenantModules.tenantId, tenantId), eq(tenantModules.moduleId, v.module_id)));
+      logSuperAdminAction({
+        adminId: ctx.userId,
+        adminEmail: ctx.user?.email || "",
+        action: 'tenant.settings_changed',
+        targetType: 'tenant',
+        targetId: tenantId,
+        metadata: { module_features: v.module_id, enabled_features: v.features },
       });
       return NextResponse.json({ success: true });
     }
