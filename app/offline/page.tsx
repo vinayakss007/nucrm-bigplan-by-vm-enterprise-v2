@@ -9,12 +9,9 @@ export default function OfflinePage() {
         <p className="text-sm text-muted-foreground max-w-sm">
           Please check your internet connection and try again.
         </p>
-        <button
-          onClick={() => window.location.reload()}
-          className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors"
-        >
-          Retry
-        </button>
+        <p className="text-xs text-muted-foreground">
+          This page is available offline via the NuCRM service worker.
+        </p>
       </div>
     </div>
   );
