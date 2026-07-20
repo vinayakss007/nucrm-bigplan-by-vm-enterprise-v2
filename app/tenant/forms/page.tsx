@@ -22,6 +22,8 @@ interface FormItem {
   is_active?: boolean;
   fields?: FormFieldDef[];
   submissions?: number;
+  submissions_count?: number;
+  views_count?: number;
   settings?: { success_message?: string; notify_email?: string };
 }
 
@@ -130,7 +132,7 @@ export default function FormsPage() {
   };
 
   const copyEmbed = (formId: string) => {
-    const script = `<script src="${window.location.origin}/embed/form.js" data-form-id="${formId}"></script>`;
+    const script = `<script src="${window.location.origin}/api/embed/form.js" data-form-id="${formId}" async></script>`;
     navigator.clipboard.writeText(script);
     setCopiedId(formId);
     setTimeout(() => setCopiedId(null), 2000);
@@ -260,7 +262,7 @@ export default function FormsPage() {
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {f.submissions ?? 0} submissions
+                  {f.views_count ?? 0} views · {f.submissions_count ?? f.submissions ?? 0} submissions
                   {Array.isArray(f.fields) && ` · ${f.fields.length} fields`}
                 </p>
               </div>
@@ -400,7 +402,7 @@ export default function FormsPage() {
               <p className="text-xs font-medium text-muted-foreground mb-1">💻 Option 3: Embed on Website</p>
               <p className="text-xs text-muted-foreground mb-2">Click <Copy className="w-3 h-3 inline" /> on any form to copy its embed code, then paste into your website:</p>
               <code className="text-xs bg-muted px-3 py-2 rounded-lg block font-mono text-muted-foreground">
-                {'<script src="https://yourcrm.com/embed/form.js" data-form-id="FORM_ID"></script>'}
+                {'<script src="https://yourcrm.com/api/embed/form.js" data-form-id="FORM_ID" async></script>'}
               </code>
             </div>
           </div>
