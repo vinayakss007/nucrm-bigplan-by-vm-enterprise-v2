@@ -1,8 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { CreditCard, Plus, Edit, X, Save, Loader2, Users, Zap, Crown } from 'lucide-react';
+import { CreditCard, Plus, Edit, X, Save, Loader2, Users, Zap, Crown, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import PlanOfferingsPanel from '@/components/superadmin/plan-offerings-panel';
 
 const FEATURE_OPTIONS = ['contacts','deals','tasks','automations','forms','reports','sequences','products','quotes','ai','api_access','custom_roles','custom_domain','sso','audit_logs','dedicated_support'];
 
@@ -153,6 +154,7 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [editPlan, setEditPlan] = useState<Plan | null>(null);
   const [creating, setCreating] = useState(false);
+  const [offeringsPlan, setOfferingsPlan] = useState<Plan | null>(null);
 
   const load = async (abortSignal?: AbortSignal) => {
     const [p, t] = await Promise.all([
@@ -180,6 +182,7 @@ export default function BillingPage() {
   return (
     <div className="space-y-5 max-w-6xl">
       {(editPlan != null || creating) && <PlanForm plan={editPlan ?? undefined} onSave={load} onClose={()=>{setEditPlan(null);setCreating(false);}}/>}
+      {offeringsPlan && <PlanOfferingsPanel planId={offeringsPlan.id} planName={offeringsPlan.name} onClose={() => setOfferingsPlan(null)} />}
 
       <div className="flex items-center justify-between">
         <div>
@@ -213,9 +216,14 @@ export default function BillingPage() {
                     </p>
                     {plan.price_yearly>0&&<p className="text-xs text-white/30">${plan.price_yearly}/yr</p>}
                   </div>
-                  <button onClick={()=>setEditPlan(plan)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/30 hover:text-white transition-colors">
-                    <Edit className="w-3.5 h-3.5"/>
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button onClick={()=>setOfferingsPlan(plan)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/30 hover:text-white transition-colors" title="Module Offerings">
+                      <Package className="w-3.5 h-3.5"/>
+                    </button>
+                    <button onClick={()=>setEditPlan(plan)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/30 hover:text-white transition-colors">
+                      <Edit className="w-3.5 h-3.5"/>
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-1.5 text-xs text-white/40 flex-1">
                   {[
