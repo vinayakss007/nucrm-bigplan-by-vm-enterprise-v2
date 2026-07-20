@@ -50,9 +50,9 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
   const [loadingLayout, setLoadingLayout] = useState(true);
   const [isEmpty, setIsEmpty] = useState<boolean | null>(null);
 
-  const fetchLayout = useCallback(async () => {
+  const fetchLayout = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/dashboard/layout', { credentials: 'include' });
+      const res = await fetch('/api/tenant/dashboard/layout', { credentials: 'include', signal });
       const data = await res.json();
       if (data.layout) {
         setLayout(data.layout);
@@ -66,9 +66,9 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
     }
   }, [planName]);
 
-  const fetchStats = useCallback(async () => {
+  const fetchStats = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/dashboard/widgets/stats/contacts', { credentials: 'include' });
+      const res = await fetch('/api/tenant/dashboard/widgets/stats/contacts', { credentials: 'include', signal });
       const data = await res.json();
       const d = data.data ?? data;
       const empty = (d?.count ?? 0) === 0 && (d?.companyCount ?? 0) === 0;
@@ -79,8 +79,10 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
   }, []);
 
   useEffect(() => {
-    fetchLayout();
-    fetchStats();
+    const controller = new AbortController();
+    fetchLayout(controller.signal);
+    fetchStats(controller.signal);
+    return () => controller.abort();
   }, [fetchLayout, fetchStats]);
 
   useEffect(() => {

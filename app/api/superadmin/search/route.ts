@@ -35,8 +35,7 @@ export async function GET(request: NextRequest) {
         ilike(tenants.id, `%${q}%`),
       ))
       .orderBy(desc(tenants.createdAt))
-      .limit(limit)
-      .catch(() => []),
+      .limit(limit),
 
       db.select({
         id: users.id,
@@ -51,8 +50,7 @@ export async function GET(request: NextRequest) {
         ilike(users.id, `%${q}%`),
       ))
       .orderBy(desc(users.createdAt))
-      .limit(limit)
-      .catch(() => []),
+      .limit(limit),
     ]);
 
     const results = [...tenantResults, ...userResults]
