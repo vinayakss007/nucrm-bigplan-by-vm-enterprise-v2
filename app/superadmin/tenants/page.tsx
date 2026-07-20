@@ -2,10 +2,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Building2, Plus, Search, X, LogIn, Trash2, Loader2, Crown, Mail,
-  DollarSign, Shield, RefreshCw, Edit, Save, Zap } from 'lucide-react';
+  DollarSign, Shield, RefreshCw, Edit, Save, Zap, Sliders } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen, ConfirmDialog, ConfirmWithInput } from '@/components/ui/confirm-dialog';
+import TenantFeaturesPanel from '@/components/superadmin/tenant-features-panel';
 
 const STATUS_COLORS: Record<string,string> = {
   active:       'bg-emerald-500/15 text-emerald-400',
@@ -241,6 +242,7 @@ export default function SuperAdminTenantsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editTenant, setEditTenant] = useState<TenantInfo | null>(null);
   const [modulesTenant, setModulesTenant] = useState<TenantInfo | null>(null);
+  const [featuresTenant, setFeaturesTenant] = useState<TenantInfo | null>(null);
   const [impersonating, setImpersonating] = useState<string|null>(null);
   const [meInfo, setMeInfo]       = useState<MeInfo | null>(null);
   const [form, setForm]           = useState({name:'',plan_id:'free',status:'trialing',billing_email:'',primary_color:'#7c3aed',owner_email:'',owner_name:'',owner_password:'',trial_days:'14',billing_type:'trial'});
@@ -510,6 +512,10 @@ export default function SuperAdminTenantsPage() {
                         className="flex items-center gap-1 px-2 py-1 rounded-lg border border-violet-300/30 dark:border-violet-500/30 text-[10px] text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 transition-colors">
                         <Zap className="w-3 h-3"/>Modules
                       </button>
+                      <button onClick={()=>setFeaturesTenant(t)} title="Manage per-feature overrides"
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg border border-violet-300/30 dark:border-violet-500/30 text-[10px] text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 transition-colors">
+                        <Sliders className="w-3 h-3"/>Features
+                      </button>
                       {t.status==='trialing'&&(
                         <button onClick={()=>extendTrial(t.id)} title="Extend trial"
                           className="px-2 py-1 rounded-lg border border-amber-300/30 dark:border-amber-500/30 text-[10px] text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors">+Days</button>
@@ -541,6 +547,7 @@ export default function SuperAdminTenantsPage() {
 
       {editTenant && <EditModal tenant={editTenant} onSave={()=>{setEditTenant(null);load();}} onClose={()=>setEditTenant(null)} />}
       {modulesTenant && <ModulesModal tenant={modulesTenant} onClose={()=>setModulesTenant(null)} _onSaved={()=>{setModulesTenant(null);load();}} />}
+      {featuresTenant && <TenantFeaturesPanel tenantId={featuresTenant.id} tenantName={featuresTenant.name} plan={featuresTenant.plan_id} onClose={() => setFeaturesTenant(null)} />}
     </div>
   );
 }
