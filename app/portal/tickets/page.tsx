@@ -60,7 +60,8 @@ export default function PortalTicketsPage() {
       ) : (
         <div className="space-y-3">
           {tickets.map(ticket => (
-            <div key={ticket.id} className="bg-card border border-border rounded-xl p-4 hover:border-violet-200 dark:hover:border-violet-800 transition-all">
+            <button key={ticket.id} onClick={() => router.push(`/portal/tickets/${ticket.id}`)}
+              className="w-full text-left bg-card border border-border rounded-xl p-4 hover:border-violet-200 dark:hover:border-violet-800 transition-all">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -74,7 +75,7 @@ export default function PortalTicketsPage() {
                   <p className="text-xs text-muted-foreground mt-2">{formatDate(ticket.created_at)}</p>
                 </div>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}

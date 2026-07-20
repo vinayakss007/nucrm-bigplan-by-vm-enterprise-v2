@@ -65,7 +65,7 @@ export default function PortalQuotesPage() {
     try {
       const res = await fetch(`/api/public/quotes/${quoteId}/accept`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-portal-email': session?.email || '' },
         body: JSON.stringify({ email: session?.email }),
       });
       if (res.ok) {
@@ -86,7 +86,7 @@ export default function PortalQuotesPage() {
     try {
       const res = await fetch(`/api/public/quotes/${quoteId}/decline`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-portal-email': session?.email || '' },
         body: JSON.stringify({ email: session?.email }),
       });
       if (res.ok) {
