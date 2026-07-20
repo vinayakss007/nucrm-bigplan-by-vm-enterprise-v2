@@ -1,6 +1,6 @@
 'use client';
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { Shield, Search, User, X, ChevronDown, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Shield, Search, User, X, ChevronDown, Download, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 import { cn, formatDateTimeShort, formatRelativeTime } from '@/lib/utils';
 
 const ACTION_CFG: Record<string, { color: string; bg: string }> = {
@@ -18,6 +18,20 @@ const ACTION_CFG: Record<string, { color: string; bg: string }> = {
 const RESOURCE_TYPES = ['contact','deal','task','company','member','role','api_key','integration','workspace'];
 const PAGE_SIZE = 50;
 
+interface FieldChange {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  field_name: string;
+  field_label: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  change_type: string;
+  user_name: string | null;
+  user_email: string | null;
+  created_at: Date | null;
+}
+
 interface AuditLogEntry {
   id: string;
   action: string;
@@ -32,6 +46,7 @@ interface AuditLogEntry {
   full_name: string | null;
   email: string | null;
   user_id: string | null;
+  field_changes: FieldChange[];
 }
 
 interface AuditLogResponse {
@@ -42,9 +57,12 @@ interface AuditLogResponse {
 }
 
 function toCSV(logs: AuditLogEntry[]): string {
-  const header = 'Timestamp,User,Email,Action,Resource,Resource ID,IP Address\n';
-  const rows = logs.map(l =>
-    [
+  const header = 'Timestamp,User,Email,Action,Resource,Resource ID,IP Address,Field Changes\n';
+  const rows = logs.map(l => {
+    const fieldSummary = (l.field_changes ?? [])
+      .map(f => `${f.field_name}: ${f.old_value ?? ''} → ${f.new_value ?? ''}`)
+      .join('; ');
+    return [
       new Date(l.created_at).toISOString(),
       l.full_name ?? '',
       l.email ?? '',
@@ -52,8 +70,9 @@ function toCSV(logs: AuditLogEntry[]): string {
       l.resource_type ?? '',
       l.resource_id ?? '',
       l.ip_address ?? '',
-    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
-  ).join('\n');
+      fieldSummary,
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+  }).join('\n');
   return header + rows;
 }
 
@@ -201,7 +220,7 @@ export default function AuditLogClient() {
             {logs.map(log => {
               const word = log.action?.split('_')[0] ?? 'action';
               const cfg  = ACTION_CFG[log.action] ?? ACTION_CFG[word] ?? { color:'text-muted-foreground', bg:'bg-muted/40' };
-              const hasDetail = Boolean(log.old_data || log.new_data);
+              const hasDetail = Boolean(log.old_data || log.new_data || (log.field_changes?.length > 0));
               const isOpen = expanded === log.id;
               return (
                   <div key={log.id} className={cn('hover:bg-accent/20 transition-colors', hasDetail ? 'cursor-pointer' : undefined)}
@@ -234,17 +253,44 @@ export default function AuditLogClient() {
                     )}
                   </div>
                   {isOpen && hasDetail && (
-                    <div className="px-5 pb-3 grid grid-cols-2 gap-3">
-                      {log.old_data && (
+                    <div className="px-5 pb-3 space-y-3">
+                      {/* Field-level diffs */}
+                      {log.field_changes?.length > 0 && (
                         <div>
-                          <p className="text-[10px] font-semibold text-muted-foreground mb-1">Before</p>
-                          <pre className="text-[10px] font-mono bg-muted/40 rounded-lg p-2 overflow-x-auto text-muted-foreground">{JSON.stringify(log.old_data, null, 2)}</pre>
+                          <p className="text-[10px] font-semibold text-muted-foreground mb-2">Field Changes</p>
+                          <div className="space-y-1.5">
+                            {log.field_changes.map((fc) => (
+                              <div key={fc.id} className="flex items-center gap-2 text-xs">
+                                <span className="font-medium text-foreground min-w-[120px] shrink-0">
+                                  {fc.field_label ?? fc.field_name}
+                                </span>
+                                <span className="text-red-600 dark:text-red-400 line-through font-mono text-[10px]">
+                                  {fc.old_value ?? '—'}
+                                </span>
+                                <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
+                                <span className="text-emerald-600 dark:text-emerald-400 font-mono text-[10px]">
+                                  {fc.new_value ?? '—'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
-                      {log.new_data && (
-                        <div>
-                          <p className="text-[10px] font-semibold text-muted-foreground mb-1">After</p>
-                          <pre className="text-[10px] font-mono bg-muted/40 rounded-lg p-2 overflow-x-auto text-muted-foreground">{JSON.stringify(log.new_data, null, 2)}</pre>
+                      {/* Raw JSON diffs */}
+                      {(log.old_data || log.new_data) && (
+                        <div className="grid grid-cols-2 gap-3">
+                          {log.old_data && (
+                            <div>
+                              <p className="text-[10px] font-semibold text-muted-foreground mb-1">Before (Raw)</p>
+                              <pre className="text-[10px] font-mono bg-muted/40 rounded-lg p-2 overflow-x-auto text-muted-foreground">{JSON.stringify(log.old_data, null, 2)}</pre>
+                            </div>
+                          )}
+                          {log.new_data && (
+                            <div>
+                              <p className="text-[10px] font-semibold text-muted-foreground mb-1">After (Raw)</p>
+                              <pre className="text-[10px] font-mono bg-muted/40 rounded-lg p-2 overflow-x-auto text-muted-foreground">{JSON.stringify(log.new_data, null, 2)}</pre>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
