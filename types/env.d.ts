@@ -42,6 +42,12 @@ declare namespace NodeJS {
     AWS_S3_BUCKET?: string;
     RESEND_WEBHOOK_SECRET?: string;
     CRITICAL_ERROR_WEBHOOK_URL?: string;
+    PAGERDUTY_ROUTING_KEY?: string;
+    PAGERDUTY_ENABLED?: string;
+    SLACK_WEBHOOK_URL?: string;
+    DISCORD_WEBHOOK_URL?: string;
+    TELEGRAM_BOT_TOKEN?: string;
+    TELEGRAM_CHAT_ID?: string;
     [key: string]: string | undefined;
   }
 }

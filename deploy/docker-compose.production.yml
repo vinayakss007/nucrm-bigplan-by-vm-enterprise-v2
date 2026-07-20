@@ -57,12 +57,20 @@ services:
       resources:
         limits:
           memory: 64M
-          cpus: '0.25'
+          cpus: "0.25"
     restart: unless-stopped
     networks:
       - nucrm-net
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost/health",
+        ]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -120,6 +128,8 @@ services:
       - MODULE_AUTO_INSTALL=${MODULE_AUTO_INSTALL:-on}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - PAGERDUTY_ROUTING_KEY=${PAGERDUTY_ROUTING_KEY:-}
+      - PAGERDUTY_ENABLED=${PAGERDUTY_ENABLED:-}
       - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-20}
       - DATABASE_SSL=${DATABASE_SSL:-true}
     expose:
@@ -129,12 +139,20 @@ services:
       resources:
         limits:
           memory: ${NUCRM_WEB_MEMORY_LIMIT:-768M}
-          cpus: '${NUCRM_WEB_CPU_LIMIT:-1.5}'
+          cpus: "${NUCRM_WEB_CPU_LIMIT:-1.5}"
         reservations:
           memory: 384M
-          cpus: '0.25'
+          cpus: "0.25"
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/api/health",
+        ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -172,12 +190,14 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - PAGERDUTY_ROUTING_KEY=${PAGERDUTY_ROUTING_KEY:-}
+      - PAGERDUTY_ENABLED=${PAGERDUTY_ENABLED:-}
     deploy:
       replicas: ${NUCRM_WORKER_REPLICAS:-1}
       resources:
         limits:
           memory: ${NUCRM_WORKER_MEMORY_LIMIT:-512M}
-          cpus: '${NUCRM_WORKER_CPU_LIMIT:-0.5}'
+          cpus: "${NUCRM_WORKER_CPU_LIMIT:-0.5}"
         reservations:
           memory: 256M
     depends_on:
@@ -204,7 +224,7 @@ services:
       resources:
         limits:
           memory: 128M
-          cpus: '0.1'
+          cpus: "0.1"
     depends_on:
       app:
         condition: service_healthy
@@ -235,7 +255,7 @@ services:
       resources:
         limits:
           memory: 600M
-          cpus: '0.5'
+          cpus: "0.5"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -264,7 +284,7 @@ services:
       resources:
         limits:
           memory: ${MINIO_MEMORY_LIMIT:-512M}
-          cpus: '0.5'
+          cpus: "0.5"
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 15s
@@ -323,12 +343,16 @@ services:
       resources:
         limits:
           memory: 128M
-          cpus: '0.25'
+          cpus: "0.25"
     restart: unless-stopped
     networks:
       - nucrm-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U ${POSTGRES_USER:-nucrm}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -p 6432 -U ${POSTGRES_USER:-nucrm}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -352,16 +376,16 @@ services:
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
       - CRITICAL_ERROR_WEBHOOK_URL=${CRITICAL_ERROR_WEBHOOK_URL:-}
     command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
-      - '--web.listen-address=:9093'
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+      - "--web.listen-address=:9093"
     ports:
       - "127.0.0.1:9093:9093"
     deploy:
       resources:
         limits:
           memory: 64M
-          cpus: '0.1'
+          cpus: "0.1"
     restart: unless-stopped
     networks:
       - nucrm-net
@@ -377,18 +401,18 @@ services:
       - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheusdata:/prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=30d'
-      - '--storage.tsdb.retention.size=2GB'
-      - '--web.enable-lifecycle'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--storage.tsdb.retention.size=2GB"
+      - "--web.enable-lifecycle"
     ports:
       - "127.0.0.1:9090:9090"
     deploy:
       resources:
         limits:
           memory: 256M
-          cpus: '0.25'
+          cpus: "0.25"
     restart: unless-stopped
     networks:
       - nucrm-net
@@ -411,7 +435,7 @@ services:
       resources:
         limits:
           memory: 256M
-          cpus: '0.25'
+          cpus: "0.25"
     depends_on:
       - prometheus
     restart: unless-stopped
@@ -428,14 +452,14 @@ services:
       - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
       - lokidata:/loki
     command:
-      - '--config.file=/etc/loki/loki-config.yml'
+      - "--config.file=/etc/loki/loki-config.yml"
     ports:
       - "127.0.0.1:3100:3100"
     deploy:
       resources:
         limits:
           memory: 256M
-          cpus: '0.25'
+          cpus: "0.25"
     restart: unless-stopped
     networks:
       - nucrm-net
@@ -448,12 +472,12 @@ services:
       - /var/log:/var/log:ro
       - nginx-logs:/var/log/nginx:ro
     command:
-      - '--config.file=/etc/promtail/promtail-config.yml'
+      - "--config.file=/etc/promtail/promtail-config.yml"
     deploy:
       resources:
         limits:
           memory: 64M
-          cpus: '0.1'
+          cpus: "0.1"
     depends_on:
       - loki
     restart: unless-stopped
@@ -467,15 +491,15 @@ services:
     image: prom/node-exporter:v1.8.1
     container_name: nucrm-node-exporter
     command:
-      - '--path.rootfs=/host'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - "--path.rootfs=/host"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
     volumes:
       - /:/host:ro,rslave
     deploy:
       resources:
         limits:
           memory: 48M
-          cpus: '0.1'
+          cpus: "0.1"
     restart: unless-stopped
     networks:
       - nucrm-net
@@ -489,7 +513,7 @@ services:
       resources:
         limits:
           memory: 32M
-          cpus: '0.1'
+          cpus: "0.1"
     depends_on:
       redis:
         condition: service_healthy
