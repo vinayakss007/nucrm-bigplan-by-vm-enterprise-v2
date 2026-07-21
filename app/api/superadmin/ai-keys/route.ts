@@ -94,8 +94,8 @@ export async function POST(req: NextRequest) {
     let result;
     try {
       result = await setSystemKey(tenantId, provider, api_key, {
-        baseUrl: base_url,
-        modelOverride: model,
+        baseUrl: base_url ?? undefined,
+        modelOverride: model ?? undefined,
       });
     } catch (err) {
       if (err instanceof SecretsVaultError && err.code === 'encryption_key_missing') {

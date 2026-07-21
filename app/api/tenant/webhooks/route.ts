@@ -76,12 +76,12 @@ export async function POST(req: NextRequest) {
     
     const signingSecret = randomBytes(24).toString('hex');
     const [row] = await db.insert(integrations).values({
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
+      tenantId: ctx.tenantId!,
+      userId: ctx.userId!,
       type: 'webhook',
-      name: v.name,
+      name: v.name ?? 'Webhook',
       config: { url: v.url, events: v.events, secret: signingSecret },
-      isActive: true,
+      isActive: v.is_active ?? true,
     }).returning({
       id: integrations.id,
       name: integrations.name,
