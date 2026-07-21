@@ -334,7 +334,7 @@ async function handleSearch(searchParams: URLSearchParams) {
 
       const dataRes = await db.execute(sql`
         SELECT u.id, u.email, u.full_name, u.is_super_admin,
-               u.created_at, u.last_login_at,
+               u.created_at,
                tm.tenant_id, t.name as tenant_name,
                tm.role_slug as tenant_role
         FROM users u
