@@ -4,12 +4,12 @@ import { logger } from '@/lib/logger';
 import { eq, desc } from 'drizzle-orm';
 import { createHash } from 'crypto';
 
-function computeHash(payload: Record<string, unknown>): string {
+export function computeHash(payload: Record<string, unknown>): string {
   const canonical = JSON.stringify(payload, Object.keys(payload).sort());
   return createHash('sha256').update(canonical).digest('hex');
 }
 
-function computeEntryHash(entry: {
+export function computeEntryHash(entry: {
   tenantId: string;
   userId: string | null;
   action: string;
