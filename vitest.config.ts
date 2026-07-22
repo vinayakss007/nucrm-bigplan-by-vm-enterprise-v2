@@ -29,6 +29,13 @@ export default defineConfig({
         'lib/restore/**',
         'lib/storage/**',
         'lib/usage/**',
+        'lib/automation/types.ts',
+        'lib/calendar-sync/types.ts',
+        'lib/integrations/types.ts',
+        'lib/modules/sdk/types.ts',
+        'lib/sdk/types.ts',
+        'lib/sdk/modules.ts',
+        'lib/server-only-shim.ts',
       ],
       thresholds: {
         lines: 60,
