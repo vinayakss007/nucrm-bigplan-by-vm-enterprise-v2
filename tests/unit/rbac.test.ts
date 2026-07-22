@@ -205,6 +205,195 @@ describe('RBAC - Record Permissions', () => {
   });
 });
 
+describe('RBAC - Field Permissions Additional', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.restoreAllMocks();
+  });
+
+  describe('getFieldPermissions', () => {
+    it('returns permissions for a role on entity type', async () => {
+      const { db } = await import('@/drizzle/db');
+      (db.select as ReturnType<typeof vi.fn>).mockReturnValue({
+        from: vi.fn(() => ({
+          where: vi.fn(() => [
+            { fieldName: 'salary', accessLevel: 'none' },
+          ]),
+        })),
+      });
+
+      const { getFieldPermissions } = await import('@/lib/rbac/field-permissions');
+      const result = await getFieldPermissions('tenant-1', 'role-1', 'contact');
+      expect(result).toHaveLength(1);
+      expect(result[0].fieldName).toBe('salary');
+    });
+  });
+
+  describe('checkFieldAccess', () => {
+    it('returns write as default when no permission defined', async () => {
+      const { checkFieldAccess } = await import('@/lib/rbac/field-permissions');
+      const result = await checkFieldAccess('tenant-1', 'role-1', 'contact', 'name');
+      expect(result).toBe('write');
+    });
+
+    it('returns the explicit access level when defined', async () => {
+      const { db } = await import('@/drizzle/db');
+      (db.select as ReturnType<typeof vi.fn>).mockReturnValue({
+        from: vi.fn(() => ({
+          where: vi.fn(() => [
+            { accessLevel: 'read' },
+          ]),
+        })),
+      });
+
+      const { checkFieldAccess } = await import('@/lib/rbac/field-permissions');
+      const result = await checkFieldAccess('tenant-1', 'role-1', 'contact', 'name');
+      expect(result).toBe('read');
+    });
+  });
+
+  describe('setFieldPermission', () => {
+    it('inserts new permission when none exists', async () => {
+      const { db } = await import('@/drizzle/db');
+      (db.insert as ReturnType<typeof vi.fn>).mockReturnValue({
+        values: vi.fn(() => ({
+          returning: vi.fn(() => [{
+            id: 'fp-new', fieldName: 'salary', accessLevel: 'none',
+          }]),
+        })),
+      });
+
+      const { setFieldPermission } = await import('@/lib/rbac/field-permissions');
+      const result = await setFieldPermission('tenant-1', 'role-1', 'contact', 'salary', 'none');
+      expect(result.accessLevel).toBe('none');
+    });
+
+    it('updates existing permission when one exists', async () => {
+      const { db } = await import('@/drizzle/db');
+      (db.select as ReturnType<typeof vi.fn>).mockReturnValue({
+        from: vi.fn(() => ({
+          where: vi.fn(() => [
+            { id: 'fp-1', fieldName: 'salary', accessLevel: 'none', tenantId: 'tenant-1', roleId: 'role-1', entityType: 'contact' },
+          ]),
+        })),
+      });
+      (db.update as ReturnType<typeof vi.fn>).mockReturnValue({
+        set: vi.fn(() => ({
+          where: vi.fn(() => ({})),
+        })),
+      });
+
+      const { setFieldPermission } = await import('@/lib/rbac/field-permissions');
+      const result = await setFieldPermission('tenant-1', 'role-1', 'contact', 'salary', 'read');
+      expect(result.accessLevel).toBe('read');
+    });
+  });
+});
+
+describe('RBAC - Record Permissions Additional', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.restoreAllMocks();
+  });
+
+  describe('grantRecordAccess', () => {
+    it('inserts new record permission when none exists', async () => {
+      const { db } = await import('@/drizzle/db');
+      (db.insert as ReturnType<typeof vi.fn>).mockReturnValue({
+        values: vi.fn(() => ({
+          returning: vi.fn(() => [{
+            id: 'rp-new', tenantId: 'tenant-1', roleId: 'role-1',
+            entityType: 'deal', entityId: 'deal-1', accessLevel: 'write', grantedBy: 'user-1',
+          }]),
+        })),
+      });
+
+      const { grantRecordAccess } = await import('@/lib/rbac/record-permissions');
+      const result = await grantRecordAccess('tenant-1', 'role-1', 'deal', 'deal-1', 'write', 'user-1');
+      expect(result.accessLevel).toBe('write');
+    });
+
+    it('updates existing record permission when one exists', async () => {
+      const { db } = await import('@/drizzle/db');
+      (db.select as ReturnType<typeof vi.fn>).mockReturnValue({
+        from: vi.fn(() => ({
+          where: vi.fn(() => [
+            { id: 'rp-1', tenantId: 'tenant-1', roleId: 'role-1', entityType: 'deal', entityId: 'deal-1', accessLevel: 'read', grantedBy: 'user-1' },
+          ]),
+        })),
+      });
+      (db.update as ReturnType<typeof vi.fn>).mockReturnValue({
+        set: vi.fn(() => ({
+          where: vi.fn(() => ({})),
+        })),
+      });
+
+      const { grantRecordAccess } = await import('@/lib/rbac/record-permissions');
+      const result = await grantRecordAccess('tenant-1', 'role-1', 'deal', 'deal-1', 'admin', 'user-2');
+      expect(result.accessLevel).toBe('admin');
+    });
+  });
+
+  describe('revokeRecordAccess', () => {
+    it('soft-deletes record permission', async () => {
+      const { db } = await import('@/drizzle/db');
+      (db.update as ReturnType<typeof vi.fn>).mockReturnValue({
+        set: vi.fn(() => ({
+          where: vi.fn(() => ({})),
+        })),
+      });
+
+      const { revokeRecordAccess } = await import('@/lib/rbac/record-permissions');
+      await expect(revokeRecordAccess('tenant-1', 'role-1', 'deal', 'deal-1')).resolves.not.toThrow();
+    });
+  });
+
+  describe('getColumnMapping', () => {
+    it('returns default mapping for unknown entity types', async () => {
+      const { getColumnMapping } = await import('@/lib/rbac/record-permissions');
+      const mapping = getColumnMapping('unknown');
+      expect(mapping.idColumn).toBe('id');
+      expect(mapping.assignedToColumn).toBe('assigned_to');
+      expect(mapping.createdByColumn).toBe('created_by');
+    });
+
+    it('returns overridden mapping for tickets', async () => {
+      const { getColumnMapping } = await import('@/lib/rbac/record-permissions');
+      const mapping = getColumnMapping('tickets');
+      expect(mapping.assignedToColumn).toBe('assignee_id');
+      expect(mapping.createdByColumn).toBe('reporter_id');
+    });
+
+    it('returns overridden mapping for documents', async () => {
+      const { getColumnMapping } = await import('@/lib/rbac/record-permissions');
+      const mapping = getColumnMapping('documents');
+      expect(mapping.assignedToColumn).toBe('owner_id');
+      expect(mapping.createdByColumn).toBe('uploaded_by');
+    });
+
+    it('returns overridden mapping for companies (owner_id)', async () => {
+      const { getColumnMapping } = await import('@/lib/rbac/record-permissions');
+      const mapping = getColumnMapping('companies');
+      expect(mapping.assignedToColumn).toBe('owner_id');
+      expect(mapping.createdByColumn).toBe('created_by');
+    });
+  });
+
+  describe('getRecordAccessFilter', () => {
+    it('returns a SQL expression for entity access filtering', async () => {
+      const { getRecordAccessFilter } = await import('@/lib/rbac/record-permissions');
+      const filter = getRecordAccessFilter('tenant-1', 'user-1', 'role-1', 'contact');
+      expect(filter).toBeDefined();
+    });
+
+    it('accepts custom column mapping overrides', async () => {
+      const { getRecordAccessFilter } = await import('@/lib/rbac/record-permissions');
+      const filter = getRecordAccessFilter('tenant-1', 'user-1', 'role-1', 'contact', { assignedToColumn: 'owner_id' });
+      expect(filter).toBeDefined();
+    });
+  });
+});
+
 describe('RBAC - Approval Workflows', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -354,6 +543,33 @@ describe('RBAC - Approval Workflows', () => {
       expect(result.requestedBy).toBe('user-1');
     });
 
+    it('checkNeedsApproval handles != operator with strings', async () => {
+      const { checkNeedsApproval } = await import('@/lib/rbac/approval-workflows');
+      const rules = [
+        { id: 'r1', tenantId: 't1', entityType: 'deal', conditionField: 'status', conditionOperator: '!=' as const, conditionValue: 'draft', approverRoleSlug: 'manager', autoApproveRoles: [] },
+      ];
+      expect(checkNeedsApproval(rules, 'deal', { status: 'published' })).not.toBeNull();
+      expect(checkNeedsApproval(rules, 'deal', { status: 'draft' })).toBeNull();
+    });
+
+    it('checkNeedsApproval handles null/undefined field values', async () => {
+      const { checkNeedsApproval } = await import('@/lib/rbac/approval-workflows');
+      const rules = [
+        { id: 'r1', tenantId: 't1', entityType: 'deal', conditionField: 'amount', conditionOperator: '>' as const, conditionValue: 100, approverRoleSlug: 'manager', autoApproveRoles: [] },
+      ];
+      expect(checkNeedsApproval(rules, 'deal', { amount: undefined })).toBeNull();
+      expect(checkNeedsApproval(rules, 'deal', {})).toBeNull();
+    });
+
+    it('checkNeedsApproval handles <= operator with exact match', async () => {
+      const { checkNeedsApproval } = await import('@/lib/rbac/approval-workflows');
+      const rules = [
+        { id: 'r1', tenantId: 't1', entityType: 'deal', conditionField: 'amount', conditionOperator: '<=' as const, conditionValue: 1000, approverRoleSlug: 'manager', autoApproveRoles: [] },
+      ];
+      expect(checkNeedsApproval(rules, 'deal', { amount: 1000 })).not.toBeNull();
+      expect(checkNeedsApproval(rules, 'deal', { amount: 1001 })).toBeNull();
+    });
+
     it('approveRequest transitions to approved', async () => {
       const { db } = await import('@/drizzle/db');
       (db.update as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -381,6 +597,39 @@ describe('RBAC - Approval Workflows', () => {
       const result = await approveRequest('req-1', 'user-2');
       expect(result).toBeDefined();
       expect(result!.status).toBe('approved');
+    });
+
+    describe('rejectRequest', () => {
+      it('rejects a pending request', async () => {
+        const { db } = await import('@/drizzle/db');
+        (db.update as ReturnType<typeof vi.fn>).mockReturnValue({
+          set: vi.fn(() => ({
+            where: vi.fn(() => ({
+              returning: vi.fn(() => [{
+                id: 'req-1',
+                tenantId: 'tenant-1',
+                entityType: 'deal',
+                entityId: 'deal-1',
+                status: 'rejected',
+                rejectedBy: 'user-2',
+                reason: 'Not appropriate',
+              }]),
+            })),
+          })),
+        });
+        (db.insert as ReturnType<typeof vi.fn>).mockReturnValue({
+          values: vi.fn(() => ({
+            returning: vi.fn(() => []),
+            catch: vi.fn(),
+          })),
+        });
+
+        const { rejectRequest } = await import('@/lib/rbac/approval-workflows');
+        const result = await rejectRequest('req-1', 'user-2', 'Not appropriate');
+        expect(result).toBeDefined();
+        expect(result!.status).toBe('rejected');
+        expect(result!.reason).toBe('Not appropriate');
+      });
     });
   });
 });
