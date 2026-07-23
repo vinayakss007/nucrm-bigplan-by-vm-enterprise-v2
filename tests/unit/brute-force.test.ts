@@ -1,85 +1,162 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const mockDbExecute = vi.fn();
+const mockExecute = vi.fn();
 vi.mock('@/drizzle/db', () => ({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: { execute: (...args: any[]) => mockDbExecute(...args) },
+  db: { execute: (...args: any[]) => mockExecute(...args) },
 }));
-
-vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/dev-logger', () => ({ devLogger: { error: vi.fn() } }));
 
-const _DEFAULT_CONFIG = { maxAttempts: 5, windowMinutes: 15, blockMinutes: 30 };
+import {
+  isBlocked,
+  recordFailedAttempt,
+  recordSuccessfulLogin,
+  getBruteForceStatus,
+  cleanupOldRecords,
+} from '@/lib/security/brute-force';
 
-describe('isBlocked', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+describe('brute-force', () => {
+  beforeEach(() => vi.clearAllMocks());
 
-  it('returns blocked=true when a valid block exists', async () => {
-    const future = new Date(Date.now() + 3600000);
-    mockDbExecute.mockResolvedValue({
-      rows: [{ blocked_until: future.toISOString(), block_reason: 'Too many attempts' }],
+  describe('isBlocked', () => {
+    it('returns blocked=true when block record found', async () => {
+      const future = new Date(Date.now() + 60000).toISOString();
+      mockExecute.mockResolvedValue({
+        rows: [{ blocked_until: future, block_reason: 'Too many attempts' }],
+      });
+      const r = await isBlocked('1.2.3.4', 'ip');
+      expect(r.blocked).toBe(true);
+      expect(r.blockedUntil).toBeInstanceOf(Date);
+      expect(r.reason).toBe('Too many attempts');
     });
-    const { isBlocked } = await import('@/lib/security/brute-force');
-    const result = await isBlocked('test@test.com', 'email');
-    expect(result.blocked).toBe(true);
-    expect(result.blockedUntil).toBeInstanceOf(Date);
-    expect(result.reason).toBe('Too many attempts');
-  });
 
-  it('returns blocked=false when no block exists', async () => {
-    mockDbExecute.mockResolvedValue({ rows: [] });
-    const { isBlocked } = await import('@/lib/security/brute-force');
-    const result = await isBlocked('test@test.com', 'email');
-    expect(result.blocked).toBe(false);
-  });
-
-  it('returns blocked=false on db error (fail open)', async () => {
-    mockDbExecute.mockRejectedValue(new Error('DB error'));
-    const { isBlocked } = await import('@/lib/security/brute-force');
-    const result = await isBlocked('test@test.com', 'email');
-    expect(result.blocked).toBe(false);
-  });
-});
-
-describe('recordFailedAttempt', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
-
-  it('records failed attempt and does not block below threshold', async () => {
-    mockDbExecute.mockResolvedValue({ rows: [] });
-    const { recordFailedAttempt } = await import('@/lib/security/brute-force');
-    await expect(recordFailedAttempt('test@test.com', '1.2.3.4')).resolves.toBeUndefined();
-    expect(mockDbExecute).toHaveBeenCalledTimes(3);
-  });
-
-  it('blocks IP after exceeding maxAttempts', async () => {
-    const callCount = { current: 0 };
-    mockDbExecute.mockImplementation(() => {
-      callCount.current++;
-      if (callCount.current === 2) return Promise.resolve({ rows: [{ count: 5 }] });
-      if (callCount.current === 3) return Promise.resolve({ rows: [{ count: 0 }] });
-      return Promise.resolve({ rows: [] });
+    it('returns blocked=false when no rows', async () => {
+      mockExecute.mockResolvedValue({ rows: [] });
+      const r = await isBlocked('1.2.3.4', 'ip');
+      expect(r.blocked).toBe(false);
     });
-    const { recordFailedAttempt } = await import('@/lib/security/brute-force');
-    await recordFailedAttempt('test@test.com', '1.2.3.4');
-    expect(mockDbExecute).toHaveBeenCalledTimes(4);
+
+    it('returns blocked=false on DB error (fail open)', async () => {
+      mockExecute.mockRejectedValue(new Error('DB down'));
+      const r = await isBlocked('1.2.3.4', 'ip');
+      expect(r.blocked).toBe(false);
+    });
+
+    it('uses default reason when block_reason is null', async () => {
+      const future = new Date(Date.now() + 60000).toISOString();
+      mockExecute.mockResolvedValue({
+        rows: [{ blocked_until: future, block_reason: null }],
+      });
+      const r = await isBlocked('x@x.com', 'email');
+      expect(r.blocked).toBe(true);
+      expect(r.reason).toBe('Too many failed attempts');
+    });
   });
 
-  it('handles errors gracefully', async () => {
-    mockDbExecute.mockRejectedValue(new Error('DB error'));
-    const { recordFailedAttempt } = await import('@/lib/security/brute-force');
-    await expect(recordFailedAttempt('test@test.com', '1.2.3.4')).resolves.toBeUndefined();
+  describe('recordFailedAttempt', () => {
+    it('inserts attempt and checks counts', async () => {
+      // First call: INSERT attempt
+      // Second call: count by IP
+      // Third call: count by email
+      mockExecute
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ count: 2 }] })
+        .mockResolvedValueOnce({ rows: [{ count: 1 }] });
+      await recordFailedAttempt('a@b.com', '10.0.0.1', 'Mozilla', 'wrong password');
+      expect(mockExecute).toHaveBeenCalledTimes(3);
+    });
+
+    it('blocks IP when threshold exceeded', async () => {
+      mockExecute
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ count: 5 }] })
+        .mockResolvedValueOnce({ rows: [{ count: 1 }] })
+        .mockResolvedValueOnce({ rows: [] }); // blockIdentifier INSERT
+      await recordFailedAttempt('a@b.com', '10.0.0.1');
+      expect(mockExecute).toHaveBeenCalledTimes(4);
+    });
+
+    it('blocks email when threshold exceeded', async () => {
+      mockExecute
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ count: 2 }] })
+        .mockResolvedValueOnce({ rows: [{ count: 5 }] })
+        .mockResolvedValueOnce({ rows: [] }); // blockIdentifier INSERT
+      await recordFailedAttempt('a@b.com', '10.0.0.1');
+      expect(mockExecute).toHaveBeenCalledTimes(4);
+    });
+
+    it('does not throw on DB error', async () => {
+      mockExecute.mockRejectedValue(new Error('fail'));
+      await expect(recordFailedAttempt('a@b.com', '10.0.0.1')).resolves.toBeUndefined();
+    });
   });
-});
 
-describe('getBruteForceStatus', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  describe('recordSuccessfulLogin', () => {
+    it('inserts successful attempt', async () => {
+      mockExecute.mockResolvedValue({ rows: [] });
+      await recordSuccessfulLogin('a@b.com', '10.0.0.1', 'Mozilla');
+      expect(mockExecute).toHaveBeenCalledTimes(1);
+    });
 
-  it('returns status with attempts and remaining', async () => {
-    mockDbExecute.mockResolvedValue({ rows: [{ count: 3 }] });
-    const { getBruteForceStatus } = await import('@/lib/security/brute-force');
-    const result = await getBruteForceStatus('test@test.com', 'email');
-    expect(result.attempts).toBe(3);
-    expect(result.remainingAttempts).toBe(2);
-    expect(result.blocked).toBe(false);
+    it('does not throw on DB error', async () => {
+      mockExecute.mockRejectedValue(new Error('fail'));
+      await expect(recordSuccessfulLogin('a@b.com', '10.0.0.1')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('getBruteForceStatus', () => {
+    it('returns attempt count and remaining', async () => {
+      const future = new Date(Date.now() + 60000).toISOString();
+      mockExecute
+        .mockResolvedValueOnce({ rows: [{ count: 3 }] })
+        .mockResolvedValueOnce({ rows: [{ blocked_until: future, block_reason: 'x' }] });
+      const r = await getBruteForceStatus('10.0.0.1', 'ip');
+      expect(r.attempts).toBe(3);
+      expect(r.remainingAttempts).toBe(2);
+      expect(r.blocked).toBe(true);
+    });
+
+    it('returns defaults on DB error', async () => {
+      mockExecute.mockRejectedValue(new Error('fail'));
+      const r = await getBruteForceStatus('10.0.0.1', 'ip');
+      expect(r.attempts).toBe(0);
+      expect(r.blocked).toBe(false);
+      expect(r.remainingAttempts).toBe(5);
+    });
+
+    it('returns zero remaining when at max', async () => {
+      mockExecute
+        .mockResolvedValueOnce({ rows: [{ count: 7 }] })
+        .mockResolvedValueOnce({ rows: [] });
+      const r = await getBruteForceStatus('a@b.com', 'email');
+      expect(r.remainingAttempts).toBe(0);
+    });
+  });
+
+  describe('cleanupOldRecords', () => {
+    it('returns cleaned counts', async () => {
+      mockExecute
+        .mockResolvedValueOnce({ rowCount: 3 })
+        .mockResolvedValueOnce({ rowCount: 10 });
+      const r = await cleanupOldRecords();
+      expect(r.blocksCleaned).toBe(3);
+      expect(r.attemptsCleaned).toBe(10);
+    });
+
+    it('returns zeros on DB error', async () => {
+      mockExecute.mockRejectedValue(new Error('fail'));
+      const r = await cleanupOldRecords();
+      expect(r.blocksCleaned).toBe(0);
+      expect(r.attemptsCleaned).toBe(0);
+    });
+
+    it('handles undefined rowCount', async () => {
+      mockExecute.mockResolvedValue({});
+      const r = await cleanupOldRecords();
+      expect(r.blocksCleaned).toBe(0);
+      expect(r.attemptsCleaned).toBe(0);
+    });
   });
 });
