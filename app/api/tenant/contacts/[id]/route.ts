@@ -5,7 +5,7 @@ import { updateContactSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, users, activities, tenants } from '@/drizzle/schema';
-import { eq, and, sql, ne, SQL } from 'drizzle-orm';
+import { eq, and, sql, ne } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { trackFieldChange } from '@/lib/history';
 import { fireWebhooks } from '@/lib/webhooks';

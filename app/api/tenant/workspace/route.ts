@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     const slug = name.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'') + '-' + Date.now().toString(36);
     
-    const [tenant] = await db.transaction(async (tx) => {
+    const tenant = await db.transaction(async (tx) => {
       const [t] = await tx.insert(tenants).values({
         name: name.trim(),
         slug,

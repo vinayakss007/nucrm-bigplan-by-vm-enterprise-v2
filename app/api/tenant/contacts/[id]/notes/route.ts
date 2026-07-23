@@ -71,7 +71,7 @@ export async function POST(
       return NextResponse.json({ error: `type must be one of: ${VALID.join(', ')}` }, { status: 400 });
     }
 
-    const [row] = await db.transaction(async (tx) => {
+    const row = await db.transaction(async (tx) => {
       const [r] = await tx.insert(activities)
         .values({
           tenantId: ctx.tenantId,

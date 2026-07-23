@@ -43,7 +43,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const [contact] = await db.transaction(async (tx) => {
+    const contact = await db.transaction(async (tx) => {
       const [c] = await tx.update(contacts)
         .set({ 
           leadStatus: lead_status, 

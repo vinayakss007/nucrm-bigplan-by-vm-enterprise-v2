@@ -92,12 +92,7 @@ export async function POST(request: NextRequest) {
         })
         .returning();
 
-      // Add participants to pool
       if (Array.isArray(participants) && participants.length > 0 && c) {
-  
-  
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         const poolValues = participants.map((p: any) => ({
           configId: c.id,
           participantEmail: p.email,
@@ -114,29 +109,6 @@ export async function POST(request: NextRequest) {
 
       return c;
     });
-      })
-      .returning();
-
-    const configId = config?.id;
-
-    // Add participants to pool
-    if (Array.isArray(participants) && participants.length > 0) {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const poolValues = participants.map((p: any) => ({
-        configId: configId!,
-        participantEmail: p.email,
-        participantName: p.name || '',
-        status: 'active',
-      } as typeof emailWarmupPool.$inferInsert));
-
-      await db.insert(emailWarmupPool)
-        .values(poolValues)
-        .onConflictDoNothing({
-          target: [emailWarmupPool.configId, emailWarmupPool.participantEmail]
-        });
-    }
 
     return NextResponse.json({ ok: true, message: 'Warm-up configured' }, { status: 201 });
  

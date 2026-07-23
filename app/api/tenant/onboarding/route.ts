@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       'Lead', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost',
     ];
 
-    const [newPipeline] = await db.transaction(async (tx) => {
+    const newPipeline = await db.transaction(async (tx) => {
       const [p] = await tx.insert(pipelines).values({
         tenantId: ctx.tenantId,
         name: v.pipelineName.trim(),

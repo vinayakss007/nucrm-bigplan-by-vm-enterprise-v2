@@ -169,7 +169,7 @@ export async function PATCH(
     if (v.custom_fields !== undefined) updateData.customFields = v.custom_fields;
     if (v.score !== undefined) updateData.score = v.score;
 
-    const [updatedLead] = await db.transaction(async (tx) => {
+    const updatedLead = await db.transaction(async (tx) => {
       const [ul] = await tx.update(leads)
         .set(updateData)
         .where(and(

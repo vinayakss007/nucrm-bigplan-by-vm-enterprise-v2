@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create sequence with steps in transaction
-    const [newSequence] = await db.transaction(async (tx) => {
+    const newSequence = await db.transaction(async (tx) => {
       const [seq] = await tx.insert(sequences)
         .values({
           tenantId: ctx.tenantId,
@@ -83,13 +83,7 @@ export async function POST(request: NextRequest) {
         })
         .returning();
 
-      if (!seq) throw new Error('Failed to create sequence');
-
-      // Create steps in sequence_steps table
       if (steps.length > 0) {
-  
-  
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const stepValues = steps.map((step: any, index: number) => ({
           sequenceId: seq.id,

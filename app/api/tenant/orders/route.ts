@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     }
     const totalAmount = subtotal;
 
-    const [order] = await db.transaction(async (tx) => {
+    const order = await db.transaction(async (tx) => {
       const [o] = await tx.insert(orders).values({
         tenantId,
         contactId: contactId ?? null,

@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     const taxAmount = taxRate / 100 * taxableAmount;
     const totalAmount = taxableAmount + taxAmount;
 
-    const [invoice] = await db.transaction(async (tx) => {
+    const invoice = await db.transaction(async (tx) => {
       const [inv] = await tx.insert(invoices).values({
         tenantId,
         contactId: contactId ?? null,
