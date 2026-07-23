@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
       columns: { id: true, tags: true, leadStatus: true, formSubmissionsCount: true }
     });
 
-    let contactId: string;
+    let contactId!: string;
 
     if (existingLead) {
       // Re-activate and update existing lead
