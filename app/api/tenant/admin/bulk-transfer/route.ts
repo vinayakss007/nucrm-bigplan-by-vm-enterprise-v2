@@ -135,53 +135,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'to_user is not a member of this workspace' }, { status: 404 });
 
     const now = new Date();
+    const transferred: Record<Resource, number> = { leads: 0, contacts: 0, deals: 0, tasks: 0, tickets: 0 };
 
-    const transferred = await db.transaction(async (tx) => {
-      const result: Record<Resource, number> = { leads: 0, contacts: 0, deals: 0, tasks: 0, tickets: 0 };
+    if (resources.includes('leads')) {
+      const r = await db.update(leads)
+        .set({ assignedTo: toUserId, updatedAt: now })
+        .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.assignedTo, fromUserId), sql`${leads.deletedAt} IS NULL`));
+      transferred.leads = r.rowCount ?? 0;
+    }
 
-      if (resources.includes('leads')) {
-        const r = await tx.update(leads)
-          .set({ assignedTo: toUserId, updatedAt: now })
-          .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.assignedTo, fromUserId), sql`${leads.deletedAt} IS NULL`));
-        result.leads = r.rowCount ?? 0;
-      }
+    if (resources.includes('contacts')) {
+      const r = await db.update(contacts)
+        .set({ assignedTo: toUserId, updatedAt: now })
+        .where(and(eq(contacts.tenantId, ctx.tenantId), eq(contacts.assignedTo, fromUserId), sql`${contacts.deletedAt} IS NULL`));
+      transferred.contacts = r.rowCount ?? 0;
+    }
 
-      if (resources.includes('contacts')) {
-        const r = await tx.update(contacts)
-          .set({ assignedTo: toUserId, updatedAt: now })
-          .where(and(eq(contacts.tenantId, ctx.tenantId), eq(contacts.assignedTo, fromUserId), sql`${contacts.deletedAt} IS NULL`));
-        result.contacts = r.rowCount ?? 0;
-      }
+    if (resources.includes('deals')) {
+      const conds = [eq(deals.tenantId, ctx.tenantId), eq(deals.assignedTo, fromUserId), sql`${deals.deletedAt} IS NULL`];
+      if (onlyOpen) conds.push(sql`COALESCE(${deals.metadata}->>'outcome', '') NOT IN ('won','lost')`);
+      const r = await db.update(deals)
+        .set({ assignedTo: toUserId, updatedAt: now, updatedBy: ctx.userId })
+        .where(and(...conds));
+      transferred.deals = r.rowCount ?? 0;
+    }
 
-      if (resources.includes('deals')) {
-        const conds = [eq(deals.tenantId, ctx.tenantId), eq(deals.assignedTo, fromUserId), sql`${deals.deletedAt} IS NULL`];
-        if (onlyOpen) conds.push(sql`COALESCE(${deals.metadata}->>'outcome', '') NOT IN ('won','lost')`);
-        const r = await tx.update(deals)
-          .set({ assignedTo: toUserId, updatedAt: now, updatedBy: ctx.userId })
-          .where(and(...conds));
-        result.deals = r.rowCount ?? 0;
-      }
+    if (resources.includes('tasks')) {
+      const conds = [eq(tasks.tenantId, ctx.tenantId), eq(tasks.assignedTo, fromUserId), sql`${tasks.deletedAt} IS NULL`];
+      if (onlyOpen) conds.push(sql`${tasks.completed} = false`);
+      const r = await db.update(tasks)
+        .set({ assignedTo: toUserId, updatedAt: now, updatedBy: ctx.userId })
+        .where(and(...conds));
+      transferred.tasks = r.rowCount ?? 0;
+    }
 
-      if (resources.includes('tasks')) {
-        const conds = [eq(tasks.tenantId, ctx.tenantId), eq(tasks.assignedTo, fromUserId), sql`${tasks.deletedAt} IS NULL`];
-        if (onlyOpen) conds.push(sql`${tasks.completed} = false`);
-        const r = await tx.update(tasks)
-          .set({ assignedTo: toUserId, updatedAt: now, updatedBy: ctx.userId })
-          .where(and(...conds));
-        result.tasks = r.rowCount ?? 0;
-      }
-
-      if (resources.includes('tickets')) {
-        const conds = [eq(tickets.tenantId, ctx.tenantId), eq(tickets.assignedTo, fromUserId), sql`${tickets.deletedAt} IS NULL`];
-        if (onlyOpen) conds.push(sql`COALESCE(${tickets.status}, 'open') NOT IN ('closed','resolved')`);
-        const r = await tx.update(tickets)
-          .set({ assignedTo: toUserId, updatedAt: now })
-          .where(and(...conds));
-        result.tickets = r.rowCount ?? 0;
-      }
-
-      return result;
-    });
+    if (resources.includes('tickets')) {
+      const conds = [eq(tickets.tenantId, ctx.tenantId), eq(tickets.assignedTo, fromUserId), sql`${tickets.deletedAt} IS NULL`];
+      if (onlyOpen) conds.push(sql`COALESCE(${tickets.status}, 'open') NOT IN ('closed','resolved')`);
+      const r = await db.update(tickets)
+        .set({ assignedTo: toUserId, updatedAt: now })
+        .where(and(...conds));
+      transferred.tickets = r.rowCount ?? 0;
+    }
 
     const total = Object.values(transferred).reduce((a, b) => a + b, 0);
 

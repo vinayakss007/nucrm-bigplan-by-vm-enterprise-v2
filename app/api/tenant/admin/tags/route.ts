@@ -77,47 +77,44 @@ export async function GET(req: NextRequest) {
 }
 
 async function renameAcrossTables(tenantId: string, fromTag: string, toTag: string) {
-  return db.transaction(async (tx) => {
-    const c1 = await tx.execute<{ updated: number }>(sql`
-      UPDATE leads SET tags = ARRAY(SELECT DISTINCT unnest(array_replace(tags, ${fromTag}, ${toTag}))), updated_at = now()
-        WHERE tenant_id = ${tenantId} AND ${fromTag} = ANY(tags) AND deleted_at IS NULL
-    `);
-    const c2 = await tx.execute<{ updated: number }>(sql`
-      UPDATE contacts SET tags = ARRAY(SELECT DISTINCT unnest(array_replace(tags, ${fromTag}, ${toTag}))), updated_at = now()
-        WHERE tenant_id = ${tenantId} AND ${fromTag} = ANY(tags) AND deleted_at IS NULL
-    `);
-    const c3 = await tx.execute<{ updated: number }>(sql`
-      UPDATE companies SET tags = ARRAY(SELECT DISTINCT unnest(array_replace(tags, ${fromTag}, ${toTag}))), updated_at = now()
-        WHERE tenant_id = ${tenantId} AND ${fromTag} = ANY(tags) AND deleted_at IS NULL
-    `);
-    return {
-      leads:     c1.rowCount ?? 0,
-      contacts:  c2.rowCount ?? 0,
-      companies: c3.rowCount ?? 0,
-    };
-  });
+  // Use array_agg(DISTINCT) on unnest(array_replace(...)) to dedupe automatically.
+  const c1 = await db.execute<{ updated: number }>(sql`
+    UPDATE leads SET tags = ARRAY(SELECT DISTINCT unnest(array_replace(tags, ${fromTag}, ${toTag}))), updated_at = now()
+      WHERE tenant_id = ${tenantId} AND ${fromTag} = ANY(tags) AND deleted_at IS NULL
+  `);
+  const c2 = await db.execute<{ updated: number }>(sql`
+    UPDATE contacts SET tags = ARRAY(SELECT DISTINCT unnest(array_replace(tags, ${fromTag}, ${toTag}))), updated_at = now()
+      WHERE tenant_id = ${tenantId} AND ${fromTag} = ANY(tags) AND deleted_at IS NULL
+  `);
+  const c3 = await db.execute<{ updated: number }>(sql`
+    UPDATE companies SET tags = ARRAY(SELECT DISTINCT unnest(array_replace(tags, ${fromTag}, ${toTag}))), updated_at = now()
+      WHERE tenant_id = ${tenantId} AND ${fromTag} = ANY(tags) AND deleted_at IS NULL
+  `);
+  return {
+    leads:     c1.rowCount ?? 0,
+    contacts:  c2.rowCount ?? 0,
+    companies: c3.rowCount ?? 0,
+  };
 }
 
 async function deleteAcrossTables(tenantId: string, tag: string) {
-  return db.transaction(async (tx) => {
-    const c1 = await tx.execute(sql`
-      UPDATE leads     SET tags = array_remove(tags, ${tag}), updated_at = now()
-        WHERE tenant_id = ${tenantId} AND ${tag} = ANY(tags) AND deleted_at IS NULL
-    `);
-    const c2 = await tx.execute(sql`
-      UPDATE contacts  SET tags = array_remove(tags, ${tag}), updated_at = now()
-        WHERE tenant_id = ${tenantId} AND ${tag} = ANY(tags) AND deleted_at IS NULL
-    `);
-    const c3 = await tx.execute(sql`
-      UPDATE companies SET tags = array_remove(tags, ${tag}), updated_at = now()
-        WHERE tenant_id = ${tenantId} AND ${tag} = ANY(tags) AND deleted_at IS NULL
-    `);
-    return {
-      leads:     c1.rowCount ?? 0,
-      contacts:  c2.rowCount ?? 0,
-      companies: c3.rowCount ?? 0,
-    };
-  });
+  const c1 = await db.execute(sql`
+    UPDATE leads     SET tags = array_remove(tags, ${tag}), updated_at = now()
+      WHERE tenant_id = ${tenantId} AND ${tag} = ANY(tags) AND deleted_at IS NULL
+  `);
+  const c2 = await db.execute(sql`
+    UPDATE contacts  SET tags = array_remove(tags, ${tag}), updated_at = now()
+      WHERE tenant_id = ${tenantId} AND ${tag} = ANY(tags) AND deleted_at IS NULL
+  `);
+  const c3 = await db.execute(sql`
+    UPDATE companies SET tags = array_remove(tags, ${tag}), updated_at = now()
+      WHERE tenant_id = ${tenantId} AND ${tag} = ANY(tags) AND deleted_at IS NULL
+  `);
+  return {
+    leads:     c1.rowCount ?? 0,
+    contacts:  c2.rowCount ?? 0,
+    companies: c3.rowCount ?? 0,
+  };
 }
 
 const _TAG_RE = /^[\w \-./&]{1,40}$/;

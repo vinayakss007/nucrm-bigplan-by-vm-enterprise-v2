@@ -46,9 +46,7 @@ export default function LiveLogsPage() {
         try {
           const entry: LogEntry = JSON.parse(e.data);
           setLogs(prev => [...prev.slice(-999), entry]);
-        } catch {
-          console.warn('[logs] Failed to parse SSE log entry');
-        }
+        } catch (e) { console.error('[logs] Parse error:', e); }
       };
       es.onerror = () => {
         if (mounted) setConnected(false);

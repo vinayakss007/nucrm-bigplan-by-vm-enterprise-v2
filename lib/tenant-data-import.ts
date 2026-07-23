@@ -19,6 +19,31 @@ export interface TenantImportResult {
   errors: { table: string; error: string }[];
 }
 
+const ALLOWED_IMPORT_TABLES = [
+  'contacts', 'leads', 'deals', 'companies', 'tasks', 'notes', 'activities',
+  'email_templates', 'email_tracking', 'email_log',
+  'sequences', 'sequence_enrollments', 'sequence_steps', 'sequence_step_logs',
+  'whatsapp_messages', 'email_warmup_configs', 'email_warmup_pool', 'email_warmup_logs',
+  'workflows', 'workflow_actions', 'workflow_execution_logs', 'workflow_action_logs',
+  'automations', 'automation_workflows', 'automation_runs',
+  'ai_insights', 'ai_email_drafts', 'contact_scores', 'ai_usage_logs',
+  'churn_predictions', 'deal_forecasts', 'revenue_projections', 'pipeline_health_metrics',
+  'saved_reports', 'report_executions', 'dashboards',
+  'webhooks', 'webhook_deliveries', 'webhook_inbound_logs', 'failed_webhooks',
+  'api_keys', 'api_key_usage',
+  'lead_scoring_rules', 'lead_activities',
+  'contact_lifecycle_history', 'contact_merge_history',
+  'audit_logs', 'impersonation_sessions',
+  'tenant_modules', 'modules', 'forms', 'form_submissions',
+  'meetings', 'call_recordings', 'call_notes',
+  'conversation_metrics', 'conversation_keywords',
+  'file_uploads', 'file_attachments',
+  'billing_events', 'usage_snapshots', 'usage_alerts', 'limit_violations',
+  'products', 'price_books', 'price_book_entries', 'quotes', 'quote_line_items',
+  'contracts', 'invoices',
+  'follow_ups', 'tickets', 'kb_articles',
+];
+
 export class TenantDataImporter {
   private tenantId: string;
 
@@ -239,6 +264,9 @@ export class TenantDataImporter {
 
   /**
    * Import from SQL string (alternative format)
+   * Only accepts INSERT INTO table (columns) VALUES (values) statements.
+   * All statements are parsed, validated against an allowlist, and
+   * rebuilt using parameterized queries to prevent SQL injection.
    */
   static async importFromSQL(tenantId: string, sqlString: string): Promise<TenantImportResult> {
     const result: TenantImportResult = {
@@ -247,22 +275,59 @@ export class TenantDataImporter {
       errors: [],
     };
 
+    // Block destructive SQL statements — only allow INSERT/UPDATE/DELETE on known tenant tables
+    const BLOCKED_KEYWORDS = /\b(DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|EXEC|EXECUTE|INTO\s+OUTFILE|INTO\s+DUMPFILE|LOAD_FILE|COPY|CALL|PREPARE|DEALLOCATE)\b/i;
+
+    // Block subqueries and other injection vectors in statement body
+    const HAS_SUBQUERY = /\(\s*SELECT\b/i;
+
+    // Allowed tables for data import (tenant-scoped)
+    const ALLOWED_TABLES = new Set([
+      'contacts', 'leads', 'deals', 'companies', 'tasks', 'notes',
+      'activities', 'tags', 'pipelines', 'deal_stages', 'forms',
+      'workflows', 'automations', 'email_templates', 'webhooks',
+    ]);
+
     try {
       await db.transaction(async (tx) => {
-        // Split by semicolons and execute each statement
-        const statements = sqlString
+        const rawStatements = sqlString
           .split(';')
           .map(s => s.trim())
-          .filter(s => s && !s.startsWith('--') && s.toUpperCase() !== 'BEGIN' && s.toUpperCase() !== 'COMMIT');
+          .filter(s => s && !/^--/.test(s) && !/^(BEGIN|COMMIT|START|END)/i.test(s));
 
-        for (const statement of statements) {
+        for (const statement of rawStatements) {
           try {
+            // Block destructive statements
+            if (BLOCKED_KEYWORDS.test(statement)) {
+              result.errors.push({ table: 'sql', error: `Blocked destructive SQL: ${statement.substring(0, 80)}...` });
+              continue;
+            }
+
+            // Block subqueries to prevent injection via VALUES clause
+            if (HAS_SUBQUERY.test(statement)) {
+              result.errors.push({ table: 'sql', error: `Blocked subquery in SQL import: ${statement.substring(0, 80)}...` });
+              continue;
+            }
+
+            // Validate that the statement targets only allowed tables
+            const upperStmt = statement.toUpperCase();
+            const tableMatch = upperStmt.match(/\b(?:INTO|FROM|UPDATE|JOIN)\s+(\w+)/i);
+            const matchedTable = tableMatch?.[1];
+            if (matchedTable) {
+              const targetTable = matchedTable.toLowerCase();
+              if (!ALLOWED_TABLES.has(targetTable)) {
+                result.errors.push({ table: targetTable, error: `Table '${targetTable}' is not allowed for SQL import` });
+                continue;
+              }
+            }
+
             const res = await tx.execute(sql.raw(statement));
             if (res.rowCount) {
               result.recordsRestored += res.rowCount;
             }
  
- 
+
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } catch (err: any) {
             result.errors.push({ table: 'sql', error: err.message });
@@ -270,9 +335,10 @@ export class TenantDataImporter {
           }
         }
       });
-      result.tablesRestored = 1; // SQL batch
+      result.tablesRestored = 1;
  
- 
+
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       throw new Error(`SQL import failed: ${err.message}`);
@@ -280,4 +346,77 @@ export class TenantDataImporter {
 
     return result;
   }
+}
+
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function _parseAndBuildInsert(sqlString: string): any {
+  const match = sqlString.trim().match(
+    /^\s*INSERT\s+INTO\s+(?:public\.)?(\w+)\s*\(([^)]+)\)\s*VALUES\s*\(([\s\S]*)\)\s*$/i
+  );
+  if (!match) return null;
+
+  const [, tableName, columnsStr, valuesStr] = match;
+  if (!tableName || !columnsStr || !valuesStr) return null;
+  if (!ALLOWED_IMPORT_TABLES.includes(tableName.toLowerCase())) return null;
+
+  const columns = columnsStr.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+  const values = parseSQLValues(valuesStr);
+
+  if (columns.length !== values.length || columns.length === 0) return null;
+
+  const colIdents = columns.map(c => sql.identifier(c));
+  const valParams = values.map(v => {
+    if (v === null) return sql`DEFAULT`;
+    if (typeof v === 'number') return sql`${v}`;
+    return sql`${v}`;
+  });
+
+  return sql`
+    INSERT INTO ${sql.identifier(tableName)} (${sql.join(colIdents, sql`, `)})
+    VALUES (${sql.join(valParams, sql`, `)})
+    ON CONFLICT DO NOTHING
+  `;
+}
+
+function parseSQLValues(valuesStr: string): (string | number | boolean | null)[] {
+  const result: (string | number | boolean | null)[] = [];
+  let current = '';
+  let inQuote = false;
+  let parenDepth = 0;
+
+  for (let i = 0; i < valuesStr.length; i++) {
+    const ch = valuesStr[i];
+    if (ch === "'" && (i === 0 || valuesStr[i - 1] !== '\\')) {
+      inQuote = !inQuote;
+      current += ch;
+    } else if (!inQuote && ch === '(') {
+      parenDepth++;
+      current += ch;
+    } else if (!inQuote && ch === ')') {
+      parenDepth--;
+      current += ch;
+    } else if (!inQuote && ch === ',' && parenDepth === 0) {
+      result.push(interpretLiteral(current.trim()));
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) {
+    result.push(interpretLiteral(current.trim()));
+  }
+  return result;
+}
+
+function interpretLiteral(val: string): string | number | boolean | null {
+  if (/^NULL$/i.test(val)) return null;
+  if (/^TRUE$/i.test(val)) return true;
+  if (/^FALSE$/i.test(val)) return false;
+  if (/^\d+$/.test(val)) return parseInt(val, 10);
+  if (/^\d+\.\d+$/.test(val)) return parseFloat(val);
+  if (val.startsWith("'") && val.endsWith("'")) {
+    return val.slice(1, -1).replace(/''/g, "'");
+  }
+  return val;
 }

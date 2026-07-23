@@ -268,13 +268,11 @@ export async function PATCH(request: NextRequest) {
       try { _parsedBody = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
       const { contactId } = _parsedBody;
       if (contactId) {
-        await db.transaction(async (tx) => {
-          await tx.update(contacts).set({ assignedTo: target.userId, lastAssignedAt: new Date() }).where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId)));
-          await tx.insert(leadAssignments).values({
-            tenantId: ctx.tenantId,
-            contactId: contactId,
-            userId: target.userId,
-          });
+        await db.update(contacts).set({ assignedTo: target.userId, lastAssignedAt: new Date() }).where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId)));
+        await db.insert(leadAssignments).values({
+          tenantId: ctx.tenantId,
+          contactId: contactId,
+          userId: target.userId,
         });
       }
     } else {

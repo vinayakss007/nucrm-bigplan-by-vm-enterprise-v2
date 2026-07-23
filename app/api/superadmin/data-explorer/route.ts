@@ -138,10 +138,7 @@ async function handleSchemaInfo() {
           ORDER BY ordinal_position
         `);
 
-        // Use parameterized query for table name to prevent SQL injection
-        const countResult = await db.execute(
-          sql.raw(`SELECT count(*) FROM "${table.table_name.replace(/[^a-zA-Z0-9_]/g, '')}"`)
-        );
+        const countResult = await db.execute(sql`SELECT count(*) FROM ${sql.identifier(table.table_name)}`);
 
         tableDetails.push({
           table: table.table_name,
@@ -149,7 +146,7 @@ async function handleSchemaInfo() {
           totalRows: parseInt(((countResult.rows[0] as Record<string, unknown>)?.count as string) || '0', 10),
         });
       } catch {
-        console.warn('[data-explorer] Table may not exist yet during migration/setup, skipping:', table.table_name);
+        // Silently skip during migration/setup when tables may not exist yet
       }
     }
 
@@ -191,11 +188,11 @@ async function handleSearch(searchParams: URLSearchParams) {
       const conds = [];
       if (q) {
         const qPattern = `%${q}%`;
-        const searchConds = searchFields.map(f => sql`${sql.raw(`${tableAlias}.${f}`)} ILIKE ${qPattern}`);
+        const searchConds = searchFields.map(f => sql`${sql.identifier(tableAlias)}.${sql.identifier(f)} ILIKE ${qPattern}`);
         conds.push(sql`(${sql.join(searchConds, sql` OR `)})`);
       }
       if (tenantId) {
-        conds.push(sql`${sql.raw(`${tableAlias}.tenant_id`)} = ${tenantId}`);
+        conds.push(sql`${sql.identifier(tableAlias)}.${sql.identifier('tenant_id')} = ${tenantId}`);
       }
       return conds;
     };
@@ -216,7 +213,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         LEFT JOIN public.plans p ON p.id = t.plan_id
         LEFT JOIN users u ON t.owner_id = u.id
         ${where}
-        ORDER BY t.${sql.raw(safeSort)} ${sql.raw(safeOrder)}
+        ORDER BY ${sql.identifier('t')}.${sql.identifier(safeSort)} ${sql.raw(safeOrder)}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -229,7 +226,7 @@ async function handleSearch(searchParams: URLSearchParams) {
       const conds = buildConditions('c', searchFields);
       conds.push(sql`c.deleted_at IS NULL`);
       if (field && fieldValue && searchFields.includes(field)) {
-        conds.push(sql`${sql.raw(`c.${field}`)} = ${fieldValue}`);
+        conds.push(sql`${sql.identifier('c')}.${sql.identifier(field)} = ${fieldValue}`);
       }
       const where = sql`WHERE ${sql.join(conds, sql` AND `)}`;
 
@@ -245,7 +242,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         JOIN tenants t ON c.tenant_id = t.id
         LEFT JOIN companies co ON c.company_id = co.id
         ${where}
-        ORDER BY c.${sql.raw(safeSort)} ${sql.raw(safeOrder)}
+        ORDER BY ${sql.identifier('c')}.${sql.identifier(safeSort)} ${sql.raw(safeOrder)}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -271,7 +268,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         FROM leads l
         JOIN tenants t ON l.tenant_id = t.id
         ${where}
-        ORDER BY l.${sql.raw(safeSort)} ${sql.raw(safeOrder)}
+        ORDER BY ${sql.identifier('l')}.${sql.identifier(safeSort)} ${sql.raw(safeOrder)}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -296,7 +293,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         JOIN tenants t ON d.tenant_id = t.id
         LEFT JOIN contacts c ON d.contact_id = c.id
         ${where}
-        ORDER BY d.${sql.raw(safeSort === 'value' ? 'amount' : safeSort)} ${sql.raw(safeOrder)}
+        ORDER BY ${sql.identifier('d')}.${sql.identifier(safeSort === 'value' ? 'amount' : safeSort)} ${sql.raw(safeOrder)}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -320,7 +317,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         FROM companies co
         JOIN tenants t ON co.tenant_id = t.id
         ${where}
-        ORDER BY co.${sql.raw(safeSort)} ${sql.raw(safeOrder)}
+        ORDER BY ${sql.identifier('co')}.${sql.identifier(safeSort)} ${sql.raw(safeOrder)}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -337,14 +334,14 @@ async function handleSearch(searchParams: URLSearchParams) {
 
       const dataRes = await db.execute(sql`
         SELECT u.id, u.email, u.full_name, u.is_super_admin,
-               u.created_at, u.last_login_at,
+               u.created_at,
                tm.tenant_id, t.name as tenant_name,
                tm.role_slug as tenant_role
         FROM users u
         LEFT JOIN tenant_members tm ON tm.user_id = u.id
         LEFT JOIN tenants t ON tm.tenant_id = t.id
         ${where}
-        ORDER BY u.${sql.raw(safeSort)} ${sql.raw(safeOrder)}
+        ORDER BY ${sql.identifier('u')}.${sql.identifier(safeSort)} ${sql.raw(safeOrder)}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -413,8 +410,8 @@ export async function PUT(req: NextRequest) {
     }
 
     const result = await db.execute(sql`
-      UPDATE "${sql.raw(table)}" SET "${sql.raw(safeField)}" = ${value}, updated_at = now() 
-      WHERE id = ${id} RETURNING id, "${sql.raw(safeField)}"
+      UPDATE ${sql.identifier(table)} SET ${sql.identifier(safeField)} = ${value}, updated_at = now() 
+      WHERE id = ${id} RETURNING id, ${sql.identifier(safeField)}
     `);
 
     if (result.rows.length === 0) {
@@ -466,14 +463,14 @@ export async function DELETE(req: NextRequest) {
 
     if (softDelete) {
       const result = await db.execute(sql`
-        UPDATE "${sql.raw(table)}" SET deleted_at = NOW() WHERE id = ${id} RETURNING id
+        UPDATE ${sql.identifier(table)} SET deleted_at = NOW() WHERE id = ${id} RETURNING id
       `);
       if (result.rows.length === 0) {
         return NextResponse.json({ error: 'Record not found' }, { status: 404 });
       }
     } else {
       const result = await db.execute(sql`
-        DELETE FROM "${sql.raw(table)}" WHERE id = ${id} RETURNING id
+        DELETE FROM ${sql.identifier(table)} WHERE id = ${id} RETURNING id
       `);
       if (result.rows.length === 0) {
         return NextResponse.json({ error: 'Record not found' }, { status: 404 });

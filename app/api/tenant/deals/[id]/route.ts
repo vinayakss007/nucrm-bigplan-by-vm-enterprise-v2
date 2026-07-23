@@ -10,6 +10,7 @@ import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { notifyTenantMembers } from '@/lib/notifications';
 import { logError } from '@/lib/errors-server';
+import { cache } from '@/lib/cache';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -75,14 +76,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const dealId = (await params).id;
     const body = await req.json();
-
-    // Optimistic concurrency: extract updatedAt before validation
-    const clientUpdatedAt = body.updatedAt ? new Date(body.updatedAt) : undefined;
-    if (body.updatedAt !== undefined && isNaN(clientUpdatedAt!.getTime())) {
-      return NextResponse.json({ error: 'Invalid updatedAt' }, { status: 400 });
-    }
-    delete body.updatedAt;
-
     const validated = validateBody(updateDealSchema, body);
     if (validated instanceof NextResponse) return validated;
 
@@ -148,19 +141,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const [row] = await db
       .update(deals)
       .set(updateData)
-      .where(and(
-        eq(deals.id, dealId),
-        eq(deals.tenantId, ctx.tenantId),
-        ...(clientUpdatedAt ? [sql`${deals.updatedAt}::timestamp(3) = ${clientUpdatedAt}::timestamptz`] : []),
-      ))
+      .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId)))
       .returning();
-
-    if (!row) {
-      if (clientUpdatedAt) {
-        return NextResponse.json({ error: 'Conflict: resource modified by another user' }, { status: 409 });
-      }
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
 
     if (body.stageId && prev.stageId !== body.stageId) {
       // Logic for stage change
@@ -194,6 +176,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         newData: { stage: body.stageId }
       });
 
+      // Fire deal.stage_changed automation + webhooks
+      fireWebhooks(ctx.tenantId, 'deal.stage_changed', {
+        id: dealId,
+        title: row!.title,
+        stage_from: prev.stageId,
+        stage_to: body.stageId,
+        contact_id: row!.contactId,
+      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+
+      try {
+        const { evaluateAutomations } = await import('@/lib/automation/engine');
+        evaluateAutomations({
+          tenantId: ctx.tenantId,
+          userId: ctx.userId,
+          event: 'deal.stage_changed',
+          data: { ...row, id: dealId, stage_from: prev.stageId, stage_to: body.stageId },
+        }).catch(err => console.error('[deals PATCH] deal.stage_changed automation failed:', err));
+      } catch (e) {
+        console.error('[deals PATCH] automation import failed:', e);
+      }
+
       // Check if 'won' stage - get stage name to compare
       if (body.stageId) {
         const [stageInfo] = await db
@@ -208,9 +211,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
 
+    cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`);
     return NextResponse.json({ data: row });
- 
- 
+  
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[deals [id] PATCH]', err);
@@ -233,6 +237,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       .set({
         deletedAt: new Date(),
         deletedBy: ctx.userId,
+        updatedAt: new Date(),
       })
       .where(
         and(
@@ -255,6 +260,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     fireWebhooks(ctx.tenantId, 'deal.deleted', { id: dealId }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
+    cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`);
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
  
  

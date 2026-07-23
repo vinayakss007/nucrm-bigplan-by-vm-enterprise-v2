@@ -74,22 +74,19 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (!meetsConditions(automation.conditions as any[], enrichedData)) continue;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const action of (automation.actions as any[] ?? [])) {
+          await executeAction(action, payload, enrichedData);
+        }
 
-        await db.transaction(async (tx) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          for (const action of (automation.actions as any[] ?? [])) {
-            await executeAction(action, payload, enrichedData, tx);
-          }
-
-          await tx.insert(automationRuns).values({
-            tenantId: payload.tenantId,
-            automationId: automation.id,
-            triggerEvent: payload.event,
-            status: 'success',
-            triggeredBy: payload.userId || null,
-            metadata: enrichedData,
-          });
-        });
+        await db.insert(automationRuns).values({
+          tenantId: payload.tenantId,
+          automationId: automation.id,
+          triggerEvent: payload.event,
+          status: 'success',
+          triggeredBy: payload.userId || null,
+          metadata: enrichedData,
+        }).catch((err) => captureError(err, 'automation:log-run'));
 
  
  
@@ -148,10 +145,8 @@ function getNestedValue(obj: Record<string, any>, path: string): any {
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function executeAction(action: any, payload: TriggerPayload, enrichedData: Record<string, any>, tx?: any): Promise<void> {
+async function executeAction(action: any, payload: TriggerPayload, enrichedData: Record<string, any>): Promise<void> {
   const { type, config = {} } = action;
-  const exec = tx || db;
 
   switch (type) {
     case 'send_email': {
@@ -192,13 +187,13 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
       if (!allowed[resource]?.includes(field)) return;
 
       if (resource === 'contacts') {
-        await exec.update(contacts).set({ [field]: value, updatedAt: new Date() })
+        await db.update(contacts).set({ [field]: value, updatedAt: new Date() })
           .where(and(eq(contacts.id, resourceId), eq(contacts.tenantId, payload.tenantId)));
       } else if (resource === 'deals') {
-        await exec.update(deals).set({ [field]: value, updatedAt: new Date() })
+        await db.update(deals).set({ [field]: value, updatedAt: new Date() })
           .where(and(eq(deals.id, resourceId), eq(deals.tenantId, payload.tenantId)));
       } else if (resource === 'tasks') {
-        await exec.update(tasks).set({ [field]: value, updatedAt: new Date() })
+        await db.update(tasks).set({ [field]: value, updatedAt: new Date() })
           .where(and(eq(tasks.id, resourceId), eq(tasks.tenantId, payload.tenantId)));
       }
       break;
@@ -206,7 +201,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
 
     case 'create_task': {
       const contactId = enrichedData?.['contact_id'] || enrichedData?.['id'];
-      await exec.insert(tasks).values({
+      await db.insert(tasks).values({
         tenantId: payload.tenantId,
         title: interpolate(config.title || 'Follow up', enrichedData),
         priority: config.priority || 'medium',
@@ -225,7 +220,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
       if (!contactId || !sequenceId) return;
 
       try {
-        await exec.execute(sql`
+        await db.execute(sql`
           SELECT public.enroll_contact_in_sequence(
             ${payload.tenantId}::uuid, 
             ${sequenceId}::uuid, 
@@ -245,7 +240,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
     case 'log_call': {
       const contactId = enrichedData?.['contact_id'] || enrichedData?.['id'];
       if (!contactId) return;
-      await exec.insert(callLogs).values({
+      await db.insert(callLogs).values({
         tenantId: payload.tenantId,
         contactId,
         userId: payload.userId || null,
@@ -261,7 +256,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
       const to = config.to || enrichedData?.['phone'];
       if (!to) return;
       
-      const integration = await exec.query.integrations.findFirst({
+      const integration = await db.query.integrations.findFirst({
         where: and(
           eq(integrations.tenantId, payload.tenantId),
           eq(integrations.type, 'whatsapp'),

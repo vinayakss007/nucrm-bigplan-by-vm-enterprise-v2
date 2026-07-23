@@ -355,7 +355,7 @@ export class TenantDataExporter {
           });
         }
       } catch {
-        console.warn('[tenant-data-export] Table may not exist yet during migration/setup, skipping:', tableDef.table);
+        // Silently skip during migration/setup when tables may not exist yet
       }
     }
 

@@ -72,55 +72,51 @@ export async function POST(request: NextRequest) {
     }
     const totalAmount = subtotal;
 
-    const order = await db.transaction(async (tx) => {
-      const [o] = await tx.insert(orders).values({
-        tenantId,
-        contactId: contactId ?? null,
-        companyId: companyId ?? null,
-        orderNumber,
-        title: `Order ${orderNumber}`,
-        status: status ?? 'pending',
-        orderDate: new Date().toISOString().split('T')[0],
-        expectedDeliveryDate: null,
-        subtotal: String(subtotal.toFixed(2)),
-        discountAmount: '0',
-        taxAmount: '0',
-        shippingAmount: '0',
-        totalAmount: String(totalAmount.toFixed(2)),
-        shippingAddress: shippingAddress ?? null,
-        shippingCity: null,
-        shippingState: null,
-        shippingCountry: null,
-        shippingPostalCode: null,
-        notes: notes ?? null,
-        customerNotes: null,
-        createdBy: userId,
-      } as typeof orders.$inferInsert).returning();
+    const [order] = await db.insert(orders).values({
+      tenantId,
+      contactId: contactId ?? null,
+      companyId: companyId ?? null,
+      orderNumber,
+      title: `Order ${orderNumber}`,
+      status: status ?? 'pending',
+      orderDate: new Date().toISOString().split('T')[0],
+      expectedDeliveryDate: null,
+      subtotal: String(subtotal.toFixed(2)),
+      discountAmount: '0',
+      taxAmount: '0',
+      shippingAmount: '0',
+      totalAmount: String(totalAmount.toFixed(2)),
+      shippingAddress: shippingAddress ?? null,
+      shippingCity: null,
+      shippingState: null,
+      shippingCountry: null,
+      shippingPostalCode: null,
+      notes: notes ?? null,
+      customerNotes: null,
+      createdBy: userId,
+    } as typeof orders.$inferInsert).returning();
 
-      if (!o) throw new Error('Failed to create order');
+    if (!order) throw new Error('Failed to create order');
 
-      if (items?.length) {
-  
-  
-
+    if (items?.length) {
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const lineItems = items.map((item: any, idx: number) => ({
-          orderId: o.id,
-          productId: null,
-          serviceId: null,
-          description: item.description,
-          itemType: 'product',
-          quantity: String(item.quantity || 1),
-          unitPrice: String(item.unit_price || 0),
-          total: String(((parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0)).toFixed(2)),
-          sortOrder: idx,
-        }));
+      const lineItems = items.map((item: any, idx: number) => ({
+        tenantId: ctx.tenantId,
+        orderId: order.id,
+        productId: null,
+        serviceId: null,
+        description: item.description,
+        itemType: 'product',
+        quantity: String(item.quantity || 1),
+        unitPrice: String(item.unit_price || 0),
+        total: String(((parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0)).toFixed(2)),
+        sortOrder: idx,
+      }));
 
-        await tx.insert(orderLineItems).values(lineItems);
-      }
-
-      return o;
-    });
+      await db.insert(orderLineItems).values(lineItems);
+    }
 
     return NextResponse.json({ order }, { status: 201 });
   } catch (error) {

@@ -47,106 +47,112 @@ export async function POST(req: NextRequest) {
     const message = formData.message || formData.notes || formData.Message || null;
     let contactId: string | null = null;
 
-    await db.transaction(async (tx) => {
-      if (email) {
-        const existing = await tx.query.contacts.findFirst({
-          where: and(eq(contacts.tenantId, form.tenantId), eq(contacts.email, email), isNull(contacts.deletedAt))
+    if (email) {
+      const existing = await db.query.contacts.findFirst({
+        where: and(eq(contacts.tenantId, form.tenantId), eq(contacts.email, email), isNull(contacts.deletedAt))
+      });
+
+      if (existing) {
+        contactId = existing.id;
+        // Update contact with new data from form
+        const currentTags = (existing.tags as string[]) || [];
+        const newTags = Array.from(new Set([...currentTags, 'Form Submission', `Form: ${form.name}`]));
+        
+        await db.update(contacts)
+          .set({ tags: newTags, updatedAt: new Date() })
+          .where(eq(contacts.id, contactId));
+
+        // Log activity for existing contact
+        await db.insert(activities).values({
+          tenantId: form.tenantId,
+          contactId: contactId,
+          eventType: 'note',
+          metadata: { 
+            message: `Form "${form.name}" submitted again`,
+            form_id: form.id, 
+            ...formData 
+          },
+          entityType: 'contact',
+          entityId: contactId,
+          action: 'form_submission',
+          description: `Submitted form "${form.name}"`
         });
+      } else {
+        // Create new contact
+        const firstName = formData.first_name || formData.first_name || formData.name?.split(' ')[0] || 'Unknown';
+        const lastName = formData.last_name || formData.name?.split(' ').slice(1).join(' ') || 'Lead';
+        
+        const [newContact] = await db.insert(contacts)
+          .values({
+            tenantId: form.tenantId,
+            firstName,
+            lastName,
+            email,
+            phone: formData.phone || formData.phone_number || null,
+            leadStatus: 'new',
+            leadSource: `Form: ${form.name}`,
+            notes: message,
+            tags: ['New Lead', 'Form Submission', `Form: ${form.name}`]
+          })
+          .returning({ id: contacts.id });
+        
+        contactId = newContact?.id || null;
 
-        if (existing) {
-          contactId = existing.id;
-          const currentTags = (existing.tags as string[]) || [];
-          const newTags = Array.from(new Set([...currentTags, 'Form Submission', `Form: ${form.name}`]));
-          
-          await tx.update(contacts)
-            .set({ tags: newTags, updatedAt: new Date() })
-            .where(eq(contacts.id, contactId));
-
-          await tx.insert(activities).values({
+        // Log initial activity
+        if (contactId) {
+          await db.insert(activities).values({
             tenantId: form.tenantId,
             contactId: contactId,
             eventType: 'note',
-            metadata: { 
-              message: `Form "${form.name}" submitted again`,
-              form_id: form.id, 
-              ...formData 
+            metadata: {
+              message: `Initial capture via form "${form.name}"`,
+              form_id: form.id,
+              ...formData
             },
             entityType: 'contact',
             entityId: contactId,
             action: 'form_submission',
-            description: `Submitted form "${form.name}"`
+            description: `Captured via form "${form.name}"`
           });
-        } else {
-          const firstName = formData.first_name || formData.first_name || formData.name?.split(' ')[0] || 'Unknown';
-          const lastName = formData.last_name || formData.name?.split(' ').slice(1).join(' ') || 'Lead';
-          
-          const [newContact] = await tx.insert(contacts)
-            .values({
-              tenantId: form.tenantId,
-              firstName,
-              lastName,
-              email,
-              phone: formData.phone || formData.phone_number || null,
-              leadStatus: 'new',
-              leadSource: `Form: ${form.name}`,
-              notes: message,
-              tags: ['New Lead', 'Form Submission', `Form: ${form.name}`]
-            })
-            .returning({ id: contacts.id });
-          
-          contactId = newContact?.id || null;
-
-          if (contactId) {
-            await tx.insert(activities).values({
-              tenantId: form.tenantId,
-              contactId: contactId,
-              eventType: 'note',
-              metadata: {
-                message: `Initial capture via form "${form.name}"`,
-                form_id: form.id,
-                ...formData
-              },
-              entityType: 'contact',
-              entityId: contactId,
-              action: 'form_submission',
-              description: `Captured via form "${form.name}"`
-            });
-          }
         }
       }
+    }
 
-      // Save message as a separate note if present
-      if (contactId && message) {
-        await tx.insert(activities).values({
-          tenantId: form.tenantId,
-          contactId: contactId,
-          eventType: 'note',
-          metadata: {
-            message: message,
-            form_id: form.id,
-            form_name: form.name
-          },
-          entityType: 'contact',
-          entityId: contactId,
-          action: 'form_message',
-          description: `Sent message via form "${form.name}"`
-        }).catch(err => console.error('[FormsSubmit] failed to save note:', err));
-      }
-
-      // Record the submission
-      await tx.insert(formSubmissions).values({
+    // Save message as a separate note if present
+    if (contactId && message) {
+      await db.insert(activities).values({
         tenantId: form.tenantId,
-        formId: form.id,
-        contactId,
-        data: formData,
-        submittedBy: req.headers.get('x-forwarded-for')?.split(',')[0] || null
-      });
+        contactId: contactId,
+        eventType: 'note',
+        metadata: {
+          message: message,
+          form_id: form.id,
+          form_name: form.name
+        },
+        entityType: 'contact',
+        entityId: contactId,
+        action: 'form_message',
+        description: `Sent message via form "${form.name}"`
+      }).catch(err => console.error('[FormsSubmit] failed to save note:', err));
+    }
 
-      // Update submission count
-      await tx.update(forms)
-        .set({ submissionsCount: sql`${forms.submissionsCount} + 1` })
-        .where(eq(forms.id, form.id));
+    // 4. Record the submission
+    await db.insert(formSubmissions).values({
+      tenantId: form.tenantId,
+      formId: form.id,
+      contactId,
+      data: formData,
+      submittedBy: req.headers.get('x-forwarded-for')?.split(',')[0] || null
     });
+
+    // 5. Update submission count
+    await db.update(forms)
+      .set({ submissionsCount: sql`${forms.submissionsCount} + 1` })
+      .where(eq(forms.id, form.id))
+      .catch(async (err) => {
+        console.warn('[FormsSubmit] failed to update submissionsCount:', err.message);
+        // Fallback or retry logic if needed, but in Drizzle the column name should be fixed
+      });
 
 
     // 6. Trigger Calculations & Automations

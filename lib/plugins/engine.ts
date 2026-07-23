@@ -202,7 +202,7 @@ export async function executePluginAction(
     try {
       data = JSON.parse(responseBody);
     } catch {
-      console.warn('[plugins] Failed to parse plugin response body as JSON, using raw body');
+      // Fallback to default on corrupted storage data
     }
 
     // Apply response mapping if configured

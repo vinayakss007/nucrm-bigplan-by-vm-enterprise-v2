@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 const provisionSchema = z.object({
   templateId: z.string().min(1),
   modules: z.array(z.string()).min(1),
-  companyName: z.string().min(1).max(255),
+  companyName: z.string().min(1).max(255).optional(),
   pipelineName: z.string().min(1).max(100),
 });
 
@@ -61,36 +61,33 @@ export async function POST(request: NextRequest) {
       'Lead', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost',
     ];
 
-    const newPipeline = await db.transaction(async (tx) => {
-      const [p] = await tx.insert(pipelines).values({
-        tenantId: ctx.tenantId,
-        name: v.pipelineName.trim(),
-        isDefault: true,
-      }).returning();
+    const [newPipeline] = await db.insert(pipelines).values({
+      tenantId: ctx.tenantId,
+      name: v.pipelineName.trim(),
+      isDefault: true,
+    }).returning();
 
-      if (p) {
-        await tx.insert(dealStages).values(
-          pipelineStages.map((stage, idx) => ({
-            tenantId: ctx.tenantId,
-            pipelineId: p.id,
-            name: stage,
-            order: idx,
-          }))
-        );
-      }
+    if (newPipeline) {
+      await db.insert(dealStages).values(
+        pipelineStages.map((stage, idx) => ({
+          tenantId: ctx.tenantId,
+          pipelineId: newPipeline.id,
+          name: stage,
+          order: idx,
+        }))
+      );
+    }
 
-      await tx.insert(onboardingProgress).values({
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        stepName: 'onboarding_complete',
-        isCompleted: true,
-        completedAt: new Date(),
-      }).onConflictDoUpdate({
-        target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
-        set: { isCompleted: true, completedAt: new Date() },
-      });
-
-      return p;
+    // Mark onboarding as completed
+    await db.insert(onboardingProgress).values({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      stepName: 'onboarding_complete',
+      isCompleted: true,
+      completedAt: new Date(),
+    }).onConflictDoUpdate({
+      target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
+      set: { isCompleted: true, completedAt: new Date(), updatedAt: new Date() },
     });
 
     return NextResponse.json({
@@ -121,7 +118,7 @@ export async function PATCH(request: NextRequest) {
         completedAt: new Date(),
       }).onConflictDoUpdate({
         target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
-        set: { isCompleted: true, completedAt: new Date() }
+        set: { isCompleted: true, completedAt: new Date(), updatedAt: new Date() }
       });
     } else if (v.step) {
       await db.insert(onboardingProgress).values({
@@ -132,7 +129,7 @@ export async function PATCH(request: NextRequest) {
         completedAt: new Date(),
       }).onConflictDoUpdate({
         target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
-        set: { isCompleted: true, completedAt: new Date() }
+        set: { isCompleted: true, completedAt: new Date(), updatedAt: new Date() }
       });
     }
     return NextResponse.json({ ok: true });

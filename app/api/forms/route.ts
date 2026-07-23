@@ -66,19 +66,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    await db.transaction(async (tx) => {
-      await tx.insert(formSubmissions).values({
-        tenantId: form.tenantId,
-        formId: form_id,
-        contactId: contact_id,
-        data: formData,
-        sourceUrl: req.headers.get('referer') ?? null,
-        submittedBy: req.headers.get('x-forwarded-for')?.split(',')[0] ?? null,
-      });
-
-      await tx.update(forms)
-        .set({ submissionsCount: sql`${forms.submissionsCount} + 1` })
-        .where(eq(forms.id, form_id));
+    await db.insert(formSubmissions).values({
+      tenantId: form.tenantId,
+      formId: form_id,
+      contactId: contact_id,
+      data: formData,
+      sourceUrl: req.headers.get('referer') ?? null,
+      submittedBy: req.headers.get('x-forwarded-for')?.split(',')[0] ?? null,
     });
 
     await db.update(forms)

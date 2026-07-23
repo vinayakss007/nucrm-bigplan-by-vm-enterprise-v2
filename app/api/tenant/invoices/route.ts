@@ -89,60 +89,56 @@ export async function POST(request: NextRequest) {
     const taxAmount = taxRate / 100 * taxableAmount;
     const totalAmount = taxableAmount + taxAmount;
 
-    const invoice = await db.transaction(async (tx) => {
-      const [inv] = await tx.insert(invoices).values({
-        tenantId,
-        contactId: contactId ?? null,
-        companyId: companyId ?? null,
-        invoiceNumber,
-        title: title ?? `Invoice ${invoiceNumber}`,
-        status: status ?? 'draft',
-        issueDate: new Date(issueDate).toISOString().split('T')[0],
-        dueDate: dueDate ? new Date(dueDate).toISOString().split('T')[0] : null,
-        subtotal: String(subtotal.toFixed(2)),
-        discountType: discount > 0 ? 'fixed' : 'percentage',
-        discountValue: String(discount),
-        discountAmount: String(discountAmount.toFixed(2)),
-        taxRate: String(taxRate),
-        taxAmount: String(taxAmount.toFixed(2)),
-        totalAmount: String(totalAmount.toFixed(2)),
-        amountPaid: '0',
-        balanceDue: String(totalAmount.toFixed(2)),
-        notes: notes ?? null,
-        terms: terms ?? null,
-        createdBy: userId,
-      } as typeof invoices.$inferInsert).returning();
+    const [invoice] = await db.insert(invoices).values({
+      tenantId,
+      contactId: contactId ?? null,
+      companyId: companyId ?? null,
+      invoiceNumber,
+      title: title ?? `Invoice ${invoiceNumber}`,
+      status: status ?? 'draft',
+      issueDate: new Date(issueDate).toISOString().split('T')[0],
+      dueDate: dueDate ? new Date(dueDate).toISOString().split('T')[0] : null,
+      subtotal: String(subtotal.toFixed(2)),
+      discountType: discount > 0 ? 'fixed' : 'percentage',
+      discountValue: String(discount),
+      discountAmount: String(discountAmount.toFixed(2)),
+      taxRate: String(taxRate),
+      taxAmount: String(taxAmount.toFixed(2)),
+      totalAmount: String(totalAmount.toFixed(2)),
+      amountPaid: '0',
+      balanceDue: String(totalAmount.toFixed(2)),
+      notes: notes ?? null,
+      terms: terms ?? null,
+      createdBy: userId,
+    } as typeof invoices.$inferInsert).returning();
 
-      if (!inv) throw new Error('Failed to create invoice');
+    if (!invoice) throw new Error('Failed to create invoice');
 
-      // Add line items
-      if (items?.length) {
-  
-  
-
+    // Add line items
+    if (items?.length) {
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const lineItems = items.map((item: any, idx: number) => ({
-          invoiceId: inv.id,
-          productId: null,
-          serviceId: null,
-          description: item.description,
-          itemType: 'custom',
-          quantity: String(item.quantity || 1),
-          unitPrice: String(item.unit_price || 0),
-          discountType: 'percentage',
-          discountValue: '0',
-          discountAmount: '0',
-          taxRate: String(item.tax_rate || 0),
-          taxAmount: '0',
-          total: String(((parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0)).toFixed(2)),
-          sortOrder: idx,
-        }));
+      const lineItems = items.map((item: any, idx: number) => ({
+        tenantId: ctx.tenantId,
+        invoiceId: invoice.id,
+        productId: null,
+        serviceId: null,
+        description: item.description,
+        itemType: 'custom',
+        quantity: String(item.quantity || 1),
+        unitPrice: String(item.unit_price || 0),
+        discountType: 'percentage',
+        discountValue: '0',
+        discountAmount: '0',
+        taxRate: String(item.tax_rate || 0),
+        taxAmount: '0',
+        total: String(((parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0)).toFixed(2)),
+        sortOrder: idx,
+      }));
 
-        await tx.insert(invoiceLineItems).values(lineItems);
-      }
-
-      return inv;
-    });
+      await db.insert(invoiceLineItems).values(lineItems);
+    }
 
     return NextResponse.json({ invoice }, { status: 201 });
   } catch (error) {

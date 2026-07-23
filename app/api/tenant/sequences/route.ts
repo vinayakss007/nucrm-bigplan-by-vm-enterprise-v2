@@ -71,37 +71,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
-    // Create sequence with steps in transaction
-    const newSequence = await db.transaction(async (tx) => {
-      const [seq] = await tx.insert(sequences)
-        .values({
-          tenantId: ctx.tenantId,
-          name: name.trim(),
-          description: description || null,
-          status: 'active',
-          createdBy: ctx.userId,
-        })
-        .returning();
+    // Create sequence
+    const [newSequence] = await db.insert(sequences)
+      .values({
+        tenantId: ctx.tenantId,
+        name: name.trim(),
+        description: description || null,
+        status: 'active', // Default to active for newly created sequences as per legacy
+        createdBy: ctx.userId,
+      })
+      .returning();
 
-      if (steps.length > 0) {
+    if (!newSequence) throw new Error('Failed to create sequence');
+
+    // Create steps in sequence_steps table
+    if (steps.length > 0) {
+ 
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const stepValues = steps.map((step: any, index: number) => ({
-          sequenceId: seq.id,
-          tenantId: ctx.tenantId,
-          stepNumber: index + 1,
-          stepType: step.type || 'email',
-          subject: step.subject || null,
-          body: step.body || null,
-          delayHours: Math.floor((step.delay_minutes || 0) / 60),
-          delayMinutes: (step.delay_minutes || 0) % 60,
-          delayDays: 0,
-        }));
+      const stepValues = steps.map((step: any, index: number) => ({
+        sequenceId: newSequence.id,
+        tenantId: ctx.tenantId,
+        stepNumber: index + 1,
+        stepType: step.type || 'email',
+        subject: step.subject || null,
+        body: step.body || null,
+        delayHours: Math.floor((step.delay_minutes || 0) / 60),
+        delayMinutes: (step.delay_minutes || 0) % 60,
+        delayDays: 0,
+      }));
 
-        await tx.insert(sequenceSteps).values(stepValues);
-      }
-
-      return seq;
-    });
+      await db.insert(sequenceSteps).values(stepValues);
+    }
 
     return NextResponse.json({
       ok: true,

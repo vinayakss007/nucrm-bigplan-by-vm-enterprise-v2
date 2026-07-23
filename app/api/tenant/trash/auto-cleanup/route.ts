@@ -39,36 +39,33 @@ export async function POST(request: NextRequest) {
       leads: 0
     };
 
-    const [contactResult, companyResult, dealResult, taskResult, leadResult] = await db.transaction(async (tx) => {
-      const results = await Promise.all([
-        tx.delete(contacts).where(and(
-          eq(contacts.tenantId, ctx.tenantId),
-          isNotNull(contacts.deletedAt),
-          lt(contacts.deletedAt, cutoffDate)
-        )),
-        tx.delete(companies).where(and(
-          eq(companies.tenantId, ctx.tenantId),
-          isNotNull(companies.deletedAt),
-          lt(companies.deletedAt, cutoffDate)
-        )),
-        tx.delete(deals).where(and(
-          eq(deals.tenantId, ctx.tenantId),
-          isNotNull(deals.deletedAt),
-          lt(deals.deletedAt, cutoffDate)
-        )),
-        tx.delete(tasks).where(and(
-          eq(tasks.tenantId, ctx.tenantId),
-          isNotNull(tasks.deletedAt),
-          lt(tasks.deletedAt, cutoffDate)
-        )),
-        tx.delete(leads).where(and(
-          eq(leads.tenantId, ctx.tenantId),
-          isNotNull(leads.deletedAt),
-          lt(leads.deletedAt, cutoffDate)
-        ))
-      ]);
-      return results;
-    });
+    const [contactResult, companyResult, dealResult, taskResult, leadResult] = await Promise.all([
+      db.delete(contacts).where(and(
+        eq(contacts.tenantId, ctx.tenantId),
+        isNotNull(contacts.deletedAt),
+        lt(contacts.deletedAt, cutoffDate)
+      )),
+      db.delete(companies).where(and(
+        eq(companies.tenantId, ctx.tenantId),
+        isNotNull(companies.deletedAt),
+        lt(companies.deletedAt, cutoffDate)
+      )),
+      db.delete(deals).where(and(
+        eq(deals.tenantId, ctx.tenantId),
+        isNotNull(deals.deletedAt),
+        lt(deals.deletedAt, cutoffDate)
+      )),
+      db.delete(tasks).where(and(
+        eq(tasks.tenantId, ctx.tenantId),
+        isNotNull(tasks.deletedAt),
+        lt(tasks.deletedAt, cutoffDate)
+      )),
+      db.delete(leads).where(and(
+        eq(leads.tenantId, ctx.tenantId),
+        isNotNull(leads.deletedAt),
+        lt(leads.deletedAt, cutoffDate)
+      ))
+    ]);
 
  
  

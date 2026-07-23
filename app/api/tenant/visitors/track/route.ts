@@ -45,43 +45,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'visitorId and url are required' }, { status: 400 });
     }
 
-    await db.transaction(async (tx) => {
-      await tx.insert(pageViews).values({
-        tenantId,
-        visitorId,
-        url,
-        title: title || '',
-        referrer: referrer || '',
-        durationSeconds: duration || 0,
-      });
-
-      const existing = await tx
-        .select()
-        .from(visitors)
-        .where(and(eq(visitors.id, visitorId), eq(visitors.tenantId, tenantId)));
-
-      if (existing.length === 0) {
-        await tx.insert(visitors).values({
-          id: visitorId,
-          tenantId,
-          fingerprintId: fingerprintId || visitorId,
-          firstSeenAt: new Date(),
-          lastSeenAt: new Date(),
-          totalPageViews: 1,
-          score: scorePageUrl(url),
-        });
-      } else {
-        const points = scorePageUrl(url);
-        await tx
-          .update(visitors)
-          .set({
-            lastSeenAt: new Date(),
-            totalPageViews: (existing[0]!.totalPageViews ?? 0) + 1,
-            score: (existing[0]!.score ?? 0) + points,
-          })
-          .where(eq(visitors.id, visitorId));
-      }
+    // Insert page view
+    await db.insert(pageViews).values({
+      tenantId,
+      visitorId,
+      url,
+      title: title || '',
+      referrer: referrer || '',
+      durationSeconds: duration || 0,
     });
+
+    // Upsert visitor
+    const existing = await db
+      .select()
+      .from(visitors)
+      .where(and(eq(visitors.id, visitorId), eq(visitors.tenantId, tenantId)));
+
+    if (existing.length === 0) {
+      // Create new visitor
+      await db.insert(visitors).values({
+        id: visitorId,
+        tenantId,
+        fingerprintId: fingerprintId || visitorId,
+        firstSeenAt: new Date(),
+        lastSeenAt: new Date(),
+        totalPageViews: 1,
+        score: scorePageUrl(url),
+      });
+    } else {
+      // Update existing visitor
+      const points = scorePageUrl(url);
+      await db
+        .update(visitors)
+        .set({
+          lastSeenAt: new Date(),
+          totalPageViews: (existing[0]!.totalPageViews ?? 0) + 1,
+          score: (existing[0]!.score ?? 0) + points,
+        })
+        .where(eq(visitors.id, visitorId));
+    }
 
     // Return immediately for speed
     return NextResponse.json({ ok: true }, { status: 200 });

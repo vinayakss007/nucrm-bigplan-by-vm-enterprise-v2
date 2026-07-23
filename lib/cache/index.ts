@@ -100,7 +100,7 @@ export async function set(
 ): Promise<void> {
   const redis = getRedisClient();
 
-  if (redis) {
+  if (redis && redis.status === 'ready') {
     try {
       await redis.setex(`nucrm:${key}`, ttlSeconds, JSON.stringify(value));
     } catch (error) {
@@ -126,7 +126,7 @@ export async function set(
 export async function get<T = any>(key: string): Promise<T | null> {
   const redis = getRedisClient();
 
-  if (redis) {
+  if (redis && redis.status === 'ready') {
     try {
       const value = await redis.get(`nucrm:${key}`);
       return value ? JSON.parse(value) : null;
@@ -169,7 +169,7 @@ const LOCK_SCRIPT = `
   return 0
 `;
 
-async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<{ acquired: boolean; value: string }> {
+export async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<{ acquired: boolean; value: string }> {
   const redis = getRedisClient();
   if (!redis) return { acquired: true, value: '' };
   const value = makeLockValue();
@@ -182,24 +182,20 @@ async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<
   }
 }
 
-async function releaseLock(key: string, value: string): Promise<void> {
+export async function releaseLock(key: string, value: string): Promise<void> {
   const redis = getRedisClient();
   if (!redis || !value) return;
   try {
     await redis.eval(LOCK_SCRIPT, 1, `nucrm:lock:${key}`, value);
-  } catch {
-    console.error('[cache] Failed to release lock:', key);
-  }
+  } catch { /* safe */ }
 }
 
-async function refreshLock(key: string, value: string, ttlSeconds: number): Promise<void> {
+export async function refreshLock(key: string, value: string, ttlSeconds: number): Promise<void> {
   const redis = getRedisClient();
   if (!redis || !value) return;
   try {
     await redis.expire(`nucrm:lock:${key}`, ttlSeconds);
-  } catch {
-    console.error('[cache] Failed to refresh lock:', key);
-  }
+  } catch { /* safe */ }
 }
 
 function ttlWithJitter(ttlSeconds: number): number {
@@ -339,7 +335,7 @@ export async function warm<T = any>(
 export async function del(key: string): Promise<void> {
   const redis = getRedisClient();
 
-  if (redis) {
+  if (redis && redis.status === 'ready') {
     try {
       await redis.del(`nucrm:${key}`);
     } catch (error) {
@@ -357,7 +353,7 @@ export async function del(key: string): Promise<void> {
 export async function delByPattern(pattern: string): Promise<void> {
   const redis = getRedisClient();
 
-  if (redis) {
+  if (redis && redis.status === 'ready') {
     try {
       // Use SCAN to avoid blocking the Redis event loop on large datasets
       let cursor = '0';
@@ -392,7 +388,7 @@ export async function delByPattern(pattern: string): Promise<void> {
 export async function exists(key: string): Promise<boolean> {
   const redis = getRedisClient();
 
-  if (redis) {
+  if (redis && redis.status === 'ready') {
     try {
       const result = await redis.exists(`nucrm:${key}`);
       return result === 1;
@@ -411,7 +407,7 @@ export async function exists(key: string): Promise<boolean> {
 export async function incr(key: string, ttlSeconds?: number): Promise<number> {
   const redis = getRedisClient();
 
-  if (redis) {
+  if (redis && redis.status === 'ready') {
     try {
       const result = await redis.incr(`nucrm:${key}`);
       if (ttlSeconds && result === 1) {
@@ -474,7 +470,7 @@ export const rateLimit = {
     const redis = getRedisClient();
     const windowKey = `rate:${key}:${Math.floor(Date.now() / (windowSeconds * 1000))}`;
 
-    if (redis) {
+    if (redis && redis.status === 'ready') {
       try {
         const current = await redis.incr(windowKey);
         if (current === 1) {

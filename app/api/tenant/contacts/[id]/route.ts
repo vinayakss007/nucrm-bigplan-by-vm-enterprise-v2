@@ -89,13 +89,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const contactId = (await params).id;
     const body = await req.json();
 
-    // Optimistic concurrency: extract updatedAt before validation
-    const clientUpdatedAt = body.updatedAt ? new Date(body.updatedAt) : undefined;
-    if (body.updatedAt !== undefined && isNaN(clientUpdatedAt!.getTime())) {
-      return NextResponse.json({ error: 'Invalid updatedAt' }, { status: 400 });
-    }
-    delete body.updatedAt;
-
     const validated = validateBody(updateContactSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -173,19 +166,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         ...updateData,
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(contacts.id, contactId),
-        eq(contacts.tenantId, ctx.tenantId),
-        ...(clientUpdatedAt ? [sql`${contacts.updatedAt}::timestamp(3) = ${clientUpdatedAt}::timestamptz`] : []),
-      ))
+      .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId)))
       .returning();
 
-    if (!row) {
-      if (clientUpdatedAt) {
-        return NextResponse.json({ error: 'Conflict: resource modified by another user' }, { status: 409 });
-      }
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
+    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || undefined;
     const userAgent = req.headers.get('user-agent') || undefined;
@@ -273,6 +257,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         deletedAt: new Date(),
         deletedBy: ctx.userId,
         isArchived: true,
+        updatedAt: new Date(),
       })
       .where(
         and(
