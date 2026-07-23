@@ -5,7 +5,7 @@ import { validateBody } from '@/lib/api/validate';
 import { updateTaskSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { tasks } from '@/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
@@ -21,6 +21,14 @@ export async function PATCH(req: NextRequest, { params }: any) {
     
     const id = (await params).id;
     const body = await req.json();
+
+    // Optimistic concurrency: extract updatedAt before validation
+    const clientUpdatedAt = body.updatedAt ? new Date(body.updatedAt) : undefined;
+    if (body.updatedAt !== undefined && isNaN(clientUpdatedAt!.getTime())) {
+      return NextResponse.json({ error: 'Invalid updatedAt' }, { status: 400 });
+    }
+    delete body.updatedAt;
+
     const validated = validateBody(updateTaskSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -43,11 +51,9 @@ export async function PATCH(req: NextRequest, { params }: any) {
     
     if (body.completed === true) {
       updateData.status = 'completed';
-      updateData.completed = true;
       updateData.completedAt = new Date();
     } else if (body.completed === false) {
       updateData.status = 'pending';
-      updateData.completed = false;
       updateData.completedAt = null;
     }
 
@@ -56,11 +62,24 @@ export async function PATCH(req: NextRequest, { params }: any) {
       .where(and(
         eq(tasks.id, id),
         eq(tasks.tenantId, ctx.tenantId),
-        isNull(tasks.deletedAt)
+        isNull(tasks.deletedAt),
+        ...(clientUpdatedAt ? [sql`${tasks.updatedAt}::timestamp(3) = ${clientUpdatedAt}::timestamptz`] : []),
       ))
       .returning();
 
-    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!row) {
+      if (clientUpdatedAt) {
+        const [existing] = await db
+          .select({ id: tasks.id })
+          .from(tasks)
+          .where(and(eq(tasks.id, id), eq(tasks.tenantId, ctx.tenantId)))
+          .limit(1);
+        if (existing) {
+          return NextResponse.json({ error: 'Conflict: resource modified by another user' }, { status: 409 });
+        }
+      }
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
 
     if (body.completed === true) {
       await logAudit({ 
@@ -109,8 +128,7 @@ export async function DELETE(req: NextRequest, { params }: any) {
     const [row] = await db.update(tasks)
       .set({ 
         deletedAt: new Date(),
-        deletedBy: ctx.userId,
-        updatedAt: new Date(),
+        deletedBy: ctx.userId 
       })
       .where(and(
         eq(tasks.id, id),

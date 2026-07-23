@@ -1,9 +1,8 @@
 /**
  * Bulk Contact Operations
  * POST /api/tenant/contacts/bulk
- * Body: { action, contact_ids?, payload?, selectAll?, filters? }
+ * Body: { action, contact_ids, payload? }
  * Actions: tag, untag, assign, status, delete, export
- * When selectAll=true, contact_ids is optional; contacts are resolved from filters.
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
@@ -11,11 +10,10 @@ import { validateBody } from '@/lib/api/validate';
 import { bulkUpdateSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, tenantMembers, sequences, sequenceEnrollments, segments, segmentMembers, companies } from '@/drizzle/schema';
-import { eq, and, sql, inArray, isNull, or, ilike } from 'drizzle-orm';
+import { contacts, tenantMembers, sequences, sequenceEnrollments, segments, segmentMembers } from '@/drizzle/schema';
+import { eq, and, sql, inArray, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
-import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 
 const MAX_BULK = 500;
 
@@ -29,62 +27,16 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
 
     const rawBody = await req.json();
+    const validated = validateBody(bulkUpdateSchema, rawBody);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { ids: contact_ids, updates: payload } = v;
     const action = rawBody.action;
-    const selectAll = rawBody.selectAll === true;
-    const filters = rawBody.filters as { q?: string; lead_status?: string; company_id?: string } | undefined;
 
-    // In selectAll mode, resolve IDs from filters; otherwise require explicit IDs
-    let contact_ids: string[] = rawBody.contact_ids ?? [];
-
-    if (selectAll) {
-      // Build filter conditions from the same logic as the contacts list endpoint
-      const whereConditions = [
-        eq(contacts.tenantId, ctx.tenantId),
-        eq(contacts.isArchived, false),
-        isNull(contacts.deletedAt),
-      ];
-
-      if (filters?.lead_status) {
-        whereConditions.push(eq(contacts.leadStatus, filters.lead_status));
-      }
-      if (filters?.company_id) {
-        whereConditions.push(eq(contacts.companyId, filters.company_id));
-      }
-      if (filters?.q) {
-        whereConditions.push(or(
-          ilike(contacts.firstName, `%${filters.q}%`),
-          ilike(contacts.lastName, `%${filters.q}%`),
-          ilike(contacts.email, `%${filters.q}%`),
-          ilike(contacts.phone, `%${filters.q}%`),
-        )!);
-      }
-
-      const matched = await db
-        .select({ id: contacts.id })
-        .from(contacts)
-        .leftJoin(companies, eq(companies.id, contacts.companyId))
-        .where(and(...whereConditions));
-
-      contact_ids = matched.map(r => r.id);
-
-      if (!contact_ids.length) {
-        return NextResponse.json({ error: 'No contacts match the provided filters' }, { status: 404 });
-      }
-      if (contact_ids.length > MAX_BULK) {
-        return NextResponse.json({ error: `Max ${MAX_BULK} contacts per bulk operation (matched ${contact_ids.length})` }, { status: 400 });
-      }
-    } else {
-      // Legacy mode: require explicit IDs
-      const validated = validateBody(bulkUpdateSchema, rawBody);
-      if (validated instanceof NextResponse) return validated;
-      const v = validated.data;
-      contact_ids = v.ids;
-
-      if (!Array.isArray(contact_ids) || !contact_ids.length)
-        return NextResponse.json({ error: 'contact_ids array required' }, { status: 400 });
-      if (contact_ids.length > MAX_BULK)
-        return NextResponse.json({ error: `Max ${MAX_BULK} contacts per bulk operation` }, { status: 400 });
-    }
+    if (!Array.isArray(contact_ids) || !contact_ids.length)
+      return NextResponse.json({ error: 'contact_ids array required' }, { status: 400 });
+    if (contact_ids.length > MAX_BULK)
+      return NextResponse.json({ error: `Max ${MAX_BULK} contacts per bulk operation` }, { status: 400 });
 
     // Validate all IDs belong to this tenant
     const valid = await db
@@ -102,7 +54,6 @@ export async function POST(req: NextRequest) {
     if (!validIds.length)
       return NextResponse.json({ error: 'No valid contacts found' }, { status: 404 });
 
-    const payload = rawBody.payload ?? {};
     let affected = 0;
 
     switch (action) {
@@ -222,7 +173,6 @@ export async function POST(req: NextRequest) {
             deletedAt: new Date(),
             deletedBy: ctx.userId,
             isArchived: true,
-            updatedAt: new Date(),
           })
           .where(
             and(
@@ -339,11 +289,14 @@ export async function POST(req: NextRequest) {
           currentStep: 1,
         }));
         
-        const res = await db.insert(sequenceEnrollments).values(enrollValues).onConflictDoNothing();
+        const res = await db.transaction(async (tx) => {
+          const r = await tx.insert(sequenceEnrollments).values(enrollValues).onConflictDoNothing();
+          const aff = r.rowCount ?? enrollValues.length;
+          await tx.update(sequences).set({ enrollCount: sql`COALESCE(${sequences.enrollCount}, 0) + ${aff}` })
+            .where(eq(sequences.id, sequenceId));
+          return r;
+        });
         affected = res.rowCount ?? enrollValues.length;
-        
-        await db.update(sequences).set({ enrollCount: sql`COALESCE(${sequences.enrollCount}, 0) + ${affected}` })
-          .where(eq(sequences.id, sequenceId));
         
         break;
       }
@@ -362,8 +315,6 @@ export async function POST(req: NextRequest) {
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }
-
-    invalidateWidgetCache(ctx.tenantId, 'stats-contacts', 'contacts-recent', 'activity');
 
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,

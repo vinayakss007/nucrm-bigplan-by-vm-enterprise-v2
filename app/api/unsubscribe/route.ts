@@ -19,33 +19,39 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Set do_not_contact
-    const [contact] = await db.update(contacts)
-      .set({ 
-        doNotContact: true, 
-        updatedAt: new Date() 
-      })
-      .where(and(
-        eq(contacts.id, contactId), 
-        isNull(contacts.deletedAt)
-      ))
-      .returning({ 
-        id: contacts.id, 
-        firstName: contacts.firstName, 
-        tenantId: contacts.tenantId 
-      });
+    const [contact] = await db.transaction(async (tx) => {
+      // Set do_not_contact
+      const [c] = await tx.update(contacts)
+        .set({ 
+          doNotContact: true, 
+          updatedAt: new Date() 
+        })
+        .where(and(
+          eq(contacts.id, contactId), 
+          isNull(contacts.deletedAt)
+        ))
+        .returning({ 
+          id: contacts.id, 
+          firstName: contacts.firstName, 
+          tenantId: contacts.tenantId 
+        });
+
+      if (!c) return [undefined] as any;
+
+      // Cancel all sequence enrollments for this contact
+      await tx.update(sequenceEnrollments)
+        .set({ status: 'cancelled' })
+        .where(and(
+          eq(sequenceEnrollments.contactId, contactId), 
+          eq(sequenceEnrollments.status, 'active')
+        ));
+
+      return [c];
+    });
 
     if (!contact) {
       return new NextResponse('Contact not found', { status: 404 });
     }
-
-    // Cancel all sequence enrollments for this contact
-    await db.update(sequenceEnrollments)
-      .set({ status: 'cancelled' })
-      .where(and(
-        eq(sequenceEnrollments.contactId, contactId), 
-        eq(sequenceEnrollments.status, 'active')
-      ));
 
     // Log activity
     await db.insert(activities).values({

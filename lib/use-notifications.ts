@@ -36,7 +36,9 @@ export function useNotifications(enabled = true) {
             if (data.type === 'unread') {
               setState(prev => ({ ...prev, unreadCount: data.count }));
             }
-          } catch { /* Fallback to default on corrupted storage data */ }
+          } catch {
+            console.warn('[notifications] Failed to parse SSE event data');
+          }
         });
 
         eventSource.onerror = () => {

@@ -34,10 +34,7 @@ export async function GET(req: NextRequest) {
       .limit(1);
 
     const aiSettings = ((t?.settings as Record<string, unknown> | null) ?? {})['ai_providers'] as Record<string, { enabled?: boolean }> | undefined ?? {};
-    const keyMeta = await listProviderKeyMeta(ctx.tenantId) as Record<string, {
-      present: boolean; keyPrefix: string | null; baseUrl: string | null;
-      rotatedAt: Date | null; keyType: string | null;
-    }>;
+    const keyMeta = await listProviderKeyMeta(ctx.tenantId);
 
     // Dynamic: named presets + any custom providers that have keys stored
     const allProviderIds = new Set([...NAMED_PROVIDER_IDS, ...Object.keys(keyMeta)]);
@@ -97,8 +94,8 @@ export async function GET(req: NextRequest) {
     try {
       const atRiskDeals = await getAtRiskDeals(ctx.tenantId);
       at_risk_count = atRiskDeals.length;
-    } catch (e) {
-      console.error('[ai/status] Error (may be expected during migration):', e);
+    } catch {
+      console.warn('[ai-status] getAtRiskDeals failed during migration/setup');
     }
 
     return NextResponse.json({

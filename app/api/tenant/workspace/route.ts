@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { tenants, users, plans, subscriptions } from '@/drizzle/schema';
+import { tenants, users, plans } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { dbCache, invalidateCache } from '@/lib/db/cache';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -35,13 +35,9 @@ export async function GET(request: NextRequest) {
         max_contacts: plans.maxContacts,
         max_deals: plans.maxDeals,
         features: plans.features,
-        // Surface the Stripe customer ID so the billing UI can decide
-        // whether to show "Manage Billing" / "Invoices" buttons.
-        stripe_customer_id: subscriptions.stripeCustomerId,
       })
       .from(tenants)
       .leftJoin(plans, eq(plans.id, tenants.planId))
-      .leftJoin(subscriptions, eq(subscriptions.tenantId, tenants.id))
       .where(eq(tenants.id, ctx.tenantId))
       .limit(1);
       return row;
@@ -66,19 +62,23 @@ export async function POST(request: NextRequest) {
 
     const slug = name.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'') + '-' + Date.now().toString(36);
     
-    const [tenant] = await db.insert(tenants).values({
-      name: name.trim(),
-      slug,
-      ownerId: ctx.userId,
-      planId: 'free',
-      status: 'trialing',
-    }).returning();
+    const [tenant] = await db.transaction(async (tx) => {
+      const [t] = await tx.insert(tenants).values({
+        name: name.trim(),
+        slug,
+        ownerId: ctx.userId,
+        planId: 'free',
+        status: 'trialing',
+      }).returning();
 
-    if (!tenant) throw new Error('Failed to create workspace');
+      if (!t) throw new Error('Failed to create workspace');
 
-    await db.update(users)
-      .set({ lastTenantId: tenant.id })
-      .where(eq(users.id, ctx.userId));
+      await tx.update(users)
+        .set({ lastTenantId: t.id })
+        .where(eq(users.id, ctx.userId));
+
+      return t;
+    });
 
     return NextResponse.json({ data: tenant }, { status: 201 });
  

@@ -39,7 +39,9 @@ async function extractToken(request: NextRequest): Promise<string | null> {
     const store = await cookies();
     const val = store.get('nucrm_session')?.value;
     if (val) return val;
-  } catch { /* cookies() not available */ }
+  } catch {
+    console.warn('[auth] cookies() not available, falling back to request.cookies');
+  }
   return request.cookies.get('nucrm_session')?.value ?? null;
 }
 
@@ -101,11 +103,8 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
   const requestId = request.headers.get('x-request-id') || requestContext.generateId();
   return withRequestId(requestId, async () => {
 
-    console.log('[Middleware] requireAuth called for:', request.nextUrl.pathname);
-    
     // Try API key auth first
     const apiKeyCtx = await tryApiKeyAuth(request);
-    console.log('[Middleware] apiKeyCtx result:', apiKeyCtx ? 'FOUND' : 'null');
     if (apiKeyCtx) {
       apiKeyCtx.authMethod = 'api_key';
       await setTenantContext(apiKeyCtx.tenantId, apiKeyCtx.userId);

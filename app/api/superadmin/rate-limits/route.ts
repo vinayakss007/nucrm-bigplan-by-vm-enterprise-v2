@@ -4,8 +4,6 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { plans, users, systemSettings } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
-import { validateBody } from '@/lib/api/validate';
-import { updateRateLimitsSchema } from '@/lib/api/schemas';
 
 const RATE_LIMIT_ENDPOINTS = [
   { key: 'api', label: 'API Requests', window: 60, windowLabel: 'per minute' },
@@ -40,7 +38,7 @@ export async function GET(_request: NextRequest) {
           : (setting.value as Record<string, number>);
       }
     } catch {
-      // Empty defaults
+      console.warn('[rate-limits] Failed to load global rate limit defaults, using empty');
     }
 
     // Get all plans
@@ -85,47 +83,69 @@ export async function PUT(request: NextRequest) {
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const body = await request.json();
-    const parsed = validateBody(updateRateLimitsSchema, body);
-    if (parsed instanceof NextResponse) return parsed;
+    const { action } = body;
 
-    if (parsed.data.action === 'update_global') {
+    if (action === 'update_global') {
+      const { rateLimits } = body;
+      if (!rateLimits || typeof rateLimits !== 'object') {
+        return NextResponse.json({ error: 'rateLimits object required' }, { status: 400 });
+      }
+
       await db
         .insert(systemSettings)
         .values({
           key: 'global_rate_limits',
-          value: JSON.stringify(parsed.data.rateLimits),
+          value: JSON.stringify(rateLimits),
         })
         .onConflictDoUpdate({
           target: [systemSettings.key],
-          set: { value: JSON.stringify(parsed.data.rateLimits), updatedAt: new Date() },
+          set: { value: JSON.stringify(rateLimits), updatedAt: new Date() },
         });
 
       return NextResponse.json({ ok: true, message: 'Global rate limits updated' });
     }
 
-    if (parsed.data.action === 'update_plan_limits') {
+    if (action === 'update_plan_limits') {
+      const { planId, rateLimits } = body;
+      if (!planId || !rateLimits) {
+        return NextResponse.json({ error: 'planId and rateLimits required' }, { status: 400 });
+      }
+
       await db.update(plans)
-        .set({ rateLimitConfig: parsed.data.rateLimits, updatedAt: new Date() })
-        .where(eq(plans.id, parsed.data.planId));
+        .set({ rateLimitConfig: rateLimits, updatedAt: new Date() })
+        .where(eq(plans.id, planId));
 
-      return NextResponse.json({ ok: true, message: `Rate limits updated for plan ${parsed.data.planId}` });
+      return NextResponse.json({ ok: true, message: `Rate limits updated for plan ${planId}` });
     }
 
-    if (parsed.data.action === 'toggle_super_admin_unlimited') {
+    if (action === 'toggle_super_admin_unlimited') {
+      const { userId, unlimited } = body;
+      if (!userId || typeof unlimited !== 'boolean') {
+        return NextResponse.json({ error: 'userId and unlimited required' }, { status: 400 });
+      }
+
       await db.update(users)
-        .set({ unlimitedRateLimit: parsed.data.unlimited, updatedAt: new Date() })
-        .where(eq(users.id, parsed.data.userId));
+        .set({ unlimitedRateLimit: unlimited, updatedAt: new Date() })
+        .where(eq(users.id, userId));
 
-      return NextResponse.json({ ok: true, message: `Unlimited rate limit ${parsed.data.unlimited ? 'enabled' : 'disabled'} for user ${parsed.data.userId}` });
+      return NextResponse.json({ ok: true, message: `Unlimited rate limit ${unlimited ? 'enabled' : 'disabled'} for user ${userId}` });
     }
 
-    if (parsed.data.action === 'reset_to_defaults') {
+    if (action === 'reset_to_defaults') {
+      const { planId } = body;
+      if (!planId) {
+        return NextResponse.json({ error: 'planId required' }, { status: 400 });
+      }
+
+      // Reset to empty object so plan uses global defaults
       await db.update(plans)
         .set({ rateLimitConfig: {}, updatedAt: new Date() })
-        .where(eq(plans.id, parsed.data.planId));
+        .where(eq(plans.id, planId));
 
-      return NextResponse.json({ ok: true, message: `Plan ${parsed.data.planId} reset to use global defaults` });
+      return NextResponse.json({ ok: true, message: `Plan ${planId} reset to use global defaults` });
     }
+
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (err) {
     return apiError(err);
   }

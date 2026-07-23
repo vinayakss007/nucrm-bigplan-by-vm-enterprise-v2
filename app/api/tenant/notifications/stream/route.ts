@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
           try {
             controller.enqueue(encoder.encode(': keepalive\n\n'));
           } catch {
-            // client disconnected
+            console.warn('[notifications-stream] Client disconnected, stopping keepalive');
           }
         }, 10000);
 

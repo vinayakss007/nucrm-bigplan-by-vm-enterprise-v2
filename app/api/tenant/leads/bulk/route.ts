@@ -134,8 +134,7 @@ export async function POST(req: NextRequest) {
           .set({ 
             deletedAt: new Date(), 
             deletedBy: ctx.userId, 
-            isArchived: true,
-            updatedAt: new Date(),
+            isArchived: true 
           })
           .where(
             and(
@@ -276,11 +275,14 @@ export async function POST(req: NextRequest) {
           currentStep: 1,
         }));
         
-        const res = await db.insert(sequenceEnrollments).values(enrollValues).onConflictDoNothing();
+        const res = await db.transaction(async (tx) => {
+          const r = await tx.insert(sequenceEnrollments).values(enrollValues).onConflictDoNothing();
+          const aff = r.rowCount ?? enrollValues.length;
+          await tx.update(sequences).set({ enrollCount: sql`COALESCE(${sequences.enrollCount}, 0) + ${aff}` })
+            .where(eq(sequences.id, sequenceId));
+          return r;
+        });
         affected = res.rowCount ?? enrollValues.length;
-        
-        await db.update(sequences).set({ enrollCount: sql`COALESCE(${sequences.enrollCount}, 0) + ${affected}` })
-          .where(eq(sequences.id, sequenceId));
         
         break;
       }

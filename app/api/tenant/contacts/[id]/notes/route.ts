@@ -71,23 +71,26 @@ export async function POST(
       return NextResponse.json({ error: `type must be one of: ${VALID.join(', ')}` }, { status: 400 });
     }
 
-    const [row] = await db.insert(activities)
-      .values({
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        entityType: 'contact',
-        entityId: id,
-        contactId: id,
-        eventType: type,
-        description: description.trim(),
-        metadata: metadata || {},
-      })
-      .returning();
+    const [row] = await db.transaction(async (tx) => {
+      const [r] = await tx.insert(activities)
+        .values({
+          tenantId: ctx.tenantId,
+          userId: ctx.userId,
+          entityType: 'contact',
+          entityId: id,
+          contactId: id,
+          eventType: type,
+          description: description.trim(),
+          metadata: metadata || {},
+        })
+        .returning();
 
-    // Update contact last activity
-    await db.update(contacts)
-      .set({ updatedAt: new Date() })
-      .where(and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId)));
+      await tx.update(contacts)
+        .set({ updatedAt: new Date() })
+        .where(and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId)));
+
+      return r;
+    });
 
     // Process mentions for notifications
     await processMentions(description.trim(), ctx.tenantId, ctx.userId, `/tenant/contacts/${id}`);

@@ -148,7 +148,9 @@ export async function GET(request: NextRequest) {
             push(metrics, 'nucrm_queue_jobs_total', `Jobs in queue ${queue}`, 'gauge', delayed, `{queue="${queue}",status="delayed"}`);
             push(metrics, 'nucrm_queue_jobs_total', `Jobs in queue ${queue}`, 'gauge', failed, `{queue="${queue}",status="failed"}`);
           }
-        } catch { /* Silently skip during migration/setup when tables may not exist yet */ }
+        } catch {
+          console.warn('[metrics] Redis queue not available during migration/setup');
+        }
       }
 
       // Worker health heartbeat

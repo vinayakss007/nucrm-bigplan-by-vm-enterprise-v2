@@ -113,29 +113,31 @@ export async function DELETE(request: NextRequest) {
     const { contact_ids, reason } = dv;
     if (!contact_ids?.length) return NextResponse.json({ error:'contact_ids required' }, { status:400 });
 
-    // Mark previous assignments as ended
-    await db.execute(sql`
-      UPDATE public.lead_assignments SET unassigned_at=now()
-      WHERE contact_id = ANY(${contact_ids}::uuid[]) AND unassigned_at IS NULL
-    `);
+    let rowCount = 0;
 
-    // Unassign — set to null (unowned)
-    const result = await db
-      .update(contacts)
-      .set({ 
-        assignedTo: null, 
-        lastAssignedAt: new Date(),
-        updatedAt: new Date()
-      })
-      .where(
-        and(
-          inArray(contacts.id, contact_ids),
-          eq(contacts.tenantId, ctx.tenantId),
-          sql`${contacts.deletedAt} IS NULL`
-        )
-      );
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`
+        UPDATE public.lead_assignments SET unassigned_at=now()
+        WHERE contact_id = ANY(${contact_ids}::uuid[]) AND unassigned_at IS NULL
+      `);
 
-    const rowCount = result.rowCount ?? 0;
+      const result = await tx
+        .update(contacts)
+        .set({ 
+          assignedTo: null, 
+          lastAssignedAt: new Date(),
+          updatedAt: new Date()
+        })
+        .where(
+          and(
+            inArray(contacts.id, contact_ids),
+            eq(contacts.tenantId, ctx.tenantId),
+            sql`${contacts.deletedAt} IS NULL`
+          )
+        );
+
+      rowCount = result.rowCount ?? 0;
+    });
 
     await logAudit({ 
       tenantId:ctx.tenantId, 

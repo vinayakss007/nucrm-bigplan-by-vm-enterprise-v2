@@ -68,26 +68,52 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'from_email is required' }, { status: 400 });
     }
 
-    const [config] = await db.insert(emailWarmupConfigs)
-      .values({
-        tenantId: ctx.tenantId,
-        fromEmail: from_email,
-        fromName: from_name || '',
-        dailyLimitStart: daily_limit_start || 5,
-        dailyLimitMax: daily_limit_max || 50,
-        rampUpDays: ramp_up_days || 21,
-        isActive: true,
-      })
-      .onConflictDoUpdate({
-        target: [emailWarmupConfigs.tenantId, emailWarmupConfigs.fromEmail],
-        set: {
+    const [config] = await db.transaction(async (tx) => {
+      const [c] = await tx.insert(emailWarmupConfigs)
+        .values({
+          tenantId: ctx.tenantId,
+          fromEmail: from_email,
           fromName: from_name || '',
           dailyLimitStart: daily_limit_start || 5,
           dailyLimitMax: daily_limit_max || 50,
           rampUpDays: ramp_up_days || 21,
           isActive: true,
-          updatedAt: new Date(),
-        }
+        })
+        .onConflictDoUpdate({
+          target: [emailWarmupConfigs.tenantId, emailWarmupConfigs.fromEmail],
+          set: {
+            fromName: from_name || '',
+            dailyLimitStart: daily_limit_start || 5,
+            dailyLimitMax: daily_limit_max || 50,
+            rampUpDays: ramp_up_days || 21,
+            isActive: true,
+            updatedAt: new Date(),
+          }
+        })
+        .returning();
+
+      // Add participants to pool
+      if (Array.isArray(participants) && participants.length > 0 && c) {
+  
+  
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const poolValues = participants.map((p: any) => ({
+          configId: c.id,
+          participantEmail: p.email,
+          participantName: p.name || '',
+          status: 'active',
+        } as typeof emailWarmupPool.$inferInsert));
+
+        await tx.insert(emailWarmupPool)
+          .values(poolValues)
+          .onConflictDoNothing({
+            target: [emailWarmupPool.configId, emailWarmupPool.participantEmail]
+          });
+      }
+
+      return c;
+    });
       })
       .returning();
 

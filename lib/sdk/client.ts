@@ -319,7 +319,7 @@ export class NuCRMClient {
         try {
           errorData = (await response.json()) as ApiError;
         } catch {
-          // Fallback to default on corrupted storage data
+          console.warn('[sdk-client] Failed to parse error response body');
         }
 
         throw new NuCRMError(

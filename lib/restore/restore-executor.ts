@@ -13,8 +13,8 @@
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { restoreSnapshots } from '@/drizzle/schema';
-import { eq, and, sql, type SQL } from 'drizzle-orm';
-import { extractTenantSQL, parseInsertStatement } from './backup-parser';
+import { eq, and, sql } from 'drizzle-orm';
+import { extractTenantSQL, convertToUpsert } from './backup-parser';
 
 /**
  * Foreign key dependency ordering for restore.
@@ -150,9 +150,7 @@ export async function createPreRestoreSnapshot(
   
   for (const table of tables) {
     try {
-      const result = await db.execute(sql`
-        SELECT * FROM ${sql.identifier(table)} WHERE tenant_id = ${tenantId}
-      `);
+      const result = await db.execute(sql.raw(`SELECT * FROM public.${table} WHERE tenant_id = '${tenantId}'`));
       snapshotData[table] = result.rows;
       totalRecords += result.rows.length;
     } catch {
@@ -192,18 +190,16 @@ export async function rollbackToSnapshot(snapshotId: string, tenantId: string): 
   await db.transaction(async (tx) => {
     for (const [table, rows] of Object.entries(snapshotData)) {
       // Delete current data
-      await tx.execute(sql`DELETE FROM ${sql.identifier(table)} WHERE tenant_id = ${tenantId}`);
+      await tx.execute(sql.raw(`DELETE FROM public.${table} WHERE tenant_id = '${tenantId}'`));
       
       // Restore from snapshot
       if (Array.isArray(rows) && rows.length > 0) {
         const columns = Object.keys(rows[0]);
         for (const row of rows) {
-          const colIdents = columns.map(c => sql.identifier(c));
-          const valParams = columns.map(c => sql`${row[c]}`);
-          await tx.execute(sql`
-            INSERT INTO ${sql.identifier(table)} (${sql.join(colIdents, sql`, `)})
-            VALUES (${sql.join(valParams, sql`, `)})
-          `);
+          const values = columns.map(c => formatSQLValue(row[c])).join(', ');
+          await tx.execute(sql.raw(
+            `INSERT INTO public.${table} (${columns.join(', ')}) VALUES (${values})`
+          ));
         }
       }
     }
@@ -278,41 +274,22 @@ export async function executeSelectiveRestore(
         
         for (const statement of statements) {
           try {
-            const safeQuery = buildSafeInsertQuery(statement);
-            if (!safeQuery) {
-              skippedCount++;
-              continue;
-            }
             if (options.restoreMode === 'insert_only') {
-              const result = await tx.execute(sql`
-                ${safeQuery} ON CONFLICT (id) DO NOTHING
-              `);
+              const result = await tx.execute(sql.raw(
+                statement.replace(/;\s*$/, '') + ' ON CONFLICT (id) DO NOTHING'
+              ));
               if (result.rowCount && result.rowCount > 0) newCount++;
               else skippedCount++;
             } else if (options.restoreMode === 'upsert') {
-              const parsed = parseInsertStatement(statement);
-              if (!parsed) { skippedCount++; continue; }
-              const nonPkColumns = parsed.columns.filter(c => c !== 'id');
-              if (nonPkColumns.length === 0) {
-                const result = await tx.execute(sql`${safeQuery} ON CONFLICT (id) DO NOTHING`);
-                if (result.rowCount && result.rowCount > 0) newCount++;
-              } else {
-                const updateExpr = sql.join(
-                  nonPkColumns.map(c => sql`${sql.identifier(c)} = EXCLUDED.${sql.identifier(c)}`),
-                  sql`, `
-                );
-                const result = await tx.execute(sql`
-                  ${safeQuery} ON CONFLICT (id) DO UPDATE SET ${updateExpr}
-                `);
-                if (result.rowCount && result.rowCount > 0) newCount++;
-              }
-            } else if (options.restoreMode === 'replace') {
-              const result = await tx.execute(sql`${safeQuery}`);
+              const upsertSQL = convertToUpsert(statement);
+              const result = await tx.execute(sql.raw(upsertSQL));
               if (result.rowCount && result.rowCount > 0) newCount++;
+            } else if (options.restoreMode === 'replace') {
+              await tx.execute(sql.raw(statement));
+              newCount++;
             }
  
-
-
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } catch (err: any) {
             console.error(`[restore] Failed to restore row in ${table}:`, err.message);
@@ -369,6 +346,19 @@ export async function executeSelectiveRestore(
     };
   }
 }
+
+ 
+ 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatSQLValue(value: any): string {
+  if (value === null || value === undefined) return 'NULL';
+  if (typeof value === 'number') return value.toString();
+  if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+  if (value instanceof Date) return `'${value.toISOString()}'`;
+  if (typeof value === 'object') return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
 export async function countExistingRecords(
   tenantId: string,
   tables: string[]
@@ -377,9 +367,9 @@ export async function countExistingRecords(
   
   for (const table of tables) {
     try {
-      const result = await db.execute(sql`
-        SELECT count(*)::int as cnt FROM ${sql.identifier(table)} WHERE tenant_id = ${tenantId}
-      `);
+      const result = await db.execute(sql.raw(
+        `SELECT count(*)::int as cnt FROM public.${table} WHERE tenant_id = '${tenantId}'`
+      ));
       const row = result.rows[0] as { cnt?: number } | undefined;
       counts[table] = row?.cnt ?? 0;
     } catch {
@@ -413,81 +403,4 @@ export async function validateTenant(tenantId: string): Promise<{
   }
   
   return { valid: true, tenant };
-}
-
-/**
- * Parse an INSERT statement and rebuild it using Drizzle parameterized queries.
- * Only allows simple INSERT INTO table (columns) VALUES (values) format.
- * Returns a SQL fragment or null if the statement is not a safe INSERT.
- */
-function buildSafeInsertQuery(statement: string): SQL | null {
-  const trimmed = statement.replace(/;\s*$/, '').trim();
-  const insertMatch = trimmed.match(
-    /^\s*INSERT\s+INTO\s+(?:public\.)?(\w+)\s*\(([^)]+)\)\s*VALUES\s*\(([\s\S]*)\)\s*$/i
-  );
-  if (!insertMatch) return null;
-  
-  const [, tableName, columnsStr, valuesStr] = insertMatch;
-  if (!tableName || !columnsStr || !valuesStr) return null;
-  const columns = columnsStr.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-  const values = parseInsertValues(valuesStr);
-  
-  if (columns.length !== values.length || columns.length === 0) return null;
-  
-  const colIdents = columns.map(c => sql.identifier(c));
-  const valParams = values.map(v => {
-    if (v === null) return sql`DEFAULT`;
-    if (typeof v === 'number') return sql`${v}`;
-    return sql`${v}`;
-  });
-  
-  return sql`
-    INSERT INTO ${sql.identifier(tableName)} (${sql.join(colIdents, sql`, `)})
-    VALUES (${sql.join(valParams, sql`, `)})
-  `;
-}
-
-/**
- * Parse comma-separated SQL values, handling quoted strings.
- */
-function parseInsertValues(valuesStr: string): (string | number | boolean | null)[] {
-  const result: (string | number | boolean | null)[] = [];
-  let current = '';
-  let inQuote = false;
-  let parenDepth = 0;
-  
-  for (let i = 0; i < valuesStr.length; i++) {
-    const ch = valuesStr[i];
-    if (ch === "'" && (i === 0 || valuesStr[i - 1] !== '\\')) {
-      inQuote = !inQuote;
-      current += ch;
-    } else if (!inQuote && ch === '(') {
-      parenDepth++;
-      current += ch;
-    } else if (!inQuote && ch === ')') {
-      parenDepth--;
-      current += ch;
-    } else if (!inQuote && ch === ',' && parenDepth === 0) {
-      result.push(interpretSQLValue(current.trim()));
-      current = '';
-    } else {
-      current += ch;
-    }
-  }
-  if (current.trim()) {
-    result.push(interpretSQLValue(current.trim()));
-  }
-  return result;
-}
-
-function interpretSQLValue(val: string): string | number | boolean | null {
-  if (/^NULL$/i.test(val)) return null;
-  if (/^TRUE$/i.test(val)) return true;
-  if (/^FALSE$/i.test(val)) return false;
-  if (/^\d+$/.test(val)) return parseInt(val, 10);
-  if (/^\d+\.\d+$/.test(val)) return parseFloat(val);
-  if (val.startsWith("'") && val.endsWith("'")) {
-    return val.slice(1, -1).replace(/''/g, "'");
-  }
-  return val;
 }

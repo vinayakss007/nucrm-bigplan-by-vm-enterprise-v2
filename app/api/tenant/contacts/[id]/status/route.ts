@@ -43,31 +43,35 @@ export async function PATCH(
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const [contact] = await db.update(contacts)
-      .set({ 
-        leadStatus: lead_status, 
-        updatedAt: new Date() 
-      })
-      .where(and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId)))
-      .returning();
+    const [contact] = await db.transaction(async (tx) => {
+      const [c] = await tx.update(contacts)
+        .set({ 
+          leadStatus: lead_status, 
+          updatedAt: new Date() 
+        })
+        .where(and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId)))
+        .returning();
 
-    const description = `Status: ${prev.leadStatus} → ${lead_status}${reason ? ` — ${reason}` : ''}`;
-    
-    await db.insert(activities).values({
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      contactId: id,
-      eventType: 'note',
-      description,
-      metadata: { 
-        status_change: true, 
-        from: prev.leadStatus, 
-        to: lead_status, 
-        reason 
-      },
-      entityType: 'contact',
-      entityId: id,
-      action: 'status_change',
+      const description = `Status: ${prev.leadStatus} → ${lead_status}${reason ? ` — ${reason}` : ''}`;
+      
+      await tx.insert(activities).values({
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        contactId: id,
+        eventType: 'note',
+        description,
+        metadata: { 
+          status_change: true, 
+          from: prev.leadStatus, 
+          to: lead_status, 
+          reason 
+        },
+        entityType: 'contact',
+        entityId: id,
+        action: 'status_change',
+      });
+
+      return c;
     });
 
     return NextResponse.json({ data: contact });

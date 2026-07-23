@@ -71,91 +71,90 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, message: 'Thank you! We will be in touch.' });
     }
 
-    // Look up or create company
     let company_id: string | null = null;
-    if (company?.trim()) {
-      const existingCo = await db.query.companies.findFirst({
-        where: and(
-          eq(companies.tenantId, tenant_id),
-          ilike(companies.name, company.trim())
-        ),
-        columns: { id: true }
-      });
-
-      if (existingCo) {
-        company_id = existingCo.id;
-      } else {
-        const [newCo] = await db.insert(companies).values({
-          tenantId: tenant_id,
-          name: company.trim(),
-        }).returning({ id: companies.id });
-        company_id = newCo?.id ?? null;
-      }
-    }
-
-    // Check for duplicate email — upsert into leads table
-    const existingLead = await db.query.leads.findFirst({
-      where: and(
-        eq(leads.tenantId, tenant_id),
-        eq(sql`lower(${leads.email})`, email.trim().toLowerCase()),
-        isNull(leads.deletedAt)
-      ),
-      columns: { id: true, tags: true, leadStatus: true, formSubmissionsCount: true }
-    });
-
     let contactId: string;
 
-    if (existingLead) {
-      // Re-activate and update existing lead
-      const newTags = Array.isArray(tags) ? tags : [];
-      const currentTags = existingLead.tags || [];
-      const combinedTags = Array.from(new Set([...currentTags, ...newTags]));
+    await db.transaction(async (tx) => {
+      // Look up or create company
+      if (company?.trim()) {
+        const existingCo = await tx.query.companies.findFirst({
+          where: and(
+            eq(companies.tenantId, tenant_id),
+            ilike(companies.name, company.trim())
+          ),
+          columns: { id: true }
+        });
 
-      const [updated] = await db.update(leads)
-        .set({
-          phone: phone?.trim() || undefined,
-          companyName: company?.trim() || undefined,
-          companyId: company_id || undefined,
-          leadStatus: ['lost', 'unqualified'].includes(existingLead.leadStatus || '') ? 'new' : undefined,
-          tags: combinedTags,
-          formSubmissionsCount: (existingLead.formSubmissionsCount || 0) + 1,
+        if (existingCo) {
+          company_id = existingCo.id;
+        } else {
+          const [newCo] = await tx.insert(companies).values({
+            tenantId: tenant_id,
+            name: company.trim(),
+          }).returning({ id: companies.id });
+          company_id = newCo?.id ?? null;
+        }
+      }
+
+      // Check for duplicate email — upsert into leads table
+      const existingLead = await tx.query.leads.findFirst({
+        where: and(
+          eq(leads.tenantId, tenant_id),
+          eq(sql`lower(${leads.email})`, email.trim().toLowerCase()),
+          isNull(leads.deletedAt)
+        ),
+        columns: { id: true, tags: true, leadStatus: true, formSubmissionsCount: true }
+      });
+
+      if (existingLead) {
+        const newTags = Array.isArray(tags) ? tags : [];
+        const currentTags = existingLead.tags || [];
+        const combinedTags = Array.from(new Set([...currentTags, ...newTags]));
+
+        const [updated] = await tx.update(leads)
+          .set({
+            phone: phone?.trim() || undefined,
+            companyName: company?.trim() || undefined,
+            companyId: company_id || undefined,
+            leadStatus: ['lost', 'unqualified'].includes(existingLead.leadStatus || '') ? 'new' : undefined,
+            tags: combinedTags,
+            formSubmissionsCount: (existingLead.formSubmissionsCount || 0) + 1,
+            lastActivityAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(leads.id, existingLead.id))
+          .returning({ id: leads.id });
+        
+        contactId = updated?.id ?? existingLead.id;
+      } else {
+        const [newLead] = await tx.insert(leads).values({
+          tenantId: tenant_id,
+          firstName: first_name?.trim() || '',
+          lastName: last_name?.trim() || '',
+          email: email.trim().toLowerCase(),
+          phone: phone?.trim() || null,
+          companyName: company?.trim() || null,
+          companyId: company_id,
+          source: source,
+          leadStatus: 'new',
+          notes: message?.trim() || null,
+          formId: form_id || null,
+          tags: Array.isArray(tags) ? tags : [],
+          formSubmissionsCount: 1,
           lastActivityAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(leads.id, existingLead.id))
-        .returning({ id: leads.id });
-      
-      contactId = updated?.id ?? existingLead.id;
-    } else {
-      // Create new lead record
-      const [newLead] = await db.insert(leads).values({
-        tenantId: tenant_id,
-        firstName: first_name?.trim() || '',
-        lastName: last_name?.trim() || '',
-        email: email.trim().toLowerCase(),
-        phone: phone?.trim() || null,
-        companyName: company?.trim() || null,
-        companyId: company_id,
-        source: source,
-        leadStatus: 'new',
-        notes: message?.trim() || null,
-        formId: form_id || null,
-        tags: Array.isArray(tags) ? tags : [],
-        formSubmissionsCount: 1,
-        lastActivityAt: new Date(),
-      }).returning({ id: leads.id });
-      
-      if (!newLead) throw new Error('Failed to create lead');
-      contactId = newLead.id;
+        }).returning({ id: leads.id });
+        
+        if (!newLead) throw new Error('Failed to create lead');
+        contactId = newLead.id;
 
-      // Log lead activity
-      await db.insert(leadActivities).values({
-        tenantId: tenant_id,
-        leadId: contactId,
-        activityType: 'created',
-        description: `Lead captured via ${source}${form_id ? ` (form: ${form_id})` : ''}`,
-      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
-    }
+        await tx.insert(leadActivities).values({
+          tenantId: tenant_id,
+          leadId: contactId,
+          activityType: 'created',
+          description: `Lead captured via ${source}${form_id ? ` (form: ${form_id})` : ''}`,
+        });
+      }
+    });
 
     // Insert into formSubmissions if form_id provided
     if (form_id && contactId) {
