@@ -195,7 +195,7 @@ describe('auto-install', () => {
       const { db } = await import('@/drizzle/db');
       const { installTemplateModules } = await import('@/lib/modules/auto-install');
 
-      let captured: unknown[] = [];
+      const captured: unknown[] = [];
       (db.insert as ReturnType<typeof vi.fn>).mockImplementation((table: unknown) => ({
         values: vi.fn((data: unknown) => {
           captured.push({ table, data });
@@ -231,7 +231,7 @@ describe('auto-install', () => {
       const { db } = await import('@/drizzle/db');
       const { installTemplateModules } = await import('@/lib/modules/auto-install');
 
-      let captured: unknown[] = [];
+      const captured: unknown[] = [];
       (db.insert as ReturnType<typeof vi.fn>).mockImplementation((table: unknown) => ({
         values: vi.fn((data: unknown) => {
           captured.push({ table, data });
@@ -280,7 +280,7 @@ describe('auto-install', () => {
       const { db } = await import('@/drizzle/db');
       const { installTemplateModules } = await import('@/lib/modules/auto-install');
 
-      let captured: unknown[] = [];
+      const captured: unknown[] = [];
       (db.insert as ReturnType<typeof vi.fn>).mockImplementation((table: unknown) => ({
         values: vi.fn((data: unknown) => {
           captured.push({ table, data });
@@ -322,7 +322,7 @@ describe('auto-install', () => {
       const { db } = await import('@/drizzle/db');
       const { installDefaultModules } = await import('@/lib/modules/auto-install');
 
-      let captured: unknown[] = [];
+      const captured: unknown[] = [];
       (db.insert as ReturnType<typeof vi.fn>).mockImplementation((table: unknown) => ({
         values: vi.fn((data: unknown) => {
           captured.push({ table, data });
@@ -350,7 +350,7 @@ describe('auto-install', () => {
       const { db } = await import('@/drizzle/db');
       const { installDefaultModules } = await import('@/lib/modules/auto-install');
 
-      let captured: unknown[] = [];
+      const captured: unknown[] = [];
       (db.insert as ReturnType<typeof vi.fn>).mockImplementation((table: unknown) => ({
         values: vi.fn((data: unknown) => {
           captured.push({ table, data });
@@ -374,7 +374,7 @@ describe('auto-install', () => {
       const { db } = await import('@/drizzle/db');
       const { installDefaultModules } = await import('@/lib/modules/auto-install');
 
-      let captured: unknown[] = [];
+      const captured: unknown[] = [];
       (db.insert as ReturnType<typeof vi.fn>).mockImplementation((table: unknown) => ({
         values: vi.fn((data: unknown) => {
           captured.push({ table, data });
@@ -410,7 +410,7 @@ describe('auto-install', () => {
       const { db } = await import('@/drizzle/db');
       const { installDefaultModules } = await import('@/lib/modules/auto-install');
 
-      let captured: unknown[] = [];
+      const captured: unknown[] = [];
       (db.insert as ReturnType<typeof vi.fn>).mockImplementation((table: unknown) => ({
         values: vi.fn((data: unknown) => {
           captured.push({ table, data });
