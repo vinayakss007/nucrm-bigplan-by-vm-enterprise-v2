@@ -292,8 +292,7 @@ describe('webhooks - fireWebhooks', () => {
 
   it('returns when no hooks', async () => {
     const { fireWebhooks } = await import('@/lib/webhooks');
-    await fireWebhooks('t1', 'contact.created', { id: 'c1' });
-    expect(true).toBe(true);
+    await expect(fireWebhooks('t1', 'contact.created', { id: 'c1' })).resolves.toBeUndefined();
   });
 });
 
@@ -377,26 +376,31 @@ describe('rate-limit - comprehensive', () => {
 
 describe('metrics - comprehensive', () => {
   beforeEach(() => {
+    process.env.PROMETHEUS_ENABLED = 'true';
     vi.resetModules();
     vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    delete process.env.PROMETHEUS_ENABLED;
   });
 
   it('increment metric', async () => {
     const { metrics } = await import('@/lib/metrics');
     metrics.increment('test.cnt', 3, { env: 'test' });
-    expect(true).toBe(true);
+    expect(metrics.getMetrics().length).toBeGreaterThan(0);
   });
 
   it('timing metric', async () => {
     const { metrics } = await import('@/lib/metrics');
     metrics.timing('test.time', 100, { endpoint: '/api' });
-    expect(true).toBe(true);
+    expect(metrics.getMetrics().length).toBeGreaterThan(0);
   });
 
   it('gauge metric', async () => {
     const { metrics } = await import('@/lib/metrics');
     metrics.gauge('test.gauge', 42, { region: 'us' });
-    expect(true).toBe(true);
+    expect(metrics.getMetrics().length).toBeGreaterThan(0);
   });
 
   it('getMetrics returns array', async () => {
@@ -411,27 +415,27 @@ describe('metrics - comprehensive', () => {
   });
 
   it('trackRequest tracks HTTP metrics', async () => {
-    const { trackRequest } = await import('@/lib/metrics');
+    const { trackRequest, metrics } = await import('@/lib/metrics');
     trackRequest('GET', '/api/users', 200, 45);
-    expect(true).toBe(true);
+    expect(metrics.getMetrics().length).toBeGreaterThan(0);
   });
 
   it('trackDatabaseQuery tracks DB metrics', async () => {
-    const { trackDatabaseQuery } = await import('@/lib/metrics');
+    const { trackDatabaseQuery, metrics } = await import('@/lib/metrics');
     trackDatabaseQuery('users', 'SELECT', 25, true);
-    expect(true).toBe(true);
+    expect(metrics.getMetrics().length).toBeGreaterThan(0);
   });
 
   it('trackAuthEvent tracks auth metrics', async () => {
-    const { trackAuthEvent } = await import('@/lib/metrics');
+    const { trackAuthEvent, metrics } = await import('@/lib/metrics');
     trackAuthEvent('login', true, 'user-1');
-    expect(true).toBe(true);
+    expect(metrics.getMetrics().length).toBeGreaterThan(0);
   });
 
   it('trackBusinessMetric tracks business metrics', async () => {
-    const { trackBusinessMetric } = await import('@/lib/metrics');
+    const { trackBusinessMetric, metrics } = await import('@/lib/metrics');
     trackBusinessMetric('revenue', 50000, 'tenant-1');
-    expect(true).toBe(true);
+    expect(metrics.getMetrics().length).toBeGreaterThan(0);
   });
 
   it('exportPrometheusMetrics returns string', async () => {
@@ -454,67 +458,60 @@ describe('notifications - comprehensive', () => {
 
   it('createNotification with entity deep link', async () => {
     const { createNotification } = await import('@/lib/notifications');
-    await createNotification({
+    await expect(createNotification({
       userId: 'u1', tenantId: 't1', type: 'deal_won',
       title: 'Won!', entity_type: 'deal', entity_id: 'd1',
-    });
-    expect(true).toBe(true);
+    })).resolves.toBeUndefined();
   });
 
   it('createNotification with explicit link', async () => {
     const { createNotification } = await import('@/lib/notifications');
-    await createNotification({
+    await expect(createNotification({
       userId: 'u1', tenantId: 't1', type: 'task_assigned',
       title: 'Task', link: '/custom',
-    });
-    expect(true).toBe(true);
+    })).resolves.toBeUndefined();
   });
 
   it('createNotification with all entity types', async () => {
     const { createNotification } = await import('@/lib/notifications');
     for (const et of ['contact', 'deal', 'task', 'company', 'lead', 'sequence'] as const) {
-      await createNotification({
+      await expect(createNotification({
         userId: 'u1', tenantId: 't1', type: 'system',
         title: 'Entity', entity_type: et, entity_id: `${et}-1`,
-      });
+      })).resolves.toBeUndefined();
     }
-    expect(true).toBe(true);
   });
 
   it('createNotification truncates long text', async () => {
     const { createNotification } = await import('@/lib/notifications');
-    await createNotification({
+    await expect(createNotification({
       userId: 'u1', tenantId: 't1', type: 'system',
       title: 'a'.repeat(300), body: 'b'.repeat(600),
-    });
-    expect(true).toBe(true);
+    })).resolves.toBeUndefined();
   });
 
   it('notifyTenantMembers handles empty list', async () => {
     const { query } = await import('@/lib/db/client');
     vi.mocked(query).mockResolvedValueOnce({ rows: [] });
     const { notifyTenantMembers } = await import('@/lib/notifications');
-    await notifyTenantMembers({
+    await expect(notifyTenantMembers({
       tenantId: 't1', type: 'system', title: 'Msg',
-    });
-    expect(true).toBe(true);
+    })).resolves.toBeUndefined();
   });
 
   it('notifyTenantMembers with entity link', async () => {
     const { query } = await import('@/lib/db/client');
     vi.mocked(query).mockResolvedValueOnce({ rows: [{ user_id: 'u1' }] });
     const { notifyTenantMembers } = await import('@/lib/notifications');
-    await notifyTenantMembers({
+    await expect(notifyTenantMembers({
       tenantId: 't1', type: 'deal_won', title: 'Won!',
       entity_type: 'deal', entity_id: 'd1',
-    });
-    expect(true).toBe(true);
+    })).resolves.toBeUndefined();
   });
 
   it('processMentions handles no mentions', async () => {
     const { processMentions } = await import('@/lib/notifications');
-    await processMentions('No mentions', 't1', 'u1');
-    expect(true).toBe(true);
+    await expect(processMentions('No mentions', 't1', 'u1')).resolves.toBeUndefined();
   });
 
   it('processMentions handles empty string', async () => {
@@ -564,37 +561,32 @@ describe('email/service - sendEmail', () => {
     process.env.SUPER_ADMIN_EMAIL = 'admin@e.com';
     process.env.NODE_ENV = 'development';
     const { alertSuperAdmin } = await import('@/lib/email/service');
-    await alertSuperAdmin('Alert', 'DB down');
-    expect(true).toBe(true);
+    await expect(alertSuperAdmin('Alert', 'DB down')).resolves.toBeUndefined();
   });
 
   it('sendWebhookNotification to Discord', async () => {
     process.env.DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/t';
     const { sendWebhookNotification } = await import('@/lib/email/service');
-    await sendWebhookNotification({ title: 'T', message: 'M', color: '#ff0000' });
-    expect(true).toBe(true);
+    await expect(sendWebhookNotification({ title: 'T', message: 'M', color: '#ff0000' })).resolves.toBeUndefined();
   });
 
   it('sendWebhookNotification to Slack', async () => {
     process.env.SLACK_WEBHOOK_URL = 'https://hooks.slack.com/t';
     const { sendWebhookNotification } = await import('@/lib/email/service');
-    await sendWebhookNotification({ title: 'T', message: 'M' });
-    expect(true).toBe(true);
+    await expect(sendWebhookNotification({ title: 'T', message: 'M' })).resolves.toBeUndefined();
   });
 
   it('sendTelegram with valid config', async () => {
     const { sendTelegram } = await import('@/lib/email/service');
-    await sendTelegram({
+    await expect(sendTelegram({
       botToken: '123:ABC', chatId: '456',
       title: 'T', message: 'M', icon: '🚨', url: 'https://e.com',
-    });
-    expect(true).toBe(true);
+    })).resolves.toBeUndefined();
   });
 
   it('sendTelegram skips when missing token', async () => {
     const { sendTelegram } = await import('@/lib/email/service');
-    await sendTelegram({ botToken: '', chatId: '456', title: 'T', message: 'M' });
-    expect(true).toBe(true);
+    await expect(sendTelegram({ botToken: '', chatId: '456', title: 'T', message: 'M' })).resolves.toBeUndefined();
   });
 
   it('addTracking adds pixel', async () => {
@@ -612,35 +604,30 @@ describe('export - comprehensive', () => {
 
   it('enqueueExport for contacts', async () => {
     const { enqueueExport } = await import('@/lib/export');
-    await enqueueExport({ type: 'contacts', tenantId: 't1', userId: 'u1' });
-    expect(true).toBe(true);
+    await expect(enqueueExport({ type: 'contacts', tenantId: 't1', userId: 'u1' })).resolves.toBeUndefined();
   });
 
   it('enqueueExport for deals with callback', async () => {
     const { enqueueExport } = await import('@/lib/export');
-    await enqueueExport({
+    await expect(enqueueExport({
       type: 'deals', tenantId: 't1', userId: 'u1',
       callbackUrl: 'https://cb.com',
-    });
-    expect(true).toBe(true);
+    })).resolves.toBeUndefined();
   });
 
   it('enqueueExport for companies', async () => {
     const { enqueueExport } = await import('@/lib/export');
-    await enqueueExport({ type: 'companies', tenantId: 't1', userId: 'u1' });
-    expect(true).toBe(true);
+    await expect(enqueueExport({ type: 'companies', tenantId: 't1', userId: 'u1' })).resolves.toBeUndefined();
   });
 
   it('enqueueExport for tasks', async () => {
     const { enqueueExport } = await import('@/lib/export');
-    await enqueueExport({ type: 'tasks', tenantId: 't1', userId: 'u1' });
-    expect(true).toBe(true);
+    await expect(enqueueExport({ type: 'tasks', tenantId: 't1', userId: 'u1' })).resolves.toBeUndefined();
   });
 
   it('enqueueContactImport', async () => {
     const { enqueueContactImport } = await import('@/lib/export');
-    await enqueueContactImport('t1', 'u1', 'csv', { skipDuplicates: true, updateExisting: false }, 100);
-    expect(true).toBe(true);
+    await expect(enqueueContactImport('t1', 'u1', 'csv', { skipDuplicates: true, updateExisting: false }, 100)).resolves.toBeUndefined();
   });
 });
 

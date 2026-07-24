@@ -214,7 +214,7 @@ describe('modules/registry', () => {
   describe('ModuleRegistry.disable', () => {
     it('calls update', async () => {
       await ModuleRegistry.disable('t1', 'core-crm');
-      expect(true).toBe(true);
+      expect(ModuleRegistry.get('core-crm')).toBeDefined();
     });
   });
 
@@ -235,7 +235,7 @@ describe('modules/registry', () => {
   describe('ModuleRegistry.updateSettings', () => {
     it('calls update with new settings', async () => {
       await ModuleRegistry.updateSettings('t1', 'whatsapp-bot', { token: 'abc' });
-      expect(true).toBe(true);
+      expect(ModuleRegistry.get('whatsapp-bot')).toBeDefined();
     });
   });
 

@@ -166,11 +166,13 @@ describe('queue/index - comprehensive', () => {
 
   it('memory adapter processes jobs', async () => {
     vi.useFakeTimers();
-    const { addJob } = await import('@/lib/queue');
+    const { addJob, getQueueAdapter } = await import('@/lib/queue');
     await addJob('send-notification', { userId: 'u1' });
+    const adapter = await getQueueAdapter();
     vi.advanceTimersByTime(6000);
     vi.useRealTimers();
-    expect(true).toBe(true);
+    expect(adapter).toBeDefined();
+    expect(adapter.provider).toBe('memory');
   });
 });
 
@@ -187,8 +189,7 @@ describe('webhooks - fireWebhooks', () => {
 
   it('returns when no hooks', async () => {
     const { fireWebhooks } = await import('@/lib/webhooks');
-    await fireWebhooks('t1', 'contact.created', { id: 'c1' });
-    expect(true).toBe(true);
+    await expect(fireWebhooks('t1', 'contact.created', { id: 'c1' })).resolves.toBeUndefined();
   });
 });
 
