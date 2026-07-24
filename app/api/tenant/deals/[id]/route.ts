@@ -95,8 +95,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       delete body.value;
     }
 
-    // Map legacy 'stage' (string like "won") to stageId (UUID)
-    if (body.stage !== undefined && body.stageId === undefined) {
+    // Map legacy 'stage' or 'stage_name' (string like "won") to stageId (UUID)
+    if (body.stageId === undefined && (body.stage !== undefined || body.stage_name !== undefined)) {
+      body.stage = body.stage || body.stage_name;
+      delete body.stage_name;
       // Try to find stage by name
       const [stageRecord] = await db
         .select({ id: dealStages.id, name: dealStages.name })
