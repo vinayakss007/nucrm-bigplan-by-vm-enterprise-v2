@@ -11,6 +11,7 @@ import { trackFieldChange } from '@/lib/history';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
+import { withConcurrencyGuard } from '@/lib/concurrency';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -153,21 +154,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         notes: contacts.notes,
         companyId: contacts.companyId,
         assignedTo: contacts.assignedTo,
+        updatedAt: contacts.updatedAt,
       })
       .from(contacts)
-      .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId)))
+      .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId), sql`${contacts.deletedAt} IS NULL`))
       .limit(1);
 
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const [row] = await db
-      .update(contacts)
-      .set({
-        ...updateData,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId)))
-      .returning();
+    const [row] = await withConcurrencyGuard(
+      () => db
+        .update(contacts)
+        .set({
+          ...updateData,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId), eq(contacts.updatedAt, existing.updatedAt!), sql`${contacts.deletedAt} IS NULL`))
+        .returning(),
+      'Contact',
+      existing.updatedAt!,
+    );
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 

@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { quotes } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
+import { withConcurrencyGuard } from '@/lib/concurrency';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -88,7 +89,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const [existing] = await db
-      .select({ id: quotes.id })
+      .select({ id: quotes.id, updatedAt: quotes.updatedAt })
       .from(quotes)
       .where(
         and(
@@ -101,15 +102,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const [updated] = await db
-      .update(quotes)
-      .set({
-        ...allowedFields,
-        updatedAt: new Date(),
-        updatedBy: ctx.userId,
-      })
-      .where(and(eq(quotes.id, quoteId), eq(quotes.tenantId, ctx.tenantId)))
-      .returning();
+    const [updated] = await withConcurrencyGuard(
+      () => db
+        .update(quotes)
+        .set({
+          ...allowedFields,
+          updatedAt: new Date(),
+          updatedBy: ctx.userId,
+        })
+        .where(and(eq(quotes.id, quoteId), eq(quotes.tenantId, ctx.tenantId), eq(quotes.updatedAt, existing.updatedAt!), sql`${quotes.deletedAt} IS NULL`))
+        .returning(),
+      'Quote',
+      existing.updatedAt!,
+    );
 
     await logAudit({
       tenantId: ctx.tenantId,

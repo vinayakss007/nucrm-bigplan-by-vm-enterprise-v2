@@ -11,6 +11,7 @@ import { emailTemplates } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { validateBody } from '@/lib/api/validate';
 import { updateEmailTemplateSchema } from '@/lib/api/schemas';
+import { withConcurrencyGuard } from '@/lib/concurrency';
 
  
  
@@ -74,21 +75,36 @@ export async function PATCH(request: NextRequest, { params }: any) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
 
-    const [row] = await db.update(emailTemplates)
-      .set(updateData)
-      .where(and(
+    const existing = await db.query.emailTemplates.findFirst({
+      where: and(
         eq(emailTemplates.id, id),
         eq(emailTemplates.tenantId, ctx.tenantId),
         isNull(emailTemplates.deletedAt)
-      ))
-      .returning({
-        id: emailTemplates.id,
-        name: emailTemplates.name,
-        subject: emailTemplates.subject,
-        bodyHtml: emailTemplates.bodyHtml,
-        category: emailTemplates.category,
-        updatedAt: emailTemplates.updatedAt,
-      });
+      ),
+      columns: { updatedAt: true },
+    });
+    if (!existing) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+
+    const [row] = await withConcurrencyGuard(
+      () => db.update(emailTemplates)
+        .set(updateData)
+        .where(and(
+          eq(emailTemplates.id, id),
+          eq(emailTemplates.tenantId, ctx.tenantId),
+          isNull(emailTemplates.deletedAt),
+          eq(emailTemplates.updatedAt, existing.updatedAt!)
+        ))
+        .returning({
+          id: emailTemplates.id,
+          name: emailTemplates.name,
+          subject: emailTemplates.subject,
+          bodyHtml: emailTemplates.bodyHtml,
+          category: emailTemplates.category,
+          updatedAt: emailTemplates.updatedAt,
+        }),
+      'EmailTemplate',
+      existing.updatedAt!
+    );
 
     if (!row) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     return NextResponse.json({ data: row });

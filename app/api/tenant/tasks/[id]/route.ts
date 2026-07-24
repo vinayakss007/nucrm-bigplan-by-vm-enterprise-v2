@@ -10,6 +10,7 @@ import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
+import { withConcurrencyGuard } from '@/lib/concurrency';
 
  
  
@@ -24,6 +25,14 @@ export async function PATCH(req: NextRequest, { params }: any) {
     const validated = validateBody(updateTaskSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
+
+    const [existing] = await db
+      .select({ id: tasks.id, updatedAt: tasks.updatedAt })
+      .from(tasks)
+      .where(and(eq(tasks.id, id), eq(tasks.tenantId, ctx.tenantId), isNull(tasks.deletedAt)))
+      .limit(1);
+
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
  
  
@@ -51,14 +60,19 @@ export async function PATCH(req: NextRequest, { params }: any) {
       updateData.completedAt = null;
     }
 
-    const [row] = await db.update(tasks)
-      .set(updateData)
-      .where(and(
-        eq(tasks.id, id),
-        eq(tasks.tenantId, ctx.tenantId),
-        isNull(tasks.deletedAt)
-      ))
-      .returning();
+    const [row] = await withConcurrencyGuard(
+      () => db.update(tasks)
+        .set(updateData)
+        .where(and(
+          eq(tasks.id, id),
+          eq(tasks.tenantId, ctx.tenantId),
+          eq(tasks.updatedAt, existing.updatedAt!),
+          isNull(tasks.deletedAt)
+        ))
+        .returning(),
+      'Task',
+      existing.updatedAt!,
+    );
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
