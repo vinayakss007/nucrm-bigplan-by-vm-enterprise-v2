@@ -22,7 +22,6 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const { theme, setTheme }       = useTheme();
-  const [_mounted, setMounted]     = useState(false);
   const router                    = useRouter();
   const inputRef                  = useRef<HTMLInputElement>(null);
   const timerRef                  = useRef<NodeJS.Timeout>(undefined);

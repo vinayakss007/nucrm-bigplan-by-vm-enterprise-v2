@@ -75,6 +75,12 @@ const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     category: 'core', defaultSize: '1x1', minPlan: 'free',
     refreshInterval: 120, apiEndpoint: '/api/tenant/dashboard/widgets/follow-ups',
   },
+  'notifications-list': {
+    id: 'notifications-list', name: 'Notifications',
+    description: 'Recent notifications and unread count',
+    category: 'core', defaultSize: '1x1', minPlan: 'free',
+    refreshInterval: 60, apiEndpoint: '/api/tenant/dashboard/widgets/notifications',
+  },
 }
 
 export function getWidget(id: string): WidgetConfig | undefined {
