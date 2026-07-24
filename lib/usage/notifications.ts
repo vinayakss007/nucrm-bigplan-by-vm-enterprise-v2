@@ -8,6 +8,7 @@ import { db } from '@/drizzle/db';
 import { tenants, users, limitViolations } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { sendEmail, sendWebhookNotification, sendTelegram } from '@/lib/email/service';
+import { logger } from '@/lib/logger';
 import type { LimitKind } from './tracker';
 
 export interface LimitHit {
@@ -70,7 +71,12 @@ export async function notifyLimitHit(hit: LimitHit): Promise<void> {
           <p>To keep adding records, upgrade your plan from the billing page:</p>
           <p><a href="${process.env['NEXT_PUBLIC_APP_URL'] ?? ''}/tenant/settings/billing">Upgrade plan</a></p>
         `,
-      }).catch(() => {});
+      }).catch((err) => {
+        logger.warn('[notifications] Failed to send email notification', {
+          tenantId: hit.tenantId, channel: 'email',
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
     }
   }
 
@@ -80,7 +86,12 @@ export async function notifyLimitHit(hit: LimitHit): Promise<void> {
     message,
     color: '#ef4444',
     url: `${process.env['NEXT_PUBLIC_APP_URL'] ?? ''}/superadmin/tenants/${tenant.id}`,
-  }).catch(() => {});
+  }).catch((err) => {
+    logger.warn('[notifications] Failed to send webhook notification', {
+      tenantId: hit.tenantId, channel: 'webhook',
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
 
   sendTelegram({
     botToken: process.env['TELEGRAM_BOT_TOKEN'] ?? '',
@@ -89,7 +100,12 @@ export async function notifyLimitHit(hit: LimitHit): Promise<void> {
     message,
     icon: '🛑',
     url: `${process.env['NEXT_PUBLIC_APP_URL'] ?? ''}/superadmin/tenants/${tenant.id}`,
-  }).catch(() => {});
+  }).catch((err) => {
+    logger.warn('[notifications] Failed to send Telegram notification', {
+      tenantId: hit.tenantId, channel: 'telegram',
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
 }
 
 function labelFor(kind: LimitKind): string {

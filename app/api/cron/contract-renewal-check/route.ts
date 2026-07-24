@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { contracts, users, activities } from '@/drizzle/schema';
 import { eq, and, isNull, lte, sql } from 'drizzle-orm';
+import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/email/service';
 import { createNotification } from '@/lib/notifications';
 import { apiError } from '@/lib/api-error';
@@ -120,7 +121,11 @@ export async function POST(request: NextRequest) {
           eventType: 'contract_renewal_reminder',
           description: `Renewal reminder sent: ${contract.title} expires in ${days} days`,
           metadata: { reminder_days: days, end_date: contract.endDate },
-        }).catch(() => {});
+        }).catch((err) => {
+          logger.warn('[cron-contract] Failed to log activity', {
+            contractId: contract.id, error: err instanceof Error ? err.message : String(err),
+          });
+        });
 
         remindersSent++;
       }
