@@ -11,6 +11,7 @@ import { fireWebhooks } from '@/lib/webhooks';
 import { notifyTenantMembers } from '@/lib/notifications';
 import { logError } from '@/lib/errors-server';
 import { cache } from '@/lib/cache';
+import { withConcurrencyGuard } from '@/lib/concurrency';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -121,9 +122,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const [prev] = await db
-      .select({ stageId: deals.stageId, title: deals.title, contactId: deals.contactId, amount: deals.amount })
+      .select({ stageId: deals.stageId, title: deals.title, contactId: deals.contactId, amount: deals.amount, updatedAt: deals.updatedAt })
       .from(deals)
-      .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId)))
+      .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId), sql`${deals.deletedAt} IS NULL`))
       .limit(1);
 
     if (!prev) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -140,11 +141,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       updateData.stageEnteredAt = new Date();
     }
 
-    const [row] = await db
-      .update(deals)
-      .set(updateData)
-      .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId)))
-      .returning();
+    const [row] = await withConcurrencyGuard(
+      () => db
+        .update(deals)
+        .set(updateData)
+        .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId), eq(deals.updatedAt, prev.updatedAt!), sql`${deals.deletedAt} IS NULL`))
+        .returning(),
+      'Deal',
+      prev.updatedAt!,
+    );
 
     if (body.stageId && prev.stageId !== body.stageId) {
       // Logic for stage change

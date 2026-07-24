@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { meetings, contacts } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
+import { withConcurrencyGuard } from '@/lib/concurrency';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -54,7 +55,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
-    const [existing] = await db.select({ id: meetings.id })
+    const [existing] = await db.select({ id: meetings.id, updatedAt: meetings.updatedAt })
       .from(meetings)
       .where(and(eq(meetings.id, id), eq(meetings.tenantId, ctx.tenantId), isNull(meetings.deletedAt)))
       .limit(1);
@@ -73,10 +74,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (v.deal_id !== undefined) updates.dealId = v.deal_id ?? null;
     if (v.status !== undefined) updates.status = v.status;
 
-    const [updated] = await db.update(meetings)
-      .set(updates)
-      .where(eq(meetings.id, id))
-      .returning();
+    const [updated] = await withConcurrencyGuard(
+      () => db.update(meetings)
+        .set(updates)
+        .where(and(eq(meetings.id, id), eq(meetings.updatedAt, existing.updatedAt!), isNull(meetings.deletedAt)))
+        .returning(),
+      'Meeting',
+      existing.updatedAt!,
+    );
 
     return NextResponse.json({ data: updated });
   } catch (err: unknown) {

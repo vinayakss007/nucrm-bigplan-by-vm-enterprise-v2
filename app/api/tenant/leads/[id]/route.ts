@@ -8,6 +8,7 @@ import { validateBody } from '@/lib/api/validate';
 import { updateLeadSchema } from '@/lib/api/schemas';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
+import { withConcurrencyGuard } from '@/lib/concurrency';
 
 /**
  * GET /api/tenant/leads/[id]
@@ -114,14 +115,15 @@ export async function PATCH(
     const v = validated.data;
 
     // Verify lead exists and belongs to tenant
-    const existing = await db.query.leads.findFirst({
-      where: and(
+    const [existing] = await db
+      .select({ id: leads.id, updatedAt: leads.updatedAt })
+      .from(leads)
+      .where(and(
         eq(leads.id, id),
         eq(leads.tenantId, ctx.tenantId),
         isNull(leads.deletedAt)
-      ),
-      columns: { id: true }
-    });
+      ))
+      .limit(1);
     
     if (!existing) {
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
@@ -166,14 +168,19 @@ export async function PATCH(
     if (v.custom_fields !== undefined) updateData.customFields = v.custom_fields;
     if (v.score !== undefined) updateData.score = v.score;
 
-    const [updatedLead] = await db.update(leads)
-      .set(updateData)
-      .where(and(
-        eq(leads.id, id),
-        eq(leads.tenantId, ctx.tenantId),
-        isNull(leads.deletedAt)
-      ))
-      .returning();
+    const [updatedLead] = await withConcurrencyGuard(
+      () => db.update(leads)
+        .set(updateData)
+        .where(and(
+          eq(leads.id, id),
+          eq(leads.tenantId, ctx.tenantId),
+          eq(leads.updatedAt, existing.updatedAt!),
+          isNull(leads.deletedAt)
+        ))
+        .returning(),
+      'Lead',
+      existing.updatedAt!,
+    );
     
     // Log activity for status changes
     if (rawBody.lead_status) {

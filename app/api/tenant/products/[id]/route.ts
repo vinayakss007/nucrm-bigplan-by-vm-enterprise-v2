@@ -8,6 +8,7 @@ import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
+import { withConcurrencyGuard } from '@/lib/concurrency';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -57,7 +58,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
     const existing = await db.query.products.findFirst({
       where: and(eq(products.id, id), eq(products.tenantId, ctx.tenantId), isNull(products.deletedAt)),
-      columns: { id: true },
+      columns: { id: true, updatedAt: true },
     });
     if (!existing) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });
@@ -74,10 +75,14 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     if (v.sku !== undefined) updateData.sku = v.sku;
     if (v.base_price !== undefined) updateData.basePrice = String(v.base_price);
 
-    const [updated] = await db.update(products)
-      .set(updateData)
-      .where(and(eq(products.id, id), eq(products.tenantId, ctx.tenantId), isNull(products.deletedAt)))
-      .returning();
+    const [updated] = await withConcurrencyGuard(
+      () => db.update(products)
+        .set(updateData)
+        .where(and(eq(products.id, id), eq(products.tenantId, ctx.tenantId), isNull(products.deletedAt), eq(products.updatedAt, existing.updatedAt!)))
+        .returning(),
+      'Product',
+      existing.updatedAt!,
+    );
 
     logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
