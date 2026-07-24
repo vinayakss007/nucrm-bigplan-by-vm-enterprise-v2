@@ -146,7 +146,11 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     captureError(err, `workflow:${workflow.name}`);
-    await updateExecution(db, execution.id, 'failed', null, message);
+    try {
+      await updateExecution(db, execution.id, 'failed', null, message);
+    } catch (updateErr) {
+      captureError(updateErr, 'workflow:execution-status-update');
+    }
   }
 
   return execution.id;
@@ -286,12 +290,12 @@ async function executeActionNode(
         if (!contactId || !tag) break;
         const [existing] = await dbOrTx.select({ tags: contacts.tags })
           .from(contacts)
-          .where(eq(contacts.id, contactId))
+          .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId)))
           .limit(1);
         const currentTags = existing?.tags || [];
         if (!currentTags.includes(tag)) {
           await dbOrTx.update(contacts).set({ tags: [...currentTags, tag], updatedAt: new Date() })
-            .where(eq(contacts.id, contactId));
+            .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId)));
         }
         break;
       }

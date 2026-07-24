@@ -1,19 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+function mockInsertChain(resolvedValue?: unknown) {
+  return { values: vi.fn().mockResolvedValue(resolvedValue ?? [{ id: 'exec-1' }]) };
+}
+function mockUpdateChain() {
+  return { set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }) };
+}
+function mockSelectChain() {
+  return { from: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([]) }) }) };
+}
+
 const mockTransaction = vi.hoisted(() => vi.fn());
-const mockQuery = vi.hoisted(() => vi.fn());
-const mockInsert = vi.hoisted(() => vi.fn());
-const mockUpdate = vi.hoisted(() => vi.fn());
-const mockSelect = vi.hoisted(() => vi.fn());
-const mockExecute = vi.hoisted(() => vi.fn());
 
 const mockDb = vi.hoisted(() => ({
   query: { automations: { findMany: vi.fn() }, integrations: { findFirst: vi.fn() } },
-  insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn() })) })),
-  update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) })),
-  select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => ({ limit: vi.fn() })) })) })),
+  insert: vi.fn(mockInsertChain),
+  update: vi.fn(mockUpdateChain),
+  select: vi.fn(mockSelectChain),
   execute: vi.fn(),
   transaction: mockTransaction,
+}));
+
+const mockTx = vi.hoisted(() => ({
+  insert: vi.fn(mockInsertChain),
+  update: vi.fn(mockUpdateChain),
+  select: vi.fn(mockSelectChain),
+  execute: vi.fn(),
 }));
 
 vi.mock('@/drizzle/db', () => ({ db: mockDb }));
@@ -29,14 +41,12 @@ describe('automation/engine transactions', () => {
 
   describe('evaluateAutomations', () => {
     it('wraps action execution + audit log in a transaction', async () => {
-      const actionFn = vi.fn();
-      mockTransaction.mockImplementation(async (cb: (tx: typeof mockDb) => Promise<void>) => {
-        await cb(mockDb);
+      mockTransaction.mockImplementation(async (cb: (tx: typeof mockTx) => Promise<void>) => {
+        await cb(mockTx);
       });
       mockDb.query.automations.findMany.mockResolvedValue([
         { id: 'auto-1', isActive: true, triggerType: 'contact.created', conditions: [], actions: [{ type: 'create_task', config: { title: 'Test task' } }], name: 'Test Auto', createdAt: new Date() },
       ]);
-      mockDb.insert.mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
 
       const { evaluateAutomations } = await import('@/lib/automation/engine');
 
@@ -47,19 +57,18 @@ describe('automation/engine transactions', () => {
       });
 
       expect(mockTransaction).toHaveBeenCalled();
+      expect(mockTx.insert).toHaveBeenCalled();
     });
 
     it('logs success run within the same transaction', async () => {
-      let capturedTx: typeof mockDb | null = null;
-      mockTransaction.mockImplementation(async (cb: (tx: typeof mockDb) => Promise<void>) => {
-        capturedTx = mockDb;
-        await cb(mockDb);
+      let capturedTx: typeof mockTx | null = null;
+      mockTransaction.mockImplementation(async (cb: (tx: typeof mockTx) => Promise<void>) => {
+        capturedTx = mockTx;
+        await cb(mockTx);
       });
       mockDb.query.automations.findMany.mockResolvedValue([
         { id: 'auto-1', isActive: true, triggerType: 'contact.created', conditions: [], actions: [], name: 'Test Auto', createdAt: new Date() },
       ]);
-      const valuesFn = vi.fn().mockResolvedValue(undefined);
-      mockDb.insert.mockReturnValue({ values: valuesFn });
 
       const { evaluateAutomations } = await import('@/lib/automation/engine');
 
@@ -69,7 +78,8 @@ describe('automation/engine transactions', () => {
         data: { email: 'test@test.com' },
       });
 
-      expect(mockDb.insert).toHaveBeenCalled();
+      expect(capturedTx).toBe(mockTx);
+      expect(mockTx.insert).toHaveBeenCalled();
     });
 
     it('logs failed run outside transaction on error', async () => {
@@ -78,8 +88,6 @@ describe('automation/engine transactions', () => {
       ]);
 
       mockTransaction.mockRejectedValue(new Error('action failed'));
-      const valuesFn = vi.fn().mockResolvedValue(undefined);
-      mockDb.insert.mockReturnValue({ values: valuesFn });
 
       const { evaluateAutomations } = await import('@/lib/automation/engine');
 
@@ -90,19 +98,18 @@ describe('automation/engine transactions', () => {
       });
 
       expect(mockDb.insert).toHaveBeenCalled();
+      expect(mockTx.insert).not.toHaveBeenCalled();
     });
   });
 
   describe('executeAction transaction propagation', () => {
     it('uses dbOrTx for create_task', async () => {
-      mockTransaction.mockImplementation(async (cb: (tx: typeof mockDb) => Promise<void>) => {
-        await cb(mockDb);
+      mockTransaction.mockImplementation(async (cb: (tx: typeof mockTx) => Promise<void>) => {
+        await cb(mockTx);
       });
       mockDb.query.automations.findMany.mockResolvedValue([
         { id: 'auto-1', isActive: true, triggerType: 'contact.created', conditions: [], actions: [{ type: 'create_task', config: { title: 'Follow up' } }], name: 'Test', createdAt: new Date() },
       ]);
-      const valuesFn = vi.fn().mockResolvedValue(undefined);
-      mockDb.insert.mockReturnValue({ values: valuesFn });
 
       const { evaluateAutomations } = await import('@/lib/automation/engine');
 
@@ -112,7 +119,8 @@ describe('automation/engine transactions', () => {
         data: { email: 'test@test.com' },
       });
 
-      expect(mockDb.insert).toHaveBeenCalled();
+      expect(mockTx.insert).toHaveBeenCalled();
+      expect(mockDb.insert).not.toHaveBeenCalled();
     });
   });
 });
@@ -138,8 +146,8 @@ describe('automation/workflow-executor transactions', () => {
     });
 
     it('wraps node execution in a transaction', async () => {
-      mockTransaction.mockImplementation(async (cb: (tx: typeof mockDb) => Promise<void>) => {
-        await cb(mockDb);
+      mockTransaction.mockImplementation(async (cb: (tx: typeof mockTx) => Promise<void>) => {
+        await cb(mockTx);
       });
 
       const returningFn = vi.fn().mockResolvedValue([{ id: 'exec-1' }]);
@@ -165,9 +173,6 @@ describe('automation/workflow-executor transactions', () => {
       const valuesFn = vi.fn().mockReturnValue({ returning: returningFn });
       mockDb.insert.mockReturnValue({ values: valuesFn });
 
-      const setFn = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
-      mockDb.update.mockReturnValue({ set: setFn });
-
       const { executeWorkflow } = await import('@/lib/automation/workflow-executor');
 
       const result = await executeWorkflow({
@@ -177,6 +182,7 @@ describe('automation/workflow-executor transactions', () => {
       });
 
       expect(result).toBe('exec-1');
+      expect(mockDb.insert).toHaveBeenCalled();
       expect(mockDb.update).toHaveBeenCalled();
     });
   });

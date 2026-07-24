@@ -373,7 +373,7 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: any, pa
         if (existing?.tags) {
           const newTags = existing.tags.filter((t: string) => t !== tagToRemove);
           await dbOrTx.update(contacts).set({ tags: newTags, updatedAt: new Date() })
-            .where(eq(contacts.id, resourceId));
+            .where(and(eq(contacts.id, resourceId), eq(contacts.tenantId, payload.tenantId)));
         }
       }
       break;

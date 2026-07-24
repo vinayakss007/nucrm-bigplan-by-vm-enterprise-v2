@@ -56,7 +56,7 @@ if (ALLOWED_ORIGINS.includes('*') && process.env['NODE_ENV'] === 'production') {
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) return true;
-  if (PUBLIC_PREFIXES.some(p => pathname.startsWith(p))) return true;
+  if (PUBLIC_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))) return true;
   return false;
 }
 
