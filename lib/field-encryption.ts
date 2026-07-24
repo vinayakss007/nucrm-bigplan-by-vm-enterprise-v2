@@ -22,6 +22,16 @@ export function isSensitiveField(fieldName: string): boolean {
 
  
  
+export function getEncryptionKey(): string {
+  const key = process.env['ENCRYPTION_KEY'];
+  if (!key) {
+    throw new Error(
+      '[field-encryption] ENCRYPTION_KEY env var is required. Generate with: openssl rand -hex 32'
+    );
+  }
+  return key;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function encryptSensitiveFields<T extends Record<string, any>>(
   data: T,
@@ -29,7 +39,7 @@ export function encryptSensitiveFields<T extends Record<string, any>>(
 ): T {
   const fieldsToEncrypt = fields || SENSITIVE_FIELDS;
   const result = { ...data };
-  const encKey = process.env['ENCRYPTION_KEY'] || '';
+  const encKey = getEncryptionKey();
 
   for (const [k, value] of Object.entries(result)) {
     if (fieldsToEncrypt.some(f => k.toLowerCase().includes(f.toLowerCase())) && value) {
@@ -40,8 +50,6 @@ export function encryptSensitiveFields<T extends Record<string, any>>(
   return result;
 }
 
- 
- 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function decryptSensitiveFields<T extends Record<string, any>>(
   data: T,
@@ -49,16 +57,11 @@ export function decryptSensitiveFields<T extends Record<string, any>>(
 ): T {
   const fieldsToDecrypt = fields || SENSITIVE_FIELDS;
   const result = { ...data };
-  const encKey = process.env['ENCRYPTION_KEY'] || '';
+  const encKey = getEncryptionKey();
 
   for (const [k, value] of Object.entries(result)) {
     if (fieldsToDecrypt.some(f => k.toLowerCase().includes(f.toLowerCase())) && value) {
-      try {
-        result[k as keyof T] = decrypt(String(value), encKey) as T[keyof T];
-      } catch {
-        console.error('[field-encryption] Decryption failed for field', k);
-        result[k as keyof T] = value;
-      }
+      result[k as keyof T] = decrypt(String(value), encKey) as T[keyof T];
     }
   }
 
