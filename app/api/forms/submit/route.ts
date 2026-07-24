@@ -51,8 +51,8 @@ export async function POST(req: NextRequest) {
 
     // 3. Process contact creation/update
     // Look for email in various possible keys
-    const email = (formData.email || formData.email_address || formData.Email || '').trim().toLowerCase();
-    const message = formData.message || formData.notes || formData.Message || null;
+    const email = String(formData.email || formData.email_address || formData.Email || '').trim().toLowerCase();
+    const message = String(formData.message || formData.notes || formData.Message || '');
     let contactId: string | null = null;
 
     if (email) {
