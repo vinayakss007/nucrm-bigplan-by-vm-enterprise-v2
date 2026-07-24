@@ -11,8 +11,8 @@ import { validateBody } from '@/lib/api/validate';
 
 const formSubmitSchema = z.object({
   form_id: z.string().min(1, 'Form ID is required'),
-  data: z.record(z.unknown()).optional().default({}),
-  values: z.record(z.unknown()).optional().default({}),
+  data: z.record(z.string(), z.unknown()).optional().default({}),
+  values: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
 export async function POST(req: NextRequest) {

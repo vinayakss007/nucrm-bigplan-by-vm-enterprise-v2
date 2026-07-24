@@ -5,8 +5,8 @@ describe('Security hardening - zod schema', () => {
     const { z } = await import('zod');
     const schema = z.object({
       form_id: z.string().min(1, 'Form ID is required'),
-      data: z.record(z.unknown()).optional().default({}),
-      values: z.record(z.unknown()).optional().default({}),
+      data: z.record(z.string(), z.unknown()).optional().default({}),
+      values: z.record(z.string(), z.unknown()).optional().default({}),
     });
     const result = schema.safeParse({});
     expect(result.success).toBe(false);
@@ -19,8 +19,8 @@ describe('Security hardening - zod schema', () => {
     const { z } = await import('zod');
     const schema = z.object({
       form_id: z.string().min(1, 'Form ID is required'),
-      data: z.record(z.unknown()).optional().default({}),
-      values: z.record(z.unknown()).optional().default({}),
+      data: z.record(z.string(), z.unknown()).optional().default({}),
+      values: z.record(z.string(), z.unknown()).optional().default({}),
     });
     const result = schema.safeParse({ form_id: 'abc-123', data: { name: 'John', email: 'john@x.com' } });
     expect(result.success).toBe(true);
@@ -30,8 +30,8 @@ describe('Security hardening - zod schema', () => {
     const { z } = await import('zod');
     const schema = z.object({
       form_id: z.string().min(1, 'Form ID is required'),
-      data: z.record(z.unknown()).optional().default({}),
-      values: z.record(z.unknown()).optional().default({}),
+      data: z.record(z.string(), z.unknown()).optional().default({}),
+      values: z.record(z.string(), z.unknown()).optional().default({}),
     });
     const result = schema.safeParse({ form_id: '' });
     expect(result.success).toBe(false);
