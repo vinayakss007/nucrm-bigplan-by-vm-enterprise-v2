@@ -2,10 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { forms, tenants, contacts, formSubmissions, activities } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createNotification } from '@/lib/notifications';
 import { fireWebhooks } from '@/lib/webhooks';
 import { syncCalculatedFields } from '@/lib/formula/sync';
+import { validateBody } from '@/lib/api/validate';
+
+const formSubmitSchema = z.object({
+  form_id: z.string().min(1, 'Form ID is required'),
+  data: z.record(z.unknown()).optional().default({}),
+  values: z.record(z.unknown()).optional().default({}),
+});
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,11 +22,11 @@ export async function POST(req: NextRequest) {
     if (limited) return limited;
 
     const body = await requestToJson(req);
-    // Support both 'data' and 'values' keys from frontend
-    const { form_id, data: d1 = {}, values: d2 = {} } = body;
+    const validated = validateBody(formSubmitSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    const { form_id, data: d1, values: d2 } = v;
     const formData = Object.keys(d1).length > 0 ? d1 : d2;
-
-    if (!form_id) return NextResponse.json({ error: 'Form ID is required' }, { status: 400 });
 
     // 2. Fetch form and tenant context
     const formResult = await db.select({

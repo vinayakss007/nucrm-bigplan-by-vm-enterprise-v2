@@ -47,11 +47,11 @@ const PUBLIC_PATHS = [
   '/sw.js', '/manifest.json', '/robots.txt', '/sitemap.xml',
 ];
 
-const PUBLIC_PREFIXES = ['/_next', '/favicon', '/images', '/static', '/icons', '/api/v2', '/fonts', '/sounds', '/videos'];
+const PUBLIC_PREFIXES = ['/_next', '/favicon', '/images', '/static', '/icons', '/api/v2', '/fonts', '/sounds', '/videos', '/api/tenant/forms/public'];
 
 const ALLOWED_ORIGINS = (process.env['ALLOWED_ORIGINS'] || 'http://localhost:3000').split(',').map(s => s.trim());
 if (ALLOWED_ORIGINS.includes('*') && process.env['NODE_ENV'] === 'production') {
-  console.error('FATAL: ALLOWED_ORIGINS=* in production. CORS is wide-open. Set specific origins.');
+  throw new Error('FATAL: ALLOWED_ORIGINS=* in production. CORS is wide-open. Set specific origins.');
 }
 
 function isPublic(pathname: string): boolean {

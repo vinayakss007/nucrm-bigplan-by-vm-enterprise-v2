@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    
+
     const [form] = await db
       .select({
         id: forms.id,
@@ -23,27 +23,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .limit(1);
 
     if (!form || !form.isActive || form.tenantStatus !== 'active') {
-      return NextResponse.json({ error: 'Not found' }, { status: 404, headers: {'Access-Control-Allow-Origin':'*'} });
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    return NextResponse.json(
-      { 
-        id: form.id, 
-        name: form.name, 
-        fields: form.fields, 
-        description: form.description, 
-        settings: { success_message: (form.settings as Record<string, unknown>)?.success_message as string ?? 'Thank you!' } 
-      },
-      { headers: {'Access-Control-Allow-Origin':'*'} }
-    );
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (_err: any) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: {'Access-Control-Allow-Origin':'*'} });
+    return NextResponse.json({
+      id: form.id,
+      name: form.name,
+      fields: form.fields,
+      description: form.description,
+      settings: { success_message: (form.settings as Record<string, unknown>)?.success_message as string ?? 'Thank you!' }
+    });
+  } catch {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
 export async function OPTIONS() {
-  return new Response(null, { headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET'} });
+  return new Response(null, { headers: { 'Access-Control-Allow-Methods': 'GET' } });
 }
