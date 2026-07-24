@@ -14,6 +14,7 @@
  */
 
 import { db } from '@/drizzle/db';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { 
   automations, 
   automationRuns, 
@@ -50,6 +51,7 @@ export interface TriggerPayload {
 /**
  * Evaluate all active automations for a given event and run matching ones.
  * Non-blocking: errors are caught per-automation so one failure doesn't stop others.
+ * Each automation's actions + audit log are wrapped in a transaction for atomicity.
  */
 export async function evaluateAutomations(payload: TriggerPayload): Promise<void> {
   try {
@@ -74,22 +76,25 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (!meetsConditions(automation.conditions as any[], enrichedData)) continue;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        for (const action of (automation.actions as any[] ?? [])) {
-          await executeAction(action, payload, enrichedData);
-        }
 
-        await db.insert(automationRuns).values({
-          tenantId: payload.tenantId,
-          automationId: automation.id,
-          triggerEvent: payload.event,
-          status: 'success',
-          triggeredBy: payload.userId || null,
-          metadata: enrichedData,
-        }).catch((err) => captureError(err, 'automation:log-run'));
+        await db.transaction(async (tx) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          for (const action of (automation.actions as any[] ?? [])) {
+            await executeAction(tx, action, payload, enrichedData);
+          }
 
- 
- 
+          await tx.insert(automationRuns).values({
+            tenantId: payload.tenantId,
+            automationId: automation.id,
+            triggerEvent: payload.event,
+            status: 'success',
+            triggeredBy: payload.userId || null,
+            metadata: enrichedData,
+          });
+        });
+
+  
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         captureError(err, `automation:${automation.name}`);
@@ -105,8 +110,8 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
         }).catch((err) => captureError(err, 'automation:log-failed-run'));
       }
     }
- 
- 
+  
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     captureError(err, 'automation:evaluate');
@@ -145,7 +150,7 @@ function getNestedValue(obj: Record<string, any>, path: string): any {
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function executeAction(action: any, payload: TriggerPayload, enrichedData: Record<string, any>): Promise<void> {
+async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: any, payload: TriggerPayload, enrichedData: Record<string, any>): Promise<void> {
   const { type, config = {} } = action;
 
   switch (type) {
@@ -187,13 +192,13 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
       if (!allowed[resource]?.includes(field)) return;
 
       if (resource === 'contacts') {
-        await db.update(contacts).set({ [field]: value, updatedAt: new Date() })
+        await dbOrTx.update(contacts).set({ [field]: value, updatedAt: new Date() })
           .where(and(eq(contacts.id, resourceId), eq(contacts.tenantId, payload.tenantId)));
       } else if (resource === 'deals') {
-        await db.update(deals).set({ [field]: value, updatedAt: new Date() })
+        await dbOrTx.update(deals).set({ [field]: value, updatedAt: new Date() })
           .where(and(eq(deals.id, resourceId), eq(deals.tenantId, payload.tenantId)));
       } else if (resource === 'tasks') {
-        await db.update(tasks).set({ [field]: value, updatedAt: new Date() })
+        await dbOrTx.update(tasks).set({ [field]: value, updatedAt: new Date() })
           .where(and(eq(tasks.id, resourceId), eq(tasks.tenantId, payload.tenantId)));
       }
       break;
@@ -201,7 +206,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
 
     case 'create_task': {
       const contactId = enrichedData?.['contact_id'] || enrichedData?.['id'];
-      await db.insert(tasks).values({
+      await dbOrTx.insert(tasks).values({
         tenantId: payload.tenantId,
         title: interpolate(config.title || 'Follow up', enrichedData),
         priority: config.priority || 'medium',
@@ -220,7 +225,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
       if (!contactId || !sequenceId) return;
 
       try {
-        await db.execute(sql`
+        await dbOrTx.execute(sql`
           SELECT public.enroll_contact_in_sequence(
             ${payload.tenantId}::uuid, 
             ${sequenceId}::uuid, 
@@ -240,7 +245,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
     case 'log_call': {
       const contactId = enrichedData?.['contact_id'] || enrichedData?.['id'];
       if (!contactId) return;
-      await db.insert(callLogs).values({
+      await dbOrTx.insert(callLogs).values({
         tenantId: payload.tenantId,
         contactId,
         userId: payload.userId || null,
@@ -256,7 +261,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
       const to = config.to || enrichedData?.['phone'];
       if (!to) return;
       
-      const integration = await db.query.integrations.findFirst({
+      const integration = await dbOrTx.query.integrations.findFirst({
         where: and(
           eq(integrations.tenantId, payload.tenantId),
           eq(integrations.type, 'whatsapp'),
@@ -329,7 +334,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
       const contactId = enrichedData?.['contact_id'] || enrichedData?.['id'];
       const assignTo = config.assigned_to || enrichedData?.['assigned_to'];
       if (!contactId || !assignTo) return;
-      await db.update(contacts).set({ assignedTo: assignTo, updatedAt: new Date() })
+      await dbOrTx.update(contacts).set({ assignedTo: assignTo, updatedAt: new Date() })
         .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, payload.tenantId)));
       break;
     }
@@ -340,7 +345,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
       const pipelineId = config.pipeline_id || null;
       const stageId = config.stage_id || null;
       if (!stageId) return;
-      await db.insert(deals).values({
+      await dbOrTx.insert(deals).values({
         tenantId: payload.tenantId,
         title: interpolate(config.title || 'New Deal', enrichedData),
         amount: config.amount || '0',
@@ -361,13 +366,13 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
       if (!resourceId || !tagToRemove) return;
 
       if (resource === 'contacts') {
-        const [existing] = await db.select({ tags: contacts.tags })
+        const [existing] = await dbOrTx.select({ tags: contacts.tags })
           .from(contacts)
           .where(and(eq(contacts.id, resourceId), eq(contacts.tenantId, payload.tenantId)))
           .limit(1);
         if (existing?.tags) {
           const newTags = existing.tags.filter((t: string) => t !== tagToRemove);
-          await db.update(contacts).set({ tags: newTags, updatedAt: new Date() })
+          await dbOrTx.update(contacts).set({ tags: newTags, updatedAt: new Date() })
             .where(eq(contacts.id, resourceId));
         }
       }
@@ -377,7 +382,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
     case 'send_sms': {
       const to = config.to || enrichedData?.['phone'];
       if (!to) return;
-      const smsIntegration = await db.query.integrations.findFirst({
+      const smsIntegration = await dbOrTx.query.integrations.findFirst({
         where: and(
           eq(integrations.tenantId, payload.tenantId),
           eq(integrations.type, 'sms'),
