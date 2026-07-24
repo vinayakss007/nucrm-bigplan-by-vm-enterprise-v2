@@ -11,16 +11,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    // Process all active tenants
     const allTenants = await db
-      .select({ id: tenants.id })
+      .select({ id: tenants.id, settings: tenants.settings })
       .from(tenants)
       .where(isNull(tenants.deletedAt));
 
     let totalDrafted = 0;
     let totalFailed = 0;
+    let skipped = 0;
 
     for (const t of allTenants) {
+      const stored = (((t.settings as Record<string, unknown>) ?? {}).ai_auto_followup ?? {}) as Record<string, unknown>;
+      if (stored.autoAiEnabled !== true) {
+        skipped++;
+        continue;
+      }
+
       const results = await processAutoFollowups(t.id);
       for (const r of results) {
         if (r.drafted) totalDrafted++;
@@ -28,17 +34,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    logger.info(`[ai-auto-followup] Processed ${allTenants.length} tenants: ${totalDrafted} drafted, ${totalFailed} failed`);
+    logger.info(`[ai-auto-followup] Processed ${allTenants.length} tenants (${skipped} skipped): ${totalDrafted} drafted, ${totalFailed} failed`);
 
     return NextResponse.json({
       ok: true,
       tenants: allTenants.length,
+      skipped,
       drafted: totalDrafted,
       failed: totalFailed,
     });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Internal error';
     console.error('[ai-auto-followup]', err);
-    return NextResponse.json({ error: err.message ?? 'Internal error' }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
