@@ -4,12 +4,16 @@ import { createOrderSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { orders, orderLineItems } from '@/drizzle/schema';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 
 export async function GET(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'orders.view');
+    if (deny) return deny;
+
     const { tenantId } = ctx;
 
     const { searchParams } = new URL(request.url);
@@ -51,6 +55,10 @@ export async function POST(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'orders.create');
+    if (deny) return deny;
+
     const { tenantId, userId } = ctx;
 
     const rawBody = await request.json();

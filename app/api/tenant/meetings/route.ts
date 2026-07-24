@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { validateBody } from '@/lib/api/validate';
 import { createMeetingSchema } from '@/lib/api/schemas';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { meetings, contacts } from '@/drizzle/schema';
 import { eq, and, isNull, gte, lte, sql, asc } from 'drizzle-orm';
@@ -11,7 +11,10 @@ export async function GET(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    
+
+    const deny = requirePerm(ctx, 'meetings.view');
+    if (deny) return deny;
+
     const { searchParams } = new URL(request.url);
     const start = searchParams.get('start');
     const end = searchParams.get('end');
@@ -81,7 +84,10 @@ export async function POST(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    
+
+    const deny = requirePerm(ctx, 'meetings.create');
+    if (deny) return deny;
+
     const body = await request.json();
     const validated = validateBody(createMeetingSchema, body);
     if (validated instanceof NextResponse) return validated;

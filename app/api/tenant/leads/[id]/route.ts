@@ -1,4 +1,4 @@
-import { requireAuth, can } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { leads, users, leadActivities } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
@@ -24,6 +24,9 @@ export async function GET(
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     
+    const deny = requirePerm(ctx, 'leads.view');
+    if (deny) return deny;
+
     const { id } = await params;
     
     const lead = await db.query.leads.findFirst({
@@ -105,6 +108,9 @@ export async function PATCH(
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     
+    const deny = requirePerm(ctx, 'leads.edit');
+    if (deny) return deny;
+
     const { id } = await params;
     const rawBody = await request.json();
 

@@ -47,7 +47,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     })
     .from(ticketReplies)
     .leftJoin(users, eq(users.id, ticketReplies.userId))
-    .where(eq(ticketReplies.ticketId, id))
+    .where(and(eq(ticketReplies.ticketId, id), eq(ticketReplies.tenantId, ctx.tenantId)))
     .orderBy(asc(ticketReplies.createdAt));
 
     return NextResponse.json({ data: { ...ticket, replies } });
