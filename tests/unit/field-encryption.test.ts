@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { isSensitiveField, maskSensitiveValue, encryptSensitiveFields, decryptSensitiveFields } from '@/lib/field-encryption';
 
 const mockEncrypt = vi.fn((val: string) => `enc:${val}`);
@@ -114,11 +114,10 @@ describe('encryptSensitiveFields', () => {
     expect(data.apiKey).toBe('sk-123');
   });
 
-  it('works without ENCRYPTION_KEY', () => {
+  it('throws when ENCRYPTION_KEY is missing', () => {
     delete process.env.ENCRYPTION_KEY;
     const data = { apiKey: 'sk-123' };
-    const _result = encryptSensitiveFields(data);
-    expect(mockEncrypt).toHaveBeenCalledWith('sk-123', '');
+    expect(() => encryptSensitiveFields(data)).toThrow('ENCRYPTION_KEY');
   });
 });
 
@@ -145,11 +144,16 @@ describe('decryptSensitiveFields', () => {
     expect(mockDecrypt).not.toHaveBeenCalled();
   });
 
-  it('handles decryption errors gracefully', () => {
+  it('throws on decryption errors instead of fail-open', () => {
     mockDecrypt.mockImplementationOnce(() => { throw new Error('bad decrypt'); });
     const data = { apiKey: 'invalid-encrypted' };
-    const result = decryptSensitiveFields(data);
-    expect(result.apiKey).toBe('invalid-encrypted');
+    expect(() => decryptSensitiveFields(data)).toThrow('bad decrypt');
+  });
+
+  it('throws when ENCRYPTION_KEY is missing', () => {
+    delete process.env.ENCRYPTION_KEY;
+    const data = { apiKey: 'enc:sk-123' };
+    expect(() => decryptSensitiveFields(data)).toThrow('ENCRYPTION_KEY');
   });
 
   it('returns a new object, not mutating input', () => {
