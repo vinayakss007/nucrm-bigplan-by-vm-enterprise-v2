@@ -42,9 +42,10 @@ const JOBS: CronJob[] = [
   { name: 'backup-health',       path: '/api/cron/backup-health',       schedule: '0 3 * * 0',         intervalMs: 7 * 24 * 60 * 60_000 },
   { name: 'cleanup',             path: '/api/cron/cleanup',             schedule: '0 4 * * 0',         intervalMs: 7 * 24 * 60 * 60_000 },
   { name: 'warmup-emails',       path: '/api/cron/warmup-emails',       schedule: '0 9,13,17 * * *',   intervalMs: 4 * 60 * 60_000 },
-  { name: 'subscription-check',  path: '/api/cron/subscription-check',  schedule: '0 5 * * *',         intervalMs: 24 * 60 * 60_000 },
-  { name: 'lead-warming',        path: '/api/cron/lead-warming',        schedule: '0 9 * * *',         intervalMs: 24 * 60 * 60_000 },
-  { name: 'process-at-risk',     path: '/api/cron/process-at-risk',     schedule: '0 8 * * *',         intervalMs: 24 * 60 * 60_000 },
+  { name: 'subscription-check',        path: '/api/cron/subscription-check',        schedule: '0 5 * * *',         intervalMs: 24 * 60 * 60_000 },
+  { name: 'contract-renewal-check',     path: '/api/cron/contract-renewal-check',     schedule: '0 7 * * *',         intervalMs: 24 * 60 * 60_000 },
+  { name: 'lead-warming',              path: '/api/cron/lead-warming',              schedule: '0 9 * * *',         intervalMs: 24 * 60 * 60_000 },
+  { name: 'process-at-risk',           path: '/api/cron/process-at-risk',           schedule: '0 8 * * *',         intervalMs: 24 * 60 * 60_000 },
   { name: 'detect-missed-followups', path: '/api/cron/detect-missed-followups', schedule: '*/30 * * * *',  intervalMs: 30 * 60_000 },
   { name: 'ai-auto-followup',    path: '/api/cron/ai-auto-followup',    schedule: '0 * * * *',         intervalMs: 60 * 60_000 },
 ];

@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Plus, Search, FileText, X, Calendar, DollarSign, User, Loader2 } from 'lucide-react';
+import { Plus, Search, FileText, X, Calendar, DollarSign, User, Loader2, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -122,6 +122,25 @@ function ContractsPageInner() {
           </div>
         ))}
       </div>
+
+      {/* Expiring Soon */}
+      {(() => {
+        const now = new Date();
+        const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        const expiring = filtered.filter(c =>
+          c.status === 'active' && c.endDate && new Date(c.endDate) <= in30Days && new Date(c.endDate) >= now
+        );
+        if (expiring.length === 0) return null;
+        return (
+          <div className="flex items-center gap-3 p-3 rounded-xl border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-950/10">
+            <Clock className="w-4 h-4 text-amber-500 shrink-0" />
+            <p className="text-sm text-amber-700 dark:text-amber-400 flex-1">
+              {expiring.length} contract{expiring.length > 1 ? 's' : ''} expiring within 30 days
+            </p>
+            <span className="text-xs text-amber-500 font-medium">{expiring.map(c => c.title).join(', ').slice(0, 80)}</span>
+          </div>
+        );
+      })()}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-2">
