@@ -3,15 +3,20 @@
  *
  * Caches user sessions for fast lookup
  * TTL: 30 days (configurable)
+ *
+ * Uses a reverse index (user-sessions:<userId>) to track which tokens
+ * belong to each user, enabling efficient per-user session invalidation
+ * without expensive key-space scans.
  */
 
 import { cache } from './index';
 
 const SESSION_TTL = 30 * 24 * 60 * 60; // 30 days in seconds
 const SESSION_PREFIX = 'session:';
+const USER_SESSIONS_PREFIX = 'user-sessions:';
 
 /**
- * Cache a session token
+ * Cache a session token and register it in the user's session index
  */
 export async function cacheSession(
   token: string,
@@ -25,6 +30,14 @@ export async function cacheSession(
   };
 
   await cache.set(`${SESSION_PREFIX}${token}`, sessionData, SESSION_TTL);
+
+  // Register token in user's session set for efficient per-user deletion
+  const indexKey = `${USER_SESSIONS_PREFIX}${userId}`;
+  const existingTokens = await cache.get<string[]>(indexKey) ?? [];
+  if (!existingTokens.includes(token)) {
+    existingTokens.push(token);
+    await cache.set(indexKey, existingTokens, SESSION_TTL);
+  }
 }
 
 /**
@@ -39,10 +52,23 @@ export async function getSession(token: string): Promise<{
 }
 
 /**
- * Delete session from cache
+ * Delete a single session from cache and remove from user's session index
  */
 export async function deleteSession(token: string): Promise<void> {
+  const sessionData = await getSession(token);
   await cache.del(`${SESSION_PREFIX}${token}`);
+
+  // Remove from user's session index if we know the userId
+  if (sessionData?.userId) {
+    const indexKey = `${USER_SESSIONS_PREFIX}${sessionData.userId}`;
+    const tokens = await cache.get<string[]>(indexKey) ?? [];
+    const updated = tokens.filter(t => t !== token);
+    if (updated.length > 0) {
+      await cache.set(indexKey, updated, SESSION_TTL);
+    } else {
+      await cache.del(indexKey);
+    }
+  }
 }
 
 /**
@@ -63,20 +89,26 @@ export async function sessionExists(token: string): Promise<boolean> {
 }
 
 /**
- * Delete all sessions for a user
+ * Delete all sessions for a user using the reverse index
  */
-export async function deleteUserSessions(_userId: string): Promise<void> {
-  // Note: This requires scanning keys, which is expensive
-  // Better to track sessions in a separate data structure
-  console.warn('[Session] deleteUserSessions requires key scanning - use with caution');
+export async function deleteUserSessions(userId: string): Promise<void> {
+  const indexKey = `${USER_SESSIONS_PREFIX}${userId}`;
+  const tokens = await cache.get<string[]>(indexKey) ?? [];
+
+  // Delete each session key
+  for (const token of tokens) {
+    await cache.del(`${SESSION_PREFIX}${token}`);
+  }
+
+  // Delete the user's session index
+  await cache.del(indexKey);
 }
 
 /**
  * Get session count (for monitoring)
  */
 export async function getSessionCount(): Promise<number> {
-  // This is an estimate - Redis doesn't have a direct count by pattern
-  // You'd need to track this separately for accuracy
+  // Approximation — production should use Redis SCARD on a session set
   return 0;
 }
 
