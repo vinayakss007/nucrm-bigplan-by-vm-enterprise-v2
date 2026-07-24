@@ -90,14 +90,16 @@ describe('RealtimeSDK', () => {
     const sdk = await createSDK();
     await sdk.connect();
     sdk.disconnect();
-    // No error thrown
-    expect(true).toBe(true);
+    const instances = (MockEventSourceCtor as any).instances || [];
+    const lastInstance = instances[instances.length - 1];
+    if (lastInstance) {
+      expect(lastInstance.readyState).toBe(MockEventSource.CLOSED);
+    }
   });
 
   it('disconnect when not connected does not throw', async () => {
     const sdk = await createSDK();
-    sdk.disconnect();
-    expect(true).toBe(true);
+    expect(() => sdk.disconnect()).not.toThrow();
   });
 
   it('on/off register and unregister handlers', async () => {
@@ -105,7 +107,15 @@ describe('RealtimeSDK', () => {
     const handler = vi.fn();
     sdk.on('contact.created', handler);
     sdk.off('contact.created', handler);
-    expect(true).toBe(true);
+    await sdk.connect();
+    const lastCall = (MockEventSourceCtor as any).instances?.slice(-1)[0];
+    if (lastCall) {
+      lastCall.simulateMessage(JSON.stringify({
+        type: 'contact.created', channel: 'contacts',
+        data: { id: '1' }, timestamp: new Date().toISOString(),
+      }));
+    }
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it('off without handler removes all handlers for event', async () => {
@@ -115,15 +125,22 @@ describe('RealtimeSDK', () => {
     sdk.on('deal.updated', h1);
     sdk.on('deal.updated', h2);
     sdk.off('deal.updated');
-    // Verify no error
-    expect(true).toBe(true);
+    await sdk.connect();
+    const lastCall = (MockEventSourceCtor as any).instances?.slice(-1)[0];
+    if (lastCall) {
+      lastCall.simulateMessage(JSON.stringify({
+        type: 'deal.updated', channel: 'deals',
+        data: { id: '1' }, timestamp: new Date().toISOString(),
+      }));
+    }
+    expect(h1).not.toHaveBeenCalled();
+    expect(h2).not.toHaveBeenCalled();
   });
 
   it('off with non-existent handler does not throw', async () => {
     const sdk = await createSDK();
     const handler = vi.fn();
-    sdk.off('nonexistent', handler);
-    expect(true).toBe(true);
+    expect(() => sdk.off('nonexistent', handler)).not.toThrow();
   });
 
   it('subscribe/unsubscribe manage channel set', async () => {
@@ -131,7 +148,7 @@ describe('RealtimeSDK', () => {
     sdk.subscribe('contacts');
     sdk.subscribe('deals');
     sdk.unsubscribe('contacts');
-    expect(true).toBe(true);
+    expect(() => sdk.unsubscribe('contacts')).not.toThrow();
   });
 
   it('unsubscribe removes handlers for channel', async () => {
@@ -140,7 +157,15 @@ describe('RealtimeSDK', () => {
     sdk.on('contacts', handler);
     sdk.subscribe('contacts');
     sdk.unsubscribe('contacts');
-    expect(true).toBe(true);
+    await sdk.connect();
+    const lastCall = (MockEventSourceCtor as any).instances?.slice(-1)[0];
+    if (lastCall) {
+      lastCall.simulateMessage(JSON.stringify({
+        type: 'contacts.update', channel: 'contacts',
+        data: { id: '1' }, timestamp: new Date().toISOString(),
+      }));
+    }
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it('dispatches messages to registered handlers', async () => {
@@ -181,7 +206,9 @@ describe('RealtimeSDK', () => {
     const { RealtimeSDK } = await import('@/lib/sdk/realtime');
     const sdk = new RealtimeSDK({ baseUrl: 'https://api.example.com/', apiKey: 'key' });
     await sdk.connect();
-    // Should work without double-slash in URLs
-    expect(true).toBe(true);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://api.example.com/api/tenant/realtime/ticket',
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 });

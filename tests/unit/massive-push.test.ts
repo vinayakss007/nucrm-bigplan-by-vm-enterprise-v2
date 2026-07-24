@@ -76,8 +76,7 @@ describe('webhooks - fireWebhooks', () => {
   it('returns early when no hooks found', async () => {
     mockDbData.hooks = [];
     const { fireWebhooks } = await import('@/lib/webhooks');
-    await fireWebhooks('t1', 'contact.created', { id: 'c1' });
-    expect(true).toBe(true);
+    await expect(fireWebhooks('t1', 'contact.created', { id: 'c1' })).resolves.toBeUndefined();
   });
 
   it('fires webhooks with HMAC signature when secret present', async () => {
@@ -94,8 +93,7 @@ describe('webhooks - fireWebhooks', () => {
       { id: 'h2', name: 'No Secret Hook', config: { url: 'https://example.com/hook2' } },
     ];
     const { fireWebhooks } = await import('@/lib/webhooks');
-    await fireWebhooks('t1', 'task.completed', { id: 't1' });
-    expect(true).toBe(true);
+    await expect(fireWebhooks('t1', 'task.completed', { id: 't1' })).resolves.toBeUndefined();
   });
 
   it('handles multiple webhooks', async () => {
@@ -104,8 +102,7 @@ describe('webhooks - fireWebhooks', () => {
       { id: 'h2', name: 'Hook2', config: { url: 'http://localhost:9999/h2', secret: 's' } },
     ];
     const { fireWebhooks } = await import('@/lib/webhooks');
-    await fireWebhooks('t1', 'contact.created', { id: 'c1' });
-    expect(true).toBe(true);
+    await expect(fireWebhooks('t1', 'contact.created', { id: 'c1' })).resolves.toBeUndefined();
   });
 
   it('handles webhook with missing URL config', async () => {
@@ -113,8 +110,7 @@ describe('webhooks - fireWebhooks', () => {
       { id: 'h1', name: 'Bad Hook', config: {} },
     ];
     const { fireWebhooks } = await import('@/lib/webhooks');
-    await fireWebhooks('t1', 'deal.lost', { id: 'd1' });
-    expect(true).toBe(true);
+    await expect(fireWebhooks('t1', 'deal.lost', { id: 'd1' })).resolves.toBeUndefined();
   });
 
   it('handles webhook failure gracefully', async () => {
@@ -153,8 +149,8 @@ describe('webhooks - retryFailedWebhooks', () => {
       { id: 'f1', url: 'https://example.com/retry', payload: '{"event":"test"}', headers: {}, attempt: 1, createdAt: new Date() },
     ];
     const { retryFailedWebhooks } = await import('@/lib/webhooks');
-    await retryFailedWebhooks();
-    expect(true).toBe(true);
+    const count = await retryFailedWebhooks();
+    expect(typeof count).toBe('number');
   });
 
   it('handles retry failure gracefully', async () => {
@@ -246,11 +242,13 @@ describe('queue - comprehensive', () => {
 
   it('memory adapter processes jobs after interval', async () => {
     vi.useFakeTimers();
-    const { addJob } = await import('@/lib/queue');
+    const { addJob, getQueueAdapter } = await import('@/lib/queue');
     await addJob('send-email', { to: 'user@test.com' });
+    const adapter = await getQueueAdapter();
     vi.advanceTimersByTime(6000);
     vi.useRealTimers();
-    expect(true).toBe(true);
+    expect(adapter).toBeDefined();
+    expect(adapter.provider).toBe('memory');
   });
 });
 

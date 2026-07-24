@@ -17,7 +17,8 @@ describe('export - comprehensive', () => {
         filters: { status: 'active' },
       });
       
-      expect(true).toBe(true);
+      const { addJob } = await import('@/lib/queue');
+      expect(addJob).toHaveBeenCalled();
     });
 
     it('enqueues deals export with callback', async () => {
@@ -30,7 +31,8 @@ describe('export - comprehensive', () => {
         callbackUrl: 'https://example.com/callback',
       });
       
-      expect(true).toBe(true);
+      const { addJob } = await import('@/lib/queue');
+      expect(addJob).toHaveBeenCalled();
     });
 
     it('enqueues companies export', async () => {
@@ -42,7 +44,8 @@ describe('export - comprehensive', () => {
         userId: 'user-1',
       });
       
-      expect(true).toBe(true);
+      const { addJob } = await import('@/lib/queue');
+      expect(addJob).toHaveBeenCalled();
     });
 
     it('enqueues tasks export', async () => {
@@ -54,7 +57,8 @@ describe('export - comprehensive', () => {
         userId: 'user-1',
       });
       
-      expect(true).toBe(true);
+      const { addJob } = await import('@/lib/queue');
+      expect(addJob).toHaveBeenCalled();
     });
   });
 
@@ -70,7 +74,8 @@ describe('export - comprehensive', () => {
         100
       );
       
-      expect(true).toBe(true);
+      const { addJob } = await import('@/lib/queue');
+      expect(addJob).toHaveBeenCalled();
     });
 
     it('enqueues contact import at exactly 1000 limit', async () => {
@@ -84,7 +89,8 @@ describe('export - comprehensive', () => {
         1000
       );
       
-      expect(true).toBe(true);
+      const { addJob } = await import('@/lib/queue');
+      expect(addJob).toHaveBeenCalled();
     });
 
     it('throws ImportLimitError when exceeding 1000 contacts', async () => {

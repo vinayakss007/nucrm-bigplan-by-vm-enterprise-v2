@@ -33,7 +33,7 @@ describe('notifications - comprehensive', () => {
     it('creates notification with entity deep link', async () => {
       const { createNotification } = await import('@/lib/notifications');
       
-      await createNotification({
+      await expect(createNotification({
         userId: 'user-1',
         tenantId: 'tenant-1',
         type: 'deal_won',
@@ -41,24 +41,20 @@ describe('notifications - comprehensive', () => {
         body: 'Great deal closed',
         entity_type: 'deal',
         entity_id: 'deal-123',
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
 
     it('creates notification with explicit link', async () => {
       const { createNotification } = await import('@/lib/notifications');
       
-      await createNotification({
+      await expect(createNotification({
         userId: 'user-2',
         tenantId: 'tenant-1',
         type: 'task_assigned',
         title: 'New Task',
         body: 'Complete report',
         link: '/custom/link',
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
 
     it('creates notification with all entity types', async () => {
@@ -67,46 +63,40 @@ describe('notifications - comprehensive', () => {
         ['contact', 'deal', 'task', 'company', 'lead', 'sequence'];
       
       for (const entityType of types) {
-        await createNotification({
+        await expect(createNotification({
           userId: 'user-1',
           tenantId: 'tenant-1',
           type: 'contact_assigned',
           title: 'Entity notification',
           entity_type: entityType,
           entity_id: `${entityType}-1`,
-        });
+        })).resolves.toBeUndefined();
       }
-      
-      expect(true).toBe(true);
     });
 
     it('truncates long title and body', async () => {
       const { createNotification } = await import('@/lib/notifications');
       
-      await createNotification({
+      await expect(createNotification({
         userId: 'user-1',
         tenantId: 'tenant-1',
         type: 'system',
         title: 'a'.repeat(300),
         body: 'b'.repeat(600),
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
 
     it('handles notification with metadata', async () => {
       const { createNotification } = await import('@/lib/notifications');
       
-      await createNotification({
+      await expect(createNotification({
         userId: 'user-1',
         tenantId: 'tenant-1',
         type: 'limit_warning',
         title: 'Limit warning',
         body: 'Approaching limit',
         metadata: { current: 95, limit: 100 },
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
 
     it('handles all notification types', async () => {
@@ -120,15 +110,13 @@ describe('notifications - comprehensive', () => {
       ] as const;
       
       for (const type of types) {
-        await createNotification({
+        await expect(createNotification({
           userId: 'user-1',
           tenantId: 'tenant-1',
           type,
           title: `${type} notification`,
-        });
+        })).resolves.toBeUndefined();
       }
-      
-      expect(true).toBe(true);
     });
   });
 
@@ -136,40 +124,34 @@ describe('notifications - comprehensive', () => {
     it('notifies all active members', async () => {
       const { notifyTenantMembers } = await import('@/lib/notifications');
       
-      await notifyTenantMembers({
+      await expect(notifyTenantMembers({
         tenantId: 'tenant-1',
         type: 'team_joined',
         title: 'New team member',
         body: 'Welcome!',
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
 
     it('notifies with entity deep links', async () => {
       const { notifyTenantMembers } = await import('@/lib/notifications');
       
-      await notifyTenantMembers({
+      await expect(notifyTenantMembers({
         tenantId: 'tenant-1',
         type: 'deal_won',
         title: 'Deal won!',
         entity_type: 'deal',
         entity_id: 'deal-456',
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
 
     it('handles empty member list', async () => {
       const { notifyTenantMembers } = await import('@/lib/notifications');
       
-      await notifyTenantMembers({
+      await expect(notifyTenantMembers({
         tenantId: 'tenant-1',
         type: 'system',
         title: 'System message',
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
   });
 
@@ -177,17 +159,13 @@ describe('notifications - comprehensive', () => {
     it('processes mentions without finding users', async () => {
       const { processMentions } = await import('@/lib/notifications');
       
-      await processMentions('Hello @john and @jane', 'tenant-1', 'user-1');
-      
-      expect(true).toBe(true);
+      await expect(processMentions('Hello @john and @jane', 'tenant-1', 'user-1')).resolves.toBeUndefined();
     });
 
     it('handles text without mentions', async () => {
       const { processMentions } = await import('@/lib/notifications');
       
-      await processMentions('No mentions here', 'tenant-1', 'user-1');
-      
-      expect(true).toBe(true);
+      await expect(processMentions('No mentions here', 'tenant-1', 'user-1')).resolves.toBeUndefined();
     });
 
     it('handles null text', async () => {
@@ -200,8 +178,13 @@ describe('notifications - comprehensive', () => {
 
 describe('metrics - comprehensive', () => {
   beforeEach(() => {
+    process.env.PROMETHEUS_ENABLED = 'true';
     vi.resetModules();
     vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    delete process.env.PROMETHEUS_ENABLED;
   });
 
   describe('metrics collector', () => {
@@ -210,7 +193,7 @@ describe('metrics - comprehensive', () => {
       
       metrics.increment('test_counter', 5, { env: 'test' });
       
-      expect(true).toBe(true);
+      expect(metrics.getMetrics().length).toBeGreaterThan(0);
     });
 
     it('timing metric', async () => {
@@ -218,7 +201,7 @@ describe('metrics - comprehensive', () => {
       
       metrics.timing('test_timing', 150, { endpoint: '/api/test' });
       
-      expect(true).toBe(true);
+      expect(metrics.getMetrics().length).toBeGreaterThan(0);
     });
 
     it('gauge metric', async () => {
@@ -226,7 +209,7 @@ describe('metrics - comprehensive', () => {
       
       metrics.gauge('test_gauge', 42.5, { region: 'us-east' });
       
-      expect(true).toBe(true);
+      expect(metrics.getMetrics().length).toBeGreaterThan(0);
     });
 
     it('getMetrics returns collected metrics', async () => {
@@ -247,73 +230,73 @@ describe('metrics - comprehensive', () => {
 
   describe('trackRequest', () => {
     it('tracks successful request', async () => {
-      const { trackRequest } = await import('@/lib/metrics');
+      const { trackRequest, metrics } = await import('@/lib/metrics');
       
       trackRequest('GET', '/api/users', 200, 45);
       
-      expect(true).toBe(true);
+      expect(metrics.getMetrics().length).toBeGreaterThan(0);
     });
 
     it('tracks error request', async () => {
-      const { trackRequest } = await import('@/lib/metrics');
+      const { trackRequest, metrics } = await import('@/lib/metrics');
       
       trackRequest('POST', '/api/create', 500, 120);
       
-      expect(true).toBe(true);
+      expect(metrics.getMetrics().length).toBeGreaterThan(0);
     });
   });
 
   describe('trackDatabaseQuery', () => {
     it('tracks successful query', async () => {
-      const { trackDatabaseQuery } = await import('@/lib/metrics');
+      const { trackDatabaseQuery, metrics } = await import('@/lib/metrics');
       
       trackDatabaseQuery('users', 'SELECT', 25, true);
       
-      expect(true).toBe(true);
+      expect(metrics.getMetrics().length).toBeGreaterThan(0);
     });
 
     it('tracks failed query', async () => {
-      const { trackDatabaseQuery } = await import('@/lib/metrics');
+      const { trackDatabaseQuery, metrics } = await import('@/lib/metrics');
       
       trackDatabaseQuery('users', 'UPDATE', 5000, false);
       
-      expect(true).toBe(true);
+      expect(metrics.getMetrics().length).toBeGreaterThan(0);
     });
   });
 
   describe('trackAuthEvent', () => {
     it('tracks successful login', async () => {
-      const { trackAuthEvent } = await import('@/lib/metrics');
+      const { trackAuthEvent, metrics } = await import('@/lib/metrics');
       
       trackAuthEvent('login', true, 'user-123');
       
-      expect(true).toBe(true);
+      expect(metrics.getMetrics().length).toBeGreaterThan(0);
     });
 
     it('tracks failed login', async () => {
-      const { trackAuthEvent } = await import('@/lib/metrics');
+      const { trackAuthEvent, metrics } = await import('@/lib/metrics');
       
       trackAuthEvent('login', false);
       
-      expect(true).toBe(true);
+      expect(metrics.getMetrics().length).toBeGreaterThan(0);
     });
   });
 
   describe('trackBusinessMetric', () => {
     it('tracks business metric with tenant', async () => {
-      const { trackBusinessMetric } = await import('@/lib/metrics');
+      const { trackBusinessMetric, metrics } = await import('@/lib/metrics');
       
       trackBusinessMetric('deals_won', 15, 'tenant-1');
       
-      expect(true).toBe(true);
+      expect(metrics.getMetrics().length).toBeGreaterThan(0);
     });
 
     it('tracks business metric without tenant', async () => {
-      const { trackBusinessMetric } = await import('@/lib/metrics');
+      const { trackBusinessMetric, metrics } = await import('@/lib/metrics');
       
       trackBusinessMetric('revenue', 50000);
       
-      expect(true).toBe(true);
+      expect(metrics.getMetrics().length).toBeGreaterThan(0);
     });
   });
 
@@ -364,9 +347,7 @@ describe('webhooks - comprehensive', () => {
     it('returns early when no hooks configured', async () => {
       const { fireWebhooks } = await import('@/lib/webhooks');
       
-      await fireWebhooks('tenant-1', 'contact.created', { id: 'c1' });
-      
-      expect(true).toBe(true);
+      await expect(fireWebhooks('tenant-1', 'contact.created', { id: 'c1' })).resolves.toBeUndefined();
     });
   });
 
@@ -393,51 +374,43 @@ describe('export - comprehensive', () => {
     it('enqueues contacts export', async () => {
       const { enqueueExport } = await import('@/lib/export');
       
-      await enqueueExport({
+      await expect(enqueueExport({
         type: 'contacts',
         tenantId: 'tenant-1',
         userId: 'user-1',
         filters: { status: 'active' },
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
 
     it('enqueues deals export with callback', async () => {
       const { enqueueExport } = await import('@/lib/export');
       
-      await enqueueExport({
+      await expect(enqueueExport({
         type: 'deals',
         tenantId: 'tenant-1',
         userId: 'user-1',
         callbackUrl: 'https://example.com/callback',
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
 
     it('enqueues companies export', async () => {
       const { enqueueExport } = await import('@/lib/export');
       
-      await enqueueExport({
+      await expect(enqueueExport({
         type: 'companies',
         tenantId: 'tenant-1',
         userId: 'user-1',
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
 
     it('enqueues tasks export', async () => {
       const { enqueueExport } = await import('@/lib/export');
       
-      await enqueueExport({
+      await expect(enqueueExport({
         type: 'tasks',
         tenantId: 'tenant-1',
         userId: 'user-1',
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
   });
 
@@ -445,15 +418,13 @@ describe('export - comprehensive', () => {
     it('enqueues contact import', async () => {
       const { enqueueContactImport } = await import('@/lib/export');
       
-      await enqueueContactImport(
+      await expect(enqueueContactImport(
         'tenant-1',
         'user-1',
         'name,email\nJohn,john@example.com',
         { skipDuplicates: true, updateExisting: false },
         100
-      );
-      
-      expect(true).toBe(true);
+      )).resolves.toBeUndefined();
     });
   });
 });
@@ -520,9 +491,7 @@ describe('email/service - comprehensive', () => {
       process.env.NODE_ENV = 'development';
       const { alertSuperAdmin } = await import('@/lib/email/service');
       
-      await alertSuperAdmin('Critical Alert', 'Database down');
-      
-      expect(true).toBe(true);
+      await expect(alertSuperAdmin('Critical Alert', 'Database down')).resolves.toBeUndefined();
     });
   });
 
@@ -531,27 +500,23 @@ describe('email/service - comprehensive', () => {
       process.env.DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/test';
       const { sendWebhookNotification } = await import('@/lib/email/service');
       
-      await sendWebhookNotification({
+      await expect(sendWebhookNotification({
         title: 'Test Alert',
         message: 'Something happened',
         color: '#ff0000',
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
 
     it('sends to Slack webhook', async () => {
       process.env.SLACK_WEBHOOK_URL = 'https://hooks.slack.com/test';
       const { sendWebhookNotification } = await import('@/lib/email/service');
       
-      await sendWebhookNotification({
+      await expect(sendWebhookNotification({
         title: 'Slack Alert',
         message: 'Deployment complete',
         color: '#00ff00',
         url: 'https://example.com',
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
 
     it('sends to both webhooks', async () => {
@@ -559,12 +524,10 @@ describe('email/service - comprehensive', () => {
       process.env.SLACK_WEBHOOK_URL = 'https://hooks.slack.com/test';
       const { sendWebhookNotification } = await import('@/lib/email/service');
       
-      await sendWebhookNotification({
+      await expect(sendWebhookNotification({
         title: 'Multi-channel Alert',
         message: 'System update',
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
   });
 
@@ -572,42 +535,36 @@ describe('email/service - comprehensive', () => {
     it('sends telegram message', async () => {
       const { sendTelegram } = await import('@/lib/email/service');
       
-      await sendTelegram({
+      await expect(sendTelegram({
         botToken: '123:ABC',
         chatId: '456',
         title: 'Telegram Alert',
         message: 'Server down',
         icon: '🚨',
         url: 'https://example.com',
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
 
     it('skips when botToken missing', async () => {
       const { sendTelegram } = await import('@/lib/email/service');
       
-      await sendTelegram({
+      await expect(sendTelegram({
         botToken: '',
         chatId: '456',
         title: 'Test',
         message: 'Test',
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
 
     it('skips when chatId missing', async () => {
       const { sendTelegram } = await import('@/lib/email/service');
       
-      await sendTelegram({
+      await expect(sendTelegram({
         botToken: '123:ABC',
         chatId: '',
         title: 'Test',
         message: 'Test',
-      });
-      
-      expect(true).toBe(true);
+      })).resolves.toBeUndefined();
     });
   });
 
