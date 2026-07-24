@@ -484,7 +484,12 @@ function interpretSQLValue(val: string): string | number | boolean | null {
   if (/^NULL$/i.test(val)) return null;
   if (/^TRUE$/i.test(val)) return true;
   if (/^FALSE$/i.test(val)) return false;
-  if (/^\d+$/.test(val)) return parseInt(val, 10);
+  if (/^\d+$/.test(val)) {
+    const n = parseInt(val, 10);
+    // BigInt overflow guard: if integer exceeds safe range, keep as string
+    if (!Number.isSafeInteger(n)) return val;
+    return n;
+  }
   if (/^\d+\.\d+$/.test(val)) return parseFloat(val);
   if (val.startsWith("'") && val.endsWith("'")) {
     return val.slice(1, -1).replace(/''/g, "'");

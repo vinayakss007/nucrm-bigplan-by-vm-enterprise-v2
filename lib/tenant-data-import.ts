@@ -227,17 +227,22 @@ export class TenantDataImporter {
    * Import a single table
    */
   private async importTable(
- 
- 
+
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     tx: any,
     tableName: string,
- 
- 
+
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     tableData: { columns: string[]; rows: Record<string, any>[] }
   ): Promise<number> {
     if (tableData.rows.length === 0) return 0;
+
+    // Table allowlist: only permit known tenant-scoped tables
+    if (!ALLOWED_IMPORT_TABLES.includes(tableName.toLowerCase())) {
+      throw new Error(`Table '${tableName}' is not allowed for import`);
+    }
 
     let inserted = 0;
 
@@ -284,19 +289,6 @@ export class TenantDataImporter {
       errors: [],
     };
 
-    // Block destructive SQL statements — only allow INSERT/UPDATE/DELETE on known tenant tables
-    const BLOCKED_KEYWORDS = /\b(DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|EXEC|EXECUTE|INTO\s+OUTFILE|INTO\s+DUMPFILE|LOAD_FILE|COPY|CALL|PREPARE|DEALLOCATE)\b/i;
-
-    // Block subqueries and other injection vectors in statement body
-    const HAS_SUBQUERY = /\(\s*SELECT\b/i;
-
-    // Allowed tables for data import (tenant-scoped)
-    const ALLOWED_TABLES = new Set([
-      'contacts', 'leads', 'deals', 'companies', 'tasks', 'notes',
-      'activities', 'tags', 'pipelines', 'deal_stages', 'forms',
-      'workflows', 'automations', 'email_templates', 'webhooks',
-    ]);
-
     try {
       await db.transaction(async (tx) => {
         const rawStatements = sqlString
@@ -306,31 +298,21 @@ export class TenantDataImporter {
 
         for (const statement of rawStatements) {
           try {
-            // Block destructive statements
-            if (BLOCKED_KEYWORDS.test(statement)) {
-              result.errors.push({ table: 'sql', error: `Blocked destructive SQL: ${statement.substring(0, 80)}...` });
+            // Only allow INSERT statements — UPDATE/DELETE are rejected to prevent
+            // untrusted raw SQL execution (SQL injection via sql.raw())
+            if (!/^\s*INSERT\s+INTO\b/i.test(statement)) {
+              result.errors.push({ table: 'sql', error: `Non-INSERT statement rejected (only INSERT allowed): ${statement.substring(0, 80)}...` });
               continue;
             }
 
-            // Block subqueries to prevent injection via VALUES clause
-            if (HAS_SUBQUERY.test(statement)) {
-              result.errors.push({ table: 'sql', error: `Blocked subquery in SQL import: ${statement.substring(0, 80)}...` });
+            // Parse the INSERT into a parameterized query
+            const safeQuery = _parseAndBuildInsert(statement);
+            if (!safeQuery) {
+              result.errors.push({ table: 'sql', error: `Could not parse INSERT statement: ${statement.substring(0, 80)}...` });
               continue;
             }
 
-            // Validate that the statement targets only allowed tables
-            const upperStmt = statement.toUpperCase();
-            const tableMatch = upperStmt.match(/\b(?:INTO|FROM|UPDATE|JOIN)\s+(\w+)/i);
-            const matchedTable = tableMatch?.[1];
-            if (matchedTable) {
-              const targetTable = matchedTable.toLowerCase();
-              if (!ALLOWED_TABLES.has(targetTable)) {
-                result.errors.push({ table: targetTable, error: `Table '${targetTable}' is not allowed for SQL import` });
-                continue;
-              }
-            }
-
-            const res = await tx.execute(sql.raw(statement));
+            const res = await tx.execute(safeQuery);
             if (res.rowCount) {
               result.recordsRestored += res.rowCount;
             }
@@ -422,7 +404,12 @@ function interpretLiteral(val: string): string | number | boolean | null {
   if (/^NULL$/i.test(val)) return null;
   if (/^TRUE$/i.test(val)) return true;
   if (/^FALSE$/i.test(val)) return false;
-  if (/^\d+$/.test(val)) return parseInt(val, 10);
+  if (/^\d+$/.test(val)) {
+    const n = parseInt(val, 10);
+    // BigInt overflow guard: if integer exceeds safe range, keep as string
+    if (!Number.isSafeInteger(n)) return val;
+    return n;
+  }
   if (/^\d+\.\d+$/.test(val)) return parseFloat(val);
   if (val.startsWith("'") && val.endsWith("'")) {
     return val.slice(1, -1).replace(/''/g, "'");
