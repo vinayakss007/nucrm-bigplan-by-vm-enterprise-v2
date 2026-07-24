@@ -103,6 +103,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     id: 'data', label: 'Data & Trash',
     items: [
+      { href:'/tenant/data-explorer',          label:'Data Explorer',   icon:Database,      keywords:'search browse filter' },
       { href:'/tenant/settings/import-export', label:'Import / Export', icon:Upload,        keywords:'csv migration', adminOnly:true },
       { href:'/tenant/settings/bulk-transfer', label:'Bulk Transfer',   icon:ArrowRightLeft, keywords:'reassign offboard ownership', adminOnly:true },
       { href:'/tenant/settings/tags-manager',  label:'Tags Manager',    icon:Tag,           keywords:'labels rename merge', adminOnly:true },
