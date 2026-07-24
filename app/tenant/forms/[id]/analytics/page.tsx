@@ -2,12 +2,35 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Eye, Send, TrendingUp, Loader2 } from 'lucide-react';
+import { ArrowLeft, Eye, Send, TrendingUp, Loader2, BarChart3, Hash, List, Type, CheckSquare, Star } from 'lucide-react';
 import Link from 'next/link';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface TimeSeriesPoint {
   date: string;
   count: number;
+}
+
+interface ValueDistItem {
+  value: string;
+  count: number;
+}
+
+interface NumericStats {
+  min: number;
+  max: number;
+  avg: number;
+}
+
+interface FieldAnalytics {
+  key: string;
+  label: string;
+  type: string;
+  total: number;
+  filled: number;
+  completionRate: number;
+  valueDistribution?: ValueDistItem[];
+  numericStats?: NumericStats;
 }
 
 interface AnalyticsData {
@@ -15,7 +38,19 @@ interface AnalyticsData {
   views: number;
   submissions: number;
   timeSeries: TimeSeriesPoint[];
+  fields: FieldAnalytics[];
 }
+
+const FIELD_ICONS: Record<string, React.ReactNode> = {
+  text: <Type className="h-3.5 w-3.5" />,
+  email: <Type className="h-3.5 w-3.5" />,
+  textarea: <Type className="h-3.5 w-3.5" />,
+  number: <Hash className="h-3.5 w-3.5" />,
+  select: <List className="h-3.5 w-3.5" />,
+  radio: <Star className="h-3.5 w-3.5" />,
+  checkbox: <CheckSquare className="h-3.5 w-3.5" />,
+  multiselect: <List className="h-3.5 w-3.5" />,
+};
 
 export default function FormAnalyticsPage() {
   const params = useParams();
@@ -85,7 +120,7 @@ export default function FormAnalyticsPage() {
         <StatCard icon={<TrendingUp className="h-5 w-5 text-purple-600" />} label="Conversion rate" value={`${conversionRate}%`} bg="bg-purple-50" />
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
+      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Submissions over time</h2>
         {data.timeSeries.length === 0 ? (
           <p className="text-sm text-gray-500 text-center py-10">No submissions in this period.</p>
@@ -109,6 +144,20 @@ export default function FormAnalyticsPage() {
         )}
       </div>
 
+      {data.fields && data.fields.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart3 className="h-5 w-5 text-gray-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Field Performance</h2>
+          </div>
+          <div className="space-y-6">
+            {data.fields.map((field) => (
+              <FieldCard key={field.key} field={field} />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-6 bg-white border border-gray-200 rounded-xl p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-3">Embed this form</h2>
         <p className="text-sm text-gray-500 mb-3">
@@ -130,6 +179,65 @@ function StatCard({ icon, label, value, bg }: { icon: React.ReactNode; label: st
         <p className="text-xs text-gray-500">{label}</p>
         <p className="text-xl font-bold text-gray-900">{value}</p>
       </div>
+    </div>
+  );
+}
+
+function FieldCard({ field }: { field: FieldAnalytics }) {
+  const isOptionField = ['select', 'radio', 'multiselect'].includes(field.type);
+  const isNumeric = field.type === 'number';
+  const color = field.completionRate >= 80 ? 'bg-green-500' : field.completionRate >= 50 ? 'bg-amber-500' : 'bg-red-500';
+  const icon = FIELD_ICONS[field.type] ?? <Type className="h-3.5 w-3.5" />;
+
+  return (
+    <div className="border border-gray-100 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500">{icon}</span>
+          <span className="font-medium text-gray-900 text-sm">{field.label}</span>
+          <span className="text-[10px] uppercase tracking-wider text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{field.type}</span>
+        </div>
+        <span className="text-xs text-gray-500">{field.filled}/{field.total} filled</span>
+      </div>
+
+      <div className="w-full bg-gray-100 rounded-full h-2 mb-3">
+        <div className={`${color} h-2 rounded-full transition-all`} style={{ width: `${field.completionRate}%` }} />
+      </div>
+      <p className="text-xs text-gray-500 mb-3">{field.completionRate}% completion rate</p>
+
+      {isOptionField && field.valueDistribution && field.valueDistribution.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-medium text-gray-600 mb-2">Value distribution</p>
+          <div className="h-40">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={field.valueDistribution} layout="vertical" margin={{ left: 20, right: 20, top: 4, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis type="number" tick={{ fontSize: 11 }} />
+                <YAxis type="category" dataKey="value" tick={{ fontSize: 11 }} width={80} />
+                <Tooltip contentStyle={{ fontSize: 12 }} />
+                <Bar dataKey="count" fill="#7c3aed" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {isNumeric && field.numericStats && (
+        <div className="mt-3 flex gap-4 text-xs">
+          <div className="bg-gray-50 rounded px-3 py-2">
+            <span className="text-gray-400 block">Min</span>
+            <span className="font-semibold text-gray-800">{field.numericStats.min}</span>
+          </div>
+          <div className="bg-gray-50 rounded px-3 py-2">
+            <span className="text-gray-400 block">Max</span>
+            <span className="font-semibold text-gray-800">{field.numericStats.max}</span>
+          </div>
+          <div className="bg-gray-50 rounded px-3 py-2">
+            <span className="text-gray-400 block">Avg</span>
+            <span className="font-semibold text-gray-800">{field.numericStats.avg}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
