@@ -35,7 +35,7 @@ describe('api/schemas', () => {
     expect(() => createContactSchema.parse({})).toThrow();
   });
 
-  it('createDealSchema accepts valid deal', async () => {
+  it('createDealSchema accepts valid deal with stage_id', async () => {
     const { createDealSchema } = await import('@/lib/api/schemas');
     const result = createDealSchema.parse({
       title: 'Big Deal',
@@ -47,6 +47,33 @@ describe('api/schemas', () => {
     });
     expect(result.title).toBe('Big Deal');
     expect(result.amount).toBe(0);
+  });
+
+  it('createDealSchema accepts stage_name from frontend', async () => {
+    const { createDealSchema } = await import('@/lib/api/schemas');
+    const result = createDealSchema.parse({
+      title: 'New Deal',
+      stage_name: 'lead',
+    });
+    expect(result.title).toBe('New Deal');
+    expect(result.stage_name).toBe('lead');
+  });
+
+  it('createDealSchema accepts stage (name string) as fallback', async () => {
+    const { createDealSchema } = await import('@/lib/api/schemas');
+    const result = createDealSchema.parse({
+      title: 'Deal via stage',
+      stage: 'qualified',
+    });
+    expect(result.stage).toBe('qualified');
+  });
+
+  it('createDealSchema accepts title-only (stage validated by route handler)', async () => {
+    const { createDealSchema } = await import('@/lib/api/schemas');
+    const result = createDealSchema.parse({ title: 'Minimal Deal' });
+    expect(result.title).toBe('Minimal Deal');
+    expect(result.stage_id).toBeUndefined();
+    expect(result.stage_name).toBeUndefined();
   });
 
   it('createCompanySchema applies https to bare domain', async () => {

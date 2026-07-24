@@ -105,16 +105,17 @@ export async function POST(request: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
-    // Resolve stage_id - support both stage_id (UUID) and stage (name string)
+    // Resolve stage_id - support stage_id (UUID), stage (name), and stage_name (frontend field)
     let stageId = v.stage_id;
+    const stageName = v.stage || v.stage_name;
     
-    if (!stageId && v.stage) {
+    if (!stageId && stageName) {
       const [stageRecord] = await db
         .select({ id: dealStages.id })
         .from(dealStages)
         .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
         .where(and(
-          ilike(dealStages.name, v.stage),
+          ilike(dealStages.name, stageName),
           eq(pipelines.tenantId, ctx.tenantId)
         ))
         .limit(1);
@@ -124,7 +125,7 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    if (!stageId) return NextResponse.json({ error: 'stage_id is required (or valid stage name)' }, { status: 400 });
+    if (!stageId) return NextResponse.json({ error: 'stage_id is required (or valid stage/stage_name)' }, { status: 400 });
     
     const amount = v.amount ?? v.value ?? 0;
 
