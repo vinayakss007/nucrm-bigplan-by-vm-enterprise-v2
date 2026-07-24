@@ -65,17 +65,31 @@ export async function createNotification(opts: {
         metadata: meta,
       });
     });
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    const errorStack = err instanceof Error ? err.stack : undefined;
-    logger.error('[notifications] Failed to create notification', {
-      type: opts.type,
-      userId: opts.userId,
-      tenantId: opts.tenantId,
-      title: opts.title?.slice(0, 100),
-      error: errorMsg,
-      stack: errorStack,
-    });
+  } catch (_err) {
+    // Retry once after a short delay
+    try {
+      await new Promise(r => setTimeout(r, 200));
+      await withTenantContext(opts.tenantId, opts.userId, async (tx) => {
+        await tx.insert(notifications).values({
+          userId: opts.userId,
+          tenantId: opts.tenantId,
+          type: opts.type,
+          title: opts.title.slice(0, 200),
+          body: opts.body?.slice(0, 500) ?? '',
+          link: opts.link ?? null,
+          metadata: opts.metadata ?? {},
+        });
+      });
+      return;
+    } catch (retryErr) {
+      logger.error('[notifications] Failed to create notification (retry exhausted)', {
+        type: opts.type,
+        userId: opts.userId,
+        tenantId: opts.tenantId,
+        title: opts.title?.slice(0, 100),
+        error: retryErr instanceof Error ? retryErr.message : String(retryErr),
+      });
+    }
   }
 }
 
@@ -141,12 +155,54 @@ export async function notifyTenantMembers(opts: {
     await withTenantContext(opts.tenantId, members[0]!.userId, async (tx) => {
       await tx.insert(notifications).values(notificationValues);
     });
-  } catch (err) {
-    logger.error('[notifications] Failed to notify tenant members', {
-      tenantId: opts.tenantId,
-      type: opts.type,
-      error: err instanceof Error ? err.message : String(err),
-    });
+  } catch (_err) {
+    // Retry once after a short delay
+    try {
+      await new Promise(r => setTimeout(r, 200));
+      const retryMembers = await db.select({ userId: tenantMembers.userId })
+        .from(tenantMembers)
+        .where(and(
+          eq(tenantMembers.tenantId, opts.tenantId),
+          eq(tenantMembers.status, 'active'),
+          ...(opts.excludeUserId ? [ne(tenantMembers.userId, opts.excludeUserId)] : []),
+        ));
+      if (retryMembers.length) {
+        const retryMeta: Record<string, unknown> = {};
+        if (opts.entity_type) retryMeta['entity_type'] = opts.entity_type;
+        if (opts.entity_id)   retryMeta['entity_id']   = opts.entity_id;
+        let resolvedLink = opts.link ?? null;
+        if (!resolvedLink && opts.entity_type && opts.entity_id) {
+          const linkMap: Record<string, string> = {
+            contact: `/tenant/contacts/${opts.entity_id}`,
+            deal:    `/tenant/deals/${opts.entity_id}`,
+            task:    `/tenant/tasks`,
+            company: `/tenant/companies/${opts.entity_id}`,
+            lead:    `/tenant/leads/${opts.entity_id}`,
+            sequence:`/tenant/sequences/${opts.entity_id}`,
+          };
+          resolvedLink = linkMap[opts.entity_type] ?? null;
+        }
+        const retryValues = retryMembers.map(m => ({
+          userId: m.userId,
+          tenantId: opts.tenantId,
+          type: opts.type,
+          title: opts.title.slice(0, 200),
+          body: opts.body?.slice(0, 500) ?? '',
+          link: resolvedLink,
+          metadata: retryMeta,
+        }));
+        await withTenantContext(opts.tenantId, retryMembers[0]!.userId, async (tx) => {
+          await tx.insert(notifications).values(retryValues);
+        });
+      }
+      return;
+    } catch (retryErr) {
+      logger.error('[notifications] Failed to notify tenant members (retry exhausted)', {
+        tenantId: opts.tenantId,
+        type: opts.type,
+        error: retryErr instanceof Error ? retryErr.message : String(retryErr),
+      });
+    }
   }
 }
 

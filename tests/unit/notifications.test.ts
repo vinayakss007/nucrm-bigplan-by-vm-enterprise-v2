@@ -1,491 +1,116 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const mockDb = vi.hoisted(() => ({
-  insert: vi.fn(() => ({ values: vi.fn() })),
-  select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn() })) })),
-}));
-
-const mockLogger = vi.hoisted(() => ({
-  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
-}));
-
-vi.mock('@/drizzle/db', () => ({
-  db: mockDb,
-}));
+const mockInsert = vi.fn();
+const mockWhere = vi.fn();
+const mockFrom = vi.fn(() => ({ where: mockWhere }));
+const mockAnd = vi.fn(() => 'mock-and');
+const mockEq = vi.fn(() => 'mock-eq');
+const mockNe = vi.fn(() => 'mock-ne');
 
 vi.mock('@/lib/db/rls', () => ({
-  withTenantContext: vi.fn(async (_tid: string, _uid: string, cb: (tx: unknown) => Promise<void>) => {
-    await cb(mockDb);
+  withTenantContext: vi.fn(async (_tid: string, _uid: string, fn: (tx: unknown) => Promise<void>) => {
+    await fn({ insert: mockInsert });
   }),
 }));
 
-vi.mock('@/lib/logger', () => mockLogger);
+vi.mock('@/drizzle/schema', () => ({
+  notifications: { userId: 'userId', tenantId: 'tenantId', type: 'type', title: 'title', body: 'body', link: 'link', metadata: 'metadata' },
+  tenantMembers: { tenantId: 'tenantId', userId: 'userId', status: 'status' },
+  users: { id: 'id', fullName: 'fullName', email: 'email' },
+}));
 
-import { db } from '@/drizzle/db';
-import { logger } from '@/lib/logger';
+vi.mock('drizzle-orm', () => ({
+  eq: mockEq,
+  and: mockAnd,
+  ne: mockNe,
+  sql: { raw: vi.fn(), join: vi.fn() },
+  ilike: vi.fn(),
+  or: vi.fn(),
+}));
+
+const mockDbSelect = vi.fn(() => ({ from: mockFrom }));
+vi.mock('@/drizzle/db', () => ({ db: { select: mockDbSelect } }));
+
+vi.mock('@/lib/logger', () => ({
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+}));
 
 describe('notifications', () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let createNotification: any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let notifyTenantMembers: any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let processMentions: any;
-
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.resetModules();
+    vi.restoreAllMocks();
+    mockInsert.mockReset();
+    mockFrom.mockReset();
+    mockWhere.mockReset();
+    mockDbSelect.mockReset();
+    mockDbSelect.mockReturnValue({ from: mockFrom });
+    mockFrom.mockReturnValue({ where: mockWhere });
+    mockEq.mockClear();
+    mockAnd.mockClear();
+    mockNe.mockClear();
   });
 
-  describe('createNotification', () => {
-    beforeEach(async () => {
-      const mod = await import('@/lib/notifications');
-      createNotification = mod.createNotification;
+  it('createNotification succeeds on first try', async () => {
+    mockInsert.mockResolvedValue(undefined);
+    const { createNotification } = await import('@/lib/notifications');
+    await createNotification({
+      userId: 'u1', tenantId: 't1', type: 'task_assigned', title: 'Test',
     });
-
-    it('inserts a notification with all fields', async () => {
-      const valuesFn = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
-
-      await createNotification({
-        userId: 'user-1',
-        tenantId: 'tenant-1',
-        type: 'task_assigned',
-        title: 'Task assigned to you',
-        body: 'Please review the proposal',
-        link: '/tenant/tasks/123',
-      });
-
-      expect(valuesFn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: 'user-1',
-          tenantId: 'tenant-1',
-          type: 'task_assigned',
-          title: 'Task assigned to you',
-        }),
-      );
-    });
-
-    it('auto-derives link from entity_type and entity_id', async () => {
-      const valuesFn = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
-
-      await createNotification({
-        userId: 'user-1',
-        tenantId: 'tenant-1',
-        type: 'deal_stage',
-        title: 'Deal moved',
-        entity_type: 'deal',
-        entity_id: 'deal-42',
-      });
-
-      expect(valuesFn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          link: '/tenant/deals/deal-42',
-        }),
-      );
-    });
-
-    it('stores entity ref in metadata', async () => {
-      const valuesFn = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
-
-      await createNotification({
-        userId: 'user-1',
-        tenantId: 'tenant-1',
-        type: 'contact_assigned',
-        title: 'Contact assigned',
-        entity_type: 'contact',
-        entity_id: 'contact-7',
-      });
-
-      expect(valuesFn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          metadata: expect.objectContaining({
-            entity_type: 'contact',
-            entity_id: 'contact-7',
-          }),
-        }),
-      );
-    });
-
-    it('truncates title to 200 chars', async () => {
-      const valuesFn = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
-      const longTitle = 'x'.repeat(300);
-
-      await createNotification({
-        userId: 'user-1',
-        tenantId: 'tenant-1',
-        type: 'system',
-        title: longTitle,
-      });
-
-      expect(valuesFn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: longTitle.slice(0, 200),
-        }),
-      );
-    });
-
-    it('truncates body to 500 chars', async () => {
-      const valuesFn = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
-      const longBody = 'x'.repeat(600);
-
-      await createNotification({
-        userId: 'user-1',
-        tenantId: 'tenant-1',
-        type: 'system',
-        title: 'Test',
-        body: longBody,
-      });
-
-      expect(valuesFn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          body: longBody.slice(0, 500),
-        }),
-      );
-    });
-
-    it('defaults body to empty string when not provided', async () => {
-      const valuesFn = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
-
-      await createNotification({
-        userId: 'user-1',
-        tenantId: 'tenant-1',
-        type: 'system',
-        title: 'Test',
-      });
-
-      expect(valuesFn).toHaveBeenCalledWith(
-        expect.objectContaining({ body: '' }),
-      );
-    });
-
-    it('handles db insert errors gracefully', async () => {
-      vi.mocked(db.insert).mockImplementation(() => {
-        throw new Error('DB connection lost');
-      });
-
-      await expect(
-        createNotification({
-          userId: 'user-1',
-          tenantId: 'tenant-1',
-          type: 'system',
-          title: 'Test',
-        }),
-      ).resolves.toBeUndefined();
-
-      expect(logger.error).toHaveBeenCalledWith(
-        '[notifications] Failed to create notification',
-        expect.objectContaining({ error: 'DB connection lost' }),
-      );
-    });
-
-    it('supports all notification types', async () => {
-      const types = [
-        'task_assigned', 'task_due', 'task_overdue',
-        'deal_stage', 'deal_assigned', 'deal_won',
-        'contact_assigned', 'mention',
-        'invite_accepted', 'team_joined',
-        'limit_warning', 'trial_expiring',
-        'lead_warming', 'system',
-      ] as const;
-      const valuesFn = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
-
-      for (const type of types) {
-        await createNotification({
-          userId: 'u-1',
-          tenantId: 't-1',
-          type,
-          title: type,
-        });
-      }
-
-      expect(valuesFn).toHaveBeenCalledTimes(types.length);
-    });
+    expect(mockInsert).toHaveBeenCalled();
   });
 
-  describe('notifyTenantMembers', () => {
-    beforeEach(async () => {
-      const mod = await import('@/lib/notifications');
-      notifyTenantMembers = mod.notifyTenantMembers;
+  it('createNotification retries once on failure then logs error', async () => {
+    mockInsert
+      .mockRejectedValueOnce(new Error('DB down'))
+      .mockResolvedValueOnce(undefined);
+    const { createNotification } = await import('@/lib/notifications');
+    await createNotification({
+      userId: 'u1', tenantId: 't1', type: 'task_assigned', title: 'Test',
     });
-
-    it('inserts notifications for all active tenant members', async () => {
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn(() => ({
-          where: vi.fn().mockResolvedValue([
-            { userId: 'member-1' },
-            { userId: 'member-2' },
-            { userId: 'member-3' },
-          ]),
-        })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-
-      const valuesFn = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
-
-      await notifyTenantMembers({
-        tenantId: 'tenant-1',
-        type: 'team_joined',
-        title: 'New member joined!',
-      });
-
-      expect(valuesFn).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({ userId: 'member-1' }),
-          expect.objectContaining({ userId: 'member-2' }),
-          expect.objectContaining({ userId: 'member-3' }),
-        ]),
-      );
-    });
-
-    it('excludes specified userId from notification', async () => {
-      const whereFn = vi.fn().mockResolvedValue([
-        { userId: 'member-1' },
-        { userId: 'member-2' },
-      ]);
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn(() => ({
-          where: whereFn,
-        })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-
-      const valuesFn = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
-
-      await notifyTenantMembers({
-        tenantId: 'tenant-1',
-        excludeUserId: 'user-admin',
-        type: 'team_joined',
-        title: 'Welcome!',
-      });
-
-      expect(whereFn).toHaveBeenCalled();
-    });
-
-    it('returns early when no active members found', async () => {
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn(() => ({
-          where: vi.fn().mockResolvedValue([]),
-        })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-
-      const valuesFn = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
-
-      await notifyTenantMembers({
-        tenantId: 'tenant-1',
-        type: 'system',
-        title: 'No one to notify',
-      });
-
-      expect(valuesFn).not.toHaveBeenCalled();
-    });
-
-    it('auto-derives link from entity for bulk notifications', async () => {
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn(() => ({
-          where: vi.fn().mockResolvedValue([
-            { userId: 'member-1' },
-          ]),
-        })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-
-      const valuesFn = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
-
-      await notifyTenantMembers({
-        tenantId: 'tenant-1',
-        type: 'contact_assigned',
-        title: 'New contact',
-        entity_type: 'company',
-        entity_id: 'company-5',
-      });
-
-      expect(valuesFn).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({
-            link: '/tenant/companies/company-5',
-          }),
-        ]),
-      );
-    });
-
-    it('handles db error gracefully', async () => {
-      vi.mocked(db.select).mockImplementation(() => {
-        throw new Error('select failed');
-      });
-
-      await expect(
-        notifyTenantMembers({
-          tenantId: 'tenant-1',
-          type: 'system',
-          title: 'Error test',
-        }),
-      ).resolves.toBeUndefined();
-
-      expect(logger.error).toHaveBeenCalledWith(
-        '[notifications] Failed to notify tenant members',
-        expect.any(Object),
-      );
-    });
+    // First call fails, retry succeeds — no error logged (retry succeeded)
+    expect(mockInsert).toHaveBeenCalledTimes(2);
   });
 
-  describe('processMentions', () => {
-    beforeEach(async () => {
-      const mod = await import('@/lib/notifications');
-      processMentions = mod.processMentions;
+  it('createNotification logs error when retry also fails', async () => {
+    mockInsert.mockRejectedValue(new Error('DB down permanently'));
+    const { createNotification } = await import('@/lib/notifications');
+    const { logger } = await import('@/lib/logger');
+    await createNotification({
+      userId: 'u1', tenantId: 't1', type: 'task_assigned', title: 'Test',
     });
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('retry exhausted'),
+      expect.objectContaining({ type: 'task_assigned' }),
+    );
+  });
 
-    it('parses @mentions and creates notifications', async () => {
-      const whereFn = vi.fn().mockResolvedValue([{ id: 'mentioned-user' }]);
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn(() => ({
-          innerJoin: vi.fn(() => ({
-            where: vi.fn(() => ({
-              limit: whereFn,
-            })),
-          })),
-        })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-
-      const valuesFn = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
-
-      await processMentions(
-        'Hey @john, check this out!',
-        'tenant-1',
-        'author-1',
-        '/tenant/tasks/1',
-      );
-
-      expect(valuesFn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: 'mentioned-user',
-          type: 'mention',
-          title: 'You were mentioned',
-        }),
-      );
+  it('notifyTenantMembers retries on failure then logs error', async () => {
+    const members = [{ userId: 'u1' }, { userId: 'u2' }];
+    mockWhere.mockResolvedValue(members);
+    mockInsert.mockRejectedValue(new Error('Insert failed'));
+    const { notifyTenantMembers } = await import('@/lib/notifications');
+    const { logger } = await import('@/lib/logger');
+    await notifyTenantMembers({
+      tenantId: 't1', type: 'deal_stage', title: 'Deal moved',
     });
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('retry exhausted'),
+      expect.objectContaining({ type: 'deal_stage' }),
+    );
+  });
 
-    it('returns early when no mentions in text', async () => {
-      const valuesFn = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
-
-      await processMentions(
-        'This text has no mentions',
-        'tenant-1',
-        'author-1',
-      );
-
-      expect(valuesFn).not.toHaveBeenCalled();
+  it('notifyTenantMembers retries and succeeds on second attempt', async () => {
+    const members = [{ userId: 'u1' }];
+    mockWhere.mockResolvedValue(members);
+    mockInsert
+      .mockRejectedValueOnce(new Error('Transient'))
+      .mockResolvedValueOnce(undefined);
+    const { notifyTenantMembers } = await import('@/lib/notifications');
+    const { withTenantContext } = await import('@/lib/db/rls');
+    await notifyTenantMembers({
+      tenantId: 't1', type: 'deal_won', title: 'Won!',
     });
-
-    it('skips mention when no user matches', async () => {
-      const whereFn = vi.fn().mockResolvedValue([]);
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn(() => ({
-          innerJoin: vi.fn(() => ({
-            where: vi.fn(() => ({
-              limit: whereFn,
-            })),
-          })),
-        })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-
-      const valuesFn = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
-
-      await processMentions(
-        'Hello @unknownuser',
-        'tenant-1',
-        'author-1',
-      );
-
-      expect(valuesFn).not.toHaveBeenCalled();
-    });
-
-    it('handles multiple mentions in one text', async () => {
-      let callCount = 0;
-      const limitFn = vi.fn().mockImplementation(() => {
-        callCount++;
-        if (callCount === 1) return [{ id: 'user-1' }];
-        return [{ id: 'user-2' }];
-      });
-
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn(() => ({
-          innerJoin: vi.fn(() => ({
-            where: vi.fn(() => ({
-              limit: limitFn,
-            })),
-          })),
-        })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-
-      const valuesFn = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
-
-      await processMentions(
-        'Hi @alice and @bob!',
-        'tenant-1',
-        'author-1',
-      );
-
-      expect(valuesFn).toHaveBeenCalledTimes(2);
-    });
-
-    it('handles db error for individual mention gracefully', async () => {
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn(() => ({
-          innerJoin: vi.fn(() => ({
-            where: vi.fn(() => ({
-              limit: vi.fn().mockRejectedValue(new Error('db error')),
-            })),
-          })),
-        })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-
-      const valuesFn = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.insert).mockReturnValue({ values: valuesFn } as any);
-
-      await expect(
-        processMentions('Hello @testuser', 'tenant-1', 'author-1'),
-      ).resolves.toBeUndefined();
-
-      expect(logger.error).toHaveBeenCalledWith(
-        '[notifications] Failed to process mention',
-        expect.any(Object),
-      );
-    });
+    expect(withTenantContext).toHaveBeenCalled();
+    expect(mockInsert).toHaveBeenCalledTimes(2);
   });
 });

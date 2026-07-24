@@ -2,6 +2,16 @@ import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 
 /**
+ * SQL templates for junction tables that lack a tenant_id column.
+ * Each function returns a DELETE statement scoped to the given tenantId.
+ */
+const JUNCTION_TABLE_DELETES: Record<string, (tenantId: string) => string> = {
+  contact_emails: (tid) => `DELETE FROM contact_emails WHERE contact_id IN (SELECT id FROM contacts WHERE tenant_id = '${tid}')`,
+  contact_tags:   (tid) => `DELETE FROM contact_tags WHERE contact_id IN (SELECT id FROM contacts WHERE tenant_id = '${tid}')`,
+  lead_tags:      (tid) => `DELETE FROM lead_tags WHERE lead_id IN (SELECT id FROM leads WHERE tenant_id = '${tid}')`,
+};
+
+/**
  * TenantDataImporter
  * 
  * Imports data for a SINGLE tenant from a backup export.
@@ -192,17 +202,16 @@ export class TenantDataImporter {
         for (const table of deleteOrder) {
           if (skipTables.includes(table)) continue;
           try {
-            // Use tx.execute for bulk delete with tenant_id filter
-            await tx.execute(sql`DELETE FROM ${sql.identifier(table)} WHERE tenant_id = ${this.tenantId}`);
-          } catch (e) {
-            console.warn('[Import] Primary delete failed for table:', table, e);
-            try {
-              // Fallback for tables where tenant_id might be named differently or need subquery
-              await tx.execute(sql`DELETE FROM ${sql.identifier(table)} WHERE id IN (SELECT id FROM ${sql.identifier(table)} WHERE tenant_id = ${this.tenantId})`);
-            } catch (e) {
-              // Silently skip during migration/setup when tables may not exist yet
-              console.warn('[Import] Failed to delete table', table, (e as Error).message);
+            // Junction tables without tenant_id — delete via parent table's tenant_id
+            const junctionDelete = JUNCTION_TABLE_DELETES[table];
+            if (junctionDelete) {
+              await tx.execute(sql.raw(junctionDelete(this.tenantId)));
+            } else {
+              // Standard tables with tenant_id column
+              await tx.execute(sql`DELETE FROM ${sql.identifier(table)} WHERE tenant_id = ${this.tenantId}`);
             }
+          } catch (e) {
+            console.warn('[Import] Delete failed for table:', table, e);
           }
         }
       });
