@@ -132,6 +132,7 @@ const SETTINGS_QUICK = [
   { href:'/tenant/settings/general',     label:'Workspace' },
   { href:'/tenant/settings/team',        label:'Team' },
   { href:'/tenant/settings/admin',       label:'Org Admin', adminOnly:true },
+  { href:'/tenant/settings/audit',       label:'Audit Log',  adminOnly:true },
   { href:'/tenant/settings/billing',     label:'Plan & Billing' },
 ];
 
