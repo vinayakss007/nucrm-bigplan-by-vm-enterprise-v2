@@ -11,3 +11,4 @@
 0 4 * * 0     /usr/local/bin/run-cron.sh cleanup
 0 9,13,17 * * * /usr/local/bin/run-cron.sh warmup-emails
 0 5 * * *     /usr/local/bin/run-cron.sh subscription-check
+0 7 * * *     /usr/local/bin/run-cron.sh contract-renewal-check
