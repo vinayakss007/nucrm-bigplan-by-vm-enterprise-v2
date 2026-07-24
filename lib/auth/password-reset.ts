@@ -9,7 +9,7 @@
  */
 
 import { db } from '@/drizzle/db';
-import { users, passwordResets } from '@/drizzle/schema';
+import { users, passwordResets, sessions } from '@/drizzle/schema';
 import { eq, isNull, and, gt } from 'drizzle-orm';
 import { createHash, randomBytes } from 'crypto';
 import { sendEmail } from '@/lib/email/service';
@@ -229,6 +229,12 @@ export async function resetPassword(
         updatedAt: new Date(),
       })
       .where(eq(users.id, tokenCheck.userId));
+
+    // Invalidate all existing sessions for this user
+    await db
+      .delete(sessions)
+      .where(eq(sessions.userId, tokenCheck.userId))
+      .catch((e) => { console.error('[password-reset] Failed to invalidate sessions', e); });
 
     logger.info('Password reset successful', { userId: tokenCheck.userId });
 
