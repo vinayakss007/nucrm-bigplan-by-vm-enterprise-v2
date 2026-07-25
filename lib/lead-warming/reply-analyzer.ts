@@ -480,51 +480,6 @@ async function handleIntentActions(
   }
 }
 
-  // Create follow-up task for actionable intents
-  if (analysis.requiresFollowUp && ownerUserId) {
-    const contactName = [contact?.firstName, contact?.lastName].filter(Boolean).join(' ') || 'Contact';
-    const dueDateMap: Record<string, number> = {
-      interested: 1,    // Follow up within 1 day
-      question: 1,      // Answer within 1 day
-      ask_later: 14,    // Follow up in 2 weeks
-    };
-    const daysUntilDue = dueDateMap[analysis.intent] ?? 3;
-
-    const [task] = await db.insert(tasks).values({
-      tenantId,
-      title: `Follow up: ${contactName} — ${analysis.suggestedAction}`,
-      description: `Reply analysis: ${analysis.summary}\n\nSuggested action: ${analysis.suggestedAction}\n\nOriginal reply:\n${originalMessage.body?.slice(0, 200)}`,
-      assignedTo: ownerUserId,
-      contactId: contact.id,
-      priority: analysis.intent === 'interested' ? 'high' : 'medium',
-      dueDate: new Date(Date.now() + daysUntilDue * 86400000),
-      completed: false,
-    }).returning({ id: tasks.id });
-
-    if (task) {
-      await db.update(leadWarmingReplies)
-        .set({ followUpCreated: true, followUpTaskId: task.id })
-        .where(eq(leadWarmingReplies.id, replyId));
-    }
-  }
-
-  // Handle unsubscribe: opt out from all campaigns
-  if (analysis.intent === 'unsubscribe') {
-    const { leadWarmingSchedule } = await import('@/drizzle/schema/lead-warming');
-    await db.update(leadWarmingSchedule)
-      .set({
-        optedOut: true,
-        optedOutAt: new Date(),
-        optOutReason: 'Replied with unsubscribe intent',
-        updatedAt: new Date(),
-      })
-      .where(and(
-        eq(leadWarmingSchedule.tenantId, tenantId),
-        eq(leadWarmingSchedule.contactId, originalMessage.contactId)
-      ));
-  }
-}
-
 // ── Batch Analysis (for unanalyzed replies) ───────────────────────────────
 
 /**

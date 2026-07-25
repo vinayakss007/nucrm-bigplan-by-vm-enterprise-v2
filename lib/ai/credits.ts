@@ -190,7 +190,7 @@ export async function deductCredits(params: {
         usedCostCents: b.usedCostCents,
         remainingCostCents: b.allocatedCostCents - b.usedCostCents,
         hardCapEnabled: b.hardCapEnabled,
-        softCapPct: b.softCapPct,
+        softCapPct: b.softCapPct ?? 80,
         status: b.status,
       };
 

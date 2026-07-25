@@ -131,7 +131,7 @@ export async function retryFromDLQ(dlqEntryId: string): Promise<boolean> {
           dlqEntryId,
         },
       })
-      .where(eq(webhookDeliveries.id, payload.deliveryId));
+      .where(eq(webhookDeliveries.id, payload.deliveryId!));
 
     await tx.update(deadLetterQueue)
       .set({

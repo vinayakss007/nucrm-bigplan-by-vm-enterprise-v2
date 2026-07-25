@@ -423,7 +423,7 @@ async function sendWarmingMessage(
 
 async function upsertWarmingSchedule(
   tx: typeof db,
-  campaign: { cooldownDays?: number; tenantId: string },
+  campaign: { id: string; cooldownDays?: number; tenantId: string },
   contact: { id: string },
 ): Promise<void> {
   const cooldownDays = campaign.cooldownDays || 7;

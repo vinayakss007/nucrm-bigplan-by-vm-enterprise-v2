@@ -62,9 +62,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  let ctx: Awaited<ReturnType<typeof requireAuth>>;
   try {
-    ctx = await requireAuth(req);
+    const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
     let body;

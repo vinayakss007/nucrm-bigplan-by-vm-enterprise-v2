@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'from_email is required' }, { status: 400 });
     }
 
-    const [config] = await db.transaction(async (tx) => {
+    const [_config] = await db.transaction(async (tx) => {
       const [cfg] = await tx.insert(emailWarmupConfigs)
         .values({
           tenantId: ctx.tenantId,
@@ -113,35 +113,9 @@ export async function POST(request: NextRequest) {
 
       return [cfg];
     });
-      })
-      .returning();
-
-    const configId = config?.id;
-
-    // Add participants to pool
-    if (Array.isArray(participants) && participants.length > 0) {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const poolValues = participants.map((p: any) => ({
-        configId: configId!,
-        participantEmail: p.email,
-        participantName: p.name || '',
-        status: 'active',
-      } as typeof emailWarmupPool.$inferInsert));
-
-      await db.insert(emailWarmupPool)
-        .values(poolValues)
-        .onConflictDoNothing({
-          target: [emailWarmupPool.configId, emailWarmupPool.participantEmail]
-        });
-    }
 
     return NextResponse.json({ ok: true, message: 'Warm-up configured' }, { status: 201 });
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     return apiError(err);
   }
 }

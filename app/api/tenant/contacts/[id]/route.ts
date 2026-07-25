@@ -184,7 +184,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         entityId: contactId,
         entityType: 'contact',
         eventType: 'note',
-        description: `Updated contact ${r.firstName} ${r.lastName || ''}`.trim(),
+        description: `Updated contact ${r?.firstName} ${r?.lastName || ''}`.trim(),
         action: 'update',
       });
 
@@ -279,7 +279,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         )
         .returning({ id: contacts.id });
 
-      if (!r) return null as any;
+      if (!r) return [];
 
       await tx.update(tenants)
         .set({ currentContacts: sql`greatest(0, ${tenants.currentContacts} - 1)` })
