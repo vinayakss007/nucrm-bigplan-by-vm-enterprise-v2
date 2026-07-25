@@ -12,15 +12,15 @@
     {
       "idx": 1,
       "version": "7",
-      "when": 1783769189681,
-      "tag": "0001_flat_sir_ram",
+      "when": 1778251492391,
+      "tag": "0001_perpetual_the_stranger",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "7",
-      "when": 1778251492391,
-      "tag": "0001_perpetual_the_stranger",
+      "when": 1783769189681,
+      "tag": "0001_flat_sir_ram",
       "breakpoints": true
     },
     {
@@ -124,15 +124,15 @@
     {
       "idx": 17,
       "version": "7",
-      "when": 1746990200000,
-      "tag": "0013_documents",
+      "when": 1746990300000,
+      "tag": "0014_missing_ai_tables",
       "breakpoints": true
     },
     {
       "idx": 18,
       "version": "7",
-      "when": 1746990300000,
-      "tag": "0014_missing_ai_tables",
+      "when": 1746990400000,
+      "tag": "0015_workflow_foundation",
       "breakpoints": true
     },
     {
@@ -145,103 +145,96 @@
     {
       "idx": 20,
       "version": "7",
-      "when": 1746990400000,
-      "tag": "0015_workflow_foundation",
-      "breakpoints": true
-    },
-    {
-      "idx": 21,
-      "version": "7",
       "when": 1779574618000,
       "tag": "0018_add_fk_references",
       "breakpoints": true
     },
     {
-      "idx": 22,
+      "idx": 21,
       "version": "7",
       "when": 1779900000000,
       "tag": "0019_add_stage_entered_at",
       "breakpoints": true
     },
     {
-      "idx": 23,
+      "idx": 22,
       "version": "7",
       "when": 1779900001000,
       "tag": "0020_platform_stats_function",
       "breakpoints": true
     },
     {
-      "idx": 24,
+      "idx": 23,
       "version": "7",
       "when": 1781440125000,
       "tag": "0021_follow_ups",
       "breakpoints": true
     },
     {
-      "idx": 25,
+      "idx": 24,
       "version": "7",
       "when": 1781712000000,
       "tag": "0022_follow_ups_add_updated_by",
       "breakpoints": true
     },
     {
-      "idx": 26,
+      "idx": 25,
       "version": "7",
       "when": 1782000000000,
       "tag": "0023_ai_key_type_personal_system",
       "breakpoints": true
     },
     {
-      "idx": 27,
+      "idx": 26,
       "version": "7",
       "when": 1782100000000,
       "tag": "0024_ai_model_override",
       "breakpoints": true
     },
     {
-      "idx": 28,
+      "idx": 27,
       "version": "7",
       "when": 1782200000000,
       "tag": "0025_ai_credits_system",
       "breakpoints": true
     },
     {
-      "idx": 29,
+      "idx": 28,
       "version": "7",
       "when": 1782300000000,
       "tag": "0026_per_plan_rate_limiting",
       "breakpoints": true
     },
     {
-      "idx": 30,
+      "idx": 29,
       "version": "7",
       "when": 1782400000000,
       "tag": "0032_rename_announcement_body_to_content",
       "breakpoints": true
     },
     {
-      "idx": 31,
+      "idx": 30,
       "version": "7",
       "when": 1782500000000,
       "tag": "0033_add_fk_constraints_billing_documents",
       "breakpoints": true
     },
     {
-      "idx": 32,
+      "idx": 31,
       "version": "7",
       "when": 1782600000000,
       "tag": "0034_rls_remaining_tables",
       "breakpoints": true
     },
     {
-      "idx": 33,
+      "idx": 32,
       "version": "7",
       "when": 1783761529000,
       "tag": "0035_missing_db_functions",
       "breakpoints": true
     },
     {
-      "idx": 34,
+      "idx": 33,
       "version": "7",
       "when": 1783800000000,
       "tag": "0036_missing_tables",
