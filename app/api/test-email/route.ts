@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendEmail } from '@/lib/email/service';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 /**
  * Test Email Endpoint
@@ -13,6 +14,9 @@ import { sendEmail } from '@/lib/email/service';
  */
 export async function POST(request: NextRequest) {
   try {
+    const limited = await checkRateLimit(request, { action: 'test-email', max: 5, windowMinutes: 60 });
+    if (limited) return limited;
+
     const body = await request.json();
     const to = body.to;
     

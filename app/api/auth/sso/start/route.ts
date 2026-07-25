@@ -20,8 +20,12 @@ import {
 } from '@/lib/auth/sso/oidc';
 import { setSsoState } from '@/lib/auth/sso/state';
 import { decrypt } from '@/lib/crypto';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
+  const limited = await checkRateLimit(request, { action: 'sso-start', max: 20, windowMinutes: 1 });
+  if (limited) return limited;
+
   const url = new URL(request.url);
   const email = (url.searchParams.get('email') || '').trim().toLowerCase();
   const redirectTo = url.searchParams.get('redirect') || '/tenant';

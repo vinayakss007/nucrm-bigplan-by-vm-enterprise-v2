@@ -4,9 +4,13 @@ import { quotes, contacts, activities } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const limited = await checkRateLimit(request, { action: 'public-quote-accept', max: 10, windowMinutes: 1 });
+    if (limited) return limited;
+
     const email = request.headers.get('x-portal-email');
     if (!email) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
 

@@ -7,6 +7,7 @@ import { eq, count } from 'drizzle-orm';
 import { hashPassword, createToken, hashToken, setSessionCookie, validatePassword } from '@/lib/auth/session';
 import { installDefaultModules } from '@/lib/modules/auto-install';
 import { logError } from '@/lib/errors-server';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 const _createAdminSchema = z.object({
   full_name: z.string().min(1, 'Full name is required'),
@@ -18,9 +19,12 @@ const _createAdminSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await checkRateLimit(request, { action: 'create-admin', max: 3, windowMinutes: 60 });
+    if (limited) return limited;
+
     let body;
     try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
-    const { full_name, email, password, workspace_name, setup_key } = body;
+    const { full_name, email, password, workspace_name } = body;
 
     // Only works if zero super admin users exist
     const [existing] = await db.select({ 

@@ -6,11 +6,15 @@ import { db } from '@/drizzle/db';
 import { users, emailVerifications } from '@/drizzle/schema';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 import { createHash } from 'crypto';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 const schema = z.object({ token: z.string().min(1) });
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await checkRateLimit(request, { action: 'verify-email', max: 10, windowMinutes: 60 });
+    if (limited) return limited;
+
     const body = await request.json();
     const validated = validateBody(schema, body);
     if (validated instanceof NextResponse) return validated;

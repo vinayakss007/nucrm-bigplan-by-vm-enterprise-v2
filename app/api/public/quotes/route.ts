@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { quotes, contacts } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
+    const limited = await checkRateLimit(request, { action: 'public-quotes', max: 30, windowMinutes: 1 });
+    if (limited) return limited;
+
     const email = request.headers.get('x-portal-email') || request.nextUrl.searchParams.get('email');
     if (!email) return NextResponse.json({ data: [] });
 

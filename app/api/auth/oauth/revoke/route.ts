@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { oauthTokens, oauthClients } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await checkRateLimit(request, { action: 'oauth-revoke', max: 20, windowMinutes: 1 });
+    if (limited) return limited;
+
     let formData: FormData;
     try {
       formData = await request.formData();
