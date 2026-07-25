@@ -15,6 +15,7 @@ import { tenants } from '@/drizzle/schema';
 import { restoreSnapshots } from '@/drizzle/schema';
 import { eq, and, sql, type SQL } from 'drizzle-orm';
 import { extractTenantSQL, parseInsertStatement } from './backup-parser';
+import { validateTableName } from '@/lib/sql-allowlist';
 
 /**
  * Foreign key dependency ordering for restore.
@@ -149,6 +150,7 @@ export async function createPreRestoreSnapshot(
   let totalRecords = 0;
   
   for (const table of tables) {
+    validateTableName(table);
     try {
       const result = await db.execute(sql`
         SELECT * FROM ${sql.identifier(table)} WHERE tenant_id = ${tenantId}
