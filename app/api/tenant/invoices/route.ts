@@ -84,9 +84,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const discountAmount = discount;
+    const discountAmount = discount ?? 0;
     const taxableAmount = subtotal - discountAmount;
-    const taxAmount = taxRate / 100 * taxableAmount;
+    const taxAmount = (taxRate ?? 0) / 100 * taxableAmount;
     const totalAmount = taxableAmount + taxAmount;
 
     const invoice = await db.transaction(async (tx) => {

@@ -2,7 +2,8 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, feat/enterprise-infrastructure, fix/production-build-issues]
+    branches:
+      [main, feat/enterprise-infrastructure, fix/production-build-issues]
   push:
     branches: [main, feat/enterprise-infrastructure]
 
@@ -17,7 +18,7 @@ env:
   METRICS_SECRET: ${{ secrets.METRICS_SECRET }}
   SETUP_KEY: ${{ secrets.SETUP_KEY }}
   ALLOWED_ORIGINS: http://localhost:3000
-  DATABASE_SSL: 'false'
+  DATABASE_SSL: "false"
 
 jobs:
   lint-typecheck:
@@ -28,13 +29,16 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
 
       - run: npm ci
 
       - name: Lint
         run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
 
   test-unit:
     name: Unit Tests
@@ -66,8 +70,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
 
       - run: npm ci
 
@@ -110,8 +114,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
 
       - run: npm ci
 
@@ -124,7 +128,7 @@ jobs:
         run: npm run test:integration
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_test
-          DATABASE_SSL: 'false'
+          DATABASE_SSL: "false"
           REDIS_URL: redis://localhost:6379
 
   secret-scan:
@@ -148,8 +152,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
 
       - run: npm ci
 
@@ -194,8 +198,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
 
       - run: npm ci
 

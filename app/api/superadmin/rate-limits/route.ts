@@ -104,27 +104,30 @@ export async function PUT(request: NextRequest) {
     }
 
     if (parsed.data.action === 'update_plan_limits') {
+      const planId = parsed.data.planId!;
       await db.update(plans)
         .set({ rateLimitConfig: parsed.data.rateLimits, updatedAt: new Date() })
-        .where(eq(plans.id, parsed.data.planId));
+        .where(eq(plans.id, planId));
 
-      return NextResponse.json({ ok: true, message: `Rate limits updated for plan ${parsed.data.planId}` });
+      return NextResponse.json({ ok: true, message: `Rate limits updated for plan ${planId}` });
     }
 
     if (parsed.data.action === 'toggle_super_admin_unlimited') {
+      const userId = parsed.data.userId!;
       await db.update(users)
         .set({ unlimitedRateLimit: parsed.data.unlimited, updatedAt: new Date() })
-        .where(eq(users.id, parsed.data.userId));
+        .where(eq(users.id, userId));
 
-      return NextResponse.json({ ok: true, message: `Unlimited rate limit ${parsed.data.unlimited ? 'enabled' : 'disabled'} for user ${parsed.data.userId}` });
+      return NextResponse.json({ ok: true, message: `Unlimited rate limit ${parsed.data.unlimited ? 'enabled' : 'disabled'} for user ${userId}` });
     }
 
     if (parsed.data.action === 'reset_to_defaults') {
+      const planId = parsed.data.planId!;
       await db.update(plans)
         .set({ rateLimitConfig: {}, updatedAt: new Date() })
-        .where(eq(plans.id, parsed.data.planId));
+        .where(eq(plans.id, planId));
 
-      return NextResponse.json({ ok: true, message: `Plan ${parsed.data.planId} reset to use global defaults` });
+      return NextResponse.json({ ok: true, message: `Plan ${planId} reset to use global defaults` });
     }
   } catch (err) {
     return apiError(err);

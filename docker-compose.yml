@@ -127,6 +127,18 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: nucrm-db
+    command:
+      - "postgres"
+      - "-c"
+      - "log_min_duration_statement=200"
+      - "-c"
+      - "log_statement=none"
+      - "-c"
+      - "log_duration=off"
+      - "-c"
+      - "log_lock_waits=on"
+      - "-c"
+      - "log_temp_files=0"
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-nucrm}
       - POSTGRES_USER=${POSTGRES_USER:-nucrm}
