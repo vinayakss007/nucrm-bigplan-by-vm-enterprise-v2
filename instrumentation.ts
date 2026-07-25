@@ -18,7 +18,9 @@ export async function register() {
       }).then(r => r.json()).then(d => {
         if (d.ok) console.log('[telegram] Webhook registered:', webhookUrl);
         else console.warn('[telegram] Webhook registration failed:', d.description);
-      }).catch(() => {});
+      }).catch((err) => {
+        console.error('[instrumentation] Telegram webhook registration failed:', err?.message || err);
+      });
     }
   }
 

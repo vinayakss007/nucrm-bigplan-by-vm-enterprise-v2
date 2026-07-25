@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { serviceSubscriptions, users, activities } from '@/drizzle/schema';
 import { eq, and, isNull, lte, sql } from 'drizzle-orm';
+import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/email/service';
 import { createNotification } from '@/lib/notifications';
 import { apiError } from '@/lib/api-error';
@@ -117,7 +118,11 @@ export async function POST(request: NextRequest) {
           eventType: 'subscription_renewal_reminder',
           description: `Renewal reminder sent: ${sub.name} renews in ${days} days`,
           metadata: { reminder_days: days, end_date: sub.currentPeriodEnd },
-        }).catch(() => {});
+        }).catch((err) => {
+          logger.warn('[cron-subscription] Failed to log activity', {
+            subscriptionId: sub.id, error: err instanceof Error ? err.message : String(err),
+          });
+        });
 
         remindersSent++;
       }

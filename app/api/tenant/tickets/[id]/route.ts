@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { supportTickets, ticketReplies, contacts, users, csatSurveys } from '@/drizzle/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
+import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -145,7 +146,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
                   <p style="color: #999; font-size: 12px;">Your feedback helps us improve our support quality.</p>
                 </div>
               `,
-            }).catch(() => {}); // fire-and-forget
+            }).catch((err) => {
+              logger.warn('[ticket-survey] Failed to send satisfaction survey', {
+                ticketId: id, error: err instanceof Error ? err.message : String(err),
+              });
+            });
           }
         }
       }

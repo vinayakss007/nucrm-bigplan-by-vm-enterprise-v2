@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server';
 import type { AuthContext } from '@/lib/auth/middleware';
 import { getUsageReport, recordViolation, type LimitKind } from './tracker';
 import { notifyLimitHit } from './notifications';
+import { logger } from '@/lib/logger';
 
 const ENFORCE = process.env['USAGE_LIMITS'] === 'on';
 
@@ -47,7 +48,12 @@ export async function checkLimit(
       kind,
       limit: report.limit,
       actual: report.actual,
-    }).catch(() => {});
+    }).catch((err) => {
+      logger.warn('[usage-middleware] Failed to send limit-hit notification', {
+        tenantId: ctx.tenantId, kind,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
   }
 
   const enforce = opts.enforce ?? ENFORCE;
