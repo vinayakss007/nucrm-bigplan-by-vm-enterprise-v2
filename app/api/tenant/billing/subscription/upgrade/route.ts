@@ -83,33 +83,35 @@ export async function POST(request: NextRequest) {
     });
 
     // Update subscription in database
-    await db.update(subscriptions).set({
-      planId: planId,
-      status: 'active',
-      currentPeriodStart: new Date(stripeSub.current_period_start * 1000),
-      currentPeriodEnd: new Date(stripeSub.current_period_end * 1000),
-      cancelAtPeriodEnd: false,
-      metadata: {
-        ...(currentSub.metadata as Record<string, unknown> || {}),
-        upgraded_at: new Date().toISOString(),
-        upgraded_by: ctx.userId,
-        previous_plan_id: currentSub.planId,
-      },
-    }).where(eq(subscriptions.id, currentSub.id));
+    await db.transaction(async (tx) => {
+      await tx.update(subscriptions).set({
+        planId: planId,
+        status: 'active',
+        currentPeriodStart: new Date(stripeSub.current_period_start * 1000),
+        currentPeriodEnd: new Date(stripeSub.current_period_end * 1000),
+        cancelAtPeriodEnd: false,
+        metadata: {
+          ...(currentSub.metadata as Record<string, unknown> || {}),
+          upgraded_at: new Date().toISOString(),
+          upgraded_by: ctx.userId,
+          previous_plan_id: currentSub.planId,
+        },
+      }).where(eq(subscriptions.id, currentSub.id));
 
-    // Record billing event
-    await db.insert(billingEvents).values({
-      tenantId: ctx.tenantId,
-      eventType: 'subscription.upgraded',
-      amount: String(newPlan.priceMonthly || '0'),
-      currency: 'usd',
-      stripeSubscriptionId: currentSub.stripeSubscriptionId,
-      metadata: {
-        previous_plan_id: currentSub.planId || 'none',
-        new_plan_id: planId,
-        interval,
-        upgraded_by: ctx.userId,
-      },
+      // Record billing event
+      await tx.insert(billingEvents).values({
+        tenantId: ctx.tenantId,
+        eventType: 'subscription.upgraded',
+        amount: String(newPlan.priceMonthly || '0'),
+        currency: 'usd',
+        stripeSubscriptionId: currentSub.stripeSubscriptionId,
+        metadata: {
+          previous_plan_id: currentSub.planId || 'none',
+          new_plan_id: planId,
+          interval,
+          upgraded_by: ctx.userId,
+        },
+      });
     });
 
     return NextResponse.json({

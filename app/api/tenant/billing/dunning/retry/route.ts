@@ -73,38 +73,43 @@ export async function POST(request: NextRequest) {
 
     // Create new dunning attempt
     const attemptNumber = pendingAttempts.length + 1;
-    const [attempt] = await db.insert(dunningAttempts).values({
-      tenantId: ctx.tenantId,
-      subscriptionId: subscriptionId,
-      attemptNumber: attemptNumber,
-      status: 'pending',
-      scheduledAt: new Date(),
-      paymentAmount: '0', // Will be populated from Stripe invoice
-      metadata: {
-        created_by: ctx.userId,
-        manual_retry: true,
-      },
-    }).returning();
 
-    if (!attempt) {
-      return NextResponse.json({ error: 'Failed to create dunning attempt' }, { status: 500 });
-    }
+    const [attempt] = await db.transaction(async (tx) => {
+      const [a] = await tx.insert(dunningAttempts).values({
+        tenantId: ctx.tenantId,
+        subscriptionId: subscriptionId,
+        attemptNumber: attemptNumber,
+        status: 'pending',
+        scheduledAt: new Date(),
+        paymentAmount: '0', // Will be populated from Stripe invoice
+        metadata: {
+          created_by: ctx.userId,
+          manual_retry: true,
+        },
+      }).returning();
 
-    // TODO: In a real implementation, this would trigger a background job
-    // to retry the payment via Stripe. For now, we'll just record the attempt.
-    
-    // Record billing event
-    await db.insert(billingEvents).values({
-      tenantId: ctx.tenantId,
-      eventType: 'dunning.retry_initiated',
-      amount: '0',
-      currency: 'usd',
-      metadata: {
-        subscription_id: subscriptionId,
-        attempt_id: attempt.id,
-        attempt_number: attemptNumber,
-        initiated_by: ctx.userId,
-      },
+      if (!a) {
+        throw new Error('Failed to create dunning attempt');
+      }
+
+      // TODO: In a real implementation, this would trigger a background job
+      // to retry the payment via Stripe. For now, we'll just record the attempt.
+      
+      // Record billing event
+      await tx.insert(billingEvents).values({
+        tenantId: ctx.tenantId,
+        eventType: 'dunning.retry_initiated',
+        amount: '0',
+        currency: 'usd',
+        metadata: {
+          subscription_id: subscriptionId,
+          attempt_id: a.id,
+          attempt_number: attemptNumber,
+          initiated_by: ctx.userId,
+        },
+      });
+
+      return [a];
     });
 
     return NextResponse.json({

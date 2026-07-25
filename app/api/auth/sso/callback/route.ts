@@ -119,22 +119,24 @@ export async function GET(request: NextRequest) {
   const tokenHash = await hashToken(sessionToken);
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
 
-  await db.insert(sessions).values({
-    userId,
-    tokenHash,
-    expiresAt,
-    ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown',
-    userAgent: request.headers.get('user-agent')?.slice(0, 255),
-  });
+  await db.transaction(async (tx) => {
+    await tx.insert(sessions).values({
+      userId,
+      tokenHash,
+      expiresAt,
+      ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown',
+      userAgent: request.headers.get('user-agent')?.slice(0, 255),
+    });
 
-  await db.insert(ssoSessions).values({
-    userId,
-    tenantId: provider.tenantId,
-    providerId: provider.id,
-    sessionId: tokenHash, // links to our session row by the same hash
-    idToken: null, // we don't persist the raw token; the verified claims are enough
-    samlAssertion: null,
-    expiresAt,
+    await tx.insert(ssoSessions).values({
+      userId,
+      tenantId: provider.tenantId,
+      providerId: provider.id,
+      sessionId: tokenHash,
+      idToken: null,
+      samlAssertion: null,
+      expiresAt,
+    });
   });
 
   await setSessionCookie(sessionToken);

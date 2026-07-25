@@ -133,7 +133,8 @@ async function handleContact(
   action: string,
   raw: Record<string, unknown>,
   tenantId: string,
-  userId: string
+  userId: string,
+  tx: typeof db
 ): Promise<EntityResult> {
   const d = normalizeFields(raw);
 
@@ -194,18 +195,18 @@ async function handleContact(
     }) : null;
     if (!byId) throw new Error('Contact not found for update');
     
-    await db.update(contacts).set(contactData).where(eq(contacts.id, byId.id));
+    await tx.update(contacts).set(contactData).where(eq(contacts.id, byId.id));
     return { id: byId.id, action: 'updated' };
   }
 
   // Create (or upsert = create if not exists)
   if (existing) {
     // Upsert: update the existing contact
-    await db.update(contacts).set(contactData).where(eq(contacts.id, existing.id));
+    await tx.update(contacts).set(contactData).where(eq(contacts.id, existing.id));
     return { id: existing.id, action: 'updated' };
   }
 
-  const [newContact] = await db.insert(contacts).values({
+  const [newContact] = await tx.insert(contacts).values({
     ...contactData,
     tenantId,
     createdBy: userId,
@@ -222,7 +223,8 @@ async function handleLead(
   action: string,
   raw: Record<string, unknown>,
   tenantId: string,
-  userId: string
+  userId: string,
+  tx: typeof db
 ): Promise<EntityResult> {
   const d = normalizeFields(raw);
 
@@ -278,17 +280,17 @@ async function handleLead(
     });
     if (!check) throw new Error('Lead not found for update');
     
-    await db.update(leads).set(leadData).where(eq(leads.id, targetId));
+    await tx.update(leads).set(leadData).where(eq(leads.id, targetId));
     return { id: targetId, action: 'updated' };
   }
 
   if (existing) {
     // Upsert — update existing
-    await db.update(leads).set(leadData).where(eq(leads.id, existing.id));
+    await tx.update(leads).set(leadData).where(eq(leads.id, existing.id));
     return { id: existing.id, action: 'updated' };
   }
 
-  const [newLead] = await db.insert(leads).values({
+  const [newLead] = await tx.insert(leads).values({
     ...leadData,
     tenantId,
     createdBy: userId,
@@ -306,7 +308,8 @@ async function handleDeal(
   action: string,
   raw: Record<string, unknown>,
   tenantId: string,
-  userId: string
+  userId: string,
+  tx: typeof db
 ): Promise<EntityResult> {
   const d = normalizeFields(raw);
   const title = sanitizeString(d['title'] as string, 200);
@@ -340,14 +343,14 @@ async function handleDeal(
         )
       });
       if (check) {
-        await db.update(deals).set(dealData).where(eq(deals.id, dealId));
+        await tx.update(deals).set(dealData).where(eq(deals.id, dealId));
         return { id: dealId, action: 'updated' };
       }
       if (action === 'update') throw new Error('Deal not found for update');
     }
   }
 
-  const [newDeal] = await db.insert(deals).values({
+  const [newDeal] = await tx.insert(deals).values({
     ...dealData,
     tenantId,
     stageId: '', // placeholder - will be resolved
@@ -365,7 +368,8 @@ async function handleCompany(
   action: string,
   raw: Record<string, unknown>,
   tenantId: string,
-  userId: string
+  userId: string,
+  tx: typeof db
 ): Promise<EntityResult> {
   const d = normalizeFields(raw);
   const name = sanitizeString(d['name'] as string, 200);
@@ -393,14 +397,14 @@ async function handleCompany(
         )
       });
       if (check) {
-        await db.update(companies).set(companyData).where(eq(companies.id, companyId));
+        await tx.update(companies).set(companyData).where(eq(companies.id, companyId));
         return { id: companyId, action: 'updated' };
       }
       if (action === 'update') throw new Error('Company not found for update');
     }
   }
 
-  const [newCompany] = await db.insert(companies).values({
+  const [newCompany] = await tx.insert(companies).values({
     ...companyData,
     tenantId,
     createdBy: userId,
@@ -417,7 +421,8 @@ async function handleTask(
   action: string,
   raw: Record<string, unknown>,
   tenantId: string,
-  userId: string
+  userId: string,
+  tx: typeof db
 ): Promise<EntityResult> {
   const d = normalizeFields(raw);
   const title = sanitizeString(d['title'] as string, 200);
@@ -448,11 +453,11 @@ async function handleTask(
     });
     if (!check) throw new Error('Task not found for update');
     
-    await db.update(tasks).set(taskData).where(eq(tasks.id, taskId));
+    await tx.update(tasks).set(taskData).where(eq(tasks.id, taskId));
     return { id: taskId, action: 'updated' };
   }
 
-  const [newTask] = await db.insert(tasks).values({
+  const [newTask] = await tx.insert(tasks).values({
     ...taskData,
     tenantId,
     createdBy: userId,
@@ -467,7 +472,8 @@ async function handleTask(
 async function processItem(
   item: { action: string; entity: string; data: Record<string, unknown> },
   tenantId: string,
-  userId: string
+  userId: string,
+  tx: typeof db
 ): Promise<EntityResult> {
   const { action, entity, data } = item;
 
@@ -476,11 +482,11 @@ async function processItem(
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data must be a non-empty object');
 
   switch (entity) {
-    case 'contact': return await handleContact(action, data, tenantId, userId);
-    case 'lead':    return await handleLead(action, data, tenantId, userId);
-    case 'deal':    return await handleDeal(action, data, tenantId, userId);
-    case 'company': return await handleCompany(action, data, tenantId, userId);
-    case 'task':    return await handleTask(action, data, tenantId, userId);
+    case 'contact': return await handleContact(action, data, tenantId, userId, tx);
+    case 'lead':    return await handleLead(action, data, tenantId, userId, tx);
+    case 'deal':    return await handleDeal(action, data, tenantId, userId, tx);
+    case 'company': return await handleCompany(action, data, tenantId, userId, tx);
+    case 'task':    return await handleTask(action, data, tenantId, userId, tx);
     default:        throw new Error(`Unsupported entity: ${entity}`);
   }
 }
@@ -587,16 +593,34 @@ export async function POST(request: NextRequest) {
 
     for (const item of items) {
       try {
-        const result = await processItem(item, apiKeyRow.tenantId, apiKeyRow.userId!);
+        const result = await db.transaction(async (tx) => {
+          const r = await processItem(item, apiKeyRow.tenantId, apiKeyRow.userId!, tx);
+
+          // Log delivery inside the same transaction
+          await logWebhookDelivery({
+            tenantId: apiKeyRow.tenantId,
+            apiKeyId: apiKeyRow.id,
+            action: item.action,
+            entity: item.entity,
+            status: 'success',
+            statusCode: 200,
+            errorMessage: null,
+            recordId: r.id,
+            payloadSize: contentLength || 0,
+          });
+
+          return r;
+        });
+
         results.push({ entity: item.entity, action: result.action, id: result.id, status: 'ok' });
 
-        // Fire outgoing webhooks for created records
+        // Fire outgoing webhooks for created records (outside transaction — uses own db)
         if (result.action === 'created') {
           const eventType = `${item.entity}.created` as WebhookEvent;
           fireWebhooks(apiKeyRow.tenantId, eventType, { id: result.id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
         }
 
-        // Log audit entry
+        // Log audit entry (outside transaction — uses own db)
         logAudit({
           tenantId: apiKeyRow.tenantId,
           userId: apiKeyRow.userId!,
@@ -606,20 +630,8 @@ export async function POST(request: NextRequest) {
           newData: { source: 'inbound_webhook', api_key: apiKeyRow.name },
         }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
-        // Log delivery
-        logWebhookDelivery({
-          tenantId: apiKeyRow.tenantId,
-          apiKeyId: apiKeyRow.id,
-          action: item.action,
-          entity: item.entity,
-          status: 'success',
-          statusCode: 200,
-          errorMessage: null,
-          recordId: result.id,
-          payloadSize: contentLength || 0,
-        });
  
- 
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         hasError = true;

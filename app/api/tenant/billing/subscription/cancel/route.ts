@@ -77,22 +77,23 @@ export async function POST(request: NextRequest) {
       updateData.canceledAt = new Date();
     }
 
-    await db.update(subscriptions).set(updateData).where(eq(subscriptions.id, currentSub.id));
+    await db.transaction(async (tx) => {
+      await tx.update(subscriptions).set(updateData).where(eq(subscriptions.id, currentSub.id));
 
-    // Record billing event
-    await db.insert(billingEvents).values({
-      tenantId: ctx.tenantId,
-      eventType: cancelAtPeriodEnd ? 'subscription.cancel_scheduled' : 'subscription.cancelled',
-      amount: currentSub.planId ? '0' : undefined,
-      currency: 'usd',
-      stripeSubscriptionId: currentSub.stripeSubscriptionId,
-      metadata: {
-        plan_id: currentSub.planId || 'none',
-        cancel_at_period_end: cancelAtPeriodEnd,
-        reason: reason || 'not_specified',
-        feedback: feedback || 'not_specified',
-        cancelled_by: ctx.userId,
-      },
+      await tx.insert(billingEvents).values({
+        tenantId: ctx.tenantId,
+        eventType: cancelAtPeriodEnd ? 'subscription.cancel_scheduled' : 'subscription.cancelled',
+        amount: currentSub.planId ? '0' : undefined,
+        currency: 'usd',
+        stripeSubscriptionId: currentSub.stripeSubscriptionId,
+        metadata: {
+          plan_id: currentSub.planId || 'none',
+          cancel_at_period_end: cancelAtPeriodEnd,
+          reason: reason || 'not_specified',
+          feedback: feedback || 'not_specified',
+          cancelled_by: ctx.userId,
+        },
+      });
     });
 
     // Calculate data retention date (30 days after cancellation)
