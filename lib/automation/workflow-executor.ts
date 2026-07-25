@@ -7,6 +7,7 @@
  */
 
 import { db } from '@/drizzle/db';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import {
   workflows,
   workflowExecutions,
@@ -46,6 +47,7 @@ interface ExecuteWorkflowOptions {
 
 /**
  * Execute a workflow by ID, walking its node graph and running actions.
+ * All mutations are wrapped in a single transaction for atomicity.
  */
 export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<string> {
   const { tenantId, userId, workflowId, contactId, dealId, inputData = {} } = options;
@@ -61,22 +63,6 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
   if (workflow.status !== 'active' && workflow.status !== 'draft') {
     throw new Error(`Workflow is ${workflow.status}`);
   }
-
-  // Create execution record
-  const [execution] = await db
-    .insert(workflowExecutions)
-    .values({
-      workflowId,
-      tenantId,
-      contactId: contactId || null,
-      leadId: null,
-      status: 'running',
-      inputData,
-      startedAt: new Date(),
-    })
-    .returning({ id: workflowExecutions.id });
-
-  if (!execution) throw new Error('Failed to create execution record');
 
   // Enrich context data
   const ctx: Record<string, unknown> = { ...inputData, contact_id: contactId, deal_id: dealId, tenant_id: tenantId, user_id: userId };
@@ -114,40 +100,64 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
     }
   }
 
+  // Parse nodes and edges from workflow
+  const nodes = (workflow.nodes as WorkflowNode[]) || [];
+  const edges = (workflow.edges as WorkflowEdge[]) || [];
+
+  // Build adjacency map
+  const children = new Map<string, { target: string; handle?: string }[]>();
+  for (const edge of edges) {
+    const list = children.get(edge.source) || [];
+    list.push({ target: edge.target, handle: edge.sourceHandle });
+    children.set(edge.source, list);
+  }
+
+  // Create execution record (outside transaction so failed attempts are never lost)
+  const [execution] = await db
+    .insert(workflowExecutions)
+    .values({
+      workflowId,
+      tenantId,
+      contactId: contactId || null,
+      leadId: null,
+      status: 'running',
+      inputData,
+      startedAt: new Date(),
+    })
+    .returning({ id: workflowExecutions.id });
+
+  if (!execution) throw new Error('Failed to create execution record');
+
   try {
-    // Parse nodes and edges from workflow
-    const nodes = (workflow.nodes as WorkflowNode[]) || [];
-    const edges = (workflow.edges as WorkflowEdge[]) || [];
+    // Wrap node execution + status update in a transaction for atomicity
+    await db.transaction(async (tx) => {
+      // Find trigger node (entry point)
+      const triggerNode = nodes.find(n => n.type === 'trigger');
+      if (!triggerNode) {
+        await updateExecution(tx, execution.id, 'failed', null, 'No trigger node found');
+        return;
+      }
 
-    // Build adjacency map
-    const children = new Map<string, { target: string; handle?: string }[]>();
-    for (const edge of edges) {
-      const list = children.get(edge.source) || [];
-      list.push({ target: edge.target, handle: edge.sourceHandle });
-      children.set(edge.source, list);
-    }
+      // Execute starting from trigger
+      await executeNode(tx, triggerNode.id, nodes, children, execution.id, tenantId, userId, ctx);
 
-    // Find trigger node (entry point)
-    const triggerNode = nodes.find(n => n.type === 'trigger');
-    if (!triggerNode) {
-      await updateExecution(execution.id, 'failed', null, 'No trigger node found');
-      return execution.id;
-    }
-
-    // Execute starting from trigger
-    await executeNode(triggerNode.id, nodes, children, execution.id, tenantId, userId, ctx);
-
-    await updateExecution(execution.id, 'completed', ctx);
+      await updateExecution(tx, execution.id, 'completed', ctx);
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     captureError(err, `workflow:${workflow.name}`);
-    await updateExecution(execution.id, 'failed', null, message);
+    try {
+      await updateExecution(db, execution.id, 'failed', null, message);
+    } catch (updateErr) {
+      captureError(updateErr, 'workflow:execution-status-update');
+    }
   }
 
   return execution.id;
 }
 
 async function executeNode(
+  dbOrTx: NodePgDatabase | typeof db,
   nodeId: string,
   nodes: WorkflowNode[],
   children: Map<string, { target: string; handle?: string }[]>,
@@ -160,7 +170,7 @@ async function executeNode(
   if (!node) return;
 
   // Log execution
-  await db.insert(workflowExecutionLogs).values({
+  await dbOrTx.insert(workflowExecutionLogs).values({
     workflowExecutionId: executionId,
     tenantId,
     message: `Executing node: ${node.type} (${node.id})`,
@@ -190,7 +200,7 @@ async function executeNode(
       const { duration, unit } = node.data as { duration?: number; unit?: string };
       // In a real implementation, this would schedule the next nodes for later
       // For now, we log it and continue immediately
-      await db.insert(workflowExecutionLogs).values({
+      await dbOrTx.insert(workflowExecutionLogs).values({
         workflowExecutionId: executionId,
         tenantId,
         message: `Wait step: ${duration} ${unit} (logged, not blocking)`,
@@ -204,7 +214,7 @@ async function executeNode(
       // Action nodes: action_send_email, action_create_task, etc.
       if (node.type.startsWith('action_')) {
         const actionType = node.type.replace('action_', '');
-        await executeActionNode(actionType, node.data, executionId, tenantId, userId, ctx);
+        await executeActionNode(dbOrTx, actionType, node.data, executionId, tenantId, userId, ctx);
       }
       break;
     }
@@ -213,11 +223,12 @@ async function executeNode(
   // Proceed to children
   const childEdges = children.get(nodeId) || [];
   for (const edge of childEdges) {
-    await executeNode(edge.target, nodes, children, executionId, tenantId, userId, ctx);
+    await executeNode(dbOrTx, edge.target, nodes, children, executionId, tenantId, userId, ctx);
   }
 }
 
 async function executeActionNode(
+  dbOrTx: NodePgDatabase | typeof db,
   actionType: string,
   data: Record<string, unknown>,
   executionId: string,
@@ -248,7 +259,7 @@ async function executeActionNode(
 
       case 'create_task': {
         const contactId = ctx.contact_id as string;
-        await db.insert(tasks).values({
+        await dbOrTx.insert(tasks).values({
           tenantId,
           title: interpolate((data.title as string) || 'Follow up', ctx),
           priority: (data.priority as string) || 'medium',
@@ -268,7 +279,7 @@ async function executeActionNode(
         if (data.field && data.value) {
           updates[data.field as string] = data.value;
         }
-        await db.update(contacts).set(updates)
+        await dbOrTx.update(contacts).set(updates)
           .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId)));
         break;
       }
@@ -277,14 +288,14 @@ async function executeActionNode(
         const contactId = ctx.contact_id as string;
         const tag = data.tag as string;
         if (!contactId || !tag) break;
-        const [existing] = await db.select({ tags: contacts.tags })
+        const [existing] = await dbOrTx.select({ tags: contacts.tags })
           .from(contacts)
-          .where(eq(contacts.id, contactId))
+          .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId)))
           .limit(1);
         const currentTags = existing?.tags || [];
         if (!currentTags.includes(tag)) {
-          await db.update(contacts).set({ tags: [...currentTags, tag], updatedAt: new Date() })
-            .where(eq(contacts.id, contactId));
+          await dbOrTx.update(contacts).set({ tags: [...currentTags, tag], updatedAt: new Date() })
+            .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId)));
         }
         break;
       }
@@ -323,7 +334,7 @@ async function executeActionNode(
       case 'create_deal': {
         const stageId = data.stage_id as string;
         if (!stageId) throw new Error('stage_id required for create_deal');
-        await db.insert(deals).values({
+        await dbOrTx.insert(deals).values({
           tenantId,
           title: interpolate((data.title as string) || 'New Deal', ctx),
           amount: (data.amount as string) || '0',
@@ -341,7 +352,7 @@ async function executeActionNode(
         const contactId = ctx.contact_id as string;
         const assignTo = (data.assigned_to as string) || (ctx.assigned_to as string);
         if (!contactId || !assignTo) break;
-        await db.update(contacts).set({ assignedTo: assignTo, updatedAt: new Date() })
+        await dbOrTx.update(contacts).set({ assignedTo: assignTo, updatedAt: new Date() })
           .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId)));
         break;
       }
@@ -349,7 +360,7 @@ async function executeActionNode(
       case 'log_call': {
         const contactId = ctx.contact_id as string;
         if (!contactId) break;
-        await db.insert(callLogs).values({
+        await dbOrTx.insert(callLogs).values({
           tenantId,
           contactId,
           userId: userId || null,
@@ -369,7 +380,7 @@ async function executeActionNode(
   } catch (err: unknown) {
     actionLog.status = 'failed';
     const message = err instanceof Error ? err.message : String(err);
-    await db.insert(workflowExecutionLogs).values({
+    await dbOrTx.insert(workflowExecutionLogs).values({
       workflowExecutionId: executionId,
       tenantId,
       message: `Action ${actionType} failed: ${message}`,
@@ -377,7 +388,7 @@ async function executeActionNode(
       stepName: actionType,
     });
   } finally {
-    await db.insert(workflowActionLogs).values({
+    await dbOrTx.insert(workflowActionLogs).values({
       ...actionLog,
       completedAt: new Date(),
       result: { actionType, data },
@@ -386,12 +397,13 @@ async function executeActionNode(
 }
 
 async function updateExecution(
+  dbOrTx: NodePgDatabase | typeof db,
   executionId: string,
   status: string,
   outputData: Record<string, unknown> | null,
   errorMessage?: string
 ): Promise<void> {
-  await db
+  await dbOrTx
     .update(workflowExecutions)
     .set({
       status,
