@@ -3,6 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Trash2, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { sanitizeHTML } from '@/lib/sanitize';
 import type { EmailBlock, HeadingContent, TextContent, ImageContent, ButtonContent, DividerContent, SpacerContent, HtmlContent } from './blocks';
 
 interface BlockRendererProps {
@@ -78,7 +79,7 @@ function BlockContentPreview({ block }: { block: EmailBlock }) {
     }
     case 'text': {
       const tc = c as TextContent;
-      return <div style={{ textAlign: tc.align, color: tc.color, fontSize: tc.fontSize }} className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: tc.html }} />;
+      return <div style={{ textAlign: tc.align, color: tc.color, fontSize: tc.fontSize }} className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHTML(tc.html) }} />;
     }
     case 'image': {
       const ic = c as ImageContent;
