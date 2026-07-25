@@ -38,6 +38,8 @@ const EVENT_KEYS = new Set([
   'security.login_new_device', 'security.password_changed', 'security.two_factor_changed',
   // Billing
   'billing.trial_ending', 'billing.payment_failed', 'billing.plan_changed',
+  // Contracts
+  'contract.expiring', 'contract.expired', 'contract.renewed',
 ]);
 
 const DEFAULTS: Record<string, Record<Channel, boolean>> = Object.fromEntries(
@@ -46,9 +48,10 @@ const DEFAULTS: Record<string, Record<Channel, boolean>> = Object.fromEntries(
     const personal = /assigned_to_me|mentioned_me|due_today|overdue|replied|won|lost|approaching/.test(key);
     const security = key.startsWith('security.');
     const billing  = key.startsWith('billing.');
+    const contract = key.startsWith('contract.');
     return [key, {
       in_app:   true,
-      email:    personal || security || billing,
+      email:    personal || security || billing || contract,
       telegram: false,
     }];
   })
