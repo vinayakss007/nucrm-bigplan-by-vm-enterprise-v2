@@ -330,20 +330,22 @@ export async function POST(req: NextRequest) {
           .limit(1);
         if (!seq) return NextResponse.json({ error: 'Sequence not found' }, { status: 404 });
         
-        const enrollValues = validIds.map(contactId => ({
-          tenantId: ctx.tenantId,
-          sequenceId,
-          contactId,
-          enrolledBy: ctx.userId,
-          status: 'active',
-          currentStep: 1,
-        }));
-        
-        const res = await db.insert(sequenceEnrollments).values(enrollValues).onConflictDoNothing();
-        affected = res.rowCount ?? enrollValues.length;
-        
-        await db.update(sequences).set({ enrollCount: sql`COALESCE(${sequences.enrollCount}, 0) + ${affected}` })
-          .where(eq(sequences.id, sequenceId));
+        await db.transaction(async (tx) => {
+          const enrollValues = validIds.map(contactId => ({
+            tenantId: ctx.tenantId,
+            sequenceId,
+            contactId,
+            enrolledBy: ctx.userId,
+            status: 'active',
+            currentStep: 1,
+          }));
+          
+          const res = await tx.insert(sequenceEnrollments).values(enrollValues).onConflictDoNothing();
+          affected = res.rowCount ?? enrollValues.length;
+          
+          await tx.update(sequences).set({ enrollCount: sql`COALESCE(${sequences.enrollCount}, 0) + ${affected}` })
+            .where(eq(sequences.id, sequenceId));
+        });
         
         break;
       }

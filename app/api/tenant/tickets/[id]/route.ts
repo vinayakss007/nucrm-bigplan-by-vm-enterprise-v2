@@ -91,69 +91,81 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (v.priority) updates['priority'] = v.priority;
     if (v.assigned_to) updates['assignedTo'] = v.assigned_to;
 
-    await db.update(supportTickets)
-      .set(updates)
-      .where(and(eq(supportTickets.tenantId, ctx.tenantId), eq(supportTickets.id, id)));
+    let surveyToken: string | undefined;
+    let surveyContactEmail: string | undefined;
+    let surveyContactName: string | undefined;
+    let ticketSubject: string | undefined;
 
-    // Send CSAT survey when ticket is resolved
-    if (v.status === 'resolved') {
-      const [ticket] = await db.select({
-        contactId: supportTickets.contactId,
-        subject: supportTickets.subject,
-      })
-      .from(supportTickets)
-      .where(eq(supportTickets.id, id))
-      .limit(1);
+    await db.transaction(async (tx) => {
+      await tx.update(supportTickets)
+        .set(updates)
+        .where(and(eq(supportTickets.tenantId, ctx.tenantId), eq(supportTickets.id, id)));
 
-      if (ticket?.contactId) {
-        const [contact] = await db.select({
-          email: contacts.email,
-          firstName: contacts.firstName,
+      if (v.status === 'resolved') {
+        const [ticket] = await tx.select({
+          contactId: supportTickets.contactId,
+          subject: supportTickets.subject,
         })
-        .from(contacts)
-        .where(eq(contacts.id, ticket.contactId))
+        .from(supportTickets)
+        .where(eq(supportTickets.id, id))
         .limit(1);
 
-        if (contact?.email) {
-          const token = randomBytes(24).toString('hex');
-          const [survey] = await db.insert(csatSurveys).values({
-            tenantId: ctx.tenantId,
-            ticketId: id,
-            contactId: ticket.contactId,
-            token,
-          }).returning();
+        if (ticket?.contactId) {
+          const [contact] = await db.select({
+            email: contacts.email,
+            firstName: contacts.firstName,
+          })
+          .from(contacts)
+          .where(eq(contacts.id, ticket.contactId))
+          .limit(1);
 
-          if (survey) {
-            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-            const surveyUrl = `${baseUrl}/public/csat/${token}`;
-            const name = contact.firstName || 'there';
-
-            sendEmail({
-              to: contact.email,
-              subject: `How was your support experience? — ${ticket.subject}`,
-              html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
-                  <h2 style="color: #1a1a1a; margin-bottom: 8px;">Hi ${name},</h2>
-                  <p style="color: #555; margin-bottom: 24px;">Your support ticket <strong>${ticket.subject}</strong> has been resolved. We'd love to hear your feedback!</p>
-                  <div style="background: #f8f8f8; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px;">
-                    <p style="color: #333; font-size: 16px; margin-bottom: 16px;">How would you rate your experience?</p>
-                    <a href="${surveyUrl}?score=1" style="font-size: 32px; text-decoration: none; margin: 0 4px;">😞</a>
-                    <a href="${surveyUrl}?score=2" style="font-size: 32px; text-decoration: none; margin: 0 4px;">😕</a>
-                    <a href="${surveyUrl}?score=3" style="font-size: 32px; text-decoration: none; margin: 0 4px;">😐</a>
-                    <a href="${surveyUrl}?score=4" style="font-size: 32px; text-decoration: none; margin: 0 4px;">😊</a>
-                    <a href="${surveyUrl}?score=5" style="font-size: 32px; text-decoration: none; margin: 0 4px;">😄</a>
-                  </div>
-                  <p style="color: #999; font-size: 12px;">Your feedback helps us improve our support quality.</p>
-                </div>
-              `,
-            }).catch((err) => {
-              logger.warn('[ticket-survey] Failed to send satisfaction survey', {
-                ticketId: id, error: err instanceof Error ? err.message : String(err),
-              });
+          if (contact?.email) {
+            const token = randomBytes(24).toString('hex');
+            await tx.insert(csatSurveys).values({
+              tenantId: ctx.tenantId,
+              ticketId: id,
+              contactId: ticket.contactId,
+              token,
             });
+
+            surveyToken = token;
+            surveyContactEmail = contact.email;
+            surveyContactName = contact.firstName;
+            ticketSubject = ticket.subject;
           }
         }
       }
+    });
+
+    // Send CSAT survey email after transaction commits
+    if (surveyToken && surveyContactEmail && ticketSubject) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const surveyUrl = `${baseUrl}/public/csat/${surveyToken}`;
+      const name = surveyContactName || 'there';
+
+      sendEmail({
+        to: surveyContactEmail,
+        subject: `How was your support experience? — ${ticketSubject}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
+            <h2 style="color: #1a1a1a; margin-bottom: 8px;">Hi ${name},</h2>
+            <p style="color: #555; margin-bottom: 24px;">Your support ticket <strong>${ticketSubject}</strong> has been resolved. We'd love to hear your feedback!</p>
+            <div style="background: #f8f8f8; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px;">
+              <p style="color: #333; font-size: 16px; margin-bottom: 16px;">How would you rate your experience?</p>
+              <a href="${surveyUrl}?score=1" style="font-size: 32px; text-decoration: none; margin: 0 4px;">😞</a>
+              <a href="${surveyUrl}?score=2" style="font-size: 32px; text-decoration: none; margin: 0 4px;">😕</a>
+              <a href="${surveyUrl}?score=3" style="font-size: 32px; text-decoration: none; margin: 0 4px;">😐</a>
+              <a href="${surveyUrl}?score=4" style="font-size: 32px; text-decoration: none; margin: 0 4px;">😊</a>
+              <a href="${surveyUrl}?score=5" style="font-size: 32px; text-decoration: none; margin: 0 4px;">😄</a>
+            </div>
+            <p style="color: #999; font-size: 12px;">Your feedback helps us improve our support quality.</p>
+          </div>
+        `,
+      }).catch((err) => {
+        logger.warn('[ticket-survey] Failed to send satisfaction survey', {
+          ticketId: id, error: err instanceof Error ? err.message : String(err),
+        });
+      });
     }
 
     return NextResponse.json({ success: true });
