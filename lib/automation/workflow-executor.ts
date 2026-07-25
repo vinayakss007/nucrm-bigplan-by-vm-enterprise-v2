@@ -134,8 +134,11 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
       return execution.id;
     }
 
-    // Execute starting from trigger
-    await executeNode(triggerNode.id, nodes, children, execution.id, tenantId, userId, ctx);
+    // Execute starting from trigger — wrap all DB writes in a transaction.
+    // External actions (email, webhook) use `db` directly and don't participate.
+    await db.transaction(async (tx) => {
+      await executeNode(triggerNode.id, nodes, children, execution.id, tenantId, userId, ctx, tx);
+    });
 
     await updateExecution(execution.id, 'completed', ctx);
   } catch (err: unknown) {
@@ -154,13 +157,15 @@ async function executeNode(
   executionId: string,
   tenantId: string,
   userId: string | undefined,
-  ctx: Record<string, unknown>
+  ctx: Record<string, unknown>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx?: any
 ): Promise<void> {
   const node = nodes.find(n => n.id === nodeId);
   if (!node) return;
 
   // Log execution
-  await db.insert(workflowExecutionLogs).values({
+  await (tx || db).insert(workflowExecutionLogs).values({
     workflowExecutionId: executionId,
     tenantId,
     message: `Executing node: ${node.type} (${node.id})`,
@@ -190,7 +195,7 @@ async function executeNode(
       const { duration, unit } = node.data as { duration?: number; unit?: string };
       // In a real implementation, this would schedule the next nodes for later
       // For now, we log it and continue immediately
-      await db.insert(workflowExecutionLogs).values({
+      await (tx || db).insert(workflowExecutionLogs).values({
         workflowExecutionId: executionId,
         tenantId,
         message: `Wait step: ${duration} ${unit} (logged, not blocking)`,
@@ -204,7 +209,7 @@ async function executeNode(
       // Action nodes: action_send_email, action_create_task, etc.
       if (node.type.startsWith('action_')) {
         const actionType = node.type.replace('action_', '');
-        await executeActionNode(actionType, node.data, executionId, tenantId, userId, ctx);
+        await executeActionNode(actionType, node.data, executionId, tenantId, userId, ctx, tx);
       }
       break;
     }
@@ -213,7 +218,7 @@ async function executeNode(
   // Proceed to children
   const childEdges = children.get(nodeId) || [];
   for (const edge of childEdges) {
-    await executeNode(edge.target, nodes, children, executionId, tenantId, userId, ctx);
+    await executeNode(edge.target, nodes, children, executionId, tenantId, userId, ctx, tx);
   }
 }
 
@@ -223,8 +228,11 @@ async function executeActionNode(
   executionId: string,
   tenantId: string,
   userId: string | undefined,
-  ctx: Record<string, unknown>
+  ctx: Record<string, unknown>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx?: any
 ): Promise<void> {
+  const d = tx || db;
   const actionLog = {
     executionId,
     tenantId,
@@ -248,7 +256,7 @@ async function executeActionNode(
 
       case 'create_task': {
         const contactId = ctx.contact_id as string;
-        await db.insert(tasks).values({
+        await d.insert(tasks).values({
           tenantId,
           title: interpolate((data.title as string) || 'Follow up', ctx),
           priority: (data.priority as string) || 'medium',
@@ -268,7 +276,7 @@ async function executeActionNode(
         if (data.field && data.value) {
           updates[data.field as string] = data.value;
         }
-        await db.update(contacts).set(updates)
+        await d.update(contacts).set(updates)
           .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId)));
         break;
       }
@@ -277,13 +285,13 @@ async function executeActionNode(
         const contactId = ctx.contact_id as string;
         const tag = data.tag as string;
         if (!contactId || !tag) break;
-        const [existing] = await db.select({ tags: contacts.tags })
+        const [existing] = await d.select({ tags: contacts.tags })
           .from(contacts)
           .where(eq(contacts.id, contactId))
           .limit(1);
         const currentTags = existing?.tags || [];
         if (!currentTags.includes(tag)) {
-          await db.update(contacts).set({ tags: [...currentTags, tag], updatedAt: new Date() })
+          await d.update(contacts).set({ tags: [...currentTags, tag], updatedAt: new Date() })
             .where(eq(contacts.id, contactId));
         }
         break;
@@ -323,7 +331,7 @@ async function executeActionNode(
       case 'create_deal': {
         const stageId = data.stage_id as string;
         if (!stageId) throw new Error('stage_id required for create_deal');
-        await db.insert(deals).values({
+        await d.insert(deals).values({
           tenantId,
           title: interpolate((data.title as string) || 'New Deal', ctx),
           amount: (data.amount as string) || '0',
@@ -341,7 +349,7 @@ async function executeActionNode(
         const contactId = ctx.contact_id as string;
         const assignTo = (data.assigned_to as string) || (ctx.assigned_to as string);
         if (!contactId || !assignTo) break;
-        await db.update(contacts).set({ assignedTo: assignTo, updatedAt: new Date() })
+        await d.update(contacts).set({ assignedTo: assignTo, updatedAt: new Date() })
           .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId)));
         break;
       }
@@ -349,7 +357,7 @@ async function executeActionNode(
       case 'log_call': {
         const contactId = ctx.contact_id as string;
         if (!contactId) break;
-        await db.insert(callLogs).values({
+        await d.insert(callLogs).values({
           tenantId,
           contactId,
           userId: userId || null,

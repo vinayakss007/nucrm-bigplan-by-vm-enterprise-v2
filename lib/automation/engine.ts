@@ -74,8 +74,26 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (!meetsConditions(automation.conditions as any[], enrichedData)) continue;
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        for (const action of (automation.actions as any[] ?? [])) {
+        const actions = (automation.actions as any[]) ?? [];
+        const externalTypes = new Set(['send_email', 'send_whatsapp', 'send_sms', 'fire_webhook']);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const dbActions = actions.filter((a: any) => !externalTypes.has(a.type));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const externalActions = actions.filter((a: any) => externalTypes.has(a.type));
+
+        // Execute all DB-only actions atomically
+        if (dbActions.length > 0) {
+          await db.transaction(async (tx) => {
+            for (const action of dbActions) {
+              await executeAction(action, payload, enrichedData, tx);
+            }
+          });
+        }
+
+        // Execute external actions (email, SMS, WhatsApp, webhooks) after DB commit
+        for (const action of externalActions) {
           await executeAction(action, payload, enrichedData);
         }
 
@@ -145,8 +163,9 @@ function getNestedValue(obj: Record<string, any>, path: string): any {
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function executeAction(action: any, payload: TriggerPayload, enrichedData: Record<string, any>): Promise<void> {
+async function executeAction(action: any, payload: TriggerPayload, enrichedData: Record<string, any>, tx?: any): Promise<void> {
   const { type, config = {} } = action;
+  const d = tx || db;
 
   switch (type) {
     case 'send_email': {
@@ -187,13 +206,13 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
       if (!allowed[resource]?.includes(field)) return;
 
       if (resource === 'contacts') {
-        await db.update(contacts).set({ [field]: value, updatedAt: new Date() })
+        await d.update(contacts).set({ [field]: value, updatedAt: new Date() })
           .where(and(eq(contacts.id, resourceId), eq(contacts.tenantId, payload.tenantId)));
       } else if (resource === 'deals') {
-        await db.update(deals).set({ [field]: value, updatedAt: new Date() })
+        await d.update(deals).set({ [field]: value, updatedAt: new Date() })
           .where(and(eq(deals.id, resourceId), eq(deals.tenantId, payload.tenantId)));
       } else if (resource === 'tasks') {
-        await db.update(tasks).set({ [field]: value, updatedAt: new Date() })
+        await d.update(tasks).set({ [field]: value, updatedAt: new Date() })
           .where(and(eq(tasks.id, resourceId), eq(tasks.tenantId, payload.tenantId)));
       }
       break;
@@ -201,7 +220,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
 
     case 'create_task': {
       const contactId = enrichedData?.['contact_id'] || enrichedData?.['id'];
-      await db.insert(tasks).values({
+      await d.insert(tasks).values({
         tenantId: payload.tenantId,
         title: interpolate(config.title || 'Follow up', enrichedData),
         priority: config.priority || 'medium',
@@ -220,7 +239,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
       if (!contactId || !sequenceId) return;
 
       try {
-        await db.execute(sql`
+        await d.execute(sql`
           SELECT public.enroll_contact_in_sequence(
             ${payload.tenantId}::uuid, 
             ${sequenceId}::uuid, 
@@ -240,7 +259,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
     case 'log_call': {
       const contactId = enrichedData?.['contact_id'] || enrichedData?.['id'];
       if (!contactId) return;
-      await db.insert(callLogs).values({
+      await d.insert(callLogs).values({
         tenantId: payload.tenantId,
         contactId,
         userId: payload.userId || null,
@@ -256,7 +275,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
       const to = config.to || enrichedData?.['phone'];
       if (!to) return;
       
-      const integration = await db.query.integrations.findFirst({
+      const integration = await d.query.integrations.findFirst({
         where: and(
           eq(integrations.tenantId, payload.tenantId),
           eq(integrations.type, 'whatsapp'),
@@ -329,7 +348,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
       const contactId = enrichedData?.['contact_id'] || enrichedData?.['id'];
       const assignTo = config.assigned_to || enrichedData?.['assigned_to'];
       if (!contactId || !assignTo) return;
-      await db.update(contacts).set({ assignedTo: assignTo, updatedAt: new Date() })
+      await d.update(contacts).set({ assignedTo: assignTo, updatedAt: new Date() })
         .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, payload.tenantId)));
       break;
     }
@@ -340,7 +359,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
       const pipelineId = config.pipeline_id || null;
       const stageId = config.stage_id || null;
       if (!stageId) return;
-      await db.insert(deals).values({
+      await d.insert(deals).values({
         tenantId: payload.tenantId,
         title: interpolate(config.title || 'New Deal', enrichedData),
         amount: config.amount || '0',
@@ -361,13 +380,13 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
       if (!resourceId || !tagToRemove) return;
 
       if (resource === 'contacts') {
-        const [existing] = await db.select({ tags: contacts.tags })
+        const [existing] = await d.select({ tags: contacts.tags })
           .from(contacts)
           .where(and(eq(contacts.id, resourceId), eq(contacts.tenantId, payload.tenantId)))
           .limit(1);
         if (existing?.tags) {
           const newTags = existing.tags.filter((t: string) => t !== tagToRemove);
-          await db.update(contacts).set({ tags: newTags, updatedAt: new Date() })
+          await d.update(contacts).set({ tags: newTags, updatedAt: new Date() })
             .where(eq(contacts.id, resourceId));
         }
       }
@@ -377,7 +396,7 @@ async function executeAction(action: any, payload: TriggerPayload, enrichedData:
     case 'send_sms': {
       const to = config.to || enrichedData?.['phone'];
       if (!to) return;
-      const smsIntegration = await db.query.integrations.findFirst({
+      const smsIntegration = await d.query.integrations.findFirst({
         where: and(
           eq(integrations.tenantId, payload.tenantId),
           eq(integrations.type, 'sms'),
