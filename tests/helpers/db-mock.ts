@@ -37,6 +37,7 @@ function createMockDb(): any {
     limit: vi.fn().mockReturnThis(),
     offset: vi.fn().mockReturnThis(),
     groupBy: vi.fn().mockReturnThis(),
+    as: vi.fn().mockReturnThis(),
     execute: vi.fn().mockResolvedValue({ rows: [] }),
     insert: vi.fn().mockReturnThis(),
     values: vi.fn().mockReturnThis(),
@@ -45,6 +46,7 @@ function createMockDb(): any {
     delete: vi.fn().mockReturnThis(),
     returning: vi.fn().mockResolvedValue([{ id: 'mock-id' }]),
     onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+    catch: vi.fn().mockResolvedValue(undefined),
     query: {
       contacts: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
       users: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
