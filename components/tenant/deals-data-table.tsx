@@ -74,13 +74,14 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
   const [saving, setSaving] = useState(false)
   const [selectAllMatching, setSelectAllMatching] = useState(false)
 
-  const loadData = useCallback(async (page = 0) => {
+  const loadData = useCallback(async (page = 0, filterOverride?: string) => {
     setLoading(true)
     const params = new URLSearchParams({
       limit: String(pagination.pageSize),
       offset: String(page * pagination.pageSize),
     })
-    if (globalFilter) params.set('q', globalFilter)
+    const q = filterOverride !== undefined ? filterOverride : globalFilter
+    if (q) params.set('q', q)
     try {
       const res = await fetch(`/api/tenant/deals?${params}`)
       const data = await res.json()
@@ -105,7 +106,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
 
   const handleGlobalFilterChange = useCallback((filter: string) => {
     setGlobalFilter(filter)
-    loadData(0)
+    loadData(0, filter)
   }, [loadData])
 
   // Load pipelines/stages once for the bulk-stage selector

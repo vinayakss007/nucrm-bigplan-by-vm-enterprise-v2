@@ -207,8 +207,8 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
     setLoading(false);
   }, [search, statusFilter, router]);
 
-  const handleSearch = (q:string) => { setSearch(q); load(0, q, statusFilter); };
-  const handleStatus = (s:string) => { setStatusFilter(s); load(0, search, s); };
+  const handleSearch = (q:string) => { setSelectedIds(new Set()); setSearch(q); load(0, q, statusFilter); };
+  const handleStatus = (s:string) => { setSelectedIds(new Set()); setStatusFilter(s); load(0, search, s); };
 
   const deleteContact = async (id:string, name:string) => {
     await confirmThen(`Delete ${name}?`, async () => {
@@ -223,6 +223,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
             });
           }
         });
+        setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
         load(offset);
       }
       else toast.error('Failed to delete');
@@ -542,7 +543,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
             <p className="text-xs text-muted-foreground">
               Showing <span className="font-semibold text-foreground">{contacts.length>0?offset+1:0}–{Math.min(offset+contacts.length,total)}</span> of <span className="font-semibold text-foreground">{total.toLocaleString()}</span>
             </p>
-            <Pagination total={total} offset={offset} limit={limit} onChange={o=>load(o)}/>
+            <Pagination total={total} offset={offset} limit={limit} onChange={o=>{ setSelectedIds(new Set()); load(o); }}/>
           </div>
         </div>
       )}
@@ -602,7 +603,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
             </Swipeable>
           );
         })}
-        <Pagination total={total} offset={offset} limit={limit} onChange={o=>load(o)}/>
+        <Pagination total={total} offset={offset} limit={limit} onChange={o=>{ setSelectedIds(new Set()); load(o); }}/>
       </div>
 
       {/* Grid view - desktop only */}
@@ -655,7 +656,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
               );
             })}
           </div>
-          <Pagination total={total} offset={offset} limit={limit} onChange={o=>load(o)}/>
+        <Pagination total={total} offset={offset} limit={limit} onChange={o=>{ setSelectedIds(new Set()); load(o); }}/>
         </div>
       )}
 
