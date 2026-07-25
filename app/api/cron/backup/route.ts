@@ -128,28 +128,32 @@ export async function POST(request: NextRequest) {
     let storageType = 'local';
 
     // Upload to S3/R2 if configured
-    if (process.env.BACKUP_BUCKET && process.env.AWS_ACCESS_KEY_ID) {
+    if (process.env.S3_BUCKET && process.env.S3_ACCESS_KEY_ID) {
       try {
         const { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } = await import('@aws-sdk/client-s3');
         const { readFile } = await import('fs/promises');
 
         const s3Client = new S3Client({
-          region: process.env.AWS_REGION || 'us-east-1',
-          endpoint: process.env.AWS_ENDPOINT_URL || undefined,
+          region: process.env.S3_REGION || 'us-east-1',
+          endpoint: process.env.S3_ENDPOINT || undefined,
+          credentials: {
+            accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
+            secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
+          },
         });
 
         const fileContent = await readFile(localPath);
         const s3Key = `backups/${filename}`;
 
         await s3Client.send(new PutObjectCommand({
-          Bucket: process.env.BACKUP_BUCKET,
+          Bucket: process.env.S3_BUCKET,
           Key: s3Key,
           Body: fileContent,
           StorageClass: 'STANDARD_IA',
         }));
 
         storagePath = s3Key;
-        storageType = process.env.AWS_ENDPOINT_URL?.includes('r2') ? 's3_r2' : 's3';
+        storageType = process.env.S3_ENDPOINT?.includes('r2') ? 's3_r2' : 's3';
 
         // Delete local after successful upload
         await deleteFile(localPath);
@@ -159,7 +163,7 @@ export async function POST(request: NextRequest) {
         const cutoff = new Date(Date.now() - retention * 86400000);
 
         const listResp = await s3Client.send(new ListObjectsV2Command({
-          Bucket: process.env.BACKUP_BUCKET,
+          Bucket: process.env.S3_BUCKET,
           Prefix: 'backups/',
         }));
 

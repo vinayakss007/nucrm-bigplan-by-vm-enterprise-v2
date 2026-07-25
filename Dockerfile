@@ -4,7 +4,7 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm install --legacy-peer-deps --no-audit --no-fund 2>&1 | tail -5
+RUN npm install --no-audit --no-fund 2>&1 | tail -5
 
 # Stage 2: Builder
 FROM node:22-alpine AS builder
