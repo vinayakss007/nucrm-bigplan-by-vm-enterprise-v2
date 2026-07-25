@@ -44,73 +44,83 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const seq = ((countRow?.count as number) ?? 0) + 1;
     const invoiceNumber = `INV-${String(seq).padStart(5, '0')}`;
 
-    // Create invoice
-    const invoiceValues = {
-      tenantId: ctx.tenantId,
-      createdBy: ctx.userId,
-      contactId: quote.contactId ?? undefined,
-      companyId: undefined,
-      invoiceNumber,
-      title: quote.title,
-      status: 'draft',
-      issueDate: new Date().toISOString().slice(0, 10),
-      dueDate,
-      subtotal: quote.subtotal ?? '0',
-      discountType: 'fixed',
-      discountValue: quote.discount ?? '0',
-      discountAmount: quote.discount ?? '0',
-      taxRate: '0',
-      taxAmount: quote.tax ?? '0',
-      totalAmount: quote.totalAmount ?? '0',
-      amountPaid: '0',
-      balanceDue: quote.totalAmount ?? '0',
-      quoteId: id,
-      notes: quote.notes ?? undefined,
-      terms: quote.terms ?? undefined,
-    };
-    const [invoice] = await db.insert(invoices).values([invoiceValues]).returning();
+    // Copy line items before transaction (read-only)
+    const items = await db.select().from(quoteLineItems).where(eq(quoteLineItems.quoteId, id));
+
+    // Create invoice + line items + activity in a single transaction
+    const invoice = await db.transaction(async (tx) => {
+      const invoiceValues = {
+        tenantId: ctx.tenantId,
+        createdBy: ctx.userId,
+        contactId: quote.contactId ?? undefined,
+        companyId: undefined,
+        invoiceNumber,
+        title: quote.title,
+        status: 'draft',
+        issueDate: new Date().toISOString().slice(0, 10),
+        dueDate,
+        subtotal: quote.subtotal ?? '0',
+        discountType: 'fixed',
+        discountValue: quote.discount ?? '0',
+        discountAmount: quote.discount ?? '0',
+        taxRate: '0',
+        taxAmount: quote.tax ?? '0',
+        totalAmount: quote.totalAmount ?? '0',
+        amountPaid: '0',
+        balanceDue: quote.totalAmount ?? '0',
+        quoteId: id,
+        notes: quote.notes ?? undefined,
+        terms: quote.terms ?? undefined,
+      };
+      const [inv] = await tx.insert(invoices).values([invoiceValues]).returning();
+
+      if (!inv) {
+        throw new Error('Failed to create invoice');
+      }
+
+      // Copy line items
+      if (items.length > 0) {
+        await tx.insert(invoiceLineItems).values(
+          items.map((item, idx) => ({
+            invoiceId: inv.id,
+            productId: item.productId ?? undefined,
+            description: item.description ?? '',
+            itemType: 'product',
+            quantity: item.quantity ?? '1',
+            unitPrice: item.unitPrice ?? '0',
+            discountType: 'percentage' as const,
+            discountValue: item.discountPercent ?? '0',
+            discountAmount: '0',
+            taxRate: item.taxPercent ?? '0',
+            taxAmount: '0',
+            total: item.total ?? '0',
+            sortOrder: idx,
+          }))
+        );
+      }
+
+      // Activity
+      try {
+        await tx.insert(activities).values({
+          tenantId: ctx.tenantId,
+          userId: ctx.userId,
+          entityType: 'quote',
+          entityId: id,
+          contactId: quote.contactId,
+          dealId: quote.dealId ?? null,
+          eventType: 'quote_converted',
+          description: `Quote "${quote.title}" converted to invoice ${invoiceNumber}`,
+          metadata: { quote_id: id, invoice_id: inv.id, invoice_number: invoiceNumber },
+        });
+      } catch (err) {
+        console.warn('[convert-to-invoice] activity insert failed:', (err as Error).message);
+      }
+
+      return inv;
+    });
 
     if (!invoice) {
       return NextResponse.json({ error: 'Failed to create invoice' }, { status: 500 });
-    }
-
-    // Copy line items
-    const items = await db.select().from(quoteLineItems).where(eq(quoteLineItems.quoteId, id));
-    if (items.length > 0) {
-      await db.insert(invoiceLineItems).values(
-        items.map((item, idx) => ({
-          invoiceId: invoice.id,
-          productId: item.productId ?? undefined,
-          description: item.description ?? '',
-          itemType: 'product',
-          quantity: item.quantity ?? '1',
-          unitPrice: item.unitPrice ?? '0',
-          discountType: 'percentage' as const,
-          discountValue: item.discountPercent ?? '0',
-          discountAmount: '0',
-          taxRate: item.taxPercent ?? '0',
-          taxAmount: '0',
-          total: item.total ?? '0',
-          sortOrder: idx,
-        }))
-      );
-    }
-
-    // Activity
-    try {
-      await db.insert(activities).values({
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        entityType: 'quote',
-        entityId: id,
-        contactId: quote.contactId,
-        dealId: quote.dealId ?? null,
-        eventType: 'quote_converted',
-        description: `Quote "${quote.title}" converted to invoice ${invoiceNumber}`,
-        metadata: { quote_id: id, invoice_id: invoice.id, invoice_number: invoiceNumber },
-      });
-    } catch (err) {
-      console.warn('[convert-to-invoice] activity insert failed:', (err as Error).message);
     }
 
     await logAudit({

@@ -80,39 +80,43 @@ export async function POST(request: NextRequest) {
     }
     const totalAmount = subtotal - (parseFloat(String(discount)) || 0) + (parseFloat(String(tax)) || 0);
 
-    const [quote] = await db.insert(quotes).values({
-      tenantId,
-      contactId: contactId || null,
-      dealId: null,
-      quoteNumber,
-      title,
-      status: status ?? 'draft',
-      subtotal: String(subtotal.toFixed(2)),
-      discount: String(discount ?? 0),
-      tax: String(tax),
-      totalAmount: String(totalAmount.toFixed(2)),
-      expiresAt: expiryDate ? new Date(expiryDate) : null,
-      notes,
-      terms,
-      createdBy: userId,
-    }).returning();
+    const quote = await db.transaction(async (tx) => {
+      const [q] = await tx.insert(quotes).values({
+        tenantId,
+        contactId: contactId || null,
+        dealId: null,
+        quoteNumber,
+        title,
+        status: status ?? 'draft',
+        subtotal: String(subtotal.toFixed(2)),
+        discount: String(discount ?? 0),
+        tax: String(tax),
+        totalAmount: String(totalAmount.toFixed(2)),
+        expiresAt: expiryDate ? new Date(expiryDate) : null,
+        notes,
+        terms,
+        createdBy: userId,
+      }).returning();
 
-    if (!quote) throw new Error('Failed to create quote');
+      if (!q) throw new Error('Failed to create quote');
 
-    if (items?.length) {
-      const lineItems = items.map((item: { description?: string; quantity?: string | number; unit_price?: string | number; tax_rate?: string | number }, idx: number) => ({
-        quoteId: quote.id,
-        productId: null,
-        description: item.description ?? '',
-        quantity: String(item.quantity || 1),
-        unitPrice: String(item.unit_price || 0),
-        discountPercent: '0',
-        taxPercent: String(item.tax_rate || 0),
-        total: String(((parseFloat(String(item.quantity)) || 1) * (parseFloat(String(item.unit_price)) || 0)).toFixed(2)),
-        sortOrder: idx,
-      } as typeof quoteLineItems.$inferInsert));
-      await db.insert(quoteLineItems).values(lineItems as typeof quoteLineItems.$inferInsert[]);
-    }
+      if (items?.length) {
+        const lineItems = items.map((item: { description?: string; quantity?: string | number; unit_price?: string | number; tax_rate?: string | number }, idx: number) => ({
+          quoteId: q.id,
+          productId: null,
+          description: item.description ?? '',
+          quantity: String(item.quantity || 1),
+          unitPrice: String(item.unit_price || 0),
+          discountPercent: '0',
+          taxPercent: String(item.tax_rate || 0),
+          total: String(((parseFloat(String(item.quantity)) || 1) * (parseFloat(String(item.unit_price)) || 0)).toFixed(2)),
+          sortOrder: idx,
+        } as typeof quoteLineItems.$inferInsert));
+        await tx.insert(quoteLineItems).values(lineItems as typeof quoteLineItems.$inferInsert[]);
+      }
+
+      return q;
+    });
 
     return NextResponse.json({ quote }, { status: 201 });
   } catch (error) {

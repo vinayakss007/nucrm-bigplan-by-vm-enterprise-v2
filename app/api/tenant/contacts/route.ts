@@ -151,46 +151,58 @@ export async function POST(request: NextRequest) {
     const overLimit = await checkLimit(ctx, 'contacts');
     if (overLimit) return overLimit;
 
-    const [contact] = await db.insert(contacts)
-      .values({
-        tenantId: ctx.tenantId,
-        createdBy: ctx.userId,
-        assignedTo: v.assigned_to || ctx.userId,
-        firstName: v.first_name,
-        lastName: v.last_name ?? '',
-        email: v.email?.toLowerCase() ?? null,
-        phone: v.phone ?? null,
-        jobTitle: v.job_title ?? v.title ?? null,
-        companyId: v.company_id || null,
-        leadStatus: v.lead_status ?? 'new',
-        leadSource: v.lead_source ?? null,
-        notes: v.notes?.slice(0, 5000) ?? null,
-        tags: v.tags,
-        score: v.score,
-        city: v.city ?? null,
-        country: v.country ?? null,
-        website: v.website ?? null,
-        linkedinUrl: v.linkedin_url ?? null,
-        twitterUrl: v.twitter_url ?? null,
-        customFields: v.custom_fields,
-      })
-      .returning();
+    const contact = await db.transaction(async (tx) => {
+      const [c] = await tx.insert(contacts)
+        .values({
+          tenantId: ctx.tenantId,
+          createdBy: ctx.userId,
+          assignedTo: v.assigned_to || ctx.userId,
+          firstName: v.first_name,
+          lastName: v.last_name ?? '',
+          email: v.email?.toLowerCase() ?? null,
+          phone: v.phone ?? null,
+          jobTitle: v.job_title ?? v.title ?? null,
+          companyId: v.company_id || null,
+          leadStatus: v.lead_status ?? 'new',
+          leadSource: v.lead_source ?? null,
+          notes: v.notes?.slice(0, 5000) ?? null,
+          tags: v.tags,
+          score: v.score,
+          city: v.city ?? null,
+          country: v.country ?? null,
+          website: v.website ?? null,
+          linkedinUrl: v.linkedin_url ?? null,
+          twitterUrl: v.twitter_url ?? null,
+          customFields: v.custom_fields,
+        })
+        .returning();
+
+      if (!c) throw new Error('Failed to create contact');
+
+      // Activity log
+      await tx.insert(activities)
+        .values({
+          tenantId: ctx.tenantId,
+          userId: ctx.userId,
+          contactId: c.id,
+          entityType: 'contact',
+          entityId: c.id,
+          eventType: 'contact_created',
+          action: 'create',
+          description: `Created contact ${c.firstName} ${c.lastName}`.trim(),
+        })
+        .catch(err => console.error('[contacts POST] activity log failed:', err));
+
+      // Increment contact counter
+      await tx.update(tenants)
+        .set({ currentContacts: sql`${tenants.currentContacts} + 1` })
+        .where(eq(tenants.id, ctx.tenantId))
+        .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+
+      return c;
+    });
 
     if (!contact) throw new Error('Failed to create contact');
-
-    // Activity log
-    await db.insert(activities)
-      .values({
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        contactId: contact.id,
-        entityType: 'contact',
-        entityId: contact.id,
-        eventType: 'contact_created',
-        action: 'create',
-        description: `Created contact ${contact.firstName} ${contact.lastName}`.trim(),
-      })
-      .catch(err => console.error('[contacts POST] activity log failed:', err));
 
     // Audit log
     await logAudit({ 
@@ -201,11 +213,6 @@ export async function POST(request: NextRequest) {
       entityId: contact.id, 
       newData: { email: v.email, name: `${v.first_name} ${v.last_name}` } 
     });
-
-    await db.update(tenants)
-      .set({ currentContacts: sql`${tenants.currentContacts} + 1` })
-      .where(eq(tenants.id, ctx.tenantId))
-      .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     await fireWebhooks(ctx.tenantId, 'contact.created', { 
       id: contact.id, 
