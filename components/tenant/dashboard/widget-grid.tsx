@@ -17,6 +17,7 @@ const LeadsPipelineWidget = dynamic(() => import('./widgets/leads-pipeline-widge
 const TicketsWidget = dynamic(() => import('./widgets/tickets-widget'), { ssr: false });
 const InvoicesWidget = dynamic(() => import('./widgets/invoices-widget'), { ssr: false });
 const FollowUpsWidget = dynamic(() => import('./widgets/follow-ups-widget'), { ssr: false });
+const NotificationsWidget = dynamic(() => import('./widgets/notifications-widget'), { ssr: false });
 
 const WIDGET_MAP: Record<string, ComponentType<WidgetProps>> = {
   'stats-contacts': StatsContactsWidget,
@@ -31,6 +32,7 @@ const WIDGET_MAP: Record<string, ComponentType<WidgetProps>> = {
   'tickets-widget': TicketsWidget,
   'invoices-widget': InvoicesWidget,
   'follow-ups-list': FollowUpsWidget,
+  'notifications-list': NotificationsWidget,
 };
 
 const SIZE_CLASSES: Record<string, string> = {
