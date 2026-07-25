@@ -1,15 +1,23 @@
 import { db } from '@/drizzle/db';
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
+import { isValidTableName } from '@/lib/sql-allowlist';
 
 /**
- * SQL templates for junction tables that lack a tenant_id column.
- * Each function returns a DELETE statement scoped to the given tenantId.
+ * Parameterized junction table deletes.
+ * Returns a Drizzle SQL fragment — no raw SQL, no string interpolation.
  */
-const JUNCTION_TABLE_DELETES: Record<string, (tenantId: string) => string> = {
-  contact_emails: (tid) => `DELETE FROM contact_emails WHERE contact_id IN (SELECT id FROM contacts WHERE tenant_id = '${tid}')`,
-  contact_tags:   (tid) => `DELETE FROM contact_tags WHERE contact_id IN (SELECT id FROM contacts WHERE tenant_id = '${tid}')`,
-  lead_tags:      (tid) => `DELETE FROM lead_tags WHERE lead_id IN (SELECT id FROM leads WHERE tenant_id = '${tid}')`,
-};
+function junctionDelete(table: string, tenantId: string): SQL {
+  switch (table) {
+    case 'contact_emails':
+      return sql`DELETE FROM contact_emails WHERE contact_id IN (SELECT id FROM contacts WHERE tenant_id = ${tenantId})`;
+    case 'contact_tags':
+      return sql`DELETE FROM contact_tags WHERE contact_id IN (SELECT id FROM contacts WHERE tenant_id = ${tenantId})`;
+    case 'lead_tags':
+      return sql`DELETE FROM lead_tags WHERE lead_id IN (SELECT id FROM leads WHERE tenant_id = ${tenantId})`;
+    default:
+      throw new Error(`Unknown junction table: ${table}`);
+  }
+}
 
 /**
  * TenantDataImporter
@@ -28,31 +36,6 @@ export interface TenantImportResult {
   recordsRestored: number;
   errors: { table: string; error: string }[];
 }
-
-const ALLOWED_IMPORT_TABLES = [
-  'contacts', 'leads', 'deals', 'companies', 'tasks', 'notes', 'activities',
-  'email_templates', 'email_tracking', 'email_log',
-  'sequences', 'sequence_enrollments', 'sequence_steps', 'sequence_step_logs',
-  'whatsapp_messages', 'email_warmup_configs', 'email_warmup_pool', 'email_warmup_logs',
-  'workflows', 'workflow_actions', 'workflow_execution_logs', 'workflow_action_logs',
-  'automations', 'automation_workflows', 'automation_runs',
-  'ai_insights', 'ai_email_drafts', 'contact_scores', 'ai_usage_logs',
-  'churn_predictions', 'deal_forecasts', 'revenue_projections', 'pipeline_health_metrics',
-  'saved_reports', 'report_executions', 'dashboards',
-  'webhooks', 'webhook_deliveries', 'webhook_inbound_logs', 'failed_webhooks',
-  'api_keys', 'api_key_usage',
-  'lead_scoring_rules', 'lead_activities',
-  'contact_lifecycle_history', 'contact_merge_history',
-  'audit_logs', 'impersonation_sessions',
-  'tenant_modules', 'modules', 'forms', 'form_submissions',
-  'meetings', 'call_recordings', 'call_notes',
-  'conversation_metrics', 'conversation_keywords',
-  'file_uploads', 'file_attachments',
-  'billing_events', 'usage_snapshots', 'usage_alerts', 'limit_violations',
-  'products', 'price_books', 'price_book_entries', 'quotes', 'quote_line_items',
-  'contracts', 'invoices',
-  'follow_ups', 'tickets', 'kb_articles',
-];
 
 export class TenantDataImporter {
   private tenantId: string;
@@ -203,9 +186,9 @@ export class TenantDataImporter {
           if (skipTables.includes(table)) continue;
           try {
             // Junction tables without tenant_id — delete via parent table's tenant_id
-            const junctionDelete = JUNCTION_TABLE_DELETES[table];
-            if (junctionDelete) {
-              await tx.execute(sql.raw(junctionDelete(this.tenantId)));
+            const JUNCTION_TABLES = ['contact_emails', 'contact_tags', 'lead_tags'];
+            if (JUNCTION_TABLES.includes(table)) {
+              await tx.execute(junctionDelete(table, this.tenantId));
             } else {
               // Standard tables with tenant_id column
               await tx.execute(sql`DELETE FROM ${sql.identifier(table)} WHERE tenant_id = ${this.tenantId}`);
@@ -240,7 +223,7 @@ export class TenantDataImporter {
     if (tableData.rows.length === 0) return 0;
 
     // Table allowlist: only permit known tenant-scoped tables
-    if (!ALLOWED_IMPORT_TABLES.includes(tableName.toLowerCase())) {
+    if (!isValidTableName(tableName.toLowerCase())) {
       throw new Error(`Table '${tableName}' is not allowed for import`);
     }
 
@@ -349,7 +332,7 @@ function _parseAndBuildInsert(sqlString: string): any {
 
   const [, tableName, columnsStr, valuesStr] = match;
   if (!tableName || !columnsStr || !valuesStr) return null;
-  if (!ALLOWED_IMPORT_TABLES.includes(tableName.toLowerCase())) return null;
+  if (!isValidTableName(tableName.toLowerCase())) return null;
 
   const columns = columnsStr.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
   const values = parseSQLValues(valuesStr);

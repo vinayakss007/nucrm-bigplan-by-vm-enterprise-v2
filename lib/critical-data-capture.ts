@@ -1,6 +1,7 @@
 import { db } from '@/drizzle/db';
 import { criticalDataBackups } from '@/drizzle/schema';
 import { eq, and, gte, lte, sql, desc, count } from 'drizzle-orm';
+import { isValidTableName } from '@/lib/sql-allowlist';
 
 const CRITICAL_TABLES = [
   'contacts', 'leads', 'deals', 'companies',
@@ -18,6 +19,7 @@ export class CriticalDataCapture {
     deletedBy?: string
   ): Promise<number> {
     if (!CRITICAL_TABLES.includes(tableName)) return 0;
+    if (!isValidTableName(tableName)) return 0;
 
     let captured = 0;
 
