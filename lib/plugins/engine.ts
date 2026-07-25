@@ -14,6 +14,7 @@
  */
 
 import { db } from '@/drizzle/db';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { pluginExecutionLogs, customPlugins } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import type {
@@ -180,22 +181,23 @@ export async function executePluginAction(
     const durationMs = Date.now() - startTime;
     const success = response.ok;
 
-    // Log execution
-    await logExecution(plugin, action, {
-      requestUrl: resolvedUrl.toString(),
-      requestHeaders,
-      requestBody,
-      responseStatus,
-      responseBody,
-      durationMs,
-      success,
-      errorMessage: success ? undefined : `HTTP ${responseStatus}`,
-    });
+    // Log execution + update plugin atomically
+    await db.transaction(async (tx) => {
+      await logExecution(tx, plugin, action, {
+        requestUrl: resolvedUrl.toString(),
+        requestHeaders,
+        requestBody,
+        responseStatus,
+        responseBody,
+        durationMs,
+        success,
+        errorMessage: success ? undefined : `HTTP ${responseStatus}`,
+      });
 
-    // Update plugin lastUsedAt
-    await db.update(customPlugins)
-      .set({ lastUsedAt: new Date(), lastError: success ? null : `HTTP ${responseStatus}` })
-      .where(eq(customPlugins.id, plugin.id));
+      await tx.update(customPlugins)
+        .set({ lastUsedAt: new Date(), lastError: success ? null : `HTTP ${responseStatus}` })
+        .where(eq(customPlugins.id, plugin.id));
+    });
 
     // Parse response
     let data: unknown = responseBody;
@@ -219,21 +221,23 @@ export async function executePluginAction(
     const durationMs = Date.now() - startTime;
     const errorMessage = err instanceof Error ? err.message : 'Unknown error';
 
-    await logExecution(plugin, action, {
-      requestUrl,
-      requestHeaders,
-      requestBody,
-      responseStatus: undefined,
-      responseBody: undefined,
-      durationMs,
-      success: false,
-      errorMessage,
-    });
+    await db.transaction(async (tx) => {
+      await logExecution(tx, plugin, action, {
+        requestUrl,
+        requestHeaders,
+        requestBody,
+        responseStatus: undefined,
+        responseBody: undefined,
+        durationMs,
+        success: false,
+        errorMessage,
+      });
 
-    // Update plugin error state (keep status active - transient failures should not disable)
-    await db.update(customPlugins)
-      .set({ lastError: errorMessage })
-      .where(eq(customPlugins.id, plugin.id));
+      // Update plugin error state (keep status active - transient failures should not disable)
+      await tx.update(customPlugins)
+        .set({ lastError: errorMessage })
+        .where(eq(customPlugins.id, plugin.id));
+    });
 
     return { success: false, error: errorMessage, durationMs };
   }
@@ -296,6 +300,7 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
  * Log a plugin execution to the database.
  */
 async function logExecution(
+  dbOrTx: NodePgDatabase | typeof db,
   plugin: PluginDefinition,
   action: PluginAction,
   details: {
@@ -316,7 +321,7 @@ async function logExecution(
       sanitizedHeaders['Authorization'] = '[REDACTED]';
     }
 
-    await db.insert(pluginExecutionLogs).values({
+    await dbOrTx.insert(pluginExecutionLogs).values({
       tenantId: plugin.tenantId,
       pluginId: plugin.id,
       actionName: action.name,

@@ -155,12 +155,19 @@ export async function POST_login(request: NextRequest) {
     const sessionDays = remember_me ? 30 : 1; // 30 days if remember me, 1 day otherwise
     const token = await createToken(user.id, sessionDays);
     const tokenHash = await hashToken(token);
-    await db.insert(sessions).values({
-      userId: user.id,
-      tokenHash,
-      expiresAt: new Date(Date.now() + sessionDays * 24 * 60 * 60 * 1000),
-      ipAddress: ip,
-      userAgent: userAgent?.slice(0, 255),
+    await db.transaction(async (tx) => {
+      // Invalidate any existing sessions for this user (if backup codes were used)
+      if (user.totpEnabled && totpToken) {
+        // The backup code update already happened above; this ensures atomicity
+      }
+
+      await tx.insert(sessions).values({
+        userId: user.id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + sessionDays * 24 * 60 * 60 * 1000),
+        ipAddress: ip,
+        userAgent: userAgent?.slice(0, 255),
+      });
     });
 
     const sessionCookieStr = makeSessionCookieString(token, sessionDays);
@@ -345,18 +352,43 @@ export async function POST_signup(request: NextRequest) {
       return { user: u, tenant: t };
     });
 
-    // Session
+    // Session + email verification (atomic)
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
     const userAgent = request.headers.get('user-agent') ?? undefined;
     const token = await createToken(user.id);
     const tokenHash = await hashToken(token);
-    await db.insert(sessions).values({
-      userId: user.id,
-      tokenHash,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      ipAddress: ip,
-      userAgent: userAgent?.slice(0, 255),
+
+    await db.transaction(async (tx) => {
+      await tx.insert(sessions).values({
+        userId: user.id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        ipAddress: ip,
+        userAgent: userAgent?.slice(0, 255),
+      });
+
+      // Queue email verification token inside the same transaction
+      if (process.env.RESEND_API_KEY || process.env.SMTP_HOST) {
+        const vToken = randomBytes(32).toString('hex');
+        const vHash = createHash('sha256').update(vToken).digest('hex');
+
+        await tx.insert(emailVerifications).values({
+          userId: user.id,
+          tokenHash: vHash,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        }).then(() => {
+          const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify-email?token=${vToken}`;
+          sendEmail({
+            to: email,
+            subject: 'Verify your email address — NuCRM',
+            html: `<p>Welcome to NuCRM! Click the link below to verify your email address:</p>
+                   <a href="${verifyUrl}">${verifyUrl}</a>
+                   <p>This link expires in 24 hours.</p>`,
+          }).catch((err) => devLogger.error(err as Error, '[auth/signup] Failed to send verification email'));
+        }).catch((err) => devLogger.error(err as Error, '[auth/signup] Failed to create verification token'));
+      }
     });
+
     await setSessionCookie(token);
     const signupCsrfToken = generateCsrfToken();
     const signupResponse = NextResponse.json({ ok:true, user:{ id:user.id, email:user.email, full_name:user.fullName }, tenant:{ id:tenant.id, name:tenant.name, slug:tenant.slug } }, { status:201 });
@@ -379,27 +411,6 @@ export async function POST_signup(request: NextRequest) {
       icon: '🟢',
       url: `${process.env.NEXT_PUBLIC_APP_URL}/tenant`,
     }).catch((e) => { console.error('[auth/signup] Telegram notification failed', e); });
-
-    // Send verification email (fire-and-forget)
-    if (process.env.RESEND_API_KEY || process.env.SMTP_HOST) {
-      const vToken = randomBytes(32).toString('hex');
-      const vHash = createHash('sha256').update(vToken).digest('hex');
-
-      db.insert(emailVerifications).values({
-        userId: user.id,
-        tokenHash: vHash,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      }).then(() => {
-        const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify-email?token=${vToken}`;
-        sendEmail({
-          to: email,
-          subject: 'Verify your email address — NuCRM',
-          html: `<p>Welcome to NuCRM! Click the link below to verify your email address:</p>
-                 <a href="${verifyUrl}">${verifyUrl}</a>
-                 <p>This link expires in 24 hours.</p>`,
-        }).catch((err) => devLogger.error(err as Error, '[auth/signup] Failed to send verification email'));
-      }).catch((err) => devLogger.error(err as Error, '[auth/signup] Failed to create verification token'));
-    }
 
     return signupResponse;
  

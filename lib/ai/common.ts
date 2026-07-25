@@ -175,61 +175,63 @@ export async function recordUsage(
 ) {
   const currentPeriod = sql`TO_CHAR(NOW(), 'YYYY-MM')`;
 
-  // 1. Update global budget
-  await db.update(tokenBudgets)
-    .set({
-      currentMonthCents: sql`${tokenBudgets.currentMonthCents} + ${actualCostCents}`,
-      updatedAt: new Date()
-    })
-    .where(and(
-      eq(tokenBudgets.service, service),
-      eq(tokenBudgets.billingPeriod, currentPeriod)
-    ));
-
-  // 2. Update tenant usage
-  await db.insert(aiUsageAggregated)
-    .values({
-      tenantId,
-      moduleName: module,
-      billingPeriod: currentPeriod as unknown as string,
-      count: 1,
-      tokensUsed,
-      costCents: actualCostCents,
-    })
-    .onConflictDoUpdate({
-      target: [aiUsageAggregated.tenantId, aiUsageAggregated.moduleName, aiUsageAggregated.billingPeriod],
-      set: {
-        count: sql`${aiUsageAggregated.count} + 1`,
-        tokensUsed: sql`${aiUsageAggregated.tokensUsed} + ${tokensUsed}`,
-        costCents: sql`${aiUsageAggregated.costCents} + ${actualCostCents}`,
+  await db.transaction(async (tx) => {
+    // 1. Update global budget
+    await tx.update(tokenBudgets)
+      .set({
+        currentMonthCents: sql`${tokenBudgets.currentMonthCents} + ${actualCostCents}`,
         updatedAt: new Date()
-      }
-    });
+      })
+      .where(and(
+        eq(tokenBudgets.service, service),
+        eq(tokenBudgets.billingPeriod, currentPeriod)
+      ));
 
-  // 3. Update api_keys_registry current spend
-  await db.update(apiKeysRegistry)
-    .set({
-      currentMonthCents: sql`${apiKeysRegistry.currentMonthCents} + ${actualCostCents}`,
-      lastUsedAt: new Date(),
-      updatedAt: new Date()
-    })
-    .where(and(
-      eq(apiKeysRegistry.service, service),
-      eq(apiKeysRegistry.isPrimary, true),
-      eq(apiKeysRegistry.isActive, true)
-    ));
+    // 2. Update tenant usage
+    await tx.insert(aiUsageAggregated)
+      .values({
+        tenantId,
+        moduleName: module,
+        billingPeriod: currentPeriod as unknown as string,
+        count: 1,
+        tokensUsed,
+        costCents: actualCostCents,
+      })
+      .onConflictDoUpdate({
+        target: [aiUsageAggregated.tenantId, aiUsageAggregated.moduleName, aiUsageAggregated.billingPeriod],
+        set: {
+          count: sql`${aiUsageAggregated.count} + 1`,
+          tokensUsed: sql`${aiUsageAggregated.tokensUsed} + ${tokensUsed}`,
+          costCents: sql`${aiUsageAggregated.costCents} + ${actualCostCents}`,
+          updatedAt: new Date()
+        }
+      });
 
-  // 4. Log individual call
-  await db.insert(aiUsageLogs)
-    .values({
-      tenantId,
-      userId,
-      feature: module,
-      model: service,
-      tokensUsed,
-      costCents: String(actualCostCents),
-      metadata: responseData || {},
-    });
+    // 3. Update api_keys_registry current spend
+    await tx.update(apiKeysRegistry)
+      .set({
+        currentMonthCents: sql`${apiKeysRegistry.currentMonthCents} + ${actualCostCents}`,
+        lastUsedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(apiKeysRegistry.service, service),
+        eq(apiKeysRegistry.isPrimary, true),
+        eq(apiKeysRegistry.isActive, true)
+      ));
+
+    // 4. Log individual call
+    await tx.insert(aiUsageLogs)
+      .values({
+        tenantId,
+        userId,
+        feature: module,
+        model: service,
+        tokensUsed,
+        costCents: String(actualCostCents),
+        metadata: responseData || {},
+      });
+  });
 }
 
 // ── Anomaly Detection ────────────────────────────────────────────────────────
