@@ -66,19 +66,23 @@ export async function POST(request: NextRequest) {
 
     const slug = name.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'') + '-' + Date.now().toString(36);
     
-    const [tenant] = await db.insert(tenants).values({
-      name: name.trim(),
-      slug,
-      ownerId: ctx.userId,
-      planId: 'free',
-      status: 'trialing',
-    }).returning();
+    const tenant = await db.transaction(async (tx) => {
+      const [t] = await tx.insert(tenants).values({
+        name: name.trim(),
+        slug,
+        ownerId: ctx.userId,
+        planId: 'free',
+        status: 'trialing',
+      }).returning();
 
-    if (!tenant) throw new Error('Failed to create workspace');
+      if (!t) throw new Error('Failed to create workspace');
 
-    await db.update(users)
-      .set({ lastTenantId: tenant.id })
-      .where(eq(users.id, ctx.userId));
+      await tx.update(users)
+        .set({ lastTenantId: t.id })
+        .where(eq(users.id, ctx.userId));
+
+      return t;
+    });
 
     return NextResponse.json({ data: tenant }, { status: 201 });
  
