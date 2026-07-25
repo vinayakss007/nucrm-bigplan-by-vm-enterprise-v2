@@ -61,34 +61,35 @@ export async function POST(req: NextRequest, { params }: any) {
     const firstDelay = steps[0]?.delayDays ?? 0;
     const nextStepAt = new Date(Date.now() + firstDelay * 86400000);
 
-    // Upsert enrollment
-    const [enrollment] = await db.insert(sequenceEnrollments)
-      .values({
-        tenantId: ctx.tenantId,
-        sequenceId: sequence_id,
-        contactId: contactId,
-        currentStep: 1, // Drizzle schema default was 1, legacy was 0
-        status: 'active',
-        nextStepAt: nextStepAt,
-        enrolledAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: [sequenceEnrollments.sequenceId, sequenceEnrollments.contactId],
-        set: {
-          status: 'active',
+    const [enrollment] = await db.transaction(async (tx) => {
+      const [e] = await tx.insert(sequenceEnrollments)
+        .values({
+          tenantId: ctx.tenantId,
+          sequenceId: sequence_id,
+          contactId: contactId,
           currentStep: 1,
+          status: 'active',
           nextStepAt: nextStepAt,
           enrolledAt: new Date(),
-          updatedAt: new Date(),
-        }
-      })
-      .returning();
+        })
+        .onConflictDoUpdate({
+          target: [sequenceEnrollments.sequenceId, sequenceEnrollments.contactId],
+          set: {
+            status: 'active',
+            currentStep: 1,
+            nextStepAt: nextStepAt,
+            enrolledAt: new Date(),
+            updatedAt: new Date(),
+          }
+        })
+        .returning();
 
-    // Increment enroll count
-    await db.update(sequences)
-      .set({ enrollCount: sql`${sequences.enrollCount} + 1` })
-      .where(eq(sequences.id, sequence_id))
-      .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      await tx.update(sequences)
+        .set({ enrollCount: sql`${sequences.enrollCount} + 1` })
+        .where(eq(sequences.id, sequence_id));
+
+      return [e];
+    });
 
     return NextResponse.json({ data: enrollment }, { status: 201 });
  
