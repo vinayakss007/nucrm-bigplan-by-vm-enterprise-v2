@@ -87,16 +87,17 @@ export async function POST(req: NextRequest) {
         });
       } else {
         // Create new contact
-        const firstName = formData.first_name || formData.first_name || formData.name?.split(' ')[0] || 'Unknown';
-        const lastName = formData.last_name || formData.name?.split(' ').slice(1).join(' ') || 'Lead';
-        
+        const name = String(formData.name || '');
+        const firstName = String(formData.first_name || name.split(' ')[0] || 'Unknown');
+        const lastName = String(formData.last_name || name.split(' ').slice(1).join(' ') || 'Lead');
+
         const [newContact] = await db.insert(contacts)
           .values({
             tenantId: form.tenantId,
             firstName,
             lastName,
             email,
-            phone: formData.phone || formData.phone_number || null,
+            phone: String(formData.phone || formData.phone_number || ''),
             leadStatus: 'new',
             leadSource: `Form: ${form.name}`,
             notes: message,
