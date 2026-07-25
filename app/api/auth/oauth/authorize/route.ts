@@ -3,9 +3,13 @@ import { db } from '@/drizzle/db';
 import { oauthClients, oauthCodes } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
+    const limited = await checkRateLimit(request, { action: 'oauth-authorize', max: 20, windowMinutes: 1 });
+    if (limited) return limited;
+
     const { searchParams } = new URL(request.url);
     const clientId = searchParams.get('client_id');
     const redirectUri = searchParams.get('redirect_uri');

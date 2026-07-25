@@ -3,9 +3,13 @@ import { db } from '@/drizzle/db';
 import { oauthClients, oauthCodes, oauthTokens } from '@/drizzle/schema';
 import { eq, and, gt } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await checkRateLimit(request, { action: 'oauth-token', max: 20, windowMinutes: 1 });
+    if (limited) return limited;
+
     let formData: FormData;
     try {
       formData = await request.formData();

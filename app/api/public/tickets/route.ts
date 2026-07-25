@@ -5,6 +5,7 @@ import { supportTickets, contacts } from '@/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 const publicTicketSchema = z.object({
   email: z.string().email('Valid email is required'),
@@ -17,6 +18,9 @@ const publicTicketSchema = z.object({
 // Public ticket endpoint - uses email to identify the user
 export async function GET(request: NextRequest) {
   try {
+    const limited = await checkRateLimit(request, { action: 'public-tickets-list', max: 30, windowMinutes: 1 });
+    if (limited) return limited;
+
     const email = request.headers.get('x-portal-email') || request.nextUrl.searchParams.get('email');
     if (!email) return NextResponse.json({ data: [] });
 
@@ -45,6 +49,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await checkRateLimit(request, { action: 'public-tickets-create', max: 10, windowMinutes: 1 });
+    if (limited) return limited;
+
     const raw = await request.json();
     const parsed = validateBody(publicTicketSchema, raw);
     if (parsed instanceof NextResponse) return parsed;

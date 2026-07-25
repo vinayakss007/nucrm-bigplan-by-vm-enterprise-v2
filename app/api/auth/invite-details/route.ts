@@ -6,9 +6,13 @@ import { db } from '@/drizzle/db';
 import { invitations, tenants, users } from '@/drizzle/schema';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
+    const limited = await checkRateLimit(request, { action: 'invite-details', max: 30, windowMinutes: 1 });
+    if (limited) return limited;
+
     const token = new URL(request.url).searchParams.get('token');
     if (!token) return NextResponse.json({ error: 'Token required' }, { status: 400 });
 

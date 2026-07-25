@@ -4,6 +4,7 @@ import { db } from '@/drizzle/db';
 import { supportTickets, ticketReplies, contacts } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 const replySchema = z.object({
   email: z.string().email(),
@@ -12,6 +13,9 @@ const replySchema = z.object({
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const limited = await checkRateLimit(request, { action: 'public-ticket-replies', max: 10, windowMinutes: 1 });
+    if (limited) return limited;
+
     const raw = await request.json();
     const parsed = replySchema.safeParse(raw);
     if (!parsed.success) {
