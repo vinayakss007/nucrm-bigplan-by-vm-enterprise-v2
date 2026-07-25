@@ -261,7 +261,7 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: any, pa
       const to = config.to || enrichedData?.['phone'];
       if (!to) return;
       
-      const integration = await dbOrTx.query.integrations.findFirst({
+      const integration = await db.query.integrations.findFirst({
         where: and(
           eq(integrations.tenantId, payload.tenantId),
           eq(integrations.type, 'whatsapp'),
@@ -382,7 +382,7 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: any, pa
     case 'send_sms': {
       const to = config.to || enrichedData?.['phone'];
       if (!to) return;
-      const smsIntegration = await dbOrTx.query.integrations.findFirst({
+      const smsIntegration = await db.query.integrations.findFirst({
         where: and(
           eq(integrations.tenantId, payload.tenantId),
           eq(integrations.type, 'sms'),
