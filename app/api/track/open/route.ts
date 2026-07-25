@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { emailTracking, activities } from '@/drizzle/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
 
 // 1x1 transparent GIF
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     Promise.resolve().then(async () => {
       try {
         const row = await db.query.emailTracking.findFirst({
-          where: eq(emailTracking.id, trackId),
+          where: and(eq(emailTracking.id, trackId), isNull(emailTracking.deletedAt)),
           columns: {
             id: true,
             contactId: true,
