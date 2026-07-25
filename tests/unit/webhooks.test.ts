@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const mockTxUpdate = vi.hoisted(() => vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) })));
+
 vi.mock('@/drizzle/db', () => ({
   db: {
     select: vi.fn(() => ({
@@ -20,6 +22,21 @@ vi.mock('@/drizzle/db', () => ({
     update: vi.fn(() => ({
       set: vi.fn(() => ({
         where: vi.fn(),
+      })),
+    })),
+    transaction: vi.fn((cb: (tx: any) => Promise<any>) => cb({
+      update: mockTxUpdate,
+      insert: vi.fn(() => ({
+        values: vi.fn(() => ({
+          returning: vi.fn(() => [{ id: 'delivery-1' }]),
+        })),
+      })),
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn(() => []),
+          })),
+        })),
       })),
     })),
   },
@@ -227,14 +244,14 @@ describe('webhooks', () => {
       });
       vi.stubGlobal('fetch', mockFetch);
 
-      const setFn = vi.fn(() => ({ where: vi.fn() }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.update).mockReturnValue({ set: setFn } as any);
+      mockTxUpdate.mockClear();
+      const txSetFn = vi.fn(() => ({ where: vi.fn() }));
+      mockTxUpdate.mockReturnValue({ set: txSetFn });
 
       const { fireWebhooks } = await import('@/lib/webhooks');
       await fireWebhooks('tenant-1', 'contact.created', {});
 
-      expect(setFn).toHaveBeenCalledWith(
+      expect(txSetFn).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'success', responseStatus: 200 }),
       );
 
@@ -259,14 +276,14 @@ describe('webhooks', () => {
       });
       vi.stubGlobal('fetch', mockFetch);
 
-      const setFn = vi.fn(() => ({ where: vi.fn() }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.update).mockReturnValue({ set: setFn } as any);
+      mockTxUpdate.mockClear();
+      const txSetFn = vi.fn(() => ({ where: vi.fn() }));
+      mockTxUpdate.mockReturnValue({ set: txSetFn });
 
       const { fireWebhooks } = await import('@/lib/webhooks');
       await fireWebhooks('tenant-1', 'contact.created', {});
 
-      expect(setFn).toHaveBeenCalledWith(
+      expect(txSetFn).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'failed', responseStatus: 500 }),
       );
 

@@ -153,49 +153,76 @@ export async function deductCredits(params: {
   const tokensUsed = params.tokensIn + params.tokensOut;
 
   try {
-    // Atomic update: deduct from balance
-    await db
-      .update(tenantAiCredits)
-      .set({
-        usedTokens: sql`${tenantAiCredits.usedTokens} + ${tokensUsed}`,
-        usedCostCents: sql`${tenantAiCredits.usedCostCents} + ${params.costCents}`,
-        status: sql`CASE 
-          WHEN ${tenantAiCredits.allocatedTokens} - (${tenantAiCredits.usedTokens} + ${tokensUsed}) <= 0 THEN 'exhausted'
-          ELSE 'active'
-        END`,
-        updatedAt: new Date(),
-      })
-      .where(and(
-        eq(tenantAiCredits.tenantId, params.tenantId),
-        eq(tenantAiCredits.billingPeriod, period),
-      ))
-      .returning();
+    const balance = await db.transaction(async (tx) => {
+      // Deduct from balance
+      await tx
+        .update(tenantAiCredits)
+        .set({
+          usedTokens: sql`${tenantAiCredits.usedTokens} + ${tokensUsed}`,
+          usedCostCents: sql`${tenantAiCredits.usedCostCents} + ${params.costCents}`,
+          status: sql`CASE 
+            WHEN ${tenantAiCredits.allocatedTokens} - (${tenantAiCredits.usedTokens} + ${tokensUsed}) <= 0 THEN 'exhausted'
+            ELSE 'active'
+          END`,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(tenantAiCredits.tenantId, params.tenantId),
+          eq(tenantAiCredits.billingPeriod, period),
+        ));
 
-    // Get updated balance
-    const balance = await getCreditBalance(params.tenantId);
+      // Read back updated balance
+      const [updated] = await tx
+        .select()
+        .from(tenantAiCredits)
+        .where(and(
+          eq(tenantAiCredits.tenantId, params.tenantId),
+          eq(tenantAiCredits.billingPeriod, period),
+        ))
+        .limit(1);
 
-    // Log to ledger
-    await db.insert(aiCreditsLedger).values({
-      tenantId: params.tenantId,
-      userId: params.userId,
-      action: params.action,
-      provider: params.provider,
-      model: params.model,
-      tokensIn: params.tokensIn,
-      tokensOut: params.tokensOut,
-      tokensUsed,
-      costCents: params.costCents,
-      balanceAfterTokens: balance.remainingTokens,
-      balanceAfterCostCents: balance.remainingCostCents,
-      activityId: params.activityId,
-      billingPeriod: period,
+      const b = updated!;
+      const bal = {
+        allocatedTokens: b.allocatedTokens,
+        usedTokens: b.usedTokens,
+        remainingTokens: b.allocatedTokens - b.usedTokens,
+        allocatedCostCents: b.allocatedCostCents,
+        usedCostCents: b.usedCostCents,
+        remainingCostCents: b.allocatedCostCents - b.usedCostCents,
+        hardCapEnabled: b.hardCapEnabled,
+        softCapPct: b.softCapPct,
+        status: b.status,
+      };
+
+      // Log to ledger
+      await tx.insert(aiCreditsLedger).values({
+        tenantId: params.tenantId,
+        userId: params.userId,
+        action: params.action,
+        provider: params.provider,
+        model: params.model,
+        tokensIn: params.tokensIn,
+        tokensOut: params.tokensOut,
+        tokensUsed,
+        costCents: params.costCents,
+        balanceAfterTokens: bal.remainingTokens,
+        balanceAfterCostCents: bal.remainingCostCents,
+        activityId: params.activityId,
+        billingPeriod: period,
+      });
+
+      return bal;
     });
 
     return { success: true, balanceAfter: balance };
   } catch (err) {
     console.error('[ai credits] deduction failed:', (err as Error).message);
-    const balance = await getCreditBalance(params.tenantId);
-    return { success: false, balanceAfter: balance, error: (err as Error).message };
+    try {
+      const balance = await getCreditBalance(params.tenantId);
+      return { success: false, balanceAfter: balance, error: (err as Error).message };
+    } catch {
+      return { success: false, balanceAfter: {} as CreditBalance, error: (err as Error).message };
+    }
   }
 }
 

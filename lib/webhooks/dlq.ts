@@ -114,32 +114,33 @@ export async function retryFromDLQ(dlqEntryId: string): Promise<boolean> {
     throw new Error('Invalid DLQ payload — missing deliveryId');
   }
 
-  // Reset the original delivery for retry
-  await db.update(webhookDeliveries)
-    .set({
-      status: 'pending',
-      responseStatus: null,
-      responseBody: null,
-      durationMs: null,
-      metadata: {
-        ...(payload.headers || {}),
-        attempt: 0,
-        max_retries: entry.maxAttempts,
-        url: payload.url,
-        dlqRetriedAt: new Date().toISOString(),
-        dlqEntryId,
-      },
-    })
-    .where(eq(webhookDeliveries.id, payload.deliveryId));
+  // Reset the original delivery + mark DLQ entry resolved atomically
+  await db.transaction(async (tx) => {
+    await tx.update(webhookDeliveries)
+      .set({
+        status: 'pending',
+        responseStatus: null,
+        responseBody: null,
+        durationMs: null,
+        metadata: {
+          ...(payload.headers || {}),
+          attempt: 0,
+          max_retries: entry.maxAttempts,
+          url: payload.url,
+          dlqRetriedAt: new Date().toISOString(),
+          dlqEntryId,
+        },
+      })
+      .where(eq(webhookDeliveries.id, payload.deliveryId));
 
-  // Mark DLQ entry as resolved
-  await db.update(deadLetterQueue)
-    .set({
-      status: 'resolved',
-      resolvedAt: new Date(),
-      resolution: 'retried',
-    })
-    .where(eq(deadLetterQueue.id, dlqEntryId));
+    await tx.update(deadLetterQueue)
+      .set({
+        status: 'resolved',
+        resolvedAt: new Date(),
+        resolution: 'retried',
+      })
+      .where(eq(deadLetterQueue.id, dlqEntryId));
+  });
 
   devLogger.queue('dlq', `Retrying DLQ entry ${dlqEntryId} → delivery ${payload.deliveryId}`);
 

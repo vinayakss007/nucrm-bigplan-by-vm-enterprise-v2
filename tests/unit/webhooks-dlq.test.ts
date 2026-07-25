@@ -4,6 +4,11 @@ let mockRows: unknown[] = [{ count: 0 }];
 let mockThen = vi.fn((fn?: (rows: unknown[]) => unknown) => fn ? fn(mockRows) : mockRows);
 let mockWhere = vi.fn(() => ({ then: mockThen }));
 
+const mockDlqTxUpdate = vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn(() => Promise.resolve()) })) }));
+const mockDlqTxInsert = vi.fn(() => ({
+  values: vi.fn(() => ({ returning: vi.fn(() => Promise.resolve([{ id: 'dlq-tx-1' }])) })),
+}));
+
 vi.mock('@/drizzle/db', () => ({
   db: {
     query: {
@@ -23,6 +28,10 @@ vi.mock('@/drizzle/db', () => ({
       where: vi.fn(() => ({
         returning: vi.fn(() => Promise.resolve([{ id: 'dlq-1' }])),
       })),
+    })),
+    transaction: vi.fn((cb: (tx: any) => Promise<any>) => cb({
+      update: mockDlqTxUpdate,
+      insert: mockDlqTxInsert,
     })),
   },
 }));

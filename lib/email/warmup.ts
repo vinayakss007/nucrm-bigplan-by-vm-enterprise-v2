@@ -110,33 +110,31 @@ export async function processWarmUp(): Promise<WarmUpResult> {
               text: body,
             });
 
-            // Update log and participant
-            await db.update(emailWarmupLogs)
-              .set({ status: 'sent', sentAt: new Date() })
-              .where(eq(emailWarmupLogs.id, log.id));
+            // Update log, pool, config atomically
+            await db.transaction(async (tx) => {
+              await tx.update(emailWarmupLogs)
+                .set({ status: 'sent', sentAt: new Date() })
+                .where(eq(emailWarmupLogs.id, log.id));
 
-            await db.update(emailWarmupPool)
-              .set({ 
-                lastSentAt: new Date(), 
-                sentCount: sql`${emailWarmupPool.sentCount} + 1` 
-              })
-              .where(eq(emailWarmupPool.id, participant.id));
+              await tx.update(emailWarmupPool)
+                .set({ lastSentAt: new Date(), sentCount: sql`${emailWarmupPool.sentCount} + 1` })
+                .where(eq(emailWarmupPool.id, participant.id));
 
-            await db.update(emailWarmupConfigs)
-              .set({ 
-                totalSent: sql`${emailWarmupConfigs.totalSent} + 1`, 
-                lastWarmupAt: new Date() 
-              })
-              .where(eq(emailWarmupConfigs.id, config.id));
+              await tx.update(emailWarmupConfigs)
+                .set({ totalSent: sql`${emailWarmupConfigs.totalSent} + 1`, lastWarmupAt: new Date() })
+                .where(eq(emailWarmupConfigs.id, config.id));
+            });
 
             result.emailsSent++;
- 
- 
+  
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } catch (err: any) {
-            await db.update(emailWarmupLogs)
-              .set({ status: 'failed', errorMessage: err.message })
-              .where(eq(emailWarmupLogs.id, log.id));
+            await db.transaction(async (tx) => {
+              await tx.update(emailWarmupLogs)
+                .set({ status: 'failed', errorMessage: err.message })
+                .where(eq(emailWarmupLogs.id, log.id));
+            }).catch((_e) => { /* best-effort */ });
             result.errors.push(`Failed to send to ${participant.participantEmail}: ${err.message}`);
           }
         }
@@ -188,29 +186,27 @@ async function calculateDailyLimit(config: any, daysElapsed: number): Promise<nu
 // ─── Record Reply (called when warm-up email is replied to) ───────────────
 
 export async function recordWarmUpReply(logId: string): Promise<void> {
-  await db.update(emailWarmupLogs)
-     .set({ status: 'replied', repliedAt: new Date() })
-     .where(eq(emailWarmupLogs.id, logId));
-
-  // Get config_id from log
   const log = await db.query.emailWarmupLogs.findFirst({
     where: eq(emailWarmupLogs.id, logId)
   });
   
-  if (log) {
-    await db.update(emailWarmupConfigs)
+  if (!log) return;
+
+  await db.transaction(async (tx) => {
+    await tx.update(emailWarmupLogs)
+       .set({ status: 'replied', repliedAt: new Date() })
+       .where(eq(emailWarmupLogs.id, logId));
+
+    await tx.update(emailWarmupConfigs)
       .set({ totalReplied: sql`${emailWarmupConfigs.totalReplied} + 1` })
       .where(eq(emailWarmupConfigs.id, log.configId));
       
     if (log.participantId) {
-      await db.update(emailWarmupPool)
-        .set({ 
-          lastRepliedAt: new Date(), 
-          replyCount: sql`${emailWarmupPool.replyCount} + 1` 
-        })
+      await tx.update(emailWarmupPool)
+        .set({ lastRepliedAt: new Date(), replyCount: sql`${emailWarmupPool.replyCount} + 1` })
         .where(eq(emailWarmupPool.id, log.participantId));
     }
-  }
+  });
 }
 
 // ─── Get Warm-Up Stats ────────────────────────────────────────────────────

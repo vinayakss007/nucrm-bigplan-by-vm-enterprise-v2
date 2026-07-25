@@ -101,30 +101,32 @@ export async function setFieldPermission(
   fieldName: string,
   accessLevel: FieldAccessLevel
 ) {
-  // Check if permission exists
-  const existing = await db.select()
-    .from(fieldPermissions)
-    .where(and(
-      eq(fieldPermissions.tenantId, tenantId),
-      eq(fieldPermissions.roleId, roleId),
-      eq(fieldPermissions.entityType, entityType),
-      eq(fieldPermissions.fieldName, fieldName)
-    ));
+  return await db.transaction(async (tx) => {
+    const [existing] = await tx.select()
+      .from(fieldPermissions)
+      .where(and(
+        eq(fieldPermissions.tenantId, tenantId),
+        eq(fieldPermissions.roleId, roleId),
+        eq(fieldPermissions.entityType, entityType),
+        eq(fieldPermissions.fieldName, fieldName)
+      ))
+      .limit(1);
 
-  if (existing[0]) {
-    await db.update(fieldPermissions)
-      .set({ accessLevel, updatedAt: new Date() })
-      .where(eq(fieldPermissions.id, existing[0].id));
-    return { ...existing[0], accessLevel };
-  }
+    if (existing) {
+      await tx.update(fieldPermissions)
+        .set({ accessLevel, updatedAt: new Date() })
+        .where(eq(fieldPermissions.id, existing.id));
+      return { ...existing, accessLevel };
+    }
 
-  const [result] = await db.insert(fieldPermissions).values({
-    tenantId,
-    roleId,
-    entityType,
-    fieldName,
-    accessLevel,
-  }).returning();
+    const [result] = await tx.insert(fieldPermissions).values({
+      tenantId,
+      roleId,
+      entityType,
+      fieldName,
+      accessLevel,
+    }).returning();
 
-  return result;
+    return result;
+  });
 }
