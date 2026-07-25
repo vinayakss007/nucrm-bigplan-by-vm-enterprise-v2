@@ -152,6 +152,12 @@ export function DataTable<TData, TValue>({
     }
   }, [externalGlobalFilter])
 
+  // Clear selection when data changes (e.g. after bulk action, page change, or refresh)
+  React.useEffect(() => {
+    setRowSelection({})
+     
+  }, [data])
+
   // Reset select all matching when filters or page changes
   React.useEffect(() => {
     if (selectAllMatching) {

@@ -138,8 +138,8 @@ export default function ContactsDataTable({
   useEffect(() => {
     if (initialized) return
     setInitialized(true)
-    // Only fetch on mount if no initial data or search/filter params are active
-    if (initialContacts.length > 0 && !initialQ && initialStatus === 'all') return
+    // Server already fetched with filters applied — skip client re-fetch
+    if (initialContacts.length > 0) return
     const abortController = new AbortController()
     const loadDataWithAbort = async () => {
       setLoading(true)
