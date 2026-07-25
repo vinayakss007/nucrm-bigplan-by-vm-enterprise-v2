@@ -18,6 +18,8 @@ const mockActivityWhere = vi.fn();
 const mockActivityFrom = vi.fn(() => ({ where: mockActivityWhere }));
 const mockActivitySelect = vi.fn(() => ({ from: mockActivityFrom }));
 
+const mockCreditsTx = vi.hoisted(() => vi.fn<[(tx: any) => Promise<any>], any>());
+
 vi.mock('@/drizzle/db', () => ({
   db: {
     query: {
@@ -36,6 +38,7 @@ vi.mock('@/drizzle/db', () => ({
       }
       return { from: mockFrom };
     }),
+    transaction: mockCreditsTx,
   },
 }));
 
@@ -125,6 +128,11 @@ describe('ai/credits', () => {
     const balance = { allocatedTokens: 100000, usedTokens: 100, allocatedCostCents: 5000, usedCostCents: 10, hardCapEnabled: true, softCapPct: 80, status: 'active' };
     mockFindFirst.mockResolvedValue(balance);
     mockReturning.mockResolvedValue([]);
+    mockCreditsTx.mockImplementation(async (cb: (tx: any) => Promise<any>) => cb({
+      select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([balance]) })) })) })),
+      update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) })),
+      insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([]) })) })),
+    }));
     const { deductCredits } = await import('@/lib/ai/credits');
     const result = await deductCredits({ tenantId: 'tenant-1', userId: 'user-1', action: 'chat', provider: 'openai', model: 'gpt-4', tokensIn: 50, tokensOut: 150, costCents: 2, activityId: 'act-1' });
     expect(result.success).toBe(true);
@@ -133,7 +141,7 @@ describe('ai/credits', () => {
   it('deductCredits handles errors gracefully', async () => {
     const balance = { allocatedTokens: 100000, usedTokens: 100, allocatedCostCents: 5000, usedCostCents: 10, hardCapEnabled: true, softCapPct: 80, status: 'active' };
     mockFindFirst.mockResolvedValue(balance);
-    mockReturning.mockRejectedValue(new Error('DB error'));
+    mockCreditsTx.mockRejectedValue(new Error('DB error'));
     const { deductCredits } = await import('@/lib/ai/credits');
     const result = await deductCredits({ tenantId: 'tenant-1', userId: 'user-1', action: 'chat', provider: 'openai', model: 'gpt-4', tokensIn: 50, tokensOut: 150, costCents: 2, activityId: 'act-1' });
     expect(result.success).toBe(false);

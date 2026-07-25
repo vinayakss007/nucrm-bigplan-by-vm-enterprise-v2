@@ -84,25 +84,28 @@ export async function requestApproval(
   ruleId: string,
   requestedBy: string
 ): Promise<ApprovalRequest> {
-  const [result] = await db.insert(approvalRequests).values({
-    tenantId,
-    entityType,
-    entityId,
-    ruleId,
-    status: 'pending',
-    requestedBy,
-  }).returning();
+  const [result] = await db.transaction(async (tx) => {
+    const [r] = await tx.insert(approvalRequests).values({
+      tenantId,
+      entityType,
+      entityId,
+      ruleId,
+      status: 'pending',
+      requestedBy,
+    }).returning();
 
-  // Log activity
-  await db.insert(activities).values({
-    tenantId,
-    userId: requestedBy,
-    entityType,
-    entityId,
-    eventType: 'approval_requested',
-    description: `Approval requested for ${entityType} ${entityId}`,
-    metadata: { ruleId },
-  }).catch((e) => console.warn('[Approval] Failed to log audit', e));
+    await tx.insert(activities).values({
+      tenantId,
+      userId: requestedBy,
+      entityType,
+      entityId,
+      eventType: 'approval_requested',
+      description: `Approval requested for ${entityType} ${entityId}`,
+      metadata: { ruleId },
+    });
+
+    return [r];
+  });
 
   return result as unknown as ApprovalRequest;
 }
@@ -114,29 +117,33 @@ export async function approveRequest(
   requestId: string,
   approvedBy: string
 ) {
-  const [result] = await db.update(approvalRequests)
-    .set({
-      status: 'approved',
-      approvedBy,
-      updatedAt: new Date(),
-    })
-    .where(and(
-      eq(approvalRequests.id, requestId),
-      eq(approvalRequests.status, 'pending')
-    ))
-    .returning();
+  const [result] = await db.transaction(async (tx) => {
+    const [r] = await tx.update(approvalRequests)
+      .set({
+        status: 'approved',
+        approvedBy,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(approvalRequests.id, requestId),
+        eq(approvalRequests.status, 'pending')
+      ))
+      .returning();
 
-  if (result) {
-    await db.insert(activities).values({
-      tenantId: result.tenantId,
-      userId: approvedBy,
-      entityType: result.entityType,
-      entityId: result.entityId,
-      eventType: 'approval_approved',
-      description: `Approval granted for ${result.entityType} ${result.entityId}`,
-      metadata: { requestId },
-    }).catch((e) => console.warn('[Approval] Failed to log approval activity', e));
-  }
+    if (r) {
+      await tx.insert(activities).values({
+        tenantId: r.tenantId,
+        userId: approvedBy,
+        entityType: r.entityType,
+        entityId: r.entityId,
+        eventType: 'approval_approved',
+        description: `Approval granted for ${r.entityType} ${r.entityId}`,
+        metadata: { requestId },
+      });
+    }
+
+    return [r];
+  });
 
   return result;
 }
@@ -149,30 +156,34 @@ export async function rejectRequest(
   rejectedBy: string,
   reason: string
 ) {
-  const [result] = await db.update(approvalRequests)
-    .set({
-      status: 'rejected',
-      rejectedBy,
-      reason,
-      updatedAt: new Date(),
-    })
-    .where(and(
-      eq(approvalRequests.id, requestId),
-      eq(approvalRequests.status, 'pending')
-    ))
-    .returning();
+  const [result] = await db.transaction(async (tx) => {
+    const [r] = await tx.update(approvalRequests)
+      .set({
+        status: 'rejected',
+        rejectedBy,
+        reason,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(approvalRequests.id, requestId),
+        eq(approvalRequests.status, 'pending')
+      ))
+      .returning();
 
-  if (result) {
-    await db.insert(activities).values({
-      tenantId: result.tenantId,
-      userId: rejectedBy,
-      entityType: result.entityType,
-      entityId: result.entityId,
-      eventType: 'approval_rejected',
-      description: `Approval rejected for ${result.entityType} ${result.entityId}: ${reason}`,
-      metadata: { requestId, reason },
-    }).catch((e) => console.warn('[Approval] Failed to log rejection activity', e));
-  }
+    if (r) {
+      await tx.insert(activities).values({
+        tenantId: r.tenantId,
+        userId: rejectedBy,
+        entityType: r.entityType,
+        entityId: r.entityId,
+        eventType: 'approval_rejected',
+        description: `Approval rejected for ${r.entityType} ${r.entityId}: ${reason}`,
+        metadata: { requestId, reason },
+      });
+    }
+
+    return [r];
+  });
 
   return result;
 }

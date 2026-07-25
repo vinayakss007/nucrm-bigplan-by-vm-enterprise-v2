@@ -226,25 +226,32 @@ export async function handleSSOCallback(
     userId = newUser!.id;
   }
 
-  // Create SSO session
+  // Create SSO session + JWT token atomically
   const sessionId = randomUUID();
-  const session = await createSSOSession(userId, tenantId, providerId, {
-    sessionId,
-    idToken,
-    samlAssertion,
-    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-  });
-
-  // Issue a JWT session token (same as standard login flow)
   const token = await createToken(userId);
   const tokenHash = await hashToken(token);
-  await db.insert(sessions).values({
-    userId,
-    tokenHash,
-    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+
+  await db.transaction(async (tx) => {
+    const [session] = await tx.insert(ssoSessions).values({
+      userId,
+      tenantId,
+      providerId,
+      sessionId,
+      idToken: idToken || null,
+      samlAssertion: samlAssertion || null,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    }).returning();
+
+    if (!session) throw new Error('Failed to create SSO session');
+
+    await tx.insert(sessions).values({
+      userId,
+      tokenHash,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    });
   });
 
-  return { userId, sessionId: session.sessionId, email, token };
+  return { userId, sessionId, email, token };
 }
 
 /**

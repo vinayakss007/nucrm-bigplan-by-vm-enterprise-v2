@@ -107,31 +107,33 @@ export async function fireWebhooks(
           signal: AbortSignal.timeout(10_000) 
         });
 
-        if (res.ok) {
-          await db.update(webhookQueue)
-            .set({
-              status: 'success',
-              responseStatus: res.status,
-              deliveredAt: new Date(),
-            })
-            .where(eq(webhookQueue.id, delivery.id));
-        } else {
-          const responseBody = await res.text().catch(() => '');
-          const retryDelay = getRetryDelay(1);
-          await db.update(webhookQueue)
-            .set({
-              status: 'failed',
-              responseStatus: res.status,
-              responseBody: responseBody.slice(0, 1000),
-              nextRetryAt: new Date(Date.now() + retryDelay),
-            })
-            .where(eq(webhookQueue.id, delivery.id));
-        }
+        // Update delivery status + integration lastUsedAt atomically
+        await db.transaction(async (tx) => {
+          if (res.ok) {
+            await tx.update(webhookQueue)
+              .set({
+                status: 'success',
+                responseStatus: res.status,
+                deliveredAt: new Date(),
+              })
+              .where(eq(webhookQueue.id, delivery.id));
+          } else {
+            const responseBody = await res.text().catch(() => '');
+            const retryDelay = getRetryDelay(1);
+            await tx.update(webhookQueue)
+              .set({
+                status: 'failed',
+                responseStatus: res.status,
+                responseBody: responseBody.slice(0, 1000),
+                nextRetryAt: new Date(Date.now() + retryDelay),
+              })
+              .where(eq(webhookQueue.id, delivery.id));
+          }
 
-        await db.update(integrations)
-          .set({ lastUsedAt: new Date() })
-          .where(eq(integrations.id, hook.id))
-          .catch((e) => console.warn('[Webhook] Failed to update last used timestamp', e));
+          await tx.update(integrations)
+            .set({ lastUsedAt: new Date() })
+            .where(eq(integrations.id, hook.id));
+        }).catch((e) => console.warn('[Webhook] Failed to update delivery + integration timestamp', e));
           
  
  

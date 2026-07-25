@@ -17,6 +17,7 @@ const mockChain: any = vi.hoisted(() => {
   chain.update = vi.fn().mockReturnValue(chain);
   chain.insert = vi.fn().mockReturnValue(chain);
   chain.delete = vi.fn().mockReturnValue(chain);
+  chain.transaction = vi.fn((cb: (tx: any) => Promise<any>) => cb(chain));
   return chain;
 });
 
