@@ -4,6 +4,7 @@ import * as utils from './utils';
 
 // ── Email Opens ───────────────────────────────────────
 export const emailOpens = pgTable('email_opens', {
+  ...utils.lifecycle(),
   id: utils.pk(),
   tenantId: utils.tenantId(),
   contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
@@ -22,6 +23,7 @@ export const emailOpens = pgTable('email_opens', {
 
 // ── Email Clicks ──────────────────────────────────────
 export const emailClicks = pgTable('email_clicks', {
+  ...utils.lifecycle(),
   id: utils.pk(),
   tenantId: utils.tenantId(),
   contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),

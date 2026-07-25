@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { auditLogs, users, editHistory } from '@/drizzle/schema';
-import { eq, and, desc, sql, gte, lte } from 'drizzle-orm';
+import { eq, and, desc, sql, gte, lte, isNull } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,7 +21,10 @@ export async function GET(req: NextRequest) {
     const entityId = searchParams.get('entity_id');
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const filters: any[] = [eq(auditLogs.tenantId, ctx.tenantId)];
+    const filters: any[] = [
+      eq(auditLogs.tenantId, ctx.tenantId),
+      isNull(auditLogs.deletedAt),
+    ];
 
     if (action) filters.push(eq(auditLogs.action, action));
     if (entityType) filters.push(eq(auditLogs.entityType, entityType));
