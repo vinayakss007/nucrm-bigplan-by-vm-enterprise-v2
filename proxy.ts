@@ -171,10 +171,11 @@ export async function proxy(request: NextRequest) {
 
   // Auth check for protected paths
   if (!JWT_SECRET) {
-    const response = NextResponse.next();
-    response.headers.set('x-request-id', requestId);
-    setCORS(response, origin, pathname);
-    return response;
+    console.error('[PROXY] JWT_SECRET not configured — rejecting all requests');
+    return new NextResponse(JSON.stringify({ error: 'Server configuration error' }), {
+      status: 500,
+      headers: { 'content-type': 'application/json', 'x-request-id': requestId },
+    });
   }
 
   const cookieToken = request.cookies.get('nucrm_session')?.value;

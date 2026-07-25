@@ -19,7 +19,10 @@ export async function PATCH(req: NextRequest, { params }: any) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
-    
+
+    const deny = requirePerm(ctx, 'tasks.edit');
+    if (deny) return deny;
+
     const id = (await params).id;
     const body = await req.json();
     const validated = validateBody(updateTaskSchema, body);

@@ -276,7 +276,7 @@ export function generateSAMLMetadata(
 /**
  * Validate an OIDC ID token (JWT).
  * Uses proper JWT signature verification via JWKS.
- * Falls back to basic claims validation if JWKS verification fails.
+ * Rejects tokens when JWKS verification cannot be performed.
  */
 export async function validateOIDCToken(
   idToken: string,
@@ -290,50 +290,23 @@ export async function validateOIDCToken(
 
     const payload = JSON.parse(Buffer.from(parts[1] || '', 'base64').toString()) as Record<string, unknown>;
 
-    // Try to verify signature using JWKS if issuer is available
-    if (config.issuer) {
-      try {
-        const { jwtVerify, createRemoteJWKSet } = await import('jose');
-        const JWKS = createRemoteJWKSet(new URL(`${config.issuer}/.well-known/openid-configuration`));
-        
-        await jwtVerify(idToken, JWKS, {
-          issuer: config.issuer,
-          audience: config.clientId,
-        });
-        
-        // If verification succeeds, token is valid
-        return { valid: true, payload };
-      } catch (verifyError) {
-        console.error('[SSO] JWKS verification failed — rejecting token:', verifyError);
-        return { valid: false, error: 'Token signature verification failed' };
-      }
+    // Verify signature using JWKS — required for OIDC security
+    if (!config.issuer) {
+      return { valid: false, error: 'OIDC issuer not configured — cannot verify token signature' };
     }
 
-    // Check issuer (only reached when no JWKS endpoint is configured)
-    if (payload['iss'] !== config.issuer) {
-      return { valid: false, error: `Invalid issuer: expected ${config.issuer}, got ${String(payload['iss'])}` };
-    }
-
-    // Check audience
-    const aud = payload['aud'];
-    if (Array.isArray(aud)) {
-      if (!aud.includes(config.clientId)) {
-        return { valid: false, error: 'Token audience mismatch' };
-      }
-    } else if (aud !== config.clientId) {
-      return { valid: false, error: 'Token audience mismatch' };
-    }
-
-    // Check expiry
-    const exp = payload['exp'] as number | undefined;
-    if (!exp || exp * 1000 < Date.now()) {
-      return { valid: false, error: 'Token expired' };
-    }
-
+    const { jwtVerify, createRemoteJWKSet } = await import('jose');
+    const JWKS = createRemoteJWKSet(new URL(`${config.issuer}/.well-known/openid-configuration`));
+    
+    await jwtVerify(idToken, JWKS, {
+      issuer: config.issuer,
+      audience: config.clientId,
+    });
+    
     return { valid: true, payload };
-  } catch {
-    console.error('[sso] Failed to parse token');
-    return { valid: false, error: 'Failed to parse token' };
+  } catch (verifyError) {
+    console.error('[SSO] OIDC token verification failed:', verifyError);
+    return { valid: false, error: 'Token signature verification failed' };
   }
 }
 
@@ -425,20 +398,7 @@ async function verifySAMLSignature(samlXml: string, _idpCertificate: string): Pr
     return false;
   } catch (error) {
     console.error('[SAML] Signature verification error:', error);
-    
-    // Fallback to basic structure validation if library fails
-    const signatureMatch = samlXml.match(/<ds:Signature[^>]*>([\s\S]*?)<\/ds:Signature>/) ||
-                          samlXml.match(/<Signature[^>]*>([\s\S]*?)<\/Signature>/);
-    const signedInfoMatch = samlXml.match(/<ds:SignedInfo[^>]*>([\s\S]*?)<\/ds:SignedInfo>/) ||
-                           samlXml.match(/<SignedInfo[^>]*>([\s\S]*?)<\/SignedInfo>/);
-    const signatureValueMatch = samlXml.match(/<ds:SignatureValue[^>]*>([\s\S]*?)<\/ds:SignatureValue>/) ||
-                               samlXml.match(/<SignatureValue[^>]*>([\s\S]*?)<\/SignatureValue>/);
-    
-    if (signatureMatch && signedInfoMatch && signatureValueMatch) {
-      console.warn('[SAML] Falling back to basic structure validation (not cryptographically secure)');
-      return true;
-    }
-    
+    // Reject — do NOT fall back to structure-only checks which are trivially forgeable
     return false;
   }
 }
