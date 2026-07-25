@@ -5,6 +5,12 @@ const mockUpdate = vi.fn();
 const mockSelect = vi.fn();
 const mockFindFirst = vi.fn();
 
+const mockTxReturning = vi.fn();
+const mockTxValues = vi.fn(() => ({ returning: mockTxReturning }));
+const mockTxInsert = vi.fn(() => ({ values: mockTxValues }));
+const mockTxSet = vi.fn(() => ({ where: vi.fn() }));
+const mockTxUpdate = vi.fn(() => ({ set: mockTxSet }));
+
 vi.mock('@/drizzle/db', () => ({
   db: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -17,6 +23,9 @@ vi.mock('@/drizzle/db', () => ({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       chatSessions: { findFirst: (...args: any[]) => mockFindFirst(...args) },
     },
+    transaction: vi.fn(async (cb: (tx: any) => Promise<any>) => {
+      return await cb({ insert: mockTxInsert, update: mockTxUpdate });
+    }),
   },
 }));
 
@@ -151,11 +160,7 @@ describe('Chat - sendMessage', () => {
 
   it('sends message successfully in active session', async () => {
     mockFindFirst.mockResolvedValue({ id: 'session-1', status: 'active' });
-    mockInsert.mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue([{ id: 'msg-1', content: 'Hello', senderType: 'visitor' }]),
-      }),
-    });
+    mockTxReturning.mockResolvedValue([{ id: 'msg-1', content: 'Hello', senderType: 'visitor' }]);
 
     const result = await sendMessage({
       sessionId: 'session-1', tenantId: 'tenant-1',
@@ -192,16 +197,8 @@ describe('Chat - sendMessage', () => {
 
   it('sends agent message and moves waiting session to active', async () => {
     mockFindFirst.mockResolvedValue({ id: 'session-1', status: 'waiting' });
-    mockInsert.mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue([{ id: 'msg-1', content: 'Hi there!', senderType: 'agent' }]),
-      }),
-    });
-    mockUpdate.mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([]),
-      }),
-    });
+    mockTxReturning.mockResolvedValue([{ id: 'msg-1', content: 'Hi there!', senderType: 'agent' }]);
+    mockTxSet.mockReturnValue({ where: vi.fn().mockResolvedValue([]) });
 
     const result = await sendMessage({
       sessionId: 'session-1', tenantId: 'tenant-1',
@@ -209,16 +206,12 @@ describe('Chat - sendMessage', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(mockUpdate).toHaveBeenCalled();
+    expect(mockTxUpdate).toHaveBeenCalled();
   });
 
   it('sends message with optional senderId', async () => {
     mockFindFirst.mockResolvedValue({ id: 'session-1', status: 'active' });
-    mockInsert.mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue([{ id: 'msg-1', senderId: 'agent-1' }]),
-      }),
-    });
+    mockTxReturning.mockResolvedValue([{ id: 'msg-1', senderId: 'agent-1' }]);
 
     const result = await sendMessage({
       sessionId: 'session-1', tenantId: 'tenant-1',
@@ -295,16 +288,8 @@ describe('Chat - convertChatToLead', () => {
     mockFindFirst.mockResolvedValue({
       id: 'session-1', visitorName: 'Jane Doe', visitorEmail: 'jane@example.com', convertedLeadId: null,
     });
-    mockInsert.mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue([{ id: 'contact-1' }]),
-      }),
-    });
-    mockUpdate.mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([]),
-      }),
-    });
+    mockTxReturning.mockResolvedValue([{ id: 'contact-1' }]);
+    mockTxSet.mockReturnValue({ where: vi.fn().mockResolvedValue([]) });
 
     const result = await convertChatToLead('session-1', 'tenant-1');
 
@@ -337,16 +322,8 @@ describe('Chat - convertChatToLead', () => {
     mockFindFirst.mockResolvedValue({
       id: 'session-1', visitorName: null, visitorEmail: null, convertedLeadId: null,
     });
-    mockInsert.mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue([{ id: 'contact-2' }]),
-      }),
-    });
-    mockUpdate.mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([]),
-      }),
-    });
+    mockTxReturning.mockResolvedValue([{ id: 'contact-2' }]);
+    mockTxSet.mockReturnValue({ where: vi.fn().mockResolvedValue([]) });
 
     const result = await convertChatToLead('session-1', 'tenant-1');
 

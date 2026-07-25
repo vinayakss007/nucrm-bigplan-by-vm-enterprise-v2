@@ -249,27 +249,31 @@ export async function createSigningRequest(input: CreateSigningRequestInput): Pr
   // Create request with provider
   const { externalId } = await adapter.createRequest(input);
 
-  // Store in database
-  const [row] = await db.insert(signingRequests).values({
-    tenantId: input.tenantId,
-    documentId: input.documentId,
-    provider: input.provider,
-    status: 'sent',
-    externalId,
-    signers: input.signers,
-    metadata: input.metadata || {},
-  }).returning();
-
-  // Record the sent event for each signer
-  for (const signer of input.signers) {
-    await db.insert(signingEvents).values({
-      requestId: row!.id,
+  // Store in database + record events atomically
+  const [row] = await db.transaction(async (tx) => {
+    const [r] = await tx.insert(signingRequests).values({
       tenantId: input.tenantId,
-      signerEmail: signer.email,
-      event: 'sent',
-      metadata: {},
-    });
-  }
+      documentId: input.documentId,
+      provider: input.provider,
+      status: 'sent',
+      externalId,
+      signers: input.signers,
+      metadata: input.metadata || {},
+    }).returning();
+
+    // Record the sent event for each signer
+    for (const signer of input.signers) {
+      await tx.insert(signingEvents).values({
+        requestId: r!.id,
+        tenantId: input.tenantId,
+        signerEmail: signer.email,
+        event: 'sent',
+        metadata: {},
+      });
+    }
+
+    return [r];
+  });
 
   return {
     id: row!.id,
@@ -327,18 +331,19 @@ export async function handleSigningWebhook(payload: WebhookPayload): Promise<{ u
   // Map event to status
   const newStatus = mapEventToStatus(payload.event);
 
-  // Update request status
-  await db.update(signingRequests)
-    .set({ status: newStatus })
-    .where(eq(signingRequests.id, row.id));
+  // Update request status and record event atomically
+  await db.transaction(async (tx) => {
+    await tx.update(signingRequests)
+      .set({ status: newStatus })
+      .where(eq(signingRequests.id, row.id));
 
-  // Record event
-  await db.insert(signingEvents).values({
-    requestId: row.id,
-    tenantId: row.tenantId,
-    signerEmail: payload.signerEmail || 'unknown',
-    event: payload.event,
-    metadata: payload.metadata || {},
+    await tx.insert(signingEvents).values({
+      requestId: row.id,
+      tenantId: row.tenantId,
+      signerEmail: payload.signerEmail || 'unknown',
+      event: payload.event,
+      metadata: payload.metadata || {},
+    });
   });
 
   return { updated: true };
