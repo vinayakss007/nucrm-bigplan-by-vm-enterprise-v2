@@ -62,24 +62,32 @@ export async function POST(req: NextRequest) {
     const parsed = validateBody(createHierarchySchema, body);
     if (parsed instanceof NextResponse) return parsed;
 
-    const [row] = await db.insert(tenantHierarchy).values({
-      parentTenantId: ctx.tenantId,
-      childTenantId: parsed.data.childTenantId,
-      relationship: parsed.data.relationship,
-    }).returning();
+    let row: typeof tenantHierarchy.$inferSelect | undefined;
 
-    // Add permissions if provided
-    if (parsed.data.permissions && parsed.data.permissions.length > 0 && row) {
-      const allowedPerms = ['view_data', 'manage_users', 'share_contacts', 'aggregate_reports'] as const;
-      for (const perm of parsed.data.permissions) {
-        if (allowedPerms.includes(perm as typeof allowedPerms[number])) {
-          await db.insert(hierarchyPermissions).values({
-            hierarchyId: row.id,
-            permission: perm as typeof allowedPerms[number],
-          });
+    await db.transaction(async (tx) => {
+      const [inserted] = await tx.insert(tenantHierarchy).values({
+        parentTenantId: ctx.tenantId,
+        childTenantId: parsed.data.childTenantId,
+        relationship: parsed.data.relationship,
+      }).returning();
+
+      if (!inserted) throw new Error('Failed to create hierarchy entry');
+
+      // Add permissions if provided
+      if (parsed.data.permissions && parsed.data.permissions.length > 0) {
+        const allowedPerms = ['view_data', 'manage_users', 'share_contacts', 'aggregate_reports'] as const;
+        for (const perm of parsed.data.permissions) {
+          if (allowedPerms.includes(perm as typeof allowedPerms[number])) {
+            await tx.insert(hierarchyPermissions).values({
+              hierarchyId: inserted.id,
+              permission: perm as typeof allowedPerms[number],
+            });
+          }
         }
       }
-    }
+
+      row = inserted;
+    });
 
     return NextResponse.json({ data: row }, { status: 201 });
  
