@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const mockTxReturning = vi.fn();
+const mockTxValues = vi.fn(() => ({ returning: mockTxReturning }));
+const mockTxInsert = vi.fn(() => ({ values: mockTxValues }));
+const mockTxUpdate = vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) }));
+
 vi.mock('@/drizzle/db', () => ({
   db: {
     insert: vi.fn(),
@@ -8,6 +13,9 @@ vi.mock('@/drizzle/db', () => ({
       signingRequests: { findFirst: vi.fn() },
       signingEvents: { findFirst: vi.fn() },
     },
+    transaction: vi.fn(async (cb: (tx: any) => Promise<any>) => {
+      return await cb({ insert: mockTxInsert, update: mockTxUpdate });
+    }),
   },
 }));
 
@@ -258,17 +266,12 @@ describe('E-Signature - createSigningRequest', () => {
   });
 
   it('creates a signing request and returns structured result', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.insert as any).mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue([{
-          id: 'req-1', tenantId: 'tenant-1', documentId: 'doc-1',
-          provider: 'internal', status: 'sent', externalId: 'internal-123',
-          signers: [{ email: 'signer@test.com', name: 'Test Signer' }],
-          metadata: {},
-        }]),
-      }),
-    });
+    mockTxReturning.mockResolvedValue([{
+      id: 'req-1', tenantId: 'tenant-1', documentId: 'doc-1',
+      provider: 'internal', status: 'sent', externalId: 'internal-123',
+      signers: [{ email: 'signer@test.com', name: 'Test Signer' }],
+      metadata: {},
+    }]);
 
     const { createSigningRequest } = await import('@/lib/esignature');
     const result = await createSigningRequest({
@@ -280,21 +283,16 @@ describe('E-Signature - createSigningRequest', () => {
     expect(result.provider).toBe('internal');
     expect(result.status).toBe('sent');
     expect(result.documentId).toBe('doc-1');
-    expect(db.insert).toHaveBeenCalled();
+    expect(mockTxInsert).toHaveBeenCalled();
   });
 
   it('handles multiple signers', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.insert as any).mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue([{
-          id: 'req-2', tenantId: 'tenant-1', documentId: 'doc-2',
-          provider: 'internal', status: 'sent', externalId: 'internal-456',
-          signers: [{ email: 'a@b.com', name: 'A' }, { email: 'c@d.com', name: 'C' }],
-          metadata: {},
-        }]),
-      }),
-    });
+    mockTxReturning.mockResolvedValue([{
+      id: 'req-2', tenantId: 'tenant-1', documentId: 'doc-2',
+      provider: 'internal', status: 'sent', externalId: 'internal-456',
+      signers: [{ email: 'a@b.com', name: 'A' }, { email: 'c@d.com', name: 'C' }],
+      metadata: {},
+    }]);
 
     const { createSigningRequest } = await import('@/lib/esignature');
     const result = await createSigningRequest({
@@ -378,18 +376,6 @@ describe('E-Signature - handleSigningWebhook', () => {
     (db.query.signingRequests.findFirst as any).mockResolvedValue({
       id: 'req-1', tenantId: 'tenant-1', status: 'sent',
     });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.update as any).mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([{ id: 'req-1' }]),
-      }),
-    });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.insert as any).mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue([{ id: 'event-1' }]),
-      }),
-    });
 
     const { handleSigningWebhook } = await import('@/lib/esignature');
     const result = await handleSigningWebhook({
@@ -398,22 +384,14 @@ describe('E-Signature - handleSigningWebhook', () => {
     });
 
     expect(result.updated).toBe(true);
-    expect(db.update).toHaveBeenCalled();
-    expect(db.insert).toHaveBeenCalled();
+    expect(mockTxUpdate).toHaveBeenCalled();
+    expect(mockTxInsert).toHaveBeenCalled();
   });
 
   it('handles viewed webhook event', async () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.query.signingRequests.findFirst as any).mockResolvedValue({
       id: 'req-1', tenantId: 'tenant-1', status: 'sent',
-    });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.update as any).mockReturnValue({
-      set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([]) }),
-    });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.insert as any).mockReturnValue({
-      values: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'ev-1' }]) }),
     });
 
     const { handleSigningWebhook } = await import('@/lib/esignature');
@@ -429,14 +407,6 @@ describe('E-Signature - handleSigningWebhook', () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.query.signingRequests.findFirst as any).mockResolvedValue({
       id: 'req-1', tenantId: 'tenant-1', status: 'sent',
-    });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.update as any).mockReturnValue({
-      set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([]) }),
-    });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.insert as any).mockReturnValue({
-      values: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'ev-2' }]) }),
     });
 
     const { handleSigningWebhook } = await import('@/lib/esignature');

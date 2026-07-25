@@ -67,22 +67,27 @@ export async function sendMessage(options: SendMessageOptions) {
     return { success: false, error: 'Session is closed' };
   }
 
-  const [message] = await db.insert(chatMessages).values({
-    sessionId: options.sessionId,
-    tenantId: options.tenantId,
-    senderType: options.senderType,
-    senderId: options.senderId || null,
-    content: options.content,
-  }).returning();
+  // Insert message and update session status atomically
+  const message = await db.transaction(async (tx) => {
+    const [m] = await tx.insert(chatMessages).values({
+      sessionId: options.sessionId,
+      tenantId: options.tenantId,
+      senderType: options.senderType,
+      senderId: options.senderId || null,
+      content: options.content,
+    }).returning();
 
-  // If session is in 'waiting' and agent sends, move to 'active'
-  if (session.status === 'waiting' && options.senderType === 'agent') {
-    await db.update(chatSessions)
-      .set({ status: 'active' })
-      .where(eq(chatSessions.id, options.sessionId));
-  }
+    // If session is in 'waiting' and agent sends, move to 'active'
+    if (session.status === 'waiting' && options.senderType === 'agent') {
+      await tx.update(chatSessions)
+        .set({ status: 'active' })
+        .where(eq(chatSessions.id, options.sessionId));
+    }
 
-  return { success: true, message: message! };
+    return m!;
+  });
+
+  return { success: true, message };
 }
 
 /**
@@ -150,21 +155,25 @@ export async function convertChatToLead(sessionId: string, tenantId: string) {
     return { success: false, error: 'Session already converted', leadId: session.convertedLeadId };
   }
 
-  // Create a new contact from visitor info
-  const [contact] = await db.insert(contacts).values({
-    tenantId,
-    firstName: session.visitorName || 'Chat Visitor',
-    email: session.visitorEmail || null,
-    leadSource: 'live_chat',
-    leadStatus: 'new',
-  }).returning();
+  // Create contact and update session atomically
+  const contact = await db.transaction(async (tx) => {
+    const [c] = await tx.insert(contacts).values({
+      tenantId,
+      firstName: session.visitorName || 'Chat Visitor',
+      email: session.visitorEmail || null,
+      leadSource: 'live_chat',
+      leadStatus: 'new',
+    }).returning();
 
-  // Update session with converted lead reference
-  await db.update(chatSessions)
-    .set({ convertedLeadId: contact!.id })
-    .where(eq(chatSessions.id, sessionId));
+    // Update session with converted lead reference
+    await tx.update(chatSessions)
+      .set({ convertedLeadId: c!.id })
+      .where(eq(chatSessions.id, sessionId));
 
-  return { success: true, leadId: contact!.id };
+    return c!;
+  });
+
+  return { success: true, leadId: contact.id };
 }
 
 /**

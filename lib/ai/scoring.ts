@@ -98,29 +98,31 @@ Format: {"score": number, "reason": "brief explanation", "factors": {"factor_nam
 
   const finalScore = Math.max(0, Math.min(100, Number(parsed.score) || 0));
 
-  // 6. Persist to DB
-  await db.insert(contactScores)
-    .values({
-      tenantId,
-      contactId,
-      overallScore: finalScore,
-      scoreFactors: parsed.factors || [],
-      lastCalculatedAt: new Date(),
-    })
-    .onConflictDoUpdate({
-      target: [contactScores.contactId],
-      set: {
+  // 6. Persist to DB + sync to contacts atomically
+  await db.transaction(async (tx) => {
+    await tx.insert(contactScores)
+      .values({
+        tenantId,
+        contactId,
         overallScore: finalScore,
         scoreFactors: parsed.factors || [],
         lastCalculatedAt: new Date(),
-        updatedAt: new Date(),
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: [contactScores.contactId],
+        set: {
+          overallScore: finalScore,
+          scoreFactors: parsed.factors || [],
+          lastCalculatedAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
 
-  // 7. Sync back to contacts table for fast list-view access
-  await db.update(contacts)
-    .set({ score: finalScore, updatedAt: new Date() })
-    .where(eq(contacts.id, contactId));
+    // 7. Sync back to contacts table for fast list-view access
+    await tx.update(contacts)
+      .set({ score: finalScore, updatedAt: new Date() })
+      .where(eq(contacts.id, contactId));
+  });
 
   return {
     contactId,
