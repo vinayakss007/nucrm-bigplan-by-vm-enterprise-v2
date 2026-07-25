@@ -31,8 +31,6 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
 
   const color = tenant?.primary_color || '#7c3aed';
 
-  useEffect(() => { setMounted(true); }, []);
-
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (!searchRef.current?.contains(e.target as Node))  setShowDrop(false);

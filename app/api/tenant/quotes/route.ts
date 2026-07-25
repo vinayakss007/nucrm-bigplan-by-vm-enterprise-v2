@@ -101,15 +101,15 @@ export async function POST(request: NextRequest) {
       if (!q) throw new Error('Failed to create quote');
 
       if (items?.length) {
-        const lineItems = items.map((item: { description?: string; quantity?: string | number; unit_price?: string | number; tax_rate?: string | number }, idx: number) => ({
+        const lineItems = items.map((item: { name?: string; description?: string | null; quantity?: number; unit_price?: number; product_id?: string | null; tax_amount?: number | null; discount_amount?: number | null; discount_percent?: number | null }, idx: number) => ({
           quoteId: q.id,
-          productId: null,
+          productId: item.product_id ?? null,
           description: item.description ?? '',
-          quantity: String(item.quantity || 1),
-          unitPrice: String(item.unit_price || 0),
+          quantity: String(item.quantity ?? 1),
+          unitPrice: String(item.unit_price ?? 0),
           discountPercent: '0',
-          taxPercent: String(item.tax_rate || 0),
-          total: String(((parseFloat(String(item.quantity)) || 1) * (parseFloat(String(item.unit_price)) || 0)).toFixed(2)),
+          taxPercent: String(item.tax_amount ?? 0),
+          total: String(((item.quantity ?? 1) * (item.unit_price ?? 0)).toFixed(2)),
           sortOrder: idx,
         } as typeof quoteLineItems.$inferInsert));
         await tx.insert(quoteLineItems).values(lineItems as typeof quoteLineItems.$inferInsert[]);
