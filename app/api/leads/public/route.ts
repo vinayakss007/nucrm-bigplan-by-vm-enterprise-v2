@@ -127,34 +127,34 @@ export async function POST(request: NextRequest) {
       
       contactId = updated?.id ?? existingLead.id;
     } else {
-      // Create new lead record
-      const [newLead] = await db.insert(leads).values({
-        tenantId: tenant_id,
-        firstName: first_name?.trim() || '',
-        lastName: last_name?.trim() || '',
-        email: email.trim().toLowerCase(),
-        phone: phone?.trim() || null,
-        companyName: company?.trim() || null,
-        companyId: company_id,
-        source: source,
-        leadStatus: 'new',
-        notes: message?.trim() || null,
-        formId: form_id || null,
-        tags: Array.isArray(tags) ? tags : [],
-        formSubmissionsCount: 1,
-        lastActivityAt: new Date(),
-      }).returning({ id: leads.id });
-      
-      if (!newLead) throw new Error('Failed to create lead');
-      contactId = newLead.id;
+      await db.transaction(async (tx) => {
+        const [newLead] = await tx.insert(leads).values({
+          tenantId: tenant_id,
+          firstName: first_name?.trim() || '',
+          lastName: last_name?.trim() || '',
+          email: email.trim().toLowerCase(),
+          phone: phone?.trim() || null,
+          companyName: company?.trim() || null,
+          companyId: company_id,
+          source: source,
+          leadStatus: 'new',
+          notes: message?.trim() || null,
+          formId: form_id || null,
+          tags: Array.isArray(tags) ? tags : [],
+          formSubmissionsCount: 1,
+          lastActivityAt: new Date(),
+        }).returning({ id: leads.id });
+        
+        if (!newLead) throw new Error('Failed to create lead');
+        contactId = newLead.id;
 
-      // Log lead activity
-      await db.insert(leadActivities).values({
-        tenantId: tenant_id,
-        leadId: contactId,
-        activityType: 'created',
-        description: `Lead captured via ${source}${form_id ? ` (form: ${form_id})` : ''}`,
-      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+        await tx.insert(leadActivities).values({
+          tenantId: tenant_id,
+          leadId: contactId,
+          activityType: 'created',
+          description: `Lead captured via ${source}${form_id ? ` (form: ${form_id})` : ''}`,
+        });
+      });
     }
 
     // Insert into formSubmissions if form_id provided

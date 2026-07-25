@@ -141,15 +141,31 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       updateData.stageEnteredAt = new Date();
     }
 
-    const [row] = await withConcurrencyGuard(
-      () => db
-        .update(deals)
-        .set(updateData)
-        .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId), eq(deals.updatedAt, prev.updatedAt!), sql`${deals.deletedAt} IS NULL`))
-        .returning(),
-      'Deal',
-      prev.updatedAt!,
-    );
+    const [row] = await db.transaction(async (tx) => {
+      const [r] = await withConcurrencyGuard(
+        () => tx
+          .update(deals)
+          .set(updateData)
+          .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId), eq(deals.updatedAt, prev.updatedAt!), sql`${deals.deletedAt} IS NULL`))
+          .returning(),
+        'Deal',
+        prev.updatedAt!,
+      );
+
+      if (body.stageId && prev.stageId !== body.stageId) {
+        await tx.insert(activities).values({
+          tenantId: ctx.tenantId,
+          userId: ctx.userId,
+          entityId: dealId,
+          entityType: 'deal',
+          eventType: 'deal_update',
+          description: `Deal stage: ${prev.stageId} → ${body.stageId}`,
+          metadata: { stage_from: prev.stageId, stage_to: body.stageId, action: 'stage_change' },
+        });
+      }
+
+      return [r];
+    });
 
     if (body.stageId && prev.stageId !== body.stageId) {
       // Logic for stage change
@@ -162,16 +178,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         entity_id: dealId,
         link: `/tenant/deals/${dealId}`
       } as Parameters<typeof notifyTenantMembers>[0]);
-
-      await db.insert(activities).values({
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        entityId: dealId,
-        entityType: 'deal',
-        eventType: 'deal_update',
-        description: `Deal stage: ${prev.stageId} → ${body.stageId}`,
-        metadata: { stage_from: prev.stageId, stage_to: body.stageId, action: 'stage_change' },
-      }).catch(err => console.error('[deals PATCH] activity log failed:', err));
 
       await logAudit({
         tenantId: ctx.tenantId,

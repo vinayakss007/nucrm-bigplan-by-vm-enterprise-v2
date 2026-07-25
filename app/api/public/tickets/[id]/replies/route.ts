@@ -46,20 +46,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Cannot reply to a closed ticket' }, { status: 409 });
     }
 
-    const [reply] = await db.insert(ticketReplies).values({
-      ticketId: id,
-      tenantId: contact.tenantId,
-      contactId: contact.id,
-      body,
-      isInternal: false,
-    }).returning();
+    const [reply] = await db.transaction(async (tx) => {
+      const [r] = await tx.insert(ticketReplies).values({
+        ticketId: id,
+        tenantId: contact.tenantId,
+        contactId: contact.id,
+        body,
+        isInternal: false,
+      }).returning();
 
-    // Reopen ticket if it was resolved
-    if (ticket.status === 'resolved') {
-      await db.update(supportTickets)
-        .set({ status: 'open', updatedAt: new Date() })
-        .where(eq(supportTickets.id, id));
-    }
+      if (ticket.status === 'resolved') {
+        await tx.update(supportTickets)
+          .set({ status: 'open', updatedAt: new Date() })
+          .where(eq(supportTickets.id, id));
+      }
+
+      return [r];
+    });
 
     return NextResponse.json({ data: reply }, { status: 201 });
   } catch (err) {

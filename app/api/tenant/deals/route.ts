@@ -133,42 +133,44 @@ export async function POST(request: NextRequest) {
     const overLimit = await checkLimit(ctx, 'deals');
     if (overLimit) return overLimit;
 
-    const [deal] = await db.insert(deals)
-      .values({
-        tenantId: ctx.tenantId,
-        createdBy: ctx.userId,
-        title: v.title,
-        amount: amount.toString(),
-        stageId,
-        pipelineId: v.pipeline_id || null,
-        closeDate: v.close_date ? new Date(v.close_date) : null,
-        contactId: v.contact_id || null,
-        assignedTo: v.assigned_to || ctx.userId,
-        metadata: v.metadata,
-      })
-      .returning();
+    const [deal] = await db.transaction(async (tx) => {
+      const [d] = await tx.insert(deals)
+        .values({
+          tenantId: ctx.tenantId,
+          createdBy: ctx.userId,
+          title: v.title,
+          amount: amount.toString(),
+          stageId,
+          pipelineId: v.pipeline_id || null,
+          closeDate: v.close_date ? new Date(v.close_date) : null,
+          contactId: v.contact_id || null,
+          assignedTo: v.assigned_to || ctx.userId,
+          metadata: v.metadata,
+        })
+        .returning();
 
-    if (!deal) throw new Error('Failed to create deal');
+      if (!d) throw new Error('Failed to create deal');
 
-    await db.update(tenants)
-      .set({ currentDeals: sql`${tenants.currentDeals} + 1` })
-      .where(eq(tenants.id, ctx.tenantId))
-      .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      await tx.update(tenants)
+        .set({ currentDeals: sql`${tenants.currentDeals} + 1` })
+        .where(eq(tenants.id, ctx.tenantId));
 
-    // Activity log
-    await db.insert(activities)
-      .values({
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        entityType: 'deal',
-        entityId: deal.id,
-        dealId: deal.id,
-        contactId: v.contact_id || null,
-        eventType: 'deal_update',
-        action: 'create',
-        description: `Created deal "${deal.title}" with amount ${amount}`,
-      })
-      .catch(err => console.error('[deals POST] activity log failed:', err));
+      // Activity log
+      await tx.insert(activities)
+        .values({
+          tenantId: ctx.tenantId,
+          userId: ctx.userId,
+          entityType: 'deal',
+          entityId: d.id,
+          dealId: d.id,
+          contactId: v.contact_id || null,
+          eventType: 'deal_update',
+          action: 'create',
+          description: `Created deal "${d.title}" with amount ${amount}`,
+        });
+
+      return [d];
+    });
 
     if (v.assigned_to && v.assigned_to !== ctx.userId) {
       createNotification({

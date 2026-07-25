@@ -162,18 +162,34 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const [row] = await withConcurrencyGuard(
-      () => db
-        .update(contacts)
-        .set({
-          ...updateData,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId), eq(contacts.updatedAt, existing.updatedAt!), sql`${contacts.deletedAt} IS NULL`))
-        .returning(),
-      'Contact',
-      existing.updatedAt!,
-    );
+    const [row] = await db.transaction(async (tx) => {
+      const [r] = await withConcurrencyGuard(
+        () => tx
+          .update(contacts)
+          .set({
+            ...updateData,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId), eq(contacts.updatedAt, existing.updatedAt!), sql`${contacts.deletedAt} IS NULL`))
+          .returning(),
+        'Contact',
+        existing.updatedAt!,
+      );
+
+      // Activity log
+      await tx.insert(activities).values({
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        contactId: contactId,
+        entityId: contactId,
+        entityType: 'contact',
+        eventType: 'note',
+        description: `Updated contact ${r.firstName} ${r.lastName || ''}`.trim(),
+        action: 'update',
+      });
+
+      return [r];
+    });
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -212,18 +228,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
 
-    // Activity log
-    await db.insert(activities).values({
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      contactId: contactId,
-      entityId: contactId,
-      entityType: 'contact',
-      eventType: 'note',
-      description: `Updated contact ${row.firstName} ${row.lastName || ''}`.trim(),
-      action: 'update',
-    }).catch(err => console.error('[contacts PATCH] activity log failed:', err));
-
     await logAudit({
       tenantId: ctx.tenantId,
       userId: ctx.userId,
@@ -257,29 +261,34 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const contactId = (await params).id;
 
     // SOFT DELETE
-    const [row] = await db
-      .update(contacts)
-      .set({
-        deletedAt: new Date(),
-        deletedBy: ctx.userId,
-        isArchived: true,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(contacts.id, contactId),
-          eq(contacts.tenantId, ctx.tenantId),
-          sql`${contacts.deletedAt} IS NULL`
+    const [row] = await db.transaction(async (tx) => {
+      const [r] = await tx
+        .update(contacts)
+        .set({
+          deletedAt: new Date(),
+          deletedBy: ctx.userId,
+          isArchived: true,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(contacts.id, contactId),
+            eq(contacts.tenantId, ctx.tenantId),
+            sql`${contacts.deletedAt} IS NULL`
+          )
         )
-      )
-      .returning({ id: contacts.id });
+        .returning({ id: contacts.id });
+
+      if (!r) return null as any;
+
+      await tx.update(tenants)
+        .set({ currentContacts: sql`greatest(0, ${tenants.currentContacts} - 1)` })
+        .where(eq(tenants.id, ctx.tenantId));
+
+      return [r];
+    });
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-    await db.update(tenants)
-      .set({ currentContacts: sql`greatest(0, ${tenants.currentContacts} - 1)` })
-      .where(eq(tenants.id, ctx.tenantId))
-      .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     await logAudit({
       tenantId: ctx.tenantId,

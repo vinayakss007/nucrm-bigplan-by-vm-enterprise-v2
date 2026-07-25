@@ -174,31 +174,34 @@ export async function PATCH(
     if (v.custom_fields !== undefined) updateData.customFields = v.custom_fields;
     if (v.score !== undefined) updateData.score = v.score;
 
-    const [updatedLead] = await withConcurrencyGuard(
-      () => db.update(leads)
-        .set(updateData)
-        .where(and(
-          eq(leads.id, id),
-          eq(leads.tenantId, ctx.tenantId),
-          eq(leads.updatedAt, existing.updatedAt!),
-          isNull(leads.deletedAt)
-        ))
-        .returning(),
-      'Lead',
-      existing.updatedAt!,
-    );
-    
-    // Log activity for status changes
-    if (rawBody.lead_status) {
-      await db.insert(leadActivities).values({
-        tenantId: ctx.tenantId,
-        leadId: id,
-        performedBy: ctx.userId,
-        activityType: 'status_change',
-        description: `Lead status changed to ${rawBody.lead_status}`,
-        activityData: { new_status: rawBody.lead_status },
-      });
-    }
+    const [updatedLead] = await db.transaction(async (tx) => {
+      const [lead] = await withConcurrencyGuard(
+        () => tx.update(leads)
+          .set(updateData)
+          .where(and(
+            eq(leads.id, id),
+            eq(leads.tenantId, ctx.tenantId),
+            eq(leads.updatedAt, existing.updatedAt!),
+            isNull(leads.deletedAt)
+          ))
+          .returning(),
+        'Lead',
+        existing.updatedAt!,
+      );
+
+      if (rawBody.lead_status) {
+        await tx.insert(leadActivities).values({
+          tenantId: ctx.tenantId,
+          leadId: id,
+          performedBy: ctx.userId,
+          activityType: 'status_change',
+          description: `Lead status changed to ${rawBody.lead_status}`,
+          activityData: { new_status: rawBody.lead_status },
+        });
+      }
+
+      return [lead];
+    });
 
     fireWebhooks(ctx.tenantId, 'lead.updated', { id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     

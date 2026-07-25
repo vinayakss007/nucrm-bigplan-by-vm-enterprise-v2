@@ -61,33 +61,36 @@ export async function POST(request: NextRequest) {
       'Lead', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost',
     ];
 
-    const [newPipeline] = await db.insert(pipelines).values({
-      tenantId: ctx.tenantId,
-      name: v.pipelineName.trim(),
-      isDefault: true,
-    }).returning();
+    const [newPipeline] = await db.transaction(async (tx) => {
+      const [p] = await tx.insert(pipelines).values({
+        tenantId: ctx.tenantId,
+        name: v.pipelineName.trim(),
+        isDefault: true,
+      }).returning();
 
-    if (newPipeline) {
-      await db.insert(dealStages).values(
-        pipelineStages.map((stage, idx) => ({
-          tenantId: ctx.tenantId,
-          pipelineId: newPipeline.id,
-          name: stage,
-          order: idx,
-        }))
-      );
-    }
+      if (p) {
+        await tx.insert(dealStages).values(
+          pipelineStages.map((stage, idx) => ({
+            tenantId: ctx.tenantId,
+            pipelineId: p.id,
+            name: stage,
+            order: idx,
+          }))
+        );
+      }
 
-    // Mark onboarding as completed
-    await db.insert(onboardingProgress).values({
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      stepName: 'onboarding_complete',
-      isCompleted: true,
-      completedAt: new Date(),
-    }).onConflictDoUpdate({
-      target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
-      set: { isCompleted: true, completedAt: new Date(), updatedAt: new Date() },
+      await tx.insert(onboardingProgress).values({
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        stepName: 'onboarding_complete',
+        isCompleted: true,
+        completedAt: new Date(),
+      }).onConflictDoUpdate({
+        target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
+        set: { isCompleted: true, completedAt: new Date(), updatedAt: new Date() },
+      });
+
+      return [p];
     });
 
     return NextResponse.json({
