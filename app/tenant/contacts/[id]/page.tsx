@@ -54,7 +54,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     })
     .from(activitiesTable)
     .leftJoin(usersTable, eq(usersTable.id, activitiesTable.userId))
-    .where(eq(activitiesTable.contactId, contactId))
+    .where(and(eq(activitiesTable.contactId, contactId), eq(activitiesTable.tenantId, ctx.tenantId)))
     .orderBy(desc(activitiesTable.createdAt))
     .limit(100),
 
@@ -70,6 +70,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     .leftJoin(dealStages, eq(dealStages.id, dealsTable.stageId))
     .where(and(
       eq(dealsTable.contactId, contactId),
+      eq(dealsTable.tenantId, ctx.tenantId),
       sql`${dealsTable.deletedAt} IS NULL`
     ))
     .orderBy(desc(dealsTable.createdAt)),
@@ -89,6 +90,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     .leftJoin(usersTable, eq(usersTable.id, tasksTable.assignedTo))
     .where(and(
       eq(tasksTable.contactId, contactId),
+      eq(tasksTable.tenantId, ctx.tenantId),
       sql`${tasksTable.deletedAt} IS NULL`
     ))
     .orderBy(tasksTable.completed, tasksTable.dueDate),
@@ -106,6 +108,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     .leftJoin(usersTable, eq(usersTable.id, activitiesTable.userId))
     .where(and(
       eq(activitiesTable.contactId, contactId),
+      eq(activitiesTable.tenantId, ctx.tenantId),
       eq(activitiesTable.eventType, 'note') // The old code used n.type = 'note'
     ))
     .orderBy(desc(activitiesTable.createdAt))
@@ -136,11 +139,11 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     (async () => {
       const safe = async <T,>(p: Promise<T>, fallback: T): Promise<T> => p.catch(() => fallback);
       return Promise.all([
-        safe(db.select().from(invoices).where(eq(invoices.contactId, contactId)).orderBy(desc(invoices.createdAt)).limit(50), []),
-        safe(db.select().from(orders).where(eq(orders.contactId, contactId)).orderBy(desc(orders.createdAt)).limit(50), []),
-        safe(db.select().from(contracts).where(eq(contracts.contactId, contactId)).orderBy(desc(contracts.createdAt)).limit(50), []),
-        safe(db.select().from(serviceSubscriptions).where(eq(serviceSubscriptions.contactId, contactId)).orderBy(desc(serviceSubscriptions.createdAt)).limit(50), []),
-        safe(db.select().from(quotes).where(eq(quotes.contactId, contactId)).orderBy(desc(quotes.createdAt)).limit(50), []),
+        safe(db.select().from(invoices).where(and(eq(invoices.contactId, contactId), eq(invoices.tenantId, ctx.tenantId))).orderBy(desc(invoices.createdAt)).limit(50), []),
+        safe(db.select().from(orders).where(and(eq(orders.contactId, contactId), eq(orders.tenantId, ctx.tenantId))).orderBy(desc(orders.createdAt)).limit(50), []),
+        safe(db.select().from(contracts).where(and(eq(contracts.contactId, contactId), eq(contracts.tenantId, ctx.tenantId))).orderBy(desc(contracts.createdAt)).limit(50), []),
+        safe(db.select().from(serviceSubscriptions).where(and(eq(serviceSubscriptions.contactId, contactId), eq(serviceSubscriptions.tenantId, ctx.tenantId))).orderBy(desc(serviceSubscriptions.createdAt)).limit(50), []),
+        safe(db.select().from(quotes).where(and(eq(quotes.contactId, contactId), eq(quotes.tenantId, ctx.tenantId))).orderBy(desc(quotes.createdAt)).limit(50), []),
       ]);
     })(),
 
@@ -156,7 +159,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     })
     .from(callLogs)
     .leftJoin(usersTable, eq(usersTable.id, callLogs.userId))
-    .where(and(eq(callLogs.contactId, contactId), isNull(callLogs.deletedAt)))
+    .where(and(eq(callLogs.contactId, contactId), eq(callLogs.tenantId, ctx.tenantId), isNull(callLogs.deletedAt)))
     .orderBy(desc(callLogs.createdAt))
     .limit(50),
   ]);

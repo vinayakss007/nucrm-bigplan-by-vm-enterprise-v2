@@ -42,7 +42,8 @@ class ConsoleMetricsCollector implements MetricsCollector {
   private buffer: MetricPoint[] = [];
   private writeIndex = 0;
   private count = 0;
-  private testMode = process.env['PROMETHEUS_ENABLED'] !== 'true';
+  private testMode = process.env['PROMETHEUS_ENABLED'] === 'false' || 
+    (process.env['PROMETHEUS_ENABLED'] === undefined && process.env['NODE_ENV'] !== 'production');
 
   private push(point: MetricPoint): void {
     if (this.count < MAX_METRICS) {

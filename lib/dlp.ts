@@ -67,7 +67,7 @@ export interface DlpCheckResult {
 /**
  * Get DLP configuration for a tenant
  */
-export async function getDlpConfig(tenantId?: string): Promise<DlpConfig> {
+export async function getDlpConfig(_tenantId?: string): Promise<DlpConfig> {
   const defaultConfig: DlpConfig = {
     maskSensitiveFields: true,
     logExports: true,
@@ -77,10 +77,12 @@ export async function getDlpConfig(tenantId?: string): Promise<DlpConfig> {
   };
 
   try {
+    // NOTE: systemSettings is a global table (no tenantId column).
+    // DLP config is currently global across all tenants.
+    // To make this tenant-specific, add a tenantId column to systemSettings
+    // and filter here with eq(systemSettings.tenantId, tenantId).
     const setting = await db.query.systemSettings.findFirst({
-      where: tenantId
-        ? eq(systemSettings.key, 'dlp_config')
-        : eq(systemSettings.key, 'dlp_config'),
+      where: eq(systemSettings.key, 'dlp_config'),
       columns: { value: true },
     });
 
