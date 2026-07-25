@@ -40,38 +40,33 @@
 
 ### Phase 4: HIGH — multi-table writes + error handling
 
-| #   | Issue                                                            | Branch                     | PR  | Status  |
-| --- | ---------------------------------------------------------------- | -------------------------- | --- | ------- |
-| 685 | Wrap multi-table writes in db.transaction (8 highest-risk files) | local changes              |     | DONE    |
-| 681 | Replace 35 silent catch blocks with logging                      | `fix/silent-catch-logging` |     | PENDING |
+| #   | Issue                                                            | Branch                     | PR             | Status |
+| --- | ---------------------------------------------------------------- | -------------------------- | -------------- | ------ |
+| 685 | Wrap multi-table writes in db.transaction (8 highest-risk files) | local changes              | #714,#716,#718 | DONE   |
+| 681 | Replace 35 silent catch blocks with logging                      | `fix/silent-catch-logging` | #715           | DONE   |
 
 ### Phase 5: HIGH — security + infrastructure
 
-| #       | Issue                                            | Branch                      | PR  | Status  |
-| ------- | ------------------------------------------------ | --------------------------- | --- | ------- |
-| 662     | SQL injection risk in restore; BigInt overflow   | `fix/sql-injection-restore` |     | PENDING |
-| 652     | Missing rate limiting on PATCH/DELETE/GET        | `fix/rate-limiting-gaps`    |     | PENDING |
-| 657     | CSP unsafe-eval/inline; weak sanitization        | `fix/csp-sanitization`      |     | PENDING |
-| 656     | Docker runs as root; legacy-peer-deps            | `fix/docker-root-hardening` |     | PENDING |
-| 663/659 | S3 backup env mismatch; email rate limits broken | `fix/s3-email-backup`       |     | PENDING |
+| #       | Issue                                            | Branch                      | PR            | Status |
+| ------- | ------------------------------------------------ | --------------------------- | ------------- | ------ |
+| 662     | SQL injection risk in restore; BigInt overflow   | `fix/sql-injection-restore` | #706          | DONE   |
+| 652     | Missing rate limiting on PATCH/DELETE/GET        | `fix/rate-limiting-gaps`    | #713          | DONE   |
+| 657     | CSP unsafe-eval/inline; weak sanitization        | `fix/csp-sanitization`      | #708          | DONE   |
+| 656     | Docker runs as root; legacy-peer-deps            | `fix/docker-root-hardening` | Direct commit | DONE   |
+| 663/659 | S3 backup env mismatch; email rate limits broken | `fix/s3-email-backup`       | Direct commit | DONE   |
 
 ### Phase 6: HIGH — data + UX bugs
 
-| #   | Issue                                             | Branch                     | PR  | Status  |
-| --- | ------------------------------------------------- | -------------------------- | --- | ------- |
-| 665 | Data tables double-fetch; stale selectedIds       | `fix/data-tables-bugs`     |     | PENDING |
-| 664 | Contacts page cross-tenant activities leak        | `fix/contacts-tenant-leak` |     | PENDING |
-| 653 | Metrics never collected; sync file logging blocks | `fix/metrics-logging`      |     | PENDING |
+| #   | Issue                                        | Branch                     | PR            | Status |
+| --- | -------------------------------------------- | -------------------------- | ------------- | ------ |
+| 665 | Data tables double-fetch; stale selectedIds  | `fix/data-tables-bugs`     | #719          | DONE   |
+| 664 | Contacts page cross-tenant activities leak   | `fix/contacts-tenant-leak` | Direct commit | DONE   |
+| 653 | Metrics testMode default; async fs in logger | `fix/metrics-logging`      | Direct commit | DONE   |
 
 ### Phase 7: MEDIUM + LOW
 
-| #   | Issue                                        | Branch                  | PR  | Status  |
-| --- | -------------------------------------------- | ----------------------- | --- | ------- |
-| 683 | Table/column allowlist for dynamic SQL       | `fix/sql-allowlist`     |     | PENDING |
-| 682 | Fix migration journal duplicate idx entries  | `fix/migration-journal` |     | PENDING |
-| 673 | lib/dlp.ts unused tenantId                   | `fix/dlp-tenantid`      |     | PENDING |
-| 684 | Soft-delete on audit_logs + email tracking   | `fix/audit-soft-delete` |     | PENDING |
-| 666 | No API route/E2E auth/tenant isolation tests | `fix/api-e2e-tests`     |     | PENDING |
+| #   | Issue | Branch | PR  | Status |
+| --- | ----- | ------ | --- | ------ |
 
 ---
 
@@ -85,6 +80,11 @@
 | 651     | Encryption fail-open removed; `getEncryptionKey()` added                                    | `fix/encryption-fail-open`                   | Pushed (PR TBD) | 3398 passing    |
 | 648     | SAML/OIDC crypto bypass removed; proxy auth fixed; session invalidation on password reset   | `fix/sso-crypto-bypass-and-auth-hardening`   | Pushed (PR TBD) | 3398 passing    |
 | 649     | Permission checks added (leads, meetings, orders, tasks); ticket replies scoped by tenantId | `fix/permission-checks-tenant-isolation`     | Pushed (PR TBD) | typecheck clean |
+| 666     | API route integration tests (33 tests: auth, permissions, tenant isolation)                 | `fix/api-route-tests-666`                    | #725            | 33/33 passing   |
+| 683     | SQL allowlist for dynamic identifiers (120+ tables)                                         | `fix/sql-allowlist`                          | #720            | typecheck clean |
+| 682     | Migration journal duplicate idx entries fixed (re-indexed 0-33)                             | `fix/migration-journal`                      | #722            | typecheck clean |
+| 673     | DLP tenantId dead code removed                                                              | `fix/dlp-tenantid`                           | Direct commit   | typecheck clean |
+| 684     | Soft-delete on email_opens/email_clicks + audit_logs filtered                               | `fix/audit-soft-delete`                      | #721            | typecheck clean |
 
 ## False Positives / Won't Fix
 
