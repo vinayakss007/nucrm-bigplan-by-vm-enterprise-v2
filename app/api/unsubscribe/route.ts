@@ -19,44 +19,47 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Set do_not_contact
-    const [contact] = await db.update(contacts)
-      .set({ 
-        doNotContact: true, 
-        updatedAt: new Date() 
-      })
-      .where(and(
-        eq(contacts.id, contactId), 
-        isNull(contacts.deletedAt)
-      ))
-      .returning({ 
-        id: contacts.id, 
-        firstName: contacts.firstName, 
-        tenantId: contacts.tenantId 
+    const [contact] = await db.transaction(async (tx) => {
+      const [c] = await tx.update(contacts)
+        .set({ 
+          doNotContact: true, 
+          updatedAt: new Date() 
+        })
+        .where(and(
+          eq(contacts.id, contactId), 
+          isNull(contacts.deletedAt)
+        ))
+        .returning({ 
+          id: contacts.id, 
+          firstName: contacts.firstName, 
+          tenantId: contacts.tenantId 
+        });
+
+      if (!c) return null as any;
+
+      await tx.update(sequenceEnrollments)
+        .set({ status: 'cancelled' })
+        .where(and(
+          eq(sequenceEnrollments.contactId, contactId), 
+          eq(sequenceEnrollments.status, 'active')
+        ));
+
+      await tx.insert(activities).values({
+        tenantId: c.tenantId,
+        contactId: contactId,
+        eventType: 'note',
+        description: 'Unsubscribed via email link — do not contact flag set',
+        entityType: 'contact',
+        entityId: contactId,
+        action: 'unsubscribe'
       });
+
+      return [c];
+    });
 
     if (!contact) {
       return new NextResponse('Contact not found', { status: 404 });
     }
-
-    // Cancel all sequence enrollments for this contact
-    await db.update(sequenceEnrollments)
-      .set({ status: 'cancelled' })
-      .where(and(
-        eq(sequenceEnrollments.contactId, contactId), 
-        eq(sequenceEnrollments.status, 'active')
-      ));
-
-    // Log activity
-    await db.insert(activities).values({
-      tenantId: contact.tenantId,
-      contactId: contactId,
-      eventType: 'note',
-      description: 'Unsubscribed via email link — do not contact flag set',
-      entityType: 'contact',
-      entityId: contactId,
-      action: 'unsubscribe'
-    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     // Return a clean HTML page
     return new NextResponse(

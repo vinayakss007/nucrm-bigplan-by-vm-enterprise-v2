@@ -41,13 +41,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     } catch { /* no body is fine */ }
 
     const now = new Date();
-    await db
-      .update(quotes)
-      .set({ status: 'declined', declinedAt: now, updatedAt: now })
-      .where(eq(quotes.id, quote.id));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(quotes)
+        .set({ status: 'declined', declinedAt: now, updatedAt: now })
+        .where(eq(quotes.id, quote.id));
 
-    try {
-      await db.insert(activities).values({
+      await tx.insert(activities).values({
         tenantId: quote.tenantId,
         userId: null,
         entityType: 'quote',
@@ -58,9 +58,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         description: `Client declined quote "${quote.title}"${reason ? ` — ${reason}` : ''}`,
         metadata: { quote_id: quote.id, decline_reason: reason, email },
       });
-    } catch (err) {
-      console.warn('[portal/quotes/decline] activity insert failed:', (err as Error).message);
-    }
+    });
 
     await logAudit({
       tenantId: quote.tenantId,

@@ -40,13 +40,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const now = new Date();
-    await db
-      .update(quotes)
-      .set({ status: 'accepted', acceptedAt: now, updatedAt: now })
-      .where(eq(quotes.id, quote.id));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(quotes)
+        .set({ status: 'accepted', acceptedAt: now, updatedAt: now })
+        .where(eq(quotes.id, quote.id));
 
-    try {
-      await db.insert(activities).values({
+      await tx.insert(activities).values({
         tenantId: quote.tenantId,
         userId: null,
         entityType: 'quote',
@@ -57,9 +57,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         description: `Client accepted quote "${quote.title}"`,
         metadata: { quote_id: quote.id, total_amount: quote.totalAmount, accepted_by_email: email },
       });
-    } catch (err) {
-      console.warn('[portal/quotes/accept] activity insert failed:', (err as Error).message);
-    }
+    });
 
     await logAudit({
       tenantId: quote.tenantId,

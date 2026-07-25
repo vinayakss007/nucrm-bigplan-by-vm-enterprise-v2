@@ -132,34 +132,35 @@ export async function PATCH(req: NextRequest) {
         eq(tenantMembers.status, 'active')
       ));
 
-    // Optional: sweep open records to delegate immediately.
     let reassigned = { leads: 0, contacts: 0, deals: 0, tasks: 0 };
     if (enabled && autoReassign && delegate) {
       const now = new Date();
-      const r1 = await db.update(leads)
-        .set({ assignedTo: delegate, updatedAt: now })
-        .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.assignedTo, ctx.userId), sql`${leads.deletedAt} IS NULL`));
-      const r2 = await db.update(contacts)
-        .set({ assignedTo: delegate, updatedAt: now })
-        .where(and(eq(contacts.tenantId, ctx.tenantId), eq(contacts.assignedTo, ctx.userId), sql`${contacts.deletedAt} IS NULL`));
-      const r3 = await db.update(deals)
-        .set({ assignedTo: delegate, updatedAt: now, updatedBy: ctx.userId })
-        .where(and(eq(deals.tenantId, ctx.tenantId), eq(deals.assignedTo, ctx.userId), sql`${deals.deletedAt} IS NULL`));
-      const r4 = await db.update(tasks)
-        .set({ assignedTo: delegate, updatedAt: now, updatedBy: ctx.userId })
-        .where(and(
-          eq(tasks.tenantId, ctx.tenantId),
-          eq(tasks.assignedTo, ctx.userId),
-          sql`${tasks.deletedAt} IS NULL`,
-          sql`${tasks.completed} = false`
-        ));
+      await db.transaction(async (tx) => {
+        const r1 = await tx.update(leads)
+          .set({ assignedTo: delegate, updatedAt: now })
+          .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.assignedTo, ctx.userId), sql`${leads.deletedAt} IS NULL`));
+        const r2 = await tx.update(contacts)
+          .set({ assignedTo: delegate, updatedAt: now })
+          .where(and(eq(contacts.tenantId, ctx.tenantId), eq(contacts.assignedTo, ctx.userId), sql`${contacts.deletedAt} IS NULL`));
+        const r3 = await tx.update(deals)
+          .set({ assignedTo: delegate, updatedAt: now, updatedBy: ctx.userId })
+          .where(and(eq(deals.tenantId, ctx.tenantId), eq(deals.assignedTo, ctx.userId), sql`${deals.deletedAt} IS NULL`));
+        const r4 = await tx.update(tasks)
+          .set({ assignedTo: delegate, updatedAt: now, updatedBy: ctx.userId })
+          .where(and(
+            eq(tasks.tenantId, ctx.tenantId),
+            eq(tasks.assignedTo, ctx.userId),
+            sql`${tasks.deletedAt} IS NULL`,
+            sql`${tasks.completed} = false`
+          ));
 
-      reassigned = {
-        leads:    r1.rowCount ?? 0,
-        contacts: r2.rowCount ?? 0,
-        deals:    r3.rowCount ?? 0,
-        tasks:    r4.rowCount ?? 0,
-      };
+        reassigned = {
+          leads:    r1.rowCount ?? 0,
+          contacts: r2.rowCount ?? 0,
+          deals:    r3.rowCount ?? 0,
+          tasks:    r4.rowCount ?? 0,
+        };
+      });
 
       await logAudit({
         tenantId: ctx.tenantId, userId: ctx.userId,
