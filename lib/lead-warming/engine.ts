@@ -358,20 +358,27 @@ async function sendWarmingMessage(
       tenantId: campaign.tenantId,
     });
 
-    // Record the message
-    await db.insert(leadWarmingMessages).values({
-      tenantId: campaign.tenantId,
-      campaignId: campaign.id,
-      contactId: contact.id,
-      eventId: event.id || null,
-      channel: 'email',
-      subject: message.subject,
-      body: message.body,
-      aiGenerated: campaign.aiGenerateMessages,
-      aiModel: message.model || null,
-      status: 'queued',
-      eventName: event.name,
-      personalizedFor: event.name,
+    // Record message + schedule + stats atomically
+    await db.transaction(async (tx) => {
+      await tx.insert(leadWarmingMessages).values({
+        tenantId: campaign.tenantId,
+        campaignId: campaign.id,
+        contactId: contact.id,
+        eventId: event.id || null,
+        channel: 'email',
+        subject: message.subject,
+        body: message.body,
+        aiGenerated: campaign.aiGenerateMessages,
+        aiModel: message.model || null,
+        status: 'queued',
+        eventName: event.name,
+        personalizedFor: event.name,
+      });
+
+      await upsertWarmingSchedule(tx, campaign, contact);
+      await tx.update(leadWarmingCampaigns)
+        .set({ totalSent: sql`${leadWarmingCampaigns.totalSent} + 1`, updatedAt: new Date() })
+        .where(eq(leadWarmingCampaigns.id, campaign.id));
     });
 
     result.messagesQueued++;
@@ -388,27 +395,39 @@ async function sendWarmingMessage(
       eventName: event.name,
     });
 
-    await db.insert(leadWarmingMessages).values({
-      tenantId: campaign.tenantId,
-      campaignId: campaign.id,
-      contactId: contact.id,
-      eventId: event.id || null,
-      channel: 'whatsapp',
-      body: message.body,
-      templateUsed: event.defaultWhatsappTemplate || null,
-      aiGenerated: campaign.aiGenerateMessages,
-      aiModel: message.model || null,
-      status: 'queued',
-      eventName: event.name,
-      personalizedFor: event.name,
+    await db.transaction(async (tx) => {
+      await tx.insert(leadWarmingMessages).values({
+        tenantId: campaign.tenantId,
+        campaignId: campaign.id,
+        contactId: contact.id,
+        eventId: event.id || null,
+        channel: 'whatsapp',
+        body: message.body,
+        templateUsed: event.defaultWhatsappTemplate || null,
+        aiGenerated: campaign.aiGenerateMessages,
+        aiModel: message.model || null,
+        status: 'queued',
+        eventName: event.name,
+        personalizedFor: event.name,
+      });
+
+      await upsertWarmingSchedule(tx, campaign, contact);
+      await tx.update(leadWarmingCampaigns)
+        .set({ totalSent: sql`${leadWarmingCampaigns.totalSent} + 1`, updatedAt: new Date() })
+        .where(eq(leadWarmingCampaigns.id, campaign.id));
     });
 
     result.messagesQueued++;
   }
+}
 
-  // Update schedule (cooldown tracking)
+async function upsertWarmingSchedule(
+  tx: typeof db,
+  campaign: { cooldownDays?: number; tenantId: string },
+  contact: { id: string },
+): Promise<void> {
   const cooldownDays = campaign.cooldownDays || 7;
-  await db.insert(leadWarmingSchedule)
+  await tx.insert(leadWarmingSchedule)
     .values({
       tenantId: campaign.tenantId,
       contactId: contact.id,
@@ -428,11 +447,6 @@ async function sendWarmingMessage(
         updatedAt: new Date(),
       },
     });
-
-  // Update campaign stats
-  await db.update(leadWarmingCampaigns)
-    .set({ totalSent: sql`${leadWarmingCampaigns.totalSent} + 1`, updatedAt: new Date() })
-    .where(eq(leadWarmingCampaigns.id, campaign.id));
 }
 
 // ── Birthday Campaigns ────────────────────────────────────────────────────

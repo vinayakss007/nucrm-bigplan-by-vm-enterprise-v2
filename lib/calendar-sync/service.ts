@@ -49,37 +49,39 @@ export async function saveIntegrationConfig(
     lastSyncAt: new Date().toISOString(),
   };
 
-  const [existing] = await db
-    .select({ id: integrations.id })
-    .from(integrations)
-    .where(
-      and(
-        eq(integrations.tenantId, tenantId),
-        eq(integrations.type, providerType),
-        isNull(integrations.deletedAt)
+  await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ id: integrations.id })
+      .from(integrations)
+      .where(
+        and(
+          eq(integrations.tenantId, tenantId),
+          eq(integrations.type, providerType),
+          isNull(integrations.deletedAt)
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  if (existing) {
-    await db
-      .update(integrations)
-      .set({
+    if (existing) {
+      await tx
+        .update(integrations)
+        .set({
+          config,
+          isActive: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(integrations.id, existing.id));
+    } else {
+      await tx.insert(integrations).values({
+        tenantId,
+        userId,
+        type: providerType,
+        name: providerType === 'google' ? 'Google Calendar' : 'Outlook Calendar',
         config,
         isActive: true,
-        updatedAt: new Date(),
-      })
-      .where(eq(integrations.id, existing.id));
-  } else {
-    await db.insert(integrations).values({
-      tenantId,
-      userId,
-      type: providerType,
-      name: providerType === 'google' ? 'Google Calendar' : 'Outlook Calendar',
-      config,
-      isActive: true,
-    });
-  }
+      });
+    }
+  });
 }
 
 export async function syncCalendarEvents(
@@ -128,56 +130,70 @@ export async function syncCalendarEvents(
       .map(m => [m.externalId, m])
   );
 
-  // Create or update events from external calendar
-  for (const event of externalEvents) {
-    try {
-      const existing = existingByExternal.get(event.externalId!);
-      if (existing) {
-        // Update if changed
-        await db
-          .update(meetings)
-          .set({
+  // Sync events + integration config atomically
+  try {
+    await db.transaction(async (tx) => {
+      for (const event of externalEvents) {
+        const existing = existingByExternal.get(event.externalId!);
+        if (existing) {
+          await tx.update(meetings)
+            .set({
+              title: event.title,
+              description: event.description || null,
+              startTime: event.startTime,
+              endTime: event.endTime || null,
+              location: event.location || null,
+              meetingUrl: event.meetingUrl || null,
+              updatedAt: new Date(),
+            })
+            .where(eq(meetings.id, existing.id));
+          result.updated++;
+        } else {
+          await tx.insert(meetings).values({
+            tenantId,
+            userId,
             title: event.title,
             description: event.description || null,
             startTime: event.startTime,
             endTime: event.endTime || null,
             location: event.location || null,
             meetingUrl: event.meetingUrl || null,
-            updatedAt: new Date(),
-          })
-          .where(eq(meetings.id, existing.id));
-        result.updated++;
-      } else {
-        // Create new
-        await db.insert(meetings).values({
-          tenantId,
-          userId,
-          title: event.title,
-          description: event.description || null,
-          startTime: event.startTime,
-          endTime: event.endTime || null,
-          location: event.location || null,
-          meetingUrl: event.meetingUrl || null,
-          status: 'scheduled',
-          externalId: event.externalId,
-          syncProvider: providerType,
-          syncDirection: 'inbound',
-          syncedAt: new Date(),
-        });
-        result.created++;
+            status: 'scheduled',
+            externalId: event.externalId,
+            syncProvider: providerType,
+            syncDirection: 'inbound',
+            syncedAt: new Date(),
+          });
+          result.created++;
+        }
       }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      result.errors.push(`Failed to sync event "${event.title}": ${message}`);
-    }
-  }
 
-  // Update last sync time
-  await saveIntegrationConfig(tenantId, userId, providerType, {
-    accessToken,
-    refreshToken: config.refreshToken as string,
-    expiresAt: config.expiresAt ? new Date(config.expiresAt as string) : undefined,
-  }, config.calendarId as string);
+      // Update integration config
+      const [existing] = await tx
+        .select({ id: integrations.id })
+        .from(integrations)
+        .where(and(eq(integrations.tenantId, tenantId), eq(integrations.type, providerType), isNull(integrations.deletedAt)))
+        .limit(1);
+
+      const integrationConfig = {
+        accessToken,
+        refreshToken: config.refreshToken as string,
+        expiresAt: config.expiresAt ? new Date(config.expiresAt as string).toISOString() : undefined,
+        calendarId: config.calendarId || 'primary',
+        syncEnabled: true,
+        lastSyncAt: new Date().toISOString(),
+      };
+
+      if (existing) {
+        await tx.update(integrations)
+          .set({ config: integrationConfig, isActive: true, updatedAt: new Date() })
+          .where(eq(integrations.id, existing.id));
+      }
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    result.errors.push(`Transaction failed: ${message}`);
+  }
 
   return result;
 }

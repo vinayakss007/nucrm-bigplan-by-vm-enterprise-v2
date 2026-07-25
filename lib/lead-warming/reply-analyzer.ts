@@ -319,23 +319,7 @@ export async function processIncomingReply(input: ProcessReplyInput): Promise<Re
       ? [contact.firstName, contact.lastName].filter(Boolean).join(' ')
       : undefined;
 
-    // 3. Store the reply record
-    const [replyRecord] = await db.insert(leadWarmingReplies)
-      .values({
-        tenantId: input.tenantId,
-        messageId: input.messageId,
-        campaignId: originalMessage.campaignId,
-        contactId: originalMessage.contactId,
-        channel: input.channel,
-        replyContent: input.replyContent,
-        receivedAt: new Date(),
-        aiAnalyzed: false,
-      })
-      .returning();
-
-    if (!replyRecord) return null;
-
-    // 4. Run AI analysis
+    // 3. Run AI analysis (before transaction — external API call)
     const analysis = await analyzeReply({
       tenantId: input.tenantId,
       replyContent: input.replyContent,
@@ -344,24 +328,48 @@ export async function processIncomingReply(input: ProcessReplyInput): Promise<Re
       channel: input.channel,
     });
 
-    // 5. Update reply record with analysis
-    await db.update(leadWarmingReplies)
-      .set({
-        aiAnalyzed: true,
-        aiAnalyzedAt: new Date(),
-        intent: analysis.intent,
-        intentConfidence: analysis.intentConfidence,
-        sentiment: analysis.sentiment,
-        sentimentScore: analysis.sentimentScore,
-        aiSummary: analysis.summary,
-        aiSuggestedAction: analysis.suggestedAction,
-        aiExtractedEntities: analysis.extractedEntities,
-        requiresFollowUp: analysis.requiresFollowUp,
-        updatedAt: new Date(),
-      })
-      .where(eq(leadWarmingReplies.id, replyRecord.id));
+    // 4-8. Store reply, update analysis, campaign stats, and handle intents atomically
+    await db.transaction(async (tx) => {
+      const [replyRecord] = await tx.insert(leadWarmingReplies)
+        .values({
+          tenantId: input.tenantId,
+          messageId: input.messageId,
+          campaignId: originalMessage.campaignId,
+          contactId: originalMessage.contactId,
+          channel: input.channel,
+          replyContent: input.replyContent,
+          receivedAt: new Date(),
+          aiAnalyzed: true,
+          aiAnalyzedAt: new Date(),
+          intent: analysis.intent,
+          intentConfidence: analysis.intentConfidence,
+          sentiment: analysis.sentiment,
+          sentimentScore: analysis.sentimentScore,
+          aiSummary: analysis.summary,
+          aiSuggestedAction: analysis.suggestedAction,
+          aiExtractedEntities: analysis.extractedEntities,
+          requiresFollowUp: analysis.requiresFollowUp,
+        })
+        .returning();
 
-    // 6. Propagate sentiment to linked deals
+      if (!replyRecord) return null;
+
+      // Update campaign stats
+      await tx.update(leadWarmingCampaigns)
+        .set({
+          totalReplies: sql`${leadWarmingCampaigns.totalReplies} + 1`,
+          ...(analysis.intent === 'interested'
+            ? { totalPositiveIntent: sql`${leadWarmingCampaigns.totalPositiveIntent} + 1` }
+            : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(leadWarmingCampaigns.id, originalMessage.campaignId));
+
+      // Handle intent actions within the same transaction
+      await handleIntentActions(tx, input.tenantId, replyRecord.id, originalMessage, contact, analysis);
+    });
+
+    // Propagate sentiment to linked deals (separate — involves external API)
     try {
       const mappedScore = clamp((analysis.sentimentScore + 100) / 2, 0, 100);
       const updatedCount = await updateContactDealsSentiment(
@@ -377,26 +385,12 @@ export async function processIncomingReply(input: ProcessReplyInput): Promise<Re
       if (updatedCount > 0) {
         console.log(`[lead-warming] Updated sentiment on ${updatedCount} deal(s) for contact ${originalMessage.contactId}`);
       }
- 
- 
+  
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('[lead-warming] Failed to update deal sentiment:', err.message);
     }
-
-    // 7. Update campaign stats
-    await db.update(leadWarmingCampaigns)
-      .set({
-        totalReplies: sql`${leadWarmingCampaigns.totalReplies} + 1`,
-        ...(analysis.intent === 'interested'
-          ? { totalPositiveIntent: sql`${leadWarmingCampaigns.totalPositiveIntent} + 1` }
-          : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(leadWarmingCampaigns.id, originalMessage.campaignId));
-
-    // 8. Handle specific intents
-    await handleIntentActions(input.tenantId, replyRecord.id, originalMessage, contact, analysis);
 
     return analysis;
  
@@ -412,10 +406,10 @@ export async function processIncomingReply(input: ProcessReplyInput): Promise<Re
  * Execute actions based on detected intent
  */
 async function handleIntentActions(
+  tx: typeof db,
   tenantId: string,
   replyId: string,
- 
- 
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   originalMessage: any,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -424,7 +418,7 @@ async function handleIntentActions(
 ): Promise<void> {
   const ownerUserId = contact?.assignedTo;
 
-  // Notify owner on positive intent
+  // Notify owner on positive intent (notification outside transaction — non-critical)
   if (analysis.intent === 'interested' && ownerUserId) {
     const contactName = [contact?.firstName, contact?.lastName].filter(Boolean).join(' ') || 'A contact';
     await createNotification({
@@ -436,10 +430,55 @@ async function handleIntentActions(
       link: `/tenant/contacts/${contact.id}`,
     });
 
-    await db.update(leadWarmingReplies)
+    await tx.update(leadWarmingReplies)
       .set({ ownerNotified: true, notifiedAt: new Date() })
       .where(eq(leadWarmingReplies.id, replyId));
   }
+
+  // Create follow-up task for actionable intents
+  if (analysis.requiresFollowUp && ownerUserId) {
+    const contactName = [contact?.firstName, contact?.lastName].filter(Boolean).join(' ') || 'Contact';
+    const dueDateMap: Record<string, number> = {
+      interested: 1,    // Follow up within 1 day
+      question: 1,      // Answer within 1 day
+      ask_later: 14,    // Follow up in 2 weeks
+    };
+    const daysUntilDue = dueDateMap[analysis.intent] ?? 3;
+
+    const [task] = await tx.insert(tasks).values({
+      tenantId,
+      title: `Follow up: ${contactName} — ${analysis.suggestedAction}`,
+      description: `Reply analysis: ${analysis.summary}\n\nSuggested action: ${analysis.suggestedAction}\n\nOriginal reply:\n${originalMessage.body?.slice(0, 200)}`,
+      assignedTo: ownerUserId,
+      contactId: contact.id,
+      priority: analysis.intent === 'interested' ? 'high' : 'medium',
+      dueDate: new Date(Date.now() + daysUntilDue * 86400000),
+      completed: false,
+    }).returning({ id: tasks.id });
+
+    if (task) {
+      await tx.update(leadWarmingReplies)
+        .set({ followUpCreated: true, followUpTaskId: task.id })
+        .where(eq(leadWarmingReplies.id, replyId));
+    }
+  }
+
+  // Handle unsubscribe: opt out from all campaigns
+  if (analysis.intent === 'unsubscribe') {
+    const { leadWarmingSchedule } = await import('@/drizzle/schema/lead-warming');
+    await tx.update(leadWarmingSchedule)
+      .set({
+        optedOut: true,
+        optedOutAt: new Date(),
+        optOutReason: 'Replied with unsubscribe intent',
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(leadWarmingSchedule.tenantId, tenantId),
+        eq(leadWarmingSchedule.contactId, originalMessage.contactId)
+      ));
+  }
+}
 
   // Create follow-up task for actionable intents
   if (analysis.requiresFollowUp && ownerUserId) {

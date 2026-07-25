@@ -42,25 +42,30 @@ Handles anything marked CRITICAL, security-related, or infrastructure stability:
 
 | # | Issue | Effort | Status |
 |---|-------|--------|--------|
-| #396 | Revoke exposed Telegram bot token + rotate | Small | Open |
-| #428 | Module-aware sidebar — only show nav for installed modules | Medium | Open |
-| #432 | Tenant-level audit log page + API | Medium | Open |
-| #216 | Pre-Phase-4 Security/Fix tracker | Large | Open |
+| #680 | Add optimistic concurrency guard on all entity updates | Large | Open |
+| #685 | Wrap remaining 36 multi-table writes in db.transaction() | Large | ✅ Batch 1 in PR #714 |
+| #667 | Fix 75 expect(true).toBe(true) assertions + E2E test cleanup | Medium | Open |
+| #661 | Fix audit filters, session invalidation, notification delivery | Medium | Open |
+| #658 | Fix deal creation (stage_name vs stage), tax rate, custom fields | Medium | Open |
+| #666 | Add API route tests, E2E auth tests, tenant isolation tests | Large | Open |
+| #663 | Fix S3 backup env var mismatch, email rate limits, audit hash race | Medium | Open |
+| #656 | Fix Docker: root user, legacy-peer-deps, .dockerignore, standalone | Medium | Open |
+| #653 | Fix metrics collection, sync file logging, Grafana labels | Medium | Open |
+| #652 | Add rate limiting on PATCH/DELETE/GET endpoints | Medium | Open |
+| #657 | Fix CSP unsafe-eval/inline, missing X-Powered-By, sanitization | Medium | Open |
+| #683 | Add table/column allowlist for dynamic SQL identifiers | Medium | Open |
+| #682 | Fix migration journal — duplicate idx entries and gaps | Medium | Open |
+| #688 | Agent Task Division epic — track & coordinate | Epic | Open |
 
-### Agent 2 = Features / Enhancements
-Handles high/medium priority feature work:
+### Agent 2 = Features / Enhancements / UI
+Handles high/medium priority feature work, frontend, and UX issues:
 
 | # | Issue | Effort | Status |
 |---|-------|--------|--------|
-| #445 | Subscription self-service portal | Medium | ✅ Done (PR #594) |
-| #439 | Dunning workflow | Medium | ✅ Done (PR #595) |
-| #483 | Workflow automation gap analysis + executor | Medium | ✅ Done (PR #597) |
-| #479 | Undo/redo in workflow builder | Small | ✅ Done (PR #597) |
-| #471 | Import/export wizards (CSV/XLSX) | Medium | ✅ Done (PR #597) |
-| #470 | Calendar sync (Google/Outlook) | Medium | ✅ Done (PR #597) |
-| #467 | API documentation expanded | Medium | ✅ Done (PR #597) |
-| #458 | Email template drag-and-drop editor | Large | ✅ Done (PR #597) |
-| #449 | Customer portal pages + auth | Large | ✅ Done (PR #597) |
+| #665 | Fix data tables double-fetch on search, stale selectedIds | Medium | Open |
+| #664 | Fix contacts page wasted DB query, cross-tenant leak, layout | Medium | Open |
+| #655 | Fix API response format inconsistency, accessibility gaps | Medium | Open |
+| #654 | Add loading.tsx (126 pages) and error.tsx (94 pages) | Large | Open |
 | #440 | Quote/invoice email-send + PDF download | Medium | Open |
 | #431 | Quote-to-invoice conversion + PDF generation | Medium | Open |
 | #433 | Contract renewal reminders + expiry automation | Medium | Open |
@@ -73,6 +78,7 @@ Handles high/medium priority feature work:
 | #158 | Notification system + hydration + dashboard fixes | Medium | Open |
 | #152 | Follow-Up Intelligence system | Large | Open |
 | #154 | AI Auto-Follow-Up opt-in + autonomous cron | Large | Open |
+| #684 | Add deletedAt soft-delete to super_admin_audit_logs + email | Small | Open |
 
 ### Low Priority / Backlog
 

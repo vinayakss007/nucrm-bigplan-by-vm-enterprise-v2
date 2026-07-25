@@ -50,33 +50,35 @@ export async function grantRecordAccess(
   accessLevel: RecordAccessLevel,
   grantedBy: string
 ) {
-  // Check for existing grant
-  const existing = await db.select()
-    .from(recordPermissions)
-    .where(and(
-      eq(recordPermissions.tenantId, tenantId),
-      eq(recordPermissions.roleId, roleId),
-      eq(recordPermissions.entityType, entityType),
-      eq(recordPermissions.entityId, entityId)
-    ));
+  return await db.transaction(async (tx) => {
+    const [existing] = await tx.select()
+      .from(recordPermissions)
+      .where(and(
+        eq(recordPermissions.tenantId, tenantId),
+        eq(recordPermissions.roleId, roleId),
+        eq(recordPermissions.entityType, entityType),
+        eq(recordPermissions.entityId, entityId)
+      ))
+      .limit(1);
 
-  if (existing[0]) {
-    await db.update(recordPermissions)
-      .set({ accessLevel, grantedBy, updatedAt: new Date() })
-      .where(eq(recordPermissions.id, existing[0].id));
-    return { ...existing[0], accessLevel, grantedBy };
-  }
+    if (existing) {
+      await tx.update(recordPermissions)
+        .set({ accessLevel, grantedBy, updatedAt: new Date() })
+        .where(eq(recordPermissions.id, existing.id));
+      return { ...existing, accessLevel, grantedBy };
+    }
 
-  const [result] = await db.insert(recordPermissions).values({
-    tenantId,
-    roleId,
-    entityType,
-    entityId,
-    accessLevel,
-    grantedBy,
-  }).returning();
+    const [result] = await tx.insert(recordPermissions).values({
+      tenantId,
+      roleId,
+      entityType,
+      entityId,
+      accessLevel,
+      grantedBy,
+    }).returning();
 
-  return result;
+    return result;
+  });
 }
 
 /**

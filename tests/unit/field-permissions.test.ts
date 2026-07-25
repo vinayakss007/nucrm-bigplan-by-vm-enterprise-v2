@@ -14,6 +14,11 @@ vi.mock('@/drizzle/db', () => ({
     select: mockSelectChain,
     insert: (...args: any[]) => mockInsertChain(...args),
     update: (...args: any[]) => mockUpdateChain(...args),
+    transaction: vi.fn((cb: (tx: any) => Promise<any>) => cb({
+      select: mockSelectChain,
+      insert: (...args: any[]) => mockInsertChain(...args),
+      update: (...args: any[]) => mockUpdateChain(...args),
+    })),
   },
 }));
 
@@ -43,7 +48,11 @@ import {
 } from '@/lib/rbac/field-permissions';
 
 function mockWhereChain(rows: any[]) {
-  return { from: vi.fn(() => ({ where: vi.fn().mockResolvedValue(rows) })) };
+  const query = {
+    limit: vi.fn().mockResolvedValue(rows),
+    then: vi.fn((resolve: (v: any) => any) => resolve(rows)),
+  };
+  return { from: vi.fn(() => ({ where: vi.fn(() => query) })) };
 }
 
 describe('field-permissions', () => {

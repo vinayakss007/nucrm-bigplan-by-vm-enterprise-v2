@@ -4,6 +4,9 @@ vi.mock('@/drizzle/db', () => ({
   db: {
     select: vi.fn(),
     insert: vi.fn(),
+    transaction: vi.fn((cb: (tx: any) => Promise<any>) => cb({
+      insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([{ id: 'user-1' }]) })) })),
+    })),
     query: {
       users: { findFirst: vi.fn() },
     },

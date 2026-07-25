@@ -41,23 +41,22 @@ export async function tryApiKeyAuth(request: NextRequest): Promise<AuthContext |
 
   const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] ?? null;
 
-  // Update last used
-  await db.update(apiKeys)
-    .set({ 
-      lastUsedAt: new Date()
-    })
-    .where(eq(apiKeys.keyHash, keyHash));
-
-  // Log usage
+  // Update last used + log usage atomically
   try {
-    await db.insert(apiKeyUsage)
-      .values({
-        apiKeyId: row.apiKey.id,
-        tenantId: row.apiKey.tenantId,
-        endpoint: request.nextUrl.pathname,
-        method: request.method,
-        ipAddress: clientIp
-      });
+    await db.transaction(async (tx) => {
+      await tx.update(apiKeys)
+        .set({ lastUsedAt: new Date() })
+        .where(eq(apiKeys.keyHash, keyHash));
+
+      await tx.insert(apiKeyUsage)
+        .values({
+          apiKeyId: row.apiKey.id,
+          tenantId: row.apiKey.tenantId,
+          endpoint: request.nextUrl.pathname,
+          method: request.method,
+          ipAddress: clientIp,
+        });
+    });
   } catch (err) {
     console.error('[API Key] Failed to log usage:', err);
   }
@@ -160,8 +159,29 @@ export async function rotateApiKey(
   name: string,
   scopes: string[]
 ): Promise<{ key: string; prefix: string } | null> {
-  await revokeApiKey(keyId, tenantId);
-  return await generateApiKey(tenantId, userId, name, scopes);
+  const { randomBytes } = await import('crypto');
+  const keyType = 'live';
+  const randomPart = randomBytes(24).toString('hex');
+  const fullKey = `ak_${keyType}_${randomPart}`;
+  const prefix = `ak_${keyType}_${randomPart.slice(0, 6)}`;
+  const keyHash = createHash('sha256').update(fullKey).digest('hex');
+
+  await db.transaction(async (tx) => {
+    await tx.update(apiKeys)
+      .set({ isActive: false })
+      .where(and(eq(apiKeys.id, keyId), eq(apiKeys.tenantId, tenantId)));
+
+    await tx.insert(apiKeys).values({
+      tenantId,
+      userId,
+      name,
+      keyHash,
+      prefix,
+      scopes,
+    });
+  });
+
+  return { key: fullKey, prefix };
 }
 
 /**

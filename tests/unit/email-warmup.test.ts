@@ -1,10 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const mockWarmupTx = vi.hoisted(() => vi.fn());
+
 vi.mock('@/drizzle/db', () => ({
   db: {
     select: vi.fn(),
     insert: vi.fn(),
     update: vi.fn(),
+    transaction: vi.fn((cb: (tx: any) => Promise<any>) => cb({
+      update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) })),
+      insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn() })) })),
+    })),
     query: {
       emailWarmupPool: {
         findMany: vi.fn(),
@@ -197,7 +203,7 @@ describe('Email Warmup Engine', () => {
 
       const { recordWarmUpReply } = await import('@/lib/email/warmup');
       await expect(recordWarmUpReply('log-1')).resolves.not.toThrow();
-      expect(db.update).toHaveBeenCalled();
+      expect(db.transaction).toHaveBeenCalled();
     });
 
     it('silently skips when log not found', async () => {
