@@ -414,23 +414,23 @@ export async function DELETE(request: NextRequest) {
 
     const now = new Date();
 
-    // Soft-delete contacts
-    const _contactResult = await db.update(contacts)
-      .set({ deletedAt: now })
-      .where(and(
-        eq(contacts.tenantId, tenantId),
-        eq(contacts.assignedTo, userId),
-        sql`${contacts.deletedAt} IS NULL`
-      ));
+    await db.transaction(async (tx) => {
+      await tx.update(contacts)
+        .set({ deletedAt: now })
+        .where(and(
+          eq(contacts.tenantId, tenantId),
+          eq(contacts.assignedTo, userId),
+          sql`${contacts.deletedAt} IS NULL`
+        ));
 
-    // Soft-delete deals
-    const _dealResult = await db.update(deals)
-      .set({ deletedAt: now })
-      .where(and(
-        eq(deals.tenantId, tenantId),
-        eq(deals.assignedTo, userId),
-        sql`${deals.deletedAt} IS NULL`
-      ));
+      await tx.update(deals)
+        .set({ deletedAt: now })
+        .where(and(
+          eq(deals.tenantId, tenantId),
+          eq(deals.assignedTo, userId),
+          sql`${deals.deletedAt} IS NULL`
+        ));
+    });
 
     console.log(`[User Data DELETE] GDPR erasure for user=${userId}, tenant=${tenantId}`);
 

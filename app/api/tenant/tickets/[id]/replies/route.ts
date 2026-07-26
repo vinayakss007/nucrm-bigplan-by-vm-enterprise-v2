@@ -25,20 +25,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const isFirstResponse = ticket && !ticket.firstResponseAt && !body.is_internal;
 
-    await db.insert(ticketReplies).values({
-      tenantId: ctx.tenantId,
-      ticketId: id,
-      userId: ctx.userId,
-      body: body.body,
-      isInternal: body.is_internal || false,
-    });
+    await db.transaction(async (tx) => {
+      await tx.insert(ticketReplies).values({
+        tenantId: ctx.tenantId,
+        ticketId: id,
+        userId: ctx.userId,
+        body: body.body,
+        isInternal: body.is_internal || false,
+      });
 
-    // Set first_response_at on the ticket if this is the first non-internal reply
-    if (isFirstResponse) {
-      await db.update(supportTickets)
-        .set({ firstResponseAt: new Date() })
-        .where(eq(supportTickets.id, id));
-    }
+      if (isFirstResponse) {
+        await tx.update(supportTickets)
+          .set({ firstResponseAt: new Date() })
+          .where(eq(supportTickets.id, id));
+      }
+    });
 
     return NextResponse.json({ success: true }, { status: 201 });
  

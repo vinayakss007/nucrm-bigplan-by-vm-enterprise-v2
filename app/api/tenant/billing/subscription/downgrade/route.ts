@@ -83,29 +83,31 @@ export async function POST(request: NextRequest) {
     });
 
     // Update subscription in database to reflect pending downgrade
-    await db.update(subscriptions).set({
-      metadata: {
-        ...(currentSub.metadata as Record<string, unknown> || {}),
-        pending_plan_id: planId,
-        scheduled_downgrade: true,
-        scheduled_downgrade_at: new Date(stripeSub.current_period_end * 1000).toISOString(),
-        downgraded_by: ctx.userId,
-      },
-    }).where(eq(subscriptions.id, currentSub.id));
+    await db.transaction(async (tx) => {
+      await tx.update(subscriptions).set({
+        metadata: {
+          ...(currentSub.metadata as Record<string, unknown> || {}),
+          pending_plan_id: planId,
+          scheduled_downgrade: true,
+          scheduled_downgrade_at: new Date(stripeSub.current_period_end * 1000).toISOString(),
+          downgraded_by: ctx.userId,
+        },
+      }).where(eq(subscriptions.id, currentSub.id));
 
-    // Record billing event
-    await db.insert(billingEvents).values({
-      tenantId: ctx.tenantId,
-      eventType: 'subscription.downgrade_scheduled',
-      amount: String(newPlan.priceMonthly || '0'),
-      currency: 'usd',
-      stripeSubscriptionId: currentSub.stripeSubscriptionId,
-      metadata: {
-        previous_plan_id: currentSub.planId || 'none',
-        new_plan_id: planId,
-        effective_at: new Date(stripeSub.current_period_end * 1000).toISOString(),
-        downgraded_by: ctx.userId,
-      },
+      // Record billing event
+      await tx.insert(billingEvents).values({
+        tenantId: ctx.tenantId,
+        eventType: 'subscription.downgrade_scheduled',
+        amount: String(newPlan.priceMonthly || '0'),
+        currency: 'usd',
+        stripeSubscriptionId: currentSub.stripeSubscriptionId,
+        metadata: {
+          previous_plan_id: currentSub.planId || 'none',
+          new_plan_id: planId,
+          effective_at: new Date(stripeSub.current_period_end * 1000).toISOString(),
+          downgraded_by: ctx.userId,
+        },
+      });
     });
 
     return NextResponse.json({

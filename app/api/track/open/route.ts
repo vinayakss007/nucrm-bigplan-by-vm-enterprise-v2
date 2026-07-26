@@ -39,26 +39,28 @@ export async function GET(req: NextRequest) {
         });
         if (!row) return;
 
-        await db.update(emailTracking)
-          .set({
-            openedAt: sql`COALESCE(${emailTracking.openedAt}, now())`,
-            openCount: sql`${emailTracking.openCount} + 1`
-          })
-          .where(eq(emailTracking.id, trackId));
+        await db.transaction(async (tx) => {
+          await tx.update(emailTracking)
+            .set({
+              openedAt: sql`COALESCE(${emailTracking.openedAt}, now())`,
+              openCount: sql`${emailTracking.openCount} + 1`
+            })
+            .where(eq(emailTracking.id, trackId));
 
-        // Log activity on first open only
-        if (row.openCount === 0 && row.contactId) {
-          await db.insert(activities).values({
-            tenantId: row.tenantId,
-            contactId: row.contactId,
-            eventType: 'email',
-            description: 'Email opened',
-            metadata: { tracking_id: trackId, event: 'open' },
-            entityType: 'contact',
-            entityId: row.contactId,
-            action: 'email_open'
-          }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
-        }
+          // Log activity on first open only
+          if (row.openCount === 0 && row.contactId) {
+            await tx.insert(activities).values({
+              tenantId: row.tenantId,
+              contactId: row.contactId,
+              eventType: 'email',
+              description: 'Email opened',
+              metadata: { tracking_id: trackId, event: 'open' },
+              entityType: 'contact',
+              entityId: row.contactId,
+              action: 'email_open'
+            });
+          }
+        });
       } catch (err) { 
         console.error('[TrackOpen] Error:', err);
         /* never fail on tracking */ 

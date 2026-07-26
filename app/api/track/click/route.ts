@@ -43,27 +43,29 @@ export async function GET(req: NextRequest) {
         });
         if (!row) return;
 
-        await db.update(emailTracking)
-          .set({
-            clickedAt: sql`COALESCE(${emailTracking.clickedAt}, now())`,
-            clickCount: sql`${emailTracking.clickCount} + 1`,
-            updatedAt: new Date(),
-          })
-          .where(eq(emailTracking.id, trackId));
+        await db.transaction(async (tx) => {
+          await tx.update(emailTracking)
+            .set({
+              clickedAt: sql`COALESCE(${emailTracking.clickedAt}, now())`,
+              clickCount: sql`${emailTracking.clickCount} + 1`,
+              updatedAt: new Date(),
+            })
+            .where(eq(emailTracking.id, trackId));
 
-        // Log activity
-        if (row.contactId) {
-          await db.insert(activities).values({
-            tenantId: row.tenantId,
-            contactId: row.contactId,
-            eventType: 'email',
-            description: 'Email link clicked',
-            metadata: { tracking_id: trackId, url: destination, event: 'click' },
-            entityType: 'contact',
-            entityId: row.contactId,
-            action: 'email_click'
-          }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
-        }
+          // Log activity
+          if (row.contactId) {
+            await tx.insert(activities).values({
+              tenantId: row.tenantId,
+              contactId: row.contactId,
+              eventType: 'email',
+              description: 'Email link clicked',
+              metadata: { tracking_id: trackId, url: destination, event: 'click' },
+              entityType: 'contact',
+              entityId: row.contactId,
+              action: 'email_click'
+            });
+          }
+        });
       } catch (err) { 
         console.error('[TrackClick] Error:', err);
         /* never fail on tracking */ 

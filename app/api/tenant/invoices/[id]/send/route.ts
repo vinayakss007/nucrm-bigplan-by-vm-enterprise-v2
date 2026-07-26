@@ -45,13 +45,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Email required (provide to_email or attach a contact)' }, { status: 400 });
     }
 
-    // Update status to sent
-    await db.update(invoices).set({ status: 'sent', sentAt: new Date(), updatedAt: new Date() }).where(eq(invoices.id, id));
+    // Update status to sent + activity row atomically
+    await db.transaction(async (tx) => {
+      await tx.update(invoices).set({ status: 'sent', sentAt: new Date(), updatedAt: new Date() }).where(eq(invoices.id, id));
 
-    // Activity row
-    if (invoice.contactId) {
-      try {
-        await db.insert(activities).values({
+      if (invoice.contactId) {
+        await tx.insert(activities).values({
           tenantId: ctx.tenantId,
           userId: ctx.userId,
           entityType: 'invoice',
@@ -66,10 +65,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             to_email: toEmail,
           },
         });
-      } catch (err) {
-        console.warn('[invoices/send] activity insert failed:', (err as Error).message);
       }
-    }
+    });
 
     // Send email
     const pdfUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/tenant/invoices/${id}/pdf`;
