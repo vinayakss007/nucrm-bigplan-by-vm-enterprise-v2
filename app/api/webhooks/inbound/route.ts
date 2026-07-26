@@ -591,15 +591,21 @@ export async function POST(request: NextRequest) {
     const results: Array<{ entity: string; action: string; id: string | null; status: string; error?: string }> = [];
     let hasError = false;
 
+    if (!apiKeyRow) {
+      return NextResponse.json({ error: 'API key not resolved' }, { status: 500 });
+    }
+
+    const currentKey = apiKeyRow;
+
     for (const item of items) {
       try {
         const result = await db.transaction(async (tx) => {
-          const r = await processItem(item, apiKeyRow.tenantId, apiKeyRow.userId!, tx);
+          const r = await processItem(item, currentKey.tenantId, currentKey.userId!, tx);
 
           // Log delivery inside the same transaction
           await logWebhookDelivery({
-            tenantId: apiKeyRow.tenantId,
-            apiKeyId: apiKeyRow.id,
+            tenantId: currentKey.tenantId,
+            apiKeyId: currentKey.id,
             action: item.action,
             entity: item.entity,
             status: 'success',
@@ -617,17 +623,17 @@ export async function POST(request: NextRequest) {
         // Fire outgoing webhooks for created records (outside transaction — uses own db)
         if (result.action === 'created') {
           const eventType = `${item.entity}.created` as WebhookEvent;
-          fireWebhooks(apiKeyRow.tenantId, eventType, { id: result.id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+          fireWebhooks(currentKey.tenantId, eventType, { id: result.id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
         }
 
         // Log audit entry (outside transaction — uses own db)
         logAudit({
-          tenantId: apiKeyRow.tenantId,
-          userId: apiKeyRow.userId!,
+          tenantId: currentKey.tenantId,
+          userId: currentKey.userId!,
           action: result.action === 'created' ? 'create' : 'update',
           entityType: item.entity,
           entityId: result.id as string,
-          newData: { source: 'inbound_webhook', api_key: apiKeyRow.name },
+          newData: { source: 'inbound_webhook', api_key: currentKey.name },
         }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
  
@@ -638,8 +644,8 @@ export async function POST(request: NextRequest) {
         results.push({ entity: item.entity, action: item.action, id: null, status: 'error', error: "Internal server error" });
 
         logWebhookDelivery({
-          tenantId: apiKeyRow.tenantId,
-          apiKeyId: apiKeyRow.id,
+          tenantId: currentKey.tenantId,
+          apiKeyId: currentKey.id,
           action: item.action,
           entity: item.entity,
           status: 'error',
@@ -659,8 +665,8 @@ export async function POST(request: NextRequest) {
     // Audit log
     if (process.env.NODE_ENV === 'production') {
       await logAudit({
-        tenantId: apiKeyRow.tenantId,
-        userId: apiKeyRow.userId!,
+        tenantId: currentKey.tenantId,
+        userId: currentKey.userId!,
         action: 'webhook_inbound',
         entityType: 'api',
         entityId: 'batch',

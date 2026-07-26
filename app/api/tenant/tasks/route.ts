@@ -160,6 +160,10 @@ export async function POST(request: NextRequest) {
       newTask = inserted;
     });
 
+    if (!newTask) {
+      return NextResponse.json({ error: 'Failed to create task' }, { status: 500 });
+    }
+
     if (v.assigned_to && v.assigned_to !== ctx.userId) {
       createNotification({
         userId: v.assigned_to,
