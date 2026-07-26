@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const CUSTOM_REPORTS_KEY = 'custom_reports';
 
@@ -111,6 +112,8 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+  const limited = await rateLimitMutating(request, 'reports', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

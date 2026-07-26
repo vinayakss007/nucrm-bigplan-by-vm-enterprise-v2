@@ -6,6 +6,7 @@ import { churnPredictions } from '@/drizzle/schema';
 import { contacts } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 /**
  * GET /api/tenant/analytics/churn
@@ -113,6 +114,8 @@ export async function PATCH(
   request: NextRequest
 ) {
   try {
+  const limited = await rateLimitMutating(request, 'reports', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

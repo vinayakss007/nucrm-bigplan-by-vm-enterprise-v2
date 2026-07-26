@@ -8,6 +8,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const createTaxRateSchema = z.object({
   name: z.string().min(1, 'name is required'),
@@ -149,6 +150,8 @@ export async function PUT(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
   try {
+  const limited = await rateLimitMutating(req, 'taxRates', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     const gate = await requireModule(ctx.tenantId, 'sales-quotes', ctx.isSuperAdmin);

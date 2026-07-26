@@ -9,6 +9,7 @@ import { logError } from '@/lib/errors-server';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { withConcurrencyGuard } from '@/lib/concurrency';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -51,6 +52,8 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
 
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
+  const limited = await rateLimitMutating(request, 'contacts', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
@@ -113,6 +116,8 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
+  const limited = await rateLimitMutating(request, 'contacts', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

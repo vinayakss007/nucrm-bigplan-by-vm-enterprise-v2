@@ -8,6 +8,7 @@ import { db } from '@/drizzle/db';
 import { documents } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getSignedUrl, deleteObject } from '@/lib/storage/s3';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(
   request: NextRequest,
@@ -88,6 +89,8 @@ export async function DELETE(
   // the user sees the document disappear from the UI; a future sweep
   // can collect orphans via the `deleted_at IS NOT NULL` filter.
   try {
+  const limited = await rateLimitMutating(request, 'documents', 'delete');
+  if (limited) return limited;
     await deleteObject(row.s3Key);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'S3 delete failed';

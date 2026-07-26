@@ -16,6 +16,7 @@ import { eq, and } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { approveRequest, rejectRequest } from '@/lib/rbac/approval-workflows';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 interface PatchBody {
   action?: 'approve' | 'reject';
@@ -24,6 +25,8 @@ interface PatchBody {
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+  const limited = await rateLimitMutating(req, 'deals', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });

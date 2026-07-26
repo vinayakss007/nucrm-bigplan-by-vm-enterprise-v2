@@ -5,6 +5,7 @@ import { revokeApiKey, rotateApiKey, getApiKeyUsage } from '@/lib/auth/api-key';
 import { db } from '@/drizzle/db';
 import { apiKeys } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 /**
  * GET /api/tenant/api-keys/[id]
@@ -79,6 +80,8 @@ export async function DELETE(
   { params }: any
 ) {
   try {
+  const limited = await rateLimitMutating(request, 'integrations', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!can(ctx, 'settings.manage')) {

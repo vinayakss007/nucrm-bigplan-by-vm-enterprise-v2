@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { contacts, deals, tasks, companies, leads, projects } from '@/drizzle/schema';
 import { eq, and, isNotNull, sql, desc } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(req: NextRequest) {
   try {
@@ -139,6 +140,8 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+  const limited = await rateLimitMutating(req, 'trash', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     const deny = requirePerm(ctx, 'contacts.edit');
@@ -180,6 +183,8 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+  const limited = await rateLimitMutating(req, 'trash', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required to permanently delete' }, { status: 403 });

@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { savedViews } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -38,6 +39,8 @@ export async function GET(req: NextRequest, { params }: Params) {
  */
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
+  const limited = await rateLimitMutating(req, 'views', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;
@@ -80,6 +83,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
  */
 export async function DELETE(req: NextRequest, { params }: Params) {
   try {
+  const limited = await rateLimitMutating(req, 'views', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;

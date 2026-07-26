@@ -9,6 +9,7 @@ import { getTerritoryTree } from '@/lib/territories';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const createTerritorySchema = z.object({
   name: z.string().min(1, 'name is required'),
@@ -116,6 +117,8 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+  const limited = await rateLimitMutating(req, 'territories', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     const gate = await requireModule(ctx.tenantId, 'core-crm', ctx.isSuperAdmin);

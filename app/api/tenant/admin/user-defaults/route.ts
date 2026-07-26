@@ -14,6 +14,7 @@ import { tenants } from '@/drizzle/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const VALID = {
   theme:           ['light', 'dark', 'system'],
@@ -73,6 +74,8 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   let ctx: Awaited<ReturnType<typeof requireAuth>>;
   try {
+  const limited = await rateLimitMutating(req, 'settings', 'patch');
+  if (limited) return limited;
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
@@ -161,6 +164,8 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+  const limited = await rateLimitMutating(req, 'settings', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });

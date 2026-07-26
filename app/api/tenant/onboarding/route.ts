@@ -9,6 +9,7 @@ import { onboardingProgress, pipelines, dealStages } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { installTemplateModules } from '@/lib/modules/auto-install';
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -105,6 +106,8 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+  const limited = await rateLimitMutating(request, 'settings', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const rawBody = await request.json();

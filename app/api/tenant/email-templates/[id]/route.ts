@@ -12,6 +12,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { validateBody } from '@/lib/api/validate';
 import { updateEmailTemplateSchema } from '@/lib/api/schemas';
 import { withConcurrencyGuard } from '@/lib/concurrency';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
  
  
@@ -54,6 +55,8 @@ export async function GET(request: NextRequest, { params }: any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function PATCH(request: NextRequest, { params }: any) {
   try {
+  const limited = await rateLimitMutating(request, 'emailTemplates', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;
@@ -121,6 +124,8 @@ export async function PATCH(request: NextRequest, { params }: any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function DELETE(request: NextRequest, { params }: any) {
   try {
+  const limited = await rateLimitMutating(request, 'emailTemplates', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;

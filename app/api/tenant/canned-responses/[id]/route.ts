@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { cannedResponses } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const updateCannedSchema = z.object({
   category: z.string().min(1).max(100).optional(),
@@ -15,6 +16,8 @@ const updateCannedSchema = z.object({
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+  const limited = await rateLimitMutating(request, 'cannedResponses', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
@@ -43,6 +46,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+  const limited = await rateLimitMutating(request, 'cannedResponses', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

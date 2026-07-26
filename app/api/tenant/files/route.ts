@@ -11,6 +11,7 @@ import { logAudit } from '@/lib/audit';
 import { writeFile, mkdir } from 'fs/promises';
 import { join, extname } from 'path';
 import { randomBytes } from 'crypto';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const ALLOWED_TYPES = new Set([
   'image/jpeg','image/png','image/gif','image/webp','image/svg+xml',
@@ -237,6 +238,8 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+  const limited = await rateLimitMutating(req, 'documents', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     const id = new URL(req.url).searchParams.get('id');

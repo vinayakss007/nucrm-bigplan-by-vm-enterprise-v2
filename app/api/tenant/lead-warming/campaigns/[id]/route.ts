@@ -10,6 +10,7 @@ import { requireAiFeature } from '@/lib/ai/plan-gate';
 import { db } from '@/drizzle/db';
 import { leadWarmingCampaigns, leadWarmingMessages, leadWarmingReplies } from '@/drizzle/schema/lead-warming';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
  
  
@@ -77,6 +78,8 @@ export async function GET(req: NextRequest, { params }: any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function PATCH(req: NextRequest, { params }: any) {
   try {
+  const limited = await rateLimitMutating(req, 'leads', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
@@ -149,6 +152,8 @@ export async function PATCH(req: NextRequest, { params }: any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function DELETE(req: NextRequest, { params }: any) {
   try {
+  const limited = await rateLimitMutating(req, 'leads', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

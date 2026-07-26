@@ -9,6 +9,7 @@ import { users, tenants, featureRegistry } from '@/drizzle/schema';
 import { tasks } from '@/drizzle/schema';
 import { eq, and, asc, desc, sql } from 'drizzle-orm';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const VALID_ENTITY_TYPES = ['contact', 'company', 'deal', 'lead', 'task', 'user', 'tenant'] as const;
 type EntityType = typeof VALID_ENTITY_TYPES[number];
@@ -157,6 +158,8 @@ export async function GET(req: NextRequest) {
 // ── POST: Create custom field or set value or register feature ──────────────
 
 export async function POST(req: NextRequest) {
+  const limited = await rateLimitMutating(req, 'customFields', 'post');
+  if (limited) return limited;
   const ctx = await requireAuth(req);
   if (ctx instanceof NextResponse) return ctx;
 
@@ -338,6 +341,8 @@ export async function POST(req: NextRequest) {
 // ── PUT: Update custom field definition ─────────────────────────────────────
 
 export async function PUT(req: NextRequest) {
+  const limited = await rateLimitMutating(req, 'customFields', 'patch');
+  if (limited) return limited;
   const ctx = await requireAuth(req);
   if (ctx instanceof NextResponse) return ctx;
 
@@ -391,6 +396,8 @@ export async function PUT(req: NextRequest) {
 // ── DELETE: Remove custom field definition ──────────────────────────────────
 
 export async function DELETE(req: NextRequest) {
+  const limited = await rateLimitMutating(req, 'customFields', 'delete');
+  if (limited) return limited;
   const ctx = await requireAuth(req);
   if (ctx instanceof NextResponse) return ctx;
 

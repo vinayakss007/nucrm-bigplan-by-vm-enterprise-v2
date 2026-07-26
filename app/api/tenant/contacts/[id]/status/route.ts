@@ -6,6 +6,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, activities } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const STATUSES = ['new', 'contacted', 'qualified', 'unqualified', 'converted', 'lost'];
 
@@ -14,6 +15,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const limited = await rateLimitMutating(request, 'contacts', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     

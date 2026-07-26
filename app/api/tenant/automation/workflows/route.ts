@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { automationWorkflows } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { getAllWorkflows } from '@/lib/automation/workflows';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -49,6 +50,8 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+  const limited = await rateLimitMutating(request, 'workflows', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

@@ -13,12 +13,15 @@ import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { validateBody } from '@/lib/api/validate';
 import { updateAtRiskRuleSchema } from '@/lib/api/schemas';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const limited = await rateLimitMutating(req, 'reports', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
@@ -70,6 +73,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const limited = await rateLimitMutating(req, 'reports', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });

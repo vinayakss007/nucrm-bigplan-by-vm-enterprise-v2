@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { activities, users, contacts } from '@/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { processMentions } from '@/lib/notifications';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(
   request: NextRequest, 
@@ -109,6 +110,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const limited = await rateLimitMutating(request, 'contacts', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     

@@ -6,6 +6,7 @@ import { automations, automationRuns, users } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { validateBody } from '@/lib/api/validate';
 import { updateAutomationSchema } from '@/lib/api/schemas';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 /**
  * GET /api/tenant/automations/[id]
@@ -88,6 +89,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const limited = await rateLimitMutating(req, 'automations', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     
@@ -145,6 +148,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const limited = await rateLimitMutating(req, 'automations', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     

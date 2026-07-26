@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { orders } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 // Order status state machine - defines valid transitions
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -172,6 +173,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+  const limited = await rateLimitMutating(req, 'orders', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

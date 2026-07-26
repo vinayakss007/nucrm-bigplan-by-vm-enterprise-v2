@@ -7,6 +7,7 @@ import { documents, documentFolders } from '@/drizzle/schema/documents';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const s3 = new S3Client({
   region: process.env['AWS_REGION'] || 'us-east-1',
@@ -148,6 +149,8 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+  const limited = await rateLimitMutating(req, 'documents', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

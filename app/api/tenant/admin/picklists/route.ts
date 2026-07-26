@@ -23,6 +23,7 @@ import { tenants } from '@/drizzle/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export type PicklistEntry = { value: string; label: string; color?: string };
 export type PicklistCategory = 'lead_sources' | 'loss_reasons' | 'win_reasons' | 'activity_types' | 'deal_types' | 'industries';
@@ -114,6 +115,8 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   let ctx: Awaited<ReturnType<typeof requireAuth>>;
   try {
+  const limited = await rateLimitMutating(req, 'settings', 'patch');
+  if (limited) return limited;
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });

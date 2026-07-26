@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { meetings, contacts } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { withConcurrencyGuard } from '@/lib/concurrency';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -46,6 +47,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+  const limited = await rateLimitMutating(request, 'meetings', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
@@ -91,6 +94,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+  const limited = await rateLimitMutating(_request, 'meetings', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(_request);
     if (ctx instanceof NextResponse) return ctx;
 
