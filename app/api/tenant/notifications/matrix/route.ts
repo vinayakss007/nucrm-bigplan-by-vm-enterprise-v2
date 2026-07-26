@@ -14,6 +14,7 @@ import { tenantMembers } from '@/drizzle/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const CHANNELS = ['in_app', 'email', 'telegram'] as const;
 type Channel = typeof CHANNELS[number];
@@ -97,6 +98,8 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+  const limited = await rateLimitMutating(req, 'notifications', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

@@ -7,6 +7,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import type { PluginAuthType, PluginAction, PluginAuthConfig } from '@/lib/plugins/types';
 import { encryptAuthConfig, decryptAuthConfig, redactAuthConfig } from '@/lib/plugins/crypto';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const VALID_AUTH_TYPES: PluginAuthType[] = ['bearer', 'basic', 'api_key_header', 'api_key_query', 'oauth2_client_credentials', 'none'];
 const VALID_STATUSES = ['active', 'disabled'] as const;
@@ -75,6 +76,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
+  const limited = await rateLimitMutating(request, 'plugins', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
@@ -144,6 +147,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
+  const limited = await rateLimitMutating(request, 'plugins', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

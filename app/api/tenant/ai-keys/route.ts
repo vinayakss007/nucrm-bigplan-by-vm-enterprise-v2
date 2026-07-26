@@ -16,6 +16,7 @@ import {
   deleteProviderKey,
   SecretsVaultError,
 } from '@/lib/ai/secrets';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 /** Accept any provider string — no hardcoded list. */
 
@@ -85,6 +86,8 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+  const limited = await rateLimitMutating(req, 'integrations', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

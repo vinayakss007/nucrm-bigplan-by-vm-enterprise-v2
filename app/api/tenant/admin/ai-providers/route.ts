@@ -29,6 +29,7 @@ import {
   listProviderKeyMeta,
   SecretsVaultError,
 } from '@/lib/ai/secrets';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 /** Named providers with built-in defaults. Any other key in the config is a custom provider. */
 const NAMED_PROVIDERS = ['openai', 'anthropic', 'groq', 'ollama', 'opencode'];
@@ -98,6 +99,8 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+  const limited = await rateLimitMutating(req, 'ai-providers', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
@@ -225,6 +228,8 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+  const limited = await rateLimitMutating(req, 'ai-providers', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });

@@ -4,6 +4,7 @@ import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { workflows, workflowActions, workflowExecutions } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 /**
  * GET /api/tenant/workflows/[id]
@@ -66,6 +67,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const limited = await rateLimitMutating(request, 'workflows', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!can(ctx, 'automations.manage')) {
@@ -168,6 +171,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const limited = await rateLimitMutating(request, 'workflows', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!can(ctx, 'automations.manage')) {

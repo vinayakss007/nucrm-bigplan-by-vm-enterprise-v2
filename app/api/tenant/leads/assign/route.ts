@@ -8,6 +8,7 @@ import { eq, and, inArray, sql } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';
 import { apiError } from '@/lib/api-error';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 // POST: assign one or many contacts to a rep
 // { contact_ids: string[], assign_to: string, reason?: string }
@@ -101,6 +102,8 @@ export async function POST(request: NextRequest) {
 // DELETE: revoke (unassign) leads — set assigned_to = NULL or reassign to admin
 export async function DELETE(request: NextRequest) {
   try {
+  const limited = await rateLimitMutating(request, 'leads', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const deny = requirePerm(ctx, 'contacts.assign');

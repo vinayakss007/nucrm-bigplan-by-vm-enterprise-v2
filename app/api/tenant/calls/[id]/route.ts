@@ -6,6 +6,7 @@ import { callLogs } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const updateCallSchema = z.object({
   direction: z.enum(['inbound', 'outbound']).optional(),
@@ -18,6 +19,8 @@ const updateCallSchema = z.object({
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+  const limited = await rateLimitMutating(req, 'calls', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     const deny = requirePerm(ctx, 'contacts.edit');
@@ -57,6 +60,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+  const limited = await rateLimitMutating(req, 'calls', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     const deny = requirePerm(ctx, 'contacts.delete');

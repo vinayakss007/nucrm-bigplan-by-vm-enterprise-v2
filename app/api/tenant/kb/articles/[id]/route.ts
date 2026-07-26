@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { kbArticles, kbCategories } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -41,6 +42,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+  const limited = await rateLimitMutating(request, 'kbArticles', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;
@@ -71,6 +74,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+  const limited = await rateLimitMutating(request, 'kbArticles', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;

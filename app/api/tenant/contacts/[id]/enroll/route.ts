@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { contacts, sequences, sequenceSteps, sequenceEnrollments } from '@/drizzle/schema';
 import { eq, and, asc, sql } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
  
  
@@ -106,6 +107,8 @@ export async function POST(req: NextRequest, { params }: any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function DELETE(req: NextRequest, { params }: any) {
   try {
+  const limited = await rateLimitMutating(req, 'contacts', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     

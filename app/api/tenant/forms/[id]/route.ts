@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { forms, formSubmissions, contacts } from '@/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
  
  
@@ -51,6 +52,8 @@ export async function GET(req: NextRequest, { params }: any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function PATCH(req: NextRequest, { params }: any) {
   try {
+  const limited = await rateLimitMutating(req, 'forms', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
@@ -89,6 +92,8 @@ export async function PATCH(req: NextRequest, { params }: any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function DELETE(req: NextRequest, { params }: any) {
   try {
+  const limited = await rateLimitMutating(req, 'forms', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });

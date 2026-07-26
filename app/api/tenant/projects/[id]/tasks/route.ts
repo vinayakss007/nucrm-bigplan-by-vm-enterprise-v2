@@ -6,6 +6,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { projects, projectTasks, tasks, users } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -142,6 +143,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const limited = await rateLimitMutating(request, 'projects', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

@@ -9,6 +9,7 @@ import { eq, and, sql, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
  
  
@@ -59,6 +60,8 @@ export async function GET(req: NextRequest, { params }: any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function PATCH(req: NextRequest, { params }: any) {
   try {
+  const limited = await rateLimitMutating(req, 'companies', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     
@@ -122,6 +125,8 @@ export async function PATCH(req: NextRequest, { params }: any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function DELETE(req: NextRequest, { params }: any) {
   try {
+  const limited = await rateLimitMutating(req, 'companies', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

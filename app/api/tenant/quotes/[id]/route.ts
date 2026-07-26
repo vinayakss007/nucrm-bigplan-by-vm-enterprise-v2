@@ -6,6 +6,7 @@ import { quotes } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { withConcurrencyGuard } from '@/lib/concurrency';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -137,6 +138,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+  const limited = await rateLimitMutating(req, 'quotes', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

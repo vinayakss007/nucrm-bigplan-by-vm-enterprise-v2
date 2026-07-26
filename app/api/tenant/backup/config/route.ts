@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
 import { eq, and, like } from 'drizzle-orm';
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const ALGORITHM = 'aes-256-gcm';
 const CONFIG_KEY_PREFIX = 'tenant_backup_config:';
@@ -273,6 +274,8 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+  const limited = await rateLimitMutating(request, 'settings', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) {

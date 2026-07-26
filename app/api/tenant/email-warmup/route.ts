@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { emailWarmupConfigs, emailWarmupPool } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
 import { getWarmUpStats } from '@/lib/email/warmup';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 /**
  * GET /api/tenant/email-warmup
@@ -126,6 +127,8 @@ export async function POST(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
+  const limited = await rateLimitMutating(request, 'emailTemplates', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!can(ctx, 'automations.manage')) {

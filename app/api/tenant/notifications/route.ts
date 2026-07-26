@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { notifications } from '@/drizzle/schema';
 import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -64,6 +65,8 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+  const limited = await rateLimitMutating(request, 'notifications', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
@@ -110,6 +113,8 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+  const limited = await rateLimitMutating(request, 'notifications', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

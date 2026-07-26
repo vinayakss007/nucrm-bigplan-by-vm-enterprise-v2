@@ -16,6 +16,8 @@ import {
   maskProvider,
   validateInput,
 } from '../route';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { apiError } from '@/lib/api-error';
 
 export async function PATCH(
   request: NextRequest,
@@ -41,6 +43,8 @@ export async function PATCH(
 
   let body: (Parameters<typeof validateInput>[0] & { is_active?: boolean }) | null;
   try { body = await request.json() as Parameters<typeof validateInput>[0] & { is_active?: boolean }; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+  const limited = await rateLimitMutating(request, 'ssoProviders', 'patch');
+  if (limited) return limited;
   const validationError = validateInput(body, { secretRequired: false });
   if (validationError) return validationError;
   const v = body!;
@@ -76,24 +80,30 @@ export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
-  const ctx = await requireAuth(request);
-  if (ctx instanceof NextResponse) return ctx;
-  if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+  try {
+    const limited = await rateLimitMutating(request, 'ssoProviders', 'delete');
+    if (limited) return limited;
+    const ctx = await requireAuth(request);
+    if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-  const { id } = await context.params;
-  const [existing] = await db
-    .select({ id: ssoProviders.id, tenantId: ssoProviders.tenantId })
-    .from(ssoProviders)
-    .where(and(eq(ssoProviders.id, id), isNull(ssoProviders.deletedAt)))
-    .limit(1);
-  if (!existing || existing.tenantId !== ctx.tenantId) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const { id } = await context.params;
+    const [existing] = await db
+      .select({ id: ssoProviders.id, tenantId: ssoProviders.tenantId })
+      .from(ssoProviders)
+      .where(and(eq(ssoProviders.id, id), isNull(ssoProviders.deletedAt)))
+      .limit(1);
+    if (!existing || existing.tenantId !== ctx.tenantId) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    await db
+      .update(ssoProviders)
+      .set({ isActive: false, deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(ssoProviders.id, id));
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return apiError(err);
   }
-
-  await db
-    .update(ssoProviders)
-    .set({ isActive: false, deletedAt: new Date(), updatedAt: new Date() })
-    .where(eq(ssoProviders.id, id));
-
-  return NextResponse.json({ ok: true });
 }

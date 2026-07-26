@@ -6,9 +6,12 @@ import { integrations } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { validateBody } from '@/lib/api/validate';
 import { updateWebhookSchema } from '@/lib/api/schemas';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
   try {
+  const limited = await rateLimitMutating(req, 'webhooks', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
@@ -64,6 +67,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
   try {
+  const limited = await rateLimitMutating(req, 'webhooks', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });

@@ -14,6 +14,7 @@ import { createNotification } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';
 import { hashPassword } from '@/lib/auth/session';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
@@ -165,6 +166,8 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+  const limited = await rateLimitMutating(request, 'settings', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });

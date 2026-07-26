@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { portalClients, platformSettings } from '@/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
 
@@ -94,6 +95,8 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+  const limited = await rateLimitMutating(request, 'portalClients', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) {

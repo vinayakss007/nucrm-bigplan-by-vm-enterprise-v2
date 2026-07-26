@@ -23,6 +23,7 @@ import { eq, and, desc, sql, gte, count } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { requireAiFeature } from '@/lib/ai/plan-gate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const VALID_STATUSES = new Set(['success', 'error', 'rate_limited', 'fallback_used']);
 const VALID_PROVIDERS = new Set(['openai', 'anthropic', 'groq', 'ollama', 'opencode', 'deepseek']);
@@ -134,6 +135,8 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+  const limited = await rateLimitMutating(req, 'aiTemplates', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

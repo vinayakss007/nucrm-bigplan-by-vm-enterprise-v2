@@ -6,12 +6,15 @@ import { updateFollowUpSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { followUps } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function PATCH(req: NextRequest, { params }: any) {
   try {
+  const limited = await rateLimitMutating(req, 'followUps', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
@@ -69,6 +72,8 @@ export async function PATCH(req: NextRequest, { params }: any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function DELETE(req: NextRequest, { params }: any) {
   try {
+  const limited = await rateLimitMutating(req, 'followUps', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

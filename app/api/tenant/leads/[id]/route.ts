@@ -9,6 +9,7 @@ import { updateLeadSchema } from '@/lib/api/schemas';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { withConcurrencyGuard } from '@/lib/concurrency';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 /**
  * GET /api/tenant/leads/[id]
@@ -106,6 +107,8 @@ export async function PATCH(
   { params }: any
 ) {
   try {
+  const limited = await rateLimitMutating(request, 'leads', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     
@@ -230,6 +233,8 @@ export async function DELETE(
   { params }: any
 ) {
   try {
+  const limited = await rateLimitMutating(request, 'leads', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     

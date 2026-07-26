@@ -5,6 +5,7 @@ import { tenants } from '@/drizzle/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(req: NextRequest) {
   try {
@@ -28,6 +29,8 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+  const limited = await rateLimitMutating(req, 'aiTemplates', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });

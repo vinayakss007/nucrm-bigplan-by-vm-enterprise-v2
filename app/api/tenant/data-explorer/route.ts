@@ -5,6 +5,7 @@ import { validateBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const ENTITY_CONFIG: Record<string, { label: string; searchFields: string[]; sortFields: string[]; defaultSort: string }> = {
   contacts: {
@@ -212,6 +213,8 @@ const deleteSchema = z.object({
 
 export async function DELETE(req: NextRequest) {
   try {
+  const limited = await rateLimitMutating(req, 'reports', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

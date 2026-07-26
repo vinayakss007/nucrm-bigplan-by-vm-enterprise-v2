@@ -6,6 +6,7 @@ import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { sequences, sequenceSteps } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 /**
  * GET /api/tenant/sequences/[id]
@@ -68,6 +69,8 @@ export async function PATCH(
   { params }: any
 ) {
   try {
+  const limited = await rateLimitMutating(request, 'sequences', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!can(ctx, 'automations.manage')) {
@@ -158,6 +161,8 @@ export async function DELETE(
   { params }: any
 ) {
   try {
+  const limited = await rateLimitMutating(request, 'sequences', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!can(ctx, 'automations.manage')) {

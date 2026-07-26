@@ -6,12 +6,15 @@ import { roles } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { validateBody } from '@/lib/api/validate';
 import { updateRoleSchema } from '@/lib/api/schemas';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function PATCH(request: NextRequest, { params }: any) {
   try {
+  const limited = await rateLimitMutating(request, 'roles', 'patch');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
@@ -46,6 +49,8 @@ export async function PATCH(request: NextRequest, { params }: any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function DELETE(request: NextRequest, { params }: any) {
   try {
+  const limited = await rateLimitMutating(request, 'roles', 'delete');
+  if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
