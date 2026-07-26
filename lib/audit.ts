@@ -1,4 +1,4 @@
-import { db } from '@/drizzle/db';
+import { db, type DbClient } from '@/drizzle/db';
 import { auditLogs } from '@/drizzle/schema';
 import { logger } from '@/lib/logger';
 import { eq, desc } from 'drizzle-orm';
@@ -37,8 +37,9 @@ export function computeEntryHash(entry: {
   });
 }
 
-async function getPreviousHash(tenantId: string): Promise<string | null> {
-  const latest = await db
+async function getPreviousHash(tenantId: string, dbOrTx?: DbClient): Promise<string | null> {
+  const client = dbOrTx ?? db;
+  const latest = await client
     .select({ hash: auditLogs.hash })
     .from(auditLogs)
     .where(eq(auditLogs.tenantId, tenantId))
@@ -53,23 +54,25 @@ export async function logAudit(opts: {
   action: string;
   entityType: string;
   entityId?: string;
- 
- 
+  
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   oldData?: any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   newData?: any;
- 
- 
+  
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata?: Record<string, any>;
   ipAddress?: string;
   userAgent?: string;
+  dbOrTx?: DbClient;
 }) {
   try {
     if (!opts.tenantId) return;
 
-    const previousHash = await getPreviousHash(opts.tenantId);
+    const client = opts.dbOrTx ?? db;
+    const previousHash = await getPreviousHash(opts.tenantId, opts.dbOrTx);
 
     const entry = {
       tenantId: opts.tenantId,
@@ -87,7 +90,7 @@ export async function logAudit(opts: {
 
     const hash = computeEntryHash(entry);
 
-    await db.insert(auditLogs).values({
+    await client.insert(auditLogs).values({
       ...entry,
       hash,
     });

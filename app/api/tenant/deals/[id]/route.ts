@@ -76,48 +76,38 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (deny) return deny;
 
     const dealId = (await params).id;
-    const body = await req.json();
-    const validated = validateBody(updateDealSchema, body);
+    const rawBody = await req.json();
+    const validated = validateBody(updateDealSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
-
-    // Validation
-    if (body.amount !== undefined) {
-      const v = Number(body.amount);
-      if (isNaN(v) || v < 0) return NextResponse.json({ error: 'amount must be a non-negative number' }, { status: 400 });
-      if (v > 999_999_999) return NextResponse.json({ error: 'amount too large' }, { status: 400 });
-      body.amount = v.toString(); // decimal in drizzle is string
-    }
+    const v = validated.data;
 
     // Map legacy 'value' to 'amount' if present
-    if (body.value !== undefined && body.amount === undefined) {
-      const v = Number(body.value);
-      if (isNaN(v) || v < 0) return NextResponse.json({ error: 'value must be a non-negative number' }, { status: 400 });
-      body.amount = v.toString();
-      delete body.value;
+    if (v.value !== undefined && v.amount === undefined) {
+      const val = Number(v.value);
+      if (isNaN(val) || val < 0) return NextResponse.json({ error: 'value must be a non-negative number' }, { status: 400 });
+      v.amount = val.toString();
+    }
+    if (v.amount !== undefined && typeof v.amount === 'number') {
+      if (v.amount < 0 || v.amount > 999_999_999) return NextResponse.json({ error: 'amount must be between 0 and 999,999,999' }, { status: 400 });
+      v.amount = v.amount.toString();
     }
 
     // Map legacy 'stage' or 'stage_name' (string like "won") to stageId (UUID)
-    if (body.stageId === undefined && (body.stage !== undefined || body.stage_name !== undefined)) {
-      body.stage = body.stage || body.stage_name;
-      delete body.stage_name;
-      // Try to find stage by name
+    let resolvedStageId = v.stage_id;
+    const stageName = v.stage || v.stage_name;
+    if (!resolvedStageId && stageName) {
       const [stageRecord] = await db
         .select({ id: dealStages.id, name: dealStages.name })
         .from(dealStages)
         .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
         .where(and(
-          ilike(dealStages.name, body.stage),
+          ilike(dealStages.name, stageName),
           eq(pipelines.tenantId, ctx.tenantId)
         ))
         .limit(1);
       
       if (stageRecord) {
-        body.stageId = stageRecord.id;
-        delete body.stage;
-      } else {
-        // Stage name not found, check if it's already a UUID
-        body.stageId = body.stage;
-        delete body.stage;
+        resolvedStageId = stageRecord.id;
       }
     }
 
@@ -129,15 +119,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     if (!prev) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
- 
- 
+    
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = {
-      ...body,
+    const updateData: Record<string, any> = {
+      ...v,
       updatedAt: new Date(),
     };
 
-    if (body.stageId && prev.stageId !== body.stageId) {
+    if (resolvedStageId) {
+      updateData.stageId = resolvedStageId;
+    }
+
+    if (updateData.stageId && prev.stageId !== updateData.stageId) {
       updateData.stageEnteredAt = new Date();
     }
 

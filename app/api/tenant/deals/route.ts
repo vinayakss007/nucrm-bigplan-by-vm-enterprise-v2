@@ -106,8 +106,9 @@ export async function POST(request: NextRequest) {
     const v = validated.data;
 
     // Resolve stage_id - support stage_id (UUID), stage (name), and stage_name (frontend field)
+    // stage_name is not in the Zod schema (stripped), so read from raw body
     let stageId = v.stage_id;
-    const stageName = v.stage || v.stage_name;
+    const stageName = v.stage || body.stage_name;
     
     if (!stageId && stageName) {
       const [stageRecord] = await db

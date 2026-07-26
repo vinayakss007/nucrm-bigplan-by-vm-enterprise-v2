@@ -198,11 +198,13 @@ export async function PATCH(request: NextRequest) {
         .where(and(or(isNull(roles.tenantId), eq(roles.tenantId, ctx.tenantId)), eq(roles.slug, roleSlug)))
         .limit(1);
       
-      await db.update(tenantMembers)
-        .set({ roleSlug, roleId: role?.id || null })
-        .where(eq(tenantMembers.id, memberId));
-        
-      await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'role_change', entityType: 'member', entityId: target.userId, newData: { role: roleSlug } });
+      await db.transaction(async (tx) => {
+        await tx.update(tenantMembers)
+          .set({ roleSlug, roleId: role?.id || null })
+          .where(eq(tenantMembers.id, memberId));
+          
+        await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'role_change', entityType: 'member', entityId: target.userId, newData: { role: roleSlug }, dbOrTx: tx as any });
+      });
 
     } else if (action === 'remove') {
       const reassignUserId = reassignTo || ctx.userId;
@@ -268,11 +270,13 @@ export async function PATCH(request: NextRequest) {
       try { _parsedBody = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
       const { contactId } = _parsedBody;
       if (contactId) {
-        await db.update(contacts).set({ assignedTo: target.userId, lastAssignedAt: new Date() }).where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId)));
-        await db.insert(leadAssignments).values({
-          tenantId: ctx.tenantId,
-          contactId: contactId,
-          userId: target.userId,
+        await db.transaction(async (tx) => {
+          await tx.update(contacts).set({ assignedTo: target.userId, lastAssignedAt: new Date() }).where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId)));
+          await tx.insert(leadAssignments).values({
+            tenantId: ctx.tenantId,
+            contactId: contactId,
+            userId: target.userId,
+          });
         });
       }
     } else {

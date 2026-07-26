@@ -122,39 +122,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const [newTask] = await db.insert(tasks)
-      .values({
-        tenantId: ctx.tenantId,
-        createdBy: ctx.userId,
-        title: v.title,
-        description: v.description,
-        dueDate: v.due_date ? new Date(v.due_date) : null,
-        priority: v.priority,
-        contactId: v.contact_id || null,
-        dealId: v.deal_id || null,
-        assignedTo: v.assigned_to || ctx.userId,
-        status: v.status,
-        completed: v.status === 'completed',
-        completedAt: v.status === 'completed' ? new Date() : null,
-      })
-      .returning();
+    let newTask: typeof tasks.$inferSelect | undefined;
 
-    if (!newTask) throw new Error('Failed to create task');
+    await db.transaction(async (tx) => {
+      [newTask] = await tx.insert(tasks)
+        .values({
+          tenantId: ctx.tenantId,
+          createdBy: ctx.userId,
+          title: v.title,
+          description: v.description,
+          dueDate: v.due_date ? new Date(v.due_date) : null,
+          priority: v.priority,
+          contactId: v.contact_id || null,
+          dealId: v.deal_id || null,
+          assignedTo: v.assigned_to || ctx.userId,
+          status: v.status,
+          completed: v.status === 'completed',
+          completedAt: v.status === 'completed' ? new Date() : null,
+        })
+        .returning();
 
-    // Activity log
-    await db.insert(activities)
-      .values({
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        contactId: v.contact_id || null,
-        dealId: v.deal_id || null,
-        entityType: 'task',
-        entityId: newTask.id,
-        eventType: 'task_created',
-        action: 'create',
-        description: `Created task: ${v.title}`,
-      })
-      .catch(err => console.error('[tasks POST] activity log failed:', err));
+      if (!newTask) throw new Error('Failed to create task');
+
+      await tx.insert(activities)
+        .values({
+          tenantId: ctx.tenantId,
+          userId: ctx.userId,
+          contactId: v.contact_id || null,
+          dealId: v.deal_id || null,
+          entityType: 'task',
+          entityId: newTask.id,
+          eventType: 'task_created',
+          action: 'create',
+          description: `Created task: ${v.title}`,
+        });
+    });
 
     if (v.assigned_to && v.assigned_to !== ctx.userId) {
       createNotification({

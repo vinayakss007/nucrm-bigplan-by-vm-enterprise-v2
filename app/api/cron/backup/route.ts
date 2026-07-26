@@ -186,32 +186,33 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Mark completed
-    await db.update(backupRecords)
-      .set({
-        status: 'completed',
-        sizeBytes: sizeBytes,
-        storagePath: storagePath,
-        storageType: storageType,
-        durationMs: durationMs,
-        completedAt: new Date(),
-        metadata: {
-          pg_version: await getPgDumpVersion(),
-          backup_type: backupType
-        }
-      })
-      .where(eq(backupRecords.id, backup.id));
+    // Mark completed and clear alerts atomically
+    await db.transaction(async (tx) => {
+      await tx.update(backupRecords)
+        .set({
+          status: 'completed',
+          sizeBytes: sizeBytes,
+          storagePath: storagePath,
+          storageType: storageType,
+          durationMs: durationMs,
+          completedAt: new Date(),
+          metadata: {
+            pg_version: await getPgDumpVersion(),
+            backup_type: backupType
+          }
+        })
+        .where(eq(backupRecords.id, backup.id));
 
-    // Clear any backup alerts
-    await db.update(backupAlerts)
-      .set({
-        resolved: true,
-        resolvedAt: new Date()
-      })
-      .where(and(
-        eq(backupAlerts.alertType, 'no_backup'),
-        eq(backupAlerts.resolved, false)
-      )).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      await tx.update(backupAlerts)
+        .set({
+          resolved: true,
+          resolvedAt: new Date()
+        })
+        .where(and(
+          eq(backupAlerts.alertType, 'no_backup'),
+          eq(backupAlerts.resolved, false)
+        ));
+    });
 
     console.log(`[backup] completed: ${filename} (${(sizeBytes / 1024 / 1024).toFixed(1)}MB, ${durationMs}ms)`);
     return NextResponse.json({
@@ -225,21 +226,22 @@ export async function POST(request: NextRequest) {
     const durationMs = Date.now() - t0;
     console.error('[backup] FAILED:', err.message);
 
-    await db.update(backupRecords)
-      .set({
-        status: 'failed',
-        errorMessage: err.message.slice(0, 500),
-        durationMs: durationMs
-      })
-      .where(eq(backupRecords.id, backup.id));
+    await db.transaction(async (tx) => {
+      await tx.update(backupRecords)
+        .set({
+          status: 'failed',
+          errorMessage: err.message.slice(0, 500),
+          durationMs: durationMs
+        })
+        .where(eq(backupRecords.id, backup.id));
 
-    // Log to error_logs
-    await db.insert(errorLogs).values({
-      level: 'fatal',
-      code: 'BACKUP_FAILED',
-      message: `Automated backup failed: ${err.message}`,
-      stack: err.stack?.slice(0, 2000)
-    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      await tx.insert(errorLogs).values({
+        level: 'fatal',
+        code: 'BACKUP_FAILED',
+        message: `Automated backup failed: ${err.message}`,
+        stack: err.stack?.slice(0, 2000)
+      });
+    });
 
     // Alert super admin
     await alertSuperAdmin(
