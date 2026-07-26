@@ -122,5 +122,23 @@ describe('Drizzle Schema - Utilities', () => {
     expect(utils.pk).toBeDefined();
     expect(utils.tenantId).toBeDefined();
     expect(utils.lifecycle).toBeDefined();
+    expect(utils.audit).toBeDefined();
+    expect(utils.metadata).toBeDefined();
+    expect(utils.createdBy).toBeDefined();
+    expect(utils.updatedBy).toBeDefined();
+    expect(utils.deletedBy).toBeDefined();
+    expect(utils.createdAt).toBeDefined();
+    expect(utils.updatedAt).toBeDefined();
+    expect(utils.deletedAt).toBeDefined();
+  });
+
+  it('index helpers are exported and callable', () => {
+    expect(typeof utils.tenantIdx).toBe('function');
+    expect(typeof utils.metadataIdx).toBe('function');
+    expect(typeof utils.activeIdx).toBe('function');
+  });
+
+  it('_registerFkRefs is exported', () => {
+    expect(typeof utils._registerFkRefs).toBe('function');
   });
 });
