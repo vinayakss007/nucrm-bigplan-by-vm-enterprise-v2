@@ -12,15 +12,15 @@ import { eq, and } from 'drizzle-orm';
 const ONBOARDING_COMPLETE_STEP = 'onboarding_complete';
 
 /**
- * Check if user has completed onboarding for this tenant.
- * Returns true if onboarding is done, false if they need to go through it.
+ * Check if onboarding has been completed for this tenant.
+ * Onboarding is a one-time-per-tenant operation — once ANY user completes it,
+ * all users in that tenant skip the onboarding flow.
  */
-export async function hasCompletedOnboarding(tenantId: string, userId: string): Promise<boolean> {
+export async function hasCompletedOnboarding(tenantId: string, _userId: string): Promise<boolean> {
   try {
     const result = await db.query.onboardingProgress.findFirst({
       where: and(
         eq(onboardingProgress.tenantId, tenantId),
-        eq(onboardingProgress.userId, userId),
         eq(onboardingProgress.stepName, ONBOARDING_COMPLETE_STEP),
         eq(onboardingProgress.isCompleted, true)
       ),
@@ -33,7 +33,6 @@ export async function hasCompletedOnboarding(tenantId: string, userId: string): 
     const legacyResult = await db.query.onboardingProgress.findFirst({
       where: and(
         eq(onboardingProgress.tenantId, tenantId),
-        eq(onboardingProgress.userId, userId),
         eq(onboardingProgress.stepName, 'completed'),
         eq(onboardingProgress.isCompleted, true)
       ),
@@ -47,10 +46,29 @@ export async function hasCompletedOnboarding(tenantId: string, userId: string): 
 }
 
 /**
- * Mark onboarding as complete for a user in a tenant.
+ * Mark onboarding as complete for a tenant.
+ * Uses a sentinel userId ('__tenant__') so completion is shared across all users.
+ * Also records per-user completion for the completing user specifically.
  */
 export async function markOnboardingComplete(tenantId: string, userId: string): Promise<void> {
   try {
+    // Mark tenant-wide completion (sentinel user ID)
+    await db.insert(onboardingProgress).values({
+      tenantId,
+      userId: '__tenant__',
+      stepName: ONBOARDING_COMPLETE_STEP,
+      isCompleted: true,
+      completedAt: new Date(),
+    }).onConflictDoUpdate({
+      target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
+      set: {
+        isCompleted: true,
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    // Also mark per-user completion for the completing user
     await db.insert(onboardingProgress).values({
       tenantId,
       userId,
