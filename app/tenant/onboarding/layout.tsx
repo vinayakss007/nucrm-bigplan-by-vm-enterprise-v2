@@ -10,7 +10,8 @@ export default async function OnboardingLayout({ children }: { children: React.R
       redirect('/tenant/dashboard');
     }
   } catch {
-    // If tenant context fails, let the page handle it
+    // If tenant context or DB check fails, redirect to dashboard (fail-safe)
+    redirect('/tenant/dashboard');
   }
   return <>{children}</>;
 }
