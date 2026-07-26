@@ -2,9 +2,9 @@ module.exports = {
   apps: [
     {
       name: 'nucrm',
-      script: 'node_modules/.bin/next',
+      script: 'node_modules/next/dist/bin/next',
       args: 'start',
-      cwd: '/home/vinayak_shruti_biz/nucrm-enterprise',
+      cwd: '/home/vinayak_shruti_biz/nucrm-bigplan-by-vm-enterprise-v2',
       env: {
         NODE_ENV: 'production',
         NODE_OPTIONS: '--max-old-space-size=2048',
@@ -29,9 +29,9 @@ module.exports = {
     },
     {
       name: 'nucrm-worker',
-      script: 'node_modules/.bin/tsx',
+      script: 'node_modules/tsx/dist/cli.mjs',
       args: 'worker.ts',
-      cwd: '/home/vinayak_shruti_biz/nucrm-enterprise',
+      cwd: '/home/vinayak_shruti_biz/nucrm-bigplan-by-vm-enterprise-v2',
       env: {
         NODE_ENV: 'production',
         NODE_OPTIONS: '--max-old-space-size=2048',
