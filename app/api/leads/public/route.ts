@@ -159,18 +159,18 @@ export async function POST(request: NextRequest) {
 
     // Insert into formSubmissions if form_id provided
     if (form_id && contactId) {
-      await db.insert(formSubmissions).values({
-        tenantId: tenant_id,
-        formId: form_id,
-        contactId: contactId,
-        data: { body },
-      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      await db.transaction(async (tx) => {
+        await tx.insert(formSubmissions).values({
+          tenantId: tenant_id,
+          formId: form_id,
+          contactId: contactId,
+          data: { body },
+        });
 
-      // Increment form submissions count
-      await db.update(forms)
-        .set({ submissionsCount: sql`${forms.submissionsCount} + 1` })
-        .where(eq(forms.id, form_id))
-        .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+        await tx.update(forms)
+          .set({ submissionsCount: sql`${forms.submissionsCount} + 1` })
+          .where(eq(forms.id, form_id));
+      });
     }
 
     // Notify workspace owner about new lead
