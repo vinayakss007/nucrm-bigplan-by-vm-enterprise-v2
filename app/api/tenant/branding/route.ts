@@ -4,7 +4,7 @@ import { validateBody } from '@/lib/api/validate';
 import { getBrandingForTenant, BrandingConfig } from '@/lib/branding';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 const brandingUpdateSchema = z.object({
@@ -56,9 +56,19 @@ export async function PUT(request: NextRequest) {
     if (data.customDomain !== undefined) tenantUpdate['customDomain'] = data.customDomain;
 
     if (Object.keys(tenantUpdate).length > 0) {
-      await db.update(tenants)
-        .set(tenantUpdate)
-        .where(eq(tenants.id, ctx.tenantId));
+      const [existing1] = await db
+        .select({ updatedAt: tenants.updatedAt })
+        .from(tenants)
+        .where(eq(tenants.id, ctx.tenantId))
+        .limit(1);
+      if (!existing1) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+      const [updated1] = await db.update(tenants)
+        .set({ ...tenantUpdate, updatedAt: new Date() })
+        .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing1.updatedAt!)))
+        .returning({ id: tenants.id });
+
+      if (!updated1) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });
     }
 
     const extendedBranding: Partial<BrandingConfig> = {};
@@ -70,22 +80,27 @@ export async function PUT(request: NextRequest) {
     if (data.headerLayout !== undefined) extendedBranding.headerLayout = data.headerLayout;
 
     if (Object.keys(extendedBranding).length > 0) {
-      const current = await db.select({ settings: tenants.settings })
+      const [existing2] = await db.select({ settings: tenants.settings, updatedAt: tenants.updatedAt })
         .from(tenants)
         .where(eq(tenants.id, ctx.tenantId))
         .limit(1);
+      if (!existing2) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-      const currentSettings = (current[0]?.settings as Record<string, unknown>) ?? {};
+      const currentSettings = (existing2.settings as Record<string, unknown>) ?? {};
       const currentBranding = (currentSettings['branding'] as Record<string, unknown>) ?? {};
 
-      await db.update(tenants)
+      const [updated2] = await db.update(tenants)
         .set({
           settings: {
             ...currentSettings,
             branding: { ...currentBranding, ...extendedBranding },
           },
+          updatedAt: new Date(),
         })
-        .where(eq(tenants.id, ctx.tenantId));
+        .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing2.updatedAt!)))
+        .returning({ id: tenants.id });
+
+      if (!updated2) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });
     }
 
     const updatedBranding = await getBrandingForTenant(ctx.tenantId);

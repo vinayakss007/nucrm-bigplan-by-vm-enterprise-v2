@@ -92,13 +92,20 @@ export async function PATCH(req: NextRequest) {
     if (parsed.data.sortOrder !== undefined) updateData.sortOrder = parsed.data.sortOrder;
     if (parsed.data.active !== undefined) updateData.active = parsed.data.active;
 
+    const [existing] = await db
+      .select({ updatedAt: leadScoringRules.updatedAt })
+      .from(leadScoringRules)
+      .where(and(eq(leadScoringRules.id, body.id), eq(leadScoringRules.tenantId, ctx.tenantId)))
+      .limit(1);
+    if (!existing) return NextResponse.json({ error: 'Rule not found' }, { status: 404 });
+
     const [row] = await db
       .update(leadScoringRules)
       .set(updateData)
-      .where(and(eq(leadScoringRules.id, body.id), eq(leadScoringRules.tenantId, ctx.tenantId)))
+      .where(and(eq(leadScoringRules.id, body.id), eq(leadScoringRules.tenantId, ctx.tenantId), eq(leadScoringRules.updatedAt, existing.updatedAt!)))
       .returning();
 
-    if (!row) return NextResponse.json({ error: 'Rule not found' }, { status: 404 });
+    if (!row) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });
 
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
@@ -121,16 +128,23 @@ export async function DELETE(req: NextRequest) {
     const id = req.nextUrl.searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
+    const [existing] = await db
+      .select({ updatedAt: leadScoringRules.updatedAt })
+      .from(leadScoringRules)
+      .where(and(eq(leadScoringRules.id, id), eq(leadScoringRules.tenantId, ctx.tenantId)))
+      .limit(1);
+    if (!existing) return NextResponse.json({ error: 'Rule not found' }, { status: 404 });
+
     const [row] = await db
       .update(leadScoringRules)
       .set({
         deletedAt: new Date(),
         updatedBy: ctx.userId,
       })
-      .where(and(eq(leadScoringRules.id, id), eq(leadScoringRules.tenantId, ctx.tenantId)))
+      .where(and(eq(leadScoringRules.id, id), eq(leadScoringRules.tenantId, ctx.tenantId), eq(leadScoringRules.updatedAt, existing.updatedAt!)))
       .returning();
 
-    if (!row) return NextResponse.json({ error: 'Rule not found' }, { status: 404 });
+    if (!row) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });
 
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,

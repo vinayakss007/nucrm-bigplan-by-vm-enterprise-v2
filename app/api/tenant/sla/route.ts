@@ -5,6 +5,7 @@ import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { slaPolicies, slaBreaches } from '@/drizzle/schema/sla';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 
 export async function GET(req: NextRequest) {
   try {
@@ -104,14 +105,17 @@ export async function PUT(req: NextRequest) {
     if (body['escalationRules'] !== undefined) updates['escalationRules'] = body['escalationRules'];
     if (body['isActive'] !== undefined) updates['isActive'] = body['isActive'];
 
+    const concurrencyWhere = concurrencyGuard(slaPolicies, body.expectedUpdatedAt);
+    const whereConditions = [eq(slaPolicies.id, id), eq(slaPolicies.tenantId, ctx.tenantId)];
+    if (concurrencyWhere) whereConditions.push(concurrencyWhere);
+
     const [updated] = await db.update(slaPolicies)
       .set({ ...updates, updatedAt: new Date() })
-      .where(and(eq(slaPolicies.id, id), eq(slaPolicies.tenantId, ctx.tenantId)))
+      .where(and(...whereConditions))
       .returning();
 
-    if (!updated) {
-      return NextResponse.json({ error: 'Policy not found' }, { status: 404 });
-    }
+    const stale = checkStaleUpdate(updated);
+    if (stale) return stale;
 
     return NextResponse.json({ data: updated });
  

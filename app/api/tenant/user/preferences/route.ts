@@ -4,6 +4,7 @@ import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 export async function GET(req: NextRequest) {
   try {
@@ -53,6 +54,10 @@ export async function PUT(req: NextRequest) {
     if (sections !== undefined) currentSidebar.sections = sections;
 
     metadata.sidebar = currentSidebar;
+
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, users, ctx.userId, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     await db
       .update(users)

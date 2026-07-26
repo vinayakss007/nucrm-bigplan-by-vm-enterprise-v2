@@ -6,6 +6,7 @@ import { ssoProviders } from '@/drizzle/schema/infra';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const ssoConfigSchema = z.object({
   providerType: z.enum(['saml', 'oidc']),
@@ -87,6 +88,10 @@ export async function PUT(req: NextRequest) {
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, ssoProviders, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
+
     const updateData: Record<string, any> = { updatedAt: new Date() };
     if (updateFields.name !== undefined) updateData['name'] = updateFields.name;
     if (updateFields.config !== undefined) updateData['config'] = updateFields.config;

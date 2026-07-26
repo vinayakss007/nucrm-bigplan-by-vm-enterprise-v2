@@ -42,8 +42,16 @@ export function encrypt(plaintext: string, key: string): string {
   if (!plaintext) throw new Error('Plaintext cannot be empty');
   if (!key) throw new Error('Key cannot be empty');
 
+  const keyBytes = Buffer.from(key, 'utf-8');
+  if (keyBytes.length < 32) {
+    throw new Error(
+      `Encryption key too short: ${keyBytes.length} bytes (minimum 32). ` +
+      `Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+    );
+  }
+  const keyBuffer = keyBytes.subarray(0, 32);
+
   const iv = randomBytes(IV_LENGTH);
-  const keyBuffer = Buffer.from(key.padEnd(32).slice(0, 32));
   
   const cipher = createCipheriv(ALGORITHM, keyBuffer, iv);
   let encrypted = cipher.update(plaintext, 'utf8', 'base64');
@@ -70,7 +78,11 @@ export function decrypt(encryptedText: string, key: string): string {
 
   const iv = Buffer.from(ivBase64, 'base64');
   const authTag = Buffer.from(authTagBase64, 'base64');
-  const keyBuffer = Buffer.from(key.padEnd(32).slice(0, 32));
+  const keyBytes = Buffer.from(key, 'utf-8');
+  if (keyBytes.length < 32) {
+    throw new Error(`Encryption key too short: ${keyBytes.length} bytes (minimum 32)`);
+  }
+  const keyBuffer = keyBytes.subarray(0, 32);
   
   const decipher = createDecipheriv(ALGORITHM, keyBuffer, iv);
   decipher.setAuthTag(authTag);

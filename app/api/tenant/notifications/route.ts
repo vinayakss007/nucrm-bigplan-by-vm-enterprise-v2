@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { notifications } from '@/drizzle/schema';
 import { eq, and, isNull, desc, sql } from 'drizzle-orm';
+import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 
 export async function GET(request: NextRequest) {
   try {
@@ -80,12 +81,21 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (body.id) {
-      await db.update(notifications)
+      const concurrencyWhere = concurrencyGuard(notifications, body.expectedUpdatedAt);
+      const whereConditions = [
+        eq(notifications.id, body.id),
+        eq(notifications.userId, ctx.userId),
+      ];
+      if (concurrencyWhere) whereConditions.push(concurrencyWhere);
+
+      const [updated] = await db.update(notifications)
         .set({ readAt: new Date(), updatedAt: new Date() })
-        .where(and(
-          eq(notifications.id, body.id),
-          eq(notifications.userId, ctx.userId),
-        ));
+        .where(and(...whereConditions))
+        .returning();
+
+      const stale = checkStaleUpdate(updated);
+      if (stale) return stale;
+
       return NextResponse.json({ success: true });
     }
 
@@ -107,12 +117,20 @@ export async function DELETE(request: NextRequest) {
     try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     if (body.id) {
-      await db.update(notifications)
+      const concurrencyWhere = concurrencyGuard(notifications, body.expectedUpdatedAt);
+      const whereConditions = [
+        eq(notifications.id, body.id),
+        eq(notifications.userId, ctx.userId),
+      ];
+      if (concurrencyWhere) whereConditions.push(concurrencyWhere);
+
+      const [updated] = await db.update(notifications)
         .set({ deletedAt: new Date() })
-        .where(and(
-          eq(notifications.id, body.id),
-          eq(notifications.userId, ctx.userId),
-        ));
+        .where(and(...whereConditions))
+        .returning();
+
+      const stale = checkStaleUpdate(updated);
+      if (stale) return stale;
     } else {
       await db.update(notifications)
         .set({ deletedAt: new Date() })

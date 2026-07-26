@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenantMembers } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
+import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 
 export async function GET(req: NextRequest) {
   try {
@@ -48,13 +49,21 @@ export async function PATCH(req: NextRequest) {
     if (v['notify_on_ticket_created'] !== undefined) safe['notify_on_ticket_created'] = v['notify_on_ticket_created'];
     if (v['notify_on_task_due'] !== undefined) safe['notify_on_task_due'] = v['notify_on_task_due'];
 
-    await db.update(tenantMembers)
+    const concurrencyWhere = concurrencyGuard(tenantMembers, v.expectedUpdatedAt);
+    const whereConditions = [
+      eq(tenantMembers.userId, ctx.userId),
+      eq(tenantMembers.tenantId, ctx.tenantId),
+      eq(tenantMembers.status, 'active'),
+    ];
+    if (concurrencyWhere) whereConditions.push(concurrencyWhere);
+
+    const [updated] = await db.update(tenantMembers)
       .set({ notificationPrefs: safe, updatedAt: new Date() })
-      .where(and(
-        eq(tenantMembers.userId, ctx.userId),
-        eq(tenantMembers.tenantId, ctx.tenantId),
-        eq(tenantMembers.status, 'active')
-      ));
+      .where(and(...whereConditions))
+      .returning();
+
+    const stale = checkStaleUpdate(updated);
+    if (stale) return stale;
 
     return NextResponse.json({ ok: true, data: safe });
  

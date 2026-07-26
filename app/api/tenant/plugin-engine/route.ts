@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getAllProviders, getProviderDef } from '@/lib/integrations/registry';
+import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 
 export async function GET(request: NextRequest) {
   try {
@@ -120,11 +121,16 @@ export async function PATCH(request: NextRequest) {
     if (body['config']) updates['config'] = body['config'];
     if (body['enabled'] !== undefined) updates['isActive'] = body['isActive'];
 
-    await db.update(integrations)
-      .set(updates)
-      .where(and(eq(integrations.tenantId, ctx.tenantId), eq(integrations.id, body.id)));
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, integrations, body.id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
-    return NextResponse.json({ success: true });
+    const [updated] = await db.update(integrations)
+      .set(updates)
+      .where(and(eq(integrations.tenantId, ctx.tenantId), eq(integrations.id, body.id)))
+      .returning({ id: integrations.id, updatedAt: integrations.updatedAt });
+
+    return NextResponse.json({ success: true, data: { id: updated?.id, updatedAt: updated?.updatedAt } });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

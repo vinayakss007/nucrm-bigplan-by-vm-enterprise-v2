@@ -8,6 +8,7 @@ import { eq, and } from 'drizzle-orm';
 import { getTerritoryTree } from '@/lib/territories';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
+import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 
 const createTerritorySchema = z.object({
   name: z.string().min(1, 'name is required'),
@@ -23,6 +24,7 @@ const updateTerritorySchema = z.object({
   parentId: z.string().uuid().optional().nullable(),
   geoConfig: z.record(z.string(), z.unknown()).optional(),
   assignedTo: z.string().uuid().optional(),
+  expectedUpdatedAt: z.coerce.date().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -90,15 +92,18 @@ export async function PUT(req: NextRequest) {
     if (geoConfig !== undefined) updates['geoConfig'] = geoConfig;
     if (assignedTo !== undefined) updates['assignedTo'] = assignedTo;
 
+    const concurrencyWhere = concurrencyGuard(territories, parsed.data.expectedUpdatedAt);
+    const whereConditions = [eq(territories.id, id), eq(territories.tenantId, ctx.tenantId)];
+    if (concurrencyWhere) whereConditions.push(concurrencyWhere);
+
     const [row] = await db
       .update(territories)
       .set(updates)
-      .where(and(eq(territories.id, id), eq(territories.tenantId, ctx.tenantId)))
+      .where(and(...whereConditions))
       .returning();
 
-    if (!row) {
-      return NextResponse.json({ error: 'Territory not found' }, { status: 404 });
-    }
+    const stale = checkStaleUpdate(row);
+    if (stale) return stale;
 
     return NextResponse.json({ data: row });
  

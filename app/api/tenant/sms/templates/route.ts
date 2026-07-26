@@ -8,6 +8,7 @@ import { eq, and, desc, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { extractTemplateVariables } from '@/lib/sms';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const createTemplateSchema = z.object({
   name: z.string().min(1).max(255),
@@ -89,6 +90,10 @@ export async function PUT(req: NextRequest) {
       updates['body'] = v.body;
       updates['variables'] = extractTemplateVariables(v.body);
     }
+
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, smsTemplates, v.id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const [updated] = await db.update(smsTemplates)
       .set(updates)

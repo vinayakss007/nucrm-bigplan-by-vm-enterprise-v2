@@ -4,6 +4,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { scheduledReports } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 export async function GET(request: NextRequest) {
   try {
@@ -76,8 +77,12 @@ export async function PATCH(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const { id, ...updates } = await request.json();
+    const { id, expectedUpdatedAt: expectedUpdatedAtRaw, ...updates } = await request.json();
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
+
+    const expectedUpdatedAt = expectedUpdatedAtRaw ? new Date(expectedUpdatedAtRaw) : null;
+    const guard = await concurrencyGuard(db, scheduledReports, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     await db.update(scheduledReports)
       .set({ ...updates, updatedAt: new Date() })

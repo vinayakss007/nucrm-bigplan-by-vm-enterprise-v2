@@ -22,6 +22,7 @@ import { users } from '@/drizzle/schema/core';
 import { eq, and, desc, sql, gte, count } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { requireAiFeature } from '@/lib/ai/plan-gate';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const VALID_STATUSES = new Set(['success', 'error', 'rate_limited', 'fallback_used']);
 const VALID_PROVIDERS = new Set(['openai', 'anthropic', 'groq', 'ollama', 'opencode', 'deepseek']);
@@ -149,6 +150,10 @@ export async function PATCH(req: NextRequest) {
     // Tenant scope + user scope (non-admin only updates own rows)
     const filters = [eq(aiActivity.id, id), eq(aiActivity.tenantId, ctx.tenantId)];
     if (!ctx.isAdmin) filters.push(eq(aiActivity.userId, ctx.userId));
+
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, aiActivity, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const result = await db
       .update(aiActivity)

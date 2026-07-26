@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { churnPredictions } from '@/drizzle/schema';
 import { contacts } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 /**
  * GET /api/tenant/analytics/churn
@@ -116,8 +117,12 @@ export async function PATCH(
     if (ctx instanceof NextResponse) return ctx;
 
     const body = await request.json();
-    const { id } = body;
+    const { id, expectedUpdatedAt: expectedUpdatedAtRaw } = body;
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
+
+    const expectedUpdatedAt = expectedUpdatedAtRaw ? new Date(expectedUpdatedAtRaw) : null;
+    const guard = await concurrencyGuard(db, churnPredictions, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     await db.update(churnPredictions)
       .set({ 

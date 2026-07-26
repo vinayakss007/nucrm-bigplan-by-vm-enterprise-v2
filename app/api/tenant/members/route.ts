@@ -13,6 +13,7 @@ import { eq, and, or, sql, desc, asc, isNull } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';
 import { hashPassword } from '@/lib/auth/session';
+import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 
 export async function POST(request: NextRequest) {
   try {
@@ -198,9 +199,17 @@ export async function PATCH(request: NextRequest) {
         .where(and(or(isNull(roles.tenantId), eq(roles.tenantId, ctx.tenantId)), eq(roles.slug, roleSlug)))
         .limit(1);
       
-      await db.update(tenantMembers)
+      const concurrencyWhere = concurrencyGuard(tenantMembers, rawPatch.expectedUpdatedAt);
+      const whereConditions: any[] = [eq(tenantMembers.id, memberId)];
+      if (concurrencyWhere) whereConditions.push(concurrencyWhere);
+
+      const [updated] = await db.update(tenantMembers)
         .set({ roleSlug, roleId: role?.id || null })
-        .where(eq(tenantMembers.id, memberId));
+        .where(and(...whereConditions))
+        .returning();
+
+      const stale = checkStaleUpdate(updated);
+      if (stale) return stale;
         
       await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'role_change', entityType: 'member', entityId: target.userId, newData: { role: roleSlug } });
 
@@ -260,9 +269,23 @@ export async function PATCH(request: NextRequest) {
       await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'member_removed', entityType: 'member', entityId: target.userId, newData: { reassigned_to: reassignTo, contacts: cCount?.n, deals: dCount?.n } });
 
     } else if (action === 'suspend') {
-      await db.update(tenantMembers).set({ status: 'suspended' }).where(eq(tenantMembers.id, memberId));
+      const concurrencyWhere = concurrencyGuard(tenantMembers, rawPatch.expectedUpdatedAt);
+      const whereConditions: any[] = [eq(tenantMembers.id, memberId)];
+      if (concurrencyWhere) whereConditions.push(concurrencyWhere);
+
+      const [updated] = await db.update(tenantMembers).set({ status: 'suspended' }).where(and(...whereConditions)).returning();
+
+      const stale = checkStaleUpdate(updated);
+      if (stale) return stale;
     } else if (action === 'reactivate') {
-      await db.update(tenantMembers).set({ status: 'active' }).where(eq(tenantMembers.id, memberId));
+      const concurrencyWhere = concurrencyGuard(tenantMembers, rawPatch.expectedUpdatedAt);
+      const whereConditions: any[] = [eq(tenantMembers.id, memberId)];
+      if (concurrencyWhere) whereConditions.push(concurrencyWhere);
+
+      const [updated] = await db.update(tenantMembers).set({ status: 'active' }).where(and(...whereConditions)).returning();
+
+      const stale = checkStaleUpdate(updated);
+      if (stale) return stale;
     } else if (action === 'assign_lead') {
       let _parsedBody: { contactId?: string };
       try { _parsedBody = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
