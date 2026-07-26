@@ -7,6 +7,7 @@ import { dataRetentionPolicies } from '@/drizzle/schema/compliance';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
+import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 
 const retentionPolicySchema = z.object({
   entityType: z.enum(['contacts', 'deals', 'activities', 'emails', 'audit_logs', 'notes', 'tasks']),
@@ -20,6 +21,7 @@ const updateRetentionPolicySchema = z.object({
   retentionDays: z.number().int().min(1).max(3650).optional(),
   action: z.enum(['archive', 'delete', 'anonymize']).optional(),
   isActive: z.boolean().optional(),
+  expectedUpdatedAt: z.coerce.date().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -111,19 +113,20 @@ export async function PUT(req: NextRequest) {
     if (v.action !== undefined) updateData['action'] = v.action;
     if (v.isActive !== undefined) updateData['isActive'] = v.isActive;
 
+    const concurrencyWhere = concurrencyGuard(dataRetentionPolicies, v.expectedUpdatedAt);
+    const whereConditions = [
+      eq(dataRetentionPolicies.id, v.id),
+      eq(dataRetentionPolicies.tenantId, ctx.tenantId),
+    ];
+    if (concurrencyWhere) whereConditions.push(concurrencyWhere);
+
     const [updated] = await db.update(dataRetentionPolicies)
       .set(updateData)
-      .where(
-        and(
-          eq(dataRetentionPolicies.id, v.id),
-          eq(dataRetentionPolicies.tenantId, ctx.tenantId)
-        )
-      )
+      .where(and(...whereConditions))
       .returning();
 
-    if (!updated) {
-      return NextResponse.json({ error: 'Policy not found' }, { status: 404 });
-    }
+    const stale = checkStaleUpdate(updated);
+    if (stale) return stale;
 
     return NextResponse.json({ data: updated });
  

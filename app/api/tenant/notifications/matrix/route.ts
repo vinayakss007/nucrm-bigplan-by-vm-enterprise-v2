@@ -13,6 +13,7 @@ import { db } from '@/drizzle/db';
 import { tenantMembers } from '@/drizzle/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const CHANNELS = ['in_app', 'email', 'telegram'] as const;
 type Channel = typeof CHANNELS[number];
@@ -117,6 +118,10 @@ export async function PATCH(req: NextRequest) {
         telegram: v['telegram'] === true,
       };
     }
+
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, tenantMembers, ctx.userId, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     await db
       .update(tenantMembers)

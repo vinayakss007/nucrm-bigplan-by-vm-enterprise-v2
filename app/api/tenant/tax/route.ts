@@ -7,6 +7,7 @@ import { taxRates } from '@/drizzle/schema/financial';
 import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const createTaxRateSchema = z.object({
   name: z.string().min(1, 'name is required'),
@@ -112,6 +113,10 @@ export async function PUT(req: NextRequest) {
     const parsed = validateBody(updateTaxRateSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const { id, ...updates } = parsed.data;
+
+    const expectedUpdatedAt = (parsed.data as Record<string, unknown>).expectedUpdatedAt ? new Date((parsed.data as Record<string, unknown>).expectedUpdatedAt as string) : null;
+    const guard = await concurrencyGuard(db, taxRates, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const updateData = { ...updates, updatedAt: new Date() } as Record<string, unknown>;
     if (updateData.rate !== undefined) {

@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 
@@ -119,7 +119,14 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
     }
 
-    await db
+    const [existing] = await db
+      .select({ updatedAt: tenants.updatedAt })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId))
+      .limit(1);
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    const [updated] = await db
       .update(tenants)
       .set({
         settings: sql`
@@ -131,7 +138,10 @@ export async function PATCH(req: NextRequest) {
         `,
         updatedAt: new Date(),
       })
-      .where(eq(tenants.id, ctx.tenantId));
+      .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing.updatedAt!)))
+      .returning({ id: tenants.id });
+
+    if (!updated) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });
 
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
@@ -155,13 +165,23 @@ export async function DELETE(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    await db
+    const [existing] = await db
+      .select({ updatedAt: tenants.updatedAt })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId))
+      .limit(1);
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    const [updated] = await db
       .update(tenants)
       .set({
         settings: sql`COALESCE(${tenants.settings}, '{}'::jsonb) - 'user_defaults'`,
         updatedAt: new Date(),
       })
-      .where(eq(tenants.id, ctx.tenantId));
+      .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing.updatedAt!)))
+      .returning({ id: tenants.id });
+
+    if (!updated) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });
 
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,

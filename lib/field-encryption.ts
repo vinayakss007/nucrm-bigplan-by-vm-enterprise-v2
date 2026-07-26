@@ -61,7 +61,13 @@ export function decryptSensitiveFields<T extends Record<string, any>>(
 
   for (const [k, value] of Object.entries(result)) {
     if (fieldsToDecrypt.some(f => k.toLowerCase().includes(f.toLowerCase())) && value) {
-      result[k as keyof T] = decrypt(String(value), encKey) as T[keyof T];
+      try {
+        result[k as keyof T] = decrypt(String(value), encKey) as T[keyof T];
+      } catch (err) {
+        // Fail-closed: replace with null rather than returning ciphertext
+        console.error(`[field-encryption] Failed to decrypt field "${k}":`, err);
+        result[k as keyof T] = null as T[keyof T];
+      }
     }
   }
 

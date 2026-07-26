@@ -34,6 +34,7 @@ export const updateNotificationPrefsSchema = z.object({
   notify_on_deal_won: z.boolean().optional(),
   notify_on_ticket_created: z.boolean().optional(),
   notify_on_task_due: z.boolean().optional(),
+  expectedUpdatedAt: z.coerce.date().optional(),
 });
 
 // ── Preferences patch schema ──

@@ -187,7 +187,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const permErr = requirePerm(ctx, 'tickets.manage');
     if (permErr) return permErr;
 
-    await db.delete(supportTickets).where(and(eq(supportTickets.tenantId, ctx.tenantId), eq(supportTickets.id, id)));
+    const now = new Date();
+    await db.update(supportTickets).set({ deletedAt: now, updatedAt: now }).where(and(eq(supportTickets.tenantId, ctx.tenantId), eq(supportTickets.id, id)));
 
     return NextResponse.json({ success: true });
  

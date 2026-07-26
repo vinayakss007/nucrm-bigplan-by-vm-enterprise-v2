@@ -7,6 +7,7 @@ import { tenantHierarchy, hierarchyPermissions } from '@/drizzle/schema/hierarch
 import { eq, and, isNull } from 'drizzle-orm';
 import { validateBody } from '@/lib/api/validate';
 import { createHierarchySchema, updateHierarchySchema } from '@/lib/api/schemas';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 export async function GET(req: NextRequest) {
   try {
@@ -111,6 +112,10 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const parsed = validateBody(updateHierarchySchema, body);
     if (parsed instanceof NextResponse) return parsed;
+
+    const expectedUpdatedAt = (parsed.data as Record<string, unknown>).expectedUpdatedAt ? new Date((parsed.data as Record<string, unknown>).expectedUpdatedAt as string) : null;
+    const guard = await concurrencyGuard(db, tenantHierarchy, parsed.data.id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const [row] = await db
       .update(tenantHierarchy)

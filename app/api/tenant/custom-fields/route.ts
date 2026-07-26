@@ -8,6 +8,7 @@ import { customFieldDefs, contacts, companies, deals, leads } from '@/drizzle/sc
 import { users, tenants, featureRegistry } from '@/drizzle/schema';
 import { tasks } from '@/drizzle/schema';
 import { eq, and, asc, desc, sql } from 'drizzle-orm';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const VALID_ENTITY_TYPES = ['contact', 'company', 'deal', 'lead', 'task', 'user', 'tenant'] as const;
 type EntityType = typeof VALID_ENTITY_TYPES[number];
@@ -353,6 +354,10 @@ export async function PUT(req: NextRequest) {
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const expectedUpdatedAt = (validated.data as Record<string, unknown>).expectedUpdatedAt ? new Date((validated.data as Record<string, unknown>).expectedUpdatedAt as string) : null;
+  const guard = await concurrencyGuard(db, customFieldDefs, fieldId, ctx.tenantId, expectedUpdatedAt);
+  if (guard) return guard;
+
   const setValues: any = {
     updatedAt: new Date()
   };

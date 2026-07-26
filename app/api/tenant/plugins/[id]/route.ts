@@ -6,6 +6,7 @@ import { customPlugins } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import type { PluginAuthType, PluginAction, PluginAuthConfig } from '@/lib/plugins/types';
 import { encryptAuthConfig, decryptAuthConfig, redactAuthConfig } from '@/lib/plugins/crypto';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const VALID_AUTH_TYPES: PluginAuthType[] = ['bearer', 'basic', 'api_key_header', 'api_key_query', 'oauth2_client_credentials', 'none'];
 const VALID_STATUSES = ['active', 'disabled'] as const;
@@ -115,6 +116,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       }
       updates['status'] = status;
     }
+
+    const expectedUpdatedAt = body['expectedUpdatedAt'] ? new Date(body['expectedUpdatedAt'] as string) : null;
+    const guard = await concurrencyGuard(db, customPlugins, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     updates['updatedAt'] = new Date();
 

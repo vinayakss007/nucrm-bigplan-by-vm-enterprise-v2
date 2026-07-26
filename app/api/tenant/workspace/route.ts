@@ -3,7 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, users, plans, subscriptions } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { dbCache, invalidateCache } from '@/lib/db/cache';
 import { checkRateLimit } from '@/lib/rate-limit';
 
@@ -123,12 +123,21 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'No valid fields' }, { status: 400 });
     }
 
+    const [existing] = await db
+      .select({ updatedAt: tenants.updatedAt })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId))
+      .limit(1);
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
     updateData.updatedAt = new Date();
 
     const [tenant] = await db.update(tenants)
       .set(updateData)
-      .where(eq(tenants.id, ctx.tenantId))
+      .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing.updatedAt!)))
       .returning();
+
+    if (!tenant) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });
 
     invalidateCache(`workspace:${ctx.tenantId}`);
 

@@ -5,6 +5,7 @@ import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { assignmentRules } from '@/drizzle/schema/assignment';
 import { eq, and, desc } from 'drizzle-orm';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 export async function GET(req: NextRequest) {
   try {
@@ -95,6 +96,10 @@ export async function PUT(req: NextRequest) {
     if (body['config'] !== undefined) updates['config'] = body['config'];
     if (body['isActive'] !== undefined) updates['isActive'] = body['isActive'];
     if (body['priority'] !== undefined) updates['priority'] = body['priority'];
+
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, assignmentRules, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const [updated] = await db.update(assignmentRules)
       .set({ ...updates, updatedAt: new Date() })
