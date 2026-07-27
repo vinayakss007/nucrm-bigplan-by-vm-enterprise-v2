@@ -10,6 +10,7 @@
 import { db } from '@/drizzle/db';
 import { systemSettings } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { logger } from '@/lib/logger';
 
 // Default sensitive fields that should be masked in exports
 const DEFAULT_SENSITIVE_FIELDS = [
@@ -92,8 +93,15 @@ export async function getDlpConfig(_tenantId?: string): Promise<DlpConfig> {
         : setting.value;
       return { ...defaultConfig, ...config };
     }
-  } catch {
-    // Return defaults on error
+  } catch (err) {
+    // Returning defaults keeps DLP enforcement active (fail-safe), but a failure
+    // here means the configured policy is NOT being applied — the tenant may be
+    // operating under stricter or looser rules than they configured. That must
+    // be visible.
+    logger.error('[DLP] Failed to load config, falling back to defaults', {
+      tenantId: _tenantId,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 
   return defaultConfig;
@@ -239,6 +247,16 @@ export async function logExportActivity(
       }),
     });
   } catch (err) {
-    console.error('[DLP] Failed to log export activity:', err);
+    // An export happened but we failed to record it. For a compliance-relevant
+    // audit trail that is a real gap, so it goes to the structured logger rather
+    // than stdout where nothing aggregates it.
+    logger.error('[DLP] Failed to log export activity', {
+      tenantId,
+      userId,
+      exportType,
+      format,
+      rowCount,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }

@@ -1,15 +1,33 @@
-#!/usr/bin/env node
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
-import * as schema from '../drizzle/schema';
-import { sql } from 'drizzle-orm';
-import * as fs from 'fs';
-import * as path from 'path';
+#!/usr/bin/env npx tsx
+/**
+ * Migration rollback CLI (issue #640)
+ *
+ * All the real work lives in `lib/db/rollback.ts` so it is type-checked and
+ * unit-tested (scripts/** is excluded from tsconfig). This file is just the CLI.
+ *
+ * Usage:
+ *   npm run db:rollback -- --list
+ *   npm run db:rollback:coverage
+ *   npm run db:rollback -- --dry-run
+ *   npm run db:rollback -- 0045_rls_fail_closed_policy --yes
+ *   npm run db:rollback -- 0043_tenant_isolation_hardening --force --yes
+ */
 import { createInterface } from 'readline';
+import {
+  listAppliedMigrations,
+  parseRollbackSql,
+  rollbackMigration,
+  verifyRollbackCoverage,
+} from '../lib/db/rollback';
 
 const args = process.argv.slice(2);
 const isDryRun = args.includes('--dry-run');
 const isYes = args.includes('--yes') || args.includes('-y');
+const isList = args.includes('--list');
+const isCoverage = args.includes('--coverage');
+const isForce = args.includes('--force');
+const positional = args.filter((a) => !a.startsWith('-'));
+const requestedTag = positional[0];
 
 function detectEnv(url: string): string {
   if (url.includes('localhost') || url.includes('127.0.0.1')) return 'local';
@@ -18,19 +36,45 @@ function detectEnv(url: string): string {
   return 'unknown';
 }
 
-async function confirm(prompt: string): Promise<boolean> {
+async function ask(prompt: string): Promise<string> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
     rl.question(`${prompt} `, (answer) => {
       rl.close();
-      resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
+      resolve(answer.trim());
     });
   });
 }
 
-async function main() {
-  const databaseUrl = process.env.DATABASE_URL;
+async function confirm(prompt: string): Promise<boolean> {
+  const answer = (await ask(prompt)).toLowerCase();
+  return answer === 'y' || answer === 'yes';
+}
 
+function printCoverage(): void {
+  const coverage = verifyRollbackCoverage();
+  console.log('[rollback] Rollback coverage report');
+  console.log(
+    `[rollback] ${coverage.covered}/${coverage.total} migrations have rollback SQL (${coverage.coveragePercent}%)`,
+  );
+  for (const entry of coverage.entries) {
+    const mark = entry.hasRollback ? 'OK  ' : 'MISS';
+    const source = entry.source ? ` (${entry.source})` : '';
+    console.log(`  ${mark} ${String(entry.idx).padStart(3, ' ')} ${entry.tag}${source}`);
+  }
+  if (coverage.missing > 0) {
+    console.log(`[rollback] ${coverage.missing} migration(s) cannot be rolled back automatically.`);
+  }
+}
+
+async function main() {
+  // --coverage is filesystem-only: no database needed.
+  if (isCoverage) {
+    printCoverage();
+    return;
+  }
+
+  const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     console.error('ERROR: DATABASE_URL environment variable is required');
     process.exit(1);
@@ -39,113 +83,75 @@ async function main() {
   const env = detectEnv(databaseUrl);
   console.log(`[rollback] Target database environment: ${env}`);
 
-  const pool = new Pool({
-    connectionString: databaseUrl,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-    connectionTimeoutMillis: 10_000,
-  });
+  const applied = await listAppliedMigrations();
 
-  const db = drizzle(pool, { schema });
-
-  console.log('[rollback] Checking migration history...');
-
-  try {
-    const result = await db.execute(sql`
-      SELECT id, name, applied_at
-      FROM __drizzle_migrations
-      ORDER BY applied_at DESC
-      LIMIT 1
-    `);
-
-    const rows = result.rows as Array<{ id: string; name: string; applied_at: Date }>;
-
-    if (rows.length === 0) {
-      console.log('[rollback] No migrations to rollback');
-      process.exit(0);
+  if (isList) {
+    if (applied.length === 0) {
+      console.log('[rollback] No applied migrations recorded.');
+      return;
     }
-
-    const migration = rows[0];
-    if (!migration) {
-      console.log('[rollback] No migrations to rollback');
-      process.exit(0);
+    console.log('[rollback] Applied migrations (newest first):');
+    for (const m of applied) {
+      const when = m.appliedAt ? m.appliedAt.toISOString() : 'unknown';
+      const rollback = m.hasRollback ? 'rollback available' : 'NO ROLLBACK';
+      console.log(`  ${String(m.idx).padStart(3, ' ')} ${m.tag}  applied=${when}  ${rollback}`);
     }
-    console.log(`[rollback] Last migration: ${migration.name} (applied at ${migration.applied_at})`);
+    return;
+  }
 
-    const migrationsDir = './drizzle/migrations';
-    const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql'));
+  if (applied.length === 0) {
+    console.log('[rollback] No migrations to rollback');
+    return;
+  }
 
-    const targetFile = files.find(f => f.includes(migration.name.slice(0, 20)));
+  const tag = requestedTag ?? applied[0]!.tag;
+  console.log(`[rollback] Target migration: ${tag}`);
 
-    if (!targetFile) {
-      console.error('[rollback] Could not find migration SQL file to rollback');
-      console.error('[rollback] Manual rollback may be required');
-      process.exit(1);
-    }
+  const sql = await parseRollbackSql(tag);
+  if (!sql) {
+    console.error(`[rollback] No rollback SQL found for "${tag}".`);
+    console.error(`[rollback] Create "${tag}.down.sql", or add a "-- DOWN" / "-- END DOWN" section`);
+    console.error('[rollback] to the migration file, or roll back manually.');
+    process.exit(1);
+  }
 
-    console.log(`[rollback] Found migration file: ${targetFile}`);
+  console.log('[rollback] Rollback SQL preview:');
+  console.log(sql.slice(0, 500));
+  if (sql.length > 500) {
+    console.log(`... (${sql.length - 500} more characters)`);
+  }
+  console.log('[rollback] WARNING: This will reverse the migration and may cause DATA LOSS.');
 
-    const downFile = targetFile.replace('.sql', '.down.sql');
-    const downPath = path.join(migrationsDir, downFile);
-
-    if (!fs.existsSync(downPath)) {
-      console.error('[rollback] No down migration file found');
-      console.error('[rollback] Create a .down.sql file with reversal statements, or rollback manually');
-      process.exit(1);
-    }
-
-    const downSql = fs.readFileSync(downPath, 'utf-8');
-    const preview = downSql.slice(0, 200);
-    console.log('[rollback] Rollback SQL preview:');
-    console.log(preview);
-    if (downSql.length > 200) {
-      console.log(`... (${downSql.length - 200} more characters)`);
-    }
-    console.log('[rollback] WARNING: This will reverse the migration and may cause DATA LOSS.');
-
-    if (isDryRun) {
-      console.log('[rollback] Dry-run complete. No rollback executed.');
-      process.exit(0);
-    }
-
-    if (!isYes) {
-      if (env === 'production') {
-        console.log('[rollback] PRODUCTION ENVIRONMENT: type the migration name to confirm:');
-        const rl = createInterface({ input: process.stdin, output: process.stdout });
-        const typed = await new Promise<string>((resolve) => {
-          rl.question('> ', (answer) => { rl.close(); resolve(answer.trim()); });
-        });
-        if (typed !== migration.name) {
-          console.log('[rollback] Migration name does not match. Aborted.');
-          process.exit(0);
-        }
-      } else {
-        const ok = await confirm(`Rollback "${migration.name}" on the "${env}" database? (y/N)`);
-        if (!ok) {
-          console.log('[rollback] Aborted by user.');
-          process.exit(0);
-        }
-      }
-    } else if (env === 'production' && !isYes) {
+  if (!isDryRun) {
+    if (env === 'production' && !isYes) {
       console.error('[rollback] ERROR: Running rollback on production without --yes flag is forbidden.');
       console.error('[rollback] Pass --yes to confirm you understand the risks.');
       process.exit(1);
     }
 
-    console.log(`[rollback] Executing rollback from ${downFile}...`);
-    await db.execute(sql.raw(downSql));
-    console.log('[rollback] Rollback completed successfully');
-
-    await db.execute(sql`
-      DELETE FROM __drizzle_migrations WHERE id = ${migration.id}
-    `);
-    console.log('[rollback] Migration record removed from history');
-
-  } catch (error: any) {
-    console.error('[rollback] Rollback failed:', error.message);
-    process.exit(1);
-  } finally {
-    await pool.end();
+    if (!isYes) {
+      const ok = await confirm(`Rollback "${tag}" on the "${env}" database? (y/N)`);
+      if (!ok) {
+        console.log('[rollback] Aborted by user.');
+        return;
+      }
+    }
   }
+
+  const result = await rollbackMigration(tag, { dryRun: isDryRun, force: isForce });
+
+  if (result.dryRun) {
+    console.log('[rollback] Dry-run complete: transaction rolled back, nothing was changed.');
+    return;
+  }
+
+  console.log(`[rollback] Rollback completed successfully (source: ${result.source})`);
+  console.log('[rollback] Migration record removed from history — it can be re-applied.');
 }
 
-main();
+main()
+  .then(() => process.exit(0))
+  .catch((err: unknown) => {
+    console.error('[rollback] Rollback failed:', err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });

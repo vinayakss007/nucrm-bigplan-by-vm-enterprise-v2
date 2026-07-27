@@ -1,3 +1,5 @@
+import { logError } from '@/lib/errors-client';
+
 let cachedPrefs: Record<string, unknown> | null = null;
 let prefsPromise: Promise<Record<string, unknown> | null> | null = null;
 
@@ -10,7 +12,12 @@ async function fetchPrefs(): Promise<Record<string, unknown>> {
         cachedPrefs = d.preferences ?? {};
         return cachedPrefs;
       })
-      .catch(() => {
+      .catch((err) => {
+        // Falling back to empty prefs is the right UX (the app stays usable and
+        // callers apply their own defaults), but a fetch failure here previously
+        // left no trace at all, so a broken /api/user/preferences looked
+        // identical to "user has configured nothing".
+        logError({ error: err, context: 'client-prefs:fetchPrefs' });
         cachedPrefs = {};
         return cachedPrefs;
       });
