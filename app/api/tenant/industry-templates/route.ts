@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
 
         for (const [i, stageName] of pipe.stages.entries()) {
           await tx.insert(dealStages).values({
+            tenantId: ctx.tenantId,
             pipelineId: pipelineId,
             name: stageName,
             order: i,

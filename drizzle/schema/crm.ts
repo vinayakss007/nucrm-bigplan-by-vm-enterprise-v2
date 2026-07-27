@@ -234,6 +234,7 @@ export const pipelines = pgTable('pipelines', {
 
 export const dealStages = pgTable('deal_stages', {
   id: utils.pk(),
+  tenantId: utils.tenantId(),
   pipelineId: uuid('pipeline_id').notNull().references(() => pipelines.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   order: integer('order').default(0),

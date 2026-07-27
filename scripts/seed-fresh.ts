@@ -89,6 +89,7 @@ async function main() {
   ];
   for (const s of stages) {
     await db.insert(dealStages).values({
+      tenantId: tenant.id,
       pipelineId: pipeline.id,
       name: s.name,
       order: s.order,

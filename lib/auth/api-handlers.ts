@@ -310,6 +310,7 @@ export async function POST_signup(request: NextRequest) {
 
       for (const s of defaultStages) {
         await tx.insert(dealStages).values({
+          tenantId: t.id,
           pipelineId: pipeline.id,
           name: s.name,
           order: s.order,
