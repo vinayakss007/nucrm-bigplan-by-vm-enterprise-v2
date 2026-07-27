@@ -1,7 +1,8 @@
 import { pgTable, uuid, text, timestamp, boolean, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from './core';
-import { contacts, deals } from './crm';
+import { contacts, deals, companies, leads } from './crm';
+import { supportTickets } from './support';
 import * as utils from './utils';
 
 export const tasks = pgTable('tasks', {
@@ -17,8 +18,15 @@ export const tasks = pgTable('tasks', {
   completed: boolean('completed').default(false),
   completedAt: timestamp('completed_at', { withTimezone: true }),
 
+  // A task could previously only attach to a contact or a deal, so "a task for
+  // this company", "follow up on this lead" and "do this for that ticket" were
+  // not representable at all. These are the relationships the product treats as
+  // first-class; anything more incidental belongs in record_links.
   contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
   dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'set null' }),
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
+  leadId: uuid('lead_id').references(() => leads.id, { onDelete: 'set null' }),
+  ticketId: uuid('ticket_id').references(() => supportTickets.id, { onDelete: 'set null' }),
   assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }),
 
   metadata: utils.metadata(),

@@ -7,6 +7,7 @@ import {
   contacts as _contacts,
   products as _products,
   quotes as _quotes,
+  deals as _deals,
 } from './crm';
 
 // Aliases to match existing references in table definitions
@@ -14,6 +15,7 @@ const companies = _companies;
 const contacts = _contacts;
 const products = _products;
 const quotes = _quotes;
+const deals = _deals;
 
 // ── SERVICES MODULE ─────────────────────────────────────
 export const services = pgTable('services', {
@@ -113,6 +115,10 @@ export const invoices = pgTable('invoices', {
   // must not delete the money record that came out of it.
   quoteId: uuid('quote_id').references(() => quotes.id, { onDelete: 'set null' }),
   orderId: uuid('order_id').references(() => orders.id, { onDelete: 'set null' }),
+  // Revenue attribution: without this, "how much did this deal actually bill"
+  // could only be answered by hopping invoice -> quote -> deal, which breaks as
+  // soon as the quote is deleted or the invoice was raised directly.
+  dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'set null' }),
   
   paymentMethod: text('payment_method'),
   paymentReference: text('payment_reference'),

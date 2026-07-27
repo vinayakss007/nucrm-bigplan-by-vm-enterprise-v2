@@ -354,6 +354,11 @@ export const quotes = pgTable('quotes', {
   tenantId: utils.tenantId(),
   contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
   dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'cascade' }),
+  // invoices, orders and contracts all carry company_id but quotes did not, so
+  // the company was dropped the moment a quote was raised and had to be
+  // re-derived from the contact. That is also why quote -> invoice conversion
+  // set companyId to undefined.
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
   
   title: text('title').notNull(),
   quoteNumber: text('quote_number'),
