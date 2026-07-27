@@ -37,6 +37,12 @@ export interface OrphanedRecord {
 export interface ReferentialIntegrityResult {
   checked: number;
   violations: OrphanedRecord[];
+  /**
+   * Relationships that could not be checked at all (missing table, permission
+   * denied, connection failure). A non-empty list means the run was INCOMPLETE:
+   * `clean` is false because absence of findings is not evidence of health.
+   */
+  errors: string[];
   clean: boolean;
   checkedAt: string;
 }
@@ -54,6 +60,8 @@ export interface TenantBoundarySample {
 export interface TenantBoundaryResult {
   checked: number;
   violations: TenantBoundarySample[];
+  /** Checks that could not be run. Non-empty means the run was incomplete. */
+  errors: string[];
   clean: boolean;
   checkedAt: string;
 }
@@ -71,6 +79,8 @@ export interface AuditChainResult {
   checkedRecords: number;
   gaps: AuditChainEntry[];
   tamperingDetected: boolean;
+  /** Why the chain could not be walked, if it could not be. */
+  errors: string[];
   clean: boolean;
   checkedAt: string;
 }
@@ -92,10 +102,28 @@ export async function verifyReferentialIntegrity(
   const pool: Pool = getPool();
   const { limit = 100 } = options;
 
-  // Discover FK relationships from the database if not provided
-  const rels = relationships ?? (await discoverForeignKeys(pool));
+  // Discover FK relationships from the database if not provided. A discovery
+  // failure is reported, not swallowed: returning an empty list would look
+  // identical to "this database has no foreign keys".
+  let rels: ForeignKeyRelationship[];
+  if (relationships) {
+    rels = relationships;
+  } else {
+    try {
+      rels = await discoverForeignKeys(pool);
+    } catch (err) {
+      return {
+        checked: 0,
+        violations: [],
+        errors: [err instanceof Error ? err.message : String(err)],
+        clean: false,
+        checkedAt: new Date().toISOString(),
+      };
+    }
+  }
 
   const violations: OrphanedRecord[] = [];
+  const errors: string[] = [];
 
   for (const rel of rels) {
     try {
@@ -120,8 +148,13 @@ export async function verifyReferentialIntegrity(
           count: result.rows.length,
         });
       }
-    } catch {
-      // Skip tables that don't exist or have permission issues
+    } catch (err) {
+      // A relationship we could not check is NOT a relationship that is clean.
+      // Record it so the caller can tell "nothing wrong" from "nothing looked at".
+      errors.push(
+        `${rel.sourceTable}.${rel.sourceColumn} -> ${rel.targetTable}.${rel.targetColumn}: ` +
+          (err instanceof Error ? err.message : String(err))
+      );
       continue;
     }
   }
@@ -129,7 +162,8 @@ export async function verifyReferentialIntegrity(
   return {
     checked: rels.length,
     violations,
-    clean: violations.length === 0,
+    errors,
+    clean: violations.length === 0 && errors.length === 0,
     checkedAt: new Date().toISOString(),
   };
 }
@@ -160,11 +194,25 @@ export async function verifyTenantBoundaries(
   const pool: Pool = getPool();
   const { sampleSize = 50 } = options;
 
-  const boundaryChecks =
-    checks ??
-    (await discoverTenantBoundaryChecks(pool));
+  let boundaryChecks: TenantBoundaryCheck[];
+  if (checks) {
+    boundaryChecks = checks;
+  } else {
+    try {
+      boundaryChecks = await discoverTenantBoundaryChecks(pool);
+    } catch (err) {
+      return {
+        checked: 0,
+        violations: [],
+        errors: [err instanceof Error ? err.message : String(err)],
+        clean: false,
+        checkedAt: new Date().toISOString(),
+      };
+    }
+  }
 
   const violations: TenantBoundarySample[] = [];
+  const errors: string[] = [];
 
   for (const check of boundaryChecks) {
     const targetCol = check.foreignTargetColumn || 'id';
@@ -194,8 +242,11 @@ export async function verifyTenantBoundaries(
           violated: true,
         });
       }
-    } catch {
-      // Skip tables that don't exist or can't be queried
+    } catch (err) {
+      errors.push(
+        `${check.table}.${check.foreignColumn} -> ${check.foreignTable}: ` +
+          (err instanceof Error ? err.message : String(err))
+      );
       continue;
     }
   }
@@ -203,7 +254,8 @@ export async function verifyTenantBoundaries(
   return {
     checked: boundaryChecks.length,
     violations,
-    clean: violations.length === 0,
+    errors,
+    clean: violations.length === 0 && errors.length === 0,
     checkedAt: new Date().toISOString(),
   };
 }
@@ -244,40 +296,50 @@ export async function verifyAuditChainIntegrity(
     );
 
     let previousHash: string | null = null;
+    let isFirstRecord = true;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const row of rows.rows as any[]) {
       checkedRecords++;
+      const backPointer: string | null = row.previous_hash ?? null;
       const entry: AuditChainEntry = {
         id: String(row.id),
-        previousHash: row.previous_hash ?? null,
+        previousHash: backPointer,
         currentHash: row.hash ?? '',
         gapDetected: false,
         tamperingSuspected: false,
       };
 
-      // First record should have null previous_hash
-      if (previousHash !== null) {
-        // Check chain continuity: this record's previous_hash should match the last record's hash
-        if (row.previous_hash && row.previous_hash !== previousHash) {
-          entry.gapDetected = true;
-          entry.tamperingSuspected = true;
-          tamperingDetected = true;
-          gaps.push(entry);
-        }
+      // Only the first record may have a null back-pointer. For every record
+      // after it, previous_hash must equal the preceding record's hash —
+      // INCLUDING when it is null. Skipping the null case (`if (backPointer &&
+      // ...)`) would miss the most likely tampering signature there is:
+      // deleting an entry and re-linking, or splicing in a forged head, both
+      // leave a null back-pointer on a record that is not the first.
+      if (!isFirstRecord && backPointer !== previousHash) {
+        entry.gapDetected = true;
+        entry.tamperingSuspected = true;
+        tamperingDetected = true;
+        gaps.push(entry);
       }
 
       previousHash = row.hash ?? null;
+      isFirstRecord = false;
     }
-  } catch {
-    // If the audit table doesn't exist or lacks expected columns,
-    // report gracefully
+  } catch (err) {
+    // The chain could not be walked. Previously this returned clean: true,
+    // which reported an unverifiable audit log as a healthy one - a connection
+    // failure and an intact chain were indistinguishable.
     return {
       totalRecords: 0,
       checkedRecords: 0,
       gaps: [],
       tamperingDetected: false,
-      clean: true,
+      errors: [
+        `Could not walk the audit chain in "${tableName}": ` +
+          (err instanceof Error ? err.message : String(err)),
+      ],
+      clean: false,
       checkedAt: new Date().toISOString(),
     };
   }
@@ -287,6 +349,7 @@ export async function verifyAuditChainIntegrity(
     checkedRecords,
     gaps,
     tamperingDetected,
+    errors: [],
     clean: gaps.length === 0,
     checkedAt: new Date().toISOString(),
   };
@@ -323,8 +386,12 @@ async function discoverForeignKeys(pool: Pool): Promise<ForeignKeyRelationship[]
       targetTable: r.target_table,
       targetColumn: r.target_column,
     }));
-  } catch {
-    return [];
+  } catch (err) {
+    // Returning [] here would be indistinguishable from "this database has no
+    // foreign keys", which the caller would then report as clean.
+    throw new Error(
+      `Foreign-key discovery failed: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 }
 
@@ -363,7 +430,9 @@ async function discoverTenantBoundaryChecks(pool: Pool): Promise<TenantBoundaryC
       foreignTable: r.target_table,
       foreignTargetColumn: r.target_column,
     }));
-  } catch {
-    return [];
+  } catch (err) {
+    throw new Error(
+      `Tenant-boundary discovery failed: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 }

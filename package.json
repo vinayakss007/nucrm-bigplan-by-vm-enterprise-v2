@@ -60,6 +60,7 @@
     "db:studio": "node -e \"console.log('Use DBeaver or pgAdmin to connect: ' + process.env.DATABASE_URL)\"",
     "db:drop": "npx tsx scripts/drop-all.ts",
     "db:verify-isolation": "npx tsx scripts/verify-tenant-isolation.ts",
+    "db:verify-integrity": "npx tsx scripts/verify-data-integrity.ts",
     "db:verify-chain": "npx tsx scripts/verify-migration-chain.ts",
     "backup:verify": "npx tsx scripts/verify-backup.ts",
     "db:reset": "npx tsx scripts/drop-all.ts && npm run db:migrate",
