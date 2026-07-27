@@ -38,7 +38,9 @@ describe('verifySecret', () => {
 });
 
 describe('encrypt/decrypt', () => {
-  const testKey = 'test-encryption-key-32-chars!!';
+  // AES-256-GCM requires a 32-byte key. `encrypt` rejects anything shorter
+  // rather than silently padding, so these fixtures must be exactly 32 bytes.
+  const testKey = 'test-encryption-key-0123456789ab';
 
   it('encrypts and decrypts correctly', () => {
     const plaintext = 'sensitive-data-123';
@@ -59,7 +61,7 @@ describe('encrypt/decrypt', () => {
   it('fails to decrypt with wrong key', () => {
     const plaintext = 'secret';
     const encrypted = encrypt(plaintext, testKey);
-    expect(() => decrypt(encrypted, 'wrong-key-32-chars-long!!')).toThrow();
+    expect(() => decrypt(encrypted, 'wrong-encryption-key-0123456789a')).toThrow();
   });
 
   it('throws on empty plaintext', () => {
@@ -95,12 +97,17 @@ describe('encrypt/decrypt', () => {
     expect(decrypt(encrypted, testKey)).toBe(unicode);
   });
 
-  it('pads short keys to 32 bytes', () => {
+  // Short keys are rejected outright. Silently padding them to 32 bytes would
+  // turn a 5-byte secret into a full-strength-looking AES-256 key and hide a
+  // serious misconfiguration, so encrypt/decrypt both refuse.
+  it('rejects keys shorter than 32 bytes instead of padding them', () => {
     const shortKey = 'short';
-    const plaintext = 'test-data';
-    const encrypted = encrypt(plaintext, shortKey);
-    const decrypted = decrypt(encrypted, shortKey);
-    expect(decrypted).toBe(plaintext);
+    expect(() => encrypt('test-data', shortKey)).toThrow('Encryption key too short');
+  });
+
+  it('rejects short keys on decrypt as well', () => {
+    const encrypted = encrypt('test-data', testKey);
+    expect(() => decrypt(encrypted, 'short')).toThrow('Encryption key too short');
   });
 
   it('truncates long keys to 32 bytes', () => {

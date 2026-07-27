@@ -13,7 +13,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { emailTracking, activities } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
-import { logError } from '@/lib/errors-server';
 
 // 1x1 transparent GIF
 const PIXEL = Buffer.from(

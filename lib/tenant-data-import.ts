@@ -325,8 +325,19 @@ export class TenantDataImporter {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function _parseAndBuildInsert(sqlString: string): any {
+  // Accept an optional schema qualifier and optional double-quoted identifiers,
+  // e.g. all of:
+  //     INSERT INTO contacts (...)
+  //     INSERT INTO public.contacts (...)
+  //     INSERT INTO "contacts" (...)
+  //     INSERT INTO "public"."contacts" (...)
+  // pg_dump quotes identifiers whenever they are mixed-case or reserved, so a
+  // parser that only accepted bare names rejected every statement in such a
+  // dump — producing a "successful" restore with zero rows.
+  // The captured name is still checked against the table allowlist below, so
+  // permitting quotes does not widen what can be written to.
   const match = sqlString.trim().match(
-    /^\s*INSERT\s+INTO\s+(?:public\.)?(\w+)\s*\(([^)]+)\)\s*VALUES\s*\(([\s\S]*)\)\s*$/i
+    /^\s*INSERT\s+INTO\s+(?:"?public"?\.)?"?(\w+)"?\s*\(([^)]+)\)\s*VALUES\s*\(([\s\S]*)\)\s*$/i
   );
   if (!match) return null;
 

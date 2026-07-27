@@ -9,8 +9,32 @@ const mockExistsSync = vi.fn().mockReturnValue(false);
 const mockStatSync = vi.fn().mockReturnValue({ size: 0 });
 const mockUnlinkSync = vi.fn();
 const mockRenameSync = vi.fn();
+
+// lib/logger writes via the promise-based fs API (fs.promises.*) so that log
+// writes never block the event loop. `stat` reports a small file so that
+// rotateLogs() short-circuits instead of exercising rotation here.
+const mockAppendFile = vi.fn().mockResolvedValue(undefined);
+const mockStat = vi.fn().mockResolvedValue({ size: 0 });
+const mockUnlink = vi.fn().mockResolvedValue(undefined);
+const mockRename = vi.fn().mockResolvedValue(undefined);
+
+const mockPromises = {
+  appendFile: mockAppendFile,
+  stat: mockStat,
+  unlink: mockUnlink,
+  rename: mockRename,
+};
+
 vi.mock('fs', () => ({
-  default: { appendFileSync: mockAppendFileSync, existsSync: mockExistsSync, statSync: mockStatSync, unlinkSync: mockUnlinkSync, renameSync: mockRenameSync },
+  default: {
+    promises: mockPromises,
+    appendFileSync: mockAppendFileSync,
+    existsSync: mockExistsSync,
+    statSync: mockStatSync,
+    unlinkSync: mockUnlinkSync,
+    renameSync: mockRenameSync,
+  },
+  promises: mockPromises,
   appendFileSync: mockAppendFileSync,
   existsSync: mockExistsSync,
   statSync: mockStatSync,
@@ -104,7 +128,12 @@ describe('logger', () => {
   it('writes to log file', async () => {
     const { logger } = await import('@/lib/logger');
     logger.info('file test', { key: 'val' });
-    expect(mockAppendFileSync).toHaveBeenCalledWith(
+
+    // writeToFile() is deliberately fire-and-forget, so wait for the rotate ->
+    // append promise chain to settle rather than asserting synchronously.
+    await vi.waitFor(() => expect(mockAppendFile).toHaveBeenCalled());
+
+    expect(mockAppendFile).toHaveBeenCalledWith(
       expect.stringContaining('nucrm.log'),
       expect.stringContaining('"level":"info"')
     );
