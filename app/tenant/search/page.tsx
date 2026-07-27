@@ -1,10 +1,11 @@
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, Users, TrendingUp, Building2, CheckSquare, Loader2, X, Target } from 'lucide-react';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { AdvancedSearchFilters } from '@/components/tenant/advanced-search';
+import { ListSkeleton } from '@/components/shared/page-skeleton';
 
 interface SearchFilters {
   status?: string[];
@@ -71,7 +72,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
   </>;
 }
 
-export default function SearchPage() {
+function SearchPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
@@ -387,5 +388,19 @@ export default function SearchPage() {
         </div>
       )}
     </div>
+  );
+}
+
+
+/**
+ * useSearchParams() suspends. Without a boundary around it, Next.js bails the
+ * whole route out of prerendering into client-side rendering and emits a build
+ * warning, so the page shipped with no server-rendered HTML at all.
+ */
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<ListSkeleton />}>
+      <SearchPageContent />
+    </Suspense>
   );
 }
