@@ -279,10 +279,13 @@ describe('verifyBackup', () => {
       expect(result.errors[0]).toContain('Tenants found: ');
     });
 
-    it('BUG: quoted / non-public identifiers are attributed to a phantom table', async () => {
-      // `public."Contacts"` is recorded as a table literally named "public",
-      // and `crm.contacts` as "crm"; a leading-quote table name is dropped
-      // entirely while still incrementing totalStatements.
+  });
+
+  describe('quoted and schema-qualified identifiers', () => {
+    it('attributes quoted and non-public tables to the real table name', async () => {
+      // `public."Contacts"` used to be recorded as a table literally named
+      // "public" and `crm.contacts` as "crm", while a leading-quote name was
+      // dropped entirely — so a fully mis-parsed backup passed verification.
       const p = write(
         'quoted.sql',
         [
@@ -293,10 +296,24 @@ describe('verifyBackup', () => {
       );
       const result = await verifyBackup(p);
       expect(result.totalStatements).toBe(3);
-      expect(result.tablesFound).toEqual(['crm', 'public']);
-      expect(result.recordsPerTable).toEqual({ public: 1, crm: 1 });
-      // Still "valid" — a fully mis-parsed backup passes verification.
-      expect(result.valid).toBe(true);
+      expect(result.tablesFound).toEqual(['Contacts', 'contacts']);
+      expect(result.recordsPerTable).toEqual({ Contacts: 1, contacts: 2 });
+    });
+
+    it('fails verification when a statement cannot be read at all', async () => {
+      // A backup whose rows the restore would skip is not a verified backup.
+      const p = write(
+        'unreadable.sql',
+        [
+          completeDump(),
+          `INSERT INTO ((( totally malformed`,
+        ].join('\n')
+      );
+      const result = await verifyBackup(p);
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some(e => /could not be parsed/.test(e) && /NOT be restored/.test(e))
+      ).toBe(true);
     });
   });
 });

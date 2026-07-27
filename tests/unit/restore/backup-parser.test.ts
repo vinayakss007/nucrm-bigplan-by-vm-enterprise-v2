@@ -214,43 +214,63 @@ describe('parseInsertStatement', () => {
   });
 
   /**
-   * These document confirmed defects. Each assertion pins the CURRENT (wrong)
-   * behaviour so the suite stays honest; when the parser is fixed these tests
-   * will fail and must be inverted to the `should` expectation in the comment.
+   * pg_dump quotes an identifier whenever it is mixed-case, reserved or
+   * contains punctuation — and quotes everything under
+   * --quote-all-identifiers. These were all silently rejected, which made
+   * every row of such a dump vanish from the restore while it still reported
+   * success. The returned table name is always unquoted and unqualified.
    */
-  describe('KNOWN BUGS — quoted / schema-qualified identifiers are silently rejected', () => {
-    it('BUG: rejects a double-quoted table name (should parse as contacts)', () => {
-      expect(parseInsertStatement(`INSERT INTO "contacts" (id, name) VALUES ('c1', 'Bob');`))
-        .toBeNull();
+  describe('quoted and schema-qualified identifiers', () => {
+    it('accepts a double-quoted table name', () => {
+      expect(
+        parseInsertStatement(`INSERT INTO "contacts" (id, name) VALUES ('c1', 'Bob');`)?.table
+      ).toBe('contacts');
     });
 
-    it('BUG: rejects a quoted mixed-case table name — pg_dump emits these for mixed-case tables', () => {
-      expect(parseInsertStatement(`INSERT INTO "Contacts" (id, name) VALUES ('c1', 'Bob');`))
-        .toBeNull();
+    it('preserves the case of a quoted mixed-case table name', () => {
+      // pg_dump emits these for mixed-case tables; the case must survive
+      // because the restore quotes the name again on the way back in.
+      expect(
+        parseInsertStatement(`INSERT INTO "Contacts" (id, name) VALUES ('c1', 'Bob');`)?.table
+      ).toBe('Contacts');
     });
 
-    it('BUG: rejects a fully quoted schema-qualified name "public"."contacts"', () => {
+    it('strips a fully quoted schema qualification "public"."contacts"', () => {
       expect(
         parseInsertStatement(`INSERT INTO "public"."contacts" (id, name) VALUES ('c1', 'Bob');`)
-      ).toBeNull();
+          ?.table
+      ).toBe('contacts');
     });
 
-    it('BUG: rejects public."Contacts" (unquoted schema, quoted table)', () => {
+    it('handles public."Contacts" (unquoted schema, quoted table)', () => {
       expect(
         parseInsertStatement(`INSERT INTO public."Contacts" (id, name) VALUES ('c1', 'Bob');`)
-      ).toBeNull();
+          ?.table
+      ).toBe('Contacts');
     });
 
-    it('BUG: rejects any schema other than public (crm.contacts)', () => {
-      expect(parseInsertStatement(`INSERT INTO crm.contacts (id, name) VALUES ('c1', 'Bob');`))
-        .toBeNull();
+    it('accepts a schema other than public and drops the prefix', () => {
+      expect(
+        parseInsertStatement(`INSERT INTO crm.contacts (id, name) VALUES ('c1', 'Bob');`)?.table
+      ).toBe('contacts');
     });
 
-    it('BUG: rejects VALUES( with no separating whitespace — the regex requires \\s+', () => {
-      expect(parseInsertStatement(`INSERT INTO contacts (id, name) VALUES('c1', 'Bob');`))
-        .toBeNull();
+    it('accepts VALUES( with no separating whitespace', () => {
+      expect(
+        parseInsertStatement(`INSERT INTO contacts (id, name) VALUES('c1', 'Bob');`)?.values
+      ).toEqual(["'c1'", "'Bob'"]);
     });
 
+    it('still parses the values and columns of a quoted-identifier statement', () => {
+      const parsed = parseInsertStatement(
+        `INSERT INTO public."Contacts" ("id", "firstName") VALUES ('c1', 'Bob');`
+      );
+      expect(parsed?.columns).toEqual(['id', 'firstName']);
+      expect(parsed?.values).toEqual(["'c1'", "'Bob'"]);
+    });
+  });
+
+  describe('KNOWN BUGS — value splitting (lower risk, still open)', () => {
     it('BUG: unquoted composite values with commas break arity, e.g. ARRAY[1,2]', () => {
       // Value splitting tracks quotes but not brackets, so ARRAY[1,2] is split
       // into two values -> arity mismatch -> the whole row is dropped.
@@ -316,12 +336,14 @@ describe('convertToUpsert', () => {
     expect(convertToUpsert(mismatched)).toBe(mismatched);
   });
 
-  it('leaves a quoted-identifier statement untouched because the parser rejects it', () => {
-    // Downstream consequence of the parser bug: an upsert conversion silently
-    // degrades to the original INSERT, so restores of mixed-case dumps will
-    // conflict-error instead of upserting.
-    const stmt = `INSERT INTO "Contacts" (id, name) VALUES ('c1', 'A');`;
-    expect(convertToUpsert(stmt)).toBe(stmt);
+  it('converts a quoted-identifier statement instead of passing it through', () => {
+    // Previously the parser rejected the quoted table, so the conversion
+    // silently degraded to a bare INSERT and a mixed-case dump would
+    // conflict-error on restore instead of upserting.
+    expect(convertToUpsert(`INSERT INTO "Contacts" (id, name) VALUES ('c1', 'A');`)).toBe(
+      `INSERT INTO "Contacts" (id, name) VALUES ('c1', 'A')` +
+        ` ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`
+    );
   });
 
   it('converts a multi-row INSERT to a single ON CONFLICT clause', () => {
@@ -331,23 +353,37 @@ describe('convertToUpsert', () => {
     expect(out).toContain(`VALUES ('c1', 'A'), ('c2', 'B') ON CONFLICT (id) DO UPDATE SET`);
   });
 
-  describe('KNOWN BUGS', () => {
-    it('BUG: DO NOTHING is appended AFTER the semicolon, producing invalid SQL', () => {
-      // Should be: INSERT ... VALUES (...) ON CONFLICT DO NOTHING;
-      // Actual:    INSERT ... VALUES (...); ON CONFLICT DO NOTHING
+  describe('clause placement and degenerate column lists', () => {
+    it('appends DO NOTHING before the semicolon, not after it', () => {
+      // The clause used to land after the `;`, which is invalid SQL. Affects
+      // every junction table with no `id` column (contact_tags, lead_tags,
+      // deal_products, quote_line_items).
       const out = convertToUpsert(
         `INSERT INTO contact_tags (contact_id, tag_id) VALUES ('c1', 't1');`
       );
       expect(out).toBe(
-        `INSERT INTO contact_tags (contact_id, tag_id) VALUES ('c1', 't1'); ON CONFLICT DO NOTHING`
+        `INSERT INTO contact_tags (contact_id, tag_id) VALUES ('c1', 't1') ON CONFLICT DO NOTHING`
       );
-      expect(out).toMatch(/;\s*ON CONFLICT/);
+      expect(out).not.toMatch(/;\s*ON CONFLICT/);
     });
 
-    it('BUG: a PK-only INSERT yields an empty SET list, which is a syntax error', () => {
-      // Should degrade to ON CONFLICT (id) DO NOTHING, as restore-executor does.
-      const out = convertToUpsert(`INSERT INTO contacts (id) VALUES ('c1');`);
-      expect(out).toBe(`INSERT INTO contacts (id) VALUES ('c1') ON CONFLICT (id) DO UPDATE SET `);
+    it('degrades a PK-only INSERT to DO NOTHING rather than an empty SET list', () => {
+      // `DO UPDATE SET` with nothing to set is a syntax error; restore-executor
+      // already had this rule and convertToUpsert now matches it.
+      expect(convertToUpsert(`INSERT INTO contacts (id) VALUES ('c1');`)).toBe(
+        `INSERT INTO contacts (id) VALUES ('c1') ON CONFLICT (id) DO NOTHING`
+      );
+    });
+
+    it('produces no clause after a semicolon in any branch', () => {
+      const statements = [
+        `INSERT INTO contacts (id, name) VALUES ('c1', 'A');`,
+        `INSERT INTO contacts (id) VALUES ('c1');`,
+        `INSERT INTO contact_tags (contact_id, tag_id) VALUES ('c1', 't1');`,
+      ];
+      for (const stmt of statements) {
+        expect(convertToUpsert(stmt)).not.toMatch(/;\s*ON CONFLICT/);
+      }
     });
   });
 });
@@ -653,10 +689,11 @@ describe('file-level helpers (real temp files)', () => {
       expect(meta.date_range).toEqual({ earliest: null, latest: null });
     });
 
-    it('BUG: a dump using quoted identifiers yields ZERO records while reporting success', async () => {
-      // This is the data-loss scenario: pg_dump --inserts on mixed-case tables
-      // emits `INSERT INTO public."Contacts" ...`, every statement is rejected
-      // by parseInsertStatement, and the metadata claims the backup is empty.
+    it('reads a dump written with quoted identifiers', async () => {
+      // The data-loss scenario this fixes: pg_dump --inserts on mixed-case
+      // tables emits `INSERT INTO public."Contacts" ...`. Every statement used
+      // to be rejected, so the metadata claimed the backup was empty and the
+      // restore wrote nothing while reporting success.
       const file = join(dir, 'quoted-identifiers.sql');
       writeFileSync(
         file,
@@ -667,9 +704,35 @@ describe('file-level helpers (real temp files)', () => {
       );
 
       const meta = await parseBackupFile(file);
-      expect(meta.statement_count).toBe(0);
-      expect(meta.tables_found).toEqual([]);
-      expect(meta.tenants_found).toEqual([]);
+      expect(meta.statement_count).toBe(2);
+      expect(meta.unparsed_statements).toBe(0);
+      expect(meta.tables_found).toEqual(['contacts']);
+      expect(meta.tenants_found).toHaveLength(1);
+      expect(meta.tenants_found[0]?.total_records).toBe(2);
+    });
+
+    it('counts an INSERT it cannot read instead of skipping it silently', async () => {
+      // The guarantee that matters more than any one regex: if the parser ever
+      // fails to read a row again, the caller is told rather than losing it.
+      const file = join(dir, 'unparseable.sql');
+      writeFileSync(
+        file,
+        [
+          `INSERT INTO public.contacts (id, tenant_id) VALUES ('c1', '${TENANT_A}');`,
+          // No column list, so it cannot be mapped to columns and is skipped.
+          `INSERT INTO public.contacts VALUES ('c2', '${TENANT_A}');`,
+          `-- a comment, not an INSERT, must NOT be counted`,
+          `SET statement_timeout = 0;`,
+        ].join('\n')
+      );
+
+      const meta = await parseBackupFile(file);
+      expect(meta.statement_count).toBe(1);
+      expect(meta.unparsed_statements).toBe(1);
+    });
+
+    it('reports zero unparsed statements for a clean dump', async () => {
+      expect((await parseBackupFile(validSql)).unparsed_statements).toBe(0);
     });
   });
 
@@ -754,14 +817,15 @@ describe('file-level helpers (real temp files)', () => {
       expect(out.contacts).toEqual([]);
     });
 
-    it('BUG: quoted-identifier dumps extract nothing for a valid tenant', async () => {
+    it('extracts rows from a quoted-identifier dump', async () => {
       const file = join(dir, 'extract-quoted.sql');
       writeFileSync(
         file,
         `INSERT INTO "public"."contacts" (id, tenant_id, name) VALUES ('c1', '${TENANT_A}', 'A');`
       );
       const out = await extractTenantSQL(file, TENANT_A, ['contacts']);
-      expect(out.contacts).toEqual([]);
+      expect(out.contacts).toHaveLength(1);
+      expect(out.contacts?.[0]).toContain(TENANT_A);
     });
   });
 });
