@@ -1,11 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock drizzle DB
-vi.mock('@/drizzle/db', () => ({
-  db: {
+vi.mock('@/drizzle/db', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db: any = {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
-        where: vi.fn(() => []),
+        // Returns an array that additionally exposes .limit(), so both
+        // `await ....where(...)` and `await ....where(...).limit(1)` work.
+        where: vi.fn(() => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const rows: any = [];
+          rows.limit = vi.fn(() => rows);
+          return rows;
+        }),
       })),
     })),
     insert: vi.fn(() => ({
@@ -20,8 +28,17 @@ vi.mock('@/drizzle/db', () => ({
         })),
       })),
     })),
-  },
-}));
+  };
+
+  // setFieldPermission / grantRecordAccess / approval workflows wrap their
+  // reads and writes in db.transaction(). The callback receives this same mock
+  // object so that per-test overrides of db.select/db.insert/db.update are also
+  // observed through `tx`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db.transaction = vi.fn(async (cb: (tx: any) => unknown) => cb(db));
+
+  return { db };
+});
 
 vi.mock('@/drizzle/schema/core', () => ({
   fieldPermissions: {
@@ -272,9 +289,14 @@ describe('RBAC - Field Permissions Additional', () => {
       const { db } = await import('@/drizzle/db');
       (db.select as ReturnType<typeof vi.fn>).mockReturnValue({
         from: vi.fn(() => ({
-          where: vi.fn(() => [
-            { id: 'fp-1', fieldName: 'salary', accessLevel: 'none', tenantId: 'tenant-1', roleId: 'role-1', entityType: 'contact' },
-          ]),
+          where: vi.fn(() => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const rows: any = [
+              { id: 'fp-1', fieldName: 'salary', accessLevel: 'none', tenantId: 'tenant-1', roleId: 'role-1', entityType: 'contact' },
+            ];
+            rows.limit = vi.fn(() => rows);
+            return rows;
+          }),
         })),
       });
       (db.update as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -317,9 +339,14 @@ describe('RBAC - Record Permissions Additional', () => {
       const { db } = await import('@/drizzle/db');
       (db.select as ReturnType<typeof vi.fn>).mockReturnValue({
         from: vi.fn(() => ({
-          where: vi.fn(() => [
-            { id: 'rp-1', tenantId: 'tenant-1', roleId: 'role-1', entityType: 'deal', entityId: 'deal-1', accessLevel: 'read', grantedBy: 'user-1' },
-          ]),
+          where: vi.fn(() => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const rows: any = [
+              { id: 'rp-1', tenantId: 'tenant-1', roleId: 'role-1', entityType: 'deal', entityId: 'deal-1', accessLevel: 'read', grantedBy: 'user-1' },
+            ];
+            rows.limit = vi.fn(() => rows);
+            return rows;
+          }),
         })),
       });
       (db.update as ReturnType<typeof vi.fn>).mockReturnValue({

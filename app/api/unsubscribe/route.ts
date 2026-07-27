@@ -7,7 +7,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { contacts, sequenceEnrollments, activities } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
-import { logError } from '@/lib/errors-server';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -35,7 +34,11 @@ export async function GET(req: NextRequest) {
           tenantId: contacts.tenantId 
         });
 
-      if (!c) return null as any;
+      // Return an empty tuple, not null: the caller destructures this value
+      // with `const [contact] = ...`, and destructuring null throws a
+      // TypeError that the outer catch turns into a 500 — making the intended
+      // 404 "Contact not found" response below unreachable.
+      if (!c) return [];
 
       await tx.update(sequenceEnrollments)
         .set({ status: 'cancelled' })

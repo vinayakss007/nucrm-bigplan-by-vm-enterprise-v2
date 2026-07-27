@@ -15,8 +15,9 @@ const mkFrom = vi.fn(() => ({
 
 vi.mock('@/lib/ai/gateway', () => ({ chat: mockChat }));
 
-vi.mock('@/drizzle/db', () => ({
-  db: {
+vi.mock('@/drizzle/db', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db: any = {
     query: {
       leadScoringRules: { findMany: vi.fn(() => mockDbFindMany()) },
       contacts: { findFirst: vi.fn(() => mockDbFindFirst()) },
@@ -30,8 +31,16 @@ vi.mock('@/drizzle/db', () => ({
       set: vi.fn(() => ({ where: vi.fn(() => Promise.resolve()) })),
     })),
     select: vi.fn(() => ({ from: mkFrom })),
-  },
-}));
+  };
+
+  // scoreLead() persists the score and syncs it back to contacts inside a
+  // single db.transaction(). The callback gets this same mock so tx.insert /
+  // tx.update resolve against the definitions above.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db.transaction = vi.fn(async (cb: (tx: any) => unknown) => cb(db));
+
+  return { db };
+});
 
 vi.mock('@/drizzle/schema/ai', () => ({
   leadScoringRules: {},

@@ -5,7 +5,7 @@ import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getAllProviders, getProviderDef } from '@/lib/integrations/registry';
-import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(request: NextRequest) {

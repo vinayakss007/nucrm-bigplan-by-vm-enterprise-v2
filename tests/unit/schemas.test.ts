@@ -154,21 +154,44 @@ describe('api/schemas', () => {
     expect(() => verify2faSchema.parse({ token: '12345', password: 'mypassword' })).toThrow();
   });
 
-  it('createInvoiceSchema validates line items required', async () => {
+  it('createInvoiceSchema requires a title', async () => {
     const { createInvoiceSchema } = await import('@/lib/api/schemas');
     expect(() => createInvoiceSchema.parse({
       contact_id: '00000000-0000-0000-0000-000000000000',
       company_id: '00000000-0000-0000-0000-000000000000',
       line_items: [],
-    })).toThrow('At least one line item required');
+    })).toThrow(/title/i);
+  });
+
+  // An empty line_items list is intentionally permitted: the invoices route
+  // creates draft invoices with a zero subtotal and line items are attached
+  // afterwards. Content of each item is still validated (see next test).
+  it('createInvoiceSchema permits an empty line_items list for drafts', async () => {
+    const { createInvoiceSchema } = await import('@/lib/api/schemas');
+    const result = createInvoiceSchema.parse({
+      title: 'Draft invoice',
+      contact_id: '00000000-0000-0000-0000-000000000000',
+      company_id: '00000000-0000-0000-0000-000000000000',
+      line_items: [],
+    });
+    expect(result.line_items).toEqual([]);
+  });
+
+  it('createInvoiceSchema rejects a line item missing its name', async () => {
+    const { createInvoiceSchema } = await import('@/lib/api/schemas');
+    expect(() => createInvoiceSchema.parse({
+      title: 'Invoice',
+      line_items: [{ quantity: 1, unit_price: 100 }],
+    })).toThrow(/name/i);
   });
 
   it('createInvoiceSchema defaults status to draft', async () => {
     const { createInvoiceSchema } = await import('@/lib/api/schemas');
     const result = createInvoiceSchema.parse({
+      title: 'Invoice for services',
       contact_id: '00000000-0000-0000-0000-000000000000',
       company_id: '00000000-0000-0000-0000-000000000000',
-      line_items: [{ description: 'Item', quantity: 1, unit_price: 100 }],
+      line_items: [{ name: 'Item', description: 'Item', quantity: 1, unit_price: 100 }],
     });
     expect(result.status).toBe('draft');
     expect(result.line_items).toHaveLength(1);
@@ -176,8 +199,12 @@ describe('api/schemas', () => {
 
   it('importSchema defaults skip_duplicates to true', async () => {
     const { importSchema } = await import('@/lib/api/schemas');
-    const result = importSchema.parse({ entity_type: 'contacts', data: [{ name: 'Test' }] });
+    const result = importSchema.parse({
+      entity_type: 'contacts',
+      file_url: 'https://example.com/contacts.csv',
+    });
     expect(result.skip_duplicates).toBe(true);
+    expect(result.dry_run).toBe(false);
   });
 
   it('exportSchema rejects invalid entity_type', async () => {
