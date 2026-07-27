@@ -113,8 +113,10 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
     <header className="h-14 border-b border-border bg-card flex items-center gap-3 px-4 shrink-0">
       {/* Hamburger to toggle sidebar */}
       <button onClick={onToggleSidebar}
+        type="button"
+        aria-label="Toggle navigation sidebar"
         className="min-h-11 min-w-11 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground transition-colors shrink-0">
-        <Menu className="w-4 h-4" />
+        <Menu className="w-4 h-4" aria-hidden="true" />
       </button>
 
       {/* Search bar */}
@@ -136,7 +138,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
             data-testid="search-input"
             className="w-full pl-8 pr-8 py-1.5 text-sm bg-muted/40 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-background transition-colors"
           />
-          {query && <button onClick={()=>{setQuery('');setResults(null);setShowDrop(false);}} className="absolute right-2 top-1/2 -translate-y-1/2 min-h-11 min-w-11 flex items-center justify-center text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5"/></button>}
+          {query && <button type="button" aria-label="Clear search" onClick={()=>{setQuery('');setResults(null);setShowDrop(false);}} className="absolute right-2 top-1/2 -translate-y-1/2 min-h-11 min-w-11 flex items-center justify-center text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" aria-hidden="true"/></button>}
         </div>
 
         {/* Search dropdown */}
@@ -208,23 +210,34 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
       <div className="flex items-center gap-1 ml-auto shrink-0">
         {/* Refresh button */}
         <button onClick={()=>router.refresh()} title="Refresh page"
+          type="button"
+          aria-label="Refresh page"
           className="min-h-11 min-w-11 flex items-center justify-center rounded-lg hover:bg-accent transition-colors text-muted-foreground">
-          <RefreshCw className="w-4 h-4"/>
+          <RefreshCw className="w-4 h-4" aria-hidden="true"/>
         </button>
 
         {/* Dark mode toggle */}
         <button onClick={()=>setTheme(theme==='dark'?'light':'dark')}
+          type="button"
+          // Names the destination state, not the current one: "Switch to light
+          // theme" tells the user what pressing it will do.
+          aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
           className="min-h-11 min-w-11 flex items-center justify-center rounded-lg hover:bg-accent transition-colors text-muted-foreground">
-          <Sun className="w-4 h-4 hidden dark:block" />
-          <Moon className="w-4 h-4 block dark:hidden" />
+          <Sun className="w-4 h-4 hidden dark:block" aria-hidden="true" />
+          <Moon className="w-4 h-4 block dark:hidden" aria-hidden="true" />
         </button>
 
         {/* Notifications bell */}
         <div className="relative" ref={notifRef}>
           <button onClick={() => setShowNotifPanel(s => !s)}
+            type="button"
+            // The unread count is rendered as a visual badge only, so it has to
+            // be part of the accessible name to reach a screen reader.
+            aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+            aria-expanded={showNotifPanel}
             className={cn("relative min-h-11 min-w-11 flex items-center justify-center rounded-lg hover:bg-accent transition-colors", showNotifPanel ? "bg-accent text-violet-600" : "text-muted-foreground")}>
-            <Bell className="w-4 h-4"/>
-            {unread > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-violet-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-in zoom-in">{unread > 99 ? '99+' : unread}</span>}
+            <Bell className="w-4 h-4" aria-hidden="true"/>
+            {unread > 0 && <span aria-hidden="true" className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-violet-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-in zoom-in">{unread > 99 ? '99+' : unread}</span>}
           </button>
 
           {showNotifPanel && (
@@ -284,6 +297,9 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
         {/* Profile dropdown */}
         <div className="relative" ref={profileRef}>
           <button onClick={()=>setShowProfile(s=>!s)}
+            type="button"
+            aria-label="Account menu"
+            aria-expanded={showProfile}
             className="flex items-center gap-2 pl-1.5 pr-2 py-1 rounded-xl hover:bg-accent transition-colors">
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0" style={{ background: color }}>
               {initials}

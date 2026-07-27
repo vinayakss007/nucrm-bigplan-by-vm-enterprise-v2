@@ -84,14 +84,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
-    // Map legacy 'value' to 'amount' if present
-    if (v.value !== undefined && v.amount === undefined) {
-      const val = Number(v.value);
-      if (isNaN(val) || val < 0) return NextResponse.json({ error: 'value must be a non-negative number' }, { status: 400 });
-      v.amount = val;
-    }
-    if (v.amount !== undefined && typeof v.amount === 'number') {
-      if (v.amount < 0 || v.amount > 999_999_999) return NextResponse.json({ error: 'amount must be between 0 and 999,999,999' }, { status: 400 });
+    // Map legacy 'value' to 'amount' if present. `deals.amount` is a decimal
+    // column, so Drizzle expects a string — resolve it separately instead of
+    // writing a string back into `v.amount`, which the schema types as a number.
+    const rawAmount = v.amount ?? v.value;
+    let normalizedAmount: string | undefined;
+    if (rawAmount !== undefined) {
+      if (!Number.isFinite(rawAmount) || rawAmount < 0 || rawAmount > 999_999_999) {
+        return NextResponse.json({ error: 'amount must be between 0 and 999,999,999' }, { status: 400 });
+      }
+      normalizedAmount = rawAmount.toString();
     }
 
     // Map legacy 'stage' or 'stage_name' (string like "won") to stageId (UUID)
@@ -125,9 +127,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: Record<string, any> = {
-      ...v,
       updatedAt: new Date(),
     };
+
+    // Map request fields to columns explicitly. Spreading the validated body
+    // would put snake_case keys (`stage_id`, `contact_id`, …) and request-only
+    // keys (`value`, `stage`, `stage_name`) into the SET clause, none of which
+    // are columns on `deals`.
+    if (v.title !== undefined) updateData.title = v.title;
+    if (normalizedAmount !== undefined) updateData.amount = normalizedAmount;
+    if (v.close_date !== undefined) updateData.closeDate = v.close_date;
+    if (v.contact_id !== undefined) updateData.contactId = v.contact_id;
+    if (v.company_id !== undefined) updateData.companyId = v.company_id;
+    if (v.pipeline_id !== undefined) updateData.pipelineId = v.pipeline_id;
+    if (v.assigned_to !== undefined) updateData.assignedTo = v.assigned_to;
+    if (v.description !== undefined) updateData.description = v.description;
+    if (v.metadata !== undefined) updateData.metadata = v.metadata;
 
     if (resolvedStageId) {
       updateData.stageId = resolvedStageId;
@@ -148,28 +163,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         prev.updatedAt!,
       );
 
-      if (v.stage_id && prev.stageId !== v.stage_id) {
+      if (updateData.stageId && prev.stageId !== updateData.stageId) {
         await tx.insert(activities).values({
           tenantId: ctx.tenantId,
           userId: ctx.userId,
           entityId: dealId,
           entityType: 'deal',
           eventType: 'deal_update',
-          description: `Deal stage: ${prev.stageId} → ${v.stage_id}`,
-          metadata: { stage_from: prev.stageId, stage_to: v.stage_id, action: 'stage_change' },
+          description: `Deal stage: ${prev.stageId} → ${updateData.stageId}`,
+          metadata: { stage_from: prev.stageId, stage_to: updateData.stageId, action: 'stage_change' },
         });
       }
 
       return [r];
     });
 
-    if (v.stage_id && prev.stageId !== v.stage_id) {
+    if (updateData.stageId && prev.stageId !== updateData.stageId) {
       // Logic for stage change
       await notifyTenantMembers({
         tenantId: ctx.tenantId,
         excludeUserId: ctx.userId,
         type: 'deal_stage',
-        title: `Deal moved to ${v.stage_id}: ${row!.title}`.trim(),
+        title: `Deal moved to ${updateData.stageId}: ${row!.title}`.trim(),
         entity_type: 'deal',
         entity_id: dealId,
         link: `/tenant/deals/${dealId}`
@@ -182,7 +197,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         entityType: 'deal',
         entityId: dealId,
         oldData: { stage: prev.stageId },
-        newData: { stage: v.stage_id }
+        newData: { stage: updateData.stageId }
       });
 
       // Fire deal.stage_changed automation + webhooks
@@ -190,7 +205,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         id: dealId,
         title: row!.title,
         stage_from: prev.stageId,
-        stage_to: v.stage_id,
+        stage_to: updateData.stageId,
         contact_id: row!.contactId,
       }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
@@ -200,18 +215,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           tenantId: ctx.tenantId,
           userId: ctx.userId,
           event: 'deal.stage_changed',
-          data: { ...row, id: dealId, stage_from: prev.stageId, stage_to: v.stage_id },
+          data: { ...row, id: dealId, stage_from: prev.stageId, stage_to: updateData.stageId },
         }).catch(err => console.error('[deals PATCH] deal.stage_changed automation failed:', err));
       } catch (e) {
         console.error('[deals PATCH] automation import failed:', e);
       }
 
       // Check if 'won' stage - get stage name to compare
-      if (v.stage_id) {
+      if (updateData.stageId) {
         const [stageInfo] = await db
           .select({ name: dealStages.name })
           .from(dealStages)
-          .where(eq(dealStages.id, v.stage_id))
+          .where(eq(dealStages.id, updateData.stageId))
           .limit(1);
         
         if (stageInfo?.name?.toLowerCase() === 'won') {

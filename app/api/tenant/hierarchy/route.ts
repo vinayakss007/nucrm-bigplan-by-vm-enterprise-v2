@@ -160,6 +160,8 @@ export async function DELETE(req: NextRequest) {
     // Soft delete
     const [row] = await db
       .update(tenantHierarchy)
+      // `tenant_hierarchy` uses utils.lifecycle() (createdAt/updatedAt/deletedAt)
+      // and has no `deleted_by` column, so actor attribution lives in audit_logs.
       .set({ deletedAt: new Date(), updatedAt: new Date() })
       .where(and(
         eq(tenantHierarchy.id, id),

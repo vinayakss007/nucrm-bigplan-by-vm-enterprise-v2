@@ -179,6 +179,10 @@ export const backupRecords = pgTable('backup_records', {
   sizeBytes: bigint('size_bytes', { mode: 'number' }).default(0),
   storagePath: text('storage_path'),
   storageType: text('storage_type').default('local'),
+  // Digest of the dump as written, so a restore can prove the artefact it
+  // fetched is byte-identical and detect silent storage corruption.
+  checksum: text('checksum'),
+  checksumAlgorithm: text('checksum_algorithm').default('sha256'),
   durationMs: integer('duration_ms'),
   initiatedAuto: boolean('initiated_auto').default(false),
   completedAt: timestamp('completed_at', { withTimezone: true }),

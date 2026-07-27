@@ -140,6 +140,33 @@ describe('GET /api/tenant/admin/ai-auto-followup', () => {
 
 describe('PATCH /api/tenant/admin/ai-auto-followup', () => {
   let PATCH: (req: Request) => Promise<Response>;
+  let lastUpdateSetSpy: ReturnType<typeof vi.fn>;
+
+  /** Spy on the `.set(...)` call of the most recent stubbed db.update(). */
+  const getUpdateSetSpy = () => lastUpdateSetSpy;
+
+  /**
+   * Stub the read-then-guarded-write pair the route performs:
+   *   db.select({updatedAt}).from(tenants).where(...).limit(1)
+   *   db.update(tenants).set(...).where(...).returning({id})
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function stubOptimisticUpdate(db: any) {
+    vi.mocked(db.select).mockReturnValue({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          limit: vi.fn(() => Promise.resolve([{ updatedAt: new Date('2026-01-01T00:00:00Z') }])),
+        })),
+      })),
+    } as never);
+
+    lastUpdateSetSpy = vi.fn().mockReturnValue({
+      where: vi.fn(() => ({
+        returning: vi.fn(() => Promise.resolve([{ id: 'tenant-1' }])),
+      })),
+    });
+    vi.mocked(db.update).mockReturnValue({ set: lastUpdateSetSpy } as never);
+  }
 
   beforeEach(async () => {
     vi.resetModules();
@@ -214,8 +241,11 @@ describe('PATCH /api/tenant/admin/ai-auto-followup', () => {
     const { requireAuth } = await import('@/lib/auth/middleware');
     const { db } = await import('@/drizzle/db');
     vi.mocked(requireAuth).mockResolvedValue({ tenantId: 'tenant-1', userId: 'user-1', isAdmin: true } as never);
-    const updateFn = vi.fn().mockReturnValue({ where: vi.fn() });
-    vi.mocked(db.update).mockReturnValue({ set: updateFn } as never);
+    // The route reads tenants.updatedAt first and then guards the UPDATE on
+    // that value (optimistic concurrency), so both the read and the
+    // .returning() of the write have to be stubbed.
+    stubOptimisticUpdate(db);
+    const updateFn = getUpdateSetSpy();
 
     const res = await PATCH(new Request('http://localhost/api/tenant/admin/ai-auto-followup', {
       method: 'PATCH',
@@ -233,8 +263,7 @@ describe('PATCH /api/tenant/admin/ai-auto-followup', () => {
     const { requireAuth } = await import('@/lib/auth/middleware');
     const { db } = await import('@/drizzle/db');
     vi.mocked(requireAuth).mockResolvedValue({ tenantId: 'tenant-1', userId: 'user-1', isAdmin: true } as never);
-    const updateFn = vi.fn().mockReturnValue({ where: vi.fn() });
-    vi.mocked(db.update).mockReturnValue({ set: updateFn } as never);
+    stubOptimisticUpdate(db);
 
     const res = await PATCH(new Request('http://localhost/api/tenant/admin/ai-auto-followup', {
       method: 'PATCH',

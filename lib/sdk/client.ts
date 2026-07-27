@@ -335,6 +335,12 @@ export class NuCRMClient {
         return undefined as T;
       }
 
+      // NOTE: deliberately NOT unwrapping the { data } envelope here. See
+      // lib/sdk/envelope.ts and docs/api-envelope-state.md — a structural
+      // heuristic cannot tell a single-entity `{ data }` from a collection
+      // endpoint that also returns only `{ data: [...] }`, and unwrapping the
+      // latter would break every SDK list caller. The fix has to be explicit
+      // per method.
       return (await response.json()) as T;
     } catch (error: unknown) {
       if (error instanceof NuCRMError) {

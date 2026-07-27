@@ -9,19 +9,24 @@ const makeChain = () => ({
   limit: vi.fn(() => mockResolve()),
   values: vi.fn(() => Promise.resolve()),
   set: vi.fn(() => ({ where: mockResolve })),
+  // resetPassword() revokes every existing session with
+  // db.delete(sessions).where(...).catch(...), so the chain has to be
+  // catch-able as well as awaitable.
+  catch: vi.fn(() => Promise.resolve()),
 });
 const chain = makeChain();
 
 let mockSelect: ReturnType<typeof vi.fn>;
 let mockUpdate: ReturnType<typeof vi.fn>;
 let mockInsert: ReturnType<typeof vi.fn>;
+let mockDelete: ReturnType<typeof vi.fn>;
 
 vi.mock('@/drizzle/db', () => ({
   get db() {
-    return { select: mockSelect, update: mockUpdate, insert: mockInsert };
+    return { select: mockSelect, update: mockUpdate, insert: mockInsert, delete: mockDelete };
   },
 }));
-vi.mock('@/drizzle/schema', () => ({ users: {}, passwordResets: {} }));
+vi.mock('@/drizzle/schema', () => ({ users: {}, passwordResets: {}, sessions: {} }));
 vi.mock('@/drizzle/relations', () => ({}));
 vi.mock('@/lib/email/service', () => ({ sendEmail: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/lib/dev-logger', () => ({ devLogger: { log: vi.fn(), error: vi.fn(), warn: vi.fn() } }));
@@ -38,6 +43,7 @@ beforeEach(() => {
   mockSelect = vi.fn(() => chain);
   mockUpdate = vi.fn(() => chain);
   mockInsert = vi.fn(() => chain);
+  mockDelete = vi.fn(() => chain);
   process.env.NEXT_PUBLIC_APP_URL = 'http://test.app';
 });
 

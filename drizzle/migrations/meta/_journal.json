@@ -5,239 +5,274 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1777981715293,
+      "when": 1700000000000,
       "tag": "0000_init",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1778251492391,
+      "when": 1700000001000,
       "tag": "0001_perpetual_the_stranger",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "7",
-      "when": 1783769189681,
+      "when": 1700000002000,
       "tag": "0037_flat_sir_ram",
       "breakpoints": true
     },
     {
       "idx": 3,
       "version": "7",
-      "when": 1778405943769,
+      "when": 1700000003000,
       "tag": "0002_billing_migration",
       "breakpoints": true
     },
     {
       "idx": 4,
       "version": "7",
-      "when": 1746988800000,
+      "when": 1700000004000,
       "tag": "0003_fix_duplicate_tables",
       "breakpoints": true
     },
     {
       "idx": 5,
       "version": "7",
-      "when": 1746988900000,
+      "when": 1700000005000,
       "tag": "0004_performance_indexes",
       "breakpoints": true
     },
     {
       "idx": 6,
       "version": "7",
-      "when": 1746989000000,
+      "when": 1700000006000,
       "tag": "0005_brute_force_protection",
       "breakpoints": true
     },
     {
       "idx": 7,
       "version": "7",
-      "when": 1746989100000,
+      "when": 1700000007000,
       "tag": "0006_super_admin_audit_logs",
       "breakpoints": true
     },
     {
       "idx": 8,
       "version": "7",
-      "when": 1783769189681,
+      "when": 1700000008000,
       "tag": "0007_documents",
       "breakpoints": true
     },
     {
       "idx": 9,
       "version": "7",
-      "when": 1746989200000,
+      "when": 1700000009000,
       "tag": "0038_workflow_functions",
       "breakpoints": true
     },
     {
       "idx": 10,
       "version": "7",
-      "when": 1746989300000,
+      "when": 1700000010000,
       "tag": "0008_services_contacts_companies",
       "breakpoints": true
     },
     {
       "idx": 11,
       "version": "7",
-      "when": 1746989400000,
+      "when": 1700000011000,
       "tag": "0009_audit_hash_chain",
       "breakpoints": true
     },
     {
       "idx": 12,
       "version": "7",
-      "when": 1746989500000,
+      "when": 1700000012000,
       "tag": "0010_rename_invitations_role",
       "breakpoints": true
     },
     {
       "idx": 13,
       "version": "7",
-      "when": 1748332800000,
+      "when": 1700000013000,
       "tag": "0039_workflow_foundation",
       "breakpoints": true
     },
     {
       "idx": 14,
       "version": "7",
-      "when": 1778500000000,
+      "when": 1700000014000,
       "tag": "0011_approval_requests",
       "breakpoints": true
     },
     {
       "idx": 15,
       "version": "7",
-      "when": 1746990000000,
+      "when": 1700000015000,
       "tag": "0012_rls_policies",
       "breakpoints": true
     },
     {
       "idx": 16,
       "version": "7",
-      "when": 1746990100000,
+      "when": 1700000016000,
       "tag": "0040_missing_ai_tables",
       "breakpoints": true
     },
     {
       "idx": 17,
       "version": "7",
-      "when": 1746990300000,
+      "when": 1700000017000,
       "tag": "0014_missing_ai_tables",
       "breakpoints": true
     },
     {
       "idx": 18,
       "version": "7",
-      "when": 1746990400000,
+      "when": 1700000018000,
       "tag": "0015_workflow_foundation",
       "breakpoints": true
     },
     {
       "idx": 19,
       "version": "7",
-      "when": 1783769189681,
+      "when": 1700000019000,
       "tag": "0016_fix_rls_notifications",
       "breakpoints": true
     },
     {
       "idx": 20,
       "version": "7",
-      "when": 1779574618000,
+      "when": 1700000020000,
       "tag": "0018_add_fk_references",
       "breakpoints": true
     },
     {
       "idx": 21,
       "version": "7",
-      "when": 1779900000000,
+      "when": 1700000021000,
       "tag": "0019_add_stage_entered_at",
       "breakpoints": true
     },
     {
       "idx": 22,
       "version": "7",
-      "when": 1779900001000,
+      "when": 1700000022000,
       "tag": "0020_platform_stats_function",
       "breakpoints": true
     },
     {
       "idx": 23,
       "version": "7",
-      "when": 1781440125000,
+      "when": 1700000023000,
       "tag": "0021_follow_ups",
       "breakpoints": true
     },
     {
       "idx": 24,
       "version": "7",
-      "when": 1781712000000,
+      "when": 1700000024000,
       "tag": "0022_follow_ups_add_updated_by",
       "breakpoints": true
     },
     {
       "idx": 25,
       "version": "7",
-      "when": 1782000000000,
+      "when": 1700000025000,
       "tag": "0023_ai_key_type_personal_system",
       "breakpoints": true
     },
     {
       "idx": 26,
       "version": "7",
-      "when": 1782100000000,
+      "when": 1700000026000,
       "tag": "0024_ai_model_override",
       "breakpoints": true
     },
     {
       "idx": 27,
       "version": "7",
-      "when": 1782200000000,
+      "when": 1700000027000,
       "tag": "0025_ai_credits_system",
       "breakpoints": true
     },
     {
       "idx": 28,
       "version": "7",
-      "when": 1782300000000,
+      "when": 1700000028000,
       "tag": "0026_per_plan_rate_limiting",
       "breakpoints": true
     },
     {
       "idx": 29,
       "version": "7",
-      "when": 1782400000000,
+      "when": 1700000029000,
       "tag": "0032_rename_announcement_body_to_content",
       "breakpoints": true
     },
     {
       "idx": 30,
       "version": "7",
-      "when": 1782500000000,
+      "when": 1700000030000,
       "tag": "0033_add_fk_constraints_billing_documents",
       "breakpoints": true
     },
     {
       "idx": 31,
       "version": "7",
-      "when": 1782600000000,
+      "when": 1700000031000,
       "tag": "0034_rls_remaining_tables",
       "breakpoints": true
     },
     {
       "idx": 32,
       "version": "7",
-      "when": 1783761529000,
+      "when": 1700000032000,
       "tag": "0035_missing_db_functions",
       "breakpoints": true
     },
     {
       "idx": 33,
       "version": "7",
-      "when": 1783800000000,
+      "when": 1700000033000,
       "tag": "0036_missing_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1700000034000,
+      "tag": "0041_add_form_views_count",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1700000035000,
+      "tag": "0041_add_tenant_short_code",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1700000036000,
+      "tag": "0042_backup_records_checksum",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1700000037000,
+      "tag": "0043_tenant_isolation_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1700000038000,
+      "tag": "0044_cross_module_record_linking",
       "breakpoints": true
     }
   ]

@@ -89,7 +89,35 @@ describe('TenantDataImporter', () => {
       expect(result.recordsRestored).toBe(0);
     });
 
-    it('handles per-row errors gracefully in importTable', async () => {
+    // Table names reach raw SQL, so anything outside the allowlist must be
+    // refused rather than interpolated.
+    it('refuses tables that are not on the allowlist', async () => {
+      mockTxExecute.mockResolvedValue({ rowCount: 1 });
+
+      const { TenantDataImporter } = await import('@/lib/tenant-data-import');
+      const importer = new TenantDataImporter('tenant-1');
+
+      const result = await importer.importAll({
+        contacts: { columns: ['id', 'name'], rows: [{ id: '1', name: 'Alice' }] },
+        bad_table: { columns: ['id'], rows: [{ id: '1' }] },
+      });
+
+      expect(result.tablesRestored).toBe(1);
+      expect(result.recordsRestored).toBe(1);
+      expect(result.errors).toEqual([
+        { table: 'bad_table', error: "Table 'bad_table' is not allowed for import" },
+      ]);
+    });
+
+    // A single bad ROW does not abort its table: importTable catches per-row
+    // insert failures so the rest of the restore still proceeds. The table is
+    // therefore still counted as restored, but the failed row is not counted in
+    // recordsRestored.
+    //
+    // NOTE: per-row failures are only logged, never added to `result.errors`,
+    // so a caller cannot tell which rows were dropped. That reporting gap is
+    // tracked separately.
+    it('keeps importing a table when an individual row fails', async () => {
       mockTxExecute
         .mockResolvedValueOnce({ rowCount: 1 })
         .mockRejectedValueOnce(new Error('constraint violation'));
@@ -97,18 +125,12 @@ describe('TenantDataImporter', () => {
       const { TenantDataImporter } = await import('@/lib/tenant-data-import');
       const importer = new TenantDataImporter('tenant-1');
 
-      const tables = {
-        contacts: {
-          columns: ['id', 'name'],
-          rows: [{ id: '1', name: 'Alice' }],
-        },
-        bad_table: {
-          columns: ['id'],
-          rows: [{ id: '1' }],
-        },
-      };
-
-      const result = await importer.importAll(tables);
+      // Both tables are allowlisted, so the second one fails on the INSERT
+      // itself rather than on table-name validation.
+      const result = await importer.importAll({
+        contacts: { columns: ['id', 'name'], rows: [{ id: '1', name: 'Alice' }] },
+        deals: { columns: ['id'], rows: [{ id: '1' }] },
+      });
 
       expect(result.tablesRestored).toBe(2);
       expect(result.recordsRestored).toBe(1);

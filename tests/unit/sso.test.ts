@@ -144,52 +144,105 @@ describe('SSO - OIDC Token Validation', () => {
       return `${header}.${body}.fake-signature`;
     }
 
-    it('rejects expired tokens', async () => {
+    /**
+     * Install a stubbed `jose` for the next import of @/lib/auth/sso.
+     * validateOIDCToken imports jose dynamically, so doMock applies as long as
+     * the module registry is reset first.
+     */
+    async function withStubbedJose(jwtVerify: ReturnType<typeof vi.fn>) {
+      vi.resetModules();
+      vi.doMock('jose', () => ({
+        createRemoteJWKSet: vi.fn(() => ({})),
+        jwtVerify,
+      }));
+      return import('@/lib/auth/sso');
+    }
+
+    // There is deliberately no claims-only fallback: accepting a token without
+    // verifying its signature would let anyone mint an admin session by
+    // base64-encoding a JSON payload. Without an issuer there is no JWKS to
+    // verify against, so validation must refuse outright.
+    it('refuses to validate when no issuer is configured (no claims-only fallback)', async () => {
       const { validateOIDCToken } = await import('@/lib/auth/sso');
 
       const token = createToken({
         iss: '',
+        aud: 'my-client-id',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        sub: 'user-123',
+        email: 'user@example.com',
+      });
+
+      const result = await validateOIDCToken(token, config);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('issuer');
+    });
+
+    it('rejects expired tokens', async () => {
+      const jwtVerify = vi.fn(async () => {
+        throw new Error('"exp" claim timestamp check failed');
+      });
+      const { validateOIDCToken } = await withStubbedJose(jwtVerify);
+
+      const token = createToken({
+        iss: 'https://accounts.google.com',
         aud: 'my-client-id',
         exp: Math.floor(Date.now() / 1000) - 3600,
         sub: 'user-123',
         email: 'user@example.com',
       });
 
-      const result = await validateOIDCToken(token, config);
+      const result = await validateOIDCToken(token, jwksConfig);
       expect(result.valid).toBe(false);
-      expect(result.error).toContain('expired');
+      expect(jwtVerify).toHaveBeenCalled();
+      vi.doUnmock('jose');
     });
 
-    it('rejects tokens with wrong audience', async () => {
-      const { validateOIDCToken } = await import('@/lib/auth/sso');
+    it('delegates audience and issuer enforcement to jwtVerify', async () => {
+      const jwtVerify = vi.fn(async () => {
+        throw new Error('unexpected "aud" claim value');
+      });
+      const { validateOIDCToken } = await withStubbedJose(jwtVerify);
 
       const token = createToken({
-        iss: '',
+        iss: 'https://accounts.google.com',
         aud: 'wrong-client-id',
         exp: Math.floor(Date.now() / 1000) + 3600,
         sub: 'user-123',
       });
 
-      const result = await validateOIDCToken(token, config);
+      const result = await validateOIDCToken(token, jwksConfig);
       expect(result.valid).toBe(false);
-      expect(result.error).toContain('audience');
+      // The expected issuer/audience must actually be handed to jose, otherwise
+      // the claims would go unchecked.
+      expect(jwtVerify).toHaveBeenCalledWith(
+        token,
+        expect.anything(),
+        expect.objectContaining({
+          issuer: jwksConfig.issuer,
+          audience: jwksConfig.clientId,
+        })
+      );
+      vi.doUnmock('jose');
     });
 
-    it('validates a correct token via claims-only (legacy)', async () => {
-      const { validateOIDCToken } = await import('@/lib/auth/sso');
+    it('accepts a token whose signature, issuer and audience all verify', async () => {
+      const jwtVerify = vi.fn(async () => ({ payload: { sub: 'user-123' } }));
+      const { validateOIDCToken } = await withStubbedJose(jwtVerify);
 
       const token = createToken({
-        iss: '',
+        iss: 'https://accounts.google.com',
         aud: 'my-client-id',
         exp: Math.floor(Date.now() / 1000) + 3600,
         sub: 'user-123',
         email: 'user@example.com',
       });
 
-      const result = await validateOIDCToken(token, config);
+      const result = await validateOIDCToken(token, jwksConfig);
       expect(result.valid).toBe(true);
       expect(result.payload).toBeDefined();
       expect(result.payload!['email']).toBe('user@example.com');
+      vi.doUnmock('jose');
     });
 
     it('rejects malformed tokens', async () => {

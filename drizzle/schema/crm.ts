@@ -354,6 +354,11 @@ export const quotes = pgTable('quotes', {
   tenantId: utils.tenantId(),
   contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
   dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'cascade' }),
+  // invoices, orders and contracts all carry company_id but quotes did not, so
+  // the company was dropped the moment a quote was raised and had to be
+  // re-derived from the contact. That is also why quote -> invoice conversion
+  // set companyId to undefined.
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
   
   title: text('title').notNull(),
   quoteNumber: text('quote_number'),
@@ -383,8 +388,17 @@ export const quotes = pgTable('quotes', {
 
 export const quoteLineItems = pgTable('quote_line_items', {
   id: utils.pk(),
+  // Needed for row-level security; without it this table cannot be isolated.
+  tenantId: utils.tenantId(),
   quoteId: uuid('quote_id').notNull().references(() => quotes.id, { onDelete: 'cascade' }),
   productId: uuid('product_id').references(() => products.id, { onDelete: 'set null' }),
+  // A quote line could only ever reference a product, while invoice_line_items
+  // and order_line_items carry product_id + service_id + item_type. That meant a
+  // service could be invoiced but never quoted, and quote -> invoice conversion
+  // silently relabelled every line as a product. These two columns close that
+  // asymmetry so the three line-item tables now agree.
+  serviceId: uuid('service_id'),
+  itemType: text('item_type').notNull().default('product'),
   description: text('description').notNull(),
   quantity: decimal('quantity', { precision: 15, scale: 4 }).notNull().default('1'),
   unitPrice: decimal('unit_price', { precision: 15, scale: 2 }).notNull(),
