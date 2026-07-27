@@ -41,9 +41,14 @@ describe('Schema Migration Coverage (Issue #219)', () => {
     expect(missing).toEqual([]);
   });
 
-  it('should have exactly 219 tables defined in schema', () => {
+  // Deliberate tripwire: adding a table should be a conscious act, so this count
+  // is updated by hand alongside the migration that creates it. The test above is
+  // what actually guarantees coverage; this one stops a table appearing silently.
+  //
+  // 219 -> 220: record_links (0044_cross_module_record_linking).
+  it('should have exactly 220 tables defined in schema', () => {
     const schemaTables = extractPgTables(schemaDir);
-    expect(schemaTables.size).toBe(219);
+    expect(schemaTables.size).toBe(220);
   });
 
   it('migration 0036 should create all 4 missing tables', () => {
