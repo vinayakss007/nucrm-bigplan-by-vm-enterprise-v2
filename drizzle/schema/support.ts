@@ -2,7 +2,7 @@ import { pgTable, uuid, text, timestamp, jsonb, index, boolean, integer } from '
 import { sql } from 'drizzle-orm';
 import * as utils from './utils';
 import { tenants, users } from './core';
-import { contacts } from './crm';
+import { contacts, companies, deals, leads } from './crm';
 import { webhooks } from './automation';
 
 // ── 1. ERROR LOGS ─────────────────────────────────────
@@ -83,7 +83,16 @@ export const failedWebhooks = pgTable('failed_webhooks', {
 export const supportTickets = pgTable('support_tickets', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
+  // A ticket could only point at a contact, which made "all tickets for this
+  // company" unanswerable and left no way to tie a support issue to the deal or
+  // lead it puts at risk. company_id is denormalised rather than derived through
+  // the contact because a ticket can be raised by an account with no named
+  // contact, and because account-level reporting should not depend on a
+  // nullable hop.
   contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
+  dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'set null' }),
+  leadId: uuid('lead_id').references(() => leads.id, { onDelete: 'set null' }),
   
   subject: text('subject').notNull(),
   body: text('body').notNull(),

@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, index } from 'drizzle-orm/pg-core';
 import { users } from './core';
-import { contacts, deals, companies } from './crm';
+import { contacts, deals, companies, leads } from './crm';
 import * as utils from './utils';
 
 export const activities = pgTable('activities', {
@@ -14,6 +14,11 @@ export const activities = pgTable('activities', {
   contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'cascade' }),
   dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'cascade' }),
   companyId: uuid('company_id').references(() => companies.id, { onDelete: 'cascade' }),
+  // Contacts, deals and companies each had a denormalised column here but leads
+  // did not, so lead activity was only ever recorded through the polymorphic
+  // entity_type/entity_id pair and could not be joined the way the other three
+  // are. That asymmetry is why lead timelines were missing history.
+  leadId: uuid('lead_id').references(() => leads.id, { onDelete: 'cascade' }),
 
   eventType: text('event_type').notNull(),
   action: text('action'),
