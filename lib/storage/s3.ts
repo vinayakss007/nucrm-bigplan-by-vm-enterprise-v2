@@ -12,17 +12,20 @@ import {
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
+import { getS3Config } from './s3-config';
+
+// Resolved through getS3Config() so that S3_ACCESS_KEY / S3_SECRET_KEY (the
+// names docker-compose exports) are honoured as well as the AWS-style
+// S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY.
+const s3Config = getS3Config();
 
 const s3Client = new S3Client({
-  region: process.env['S3_REGION'] || 'auto',
-  endpoint: process.env['S3_ENDPOINT'], // For R2: https://xxx.r2.cloudflarestorage.com
-  credentials: {
-    accessKeyId: process.env['S3_ACCESS_KEY_ID'] || '',
-    secretAccessKey: process.env['S3_SECRET_ACCESS_KEY'] || '',
-  },
+  region: s3Config.region,
+  endpoint: s3Config.endpoint, // For R2: https://xxx.r2.cloudflarestorage.com
+  credentials: s3Config.credentials,
 });
 
-const BUCKET = process.env['S3_BUCKET'] || 'nucrm-backups';
+const BUCKET = s3Config.backupBucket || 'nucrm-backups';
 const BACKUP_PREFIX = 'backups/';
 
 export async function uploadBackup(backupData: Buffer, filename: string): Promise<string> {

@@ -10,6 +10,9 @@ import { promisify } from 'util';
 import { spawn } from 'child_process';
 import { ensureDir, deleteFile, getFileStats } from '@/lib/backups/runtime-fs';
 import { logError } from '@/lib/errors-server';
+import { checksumFile, CHECKSUM_ALGORITHM } from '@/lib/backups/integrity';
+import { uploadBackupArtifact, purgeExpiredBackups, resolveRetentionDays } from '@/lib/backups/offsite';
+import { isS3Configured, describeS3ConfigGap } from '@/lib/storage/s3-config';
 
 const exec = promisify(execCb);
 
@@ -122,100 +125,123 @@ export async function POST(request: NextRequest) {
 
     const stats = await getFileStats(localPath);
     const sizeBytes = stats?.size || 0;
-    const durationMs = Date.now() - t0;
+
+    // Digest the artefact as written, before anything moves or deletes it.
+    const checksum = await checksumFile(localPath);
 
     let storagePath = localPath;
     let storageType = 'local';
+    let offsiteError: string | null = null;
+    const offsiteExpected = isS3Configured();
 
-    // Upload to S3/R2 if configured
-    if (process.env.S3_BUCKET && process.env.S3_ACCESS_KEY_ID) {
+    if (offsiteExpected) {
       try {
-        const { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } = await import('@aws-sdk/client-s3');
-        const { readFile } = await import('fs/promises');
-
-        const s3Client = new S3Client({
-          region: process.env.S3_REGION || 'us-east-1',
-          endpoint: process.env.S3_ENDPOINT || undefined,
-          credentials: {
-            accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
-            secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
-          },
+        const uploaded = await uploadBackupArtifact({
+          localPath,
+          filename,
+          checksum,
+          storageClass: 'STANDARD_IA',
         });
+        storagePath = uploaded.storagePath;
+        storageType = uploaded.storageType;
 
-        const fileContent = await readFile(localPath);
-        const s3Key = `backups/${filename}`;
-
-        await s3Client.send(new PutObjectCommand({
-          Bucket: process.env.S3_BUCKET,
-          Key: s3Key,
-          Body: fileContent,
-          StorageClass: 'STANDARD_IA',
-        }));
-
-        storagePath = s3Key;
-        storageType = process.env.S3_ENDPOINT?.includes('r2') ? 's3_r2' : 's3';
-
-        // Delete local after successful upload
+        // Only drop the local copy once the upload has succeeded.
         await deleteFile(localPath);
 
-        // Purge old S3 backups beyond retention
-        const retention = parseInt(process.env.BACKUP_RETENTION_DAYS || '30');
-        const cutoff = new Date(Date.now() - retention * 86400000);
-
-        const listResp = await s3Client.send(new ListObjectsV2Command({
-          Bucket: process.env.S3_BUCKET,
-          Prefix: 'backups/',
-        }));
-
-        const oldKeys = (listResp.Contents || [])
-          .filter(obj => obj.LastModified && obj.LastModified < cutoff && obj.Key)
-          .map(obj => ({ Key: obj.Key! }));
-
-        if (oldKeys.length > 0) {
-          await s3Client.send(new DeleteObjectsCommand({
-            Bucket: process.env.BACKUP_BUCKET,
-            Delete: { Objects: oldKeys },
-          })).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+        // Retention purge reads and deletes from the same bucket; previously it
+        // listed from S3_BUCKET and deleted from BACKUP_BUCKET.
+        const retention = resolveRetentionDays();
+        try {
+          const purged = await purgeExpiredBackups(retention);
+          if (purged.deleted > 0) {
+            console.log(`[backup] purged ${purged.deleted} expired object(s) from ${purged.bucket}`);
+          }
+        } catch (purgeErr) {
+          // Retention is best-effort: a purge failure must not make a
+          // successful backup look failed.
+          await logError({ error: purgeErr, context: 'cron/backup:purgeExpiredBackups' });
         }
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (uploadErr: any) {
-        console.error('[backup] S3 upload failed, keeping local:', uploadErr.message);
+      } catch (uploadErr) {
+        offsiteError = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
+        console.error('[backup] S3 upload failed, keeping local copy:', offsiteError);
         storageType = 'local';
+        storagePath = localPath;
+      }
+    } else {
+      offsiteError = describeS3ConfigGap();
+      if (offsiteError) {
+        console.warn(`[backup] Backup kept local only: ${offsiteError}`);
       }
     }
 
-    // Mark completed
-    await db.update(backupRecords)
-      .set({
-        status: 'completed',
-        sizeBytes: sizeBytes,
-        storagePath: storagePath,
-        storageType: storageType,
-        durationMs: durationMs,
-        completedAt: new Date(),
-        metadata: {
-          pg_version: await getPgDumpVersion(),
-          backup_type: backupType
-        }
-      })
-      .where(eq(backupRecords.id, backup.id));
+    // Measured after the off-site upload so the recorded duration covers the
+    // whole job, not just pg_dump.
+    const durationMs = Date.now() - t0;
 
-    // Clear any backup alerts
-    await db.update(backupAlerts)
-      .set({
-        resolved: true,
-        resolvedAt: new Date()
-      })
-      .where(and(
-        eq(backupAlerts.alertType, 'no_backup'),
-        eq(backupAlerts.resolved, false)
-      )).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    // Mark completed and clear alerts atomically (transaction from #733),
+    // carrying the checksum + off-site outcome from the backup hardening.
+    await db.transaction(async (tx) => {
+      await tx.update(backupRecords)
+        .set({
+          // Stays 'completed' even when the upload failed: the dump succeeded,
+          // and /api/superadmin/restore only lists 'completed' rows, so a
+          // separate status would hide the sole local copy from restore.
+          status: 'completed',
+          sizeBytes: sizeBytes,
+          storagePath: storagePath,
+          storageType: storageType,
+          checksum,
+          checksumAlgorithm: CHECKSUM_ALGORITHM,
+          durationMs: durationMs,
+          completedAt: new Date(),
+          ...(offsiteError ? { errorMessage: offsiteError.slice(0, 500) } : {}),
+          metadata: {
+            pg_version: await getPgDumpVersion(),
+            backup_type: backupType,
+            offsite: !offsiteError,
+            ...(offsiteError ? { offsite_error: offsiteError.slice(0, 500) } : {}),
+          }
+        })
+        .where(eq(backupRecords.id, backup.id));
 
-    console.log(`[backup] completed: ${filename} (${(sizeBytes / 1024 / 1024).toFixed(1)}MB, ${durationMs}ms)`);
+      await tx.update(backupAlerts)
+        .set({
+          resolved: true,
+          resolvedAt: new Date()
+        })
+        .where(and(
+          eq(backupAlerts.alertType, 'no_backup'),
+          eq(backupAlerts.resolved, false)
+        ));
+    });
+
+    if (offsiteError && offsiteExpected) {
+      // Off-site storage is configured but rejected the upload, so the only
+      // copy is on an ephemeral host. Page an operator rather than logging and
+      // reporting success.
+      await alertSuperAdmin(
+        'WARNING: Database backup did not reach off-site storage',
+        `Backup ${filename} completed locally but could not be uploaded.\n\n` +
+        `Error: ${offsiteError}\n\n` +
+        `The only copy is at ${localPath} on the application host and will be ` +
+        `lost if the container is replaced. Check S3/R2 credentials and re-run.`
+      ).catch((alertErr) => logError({ error: alertErr, context: 'cron/backup:offsiteAlert' }));
+    }
+
+    console.log(
+      `[backup] completed: ${filename} (${(sizeBytes / 1024 / 1024).toFixed(1)}MB, ` +
+      `${durationMs}ms, storage=${storageType}, offsite=${!offsiteError})`
+    );
     return NextResponse.json({
-      ok: true, filename, size_bytes: sizeBytes, duration_ms: durationMs, storage: storageType,
+      ok: true,
+      filename,
+      size_bytes: sizeBytes,
+      duration_ms: durationMs,
+      storage: storageType,
+      checksum,
+      checksum_algorithm: CHECKSUM_ALGORITHM,
+      offsite: !offsiteError,
+      ...(offsiteError ? { offsite_error: offsiteError } : {}),
     });
 
  
@@ -225,21 +251,22 @@ export async function POST(request: NextRequest) {
     const durationMs = Date.now() - t0;
     console.error('[backup] FAILED:', err.message);
 
-    await db.update(backupRecords)
-      .set({
-        status: 'failed',
-        errorMessage: err.message.slice(0, 500),
-        durationMs: durationMs
-      })
-      .where(eq(backupRecords.id, backup.id));
+    await db.transaction(async (tx) => {
+      await tx.update(backupRecords)
+        .set({
+          status: 'failed',
+          errorMessage: err.message.slice(0, 500),
+          durationMs: durationMs
+        })
+        .where(eq(backupRecords.id, backup.id));
 
-    // Log to error_logs
-    await db.insert(errorLogs).values({
-      level: 'fatal',
-      code: 'BACKUP_FAILED',
-      message: `Automated backup failed: ${err.message}`,
-      stack: err.stack?.slice(0, 2000)
-    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      await tx.insert(errorLogs).values({
+        level: 'fatal',
+        code: 'BACKUP_FAILED',
+        message: `Automated backup failed: ${err.message}`,
+        stack: err.stack?.slice(0, 2000)
+      });
+    });
 
     // Alert super admin
     await alertSuperAdmin(

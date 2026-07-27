@@ -3,6 +3,10 @@ import { backupRecords } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { spawn, exec as execCb } from 'child_process';
 import { promisify } from 'util';
+import { checksumFile, CHECKSUM_ALGORITHM } from './integrity';
+import { uploadBackupArtifact } from './offsite';
+import { isS3Configured, describeS3ConfigGap } from '@/lib/storage/s3-config';
+import { alertSuperAdmin } from '@/lib/email/service';
 
 const exec = promisify(execCb);
 
@@ -20,6 +24,13 @@ export interface BackupResult {
   durationMs: number;
   storagePath: string;
   storageType: string;
+  /** Digest of the dump, recorded so a restore can verify the artefact. */
+  checksum: string;
+  checksumAlgorithm: string;
+  /** False when the dump only exists on the application host. */
+  offsite: boolean;
+  /** Why the off-site upload did not happen, when it did not. */
+  offsiteError?: string;
 }
 
 async function getPgDumpVersion(): Promise<string> {
@@ -97,63 +108,78 @@ export async function createBackup(options: BackupOptions): Promise<BackupResult
     await runPgDump(backupType, localPath);
 
     const sizeBytes = fs.statSync(localPath).size;
-    const durationMs = Date.now() - t0;
+
+    // Checksum the artefact as written, before anything moves it.
+    const checksum = await checksumFile(localPath);
 
     let storagePath = localPath;
     let storageType = 'local';
+    let offsiteError: string | null = null;
+    const offsiteExpected = isS3Configured();
 
-    // Upload to S3 if configured
-    if (process.env.S3_BUCKET && process.env.S3_ACCESS_KEY_ID) {
+    if (offsiteExpected) {
       try {
-        const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
-        
-        const s3Client = new S3Client({
-          region: process.env.S3_REGION || 'us-east-1',
-          endpoint: process.env.S3_ENDPOINT || undefined,
-          credentials: {
-            accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
-            secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
-          },
-        });
+        const uploaded = await uploadBackupArtifact({ localPath, filename, checksum });
+        storagePath = uploaded.storagePath;
+        storageType = uploaded.storageType;
 
-        const { readFile } = await import('fs/promises');
-        const fileContent = await readFile(localPath);
-        const s3Key = `backups/${filename}`;
-
-        await s3Client.send(new PutObjectCommand({
-          Bucket: process.env.S3_BUCKET,
-          Key: s3Key,
-          Body: fileContent,
-        }));
-
-        storagePath = s3Key;
-        storageType = process.env.S3_ENDPOINT?.includes('r2') ? 's3_r2' : 's3';
-        
-        // Delete local after successful upload
+        // Only drop the local copy once the upload has succeeded.
         fs.unlinkSync(localPath);
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (uploadErr: any) {
-        console.error('[backup-service] S3 upload failed, keeping local:', uploadErr.message);
+      } catch (uploadErr) {
+        offsiteError = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
+        console.error('[backup-service] S3 upload failed, keeping local copy:', offsiteError);
+      }
+    } else {
+      offsiteError = describeS3ConfigGap();
+      if (offsiteError) {
+        console.warn(`[backup-service] Backup kept local only: ${offsiteError}`);
       }
     }
 
-    // Mark completed
+    const durationMs = Date.now() - t0;
+
+    // The dump itself did succeed, so the record stays 'completed'. Off-site
+    // state is carried by storage_type ('local' vs 's3'/'s3_r2') plus
+    // metadata.offsite, and a failure raises an operator alert below.
+    //
+    // Deliberately NOT a new status value: /api/superadmin/restore and
+    // /api/cron/backup-health both filter on status = 'completed', so inventing
+    // e.g. 'completed_local_only' would hide the local file from the restore
+    // list — and that file is the only copy that exists.
     await db.update(backupRecords)
       .set({
         status: 'completed',
         sizeBytes,
         storagePath,
         storageType,
+        checksum,
+        checksumAlgorithm: CHECKSUM_ALGORITHM,
         durationMs,
         completedAt: new Date(),
+        ...(offsiteError ? { errorMessage: offsiteError.slice(0, 500) } : {}),
         metadata: {
           pg_version: await getPgDumpVersion(),
-          backup_type: backupType
+          backup_type: backupType,
+          offsite: !offsiteError,
+          ...(offsiteError ? { offsite_error: offsiteError.slice(0, 500) } : {}),
         }
       })
       .where(eq(backupRecords.id, backup.id));
+
+    if (offsiteError && offsiteExpected) {
+      // Off-site storage is configured but did not accept the upload, which
+      // means the retention guarantee is currently broken. Tell an operator.
+      await alertSuperAdmin(
+        'WARNING: Database backup did not reach off-site storage',
+        `Backup ${filename} completed locally but could not be uploaded.\n\n` +
+        `Error: ${offsiteError}\n\n` +
+        `The only copy is at ${localPath} on the application host and will be ` +
+        `lost if the container is replaced. Investigate S3/R2 credentials and ` +
+        `re-run the backup.`
+      ).catch((err) => {
+        console.error('[backup-service] Failed to send off-site failure alert:', err);
+      });
+    }
 
     return {
       id: backup.id,
@@ -163,6 +189,10 @@ export async function createBackup(options: BackupOptions): Promise<BackupResult
       durationMs,
       storagePath,
       storageType,
+      checksum,
+      checksumAlgorithm: CHECKSUM_ALGORITHM,
+      offsite: !offsiteError,
+      ...(offsiteError ? { offsiteError } : {}),
     };
 
  

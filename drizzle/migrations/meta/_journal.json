@@ -258,13 +258,20 @@
       "idx": 36,
       "version": "7",
       "when": 1700000036000,
-      "tag": "0043_tenant_isolation_hardening",
+      "tag": "0042_backup_records_checksum",
       "breakpoints": true
     },
     {
       "idx": 37,
       "version": "7",
       "when": 1700000037000,
+      "tag": "0043_tenant_isolation_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1700000038000,
       "tag": "0044_cross_module_record_linking",
       "breakpoints": true
     }
