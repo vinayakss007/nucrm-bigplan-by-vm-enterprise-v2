@@ -12,6 +12,7 @@ import { quotes, quoteLineItems, invoices, invoiceLineItems, activities } from '
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     let body: { due_date?: string };
-    try { body = await req.json() as { due_date?: string }; } catch { body = {}; }
+    try { body = await readJsonBody(req) as { due_date?: string }; } catch { body = {}; }
 
     const dueDate = body.due_date ? body.due_date : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 

@@ -5,7 +5,7 @@ import { db } from '@/drizzle/db';
 import { dunningSettings } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 const dunningConfigSchema = z.object({
   maxRetries: z.number().min(1).max(10).optional().default(3),
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const raw = await request.json();
+    const raw = await readJsonBody(request);
     const parsed = validateBody(dunningConfigSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const config = parsed.data;

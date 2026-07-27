@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createProjectSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: gate.error }, { status: 403 });
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(createProjectSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

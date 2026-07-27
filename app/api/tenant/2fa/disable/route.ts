@@ -6,13 +6,14 @@ import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { verifyPassword } from '@/lib/auth/session';
 import { verifyTOTP } from '@/lib/auth/totp';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function POST(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const { password, totp_code } = await request.json();
+    const { password, totp_code } = await readJsonBody(request);
 
     if (!password) {
       return NextResponse.json({ error: 'Password required' }, { status: 400 });

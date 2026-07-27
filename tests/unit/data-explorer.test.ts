@@ -10,6 +10,9 @@ vi.mock('@/drizzle/db', () => ({
 
 vi.mock('@/lib/api/validate', () => ({
   validateBody: vi.fn(),
+  // Routes parse bodies through readJsonBody so a malformed body becomes a 400
+  // rather than a 500; the real implementation just delegates to request.json().
+  readJsonBody: vi.fn((request: Request) => request.json()),
 }));
 
 vi.mock('@/lib/api-error', () => ({

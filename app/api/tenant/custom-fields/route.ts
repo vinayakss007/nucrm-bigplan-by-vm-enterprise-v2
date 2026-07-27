@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createCustomFieldSchema, updateCustomFieldSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Super admin only' }, { status: 403 });
     }
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { featureName, description, version, metadataKeys, entities, requiresTables } = body;
 
     if (!featureName) {
@@ -194,7 +194,7 @@ export async function POST(req: NextRequest) {
 
   // Set a custom field value on an entity
   if (action === 'set-value') {
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { entityType, entityId, fieldKey, value } = body;
 
     if (!entityType || !entityId || !fieldKey) {
@@ -242,7 +242,7 @@ export async function POST(req: NextRequest) {
 
   // Bulk set multiple custom fields at once
   if (action === 'set-bulk') {
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { entityType, entityId, fields } = body;
 
     if (!entityType || !entityId || !fields || typeof fields !== 'object') {
@@ -290,7 +290,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Create a custom field definition
-  const rawBody = await req.json();
+  const rawBody = await readJsonBody(req);
   const validated = validateBody(createCustomFieldSchema, rawBody);
   if (validated instanceof NextResponse) return validated;
   const v = validated.data;
@@ -346,7 +346,7 @@ export async function PUT(req: NextRequest) {
   const ctx = await requireAuth(req);
   if (ctx instanceof NextResponse) return ctx;
 
-  const rawBody = await req.json();
+  const rawBody = await readJsonBody(req);
   const validated = validateBody(updateCustomFieldSchema, rawBody);
   if (validated instanceof NextResponse) return validated;
   const v = validated.data;
@@ -358,12 +358,12 @@ export async function PUT(req: NextRequest) {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
   const expectedUpdatedAt = (validated.data as Record<string, unknown>).expectedUpdatedAt ? new Date((validated.data as Record<string, unknown>).expectedUpdatedAt as string) : null;
   const guard = await concurrencyGuard(db, customFieldDefs, fieldId, ctx.tenantId, expectedUpdatedAt);
   if (guard) return guard;
 
-  const setValues: any = {
+  const setValues: Record<string, unknown> = {
     updatedAt: new Date()
   };
 

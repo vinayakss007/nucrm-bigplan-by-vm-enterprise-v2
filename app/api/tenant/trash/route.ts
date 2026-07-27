@@ -6,6 +6,7 @@ import { contacts, deals, tasks, companies, leads, projects } from '@/drizzle/sc
 import { eq, and, isNotNull, sql, desc } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(req: NextRequest) {
   try {
@@ -147,7 +148,7 @@ export async function PATCH(req: NextRequest) {
     const deny = requirePerm(ctx, 'contacts.edit');
     if (deny) return deny;
 
-    const { id, resource_type } = await req.json();
+    const { id, resource_type } = await readJsonBody(req);
     if (!id || !resource_type) return NextResponse.json({ error: 'id and resource_type required' }, { status: 400 });
 
  
@@ -189,7 +190,7 @@ export async function DELETE(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required to permanently delete' }, { status: 403 });
 
-    const { id, resource_type, purge_all } = await req.json();
+    const { id, resource_type, purge_all } = await readJsonBody(req);
 
     if (purge_all) {
       const result = await db.execute(sql`SELECT public.purge_trash() as count`);

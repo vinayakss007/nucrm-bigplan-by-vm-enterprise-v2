@@ -24,6 +24,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAiFeature } from '@/lib/ai/plan-gate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 const VALID_STATUSES = new Set(['success', 'error', 'rate_limited', 'fallback_used']);
 const VALID_PROVIDERS = new Set(['openai', 'anthropic', 'groq', 'ollama', 'opencode', 'deepseek']);
@@ -144,7 +145,7 @@ export async function PATCH(req: NextRequest) {
     if (gate) return gate;
 
     let body;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const id = typeof body.id === 'string' ? body.id : null;
     const accepted = typeof body.accepted === 'boolean' ? body.accepted : null;
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
@@ -160,7 +161,7 @@ export async function PATCH(req: NextRequest) {
 
     const result = await db
       .update(aiActivity)
-      .set({ accepted, updatedAt: new Date() } as any)
+      .set({ accepted, updatedAt: new Date() } as Record<string, unknown>)
       .where(and(...filters))
       .returning({ id: aiActivity.id });
 

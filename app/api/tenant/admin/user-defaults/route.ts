@@ -15,6 +15,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 const VALID = {
   theme:           ['light', 'dark', 'system'],
@@ -81,7 +82,7 @@ export async function PATCH(req: NextRequest) {
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     let body;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const incoming = body.user_defaults;
     if (!incoming || typeof incoming !== 'object')
       return NextResponse.json({ error: 'user_defaults object required' }, { status: 400 });

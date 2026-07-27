@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -14,7 +15,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
     
-    const { is_active } = await request.json();
+    const { is_active } = await readJsonBody(request);
     const { id } = await params;
 
     const [row] = await db.update(integrations)

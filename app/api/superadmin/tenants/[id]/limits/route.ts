@@ -4,6 +4,7 @@ import { db } from '@/drizzle/db';
 import { tenants, planLimits } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { readJsonBody } from '@/lib/api/validate';
 
 const LIMIT_FIELDS = [
   'maxUsers', 'maxContacts', 'maxDeals', 'maxStorageBytes',
@@ -64,7 +65,7 @@ export async function PATCH(
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { id } = await params;
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     const tenant = await db.query.tenants.findFirst({
       where: eq(tenants.id, id),

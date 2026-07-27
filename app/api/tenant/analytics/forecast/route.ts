@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { dealForecasts } from '@/drizzle/schema';
 import { revenueForecastSummary } from '@/drizzle/schema';
 import { eq, desc, sql } from 'drizzle-orm';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * GET /api/tenant/analytics/forecast
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { deal_id } = body;
 
     if (!deal_id) {

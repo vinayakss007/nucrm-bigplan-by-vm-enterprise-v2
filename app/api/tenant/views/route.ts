@@ -4,6 +4,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { savedViews } from '@/drizzle/schema';
 import { eq, and, or, desc, isNull } from 'drizzle-orm';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * GET /api/tenant/views
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
     const deny = requirePerm(ctx, 'contacts.view');
     if (deny) return deny;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { name, entity_type, filters, columns, is_shared } = body;
 
     if (!name || !entity_type) {

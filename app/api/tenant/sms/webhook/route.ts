@@ -3,6 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { validateTwilioSignature, handleIncomingSMS, updateDeliveryStatus } from '@/lib/sms';
 import type { IncomingSMSPayload, DeliveryStatusPayload } from '@/lib/sms';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * Twilio SMS Webhook Handler
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
         params[key] = value;
       });
     } else {
-      params = await req.json();
+      params = await readJsonBody(req);
     }
 
     // Validate Twilio signature in production

@@ -6,7 +6,7 @@ import { sessions } from '@/drizzle/schema';
 import { eq, and, gt, ne, desc } from 'drizzle-orm';
 import { hashToken } from '@/lib/auth/session';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 const deleteSessionSchema = z.object({
   sessionId: z.string().uuid().optional(),
@@ -53,7 +53,7 @@ export async function DELETE(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const parsed = validateBody(deleteSessionSchema, body);
     if (parsed instanceof NextResponse) return parsed;
     const { sessionId, revokeAll } = parsed.data;

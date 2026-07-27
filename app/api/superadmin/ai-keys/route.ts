@@ -16,7 +16,7 @@ import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { setSystemKeySchema } from '@/lib/api/schemas';
 import {
   setSystemKey,
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Superadmin required' }, { status: 403 });
 
     let body;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     const parsed = validateBody(setSystemKeySchema, body);
     if (parsed instanceof NextResponse) return parsed;

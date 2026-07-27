@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { backupRecords } from '@/drizzle/schema';
 import { desc } from 'drizzle-orm';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * GET /api/tenant/backup
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     let body;
-    try { body = await request.json(); } catch (err) { console.error('[backup] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(request); } catch (err) { console.error('[backup] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const backupType = body.backup_type === 'schema' ? 'schema' : 'full';
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';

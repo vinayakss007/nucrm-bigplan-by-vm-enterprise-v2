@@ -18,7 +18,7 @@ import { db } from '@/drizzle/db';
 import { leads, leadAssignments, leadActivities, activities, users, tenantMembers } from '@/drizzle/schema';
 import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { logAudit } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
 import { apiError } from '@/lib/api-error';
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { id } = await params;
     let rawBody;
-    try { rawBody = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { rawBody = await readJsonBody(request); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const validated = validateBody(assignSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const { assigned_to: newAssignee, reason } = validated.data;

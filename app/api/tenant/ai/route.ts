@@ -18,7 +18,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { aiAssistantSchema } from '@/lib/api/schemas';
 import { requireAuth, requireModule } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No Anthropic API key configured. Add one in the AI Assistant module settings.' }, { status: 503 });
     }
 
-    const rawBody = await req.json();
+    const rawBody = await readJsonBody(req);
     const validated = validateBody(aiAssistantSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

@@ -11,6 +11,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 const VALID_KINDS = new Set(['email', 'note', 'reply', 'call_prep']);
 
@@ -46,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!existing) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
 
     let body;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     const patch: Record<string, unknown> = { updatedAt: new Date(), updatedBy: ctx.userId };
     if (typeof body.name === 'string' && body.name.trim()) patch['name'] = body.name.trim().slice(0, 120);

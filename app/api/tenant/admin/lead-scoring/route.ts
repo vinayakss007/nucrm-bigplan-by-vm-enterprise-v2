@@ -15,7 +15,7 @@ import { leadScoringRules } from '@/drizzle/schema/ai';
 import { eq, and, isNull, desc, asc } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createLeadScoringRuleSchema, updateLeadScoringRuleSchema } from '@/lib/api/schemas';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     let body;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const parsed = validateBody(createLeadScoringRuleSchema, body);
     if (parsed instanceof NextResponse) return parsed;
 
@@ -80,7 +80,7 @@ export async function PATCH(req: NextRequest) {
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     let body;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const parsed = validateBody(updateLeadScoringRuleSchema, body);
     if (parsed instanceof NextResponse) return parsed;
 

@@ -1,7 +1,7 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { users, passwordResets, sessions } from '@/drizzle/schema';
 import { eq, and, gt, isNull } from 'drizzle-orm';
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     const rateLimited = await checkRateLimit(request, { action: 'reset-password', max: 5, windowMinutes: 15 });
     if (rateLimited) return rateLimited;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(schema, body);
     if (validated instanceof NextResponse) return validated;
     const { token, password } = validated.data;

@@ -5,6 +5,7 @@ import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(req: NextRequest) {
   try {
@@ -34,7 +35,7 @@ export async function PUT(req: NextRequest) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { pinned, sections } = body;
 
     const [user] = await db

@@ -5,7 +5,7 @@ import { db } from '@/drizzle/db';
 import { users, sessions } from '@/drizzle/schema';
 import { eq, and, lt } from 'drizzle-orm';
 import { verifyPassword, hashPassword } from '@/lib/auth/session';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { changePasswordSchema } from '@/lib/api/schemas';
 
 export async function PATCH(request: NextRequest) {
@@ -13,7 +13,7 @@ export async function PATCH(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const rawBody = await request.json();
+    const rawBody = await readJsonBody(request);
     const validated = validateBody(changePasswordSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const { current_password, new_password } = validated.data;

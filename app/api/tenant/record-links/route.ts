@@ -8,6 +8,7 @@ import {
   unlinkRecords,
   RecordLinkError,
 } from '@/lib/record-links';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * Arbitrary "related records" associations.
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     let body: Record<string, unknown>;
     try {
-      body = await request.json();
+      body = await readJsonBody(request);
     } catch {
       return badRequest('Invalid JSON');
     }

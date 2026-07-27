@@ -17,6 +17,7 @@ import {
   SecretsVaultError,
 } from '@/lib/ai/secrets';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 /** Accept any provider string — no hardcoded list. */
 
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
 
     let body;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     const { provider, api_key, base_url, model } = body as {
       provider?: string;

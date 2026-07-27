@@ -7,7 +7,7 @@ import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { withConcurrencyGuard } from '@/lib/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       created_at: product.createdAt,
       updated_at: product.updatedAt,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[products GET by id]', error);
     return NextResponse.json({ error: 'Failed to fetch product' }, { status: 500 });
   }
@@ -67,7 +67,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(updateProductSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -108,7 +108,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       created_at: updated.createdAt,
       updated_at: updated.updatedAt,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[products PATCH]', error);
     return NextResponse.json({ error: 'Failed to update product' }, { status: 500 });
   }
@@ -140,7 +140,7 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     fireWebhooks(ctx.tenantId, 'product.deleted', { id }).catch(e => logError({ error: e, context: "async-catch:[context]" }));
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[products DELETE]', error);
     return NextResponse.json({ error: 'Failed to delete product' }, { status: 500 });
   }

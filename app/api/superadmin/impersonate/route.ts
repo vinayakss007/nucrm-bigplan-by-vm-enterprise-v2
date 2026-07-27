@@ -6,6 +6,7 @@ import { users, tenantMembers, roles } from '@/drizzle/schema';
 import { eq, and, sql, asc } from 'drizzle-orm';
 import { createToken, setSessionCookie } from '@/lib/auth/session';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
     
-    const { userId, tenantId, reason } = await request.json();
+    const { userId, tenantId, reason } = await readJsonBody(request);
     if (!tenantId) return NextResponse.json({ error: 'tenantId required' }, { status: 400 });
 
     let targetUserId = userId;

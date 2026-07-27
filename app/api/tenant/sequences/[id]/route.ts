@@ -1,6 +1,6 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateSequenceSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -78,7 +78,7 @@ export async function PATCH(
     }
 
     const sequenceId = (await params).id;
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(updateSequenceSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -214,7 +214,7 @@ export async function POST(
     }
 
     const sequenceId = (await params).id;
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { contact_ids } = body;
 
     if (!Array.isArray(contact_ids) || contact_ids.length === 0) {

@@ -12,6 +12,7 @@ import { leads, tenantMembers, sequences, sequenceEnrollments, segments, segment
 import { eq, and, inArray, sql, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
+import { readJsonBody } from '@/lib/api/validate';
 
 const MAX_BULK = 500;
 
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { action, lead_ids, payload = {} } = body;
 
     if (!Array.isArray(lead_ids) || !lead_ids.length)

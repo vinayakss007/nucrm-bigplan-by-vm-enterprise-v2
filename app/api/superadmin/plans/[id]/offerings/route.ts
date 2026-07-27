@@ -6,6 +6,7 @@ import { modules } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(
   _req: NextRequest,
@@ -58,7 +59,7 @@ export async function PUT(
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { id: planId } = await params;
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { offerings } = body as {
       offerings: { module_id: string; enabled: boolean; price?: number | null }[];
     };

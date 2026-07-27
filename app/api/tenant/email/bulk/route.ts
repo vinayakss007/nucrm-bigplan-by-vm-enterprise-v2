@@ -5,6 +5,7 @@ import { contacts, emailTemplates } from '@/drizzle/schema';
 import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { sendEmail, renderTemplate } from '@/lib/email/service';
 import { logAudit } from '@/lib/audit';
+import { readJsonBody } from '@/lib/api/validate';
 
 const MAX_EMAILS = 50;
 
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
     const permErr = requirePerm(ctx, 'contacts.edit');
     if (permErr) return permErr;
 
-    const { entity_type, entity_ids, template_id } = await req.json();
+    const { entity_type, entity_ids, template_id } = await readJsonBody(req);
 
     if (!entity_ids?.length || entity_ids.length > MAX_EMAILS) {
       return NextResponse.json({ error: `Max ${MAX_EMAILS} emails per batch` }, { status: 400 });

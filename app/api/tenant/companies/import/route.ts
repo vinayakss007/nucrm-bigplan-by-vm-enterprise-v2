@@ -5,6 +5,7 @@ import { companies, activities } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { apiError } from '@/lib/api-error';
+import { readJsonBody } from '@/lib/api/validate';
 
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     const deny = requirePerm(ctx, 'companies.import');
     if (deny) return deny;
 
-    const rawBody = await request.json();
+    const rawBody = await readJsonBody(request);
     const { csv } = rawBody;
     if (!csv) return NextResponse.json({ error: 'csv field required' }, { status: 400 });
 

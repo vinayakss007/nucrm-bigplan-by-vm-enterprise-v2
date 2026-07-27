@@ -5,7 +5,7 @@ import { db } from '@/drizzle/db';
 import { subscriptions, dunningAttempts, dunningSettings, billingEvents } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { isStripeConfigured } from '@/lib/stripe';
 
 const retrySchema = z.object({
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Payment processing is not configured.' }, { status: 503 });
     }
 
-    const raw = await request.json();
+    const raw = await readJsonBody(request);
     const parsed = validateBody(retrySchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const { subscriptionId } = parsed.data;

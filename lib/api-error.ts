@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { logError } from '@/lib/errors';
 import { sendCriticalErrorAlert } from '@/lib/critical-error-alert';
+import { InvalidJsonBodyError } from '@/lib/api/validate';
 
 /**
  * Centralized API error handler.
@@ -17,6 +18,15 @@ import { sendCriticalErrorAlert } from '@/lib/critical-error-alert';
 export function apiError(err: unknown, message = 'Internal server error', status = 500) {
   const isDev = process.env.NODE_ENV === 'development';
   const errMsg = err instanceof Error ? err.message : String(err);
+
+  // A malformed request body is the caller's fault, not a server fault. Routes
+  // parse with readJsonBody() which raises this tagged error, so we can answer
+  // 400 without guessing — and without paging anyone, since there is nothing
+  // for an operator to fix. Checked before `status` is honoured because callers
+  // pass a hardcoded 500 from their catch block.
+  if (err instanceof InvalidJsonBodyError) {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
 
   // Use centralized logError (coordinates with errors.ts)
   logError({ error: err, context: `apiError:${status}` });

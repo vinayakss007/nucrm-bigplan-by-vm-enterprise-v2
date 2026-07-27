@@ -7,7 +7,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { createNotification } from '@/lib/notifications';
 import { fireWebhooks } from '@/lib/webhooks';
 import { syncCalculatedFields } from '@/lib/formula/sync';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 const formSubmitSchema = z.object({
   form_id: z.string().min(1, 'Form ID is required'),
@@ -207,7 +207,7 @@ export async function POST(req: NextRequest) {
 
 async function requestToJson(req: NextRequest) {
   try {
-    return await req.json();
+    return await readJsonBody(req);
   } catch {
     throw new Error('Invalid JSON in request body');
   }

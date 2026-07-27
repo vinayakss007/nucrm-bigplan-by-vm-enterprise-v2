@@ -13,6 +13,7 @@ import { db } from '@/drizzle/db';
 import { ssoProviders } from '@/drizzle/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { encrypt } from '@/lib/crypto';
+import { readJsonBody } from '@/lib/api/validate';
 
 interface OidcProviderInput {
   name: string;
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
   }
 
   let body: OidcProviderInput | null;
-  try { body = await request.json() as OidcProviderInput; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+  try { body = await readJsonBody(request) as OidcProviderInput; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
   const validationError = validateInput(body, { secretRequired: true });
   if (validationError) return validationError;
   const v = body!;

@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requestPasswordReset } from '@/lib/auth/password-reset';
 import { checkRateLimit } from '@/lib/rate-limit';
 
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     });
     if (limited) return limited;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(schema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

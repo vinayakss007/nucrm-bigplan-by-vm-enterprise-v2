@@ -27,6 +27,7 @@ import { tenantMembers, leads, contacts, deals, tasks } from '@/drizzle/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
+import { readJsonBody } from '@/lib/api/validate';
 
 const DEFAULT_OOO = {
   enabled: false,
@@ -67,7 +68,7 @@ export async function PATCH(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
 
     let body;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const ooo = body.out_of_office;
     if (!ooo || typeof ooo !== 'object')
       return NextResponse.json({ error: 'out_of_office object required' }, { status: 400 });
