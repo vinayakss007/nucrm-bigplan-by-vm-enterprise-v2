@@ -236,6 +236,34 @@ function extractValuesClause(line: string): string | null {
   return match?.[3] ?? null;
 }
 
+/** An INSERT decomposed into its table, columns and every VALUES row. */
+export interface ParsedInsertRows {
+  table: string;
+  columns: string[];
+  /** One entry per VALUES group, so a multi-row INSERT yields several. */
+  rows: string[][];
+}
+
+/**
+ * Parse an INSERT into its table, columns and ALL of its value rows.
+ *
+ * This is the single entry point anything needing per-row access should use.
+ * `parseInsertStatement` exposes only the first row for backwards
+ * compatibility; consumers that reimplemented their own value scanner (the
+ * verifier used to) drifted from this one and broke — see the tenant_id
+ * extraction defect fixed alongside this.
+ */
+export function parseInsertRows(line: string): ParsedInsertRows | null {
+  const match = line.match(buildInsertIntoRegex(INSERT_STATEMENT_TAIL));
+  if (!match?.[1] || !match[2] || !match[3]) return null;
+
+  const columns = parseColumnNames(match[2]);
+  const rows = parseValueGroups(match[3]).filter(r => r.length === columns.length);
+  if (rows.length === 0) return null;
+
+  return { table: unquoteIdentifier(match[1]), columns, rows };
+}
+
 /**
  * Parse a single INSERT statement into structured data.
  * Supports both single-row and multi-row INSERTs:
@@ -259,12 +287,17 @@ export function parseInsertStatement(line: string): ParsedStatement | null {
   const allValueGroups = parseValueGroups(valuesStr);
   if (allValueGroups.length === 0) return null;
 
+  // EVERY row must match the column list, not just the first. Checking only
+  // row 1 let a malformed later row through, which then failed at execute time
+  // and was merely console.error'd — so the restore reported success with a
+  // record missing. Rejecting the statement makes it countable as unparsed
+  // instead, which is surfaced to the caller.
+  if (allValueGroups.some(group => group.length !== columns.length)) return null;
+
   // For compatibility, return first value group as `values`
   // Multi-row handling is done in the backup file parser
   const values = allValueGroups[0];
   if (!values) return null;
-
-  if (columns.length !== values.length) return null;
 
   return { table, columns, values, rawStatement: line };
 }
@@ -359,6 +392,8 @@ function parseValues(valuesStr: string): string[] {
   let current = '';
   let inQuotes = false;
   let escapeNext = false;
+  /** Depth of unquoted `(`/`[` nesting, so commas inside them are not splits. */
+  let nesting = 0;
   
   for (let i = 0; i < valuesStr.length; i++) {
     const char = valuesStr[i];
@@ -380,8 +415,24 @@ function parseValues(valuesStr: string): string[] {
       current += char;
       continue;
     }
-    
-    if (char === ',' && !inQuotes) {
+
+    // Track nesting so a comma *inside* a composite value is not treated as a
+    // column separator. Without this, `ARRAY[1,2]`, `ROW(1,2)` and
+    // `'{"a":1}'::jsonb` style values split into extra columns, the row's arity
+    // stops matching the column list, and the whole row is dropped — silent
+    // data loss on restore.
+    if (!inQuotes && (char === '(' || char === '[')) {
+      nesting++;
+      current += char;
+      continue;
+    }
+    if (!inQuotes && (char === ')' || char === ']')) {
+      if (nesting > 0) nesting--;
+      current += char;
+      continue;
+    }
+
+    if (char === ',' && !inQuotes && nesting === 0) {
       values.push(current.trim());
       current = '';
       continue;

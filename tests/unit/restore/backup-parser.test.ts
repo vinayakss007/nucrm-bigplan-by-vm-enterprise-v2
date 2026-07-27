@@ -2,11 +2,12 @@
  * Unit tests for lib/restore/backup-parser.ts
  *
  * This module reads customer backups and decides which rows get restored.
- * A parse failure here is silent: every caller does `if (!parsed) continue;`,
- * so a rejected statement is a dropped customer record while the restore job
- * still reports success. The tests below therefore pin down the exact
- * accept/reject boundary of the parser, including the cases where the current
- * implementation rejects statements it should accept (marked `BUG:`).
+ * A rejected statement is a dropped customer record, so these tests pin down
+ * the exact accept/reject boundary of the parser.
+ *
+ * A statement the parser cannot read is no longer skipped silently: callers
+ * count it (`unparsed_statements` / `unparsedStatements`) and surface it, so
+ * rejection is now a reported partial restore rather than invisible loss.
  */
 
 import { describe, it, expect, afterAll, beforeAll } from 'vitest';
@@ -270,19 +271,47 @@ describe('parseInsertStatement', () => {
     });
   });
 
-  describe('KNOWN BUGS — value splitting (lower risk, still open)', () => {
-    it('BUG: unquoted composite values with commas break arity, e.g. ARRAY[1,2]', () => {
-      // Value splitting tracks quotes but not brackets, so ARRAY[1,2] is split
-      // into two values -> arity mismatch -> the whole row is dropped.
-      expect(parseInsertStatement(`INSERT INTO t (a, b) VALUES (1, ARRAY[1,2]);`)).toBeNull();
+  describe('composite values and multi-row arity', () => {
+    it('does not split on a comma inside an unquoted ARRAY[...] literal', () => {
+      // Splitting tracked quotes but not brackets, so ARRAY[1,2] became two
+      // values, the arity stopped matching, and the whole row was dropped.
+      const parsed = parseInsertStatement(`INSERT INTO t (a, b) VALUES (1, ARRAY[1,2]);`);
+      expect(parsed?.values).toEqual(['1', 'ARRAY[1,2]']);
     });
 
-    it('BUG: only the FIRST row of a multi-row INSERT is arity-checked', () => {
-      // Row 2 has 3 values for 2 columns, yet the statement is accepted.
-      const parsed = parseInsertStatement(
-        `INSERT INTO contacts (id, name) VALUES ('c1', 'A'), ('c2', 'B', 'extra');`
-      );
-      expect(parsed).not.toBeNull();
+    it('does not split on a comma inside an unquoted function or ROW(...) call', () => {
+      expect(
+        parseInsertStatement(`INSERT INTO t (a, b) VALUES (1, ROW(1,2));`)?.values
+      ).toEqual(['1', 'ROW(1,2)']);
+      expect(
+        parseInsertStatement(`INSERT INTO t (a, b) VALUES ('x', coalesce(1,2));`)?.values
+      ).toEqual(["'x'", 'coalesce(1,2)']);
+    });
+
+    it('handles nested brackets', () => {
+      expect(
+        parseInsertStatement(`INSERT INTO t (a, b) VALUES (1, ARRAY[ARRAY[1,2],ARRAY[3,4]]);`)
+          ?.values
+      ).toEqual(['1', 'ARRAY[ARRAY[1,2],ARRAY[3,4]]']);
+    });
+
+    it('arity-checks EVERY row of a multi-row INSERT, not just the first', () => {
+      // A malformed later row used to be accepted here, then fail at execute
+      // time where it was only console.error'd - so the restore reported
+      // success with a record silently missing. Rejecting the statement makes
+      // it countable as unparsed and therefore reportable.
+      expect(
+        parseInsertStatement(
+          `INSERT INTO contacts (id, name) VALUES ('c1', 'A'), ('c2', 'B', 'extra');`
+        )
+      ).toBeNull();
+    });
+
+    it('still accepts a multi-row INSERT where every row is well-formed', () => {
+      expect(
+        parseInsertStatement(`INSERT INTO contacts (id, name) VALUES ('c1', 'A'), ('c2', 'B');`)
+          ?.values
+      ).toEqual(["'c1'", "'A'"]);
     });
   });
 });

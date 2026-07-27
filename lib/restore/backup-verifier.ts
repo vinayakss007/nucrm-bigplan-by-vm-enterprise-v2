@@ -19,6 +19,7 @@ import { Readable } from 'stream';
 import {
   buildInsertIntoRegex,
   looksLikeInsertStatement,
+  parseInsertRows,
   unquoteIdentifier,
 } from './backup-parser';
 
@@ -78,70 +79,19 @@ function parseTableName(line: string): string | null {
   return match?.[1] ? unquoteIdentifier(match[1]) : null;
 }
 
-/**
- * Extract tenant_id value from an INSERT statement's VALUES clause
+/*
+ * The hand-rolled `extractTenantIdFromValues` that used to live here has been
+ * removed. It was handed the VALUES clause *including* its outer parentheses,
+ * so its bracket depth never returned to 0 and the column-separator branch
+ * never fired: it returned null for every row ever given to it. That made
+ * `tenantsFound` permanently empty, `recordsWithTenantId` permanently 0, and
+ * `verifyBackup(path, { expectedTenantId })` reject every backup including
+ * correct ones — so a pre-restore tenant gate built on it could never pass.
+ *
+ * Rather than repair a second, divergent value scanner, the verifier now uses
+ * `parseInsertRows()` from backup-parser: one parser, already covering quoted
+ * identifiers, escapes and multi-row INSERTs.
  */
-function extractTenantIdFromValues(columns: string[], valuesStr: string): string | null {
-  const tenantIdIdx = columns.indexOf('tenant_id');
-  if (tenantIdIdx === -1) return null;
-
-  // Parse values to find the tenant_id value
-  let depth = 0;
-  let inQuotes = false;
-  let escapeNext = false;
-  let currentValue = '';
-  let columnIdx = 0;
-
-  for (let i = 0; i < valuesStr.length; i++) {
-    const char = valuesStr[i];
-
-    if (escapeNext) {
-      currentValue += char;
-      escapeNext = false;
-      continue;
-    }
-
-    if (char === '\\') {
-      currentValue += char;
-      escapeNext = true;
-      continue;
-    }
-
-    if (char === "'") {
-      inQuotes = !inQuotes;
-      currentValue += char;
-      continue;
-    }
-
-    if (!inQuotes) {
-      if (char === '(') {
-        depth++;
-        currentValue += char;
-        continue;
-      }
-      if (char === ')') {
-        depth--;
-        currentValue += char;
-        if (depth === 0 && columnIdx === tenantIdIdx) {
-          return parseUUID(currentValue.trim());
-        }
-        continue;
-      }
-      if (char === ',' && depth === 0) {
-        if (columnIdx === tenantIdIdx) {
-          return parseUUID(currentValue.trim());
-        }
-        currentValue = '';
-        columnIdx++;
-        continue;
-      }
-    }
-
-    currentValue += char;
-  }
-
-  return null;
-}
 
 /**
  * Parse UUID from SQL value (removes quotes)
@@ -155,16 +105,6 @@ function parseUUID(sqlValue: string): string | null {
     return value;
   }
   return null;
-}
-
-/**
- * Parse column names from INSERT statement
- */
-function parseColumns(line: string): string[] {
-  const match = line.match(buildInsertIntoRegex(String.raw`\s*\(([^)]+)\)`));
-  // Group 1 is the table name; group 2 is the column list.
-  if (!match?.[2]) return [];
-  return match[2].split(',').map(c => c.trim().replace(/"/g, ''));
 }
 
 /**
@@ -265,20 +205,30 @@ export async function verifyBackup(
       tablesFound.add(tableName);
       recordsPerTable[tableName] = (recordsPerTable[tableName] || 0) + 1;
 
-      // Try to extract tenant_id
-      const columns = parseColumns(trimmed);
-      const valuesMatch = trimmed.match(/VALUES\s+(.+)/i);
-      if (valuesMatch && columns.includes('tenant_id')) {
-        const tenantId = extractTenantIdFromValues(columns, valuesMatch[1]!);
-        if (tenantId) {
-          tenantsFound.add(tenantId);
-          recordsWithTenantId++;
-        } else {
-          recordsWithoutTenantId++;
+      // Tenant attribution uses the shared parser so a multi-row INSERT is
+      // accounted for row by row — a single statement can span tenants.
+      const parsed = parseInsertRows(trimmed);
+      if (!parsed) {
+        // Recognisable as an INSERT (we got a table name) but its rows cannot
+        // be read, so the restore would skip them.
+        unparsedStatements++;
+        continue;
+      }
+
+      const tenantIdIdx = parsed.columns.indexOf('tenant_id');
+      if (tenantIdIdx === -1) {
+        // Table has no tenant_id column (e.g. a global/system table).
+        recordsWithoutTenantId += parsed.rows.length;
+      } else {
+        for (const row of parsed.rows) {
+          const tenantId = parseUUID((row[tenantIdIdx] ?? '').trim());
+          if (tenantId) {
+            tenantsFound.add(tenantId);
+            recordsWithTenantId++;
+          } else {
+            recordsWithoutTenantId++;
+          }
         }
-      } else if (!columns.includes('tenant_id')) {
-        // Table doesn't have tenant_id column (e.g., global tables)
-        recordsWithoutTenantId++;
       }
 
       // Safety: don't parse huge files entirely
