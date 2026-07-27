@@ -22,8 +22,6 @@ export default defineConfig({
         'lib/leads/**',
         'lib/onboarding/**',
         'lib/plugins/**',
-        'lib/restore/**',
-        'lib/storage/**',
         'lib/usage/**',
         'lib/automation/types.ts',
         'lib/calendar-sync/types.ts',
