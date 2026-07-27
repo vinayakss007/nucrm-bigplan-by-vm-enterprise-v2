@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { markOnboardingComplete, recordOnboardingStep } from '@/lib/onboarding/check';
 import { ModuleRegistry } from '@/lib/modules/registry';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * POST /api/tenant/onboarding/complete
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { product_id, modules = [], company_name, pipeline_name } = body;
 
     // Record which product they chose

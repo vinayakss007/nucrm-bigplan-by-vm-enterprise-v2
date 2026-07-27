@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { validateBody, validateQuery } from '@/lib/api/validate';
+import { validateBody, validateQuery, readJsonBody } from '@/lib/api/validate';
 import { createDealSchema, dealQuerySchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { checkLimit } from '@/lib/usage/middleware';
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     const limited = await checkRateLimit(request, { action: 'deals_create', max: 100, windowMinutes: 60 });
     if (limited) return limited;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(createDealSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

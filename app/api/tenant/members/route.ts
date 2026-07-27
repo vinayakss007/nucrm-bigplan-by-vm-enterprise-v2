@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { inviteMemberSchema, updateMemberSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -9,7 +9,7 @@ import {
   contacts, deals, tasks, userDepartures, 
   tenants, leadAssignments 
 } from '@/drizzle/schema';
-import { eq, and, or, sql, desc, asc, isNull } from 'drizzle-orm';
+import { eq, and, or, sql, desc, asc, isNull, type SQL } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';
 import { hashPassword } from '@/lib/auth/session';
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const rawBody = await request.json();
+    const rawBody = await readJsonBody(request);
     const validated = validateBody(inviteMemberSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const { email, password, full_name, role_slug = 'sales_rep' } = rawBody;
@@ -172,7 +172,7 @@ export async function PATCH(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const rawPatch = await request.json();
+    const rawPatch = await readJsonBody(request);
     const patchValidated = validateBody(updateMemberSchema, rawPatch);
     if (patchValidated instanceof NextResponse) return patchValidated;
     const pv = patchValidated.data;
@@ -203,7 +203,7 @@ export async function PATCH(request: NextRequest) {
         .limit(1);
       
       const concurrencyWhere = concurrencyGuard(tenantMembers, rawPatch.expectedUpdatedAt);
-      const whereConditions: any[] = [eq(tenantMembers.id, memberId)];
+      const whereConditions: SQL[] = [eq(tenantMembers.id, memberId)];
       if (concurrencyWhere) whereConditions.push(concurrencyWhere);
 
       const [updated] = await db.update(tenantMembers)
@@ -273,7 +273,7 @@ export async function PATCH(request: NextRequest) {
 
     } else if (action === 'suspend') {
       const concurrencyWhere = concurrencyGuard(tenantMembers, rawPatch.expectedUpdatedAt);
-      const whereConditions: any[] = [eq(tenantMembers.id, memberId)];
+      const whereConditions: SQL[] = [eq(tenantMembers.id, memberId)];
       if (concurrencyWhere) whereConditions.push(concurrencyWhere);
 
       const [updated] = await db.update(tenantMembers).set({ status: 'suspended' }).where(and(...whereConditions)).returning();
@@ -282,7 +282,7 @@ export async function PATCH(request: NextRequest) {
       if (stale) return stale;
     } else if (action === 'reactivate') {
       const concurrencyWhere = concurrencyGuard(tenantMembers, rawPatch.expectedUpdatedAt);
-      const whereConditions: any[] = [eq(tenantMembers.id, memberId)];
+      const whereConditions: SQL[] = [eq(tenantMembers.id, memberId)];
       if (concurrencyWhere) whereConditions.push(concurrencyWhere);
 
       const [updated] = await db.update(tenantMembers).set({ status: 'active' }).where(and(...whereConditions)).returning();
@@ -291,7 +291,7 @@ export async function PATCH(request: NextRequest) {
       if (stale) return stale;
     } else if (action === 'assign_lead') {
       let _parsedBody: { contactId?: string };
-      try { _parsedBody = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+      try { _parsedBody = await readJsonBody(request); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
       const { contactId } = _parsedBody;
       if (contactId) {
         await db.update(contacts).set({ assignedTo: target.userId, lastAssignedAt: new Date() }).where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId)));

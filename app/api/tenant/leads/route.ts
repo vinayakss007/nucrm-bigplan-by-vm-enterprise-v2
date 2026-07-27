@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createLeadSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { checkLimit } from '@/lib/usage/middleware';
@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
     const overLimit = await checkLimit(ctx, 'leads');
     if (overLimit) return overLimit;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(createLeadSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

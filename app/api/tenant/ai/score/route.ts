@@ -7,6 +7,7 @@ import { eq, and, desc, gte } from 'drizzle-orm';
 import { can } from '@/lib/auth/middleware';
 import { scoreLead, bulkScoreLeads } from '@/lib/ai/scoring';
 import { requireAiFeature } from '@/lib/ai/plan-gate';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * POST /api/tenant/ai/score
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     let body;
-    try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(request); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const { contact_id, bulk, limit } = body;
 
     if (bulk) {

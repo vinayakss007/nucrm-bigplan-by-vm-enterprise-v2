@@ -3,6 +3,7 @@ import { db } from '@/drizzle/db';
 import { forms, formSubmissions } from '@/drizzle/schema';
 import { eq, sql, and, gte } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
+import { readJsonBody } from '@/lib/api/validate';
 
 interface FormField {
   key: string;
@@ -137,7 +138,7 @@ export async function POST(
     const { id } = await params;
     let body: { type?: string } = {};
     try {
-      body = await req.json();
+      body = await readJsonBody(req);
     } catch {}
 
     if (body.type === 'submit') {

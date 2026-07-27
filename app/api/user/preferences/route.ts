@@ -18,6 +18,7 @@ import { db } from '@/drizzle/db';
 import { users, tenants } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { readJsonBody } from '@/lib/api/validate';
 
 const VALID = {
   // Appearance
@@ -151,7 +152,7 @@ export async function PATCH(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
 
     let body;
-    try { body = await req.json(); } catch (err) { console.error('[preferences] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch (err) { console.error('[preferences] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     // Validate strings
     for (const k of STRING_VALIDATED) {

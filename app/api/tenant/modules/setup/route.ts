@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { customFieldDefs, pipelines, pipelineStages } from '@/drizzle/schema';
 import { automations } from '@/drizzle/schema';
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const { template_id } = await req.json();
+    const { template_id } = await readJsonBody(req);
     const template = INDUSTRY_TEMPLATES[template_id];
     
     if (!template) {

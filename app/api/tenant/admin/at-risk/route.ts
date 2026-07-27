@@ -11,7 +11,7 @@ import { atRiskRules } from '@/drizzle/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { atRiskRuleSchema } from '@/lib/api/schemas';
 
 export async function GET(req: NextRequest) {
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validated = validateBody(atRiskRuleSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

@@ -1,6 +1,6 @@
 import { fireWebhooks } from '@/lib/webhooks';
 import { apiError } from '@/lib/api-error';
-import { validateBody, validateQuery } from '@/lib/api/validate';
+import { validateBody, validateQuery, readJsonBody } from '@/lib/api/validate';
 import { createContactSchema, contactQuerySchema } from '@/lib/api/schemas';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
     const deny = requirePerm(ctx, 'contacts.create');
     if (deny) return deny;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(createContactSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

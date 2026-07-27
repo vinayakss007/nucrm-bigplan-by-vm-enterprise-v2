@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, deals, tasks, leads } from '@/drizzle/schema';
 import { eq, and, desc, sql, gt, lt } from 'drizzle-orm';
+import { readJsonBody } from '@/lib/api/validate';
 
  
  
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const { report_type, filters, limit = 100 } = await request.json();
+    const { report_type, filters, limit = 100 } = await readJsonBody(request);
 
     const reportConfig = REPORT_QUERIES[report_type];
     if (!reportConfig) {

@@ -4,7 +4,7 @@ import { db } from '@/drizzle/db';
 import { supportTickets, contacts } from '@/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 const publicTicketSchema = z.object({
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     const limited = await checkRateLimit(request, { action: 'public-tickets-create', max: 10, windowMinutes: 1 });
     if (limited) return limited;
 
-    const raw = await request.json();
+    const raw = await readJsonBody(request);
     const parsed = validateBody(publicTicketSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const { email, subject, body, category, priority } = parsed.data;

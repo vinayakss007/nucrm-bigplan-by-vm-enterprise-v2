@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { scorePageUrl } from '@/lib/visitor-tracking';
 import { createHash } from 'crypto';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * Public endpoint for visitor tracking.
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
 
     const tenantId = keyRow.tenantId;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { visitorId, fingerprintId, url, title, referrer, duration } = body;
 
     if (!visitorId || !url) {

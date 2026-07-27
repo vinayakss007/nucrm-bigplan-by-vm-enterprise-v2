@@ -3,6 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { db } from '@/drizzle/db';
 import { csatSurveys } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   try {
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   try {
     const { token } = await params;
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { score, comment } = body;
 
     if (typeof score !== 'number' || score < 1 || score > 5) {

@@ -8,6 +8,7 @@ import { hashPassword, createToken, hashToken, setSessionCookie, validatePasswor
 import { installDefaultModules } from '@/lib/modules/auto-install';
 import { logError } from '@/lib/errors-server';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 const _createAdminSchema = z.object({
   full_name: z.string().min(1, 'Full name is required'),
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
     if (limited) return limited;
 
     let body;
-    try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(request); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const { full_name, email, password, workspace_name } = body;
 
     // Only works if zero super admin users exist

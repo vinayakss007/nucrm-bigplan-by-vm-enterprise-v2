@@ -13,6 +13,7 @@ import { tasks, tenantMembers, segments, segmentMembers } from '@/drizzle/schema
 import { eq, and, inArray, sql, or, ilike } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
+import { readJsonBody } from '@/lib/api/validate';
 
 const MAX_BULK = 500;
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { action, payload = {} } = body;
     const selectAll = body.selectAll === true;
     const filters = body.filters as { q?: string; status?: string; assigned_to?: string; priority?: string } | undefined;

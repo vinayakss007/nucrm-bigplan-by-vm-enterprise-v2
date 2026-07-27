@@ -5,7 +5,7 @@ import { db } from '@/drizzle/db';
 import { users, contacts, deals, tasks, activities, tenantMembers } from '@/drizzle/schema';
 import { eq, and, or, ilike, sql, desc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 const restoreUserDataSchema = z.object({
   user_id: z.string().uuid('user_id is required'),
@@ -295,7 +295,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
     }
 
-    const raw = await request.json();
+    const raw = await readJsonBody(request);
     const parsed = validateBody(restoreUserDataSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const { user_id, tenant_id, records, source } = parsed.data;

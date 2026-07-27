@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { apiError } from '@/lib/api-error';
-import { validateBody, validateQuery } from '@/lib/api/validate';
+import { validateBody, validateQuery, readJsonBody } from '@/lib/api/validate';
 import { createTicketSchema, ticketQuerySchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, requireModule } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
     const permErr = requirePerm(ctx, 'tickets.manage');
     if (permErr) return permErr;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(createTicketSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

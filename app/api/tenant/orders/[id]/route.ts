@@ -6,6 +6,7 @@ import { orders } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 // Order status state machine - defines valid transitions
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -59,7 +60,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (deny) return deny;
 
     const orderId = (await params).id;
-    const body = await req.json();
+    const body = await readJsonBody(req);
 
     // Validate numeric fields
     const numericFields = ['totalAmount', 'subtotal', 'discount'] as const;

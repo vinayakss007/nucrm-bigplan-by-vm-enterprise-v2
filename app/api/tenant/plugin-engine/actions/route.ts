@@ -5,13 +5,14 @@ import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { executeAction } from '@/lib/integrations/registry';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function POST(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     if (!body.instance_id || !body.action) {
       return NextResponse.json({ error: 'instance_id and action are required' }, { status: 400 });
     }

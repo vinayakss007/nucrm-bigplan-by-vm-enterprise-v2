@@ -1,7 +1,7 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth/session';
 import { db } from '@/drizzle/db';
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const payload = await verifyToken(token);
     if (!payload) return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(schema, body);
     if (validated instanceof NextResponse) return validated;
     const { token: inviteToken } = validated.data;

@@ -1,7 +1,7 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { errorLogs, tenants, users } from '@/drizzle/schema';
@@ -97,7 +97,7 @@ const resolveErrorSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(createErrorSchema, body);
     if (validated instanceof NextResponse) return validated;
     const { level = 'error', code, message, tenant_id, stack, context } = validated.data;
@@ -125,7 +125,7 @@ export async function PATCH(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(resolveErrorSchema, body);
     if (validated instanceof NextResponse) return validated;
     const { id, resolveAll, level } = validated.data;

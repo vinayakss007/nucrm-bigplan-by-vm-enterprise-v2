@@ -4,6 +4,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { ticketReplies, supportTickets } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const permErr = requirePerm(ctx, 'tickets.manage');
     if (permErr) return permErr;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     if (!body.body?.trim()) return NextResponse.json({ error: 'Body is required' }, { status: 400 });
 
     // Check if this is the first reply (for SLA first-response tracking)

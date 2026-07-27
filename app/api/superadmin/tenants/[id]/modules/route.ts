@@ -1,7 +1,7 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenantModules } from '@/drizzle/schema';
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const { id: tenantId } = await params;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(moduleActionSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

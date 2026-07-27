@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import * as dlq from '@/lib/webhooks/dlq';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * GET /api/tenant/webhooks/dlq — List dead letter queue entries
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { action, ids, days } = body;
 
     switch (action) {

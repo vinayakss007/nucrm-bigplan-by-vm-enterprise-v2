@@ -6,6 +6,7 @@ import { tenants, users, plans, subscriptions } from '@/drizzle/schema';
 import { and, eq } from 'drizzle-orm';
 import { dbCache, invalidateCache } from '@/lib/db/cache';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(request: NextRequest) {
   try {
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const { name } = await request.json();
+    const { name } = await readJsonBody(request);
     if (!name?.trim()) return NextResponse.json({ error: 'name required' }, { status: 400 });
 
     const slug = name.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'') + '-' + Date.now().toString(36);
@@ -102,7 +103,7 @@ export async function PATCH(request: NextRequest) {
     const limited = await checkRateLimit(request, { action: 'settings_update', max: 30, windowMinutes: 1 });
     if (limited) return limited;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

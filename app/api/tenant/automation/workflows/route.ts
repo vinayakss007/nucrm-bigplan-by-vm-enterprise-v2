@@ -6,6 +6,7 @@ import { automationWorkflows } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { getAllWorkflows } from '@/lib/automation/workflows';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(request: NextRequest) {
   try {
@@ -58,7 +59,7 @@ export async function PATCH(request: NextRequest) {
     const modErr = await requireModule(ctx, 'automation-basic');
     if (modErr) return modErr;
 
-    const { workflow_id, enabled, config } = await request.json();
+    const { workflow_id, enabled, config } = await readJsonBody(request);
 
     // Get workflow definition
     const workflow = getAllWorkflows().find(w => w.id === workflow_id);

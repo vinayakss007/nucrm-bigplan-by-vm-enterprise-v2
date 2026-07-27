@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { cannedResponses } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { readJsonBody } from '@/lib/api/validate';
 
 const createCannedSchema = z.object({
   category: z.string().min(1).max(100),
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     const permErr = requirePerm(ctx, 'settings.manage');
     if (permErr) return permErr;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = createCannedSchema.safeParse(body);
     if (!validated.success) {
       return NextResponse.json({ error: validated.error.flatten().fieldErrors }, { status: 400 });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { users, tenants } from '@/drizzle/schema';
 import { eq, sql, desc } from 'drizzle-orm';
+import { readJsonBody } from '@/lib/api/validate';
 
 interface TelegramMessage {
   message?: {
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return NextResponse.json({ ok: false });
 
-  const body: TelegramMessage = await req.json();
+  const body: TelegramMessage = await readJsonBody(req);
   const chatId = body.message?.chat?.id;
   const text = body.message?.text?.trim() || '';
 

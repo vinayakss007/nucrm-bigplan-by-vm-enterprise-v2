@@ -6,7 +6,7 @@ import { db } from '@/drizzle/db';
 import { smsTemplates } from '@/drizzle/schema/sms';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { extractTemplateVariables } from '@/lib/sms';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     const moduleGate = await requireModule(ctx.tenantId, 'whatsapp-bot', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validated = validateBody(createTemplateSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -80,7 +80,7 @@ export async function PUT(req: NextRequest) {
     const moduleGate = await requireModule(ctx.tenantId, 'whatsapp-bot', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validated = validateBody(updateTemplateSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

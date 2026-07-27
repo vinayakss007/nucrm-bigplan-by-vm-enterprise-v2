@@ -6,7 +6,7 @@ import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 const moduleCheckoutSchema = z.object({
   module_id: z.string().min(1),
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const stripeKey = process.env.STRIPE_SECRET_KEY;
     if (!stripeKey) return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
 
-    const rawBody = await req.json();
+    const rawBody = await readJsonBody(req);
     const validated = validateBody(moduleCheckoutSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const { module_id } = validated.data;

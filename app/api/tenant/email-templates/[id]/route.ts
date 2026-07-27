@@ -9,7 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { emailTemplates } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateEmailTemplateSchema } from '@/lib/api/schemas';
 import { withConcurrencyGuard } from '@/lib/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -60,7 +60,7 @@ export async function PATCH(request: NextRequest, { params }: any) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;
-    const rawBody = await request.json();
+    const rawBody = await readJsonBody(request);
     const validated = validateBody(updateEmailTemplateSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

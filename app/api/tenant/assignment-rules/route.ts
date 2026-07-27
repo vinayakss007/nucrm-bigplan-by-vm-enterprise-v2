@@ -7,6 +7,7 @@ import { assignmentRules } from '@/drizzle/schema/assignment';
 import { eq, and, desc } from 'drizzle-orm';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(req: NextRequest) {
   try {
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
     const moduleGate = await requireModule(ctx.tenantId, 'automation-pro', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { name, type, config, priority, entityType } = body;
 
     if (!name || !type) {
@@ -83,7 +84,7 @@ export async function PUT(req: NextRequest) {
     const moduleGate = await requireModule(ctx.tenantId, 'automation-pro', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { id } = body;
 
     if (!id) {

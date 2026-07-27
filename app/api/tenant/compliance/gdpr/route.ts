@@ -7,6 +7,7 @@ import { complianceRequests } from '@/drizzle/schema/compliance';
 import { eq, and, desc } from 'drizzle-orm';
 import { exportTenantData } from '@/lib/compliance/gdpr';
 import { anonymizeTenantData } from '@/lib/compliance/gdpr';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(req: NextRequest) {
   try {
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
     const moduleGate = await requireModule(ctx.tenantId, 'compliance', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const requestType = body.type as string;
 
     if (!requestType || !['export', 'delete'].includes(requestType)) {

@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { plans, users, systemSettings } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateRateLimitsSchema } from '@/lib/api/schemas';
 
 const RATE_LIMIT_ENDPOINTS = [
@@ -84,7 +84,7 @@ export async function PUT(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const parsed = validateBody(updateRateLimitsSchema, body);
     if (parsed instanceof NextResponse) return parsed;
 

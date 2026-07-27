@@ -5,7 +5,7 @@ import { db } from '@/drizzle/db';
 import { tokenBudgets, tenantTokenLimits, usageAlerts, costAnomalies, tenants } from '@/drizzle/schema';
 import { eq, sql, desc, asc } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 const tokenControlSchema = z.object({
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const raw = await request.json();
+    const raw = await readJsonBody(request);
     const parsed = validateBody(tokenControlSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const { action, data } = parsed.data;

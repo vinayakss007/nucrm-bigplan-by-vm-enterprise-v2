@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { initiateSSO, handleSSOCallback } from '@/lib/auth/sso';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * GET /api/auth/sso/[provider] - Initiate SSO login
@@ -55,7 +56,7 @@ export async function POST(
 ) {
   try {
     const { provider } = await params;
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const tenantId = req.cookies.get('sso_tenant_id')?.value || body.tenant_id;
 
     if (!tenantId) {

@@ -19,7 +19,7 @@ import { eq, and, isNull, desc } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { SEED_DRAFT_TEMPLATES } from '@/lib/ai/draft';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createAiTemplateSchema } from '@/lib/api/schemas';
 
 const VALID_KINDS = new Set(['email', 'note', 'reply', 'call_prep']);
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     let body: UpsertBody;
-    try { body = await req.json() as UpsertBody; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req) as UpsertBody; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     // Allow installing a seed template by slug
     if (typeof body.slug === 'string' && !body.system_prompt && !body.user_prompt) {

@@ -5,7 +5,7 @@ import { db } from '@/drizzle/db';
 import { callLogs } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const updateCallSchema = z.object({
@@ -27,7 +27,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (deny) return deny;
 
     const { id } = await params;
-    const raw = await req.json();
+    const raw = await readJsonBody(req);
     const parsed = validateBody(updateCallSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
 

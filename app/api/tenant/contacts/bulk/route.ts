@@ -7,7 +7,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { bulkUpdateSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const rawBody = await req.json();
+    const rawBody = await readJsonBody(req);
     const action = rawBody.action;
     const selectAll = rawBody.selectAll === true;
     const filters = rawBody.filters as { q?: string; lead_status?: string; company_id?: string } | undefined;
