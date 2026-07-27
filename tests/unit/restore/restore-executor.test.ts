@@ -435,22 +435,48 @@ describe('executeSelectiveRestore', () => {
     expect(mocks.txExecute).not.toHaveBeenCalled();
   });
 
-  it('BUG: a dump written with quoted identifiers restores ZERO rows and still reports success', async () => {
-    // Same root cause as parseInsertStatement: `INSERT INTO public."Contacts"`
-    // and `INSERT INTO "contacts"` are unparseable, so extractTenantSQL yields
-    // nothing and the restore "succeeds" having written no customer data.
+  it('restores rows from a dump written with quoted identifiers', async () => {
+    // Previously `INSERT INTO "contacts"` was unparseable, so extractTenantSQL
+    // yielded nothing and the restore "succeeded" having written no customer
+    // data at all. This is the regression test for that silent total loss.
     const quoted = join(dir, 'quoted.sql');
     writeFileSync(
       quoted,
       [
-        `INSERT INTO public."Contacts" (id, tenant_id) VALUES ('c1', '${TENANT_A}');`,
-        `INSERT INTO "contacts" (id, tenant_id) VALUES ('c2', '${TENANT_A}');`,
+        `INSERT INTO "contacts" (id, tenant_id) VALUES ('c1', '${TENANT_A}');`,
+        `INSERT INTO "public"."contacts" (id, tenant_id) VALUES ('c2', '${TENANT_A}');`,
       ].join('\n')
     );
 
     const result = await run({ backupFilePath: quoted });
     expect(result.success).toBe(true);
-    expect(result.recordsAffected).toEqual({ contacts: 0 });
-    expect(mocks.txExecute).not.toHaveBeenCalled();
+    expect(result.recordsAffected).toEqual({ contacts: 2 });
+    expect(result.unparsedStatements).toBe(0);
+    expect(mocks.txExecute).toHaveBeenCalledTimes(2);
+  });
+
+  it('admits to being partial when a statement could not be parsed', async () => {
+    // The rows that DID parse are still committed — aborting would lose them
+    // too — but the result must not read as a clean success.
+    const partial = join(dir, 'partial.sql');
+    writeFileSync(
+      partial,
+      [
+        `INSERT INTO public.contacts (id, tenant_id) VALUES ('c1', '${TENANT_A}');`,
+        `INSERT INTO public.contacts VALUES ('c2', '${TENANT_A}');`,
+      ].join('\n')
+    );
+
+    const result = await run({ backupFilePath: partial });
+    expect(result.recordsAffected).toEqual({ contacts: 1 });
+    expect(result.unparsedStatements).toBe(1);
+    expect(result.error).toMatch(/could not be parsed/);
+    expect(result.error).toMatch(/PARTIAL/);
+  });
+
+  it('reports zero unparsed statements for a clean dump', async () => {
+    const result = await run();
+    expect(result.unparsedStatements).toBe(0);
+    expect(result.error).toBeUndefined();
   });
 });

@@ -16,6 +16,11 @@ import { createReadStream } from 'fs';
 import { createInterface } from 'readline';
 import { createGunzip } from 'zlib';
 import { Readable } from 'stream';
+import {
+  buildInsertIntoRegex,
+  looksLikeInsertStatement,
+  unquoteIdentifier,
+} from './backup-parser';
 
 export interface VerificationResult {
   valid: boolean;
@@ -64,11 +69,13 @@ function detectFormat(filePath: string): 'sql' | 'sql.gz' | 'custom' | 'unknown'
 }
 
 /**
- * Parse INSERT statement to extract table name
+ * Parse INSERT statement to extract table name.
+ * Quoted and schema-qualified names are handled by the shared pattern in
+ * backup-parser, so `public."Contacts"` yields `Contacts`, not `public`.
  */
 function parseTableName(line: string): string | null {
-  const match = line.match(/INSERT\s+INTO\s+(?:public\.)?(\w+)\s*/i);
-  return match ? match[1] ?? null : null;
+  const match = line.match(buildInsertIntoRegex(String.raw`\s*`));
+  return match?.[1] ? unquoteIdentifier(match[1]) : null;
 }
 
 /**
@@ -154,9 +161,10 @@ function parseUUID(sqlValue: string): string | null {
  * Parse column names from INSERT statement
  */
 function parseColumns(line: string): string[] {
-  const match = line.match(/INSERT\s+INTO\s+(?:public\.)?\w+\s*\(([^)]+)\)/i);
-  if (!match) return [];
-  return match[1]!.split(',').map(c => c.trim().replace(/"/g, ''));
+  const match = line.match(buildInsertIntoRegex(String.raw`\s*\(([^)]+)\)`));
+  // Group 1 is the table name; group 2 is the column list.
+  if (!match?.[2]) return [];
+  return match[2].split(',').map(c => c.trim().replace(/"/g, ''));
 }
 
 /**
@@ -232,6 +240,7 @@ export async function verifyBackup(
   let totalStatements = 0;
   let recordsWithTenantId = 0;
   let recordsWithoutTenantId = 0;
+  let unparsedStatements = 0;
   let _lineCount = 0;
 
   try {
@@ -246,7 +255,12 @@ export async function verifyBackup(
       totalStatements++;
 
       const tableName = parseTableName(trimmed);
-      if (!tableName) continue;
+      if (!tableName) {
+        // We counted the statement but cannot read it. Track it instead of
+        // skipping silently — see the unparsed check below.
+        if (looksLikeInsertStatement(trimmed)) unparsedStatements++;
+        continue;
+      }
 
       tablesFound.add(tableName);
       recordsPerTable[tableName] = (recordsPerTable[tableName] || 0) + 1;
@@ -294,6 +308,16 @@ export async function verifyBackup(
   if (totalStatements === 0) {
     result.valid = false;
     result.errors.push('No INSERT statements found in backup file');
+  }
+
+  // 5b. A backup whose statements cannot be read is not a verified backup:
+  // those rows would be skipped silently by the restore.
+  if (unparsedStatements > 0) {
+    result.valid = false;
+    result.errors.push(
+      `${unparsedStatements} INSERT statement(s) could not be parsed. ` +
+      'These rows would NOT be restored, so the backup cannot be verified.'
+    );
   }
 
   // 6. Check critical tables

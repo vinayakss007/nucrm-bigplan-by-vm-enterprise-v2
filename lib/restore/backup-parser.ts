@@ -97,6 +97,12 @@ export interface BackupMetadata {
   file_size: number;
   file_hash: string;
   statement_count: number;
+  /**
+   * Lines that look like an INSERT but that parseInsertStatement could not
+   * read. Every caller skips unparseable statements, so a non-zero value here
+   * means rows in the backup will NOT be restored — it must never be ignored.
+   */
+  unparsed_statements: number;
   tables_found: string[];
   tenants_found: TenantInfo[];
   date_range?: { earliest: string | null; latest: string | null };
@@ -137,20 +143,114 @@ function getFileStream(filePath: string): Readable {
 }
 
 /**
+ * A single SQL identifier as pg_dump can emit it: either a bare word
+ * (`contacts`) or a double-quoted identifier, which may contain a doubled
+ * `""` escape (`"Contacts"`, `"odd""name"`).
+ *
+ * pg_dump emits quoted identifiers whenever a name is mixed-case, reserved or
+ * contains punctuation — and always when run with --quote-all-identifiers.
+ */
+const SQL_IDENTIFIER = String.raw`(?:"(?:[^"]|"")*"|\w+)`;
+
+/**
+ * Regex source for an optionally schema-qualified table reference, with the
+ * TABLE (not the schema) as its single capture group. Still carries the quotes
+ * if the source quoted them — run the capture through `unquoteIdentifier()`.
+ *
+ * Matches: contacts | public.contacts | "contacts" | "Contacts"
+ *        | "public"."contacts" | public."Contacts" | crm.contacts
+ *
+ * This is the single source of truth for "how do we recognise a table name in
+ * an INSERT"; the parser, the verifier and the restore executor all build
+ * their regexes from it via `buildInsertIntoRegex()` so it cannot drift again.
+ */
+export const TABLE_REFERENCE_PATTERN =
+  String.raw`(?:${SQL_IDENTIFIER}\s*\.\s*)?(${SQL_IDENTIFIER})`;
+
+/**
+ * Build a case-insensitive `INSERT INTO <table-reference>` regex.
+ *
+ * Capture group 1 is always the (possibly quoted) table name; any capture
+ * groups inside `tail` therefore start at 2.
+ */
+export function buildInsertIntoRegex(
+  tail: string,
+  options?: { anchored?: boolean }
+): RegExp {
+  const head = options?.anchored ? String.raw`^\s*` : '';
+  return new RegExp(
+    `${head}INSERT\\s+INTO\\s+${TABLE_REFERENCE_PATTERN}${tail}`,
+    'i'
+  );
+}
+
+/**
+ * Strip the surrounding double quotes from a SQL identifier, collapsing the
+ * doubled-quote escape: `"Contacts"` -> `Contacts`, `"a""b"` -> `a"b`.
+ * A bare identifier is returned unchanged.
+ */
+export function unquoteIdentifier(identifier: string): string {
+  const trimmed = identifier.trim();
+  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1).replace(/""/g, '"');
+  }
+  return trimmed;
+}
+
+/** Matches a line that is meant to be an INSERT, whether or not it parses. */
+const INSERT_LINE_PATTERN = /^\s*INSERT\s+INTO\s/i;
+
+/**
+ * True if the line is an attempted `INSERT INTO ...`. Used to tell "not an
+ * INSERT at all" (a comment, a SET, a COPY) apart from "an INSERT we failed to
+ * parse" — the latter is data loss and must be reported, not skipped.
+ */
+export function looksLikeInsertStatement(line: string): boolean {
+  return INSERT_LINE_PATTERN.test(line);
+}
+
+/** Table name of an INSERT, unquoted and stripped of any schema prefix. */
+export function parseTableReference(line: string): string | null {
+  const match = line.match(buildInsertIntoRegex(''));
+  return match?.[1] ? unquoteIdentifier(match[1]) : null;
+}
+
+/**
+ * Full shape of a single-line INSERT: table reference, column list, VALUES
+ * clause. Group 1 = table, 2 = columns, 3 = everything after VALUES.
+ *
+ * `VALUES\s*` (not `\s+`) so that `VALUES('c1','Bob')` — emitted by some
+ * dump tools and by hand-written fixtures — is accepted. The `VALUES` keyword
+ * is anchored to the closing paren of the column list, so a column named
+ * `values_count` cannot be mistaken for it.
+ */
+const INSERT_STATEMENT_TAIL = String.raw`\s*\(([^)]+)\)\s*VALUES\s*(.+);?\s*$`;
+
+/**
+ * Extract the raw VALUES clause of an INSERT (all row groups, including the
+ * trailing `;` that the greedy capture keeps — downstream group parsing
+ * tolerates it).
+ */
+function extractValuesClause(line: string): string | null {
+  const match = line.match(buildInsertIntoRegex(INSERT_STATEMENT_TAIL));
+  return match?.[3] ?? null;
+}
+
+/**
  * Parse a single INSERT statement into structured data.
  * Supports both single-row and multi-row INSERTs:
  *   INSERT INTO t (a, b) VALUES (1, 2);
  *   INSERT INTO t (a, b) VALUES (1, 2), (3, 4), (5, 6);
+ * Quoted and schema-qualified table names are accepted; the returned `table`
+ * is always unquoted and unqualified (`public."Contacts"` -> `Contacts`).
  */
 export function parseInsertStatement(line: string): ParsedStatement | null {
   // Match: INSERT INTO table_name (col1, col2, ...) VALUES (...);
-  const match = line.match(
-    /INSERT\s+INTO\s+(?:public\.)?(\w+)\s*\(([^)]+)\)\s*VALUES\s+(.+);?\s*$/i
-  );
+  const match = line.match(buildInsertIntoRegex(INSERT_STATEMENT_TAIL));
 
   if (!match) return null;
 
-  const table = match[1]!;
+  const table = unquoteIdentifier(match[1]!);
   const columnsStr = match[2]!;
   const valuesStr = match[3]!;
   const columns = parseColumnNames(columnsStr);
@@ -350,6 +450,7 @@ export async function parseBackupFile(filePath: string): Promise<BackupMetadata>
   const tenantMap = new Map<string, TenantInfo>();
   const tablesFound = new Set<string>();
   let statementCount = 0;
+  let unparsedStatements = 0;
   let earliestDate: string | null = null;
   let latestDate: string | null = null;
 
@@ -364,7 +465,12 @@ export async function parseBackupFile(filePath: string): Promise<BackupMetadata>
     if (!trimmed.startsWith('INSERT ')) continue;
 
     const parsed = parseInsertStatement(trimmed);
-    if (!parsed) continue;
+    if (!parsed) {
+      // An INSERT we cannot read is a row that will not be restored. Count it
+      // so callers can refuse to treat the backup as fully understood.
+      if (looksLikeInsertStatement(trimmed)) unparsedStatements++;
+      continue;
+    }
 
     statementCount++;
     tablesFound.add(parsed.table);
@@ -377,9 +483,9 @@ export async function parseBackupFile(filePath: string): Promise<BackupMetadata>
     if (tenantIdIdx === -1) continue;
 
     // Parse ALL value groups for multi-row INSERTs
-    const valuesStrMatch = trimmed.match(/VALUES\s+(.+);?\s*$/i);
-    if (!valuesStrMatch || !valuesStrMatch[1]) continue;
-    const allValueGroups = parseValueGroups(valuesStrMatch[1]);
+    const valuesClause = extractValuesClause(trimmed);
+    if (!valuesClause) continue;
+    const allValueGroups = parseValueGroups(valuesClause);
 
     // Process each row in the multi-row INSERT
     for (const values of allValueGroups) {
@@ -430,6 +536,7 @@ export async function parseBackupFile(filePath: string): Promise<BackupMetadata>
     file_size: fileSize,
     file_hash: fileHash,
     statement_count: statementCount,
+    unparsed_statements: unparsedStatements,
     tables_found: Array.from(tablesFound),
     tenants_found: Array.from(tenantMap.values()),
     date_range: { earliest: earliestDate, latest: latestDate },
@@ -508,9 +615,9 @@ export async function extractTenantSQL(
     const userIdIdx = userId ? parsed.columns.indexOf('user_id') : -1;
 
     // Parse all value groups for multi-row support
-    const valuesStrMatch = trimmed.match(/VALUES\s+(.+);?\s*$/i);
-    if (!valuesStrMatch || !valuesStrMatch[1]) continue;
-    const allValueGroups = parseValueGroups(valuesStrMatch[1]);
+    const valuesClause = extractValuesClause(trimmed);
+    if (!valuesClause) continue;
+    const allValueGroups = parseValueGroups(valuesClause);
 
     // Filter rows matching the target tenant (and optionally user)
     const matchingRows: string[] = [];
@@ -545,23 +652,69 @@ export async function extractTenantSQL(
 }
 
 /**
+ * Count INSERT lines in a backup that parseInsertStatement cannot read.
+ *
+ * Optionally restricted to a set of tables. A statement whose table name
+ * cannot be determined at all is ALWAYS counted: we cannot prove it is
+ * irrelevant to the restore, and under-reporting here is the exact silent
+ * data-loss failure mode this counter exists to prevent.
+ */
+export async function countUnparsedInsertStatements(
+  filePath: string,
+  tables?: string[]
+): Promise<number> {
+  let count = 0;
+  const stream = getFileStream(filePath);
+  const rl = createInterface({ input: stream, crlfDelay: Infinity });
+
+  for await (const line of rl) {
+    const trimmed = line.trim();
+    if (!looksLikeInsertStatement(trimmed)) continue;
+    if (parseInsertStatement(trimmed)) continue;
+
+    if (tables && tables.length > 0) {
+      const table = parseTableReference(trimmed);
+      if (table !== null && !tables.includes(table)) continue;
+    }
+
+    count++;
+  }
+
+  return count;
+}
+
+/**
  * Convert INSERT statement to UPSERT (INSERT ... ON CONFLICT DO UPDATE)
+ *
+ * Convention: the returned statement never ends with `;`. The ON CONFLICT
+ * clause must sit INSIDE the statement, so the trailing semicolon has to go
+ * before it is appended; rather than re-adding it on some branches only, every
+ * branch returns an unterminated statement. Callers (restore-executor, the
+ * upsert path in the API) execute the string as a single statement, where the
+ * terminator is optional, so one consistent shape is safer than two.
  */
 export function convertToUpsert(statement: string, primaryKey: string = 'id'): string {
   const parsed = parseInsertStatement(statement);
   if (!parsed) return statement;
-  
+
+  const unterminated = statement.replace(/;\s*$/, '');
+
   const pkIdx = parsed.columns.indexOf(primaryKey);
-  if (pkIdx === -1) return statement + ' ON CONFLICT DO NOTHING';
-  
+  if (pkIdx === -1) return `${unterminated} ON CONFLICT DO NOTHING`;
+
   const nonPkColumns = parsed.columns.filter(c => c !== primaryKey);
+  // A PK-only INSERT has nothing to SET; `DO UPDATE SET` with an empty list is
+  // a syntax error, so degrade to DO NOTHING (same rule as restore-executor).
+  if (nonPkColumns.length === 0) {
+    return `${unterminated} ON CONFLICT (${primaryKey}) DO NOTHING`;
+  }
   const updateClause = nonPkColumns.map(c => `${c} = EXCLUDED.${c}`).join(', ');
-  
+
   // Find VALUES position
   const valuesMatch = statement.match(/(VALUES\s*\(.+\))\s*;?\s*$/i);
-  if (!valuesMatch) return statement + ' ON CONFLICT DO NOTHING';
-  
-  return `${statement.replace(/;\s*$/, '')} ON CONFLICT (${primaryKey}) DO UPDATE SET ${updateClause}`;
+  if (!valuesMatch) return `${unterminated} ON CONFLICT DO NOTHING`;
+
+  return `${unterminated} ON CONFLICT (${primaryKey}) DO UPDATE SET ${updateClause}`;
 }
 
 /**
