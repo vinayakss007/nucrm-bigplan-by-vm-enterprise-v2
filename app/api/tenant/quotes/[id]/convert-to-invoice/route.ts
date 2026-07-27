@@ -82,10 +82,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (items.length > 0) {
         await tx.insert(invoiceLineItems).values(
           items.map((item, idx) => ({
+            // Was missing entirely: invoice line items had no tenant_id, so
+            // converted lines were unattributable and could not be RLS-scoped.
+            tenantId: ctx.tenantId,
             invoiceId: inv.id,
             productId: item.productId ?? undefined,
+            serviceId: item.serviceId ?? undefined,
             description: item.description ?? '',
-            itemType: 'product',
+            // Previously hardcoded to 'product', which mislabelled every service
+            // line on conversion. Carry the quote line's own type instead.
+            itemType: item.itemType ?? (item.serviceId ? 'service' : 'product'),
             quantity: item.quantity ?? '1',
             unitPrice: item.unitPrice ?? '0',
             discountType: 'percentage' as const,

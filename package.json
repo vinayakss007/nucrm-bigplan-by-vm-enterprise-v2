@@ -58,6 +58,7 @@
     "db:demo": "npx tsx scripts/seed-massive-data.ts",
     "db:studio": "node -e \"console.log('Use DBeaver or pgAdmin to connect: ' + process.env.DATABASE_URL)\"",
     "db:drop": "npx tsx scripts/drop-all.ts",
+    "db:verify-isolation": "npx tsx scripts/verify-tenant-isolation.ts",
     "db:reset": "npx tsx scripts/drop-all.ts && npm run db:migrate",
     "setup": "cp -n .env.example .env.local && npm run db:migrate && echo '\n✅ Run: npm run dev\n'",
     "prod:launch": "bash scripts/production-launch.sh",
