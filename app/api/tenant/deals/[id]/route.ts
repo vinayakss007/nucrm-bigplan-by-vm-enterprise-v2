@@ -88,11 +88,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (v.value !== undefined && v.amount === undefined) {
       const val = Number(v.value);
       if (isNaN(val) || val < 0) return NextResponse.json({ error: 'value must be a non-negative number' }, { status: 400 });
-      v.amount = val.toString();
+      v.amount = val;
     }
     if (v.amount !== undefined && typeof v.amount === 'number') {
       if (v.amount < 0 || v.amount > 999_999_999) return NextResponse.json({ error: 'amount must be between 0 and 999,999,999' }, { status: 400 });
-      v.amount = v.amount.toString();
     }
 
     // Map legacy 'stage' or 'stage_name' (string like "won") to stageId (UUID)
@@ -149,28 +148,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         prev.updatedAt!,
       );
 
-      if (body.stageId && prev.stageId !== body.stageId) {
+      if (v.stage_id && prev.stageId !== v.stage_id) {
         await tx.insert(activities).values({
           tenantId: ctx.tenantId,
           userId: ctx.userId,
           entityId: dealId,
           entityType: 'deal',
           eventType: 'deal_update',
-          description: `Deal stage: ${prev.stageId} → ${body.stageId}`,
-          metadata: { stage_from: prev.stageId, stage_to: body.stageId, action: 'stage_change' },
+          description: `Deal stage: ${prev.stageId} → ${v.stage_id}`,
+          metadata: { stage_from: prev.stageId, stage_to: v.stage_id, action: 'stage_change' },
         });
       }
 
       return [r];
     });
 
-    if (body.stageId && prev.stageId !== body.stageId) {
+    if (v.stage_id && prev.stageId !== v.stage_id) {
       // Logic for stage change
       await notifyTenantMembers({
         tenantId: ctx.tenantId,
         excludeUserId: ctx.userId,
         type: 'deal_stage',
-        title: `Deal moved to ${body.stageId}: ${row!.title}`.trim(),
+        title: `Deal moved to ${v.stage_id}: ${row!.title}`.trim(),
         entity_type: 'deal',
         entity_id: dealId,
         link: `/tenant/deals/${dealId}`
@@ -183,7 +182,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         entityType: 'deal',
         entityId: dealId,
         oldData: { stage: prev.stageId },
-        newData: { stage: body.stageId }
+        newData: { stage: v.stage_id }
       });
 
       // Fire deal.stage_changed automation + webhooks
@@ -191,7 +190,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         id: dealId,
         title: row!.title,
         stage_from: prev.stageId,
-        stage_to: body.stageId,
+        stage_to: v.stage_id,
         contact_id: row!.contactId,
       }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
@@ -201,18 +200,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           tenantId: ctx.tenantId,
           userId: ctx.userId,
           event: 'deal.stage_changed',
-          data: { ...row, id: dealId, stage_from: prev.stageId, stage_to: body.stageId },
+          data: { ...row, id: dealId, stage_from: prev.stageId, stage_to: v.stage_id },
         }).catch(err => console.error('[deals PATCH] deal.stage_changed automation failed:', err));
       } catch (e) {
         console.error('[deals PATCH] automation import failed:', e);
       }
 
       // Check if 'won' stage - get stage name to compare
-      if (body.stageId) {
+      if (v.stage_id) {
         const [stageInfo] = await db
           .select({ name: dealStages.name })
           .from(dealStages)
-          .where(eq(dealStages.id, body.stageId))
+          .where(eq(dealStages.id, v.stage_id))
           .limit(1);
         
         if (stageInfo?.name?.toLowerCase() === 'won') {
