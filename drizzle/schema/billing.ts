@@ -1,11 +1,19 @@
 import { uniqueIndex, pgTable, uuid, text, timestamp, jsonb, decimal, integer, boolean, index, date, numeric } from 'drizzle-orm/pg-core';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import * as utils from './utils';
-import { companies as _companies, contacts as _contacts } from './crm';
+import {
+  companies as _companies,
+  contacts as _contacts,
+  products as _products,
+  quotes as _quotes,
+} from './crm';
 
 // Aliases to match existing references in table definitions
 const companies = _companies;
 const contacts = _contacts;
+const products = _products;
+const quotes = _quotes;
 
 // ── SERVICES MODULE ─────────────────────────────────────
 export const services = pgTable('services', {
@@ -101,8 +109,10 @@ export const invoices = pgTable('invoices', {
   terms: text('terms'),
   footer: text('footer'),
   
-  quoteId: uuid('quote_id'),
-  orderId: uuid('order_id'),
+  // Provenance of this invoice. SET NULL rather than CASCADE: deleting a quote
+  // must not delete the money record that came out of it.
+  quoteId: uuid('quote_id').references(() => quotes.id, { onDelete: 'set null' }),
+  orderId: uuid('order_id').references(() => orders.id, { onDelete: 'set null' }),
   
   paymentMethod: text('payment_method'),
   paymentReference: text('payment_reference'),
@@ -110,7 +120,8 @@ export const invoices = pgTable('invoices', {
   isRecurring: boolean('is_recurring').default(false),
   recurringFrequency: text('recurring_frequency'),
   nextBillingDate: date('next_billing_date'),
-  parentInvoiceId: uuid('parent_invoice_id'),
+  // Self-reference for recurring invoice series.
+  parentInvoiceId: uuid('parent_invoice_id').references((): AnyPgColumn => invoices.id, { onDelete: 'set null' }),
   
   sentReminder: boolean('sent_reminder').default(false),
   metadata: utils.metadata(),
@@ -128,9 +139,12 @@ export const invoices = pgTable('invoices', {
 
 export const invoiceLineItems = pgTable('invoice_line_items', {
   id: utils.pk(),
-  invoiceId: uuid('invoice_id').notNull(),
-  productId: uuid('product_id'),
-  serviceId: uuid('service_id'),
+  // tenant_id is required for row-level security: without it this table cannot
+  // carry a tenant_isolation policy, and it was silently excluded from RLS.
+  tenantId: utils.tenantId(),
+  invoiceId: uuid('invoice_id').notNull().references(() => invoices.id, { onDelete: 'cascade' }),
+  productId: uuid('product_id').references(() => products.id, { onDelete: 'set null' }),
+  serviceId: uuid('service_id').references(() => services.id, { onDelete: 'set null' }),
   description: text('description').notNull(),
   itemType: text('item_type').notNull(),
   quantity: decimal('quantity', { precision: 15, scale: 4 }).notNull().default('1'),
@@ -149,7 +163,10 @@ export const invoiceLineItems = pgTable('invoice_line_items', {
 
 export const invoicePayments = pgTable('invoice_payments', {
   id: utils.pk(),
-  invoiceId: uuid('invoice_id').notNull(),
+  // Payments are money records; they need tenant scoping for RLS and a real FK
+  // so a payment can never be attached to a non-existent invoice.
+  tenantId: utils.tenantId(),
+  invoiceId: uuid('invoice_id').notNull().references(() => invoices.id, { onDelete: 'cascade' }),
   amount: decimal('amount', { precision: 15, scale: 2 }).notNull(),
   paymentDate: date('payment_date').notNull(),
   paymentMethod: text('payment_method'),
@@ -203,8 +220,8 @@ export const orders = pgTable('orders', {
   notes: text('notes'),
   customerNotes: text('customer_notes'),
   
-  quoteId: uuid('quote_id'),
-  invoiceId: uuid('invoice_id'),
+  quoteId: uuid('quote_id').references(() => quotes.id, { onDelete: 'set null' }),
+  invoiceId: uuid('invoice_id').references((): AnyPgColumn => invoices.id, { onDelete: 'set null' }),
   
   metadata: utils.metadata(),
   ...utils.audit(),
@@ -219,9 +236,10 @@ export const orders = pgTable('orders', {
 
 export const orderLineItems = pgTable('order_line_items', {
   id: utils.pk(),
-  orderId: uuid('order_id').notNull(),
-  productId: uuid('product_id'),
-  serviceId: uuid('service_id'),
+  tenantId: utils.tenantId(),
+  orderId: uuid('order_id').notNull().references(() => orders.id, { onDelete: 'cascade' }),
+  productId: uuid('product_id').references(() => products.id, { onDelete: 'set null' }),
+  serviceId: uuid('service_id').references(() => services.id, { onDelete: 'set null' }),
   description: text('description').notNull(),
   itemType: text('item_type').notNull(),
   quantity: decimal('quantity', { precision: 15, scale: 4 }).notNull().default('1'),

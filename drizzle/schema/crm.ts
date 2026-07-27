@@ -383,8 +383,17 @@ export const quotes = pgTable('quotes', {
 
 export const quoteLineItems = pgTable('quote_line_items', {
   id: utils.pk(),
+  // Needed for row-level security; without it this table cannot be isolated.
+  tenantId: utils.tenantId(),
   quoteId: uuid('quote_id').notNull().references(() => quotes.id, { onDelete: 'cascade' }),
   productId: uuid('product_id').references(() => products.id, { onDelete: 'set null' }),
+  // A quote line could only ever reference a product, while invoice_line_items
+  // and order_line_items carry product_id + service_id + item_type. That meant a
+  // service could be invoiced but never quoted, and quote -> invoice conversion
+  // silently relabelled every line as a product. These two columns close that
+  // asymmetry so the three line-item tables now agree.
+  serviceId: uuid('service_id'),
+  itemType: text('item_type').notNull().default('product'),
   description: text('description').notNull(),
   quantity: decimal('quantity', { precision: 15, scale: 4 }).notNull().default('1'),
   unitPrice: decimal('unit_price', { precision: 15, scale: 2 }).notNull(),

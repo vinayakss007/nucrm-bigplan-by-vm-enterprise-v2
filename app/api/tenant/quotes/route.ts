@@ -101,9 +101,12 @@ export async function POST(request: NextRequest) {
       if (!q) throw new Error('Failed to create quote');
 
       if (items?.length) {
-        const lineItems = items.map((item: { name?: string; description?: string | null; quantity?: number; unit_price?: number; product_id?: string | null; tax_amount?: number | null; discount_amount?: number | null; discount_percent?: number | null }, idx: number) => ({
+        const lineItems = items.map((item: { name?: string; description?: string | null; quantity?: number; unit_price?: number; product_id?: string | null; service_id?: string | null; item_type?: string | null; tax_amount?: number | null; discount_amount?: number | null; discount_percent?: number | null }, idx: number) => ({
+          tenantId,
           quoteId: q.id,
           productId: item.product_id ?? null,
+          serviceId: item.service_id ?? null,
+          itemType: item.item_type ?? (item.service_id ? 'service' : 'product'),
           description: item.description ?? '',
           quantity: String(item.quantity ?? 1),
           unitPrice: String(item.unit_price ?? 0),
