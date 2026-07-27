@@ -3,9 +3,13 @@
  *
  * verifyBackup() is the gate that is supposed to catch a corrupt or incomplete
  * backup BEFORE it is restored over live customer data, so its pass/fail
- * decisions are tested exactly. Two confirmed defects are pinned below with
- * `BUG:` — most importantly, tenant_id extraction never succeeds, which makes
- * the `expectedTenantId` check reject every backup.
+ * decisions are tested exactly.
+ *
+ * Two properties matter most here and each has a test that fails if it
+ * regresses: a backup whose statements cannot be read must FAIL verification
+ * rather than pass with a mis-parsed table list, and `expectedTenantId` must
+ * accept a backup that genuinely contains that tenant (it previously rejected
+ * every backup, so a pre-restore gate could never pass).
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -242,12 +246,11 @@ describe('verifyBackup', () => {
     });
   });
 
-  describe('KNOWN BUGS', () => {
-    it('BUG: tenant_id is never extracted, so tenantsFound is always empty', async () => {
-      // extractTenantIdFromValues() is handed the VALUES clause *including* the
-      // outer parentheses, so its depth counter is 1 for the whole row and the
-      // `depth === 0` column separator branch never fires. Consequence:
-      // recordsWithTenantId is always 0 for every real backup.
+  describe('tenant attribution', () => {
+    it('extracts tenant_id regardless of its column position', async () => {
+      // The old hand-rolled scanner was handed the VALUES clause *including*
+      // its outer parens, so its depth counter never returned to 0 and it
+      // returned null for every row ever given to it.
       const p = write(
         'tenant-scan.sql',
         [
@@ -256,27 +259,63 @@ describe('verifyBackup', () => {
         ].join('\n')
       );
       const result = await verifyBackup(p);
-      expect(result.tenantsFound).toEqual([]);
-      expect(result.recordsWithTenantId).toBe(0);
-      expect(result.recordsWithoutTenantId).toBe(2);
+      expect(result.tenantsFound).toEqual([TENANT_A]);
+      expect(result.recordsWithTenantId).toBe(2);
+      expect(result.recordsWithoutTenantId).toBe(0);
     });
 
-    it('BUG: the "No tenant_id values found" warning fires on healthy tenant backups', async () => {
+    it('attributes each row of a multi-row INSERT to its own tenant', async () => {
+      const other = '55555555-5555-4555-8555-555555555555';
+      const p = write(
+        'multi-tenant-row.sql',
+        `INSERT INTO public.contacts (id, tenant_id) VALUES ` +
+          `('c1', '${TENANT_A}'), ('c2', '${other}');`
+      );
+      const result = await verifyBackup(p);
+      expect(result.tenantsFound.sort()).toEqual([TENANT_A, other].sort());
+      expect(result.recordsWithTenantId).toBe(2);
+    });
+
+    it('does not warn about missing tenant_id on a healthy tenant backup', async () => {
       const result = await verifyBackup(write('healthy.sql', completeDump()));
       expect(
         result.warnings.some(w => w.startsWith('No tenant_id values found in any records.'))
-      ).toBe(true);
+      ).toBe(false);
     });
 
-    it('BUG: expectedTenantId ALWAYS fails, even when every row has that tenant_id', async () => {
-      // A pre-restore gate calling verifyBackup(path, { expectedTenantId }) can
-      // therefore never succeed — it rejects valid backups.
+    it('accepts a backup that contains the expected tenant', async () => {
+      // A pre-restore gate calling verifyBackup(path, { expectedTenantId })
+      // used to reject every backup, including correct ones.
       const result = await verifyBackup(write('expected-tenant.sql', completeDump()), {
         expectedTenantId: TENANT_A,
       });
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+      expect(result.tenantsFound).toEqual([TENANT_A]);
+    });
+
+    it('still rejects a backup that does NOT contain the expected tenant', async () => {
+      const result = await verifyBackup(write('wrong-tenant.sql', completeDump()), {
+        expectedTenantId: '66666666-6666-4666-8666-666666666666',
+      });
       expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain(`Expected tenant ${TENANT_A} not found in backup`);
-      expect(result.errors[0]).toContain('Tenants found: ');
+      expect(result.errors[0]).toContain('not found in backup');
+      expect(result.errors[0]).toContain(TENANT_A);
+    });
+
+    it('counts a global table with no tenant_id column separately', async () => {
+      const p = write('global.sql', `INSERT INTO public.users (id, email) VALUES ('u1', 'a@b');`);
+      const result = await verifyBackup(p);
+      expect(result.recordsWithoutTenantId).toBe(1);
+      expect(result.recordsWithTenantId).toBe(0);
+      expect(result.tenantsFound).toEqual([]);
+    });
+
+    it('counts a NULL tenant_id as a record without a tenant', async () => {
+      const p = write('null-tenant.sql', `INSERT INTO public.contacts (id, tenant_id) VALUES ('c1', NULL);`);
+      const result = await verifyBackup(p);
+      expect(result.recordsWithTenantId).toBe(0);
+      expect(result.recordsWithoutTenantId).toBe(1);
     });
 
   });

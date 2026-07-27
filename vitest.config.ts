@@ -17,7 +17,6 @@ export default defineConfig({
         'lib/**/*.test.ts',
         'lib/**/*.spec.ts',
         'lib/**/__tests__/**',
-        'lib/backups/**',
         'lib/db/services/**',
         'lib/leads/**',
         'lib/onboarding/**',
