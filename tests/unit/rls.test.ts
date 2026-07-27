@@ -33,6 +33,16 @@ describe('db/rls', () => {
       const { setTenantContext } = await import('@/lib/db/rls');
       await expect(setTenantContext('tenant-123', 'user-456')).rejects.toThrow('DB error');
     });
+
+    it('rejects empty tenantId', async () => {
+      const { setTenantContext } = await import('@/lib/db/rls');
+      await expect(setTenantContext('', 'user-456')).rejects.toThrow('empty tenantId');
+    });
+
+    it('rejects empty userId', async () => {
+      const { setTenantContext } = await import('@/lib/db/rls');
+      await expect(setTenantContext('tenant-123', '')).rejects.toThrow('empty tenantId or userId');
+    });
   });
 
   describe('clearTenantContext', () => {
@@ -56,6 +66,13 @@ describe('db/rls', () => {
       const result = await withTenantContext('tenant-123', 'user-456', fn);
       expect(result).toEqual({ id: 1, name: 'test' });
       expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects empty tenantId', async () => {
+      const { withTenantContext } = await import('@/lib/db/rls');
+      const fn = vi.fn();
+      await expect(withTenantContext('', 'user-456', fn)).rejects.toThrow('empty tenantId or userId');
+      expect(fn).not.toHaveBeenCalled();
     });
   });
 
