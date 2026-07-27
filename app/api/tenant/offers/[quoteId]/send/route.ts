@@ -22,6 +22,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { sendEmail } from '@/lib/email/service';
+import { sanitizeHTMLServer } from '@/lib/sanitize';
 import {
   generatePublicToken,
   publicOfferUrl,
@@ -130,15 +131,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ quo
 
     // Outbound email — non-fatal if it fails
     const link = publicOfferUrl(publicToken);
+    const safeContactName = sanitizeHTMLServer(contactName || '');
+    const safeQuoteTitle = sanitizeHTMLServer(quote.title || '');
     let emailResult: { success: boolean; provider?: string; error?: string } | null = null;
     try {
       emailResult = await sendEmail({
         to: toEmail,
         subject: `Your offer: ${quote.title}`,
         html: `
-          <p>Hi ${contactName},</p>
-          <p>Your offer for <strong>${quote.title}</strong> is ready to review.</p>
-          ${body.message ? `<p>${body.message}</p>` : ''}
+          <p>Hi ${safeContactName},</p>
+          <p>Your offer for <strong>${safeQuoteTitle}</strong> is ready to review.</p>
+          ${body.message ? `<p>${sanitizeHTMLServer(body.message)}</p>` : ''}
           <p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#7c3aed;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">View offer</a></p>
           <p style="color:#6b7280;font-size:13px;margin-top:24px">If the button doesn't work, paste this link into your browser:<br/>${link}</p>
         `,

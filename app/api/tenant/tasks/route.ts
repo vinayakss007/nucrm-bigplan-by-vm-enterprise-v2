@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
     let newTask: typeof tasks.$inferSelect | undefined;
 
     await db.transaction(async (tx) => {
-      const [inserted] = await tx.insert(tasks)
+      [newTask] = await tx.insert(tasks)
         .values({
           tenantId: ctx.tenantId,
           createdBy: ctx.userId,
@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
         })
         .returning();
 
-      if (!inserted) throw new Error('Failed to create task');
+      if (!newTask) throw new Error('Failed to create task');
 
       await tx.insert(activities)
         .values({
@@ -151,13 +151,11 @@ export async function POST(request: NextRequest) {
           contactId: v.contact_id || null,
           dealId: v.deal_id || null,
           entityType: 'task',
-          entityId: inserted.id,
+          entityId: newTask.id,
           eventType: 'task_created',
           action: 'create',
           description: `Created task: ${v.title}`,
         });
-
-      newTask = inserted;
     });
 
     if (!newTask) {

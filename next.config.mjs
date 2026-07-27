@@ -54,6 +54,7 @@ let nextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
   compress: true,
+  poweredByHeader: false,
   productionBrowserSourceMaps: false,
   serverExternalPackages: ['pg', 'pg-boss', 'nodemailer'],
   transpilePackages: ['@xyflow/react'],

@@ -16,13 +16,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { quotes, activities } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
 import {
   findOfferByToken,
-  patchOfferMetadata,
   canTransition,
 } from '@/lib/offers';
 import { z } from 'zod';
@@ -58,19 +57,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
     const signature = parsed.data.signature?.trim() ?? null;
 
     const now = new Date();
-    await db
-      .update(quotes)
-      .set({ status: 'accepted', acceptedAt: now, updatedAt: now })
-      .where(eq(quotes.id, offer.id));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(quotes)
+        .set({ status: 'accepted', acceptedAt: now, updatedAt: now })
+        .where(eq(quotes.id, offer.id));
 
-    await patchOfferMetadata(offer.id, offer.tenantId, {
-      accepted_by_email: email ?? undefined,
-      accepted_at: now.toISOString(),
-    });
+      await tx
+        .update(quotes)
+        .set({
+          metadata: sql`
+            jsonb_set(
+              COALESCE(${quotes.metadata}, '{}'::jsonb),
+              '{offer}',
+              COALESCE(${quotes.metadata}->'offer', '{}'::jsonb) || ${JSON.stringify({ accepted_by_email: email ?? undefined, accepted_at: now.toISOString() })}::jsonb
+            )
+          `,
+          updatedAt: now,
+        })
+        .where(eq(quotes.id, offer.id));
 
-    if (offer.contactId) {
-      try {
-        await db.insert(activities).values({
+      if (offer.contactId) {
+        await tx.insert(activities).values({
           tenantId: offer.tenantId,
           userId: null,
           entityType: 'quote',
@@ -81,10 +89,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
           description: `Buyer accepted offer "${offer.title}"`,
           metadata: { offer_id: offer.id, total_amount: offer.totalAmount, accepted_by_email: email, signature },
         });
-      } catch (err) {
-        console.warn('[offers/accept] activity insert failed:', (err as Error).message);
       }
-    }
+    });
 
     await logAudit({
       tenantId: offer.tenantId,

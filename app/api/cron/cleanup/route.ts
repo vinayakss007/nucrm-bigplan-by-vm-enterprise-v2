@@ -12,24 +12,26 @@ export async function POST(request: NextRequest) {
   try {
     const r: Record<string, number> = {};
     
-    // 1. Sessions cleanup
-    const sessionsResult = await db.delete(sessions)
-      .where(lt(sessions.expiresAt, new Date()));
-    r['sessions'] = sessionsResult.rowCount ?? 0;
+    await db.transaction(async (tx) => {
+      // 1. Sessions cleanup
+      const sessionsResult = await tx.delete(sessions)
+        .where(lt(sessions.expiresAt, new Date()));
+      r['sessions'] = sessionsResult.rowCount ?? 0;
 
-    // 2. Invitations cleanup: older than 7 days and not accepted
-    const invExpiry = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const invitationsResult = await db.delete(invitations)
-      .where(and(
-        lt(invitations.expiresAt, invExpiry),
-        isNull(invitations.acceptedAt)
-      ));
-    r['invitations'] = invitationsResult.rowCount ?? 0;
+      // 2. Invitations cleanup: older than 7 days and not accepted
+      const invExpiry = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const invitationsResult = await tx.delete(invitations)
+        .where(and(
+          lt(invitations.expiresAt, invExpiry),
+          isNull(invitations.acceptedAt)
+        ));
+      r['invitations'] = invitationsResult.rowCount ?? 0;
 
-    // 3. Password resets cleanup
-    const resetsResult = await db.delete(passwordResets)
-      .where(lt(passwordResets.expiresAt, new Date()));
-    r['resets'] = resetsResult.rowCount ?? 0;
+      // 3. Password resets cleanup
+      const resetsResult = await tx.delete(passwordResets)
+        .where(lt(passwordResets.expiresAt, new Date()));
+      r['resets'] = resetsResult.rowCount ?? 0;
+    });
 
     // 4. Purge trash items older than 30 days
     try {

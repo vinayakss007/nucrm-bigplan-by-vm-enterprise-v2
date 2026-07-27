@@ -13,6 +13,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { sendEmail } from '@/lib/email/service';
+import { sanitizeHTMLServer } from '@/lib/sanitize';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -70,15 +71,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     // Send email
     const pdfUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/tenant/invoices/${id}/pdf`;
+    const safeContactName = sanitizeHTMLServer(contactName || '');
+    const safeInvoiceTitle = sanitizeHTMLServer(invoice.title || '');
+    const safeInvoiceNumber = sanitizeHTMLServer(invoice.invoiceNumber || '');
     let emailResult: { success: boolean; provider?: string; error?: string } | null = null;
     try {
       emailResult = await sendEmail({
         to: toEmail,
         subject: `Invoice: ${invoice.title || invoice.invoiceNumber}`,
         html: `
-          <p>Hi ${contactName},</p>
-          <p>Please find your invoice <strong>${invoice.invoiceNumber || invoice.title}</strong> for <strong>$${Number(invoice.totalAmount).toFixed(2)}</strong>.</p>
-          ${body.message ? `<p>${body.message}</p>` : ''}
+          <p>Hi ${safeContactName},</p>
+          <p>Please find your invoice <strong>${safeInvoiceNumber || safeInvoiceTitle}</strong> for <strong>$${Number(invoice.totalAmount).toFixed(2)}</strong>.</p>
+          ${body.message ? `<p>${sanitizeHTMLServer(body.message)}</p>` : ''}
           <p><a href="${pdfUrl}" style="display:inline-block;padding:10px 18px;background:#7c3aed;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">View Invoice</a></p>
           ${invoice.dueDate ? `<p style="color:#6b7280;font-size:13px;margin-top:16px">Due date: ${new Date(invoice.dueDate).toLocaleDateString()}</p>` : ''}
           <p style="color:#6b7280;font-size:13px;margin-top:24px">If the button doesn't work, paste this link into your browser:<br/>${pdfUrl}</p>

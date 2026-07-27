@@ -3,13 +3,13 @@ import { apiError } from '@/lib/api-error';
 import { validateBody } from '@/lib/api/validate';
 import { inviteMemberSchema, updateMemberSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
-import { db } from '@/drizzle/db';
+import { db, type DbClient } from '@/drizzle/db';
 import { 
   tenantMembers, users, roles, invitations, 
   contacts, deals, tasks, userDepartures, 
   tenants, leadAssignments 
 } from '@/drizzle/schema';
-import { eq, and, or, sql, desc, asc, isNull } from 'drizzle-orm';
+import { eq, and, or, sql, desc, asc, isNull, type SQL } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';
 import { hashPassword } from '@/lib/auth/session';
@@ -203,18 +203,20 @@ export async function PATCH(request: NextRequest) {
         .limit(1);
       
       const concurrencyWhere = concurrencyGuard(tenantMembers, rawPatch.expectedUpdatedAt);
-      const whereConditions: any[] = [eq(tenantMembers.id, memberId)];
+      const whereConditions: SQL[] = [eq(tenantMembers.id, memberId)];
       if (concurrencyWhere) whereConditions.push(concurrencyWhere);
 
-      const [updated] = await db.update(tenantMembers)
-        .set({ roleSlug, roleId: role?.id || null })
-        .where(and(...whereConditions))
-        .returning();
+      await db.transaction(async (tx) => {
+        const [updated] = await tx.update(tenantMembers)
+          .set({ roleSlug, roleId: role?.id || null })
+          .where(and(...whereConditions))
+          .returning();
 
-      const stale = checkStaleUpdate(updated);
-      if (stale) return stale;
-        
-      await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'role_change', entityType: 'member', entityId: target.userId, newData: { role: roleSlug } });
+        const stale = checkStaleUpdate(updated);
+        if (stale) return stale;
+          
+        await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'role_change', entityType: 'member', entityId: target.userId, newData: { role: roleSlug }, dbOrTx: tx as DbClient });
+      });
 
     } else if (action === 'remove') {
       const reassignUserId = reassignTo || ctx.userId;
@@ -273,7 +275,7 @@ export async function PATCH(request: NextRequest) {
 
     } else if (action === 'suspend') {
       const concurrencyWhere = concurrencyGuard(tenantMembers, rawPatch.expectedUpdatedAt);
-      const whereConditions: any[] = [eq(tenantMembers.id, memberId)];
+      const whereConditions: SQL[] = [eq(tenantMembers.id, memberId)];
       if (concurrencyWhere) whereConditions.push(concurrencyWhere);
 
       const [updated] = await db.update(tenantMembers).set({ status: 'suspended' }).where(and(...whereConditions)).returning();
@@ -282,7 +284,7 @@ export async function PATCH(request: NextRequest) {
       if (stale) return stale;
     } else if (action === 'reactivate') {
       const concurrencyWhere = concurrencyGuard(tenantMembers, rawPatch.expectedUpdatedAt);
-      const whereConditions: any[] = [eq(tenantMembers.id, memberId)];
+      const whereConditions: SQL[] = [eq(tenantMembers.id, memberId)];
       if (concurrencyWhere) whereConditions.push(concurrencyWhere);
 
       const [updated] = await db.update(tenantMembers).set({ status: 'active' }).where(and(...whereConditions)).returning();
@@ -294,11 +296,13 @@ export async function PATCH(request: NextRequest) {
       try { _parsedBody = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
       const { contactId } = _parsedBody;
       if (contactId) {
-        await db.update(contacts).set({ assignedTo: target.userId, lastAssignedAt: new Date() }).where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId)));
-        await db.insert(leadAssignments).values({
-          tenantId: ctx.tenantId,
-          contactId: contactId,
-          userId: target.userId,
+        await db.transaction(async (tx) => {
+          await tx.update(contacts).set({ assignedTo: target.userId, lastAssignedAt: new Date() }).where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId)));
+          await tx.insert(leadAssignments).values({
+            tenantId: ctx.tenantId,
+            contactId: contactId,
+            userId: target.userId,
+          });
         });
       }
     } else {
