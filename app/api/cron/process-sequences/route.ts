@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
                 contactId: enrollment.contactId,
                 recipient: enrollment.contact.email,
                 subject: step.subject || 'Follow up',
-                bodyText: body,
+                bodyText: emailBody,
                 sequenceEnrollmentId: enrollment.id,
               });
 
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
                 to: enrollment.contact.email,
                 subject: step.subject || 'Follow up',
                 html: trackedHtml,
-                text: body + `\n\nUnsubscribe: ${unsubLink}`
+                text: emailBody + `\n\nUnsubscribe: ${unsubLink}`
               });
    
 

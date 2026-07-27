@@ -67,7 +67,7 @@ export async function GET(
     return NextResponse.json({ 
       data: { 
         ...automation, 
-        created_by_name: automation.createdBy?.fullName,
+        created_by_name: _createdName,
         recent_runs: recentRuns 
       } 
     });
