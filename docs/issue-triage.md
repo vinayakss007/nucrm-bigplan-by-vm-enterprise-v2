@@ -18,7 +18,7 @@ bodies have drifted; where a number here disagrees with the issue, the number he
 | 643 | Consolidate dual error handling       | open                            | untouched                                            |
 | 644 | Replace SSE with WebSocket            | open                            | untouched                                            |
 | 645 | Adopt ADR process                     | open                            | untouched                                            |
-| 654 | 126 pages missing loading/error.tsx   | **fixed**                       | #739                                                 |
+| 654 | 126 pages missing loading/error.tsx   | **fixed**                       | this branch                                          |
 | 655 | API format + accessibility gaps       | partial (3 of 7 sub-items)      | #739, #740                                           |
 | 668 | Epic: Phase 1 test coverage           | **effectively done**            | pre-existing                                         |
 | 669 | Epic: Phase 2 SDK resource tests      | substantially done              | pre-existing                                         |
@@ -26,18 +26,53 @@ bodies have drifted; where a number here disagrees with the issue, the number he
 | 671 | Epic: Phase 4 tenant context & auth   | open                            | not assessed                                         |
 | 672 | Epic: Phase 5 automation & calendar   | open                            | not assessed                                         |
 | 674 | Epic: database fail-proof layer       | partial                         | #737                                                 |
-| 675 | Epic: automated encrypted backup      | partial                         | #736 (separate stack)                                |
+| 675 | Epic: automated encrypted backup      | partial                         | this branch                                          |
 | 676 | Epic: corruption-free data handling   | partial                         | #733, #735                                           |
 | 688 | Agent task division — 48 open issues  | **stale, needs closing**        | see below                                            |
 
-PRs referenced: #735 → #737 → #738 → #739 → #740 are a single stack, merge in that order.
-**#736 is not part of that stack** and does not descend from it.
+All of this work now lives in **one branch**, `integration/enterprise-hardening`, as nine commits.
+It replaces the earlier stack of PRs #735, #736, #737, #738, #739, #740 and #741, which became
+unmergeable: each child PR had been merged _down into its own base branch_ instead of the base
+being merged up into `main`, so the bottom of the stack accumulated everything and conflicted with
+`main`. Close those seven in favour of the single PR.
+
+---
+
+## `main` is red again, and that is how #733 shipped broken
+
+Measured by reconstructing `main`'s tree (`3f2ed03f`) from the GitHub API and typechecking it:
+
+```
+main alone                          175 typecheck errors
+  of which pre-existing (utils.ts)  158   <- fixed by the first commit in this branch
+  of which introduced by #733        17   <- fixed by a new commit in this branch
+main + this branch                    0
+```
+
+Two of the 17 are runtime faults, not type noise:
+
+- **`PATCH /api/tenant/deals/:id` was completely broken.** The refactor renamed `body` to the
+  validated payload but left twelve `body.stageId` references, so every request threw a
+  `ReferenceError` and returned 500. Deal updates — the thing issues #658 and #660 were about —
+  regressed silently.
+- **`cron/process-sequences`** referenced `body` after it became `emailBody`, so any sequence step
+  that sends an email threw before sending.
+
+The same PATCH also spread the validated body into the `SET` clause, which put snake_case keys
+(`stage_id`, `contact_id`, `company_id`, `pipeline_id`, `assigned_to`, `close_date`) and
+request-only keys (`value`, `stage`, `stage_name`) into the update. None are columns on `deals`, so
+those fields never persisted; they are now mapped explicitly.
+
+The systemic point: **once a gate is red, new breakage is invisible.** `main` already had 158
+typecheck errors, so #733 adding 17 more changed nothing observable and it merged. Keeping the
+gates green is what makes the next regression detectable — which is the argument for landing this
+branch as one unit rather than leaving it stacked and unmergeable.
 
 ---
 
 ## Fixed
 
-### #654 — loading.tsx / error.tsx coverage → PR #739
+### #654 — loading.tsx / error.tsx coverage
 
 Every one of the 200+ pages is now covered by both a loading and an error boundary.
 
@@ -133,13 +168,15 @@ BEFORE UPDATE/DELETE triggers are not implemented.
 
 ### #675 — Automated encrypted backup
 
-Addressed by **PR #736**, which fixed the `S3_ACCESS_KEY_ID` vs `S3_ACCESS_KEY` env mismatch (under
-Docker the upload block never ran, so backups stayed in an ephemeral container while
-`backup_records.status` reported `completed`), the wrong-bucket retention delete, and integrity
-verification.
+Addressed by the backup commit in this branch (originally PR #736): the
+`S3_ACCESS_KEY_ID` vs `S3_ACCESS_KEY` env mismatch (under Docker the upload block never ran, so
+backups stayed in an ephemeral container while `backup_records.status` reported `completed`), the
+wrong-bucket retention delete, and per-artefact checksums.
 
-**#736 is on `fix/backup-offsite-upload-and-integrity`, which is not an ancestor of the
-#735→#740 stack.** It merges independently.
+Two integration problems were found while folding it in: `app/api/cron/backup/route.ts` needed a
+real three-way merge against the `db.transaction()` wrapping that #733 added on `main`, and
+`0042_backup_records_checksum.sql` was **missing from `meta/_journal.json`**, so `db:migrate` would
+never have created the `checksum` columns the route writes to. Both are fixed here.
 
 Still open from the epic: WAL archiving / PITR, restore-to-ephemeral verification, cross-region
 replication, quarterly DR test.
