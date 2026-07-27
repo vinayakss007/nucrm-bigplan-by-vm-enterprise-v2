@@ -63,13 +63,15 @@ export async function GET(
       created_at: run.createdAt
     }));
 
-    const _createdName = createdByName;
-    return NextResponse.json({ 
-      data: { 
-        ...automation, 
-        created_by_name: automation.createdBy?.fullName,
-        recent_runs: recentRuns 
-      } 
+    return NextResponse.json({
+      data: {
+        ...automation,
+        // `automation.createdBy` is the creator's UUID, not a joined row, so it
+        // has no `fullName`. Use the name resolved from the users table above —
+        // previously this always serialised as undefined.
+        created_by_name: createdByName,
+        recent_runs: recentRuns
+      }
     });
  
  

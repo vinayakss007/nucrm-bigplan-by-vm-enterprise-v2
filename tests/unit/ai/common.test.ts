@@ -15,8 +15,41 @@ const mockFrom = vi.fn(() => ({
 
 const mockSelect = vi.fn(() => ({ from: mockFrom }));
 
+/**
+ * `tx.insert(...).values(...)` is sometimes awaited directly and sometimes
+ * chained with `.onConflictDoUpdate(...)`, so the return value has to be both a
+ * thenable and an object exposing that method.
+ */
+function mockInsertValuesResult() {
+  const result = Promise.resolve() as Promise<void> & {
+    onConflictDoUpdate: ReturnType<typeof vi.fn>;
+  };
+  result.onConflictDoUpdate = vi.fn(() => Promise.resolve());
+  return result;
+}
+
+function makeMockTx() {
+  return {
+    update: vi.fn(() => ({
+      set: vi.fn(() => ({
+        where: vi.fn(() => Promise.resolve()),
+      })),
+    })),
+    insert: vi.fn(() => ({
+      values: vi.fn(() => mockInsertValuesResult()),
+    })),
+  };
+}
+
+// recordUsage() wraps its four writes in db.transaction(); without this the
+// mocked db throws "db.transaction is not a function".
+const mockTransaction = vi.fn(
+  async (cb: (tx: ReturnType<typeof makeMockTx>) => Promise<unknown>) => cb(makeMockTx())
+);
+
 vi.mock('@/drizzle/db', () => ({
   db: {
+    transaction: mockTransaction,
     query: {
       tokenBudgets: { findFirst: vi.fn(() => mockTokenBudgetFind()) },
       tenantTokenLimits: { findFirst: vi.fn(() => mockDbFindOne()) },

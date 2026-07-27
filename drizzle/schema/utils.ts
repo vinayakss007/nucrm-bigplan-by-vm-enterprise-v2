@@ -89,11 +89,31 @@ function getTableName(column: { table: Table }): string {
  */
 type ExtraConfigColumnMap = Record<string, ExtraConfigColumn>;
 
-export const tenantIdx = (table: ExtraConfigColumnMap): IndexBuilder | undefined =>
-  table.tenantId ? index(`idx_${getTableName(table.tenantId)}_tenant`).on(table.tenantId) : undefined;
+/**
+ * These helpers keep a defensive runtime guard: a table that does not declare
+ * the relevant column yields `undefined`, which Drizzle omits from the table's
+ * extra config.
+ *
+ * The return type is declared as `IndexBuilder` rather than
+ * `IndexBuilder | undefined` because Drizzle's `extraConfig` value type
+ * (`PgTableExtraConfigValue`) does not admit `undefined`. Declaring the union
+ * made every one of the ~170 call sites fail to match any `pgTable` overload,
+ * surfacing as 158 confusing "Object literal may only specify known
+ * properties" errors across drizzle/schema/*.
+ *
+ * The cast narrows only the static type; runtime behaviour is unchanged.
+ */
+export const tenantIdx = (table: ExtraConfigColumnMap): IndexBuilder =>
+  (table.tenantId
+    ? index(`idx_${getTableName(table.tenantId)}_tenant`).on(table.tenantId)
+    : undefined) as IndexBuilder;
 
-export const metadataIdx = (table: ExtraConfigColumnMap): IndexBuilder | undefined =>
-  table.metadata ? index(`idx_${getTableName(table.metadata)}_metadata_g`).using('gin', table.metadata) : undefined;
+export const metadataIdx = (table: ExtraConfigColumnMap): IndexBuilder =>
+  (table.metadata
+    ? index(`idx_${getTableName(table.metadata)}_metadata_g`).using('gin', table.metadata)
+    : undefined) as IndexBuilder;
 
-export const activeIdx = (table: ExtraConfigColumnMap): IndexBuilder | undefined =>
-  table.id ? index(`idx_${getTableName(table.id)}_active`).on(table.id).where(sql`deleted_at IS NULL`) : undefined;
+export const activeIdx = (table: ExtraConfigColumnMap): IndexBuilder =>
+  (table.id
+    ? index(`idx_${getTableName(table.id)}_active`).on(table.id).where(sql`deleted_at IS NULL`)
+    : undefined) as IndexBuilder;

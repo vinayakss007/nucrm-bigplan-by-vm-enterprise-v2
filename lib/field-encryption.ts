@@ -64,9 +64,16 @@ export function decryptSensitiveFields<T extends Record<string, any>>(
       try {
         result[k as keyof T] = decrypt(String(value), encKey) as T[keyof T];
       } catch (err) {
-        // Fail-closed: replace with null rather than returning ciphertext
-        console.error(`[field-encryption] Failed to decrypt field "${k}":`, err);
-        result[k as keyof T] = null as T[keyof T];
+        // Fail-closed and LOUD.
+        //
+        // Never return the ciphertext (that would leak stored secrets) and never
+        // substitute null either: a silently-nulled credential looks like an
+        // unconfigured integration, so a key-rotation mistake or storage
+        // corruption would be mistaken for normal state and go unnoticed. A
+        // decryption failure means the key is wrong or the data is corrupt, and
+        // both demand operator attention.
+        const reason = err instanceof Error ? err.message : String(err);
+        throw new Error(`[field-encryption] Failed to decrypt field "${k}": ${reason}`);
       }
     }
   }
