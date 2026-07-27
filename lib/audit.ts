@@ -96,10 +96,26 @@ export async function logAudit(opts: {
     });
   } catch (err) {
     logger.error('[audit] Failed to write audit log', {
+      tenantId: opts.tenantId,
+      userId: opts.userId,
       action: opts.action,
       entityType: opts.entityType,
+      entityId: opts.entityId,
+      transactional: Boolean(opts.dbOrTx),
       error: err instanceof Error ? err.message : String(err),
     });
+
+    // If the caller handed us their transaction, they asked for the audit entry
+    // and their write to succeed or fail together. Swallowing the error there
+    // would commit the change with no audit record — the exact gap the hash
+    // chain exists to prevent. Re-throw so their transaction rolls back.
+    //
+    // Standalone calls (no dbOrTx) stay non-fatal: the business write has
+    // already committed by then, so throwing would turn a logging failure into
+    // a failed request without undoing anything.
+    if (opts.dbOrTx) {
+      throw err;
+    }
   }
 }
 
