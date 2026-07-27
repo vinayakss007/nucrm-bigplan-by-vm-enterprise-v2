@@ -67,28 +67,26 @@ export async function POST(req: NextRequest) {
     let row: typeof tenantHierarchy.$inferSelect | undefined;
 
     await db.transaction(async (tx) => {
-      const [inserted] = await tx.insert(tenantHierarchy).values({
+      [row] = await tx.insert(tenantHierarchy).values({
         parentTenantId: ctx.tenantId,
         childTenantId: parsed.data.childTenantId,
         relationship: parsed.data.relationship,
       }).returning();
 
-      if (!inserted) throw new Error('Failed to create hierarchy entry');
+      if (!row) throw new Error('Failed to create hierarchy entry');
 
       // Add permissions if provided
-      if (parsed.data.permissions && parsed.data.permissions.length > 0) {
+      if (parsed.data.permissions && parsed.data.permissions.length > 0 && row) {
         const allowedPerms = ['view_data', 'manage_users', 'share_contacts', 'aggregate_reports'] as const;
         for (const perm of parsed.data.permissions) {
           if (allowedPerms.includes(perm as typeof allowedPerms[number])) {
             await tx.insert(hierarchyPermissions).values({
-              hierarchyId: inserted.id,
+              hierarchyId: row.id,
               permission: perm as typeof allowedPerms[number],
             });
           }
         }
       }
-
-      row = inserted;
     });
 
     return NextResponse.json({ data: row }, { status: 201 });
@@ -162,7 +160,9 @@ export async function DELETE(req: NextRequest) {
     // Soft delete
     const [row] = await db
       .update(tenantHierarchy)
-      .set({ deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as any)
+      // `tenant_hierarchy` uses utils.lifecycle() (createdAt/updatedAt/deletedAt)
+      // and has no `deleted_by` column, so actor attribution lives in audit_logs.
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
       .where(and(
         eq(tenantHierarchy.id, id),
         eq(tenantHierarchy.parentTenantId, ctx.tenantId)
