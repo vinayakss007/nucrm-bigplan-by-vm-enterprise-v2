@@ -99,6 +99,7 @@ export const GROUPS: SettingsGroup[] = [
     id: 'ws-team', label: 'Team', scope: 'workspace',
     items: [
       { href: '/tenant/settings/team',            label: 'Members & Invites', icon: Users,      desc: 'Add or remove team',             keywords: 'team members invite' },
+      { href: '/tenant/settings/teams',           label: 'Teams',             icon: Users,      desc: 'Group reps into Sales, Marketing, Support', adminOnly: true, badge: 'new', keywords: 'teams group sales marketing support squad routing assignment' },
       { href: '/tenant/settings/hierarchy',       label: 'Org Hierarchy',     icon: Network,    desc: 'Reporting structure',            keywords: 'hierarchy reports manager' },
       { href: '/tenant/settings/territories',     label: 'Territories',       icon: MapPin,     desc: 'Regional ownership',             keywords: 'region territory geo' },
       { href: '/tenant/settings/assignment-rules', label: 'Assignment Rules', icon: Repeat,     desc: 'Round-robin & rules',           keywords: 'round robin rules assignment' },

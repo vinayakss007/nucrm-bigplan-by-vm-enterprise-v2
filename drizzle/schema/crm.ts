@@ -105,6 +105,9 @@ export const contacts = pgTable('contacts', {
   isCustomer: boolean('is_customer').default(false),
   
   leadAccess: text('lead_access').default('team'),
+  // Owning team (WF-04) — the concrete backing for lead_access='team'. FK to
+  // teams enforced at the DB layer (migration).
+  teamId: uuid('team_id'),
   ownerNotes: text('owner_notes'),
   notes: text('notes'),
   tags: text('tags').array().default(sql`'{}'`),
@@ -204,6 +207,10 @@ export const leads = pgTable('leads', {
   // never delete the lead that referenced it.
   requestedProductId: uuid('requested_product_id').references(() => products.id, { onDelete: 'set null' }),
   requestedServiceId: uuid('requested_service_id'),
+
+  // Owning team (WF-04). FK to teams enforced at the DB layer (migration) to
+  // avoid a schema-file import cycle. SET NULL on team delete.
+  teamId: uuid('team_id'),
   
   metadata: utils.metadata(),
   

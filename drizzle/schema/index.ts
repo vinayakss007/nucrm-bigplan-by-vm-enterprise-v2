@@ -38,3 +38,4 @@ export * from './dashboard';
 export * from './super-admin-audit';
 export * from './analytics-views';
 export * from './record-links';
+export * from './teams';
