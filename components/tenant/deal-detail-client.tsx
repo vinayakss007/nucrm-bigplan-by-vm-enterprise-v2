@@ -20,6 +20,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import toast from 'react-hot-toast';
+import DealRelatedPanel from '@/components/tenant/deal-related-panel';
 
 const STAGES = [
   { id: 'lead', label: 'Lead', color: 'bg-slate-100 text-slate-700', dot: 'bg-slate-400' },
@@ -371,6 +372,9 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
           )}
         </div>
       )}
+
+      {/* Related: follow-ups, quotes, invoices (#756 items 4/5/6) */}
+      <DealRelatedPanel dealId={deal.id} />
 
       {activeTab === 'documents' && (
         <div className="admin-card overflow-hidden">
