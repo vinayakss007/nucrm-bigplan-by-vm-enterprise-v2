@@ -188,6 +188,11 @@ export const backupRecords = pgTable('backup_records', {
   completedAt: timestamp('completed_at', { withTimezone: true }),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
   errorMessage: text('error_message'),
+  // Automated verification: proves the backup is locatable, intact and
+  // restorable. Written by /api/cron/backup-verify.
+  lastVerifiedAt: timestamp('last_verified_at', { withTimezone: true }),
+  verifiedOk: boolean('verified_ok'),
+  verifyError: text('verify_error'),
   metadata: utils.metadata(),
   ...utils.audit(),
 }, (table) => {
