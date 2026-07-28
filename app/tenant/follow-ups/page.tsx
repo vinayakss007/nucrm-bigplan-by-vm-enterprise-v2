@@ -27,7 +27,7 @@ export default function FollowUpsPage() {
   const [offset, setOffset] = useState(0);
   const [total, setTotal] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
-  const [createForm, setCreateForm] = useState({ title: '', description: '', dueDate: '' });
+  const [createForm, setCreateForm] = useState({ title: '', description: '', dueDate: '', contactId: '', leadId: '', dealId: '' });
   const [saving, setSaving] = useState(false);
   const limit = 20;
 
@@ -67,11 +67,14 @@ export default function FollowUpsPage() {
           title: createForm.title,
           description: createForm.description || undefined,
           due_date: createForm.dueDate || undefined,
+          contact_id: createForm.contactId || undefined,
+          lead_id: createForm.leadId || undefined,
+          deal_id: createForm.dealId || undefined,
         }),
       });
       if (!res.ok) throw new Error('Failed to create');
       setShowCreate(false);
-      setCreateForm({ title: '', description: '', dueDate: '' });
+      setCreateForm({ title: '', description: '', dueDate: '', contactId: '', leadId: '', dealId: '' });
       setOffset(0);
       fetchData();
     } catch {
@@ -254,6 +257,17 @@ export default function FollowUpsPage() {
                 onChange={(e) => setCreateForm(f => ({ ...f, dueDate: e.target.value }))}
                 className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
               />
+            </div>
+            <div className="grid grid-cols-1 gap-3">
+              <input placeholder="Contact ID (optional)" value={createForm.contactId}
+                onChange={(e) => setCreateForm(f => ({ ...f, contactId: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm" />
+              <input placeholder="Lead ID (optional)" value={createForm.leadId}
+                onChange={(e) => setCreateForm(f => ({ ...f, leadId: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm" />
+              <input placeholder="Deal ID (optional)" value={createForm.dealId}
+                onChange={(e) => setCreateForm(f => ({ ...f, dealId: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm" />
             </div>
           </div>
           <DialogFooter>
