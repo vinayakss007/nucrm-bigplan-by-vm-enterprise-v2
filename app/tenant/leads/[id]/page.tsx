@@ -1,6 +1,6 @@
 import { requireTenantCtx } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
-import { leads, users, leadActivities, contacts, tenantMembers } from '@/drizzle/schema';
+import { leads, users, leadActivities, contacts, tenantMembers, products, services, teams } from '@/drizzle/schema';
 import { eq, and, sql, desc, or, ilike } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import LeadDetailClient from '@/components/tenant/lead-detail-client';
@@ -42,6 +42,13 @@ export default async function LeadDetailPage({ params }: PageProps) {
     assigned_to: leads.assignedTo,
     created_by: leads.createdBy,
     created_at: leads.createdAt,
+    // What the lead is a request for, and its owning team (WF-02/WF-04)
+    requested_product_id: leads.requestedProductId,
+    requested_service_id: leads.requestedServiceId,
+    team_id: leads.teamId,
+    requested_product_name: products.name,
+    requested_service_name: services.name,
+    team_name: teams.name,
     // Joined fields
     assigned_name: users.fullName,
     assigned_avatar: users.avatarUrl,
@@ -49,6 +56,9 @@ export default async function LeadDetailPage({ params }: PageProps) {
   })
   .from(leads)
   .leftJoin(users, eq(users.id, leads.assignedTo))
+  .leftJoin(products, eq(products.id, leads.requestedProductId))
+  .leftJoin(services, eq(services.id, leads.requestedServiceId))
+  .leftJoin(teams, eq(teams.id, leads.teamId))
   .where(and(
     eq(leads.id, id),
     eq(leads.tenantId, ctx.tenantId),
