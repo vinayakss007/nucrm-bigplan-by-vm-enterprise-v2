@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
+import { validateBody } from '@/lib/api/validate';
+import { disable2faSchema } from '@/lib/api/schemas/auth';
 import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
@@ -12,11 +14,10 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const { password, totp_code } = await request.json();
-
-    if (!password) {
-      return NextResponse.json({ error: 'Password required' }, { status: 400 });
-    }
+    const body = await request.json();
+    const validation = validateBody(disable2faSchema, body);
+    if (validation instanceof NextResponse) return validation;
+    const { password, totp_code } = validation.data;
 
     // Get user's password hash and 2FA status
     const userRow = await db.query.users.findFirst({
