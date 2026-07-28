@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { validateBody } from '@/lib/api/validate';
+import { updateQuoteSchema } from '@/lib/api/schemas/billing';
 import { db } from '@/drizzle/db';
 import { quotes } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
@@ -52,36 +54,25 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const quoteId = (await params).id;
     const body = await req.json();
+    const validation = validateBody(updateQuoteSchema, body);
+    if (validation instanceof NextResponse) return validation;
+    const validated = validation.data;
 
-    // Validate numeric fields
-    const numericFields = ['subtotal', 'discount', 'tax', 'totalAmount'] as const;
-    for (const field of numericFields) {
-      if (body[field] !== undefined) {
-        const v = parseFloat(body[field]);
-        if (isNaN(v)) {
-          return NextResponse.json({ error: `${field} must be a valid number` }, { status: 400 });
-        }
-        body[field] = v;
-      }
-    }
-
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allowedFields: Record<string, any> = {};
     const mutable = ['title', 'status', 'subtotal', 'discount', 'tax', 'totalAmount', 'expiresAt', 'notes', 'terms'] as const;
     for (const key of mutable) {
-      if (body[key] !== undefined) allowedFields[key] = body[key];
+      if ((validated as Record<string, unknown>)[key] !== undefined) allowedFields[key] = (validated as Record<string, unknown>)[key];
     }
 
     // Handle status-specific timestamp updates
-    if (body.status === 'sent' && !body.sentAt) {
+    if (validated.status === 'sent') {
       allowedFields['sentAt'] = new Date();
     }
-    if (body.status === 'accepted' && !body.acceptedAt) {
+    if (validated.status === 'accepted') {
       allowedFields['acceptedAt'] = new Date();
     }
-    if (body.status === 'declined' && !body.declinedAt) {
+    if (validated.status === 'declined') {
       allowedFields['declinedAt'] = new Date();
     }
 

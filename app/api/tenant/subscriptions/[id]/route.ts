@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { validateBody } from '@/lib/api/validate';
+import { updateSubscriptionSchema } from '@/lib/api/schemas/billing';
 import { db } from '@/drizzle/db';
 import { serviceSubscriptions } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
@@ -51,23 +53,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const subId = (await params).id;
     const body = await req.json();
+    const validation = validateBody(updateSubscriptionSchema, body);
+    if (validation instanceof NextResponse) return validation;
+    const validated = validation.data;
 
-    // Validate numeric fields
-    if (body.amount !== undefined) {
-      const v = parseFloat(body.amount);
-      if (isNaN(v)) {
-        return NextResponse.json({ error: 'amount must be a valid number' }, { status: 400 });
-      }
-      body.amount = v;
-    }
-
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allowedFields: Record<string, any> = {};
     const mutable = ['name', 'planName', 'status', 'amount', 'billingFrequency', 'autoRenew', 'currentPeriodEnd', 'cancelledAt'] as const;
     for (const key of mutable) {
-      if (body[key] !== undefined) allowedFields[key] = body[key];
+      if ((validated as Record<string, unknown>)[key] !== undefined) allowedFields[key] = (validated as Record<string, unknown>)[key];
     }
 
     if (Object.keys(allowedFields).length === 0) {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { validateBody } from '@/lib/api/validate';
+import { updateInvoiceSchema } from '@/lib/api/schemas/billing';
 import { db } from '@/drizzle/db';
 import { invoices } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
@@ -51,35 +53,26 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const invoiceId = (await params).id;
     const body = await req.json();
+    const validation = validateBody(updateInvoiceSchema, body);
+    if (validation instanceof NextResponse) return validation;
+    const validated = validation.data;
 
-    const numericFields = ['subtotal', 'discountAmount', 'taxAmount', 'totalAmount', 'amountPaid', 'balanceDue'] as const;
-    for (const field of numericFields) {
-      if (body[field] !== undefined) {
-        const v = parseFloat(body[field]);
-        if (isNaN(v)) {
-          return NextResponse.json({ error: `${field} must be a valid number` }, { status: 400 });
-        }
-        body[field] = v;
-      }
-    }
-
-
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // Build the update from the validated (and type-correct) payload only.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allowedFields: Record<string, any> = {};
     const mutable = ['title', 'status', 'subtotal', 'discountType', 'discountValue', 'discountAmount', 'taxRate', 'taxAmount', 'totalAmount', 'amountPaid', 'balanceDue', 'notes', 'terms', 'footer', 'issueDate', 'dueDate', 'paymentMethod', 'paymentReference'] as const;
     for (const key of mutable) {
-      if (body[key] !== undefined) allowedFields[key] = body[key];
+      if ((validated as Record<string, unknown>)[key] !== undefined) allowedFields[key] = (validated as Record<string, unknown>)[key];
     }
 
     // Handle status-specific timestamp updates
-    if (body.status === 'sent' && !body.sentAt) {
+    if (validated.status === 'sent') {
       allowedFields['sentAt'] = new Date();
     }
-    if (body.status === 'paid' && !body.paidAt) {
+    if (validated.status === 'paid') {
       allowedFields['paidAt'] = new Date();
     }
-    if (body.status === 'cancelled' && !body.cancelledAt) {
+    if (validated.status === 'cancelled') {
       allowedFields['cancelledAt'] = new Date();
     }
 

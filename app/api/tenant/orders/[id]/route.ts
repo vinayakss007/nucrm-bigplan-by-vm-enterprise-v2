@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { validateBody } from '@/lib/api/validate';
+import { updateOrderSchema } from '@/lib/api/schemas/billing';
 import { db } from '@/drizzle/db';
 import { orders } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
@@ -60,30 +62,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const orderId = (await params).id;
     const body = await req.json();
+    const validation = validateBody(updateOrderSchema, body);
+    if (validation instanceof NextResponse) return validation;
+    const validated = validation.data;
 
-    // Validate numeric fields
-    const numericFields = ['totalAmount', 'subtotal', 'discount'] as const;
-    for (const field of numericFields) {
-      if (body[field] !== undefined) {
-        const v = parseFloat(body[field]);
-        if (isNaN(v)) {
-          return NextResponse.json({ error: `${field} must be a valid number` }, { status: 400 });
-        }
-        body[field] = v;
-      }
-    }
-
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allowedFields: Record<string, any> = {};
     const mutable = ['title', 'status', 'expectedDeliveryDate', 'shippingAddress', 'shippingCity', 'shippingState', 'shippingCountry', 'shippingPostalCode', 'trackingNumber', 'shippingCarrier', 'notes', 'customerNotes'] as const;
     for (const key of mutable) {
-      if (body[key] !== undefined) allowedFields[key] = body[key];
+      if ((validated as Record<string, unknown>)[key] !== undefined) allowedFields[key] = (validated as Record<string, unknown>)[key];
     }
 
     // If status is being changed, validate the transition
-    if (body.status) {
+    if (validated.status) {
       const [current] = await db
         .select({ id: orders.id, status: orders.status })
         .from(orders)
@@ -101,22 +92,22 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const currentStatus = current.status || 'pending';
       const allowed = VALID_TRANSITIONS[currentStatus];
 
-      if (allowed && !allowed.includes(body.status)) {
+      if (allowed && !allowed.includes(validated.status!)) {
         const validOptions = allowed.length > 0 ? allowed.join(', ') : 'none (terminal state)';
         return NextResponse.json(
-          { error: `Invalid status transition from '${currentStatus}' to '${body.status}'. Valid transitions from '${currentStatus}': ${validOptions}` },
+          { error: `Invalid status transition from '${currentStatus}' to '${validated.status}'. Valid transitions from '${currentStatus}': ${validOptions}` },
           { status: 400 }
         );
       }
 
       // Handle status-specific timestamp updates
-      if (body.status === 'shipped' && !body.shippedAt) {
+      if (validated.status === 'shipped') {
         allowedFields['shippedAt'] = new Date();
       }
-      if (body.status === 'delivered' && !body.deliveredAt) {
+      if (validated.status === 'delivered') {
         allowedFields['deliveredAt'] = new Date();
       }
-      if (body.status === 'cancelled' && !body.cancelledAt) {
+      if (validated.status === 'cancelled') {
         allowedFields['cancelledAt'] = new Date();
       }
     }
@@ -126,7 +117,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     // If we haven't already fetched the existing record (no status change), check existence
-    if (!body.status) {
+    if (!validated.status) {
       const [existing] = await db
         .select({ id: orders.id })
         .from(orders)
