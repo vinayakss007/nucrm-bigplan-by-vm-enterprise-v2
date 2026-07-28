@@ -545,7 +545,6 @@ export default function SuperAdminTenantsPage() {
         </table>
       </div>
 
-      {editTenant && <EditModal tenant={editTenant} onSave={()=>{setEditTenant(null);load();}} onClose={()=>setEditTenant(null)} />}
       {modulesTenant && <ModulesModal tenant={modulesTenant} onClose={()=>setModulesTenant(null)} _onSaved={()=>{setModulesTenant(null);load();}} />}
       {featuresTenant && <TenantFeaturesPanel tenantId={featuresTenant.id} tenantName={featuresTenant.name} plan={featuresTenant.plan_id} onClose={() => setFeaturesTenant(null)} />}
     </div>
