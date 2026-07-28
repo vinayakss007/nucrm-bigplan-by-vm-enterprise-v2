@@ -275,7 +275,8 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
               </div>
               <div className="divide-y divide-border">
                 {deals.map(d => (
-                  <div key={d.id} className="flex items-center gap-3 px-5 py-3 hover:bg-accent/30 transition-colors">
+                  <Link key={d.id} href={`/tenant/deals/${d.id}`}
+                    className="flex items-center gap-3 px-5 py-3 hover:bg-accent/30 transition-colors">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{d.title}</p>
                       {d.close_date && <p className="text-xs text-muted-foreground">Close: {formatDate(d.close_date)}</p>}
@@ -286,7 +287,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
                         {d.stage}
                       </span>
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>

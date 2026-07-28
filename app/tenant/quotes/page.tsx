@@ -226,8 +226,8 @@ function QuotesPageInner() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
-                        <button className="p-1.5 hover:bg-accent rounded transition-colors" title="View"><FileText className="w-3.5 h-3.5" /></button>
-                        <button className="p-1.5 hover:bg-accent rounded transition-colors" title="Send"><Send className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => toast('Quote detail view coming soon')} className="p-1.5 hover:bg-accent rounded transition-colors" title="View"><FileText className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => toast('Quote email send coming soon')} className="p-1.5 hover:bg-accent rounded transition-colors" title="Send"><Send className="w-3.5 h-3.5" /></button>
                       </div>
                     </td>
                   </tr>

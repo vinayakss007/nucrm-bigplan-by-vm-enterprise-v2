@@ -285,7 +285,7 @@ export default function SuperAdminTenantsPage() {
   const suspend   = async (id:string,name:string) => {
     setSuspendTarget({id, name});
   };
-  const activate  = async (id:string) => { await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,status:'active'})}); toast.success('Activated'); load(); };
+  const activate  = async (id:string) => { const res=await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,status:'active'})}); if(res.ok){toast.success('Activated');load();}else{const d=await res.json();toast.error(d.error||'Failed');} };
   const grantLifetime = async (id:string,name:string) => {
     await confirmThen(`Grant lifetime access to "${name}"? This sets Pro plan + active + lifetime billing.`, async () => {
       await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,plan_id:'pro',status:'active',billing_type:'lifetime'})});
@@ -306,13 +306,13 @@ export default function SuperAdminTenantsPage() {
   };
   const executeSuspend = async () => {
     if (!suspendTarget) return;
-    await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:suspendTarget.id,status:'suspended'})});
-    toast.success('Suspended'); load();
+    const res=await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:suspendTarget.id,status:'suspended'})});
+    if(res.ok){toast.success('Suspended');load();}else{const d=await res.json();toast.error(d.error||'Failed');}
   };
   const executeDelete = async () => {
     if (!deleteTarget) return;
-    await fetch('/api/superadmin/tenants',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:deleteTarget.id,hard_delete:true})});
-    toast.success('Deleted'); load();
+    const res=await fetch('/api/superadmin/tenants',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:deleteTarget.id,hard_delete:true})});
+    if(res.ok){toast.success('Deleted');load();}else{const d=await res.json();toast.error(d.error||'Failed');}
   };
   const impersonate = async (tenantId:string, tenantName:string) => {
     await confirmThen(`Enter "${tenantName}" as superadmin? You will see everything as if you are them.`, async () => {

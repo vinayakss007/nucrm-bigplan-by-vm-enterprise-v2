@@ -149,12 +149,25 @@ const StageColumn = memo(function StageColumn({ stage, deals, _onDealMove }: { s
 });
 
 export default function DealsKanbanPage() {
-  const [stages] = useState<Stage[]>(DEFAULT_STAGES);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const { data: res, isLoading } = useSWR('/api/tenant/deals');
+  const { data: stagesRes } = useSWR('/api/tenant/pipelines');
   const [deals, setDeals] = useState<Deal[]>([]);
   const loading = isLoading && deals.length === 0;
+
+  const stages: Stage[] = useMemo(() => {
+    const apiStages = stagesRes?.stages ?? stagesRes?.data?.stages ?? stagesRes?.data;
+    if (Array.isArray(apiStages) && apiStages.length > 0) {
+      return apiStages.map((s: { id: string; name: string; color?: string; order?: number }) => ({
+        id: s.id,
+        name: s.name,
+        color: s.color || 'bg-slate-400',
+        order: s.order ?? 0,
+      }));
+    }
+    return DEFAULT_STAGES;
+  }, [stagesRes]);
 
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
@@ -248,7 +261,7 @@ export default function DealsKanbanPage() {
               List
             </button>
           </div>
-          <button className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 text-xs sm:text-sm shrink-0">
+          <button onClick={() => toast('Deal creation form coming soon')} className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 text-xs sm:text-sm shrink-0">
             <Plus className="w-4 h-4" /> <span className="hidden sm:inline">New Deal</span><span className="sm:hidden">New</span>
           </button>
         </div>
