@@ -53,8 +53,24 @@ export async function GET(request: NextRequest) {
       .limit(limit),
     ]);
 
+    // Sort by relevance: exact name match first, then by creation date (newest first).
+    // Previously sorted by Math.random() which gave non-deterministic, useless results.
+    const qLower = q.toLowerCase();
     const results = [...tenantResults, ...userResults]
-      .sort(() => Math.random() - 0.5)
+      .sort((a, b) => {
+        const aName = ('name' in a ? a.name : 'fullName' in a ? a.fullName : '') || '';
+        const bName = ('name' in b ? b.name : 'fullName' in b ? b.fullName : '') || '';
+        const aExact = aName.toLowerCase() === qLower ? 1 : 0;
+        const bExact = bName.toLowerCase() === qLower ? 1 : 0;
+        if (aExact !== bExact) return bExact - aExact;
+        const aStarts = aName.toLowerCase().startsWith(qLower) ? 1 : 0;
+        const bStarts = bName.toLowerCase().startsWith(qLower) ? 1 : 0;
+        if (aStarts !== bStarts) return bStarts - aStarts;
+        // Fall back to newest first
+        const aDate = 'createdAt' in a ? new Date(a.createdAt as string).getTime() : 0;
+        const bDate = 'createdAt' in b ? new Date(b.createdAt as string).getTime() : 0;
+        return bDate - aDate;
+      })
       .slice(0, limit);
 
     return NextResponse.json({ results });
