@@ -54,6 +54,7 @@ export type SuperAdminAction =
   | 'feature_flag.toggled'
   | 'api_key.created'
   | 'api_key.revoked'
+  | 'data.updated'
   | 'login.success'
   | 'login.failed';
 

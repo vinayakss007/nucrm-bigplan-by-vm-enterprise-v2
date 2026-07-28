@@ -2,6 +2,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
@@ -418,6 +419,16 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Record not found' }, { status: 404 });
     }
 
+    // Audit: this is the superadmin modifying any record arbitrarily.
+    await logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || '',
+      action: 'data.updated',
+      targetType: table,
+      targetId: id,
+      newData: { field: safeField, value },
+    });
+
     return NextResponse.json({
       message: 'Record updated',
       data: result.rows[0],
@@ -476,6 +487,16 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json({ error: 'Record not found' }, { status: 404 });
       }
     }
+
+    // Audit: superadmin deleting/soft-deleting a record.
+    await logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || '',
+      action: 'data.deleted',
+      targetType: table,
+      targetId: id,
+      metadata: { soft_delete: !!softDelete },
+    });
 
     return NextResponse.json({ message: 'Record deleted', id });
  
