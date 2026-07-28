@@ -10,14 +10,18 @@ import { resolveAssignee } from '@/lib/assignment-resolver';
  *   tx.update().set(vals).where()                               -> records vals
  *   tx.insert().values(vals)                                    -> records vals
  */
-function makeTx(rules: any[]) {
+function makeTx(rules: any[], roster: any[] = []) {
   const calls = { updates: [] as any[], inserts: [] as any[] };
+  // The rules query ends in .for('update') and returns rules synchronously. The
+  // team-roster query ends in .where() and is awaited, so the chain is thenable
+  // and resolves to the roster.
   const selectChain: any = {
     from: () => selectChain,
     where: () => selectChain,
     orderBy: () => selectChain,
     limit: () => selectChain,
     for: () => rules,
+    then: (resolve: (v: any[]) => void) => resolve(roster),
   };
   const tx: any = {
     select: () => selectChain,
@@ -137,6 +141,26 @@ describe('resolveAssignee', () => {
 
   it('returns null for an unknown rule type', async () => {
     const { tx } = makeTx([{ id: 'r1', type: 'nonsense', config: { members: [{ userId: 'u1' }] } }]);
+    expect(await resolveAssignee(tx, base)).toBeNull();
+  });
+
+  it('derives the member pool from a team when the rule targets a team', async () => {
+    const rule = {
+      id: 'rteam',
+      type: 'round_robin',
+      config: { teamId: 'team-1', lastAssignedIndex: -1 },
+    };
+    const roster = [{ userId: 'm1' }, { userId: 'm2' }];
+    const { tx, calls } = makeTx([rule], roster);
+    const result = await resolveAssignee(tx, base);
+    expect(result?.assignedTo).toBe('m1');
+    expect(result?.strategy).toBe('round_robin');
+    expect(calls.inserts).toHaveLength(1);
+  });
+
+  it('returns null when a team-targeted rule has an empty roster', async () => {
+    const rule = { id: 'rteam', type: 'weighted', config: { teamId: 'team-empty' } };
+    const { tx } = makeTx([rule], []);
     expect(await resolveAssignee(tx, base)).toBeNull();
   });
 

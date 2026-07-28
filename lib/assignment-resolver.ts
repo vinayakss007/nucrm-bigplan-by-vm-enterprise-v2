@@ -20,8 +20,8 @@
  * null and the caller falls back to its own default (usually the creator).
  */
 
-import { and, eq, desc } from 'drizzle-orm';
-import { assignmentRules, assignmentLogs } from '@/drizzle/schema';
+import { and, eq, desc, isNull } from 'drizzle-orm';
+import { assignmentRules, assignmentLogs, teamMembers } from '@/drizzle/schema';
 import type { db as dbType } from '@/drizzle/db';
 import {
   roundRobin,
@@ -42,6 +42,12 @@ export type AssignableEntity = 'lead' | 'ticket' | 'deal';
 export interface AssignmentRuleConfig {
   /** The pool of people this rule can assign to. */
   members?: TeamMember[];
+  /**
+   * Route to a team: when set (and `members` is not explicitly provided) the
+   * pool is loaded live from team_members, so adding/removing people from the
+   * team changes routing without editing the rule.
+   */
+  teamId?: string;
   /** Round-robin cursor, persisted between runs. */
   lastAssignedIndex?: number;
   /** skill_based: skills the entity requires. */
@@ -104,7 +110,23 @@ export async function resolveAssignee(
     if (!rule) return null;
 
     const config = (rule.config ?? {}) as AssignmentRuleConfig;
-    const members = config.members ?? [];
+
+    // Member pool: an explicit list on the rule wins; otherwise, if the rule
+    // targets a team, load its current roster live.
+    let members: TeamMember[] = config.members ?? [];
+    if (members.length === 0 && config.teamId) {
+      const roster = await tx
+        .select({ userId: teamMembers.userId })
+        .from(teamMembers)
+        .where(
+          and(
+            eq(teamMembers.tenantId, tenantId),
+            eq(teamMembers.teamId, config.teamId),
+            isNull(teamMembers.deletedAt)
+          )
+        );
+      members = roster.map((r) => ({ userId: r.userId }));
+    }
     if (members.length === 0) return null;
 
     let result: AssignmentResult;
