@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, memo, useMemo } from 'react';
+import Link from 'next/link';
 import useSWR from 'swr';
 import { 
   DndContext, DragOverlay, closestCorners, KeyboardSensor, 
@@ -261,9 +262,9 @@ export default function DealsKanbanPage() {
               List
             </button>
           </div>
-          <button onClick={() => toast('Deal creation form coming soon')} className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 text-xs sm:text-sm shrink-0">
+          <Link href="/tenant/deals" className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 text-xs sm:text-sm shrink-0">
             <Plus className="w-4 h-4" /> <span className="hidden sm:inline">New Deal</span><span className="sm:hidden">New</span>
-          </button>
+          </Link>
         </div>
       </div>
 
