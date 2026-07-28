@@ -49,6 +49,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href:'/tenant/tasks',     label:'Tasks',      icon:CheckSquare,     shortcut:'⌘6', keywords:'todo activities' },
       { href:'/tenant/projects',  label:'Projects',   icon:FolderKanban,    keywords:'project milestone tracking', module:'project-management' },
       { href:'/tenant/calendar',  label:'Calendar',   icon:Calendar,        keywords:'meetings events' },
+      { href:'/tenant/meetings',  label:'Meetings',   icon:Calendar,        keywords:'meetings schedule video call' },
       { href:'/tenant/follow-ups', label:'Follow-Ups', icon:ListChecks, keywords:'follow up missed overdue reminders' },
     ],
   },
