@@ -16,6 +16,24 @@ export type NotificationType =
   | 'ai_followup_sent'
   | 'system';
 
+/**
+ * Best-effort realtime push for a just-committed notification. Isolated in its
+ * own try/catch so a realtime problem can never surface as a notification
+ * failure, and imported lazily so client bundles never pull ioredis in.
+ */
+async function pushNotification(
+  tenantId: string,
+  userId: string,
+  notification: { title: string; body?: string; link: string | null; type: string },
+): Promise<void> {
+  try {
+    const { publishNewNotification } = await import('@/lib/realtime/publish');
+    await publishNewNotification(tenantId, userId, notification);
+  } catch {
+    // Realtime is optional; the notification row is already persisted.
+  }
+}
+
 export async function createNotification(opts: {
   userId: string;
   tenantId: string;
@@ -64,6 +82,16 @@ export async function createNotification(opts: {
         link: link,
         metadata: meta,
       });
+    });
+
+    // Push to any connected socket (#644). Deliberately after the commit and
+    // never awaited into the failure path: the row is the source of truth, the
+    // push is a convenience, and the client polls as a fallback.
+    void pushNotification(opts.tenantId, opts.userId, {
+      title: opts.title,
+      ...(opts.body !== undefined ? { body: opts.body } : {}),
+      link,
+      type: opts.type,
     });
   } catch (_err) {
     // Retry once after a short delay
