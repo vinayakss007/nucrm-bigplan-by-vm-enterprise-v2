@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import toast from 'react-hot-toast';
 
-const STAGES = [
+const DEFAULT_STAGES = [
   { id: 'lead', label: 'Lead', color: 'bg-slate-100 text-slate-700', dot: 'bg-slate-400' },
   { id: 'qualified', label: 'Qualified', color: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500' },
   { id: 'proposal', label: 'Proposal', color: 'bg-violet-100 text-violet-700', dot: 'bg-violet-500' },
@@ -58,6 +58,21 @@ interface Props {
 }
 
 export default function DealDetailClient({ deal, tasks, activities, permissions, _tenantId, _userId }: Props) {
+  // Fetch dynamic pipeline stages; fall back to defaults if unavailable (#756 item 8).
+  const [STAGES, setSTAGES] = useState(DEFAULT_STAGES);
+  useEffect(() => {
+    fetch('/api/tenant/pipelines')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        const stages = d?.stages ?? d?.data?.stages ?? d?.data;
+        if (Array.isArray(stages) && stages.length > 0) {
+          setSTAGES(stages.map((s: { id: string; name: string; color?: string }) => ({
+            id: s.id, label: s.name, color: s.color || 'bg-slate-100 text-slate-700', dot: 'bg-slate-400',
+          })));
+        }
+      })
+      .catch(() => { /* keep defaults */ });
+  }, []);
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'activities' | 'documents'>('overview');
   const [showEdit, setShowEdit] = useState(false);
