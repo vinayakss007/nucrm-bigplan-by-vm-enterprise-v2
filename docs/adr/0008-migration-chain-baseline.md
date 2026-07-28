@@ -1,7 +1,16 @@
 # ADR-0008: Squash the migration chain to a baseline
 
-- **Status:** Proposed — blocked on production provenance
+- **Status:** Proposed — no longer blocked on knowing the provenance
 - **Date:** 2026-07-27
+
+> **Update.** This ADR originally said the squash was blocked on someone
+> remembering how production was provisioned. It is not: the answer is
+> discoverable, and the handling turned out to be the same either way.
+>
+> `npm run db:diagnose` reports it read-only, and `scripts/migrate.ts` already
+> detects the case at deploy time. What actually blocked this was a **bug** in
+> that detection, now fixed — see "The recovery path was writing to the wrong
+> table" below.
 
 ## Context
 
@@ -29,26 +38,55 @@ ERROR: column "invited_by" referenced in foreign key constraint does not exist
 That was reverted. A chain that _looks_ fixed but builds an incomplete schema is
 worse than one that fails loudly.
 
+## The recovery path was writing to the wrong table
+
+`scripts/migrate.ts` has always had a recovery branch for exactly this situation:
+if the schema exists but the ledger is empty, stamp the journal instead of
+replaying it. It created and seeded an **unqualified** `"__drizzle_migrations"`,
+which resolves to `public`. But `migrate()` consults
+`"drizzle"."__drizzle_migrations"`. So recovery seeded a table drizzle never
+reads.
+
+Measured on PostgreSQL 16 against a `db:push`-style database (schema present,
+two tenants, real rows, no ledger), running `npm run db:migrate --yes`:
+
+```
+public.__drizzle_migrations   = 40    <- recovery seeded this
+drizzle.__drizzle_migrations  = 0     <- the one migrate() reads
+then: 42P07 relation "..." already exists, exit 1
+```
+
+It tried to replay every migration from `0000_init` over the live schema. The
+data survived only because the first failing statement happened to be a
+`CREATE TABLE`; a migration opening with `ALTER` or `DROP` would have damaged it.
+
+Fixed: the recovery branch now creates and seeds `"drizzle"."__drizzle_migrations"`.
+drizzle decides what is outstanding by comparing each migration's `folderMillis`
+against the newest `created_at` in that table — not by hash — so seeding the
+journal's `when` values is sufficient to mark them applied. Re-measured on the
+same fixture: `drizzle = 40`, no migration SQL executed, exit 0, rows intact.
+
 ## Decision (proposed)
 
 Replace `0000`–`0037` with a single generated baseline representing the current
-schema, keep `0038` onward, and mark the baseline as already applied in every
-existing environment.
+schema, and keep `0038` onward.
 
-**This is blocked.** The step "mark the baseline as applied per environment"
-requires knowing how production was provisioned:
+Marking the baseline as already applied no longer needs a human to remember
+anything, because the two cases collapse:
 
-- If production was built with `db:push` / `db:sync`, its
-  `drizzle.__drizzle_migrations` table may not reflect the journal at all.
-- If it was built with `db:migrate`, the rows exist and the baseline can be
-  stamped.
-- If it holds live customer data, guessing wrong means replaying `0000_init`
-  over real tables.
+- **Provisioned with `db:push`/`db:sync`, or restored from a dump.** The ledger
+  is empty, so `migrate.ts`'s recovery branch stamps the journal and executes
+  nothing.
+- **Provisioned with `db:migrate`.** The ledger already reflects the journal and
+  the baseline is stamped against it.
 
-Two questions must be answered before this proceeds:
+Either way no migration SQL runs against an existing schema. `npm run db:diagnose`
+reports which case a given environment is in, read-only, so it can be confirmed
+rather than assumed before the squash lands.
 
-1. Was production provisioned with `db:push`/`db:sync` or `db:migrate`?
-2. Does it hold live customer data?
+The remaining prerequisite is therefore mechanical, not informational: the
+`migrate.ts` fix must be deployed **before** the squashed baseline, so that any
+environment whose ledger is empty stamps rather than replays.
 
 ## Consequences
 
