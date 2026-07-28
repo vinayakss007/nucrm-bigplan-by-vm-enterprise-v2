@@ -210,7 +210,7 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
       .values({ id: randomUUID(), tenantId: tenantAId, name: 'PenTest Pipeline' })
       .returning();
     const [stage] = await db.insert(schema.dealStages)
-      .values({ id: randomUUID(), pipelineId: pipeline.id, tenantId: tenantAId, name: 'PenTest Stage', order: 1 })
+      .values({ id: randomUUID(), tenantId: tenantAId, pipelineId: pipeline.id, name: 'PenTest Stage', order: 1 })
       .returning();
 
     // Create deals for each tenant

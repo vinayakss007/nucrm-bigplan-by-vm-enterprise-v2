@@ -24,7 +24,7 @@ describe('crypto - 100% coverage', () => {
   describe('encrypt edge cases', () => {
     it('handles very long plaintext', async () => {
       const { encrypt, decrypt } = await import('@/lib/crypto');
-      const key = 'test-key-32-chars-long!!';
+      const key = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6';
       const longText = 'a'.repeat(1000);
       
       const encrypted = encrypt(longText, key);
@@ -35,7 +35,7 @@ describe('crypto - 100% coverage', () => {
 
     it('handles special characters', async () => {
       const { encrypt, decrypt } = await import('@/lib/crypto');
-      const key = 'test-key-32-chars-long!!';
+      const key = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6';
       const special = 'Hello 🌍! @#$%^&*()_+-=[]{}|;:\'",.<>?/\\`~';
       
       const encrypted = encrypt(special, key);

@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     // Check if pipeline exists
     const [existingPipeline] = await db.select().from(pipelines).where(eq(pipelines.tenantId, tenant.id)).limit(1);
     if (!existingPipeline) {
-      const [pipeline] = await db.transaction(async (tx) => {
+      const [_pipeline] = await db.transaction(async (tx) => {
         const [p] = await tx.insert(pipelines).values({
           tenantId: tenant.id,
           name: 'Sales Pipeline',
@@ -66,12 +66,12 @@ export async function POST(request: NextRequest) {
         if (!p) throw new Error('Failed to create pipeline');
 
         await tx.insert(dealStages).values([
-          { pipelineId: p.id, name: 'Lead', order: 1 },
-          { pipelineId: p.id, name: 'Qualified', order: 2 },
-          { pipelineId: p.id, name: 'Proposal', order: 3 },
-          { pipelineId: p.id, name: 'Negotiation', order: 4 },
-          { pipelineId: p.id, name: 'Won', order: 5 },
-          { pipelineId: p.id, name: 'Lost', order: 6 },
+          { pipelineId: p.id, tenantId: tenant.id, name: 'Lead', order: 1 },
+          { pipelineId: p.id, tenantId: tenant.id, name: 'Qualified', order: 2 },
+          { pipelineId: p.id, tenantId: tenant.id, name: 'Proposal', order: 3 },
+          { pipelineId: p.id, tenantId: tenant.id, name: 'Negotiation', order: 4 },
+          { pipelineId: p.id, tenantId: tenant.id, name: 'Won', order: 5 },
+          { pipelineId: p.id, tenantId: tenant.id, name: 'Lost', order: 6 },
         ]);
 
         return [p];
