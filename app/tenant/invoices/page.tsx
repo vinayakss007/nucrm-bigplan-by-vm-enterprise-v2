@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Plus, Search, Eye, Download, FileText, X, Loader2 } from 'lucide-react';
@@ -236,8 +237,8 @@ function InvoicesPageInner() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
-                        <button onClick={() => toast('Invoice detail view coming soon')} className="p-1.5 hover:bg-accent rounded transition-colors" title="View"><Eye className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => toast('PDF download coming soon')} className="p-1.5 hover:bg-accent rounded transition-colors" title="Download"><Download className="w-3.5 h-3.5" /></button>
+                        <Link href={`/tenant/invoices/${invoice.id}`} className="p-1.5 hover:bg-accent rounded transition-colors" title="View"><Eye className="w-3.5 h-3.5" /></Link>
+                        <button onClick={async () => { const r = await fetch(`/api/tenant/invoices/${invoice.id}/pdf`); if (r.ok) { const b = await r.blob(); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = `invoice-${invoice.invoiceNumber || invoice.id}.pdf`; a.click(); URL.revokeObjectURL(u); } else { toast.error('PDF not available'); } }} className="p-1.5 hover:bg-accent rounded transition-colors" title="Download"><Download className="w-3.5 h-3.5" /></button>
                       </div>
                     </td>
                   </tr>

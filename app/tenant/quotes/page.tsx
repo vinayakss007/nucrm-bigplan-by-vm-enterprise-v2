@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Plus, Search, FileText, X, Send, Loader2 } from 'lucide-react';
@@ -226,8 +227,8 @@ function QuotesPageInner() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
-                        <button onClick={() => toast('Quote detail view coming soon')} className="p-1.5 hover:bg-accent rounded transition-colors" title="View"><FileText className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => toast('Quote email send coming soon')} className="p-1.5 hover:bg-accent rounded transition-colors" title="Send"><Send className="w-3.5 h-3.5" /></button>
+                        <Link href={`/tenant/quotes/${quote.id}`} className="p-1.5 hover:bg-accent rounded transition-colors" title="View"><FileText className="w-3.5 h-3.5" /></Link>
+                        <button onClick={async () => { const r = await fetch(`/api/tenant/quotes/${quote.id}/send`, { method: 'POST' }); if (r.ok) { toast.success('Quote sent'); } else { toast.error('Failed to send'); } }} className="p-1.5 hover:bg-accent rounded transition-colors" title="Send"><Send className="w-3.5 h-3.5" /></button>
                       </div>
                     </td>
                   </tr>
