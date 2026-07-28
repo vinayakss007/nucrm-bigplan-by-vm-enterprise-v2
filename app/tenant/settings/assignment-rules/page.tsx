@@ -32,10 +32,12 @@ export default function AssignmentRulesPage() {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<AssignmentRule | null>(null);
   const [saving, setSaving] = useState(false);
+  const [teams, setTeams] = useState<{ id: string; name: string; memberCount?: number }[]>([]);
   const [form, setForm] = useState({
     name: '',
     type: 'round_robin' as string,
     config: '{}',
+    teamId: '',
     priority: 0,
     entityType: 'lead' as string,
   });
@@ -57,18 +59,31 @@ export default function AssignmentRulesPage() {
 
   useEffect(() => { load(); }, []);
 
+  // Teams the rule can route to (config.teamId) — the member pool is then
+  // loaded live from the team at assignment time.
+  useEffect(() => {
+    const abort = new AbortController();
+    fetch('/api/tenant/teams', { signal: abort.signal })
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(d => { if (!abort.signal.aborted) setTeams(d.data ?? []); })
+      .catch(() => {});
+    return () => abort.abort();
+  }, []);
+
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', type: 'round_robin', config: '{}', priority: 0, entityType: 'lead' });
+    setForm({ name: '', type: 'round_robin', config: '{}', teamId: '', priority: 0, entityType: 'lead' });
     setShowModal(true);
   };
 
   const openEdit = (r: AssignmentRule) => {
     setEditing(r);
+    const cfg = (r.config ?? {}) as { teamId?: string };
     setForm({
       name: r.name,
       type: r.type,
       config: JSON.stringify(r.config ?? {}, null, 2),
+      teamId: cfg.teamId ?? '',
       priority: r.priority,
       entityType: r.entityType,
     });
@@ -87,6 +102,12 @@ export default function AssignmentRulesPage() {
         setSaving(false);
         return;
       }
+
+      // The Team picker is the easy path: it writes config.teamId, and the
+      // engine loads that team's roster live at assignment time. Clearing it
+      // removes the key so an explicit members list (advanced JSON) can win.
+      if (form.teamId) config.teamId = form.teamId;
+      else delete config.teamId;
 
       const payload = {
         ...(editing ? { id: editing.id } : {}),
@@ -216,9 +237,22 @@ export default function AssignmentRulesPage() {
                 <input type="number" min={0} value={form.priority} onChange={e => setForm(f => ({ ...f, priority: Number(e.target.value) }))} className={inp} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Config (JSON)</label>
-                <textarea rows={5} value={form.config} onChange={e => setForm(f => ({ ...f, config: e.target.value }))} className={cn(inp, 'font-mono text-xs')} placeholder="{}" />
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Assign to team</label>
+                <select value={form.teamId} onChange={e => setForm(f => ({ ...f, teamId: e.target.value }))} className={inp}>
+                  <option value="">— Choose a team —</option>
+                  {teams.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}{typeof t.memberCount === 'number' ? ` (${t.memberCount})` : ''}</option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Routes {form.entityType}s to this team&apos;s members using the {form.type.replace('_', ' ')} strategy. Manage teams in Settings → Teams. Leave blank to define members manually in the advanced config below.
+                </p>
               </div>
+              <details className="rounded-lg border border-border p-2">
+                <summary className="text-xs font-medium text-muted-foreground cursor-pointer">Advanced config (JSON)</summary>
+                <textarea rows={5} value={form.config} onChange={e => setForm(f => ({ ...f, config: e.target.value }))} className={cn(inp, 'font-mono text-xs mt-2')} placeholder="{}" />
+                <p className="text-[11px] text-muted-foreground mt-1">For an explicit member list or skills, e.g. <code>{'{"members":[{"userId":"…"}]}'}</code>. An explicit members list here takes precedence over the team picked above.</p>
+              </details>
               <div className="flex gap-2 justify-end pt-2">
                 <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-accent">Cancel</button>
                 <button type="submit" disabled={saving || !form.name}
