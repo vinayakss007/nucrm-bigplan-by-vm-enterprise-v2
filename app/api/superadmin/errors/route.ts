@@ -97,6 +97,10 @@ const resolveErrorSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await requireAuth(request);
+    if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
     const body = await readJsonBody(request);
     const validated = validateBody(createErrorSchema, body);
     if (validated instanceof NextResponse) return validated;

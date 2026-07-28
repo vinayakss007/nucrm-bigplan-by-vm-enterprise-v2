@@ -236,8 +236,8 @@ function InvoicesPageInner() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
-                        <button className="p-1.5 hover:bg-accent rounded transition-colors"><Eye className="w-3.5 h-3.5" /></button>
-                        <button className="p-1.5 hover:bg-accent rounded transition-colors"><Download className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => toast('Invoice detail view coming soon')} className="p-1.5 hover:bg-accent rounded transition-colors" title="View"><Eye className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => toast('PDF download coming soon')} className="p-1.5 hover:bg-accent rounded transition-colors" title="Download"><Download className="w-3.5 h-3.5" /></button>
                       </div>
                     </td>
                   </tr>

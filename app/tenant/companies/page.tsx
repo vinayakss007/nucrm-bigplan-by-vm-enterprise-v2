@@ -35,8 +35,7 @@ export default async function CompaniesPage() {
     })
     .from(companies)
     .where(and(eq(companies.tenantId, ctx.tenantId), isNull(companies.deletedAt)))
-    .orderBy(asc(companies.name))
-    .limit(50);
+    .orderBy(asc(companies.name));
 
   return (
     <CompaniesDataTable
