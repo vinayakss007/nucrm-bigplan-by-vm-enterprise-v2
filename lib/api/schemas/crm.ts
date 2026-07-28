@@ -112,6 +112,8 @@ export const createLeadSchema = z.object({
   // What the lead is a request for, from the tenant's catalogue. Optional.
   requested_product_id: uuid,
   requested_service_id: uuid,
+  // Attach to an existing company by id (as well as, or instead of, a name).
+  company_id: uuid,
   utm_source: z.string().trim().max(200).nullable().optional(),
   utm_medium: z.string().trim().max(200).nullable().optional(),
   utm_campaign: z.string().trim().max(200).nullable().optional(),

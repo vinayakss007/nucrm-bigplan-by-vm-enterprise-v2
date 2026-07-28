@@ -231,6 +231,8 @@ export async function POST(request: NextRequest) {
           email: v.email,
           phone: v.phone,
           title: v.job_title,
+          // An existing company id wins; otherwise the name is resolved-or-created.
+          companyId: v.company_id || null,
           companyName: v.company,
           source: v.source,
           score: v.score,

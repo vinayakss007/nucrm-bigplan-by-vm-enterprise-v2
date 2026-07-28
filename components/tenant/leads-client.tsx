@@ -109,6 +109,7 @@ export default function LeadsClient({
     email: '',
     phone: '',
     company_id: '',
+    contact_id: '',
     lead_source: '',
     tags: '',
     requested_product_id: '',
@@ -118,6 +119,8 @@ export default function LeadsClient({
   // Catalogue for "what is this lead a request for" (WF-02).
   const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
   const [services, setServices] = useState<{ id: string; name: string }[]>([]);
+  // Existing contacts a lead can be tied to (as well as creating a new one).
+  const [contactOptions, setContactOptions] = useState<{ id: string; firstName?: string; lastName?: string; email?: string }[]>([]);
   const [customFields, setCustomFields] = useState<{ fieldKey: string; fieldLabel: string }[]>([]);
   const [showBulkField, setShowBulkField] = useState(false);
   const [bulkFieldKey, setBulkFieldKey] = useState('');
@@ -169,6 +172,11 @@ export default function LeadsClient({
       // { data: [...] } — tolerate both until the response shapes are unified.
       .then(d => { if (!abort.signal.aborted) setServices(d.data ?? d.services ?? []); })
       .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads-client] Failed to load services:', err); });
+    // Existing contacts, so a lead can be tied to one instead of creating a new.
+    fetch('/api/tenant/contacts?limit=200', { signal: abort.signal })
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(d => { if (!abort.signal.aborted) setContactOptions(d.data ?? []); })
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads-client] Failed to load contacts:', err); });
     return () => abort.abort();
   }, []);
 
@@ -230,11 +238,11 @@ export default function LeadsClient({
     setAddingLead(true);
     try {
       // A lead is a small inbound request that ties to a contact + company and
-      // can name the product/service it is about. Route it through the real
-      // leads API so it becomes a proper lead record (which also resolves-or-
-      // creates the contact and runs auto-assignment) instead of a bare contact.
-      const companyName =
-        companies.find((c) => c.id === quickAddData.company_id)?.name || undefined;
+      // can name the product/service it is about. It may attach to an EXISTING
+      // contact and/or company, or create new ones. Route it through the real
+      // leads API so it becomes a proper lead record (which resolves-or-creates
+      // the contact, honours an existing company id, and runs auto-assignment)
+      // instead of a bare contact.
       const res = await fetch('/api/tenant/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -243,7 +251,10 @@ export default function LeadsClient({
           last_name: quickAddData.last_name || undefined,
           email: quickAddData.email || undefined,
           phone: quickAddData.phone || undefined,
-          company: companyName,
+          // Existing links win; the server pulls the company from an existing
+          // contact, or uses the company id directly, or creates from the name.
+          contact_id: quickAddData.contact_id || undefined,
+          company_id: quickAddData.company_id || undefined,
           source: quickAddData.lead_source || undefined,
           status: 'new',
           // Leave assigned_to empty so the assignment engine can route it; if no
@@ -256,7 +267,7 @@ export default function LeadsClient({
       if (!res.ok) throw new Error(data.error);
       toast.success('Lead added successfully');
       setShowQuickAdd(false);
-      setQuickAddData({ first_name: '', last_name: '', email: '', phone: '', company_id: '', lead_source: '', tags: '', requested_product_id: '', requested_service_id: '' });
+      setQuickAddData({ first_name: '', last_name: '', email: '', phone: '', company_id: '', contact_id: '', lead_source: '', tags: '', requested_product_id: '', requested_service_id: '' });
       load();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
@@ -557,6 +568,33 @@ export default function LeadsClient({
               </button>
             </div>
             <form onSubmit={handleQuickAdd} className="space-y-3">
+              {/* Tie to an existing contact, or leave blank to create a new one. */}
+              <select
+                aria-label="Existing contact"
+                value={quickAddData.contact_id}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const c = contactOptions.find((o) => o.id === id);
+                  setQuickAddData((prev) => ({
+                    ...prev,
+                    contact_id: id,
+                    // Prefill from the chosen contact so it is clear who the lead
+                    // is for and the required name field is satisfied.
+                    first_name: c?.firstName ?? prev.first_name,
+                    last_name: c?.lastName ?? prev.last_name,
+                    email: c?.email ?? prev.email,
+                  }));
+                }}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-card"
+              >
+                <option value="">New contact (enter details below)</option>
+                {contactOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {[c.firstName, c.lastName].filter(Boolean).join(' ') || c.email || 'Contact'}
+                    {c.email ? ` — ${c.email}` : ''}
+                  </option>
+                ))}
+              </select>
               <div className="grid grid-cols-2 gap-3">
                 <Input
                   placeholder="First name *"
