@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
 import { backupRecords, errorLogs } from '@/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
@@ -100,6 +101,11 @@ const restoreSchema = z.object({
 // POST: restore from a specific backup
 export async function POST(request: NextRequest) {
   try {
+    // A restore is the most dangerous operation after a hard-delete: it replaces
+    // live data with a backup. Rate-limit to at most 1 per hour per admin.
+    const limited = await rateLimitMutating(request, 'restore', 'post');
+    if (limited) return limited;
+
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
