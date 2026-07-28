@@ -212,7 +212,7 @@ function Stat({ icon: Icon, label, value, sub, accent }: { icon: any; label: str
       <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
         <Icon className="w-3 h-3" /> <span className="truncate">{label}</span>
       </div>
-      <p className="text-3xl font-black tabular-nums mt-1 text-black dark:text-white">{value}</p>
+      <p className="text-3xl font-black tabular-nums mt-1 text-foreground">{value}</p>
       {sub && <p className="text-[10px] font-medium text-muted-foreground/60 mt-0.5">{sub}</p>}
     </div>
   );

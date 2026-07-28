@@ -99,13 +99,13 @@ export default function FormAnalyticsPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{data.name}</h1>
-          <p className="text-sm text-gray-500 mt-1">Form analytics</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{data.name}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Form analytics</p>
         </div>
         <select
           value={days}
           onChange={(e) => setDays(Number(e.target.value))}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+          className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 dark:text-gray-100"
         >
           <option value={7}>Last 7 days</option>
           <option value={30}>Last 30 days</option>
@@ -120,10 +120,10 @@ export default function FormAnalyticsPage() {
         <StatCard icon={<TrendingUp className="h-5 w-5 text-purple-600" />} label="Conversion rate" value={`${conversionRate}%`} bg="bg-purple-50" />
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Submissions over time</h2>
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-8">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Submissions over time</h2>
         {data.timeSeries.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-10">No submissions in this period.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-10">No submissions in this period.</p>
         ) : (
           <div className="flex items-end gap-1" style={{ height: 180 }}>
             {data.timeSeries.map((pt) => (
@@ -132,7 +132,7 @@ export default function FormAnalyticsPage() {
                   className="w-full rounded-t bg-purple-500 hover:bg-purple-600 transition-colors min-h-[2px]"
                   style={{ height: `${(pt.count / maxCount) * 100}%` }}
                 />
-                <span className="text-[10px] text-gray-400 mt-1 truncate w-full text-center">
+                <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 truncate w-full text-center">
                   {pt.date.slice(5)}
                 </span>
                 <div className="absolute -top-8 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
@@ -145,10 +145,10 @@ export default function FormAnalyticsPage() {
       </div>
 
       {data.fields && data.fields.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <BarChart3 className="h-5 w-5 text-gray-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Field Performance</h2>
+            <BarChart3 className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Field Performance</h2>
           </div>
           <div className="space-y-6">
             {data.fields.map((field) => (
@@ -158,12 +158,12 @@ export default function FormAnalyticsPage() {
         </div>
       )}
 
-      <div className="mt-6 bg-white border border-gray-200 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">Embed this form</h2>
-        <p className="text-sm text-gray-500 mb-3">
+      <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Embed this form</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
           Copy this snippet into any HTML page to embed the form:
         </p>
-        <pre className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 overflow-x-auto select-all">
+        <pre className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-xs text-gray-700 dark:text-gray-300 overflow-x-auto select-all">
           {`<script src="${typeof window !== 'undefined' ? window.location.origin : ''}/api/embed/form.js?id=${formId}"></script>`}
         </pre>
       </div>
@@ -173,11 +173,11 @@ export default function FormAnalyticsPage() {
 
 function StatCard({ icon, label, value, bg }: { icon: React.ReactNode; label: string; value: string; bg: string }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3">
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex items-center gap-3">
       <div className={`${bg} p-2 rounded-lg`}>{icon}</div>
       <div>
-        <p className="text-xs text-gray-500">{label}</p>
-        <p className="text-xl font-bold text-gray-900">{value}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
+        <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{value}</p>
       </div>
     </div>
   );
@@ -190,28 +190,28 @@ function FieldCard({ field }: { field: FieldAnalytics }) {
   const icon = FIELD_ICONS[field.type] ?? <Type className="h-3.5 w-3.5" />;
 
   return (
-    <div className="border border-gray-100 rounded-lg p-4">
+    <div className="border border-gray-100 dark:border-gray-700/50 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-gray-500">{icon}</span>
-          <span className="font-medium text-gray-900 text-sm">{field.label}</span>
-          <span className="text-[10px] uppercase tracking-wider text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{field.type}</span>
+          <span className="text-gray-500 dark:text-gray-400">{icon}</span>
+          <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{field.label}</span>
+          <span className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">{field.type}</span>
         </div>
-        <span className="text-xs text-gray-500">{field.filled}/{field.total} filled</span>
+        <span className="text-xs text-gray-500 dark:text-gray-400">{field.filled}/{field.total} filled</span>
       </div>
 
-      <div className="w-full bg-gray-100 rounded-full h-2 mb-3">
+      <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2 mb-3">
         <div className={`${color} h-2 rounded-full transition-all`} style={{ width: `${field.completionRate}%` }} />
       </div>
-      <p className="text-xs text-gray-500 mb-3">{field.completionRate}% completion rate</p>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{field.completionRate}% completion rate</p>
 
       {isOptionField && field.valueDistribution && field.valueDistribution.length > 0 && (
         <div className="mt-3">
-          <p className="text-xs font-medium text-gray-600 mb-2">Value distribution</p>
+          <p className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">Value distribution</p>
           <div className="h-40">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={field.valueDistribution} layout="vertical" margin={{ left: 20, right: 20, top: 4, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" className="dark:[&>line]:!stroke-gray-700" />
                 <XAxis type="number" tick={{ fontSize: 11 }} />
                 <YAxis type="category" dataKey="value" tick={{ fontSize: 11 }} width={80} />
                 <Tooltip contentStyle={{ fontSize: 12 }} />
@@ -224,17 +224,17 @@ function FieldCard({ field }: { field: FieldAnalytics }) {
 
       {isNumeric && field.numericStats && (
         <div className="mt-3 flex gap-4 text-xs">
-          <div className="bg-gray-50 rounded px-3 py-2">
-            <span className="text-gray-400 block">Min</span>
-            <span className="font-semibold text-gray-800">{field.numericStats.min}</span>
+          <div className="bg-gray-50 dark:bg-gray-800 rounded px-3 py-2">
+            <span className="text-gray-400 dark:text-gray-500 block">Min</span>
+            <span className="font-semibold text-gray-800 dark:text-gray-200">{field.numericStats.min}</span>
           </div>
-          <div className="bg-gray-50 rounded px-3 py-2">
-            <span className="text-gray-400 block">Max</span>
-            <span className="font-semibold text-gray-800">{field.numericStats.max}</span>
+          <div className="bg-gray-50 dark:bg-gray-800 rounded px-3 py-2">
+            <span className="text-gray-400 dark:text-gray-500 block">Max</span>
+            <span className="font-semibold text-gray-800 dark:text-gray-200">{field.numericStats.max}</span>
           </div>
-          <div className="bg-gray-50 rounded px-3 py-2">
-            <span className="text-gray-400 block">Avg</span>
-            <span className="font-semibold text-gray-800">{field.numericStats.avg}</span>
+          <div className="bg-gray-50 dark:bg-gray-800 rounded px-3 py-2">
+            <span className="text-gray-400 dark:text-gray-500 block">Avg</span>
+            <span className="font-semibold text-gray-800 dark:text-gray-200">{field.numericStats.avg}</span>
           </div>
         </div>
       )}

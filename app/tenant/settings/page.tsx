@@ -227,7 +227,7 @@ function HealthChip({ n, label, tone }: { n: number; label: string; tone: 'emera
   };
   return (
     <span className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border-2 shadow-sm', colors[tone])}>
-      <span className="font-black tabular-nums text-black dark:text-white">{n}</span> {label}
+      <span className="font-black tabular-nums text-foreground">{n}</span> {label}
     </span>
   );
 }

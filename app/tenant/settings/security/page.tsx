@@ -476,7 +476,7 @@ export default function SecuritySettingsPage() {
             <div className="text-center">
               <p className="text-sm text-muted-foreground mb-3">Scan this QR code with Google Authenticator or Authy</p>
               {totpQrCode && (
-                <div className="bg-white p-3 rounded-lg inline-block">
+                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg inline-block">
                   {/* SECURITY: QR code is server-generated SVG from qrcode library. 
                       Using DOMPurify-sanitized HTML to prevent any XSS. */}
                   {(() => {
