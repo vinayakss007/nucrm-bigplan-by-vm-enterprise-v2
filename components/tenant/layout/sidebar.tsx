@@ -90,6 +90,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href:'/tenant/automation',   label:'Workflows',    icon:Workflow, keywords:'automation rules triggers', module:'automation-pro' },
       { href:'/tenant/forms',        label:'Forms',        icon:FileBarChart, keywords:'capture lead forms', module:'forms-builder' },
       { href:'/tenant/email-templates', label:'Email Templates', icon:Mail, keywords:'snippets templates', module:'email-sync' },
+      { href:'/tenant/emails',          label:'Emails',          icon:Mail,     keywords:'email compose send inbox' },
     ],
   },
   {
