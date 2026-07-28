@@ -288,8 +288,8 @@ export default function SuperAdminTenantsPage() {
   const activate  = async (id:string) => { const res=await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,status:'active'})}); if(res.ok){toast.success('Activated');load();}else{const d=await res.json();toast.error(d.error||'Failed');} };
   const grantLifetime = async (id:string,name:string) => {
     await confirmThen(`Grant lifetime access to "${name}"? This sets Pro plan + active + lifetime billing.`, async () => {
-      await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,plan_id:'pro',status:'active',billing_type:'lifetime'})});
-      toast.success('Lifetime access granted'); load();
+      const res = await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,plan_id:'pro',status:'active',billing_type:'lifetime'})});
+      if (res.ok) { toast.success('Lifetime access granted'); load(); } else { const d = await res.json(); toast.error(d.error || 'Failed to grant lifetime'); }
     });
   };
   const extendTrial = async (id:string) => {
@@ -297,8 +297,8 @@ export default function SuperAdminTenantsPage() {
     const tenant = tenants.find(t=>t.id===id);
     const base = new Date(Math.max(Date.now(), new Date(tenant?.trial_ends_at||Date.now()).getTime()));
     base.setDate(base.getDate() + parseInt(days));
-    await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,trial_ends_at:base.toISOString(),status:'trialing'})});
-    toast.success(`Trial extended ${days} days`); load();
+    const res = await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,trial_ends_at:base.toISOString(),status:'trialing'})});
+    if (res.ok) { toast.success(`Trial extended ${days} days`); load(); } else { const d = await res.json(); toast.error(d.error || 'Failed to extend trial'); }
   };
   const hardDelete = async (id:string,name:string) => {
     if(id===meInfo?.ownTenantId){toast.error("Can't delete your own org");return;}
