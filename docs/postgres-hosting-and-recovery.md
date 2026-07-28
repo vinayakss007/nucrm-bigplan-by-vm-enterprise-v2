@@ -245,3 +245,31 @@ genuinely pass before step 10.
 - Non-owner role split and `FORCE ROW LEVEL SECURITY` still outstanding.
 - ADR-0003 / migration `0045` live in the unmerged PR #753; the pooler guidance in
   section 4 depends on that landing.
+
+---
+
+## 8. Object storage (file uploads, backups)
+
+**Current state:** a single MinIO instance in docker-compose. It is dev-only — no
+replication, no cross-region, and a disk failure loses every uploaded file.
+
+**Decision: managed object storage in production.** The app speaks the standard
+S3 API (`@aws-sdk/client-s3`) and connects to whatever `S3_ENDPOINT` is set.
+Suitable options:
+
+- **AWS S3** — the default. Versioning + lifecycle policy for cheap tiering.
+- **Cloudflare R2** — zero egress, S3-compatible, cheaper for read-heavy.
+- **Any S3-compatible managed provider** (Backblaze B2, Wasabi, etc.).
+
+Keep MinIO for local development only. The production S3 bucket should:
+
+1. Have **versioning enabled** — protects against accidental overwrites/deletes.
+2. Use a **lifecycle policy**: move to Glacier/IA after 30 days, delete after
+   retention period.
+3. Be in a **different region or account** from the database (defence in depth).
+4. Be checked by the health endpoint (`/api/superadmin/health` → `object_storage`
+   check using `HeadBucketCommand`).
+
+**Backup bucket:** set `BACKUP_BUCKET` to a separate bucket with stricter
+retention (no lifecycle delete). Backups and user uploads have different risk
+profiles and should not share a deletion policy.
