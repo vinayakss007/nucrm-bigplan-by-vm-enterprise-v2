@@ -145,8 +145,9 @@ export async function POST(request: NextRequest) {
           pipelineId: v.pipeline_id || null,
           closeDate: v.close_date ? new Date(v.close_date) : null,
           contactId: v.contact_id || null,
+          companyId: v.company_id || null,
           assignedTo: v.assigned_to || ctx.userId,
-          metadata: v.metadata,
+          metadata: { ...(v.metadata ?? {}), ...(v.description ? { description: v.description } : {}) },
         })
         .returning();
 
