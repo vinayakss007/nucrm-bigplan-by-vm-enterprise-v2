@@ -146,7 +146,7 @@ export default function BrandingSettingsPage() {
                 type="color"
                 value={form.primaryColor}
                 onChange={e => setForm(f => ({ ...f, primaryColor: e.target.value }))}
-                className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+                className="h-9 w-9 cursor-pointer rounded border border-gray-300 dark:border-gray-600"
               />
               <input
                 type="text"
@@ -164,7 +164,7 @@ export default function BrandingSettingsPage() {
                 type="color"
                 value={form.secondaryColor}
                 onChange={e => setForm(f => ({ ...f, secondaryColor: e.target.value }))}
-                className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+                className="h-9 w-9 cursor-pointer rounded border border-gray-300 dark:border-gray-600"
               />
               <input
                 type="text"
@@ -182,7 +182,7 @@ export default function BrandingSettingsPage() {
                 type="color"
                 value={form.accentColor}
                 onChange={e => setForm(f => ({ ...f, accentColor: e.target.value }))}
-                className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+                className="h-9 w-9 cursor-pointer rounded border border-gray-300 dark:border-gray-600"
               />
               <input
                 type="text"
@@ -217,7 +217,7 @@ export default function BrandingSettingsPage() {
             placeholder="crm.yourdomain.com"
             className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
           />
-          <p className="mt-1 text-xs text-gray-500">Point a CNAME record to app.nucrm.io to use a custom domain.</p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Point a CNAME record to app.nucrm.io to use a custom domain.</p>
         </div>
 
         {/* Header Layout */}

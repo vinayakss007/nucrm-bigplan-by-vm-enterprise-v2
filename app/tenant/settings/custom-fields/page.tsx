@@ -298,14 +298,14 @@ export default function TenantCustomFields() {
                     {field.is_required ? (
                       <Check className="w-4 h-4 text-green-400" />
                     ) : (
-                      <span className="text-gray-600">—</span>
+                      <span className="text-gray-600 dark:text-gray-400">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
                     {field.is_searchable ? (
                       <Search className="w-4 h-4 text-blue-400" />
                     ) : (
-                      <span className="text-gray-600">—</span>
+                      <span className="text-gray-600 dark:text-gray-400">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -571,12 +571,12 @@ function FieldFormModal({ mode, field, fieldTypes, onClose, onSubmit }: {
                   className="w-full px-3 py-2 bg-gray-900 border border-purple-900/50 rounded-lg text-cyan-300 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
                   rows={2}
                 />
-                <p className="text-[10px] text-gray-500">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">
                   Use <code className="text-purple-400">{'{{field_key}}'}</code> to reference other fields. Supports math and strings.
                 </p>
               </div>
             ) : (
-              <p className="text-xs text-gray-500">Manual entry fields are editable by users in the CRM.</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Manual entry fields are editable by users in the CRM.</p>
             )}
           </div>
 

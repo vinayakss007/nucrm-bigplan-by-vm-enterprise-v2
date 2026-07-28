@@ -51,14 +51,14 @@ interface SearchResults {
 }
 
 const STATUS_COLORS: Record<string,string> = {
-  new:'bg-slate-100 text-slate-600', contacted:'bg-blue-100 text-blue-700',
-  qualified:'bg-violet-100 text-violet-700', converted:'bg-emerald-100 text-emerald-700',
-  lost:'bg-gray-100 text-gray-500', unqualified:'bg-red-100 text-red-600',
+  new:'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300', contacted:'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  qualified:'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400', converted:'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  lost:'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400', unqualified:'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
 };
 const STAGE_COLORS: Record<string,string> = {
-  lead:'bg-slate-100 text-slate-600', qualified:'bg-blue-100 text-blue-700',
-  proposal:'bg-violet-100 text-violet-700', negotiation:'bg-amber-100 text-amber-700',
-  won:'bg-emerald-100 text-emerald-700', lost:'bg-red-100 text-red-600',
+  lead:'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300', qualified:'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  proposal:'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400', negotiation:'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  won:'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', lost:'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
 };
 
 function Highlight({ text, query }: { text: string; query: string }) {
