@@ -170,6 +170,23 @@ export async function POST(request: NextRequest) {
           description: `Created deal "${d.title}" with amount ${amount}`,
         });
 
+      // Auto-create a first follow-up task (#756 item 11). Every leading CRM
+      // does this (HubSpot, Salesforce, Pipedrive). Due in 2 days by default.
+      const followUpDue = new Date();
+      followUpDue.setDate(followUpDue.getDate() + 2);
+      await tx.insert(tasks).values({
+        tenantId: ctx.tenantId,
+        title: `Follow up on "${d.title}"`,
+        description: 'Auto-created on deal creation. Review the deal and schedule a first touch.',
+        dealId: d.id,
+        contactId: v.contact_id || null,
+        assignedTo: v.assigned_to || ctx.userId,
+        createdBy: ctx.userId,
+        priority: 'medium',
+        status: 'pending',
+        dueDate: followUpDue,
+      });
+
       return [d];
     });
 
