@@ -8,7 +8,15 @@ import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
-const schema = z.object({ targetUserId: z.string().min(1) });
+const schema = z.object({
+  targetUserId: z.string().min(1),
+  // Typed confirmation: must match the target's email so pasting a wrong id
+  // into the body cannot accidentally transfer power to the wrong person.
+  confirm_target_email: z.string().email('Must type the target user email to confirm'),
+  // Re-authentication: the caller's current password, so a stolen session cannot
+  // permanently escalate on its own.
+  current_password: z.string().min(1, 'Your current password is required to confirm this action'),
+});
 
 /**
  * POST /api/superadmin/transfer-admin
@@ -26,8 +34,19 @@ export async function POST(request: NextRequest) {
     const body = await readJsonBody(request);
     const validated = validateBody(schema, body);
     if (validated instanceof NextResponse) return validated;
-    const { targetUserId } = validated.data;
+    const { targetUserId, confirm_target_email, current_password } = validated.data;
     if (targetUserId === ctx.userId) return NextResponse.json({ error: 'Cannot transfer to yourself' }, { status: 400 });
+
+    // Re-authenticate: verify the caller's password before an irreversible action.
+    const [caller] = await db
+      .select({ passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, ctx.userId))
+      .limit(1);
+    if (!caller?.passwordHash) return NextResponse.json({ error: 'Cannot verify your identity' }, { status: 401 });
+    const { verifyPassword } = await import('@/lib/auth/session');
+    const passwordValid = await verifyPassword(current_password, caller.passwordHash);
+    if (!passwordValid) return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
 
     // Verify target user exists
     const [target] = await db
@@ -37,6 +56,15 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (!target) return NextResponse.json({ error: 'Target user not found' }, { status: 404 });
+
+    // Typed confirmation: the email must match the resolved target, so a wrong
+    // targetUserId cannot silently transfer power to someone unexpected.
+    if (confirm_target_email.toLowerCase() !== (target.email || '').toLowerCase()) {
+      return NextResponse.json(
+        { error: `confirm_target_email does not match the target user's email (${target.email})` },
+        { status: 400 }
+      );
+    }
 
     // Transfer: make target super admin, demote caller
     await db.transaction(async (tx) => {
@@ -51,7 +79,7 @@ export async function POST(request: NextRequest) {
         .where(eq(users.id, ctx.userId));
     });
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'role.updated',
