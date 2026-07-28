@@ -109,6 +109,9 @@ export const createLeadSchema = z.object({
   notes: z.string().trim().max(5000).nullable().optional(),
   score: z.coerce.number().int().min(0).max(1000).optional().default(0),
   assigned_to: uuid,
+  // What the lead is a request for, from the tenant's catalogue. Optional.
+  requested_product_id: uuid,
+  requested_service_id: uuid,
   utm_source: z.string().trim().max(200).nullable().optional(),
   utm_medium: z.string().trim().max(200).nullable().optional(),
   utm_campaign: z.string().trim().max(200).nullable().optional(),

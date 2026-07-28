@@ -197,6 +197,13 @@ export const leads = pgTable('leads', {
 
   // Which product entry the lead came in through (lib/products/registry.ts key)
   productId: text('product_id'),
+
+  // What the lead is a request FOR: an item from the tenant's real catalogue.
+  // Distinct from productId above (which is the arrival channel). Either, both,
+  // or neither may be set. SET NULL on delete — losing a catalogue item must
+  // never delete the lead that referenced it.
+  requestedProductId: uuid('requested_product_id').references(() => products.id, { onDelete: 'set null' }),
+  requestedServiceId: uuid('requested_service_id'),
   
   metadata: utils.metadata(),
   

@@ -92,7 +92,7 @@ export default function LeadsClient({
   _permissions,
   totalCount,
   _tenantId,
-  userId,
+  userId: _userId,
 }: Props) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
@@ -111,8 +111,13 @@ export default function LeadsClient({
     company_id: '',
     lead_source: '',
     tags: '',
+    requested_product_id: '',
+    requested_service_id: '',
   });
   const [addingLead, setAddingLead] = useState(false);
+  // Catalogue for "what is this lead a request for" (WF-02).
+  const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
+  const [services, setServices] = useState<{ id: string; name: string }[]>([]);
   const [customFields, setCustomFields] = useState<{ fieldKey: string; fieldLabel: string }[]>([]);
   const [showBulkField, setShowBulkField] = useState(false);
   const [bulkFieldKey, setBulkFieldKey] = useState('');
@@ -147,6 +152,23 @@ export default function LeadsClient({
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSequences(d.data ?? []); })
       .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads-client] Failed to load sequences:', err); });
+    return () => abort.abort();
+  }, []);
+
+  // Load the product & service catalogue so a lead can name what it is a
+  // request for. Non-fatal: the pickers simply stay empty if these fail.
+  useEffect(() => {
+    const abort = new AbortController();
+    fetch('/api/tenant/products?limit=200', { signal: abort.signal })
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(d => { if (!abort.signal.aborted) setProducts(d.data ?? []); })
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads-client] Failed to load products:', err); });
+    fetch('/api/tenant/services?limit=200', { signal: abort.signal })
+      .then(r => r.ok ? r.json() : { services: [] })
+      // The services route returns { services: [...] } while products returns
+      // { data: [...] } — tolerate both until the response shapes are unified.
+      .then(d => { if (!abort.signal.aborted) setServices(d.data ?? d.services ?? []); })
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads-client] Failed to load services:', err); });
     return () => abort.abort();
   }, []);
 
@@ -207,24 +229,34 @@ export default function LeadsClient({
     e.preventDefault();
     setAddingLead(true);
     try {
-      const tagsArray = quickAddData.tags
-        ? quickAddData.tags.split(',').map((t) => t.trim()).filter(Boolean)
-        : [];
-      const res = await fetch('/api/tenant/contacts', {
+      // A lead is a small inbound request that ties to a contact + company and
+      // can name the product/service it is about. Route it through the real
+      // leads API so it becomes a proper lead record (which also resolves-or-
+      // creates the contact and runs auto-assignment) instead of a bare contact.
+      const companyName =
+        companies.find((c) => c.id === quickAddData.company_id)?.name || undefined;
+      const res = await fetch('/api/tenant/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...quickAddData,
-          tags: tagsArray,
-          lead_status: 'new',
-          assigned_to: userId,
+          first_name: quickAddData.first_name,
+          last_name: quickAddData.last_name || undefined,
+          email: quickAddData.email || undefined,
+          phone: quickAddData.phone || undefined,
+          company: companyName,
+          source: quickAddData.lead_source || undefined,
+          status: 'new',
+          // Leave assigned_to empty so the assignment engine can route it; if no
+          // rule is configured the server falls back to the creator.
+          requested_product_id: quickAddData.requested_product_id || undefined,
+          requested_service_id: quickAddData.requested_service_id || undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       toast.success('Lead added successfully');
       setShowQuickAdd(false);
-      setQuickAddData({ first_name: '', last_name: '', email: '', phone: '', company_id: '', lead_source: '', tags: '' });
+      setQuickAddData({ first_name: '', last_name: '', email: '', phone: '', company_id: '', lead_source: '', tags: '', requested_product_id: '', requested_service_id: '' });
       load();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
@@ -580,6 +612,35 @@ export default function LeadsClient({
                   setQuickAddData({ ...quickAddData, lead_source: e.target.value })
                 }
               />
+              {/* What is this lead a request for? (WF-02) */}
+              <div className="grid grid-cols-2 gap-3">
+                <select
+                  aria-label="Requested product"
+                  value={quickAddData.requested_product_id}
+                  onChange={(e) =>
+                    setQuickAddData({ ...quickAddData, requested_product_id: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-card"
+                >
+                  <option value="">Product (optional)</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                <select
+                  aria-label="Requested service"
+                  value={quickAddData.requested_service_id}
+                  onChange={(e) =>
+                    setQuickAddData({ ...quickAddData, requested_service_id: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-card"
+                >
+                  <option value="">Service (optional)</option>
+                  {services.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
               <Input
                 placeholder="Tags (comma separated)"
                 value={quickAddData.tags}

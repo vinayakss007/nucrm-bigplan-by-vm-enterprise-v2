@@ -10,6 +10,7 @@ import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveOrCreateContactForLead } from '@/lib/contacts/resolve';
 import { generateLeadOid } from '@/lib/leads/oid';
+import { resolveAssignee } from '@/lib/assignment-resolver';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
@@ -243,6 +244,11 @@ export async function POST(request: NextRequest) {
       // Generate human-readable lead OID (per tenant, per year)
       const leadOid = await generateLeadOid(tx, ctx.tenantId);
 
+      // If the caller named an assignee, honour it. Otherwise start with the
+      // creator and let the assignment engine (if a rule is configured) decide.
+      const explicitAssignee =
+        v.assigned_to && String(v.assigned_to).trim() ? String(v.assigned_to) : null;
+
       const [inserted] = await tx.insert(leads)
         .values({
           tenantId: ctx.tenantId,
@@ -262,7 +268,7 @@ export async function POST(request: NextRequest) {
           address: null,
           postalCode: null,
           website: null,
-          assignedTo: v.assigned_to || ctx.userId,
+          assignedTo: explicitAssignee || ctx.userId,
           createdBy: ctx.userId,
           tags: [],
           internalNotes: null,
@@ -270,10 +276,30 @@ export async function POST(request: NextRequest) {
           contactId,
           leadOid,
           productId: (v as { product_id?: string }).product_id || null,
+          requestedProductId: v.requested_product_id || null,
+          requestedServiceId: v.requested_service_id || null,
         })
         .returning();
 
       if (!inserted) throw new Error('Failed to create lead');
+
+      // WF-03: run the auto-assignment engine only when the caller did not pick
+      // an assignee. resolveAssignee never throws — a null result means "no rule
+      // decided", and the creator (already set above) stands.
+      if (!explicitAssignee) {
+        const resolved = await resolveAssignee(tx, {
+          tenantId: ctx.tenantId,
+          entityType: 'lead',
+          entityId: inserted.id,
+          context: { location: null, skills: inserted.tags ?? null },
+        });
+        if (resolved && resolved.assignedTo !== inserted.assignedTo) {
+          await tx.update(leads)
+            .set({ assignedTo: resolved.assignedTo })
+            .where(eq(leads.id, inserted.id));
+          inserted.assignedTo = resolved.assignedTo;
+        }
+      }
 
       // Lead activity (legacy table for the lead detail page)
       await tx.insert(leadActivities).values({
@@ -307,9 +333,11 @@ export async function POST(request: NextRequest) {
       newData: { email: v.email, name: `${v.first_name} ${v.last_name ?? ''}`.trim() },
     });
 
-    if (v.assigned_to && v.assigned_to !== ctx.userId) {
+    // Notify whoever ended up with the lead — whether the caller named them or
+    // the assignment engine routed it — as long as it is not the creator.
+    if (newLead.assignedTo && newLead.assignedTo !== ctx.userId) {
       createNotification({
-        userId: v.assigned_to,
+        userId: newLead.assignedTo,
         tenantId: ctx.tenantId,
         type: 'contact_assigned',
         title: `New lead assigned: ${v.first_name} ${v.last_name ?? ''}`.trim(),
