@@ -295,6 +295,13 @@
       "when": 1700000041000,
       "tag": "0047_project_company",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1700000042000,
+      "tag": "0048_audit_log_immutability",
+      "breakpoints": true
     }
   ]
 }
