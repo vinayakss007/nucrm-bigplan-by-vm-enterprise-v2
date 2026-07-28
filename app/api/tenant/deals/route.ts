@@ -5,7 +5,7 @@ import { createDealSchema, dealQuerySchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
-import { deals, contacts, companies, users, tenants, activities, pipelines, dealStages } from '@/drizzle/schema';
+import { deals, contacts, companies, users, tenants, activities, pipelines, dealStages, tasks } from '@/drizzle/schema';
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fireWebhooks } from '@/lib/webhooks';
@@ -169,6 +169,23 @@ export async function POST(request: NextRequest) {
           action: 'create',
           description: `Created deal "${d.title}" with amount ${amount}`,
         });
+
+      // Auto-create a first follow-up task (#756 item 11). Every leading CRM
+      // does this (HubSpot, Salesforce, Pipedrive). Due in 2 days by default.
+      const followUpDue = new Date();
+      followUpDue.setDate(followUpDue.getDate() + 2);
+      await tx.insert(tasks).values({
+        tenantId: ctx.tenantId,
+        title: `Follow up on "${d.title}"`,
+        description: 'Auto-created on deal creation. Review the deal and schedule a first touch.',
+        dealId: d.id,
+        contactId: v.contact_id || null,
+        assignedTo: v.assigned_to || ctx.userId,
+        createdBy: ctx.userId,
+        priority: 'medium',
+        status: 'pending',
+        dueDate: followUpDue,
+      });
 
       return [d];
     });
