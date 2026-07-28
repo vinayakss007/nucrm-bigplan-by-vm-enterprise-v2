@@ -34,7 +34,10 @@ export async function GET(request: NextRequest) {
     if (search) conditions.push(like(services.name, `%${search}%`));
 
     const results = await db.select().from(services).where(and(...conditions)).orderBy(desc(services.createdAt));
-    return NextResponse.json({ services: results });
+    // `data` is the standard envelope used by the other entity endpoints
+    // (#655 MG-03); `services` is kept for existing consumers. Additive, so no
+    // caller breaks.
+    return NextResponse.json({ data: results, services: results });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -16,7 +16,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { tenantMembers, leads, contacts, deals, tasks, supportTickets as tickets } from '@/drizzle/schema';
+import { tenantMembers, leads, contacts, deals, tasks, supportTickets as tickets, teams } from '@/drizzle/schema';
+import { isNull } from 'drizzle-orm';
 import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
@@ -115,6 +116,7 @@ export async function POST(req: NextRequest) {
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const fromUserId: string | undefined = body.from_user_id;
     const toUserId:   string | undefined = body.to_user_id;
+    const toTeamId:   string | undefined = body.to_team_id || undefined;
     const resources: Resource[] = Array.isArray(body.resources) ? body.resources : [];
     const onlyOpen = body.only_open === true;
 
@@ -134,20 +136,30 @@ export async function POST(req: NextRequest) {
     if (!(await memberOfTenant(ctx.tenantId, toUserId)))
       return NextResponse.json({ error: 'to_user is not a member of this workspace' }, { status: 404 });
 
+    // Optionally also tag the moved leads/contacts with a team (WF-04/WF-07).
+    if (toTeamId) {
+      const [team] = await db
+        .select({ id: teams.id })
+        .from(teams)
+        .where(and(eq(teams.id, toTeamId), eq(teams.tenantId, ctx.tenantId), isNull(teams.deletedAt)))
+        .limit(1);
+      if (!team) return NextResponse.json({ error: 'to_team is not a team in this workspace' }, { status: 404 });
+    }
+
     const now = new Date();
     const transferred: Record<Resource, number> = { leads: 0, contacts: 0, deals: 0, tasks: 0, tickets: 0 };
 
     await db.transaction(async (tx) => {
       if (resources.includes('leads')) {
         const r = await tx.update(leads)
-          .set({ assignedTo: toUserId, updatedAt: now })
+          .set({ assignedTo: toUserId, updatedAt: now, ...(toTeamId ? { teamId: toTeamId } : {}) })
           .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.assignedTo, fromUserId), sql`${leads.deletedAt} IS NULL`));
         transferred.leads = r.rowCount ?? 0;
       }
 
       if (resources.includes('contacts')) {
         const r = await tx.update(contacts)
-          .set({ assignedTo: toUserId, updatedAt: now })
+          .set({ assignedTo: toUserId, updatedAt: now, ...(toTeamId ? { teamId: toTeamId } : {}) })
           .where(and(eq(contacts.tenantId, ctx.tenantId), eq(contacts.assignedTo, fromUserId), sql`${contacts.deletedAt} IS NULL`));
         transferred.contacts = r.rowCount ?? 0;
       }
@@ -185,7 +197,7 @@ export async function POST(req: NextRequest) {
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
       action: 'bulk_transfer', entityType: 'user',
-      newData: { from_user_id: fromUserId, to_user_id: toUserId, resources, only_open: onlyOpen, transferred, total },
+      newData: { from_user_id: fromUserId, to_user_id: toUserId, to_team_id: toTeamId ?? null, resources, only_open: onlyOpen, transferred, total },
     });
 
     return NextResponse.json({ ok: true, transferred, total });
