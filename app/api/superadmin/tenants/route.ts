@@ -272,18 +272,67 @@ export async function DELETE(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const { id, hard_delete } = await request.json();
+    const { id, hard_delete, confirm_name } = await request.json();
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
     if (hard_delete) {
-      await db.delete(tenants).where(eq(tenants.id, id));
-      logSuperAdminAction({
+      // Hard-deleting a tenant is the most destructive operation in the system:
+      // every table carries `tenant_id ... ON DELETE CASCADE`, so this erases all
+      // of that customer's contacts, deals, invoices AND their audit_logs. It is
+      // unrecoverable except from a backup. Three guards, none of which existed:
+      const [tenant] = await db
+        .select({ id: tenants.id, name: tenants.name, deletedAt: tenants.deletedAt })
+        .from(tenants)
+        .where(eq(tenants.id, id))
+        .limit(1);
+
+      if (!tenant) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+      // 1. Must be suspended (soft-deleted) first. Previously a single call could
+      //    permanently destroy a live, paying tenant.
+      if (!tenant.deletedAt) {
+        return NextResponse.json(
+          {
+            error:
+              'Tenant must be suspended before it can be permanently deleted. Call DELETE without hard_delete first.',
+          },
+          { status: 409 }
+        );
+      }
+
+      // 2. Typed confirmation of the exact name, so an id pasted into the wrong
+      //    request body cannot erase the wrong customer.
+      if (confirm_name !== tenant.name) {
+        return NextResponse.json(
+          { error: 'confirm_name must exactly match the tenant name to permanently delete it.' },
+          { status: 400 }
+        );
+      }
+
+      // 3. Record it BEFORE destroying anything, and await it. super_admin_audit_logs
+      //    stores tenant_id as plain text with no FK, so it survives the cascade —
+      //    but only if the write actually happened. This call was previously not
+      //    awaited and ran after the delete, so a failure left no trace of a
+      //    permanent deletion.
+      await logSuperAdminAction({
         adminId: ctx.userId,
-        adminEmail: ctx.user?.email || "",
+        adminEmail: ctx.user?.email || '',
         action: 'tenant.deleted',
         targetType: 'tenant',
         targetId: id,
-        metadata: { hard_delete: true },
+        targetName: tenant.name,
+        tenantId: id,
+        tenantName: tenant.name,
+        metadata: { hard_delete: true, confirmed_name: confirm_name },
+      });
+
+      // The cascade reaches audit_logs, which migration 0048 protects with an
+      // append-only trigger. A lawful tenant erasure is exactly what that
+      // escape hatch is for, so opt in explicitly and transaction-scoped —
+      // without this the delete fails with a confusing trigger error.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL app.allow_audit_purge = 'on'`);
+        await tx.delete(tenants).where(eq(tenants.id, id));
       });
     } else {
       await db

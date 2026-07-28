@@ -302,6 +302,13 @@
       "when": 1700000042000,
       "tag": "0048_audit_log_immutability",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1700000043000,
+      "tag": "0050_audit_logs_retain_actor",
+      "breakpoints": true
     }
   ]
 }
