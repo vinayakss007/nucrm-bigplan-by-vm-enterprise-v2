@@ -11,6 +11,7 @@ import { db } from '@/drizzle/db';
 import { leadWarmingCampaigns, leadWarmingMessages, leadWarmingReplies } from '@/drizzle/schema/lead-warming';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
  
  
@@ -91,7 +92,7 @@ export async function PATCH(req: NextRequest, { params }: any) {
     }
 
     const { id } = await params;
-    const body = await req.json();
+    const body = await readJsonBody(req);
 
  
  
@@ -167,7 +168,7 @@ export async function DELETE(req: NextRequest, { params }: any) {
     const { id } = await params;
 
     await db.update(leadWarmingCampaigns)
-      .set({ status: 'archived', deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as any)
+      .set({ status: 'archived', deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as Record<string, unknown>)
       .where(and(
         eq(leadWarmingCampaigns.id, id),
         eq(leadWarmingCampaigns.tenantId, ctx.tenantId)

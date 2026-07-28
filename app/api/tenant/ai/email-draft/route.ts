@@ -7,6 +7,7 @@ import { contacts, companies, deals } from '@/drizzle/schema';
 import { tenantModules } from '@/drizzle/schema/modules';
 import { eq, and, desc } from 'drizzle-orm';
 import { can } from '@/lib/auth/middleware';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * POST /api/tenant/ai/email-draft
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'AI Assistant module not installed' }, { status: 403 });
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const {
       contact_id,
       deal_id,

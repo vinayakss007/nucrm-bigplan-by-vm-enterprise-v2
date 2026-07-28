@@ -7,7 +7,7 @@ import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 const createProductSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(createProductSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

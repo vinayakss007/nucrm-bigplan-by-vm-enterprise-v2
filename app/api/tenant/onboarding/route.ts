@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { apiError } from '@/lib/api-error';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { onboardingStepSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const rawBody = await request.json();
+    const rawBody = await readJsonBody(request);
     const validated = validateBody(provisionSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -110,7 +110,7 @@ export async function PATCH(request: NextRequest) {
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    const rawBody = await request.json();
+    const rawBody = await readJsonBody(request);
     const validated = validateBody(onboardingStepSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

@@ -8,6 +8,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { GatewayError } from '@/lib/ai/gateway';
 import { requireAiFeature } from '@/lib/ai/plan-gate';
 import { summarizeEntity, type SummarizeEntityType } from '@/lib/ai/summarize';
+import { readJsonBody } from '@/lib/api/validate';
 
 interface PostBody {
   entity_type?: string;
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     let body: PostBody;
-    try { body = await req.json() as PostBody; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req) as PostBody; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     if (!isSummarizeEntityType(body.entity_type)) {
       return NextResponse.json({ error: 'entity_type must be contact, deal or company' }, { status: 400 });

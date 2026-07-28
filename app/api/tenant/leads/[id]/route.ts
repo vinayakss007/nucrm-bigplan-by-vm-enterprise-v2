@@ -4,7 +4,7 @@ import { leads, users, leadActivities } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateLeadSchema } from '@/lib/api/schemas';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
@@ -116,7 +116,7 @@ export async function PATCH(
     if (deny) return deny;
 
     const { id } = await params;
-    const rawBody = await request.json();
+    const rawBody = await readJsonBody(request);
 
     // Validate shared fields with schema
     const validated = validateBody(updateLeadSchema, rawBody);

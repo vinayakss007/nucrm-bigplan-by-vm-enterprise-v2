@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { emailWarmupConfigSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
 
-    const rawBody = await request.json();
+    const rawBody = await readJsonBody(request);
     const validated = validateBody(emailWarmupConfigSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -135,7 +135,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
 
-    const rawBody = await request.json();
+    const rawBody = await readJsonBody(request);
     const validateToggle = validateBody(emailWarmupConfigSchema, rawBody);
     if (validateToggle instanceof NextResponse) return validateToggle;
     const { is_active } = rawBody;

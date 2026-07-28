@@ -5,7 +5,7 @@ import { db } from '@/drizzle/db';
 import { backupRecords, backupSchedules, criticalDataBackups, tenants, users } from '@/drizzle/schema';
 import { eq, sql, desc } from 'drizzle-orm';
 import { createBackup } from '@/lib/backups/backup-service';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createBackupSchema } from '@/lib/api/schemas';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     let body;
-    try { body = await request.json(); } catch (err) { console.error('[backups] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(request); } catch (err) { console.error('[backups] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     const parsed = validateBody(createBackupSchema, body);
     if (parsed instanceof NextResponse) return parsed;

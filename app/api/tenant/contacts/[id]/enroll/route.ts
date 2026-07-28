@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateContactSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, { params }: any) {
     const deny = requirePerm(ctx, 'automations.manage');
     if (deny) return deny;
     
-    const rawBody = await req.json();
+    const rawBody = await readJsonBody(req);
     const validated = validateBody(updateContactSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const { sequence_id } = rawBody;
@@ -111,7 +111,7 @@ export async function DELETE(req: NextRequest, { params }: any) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     
-    const rawDelBody = await req.json();
+    const rawDelBody = await readJsonBody(req);
     const delValidated = validateBody(updateContactSchema, rawDelBody);
     if (delValidated instanceof NextResponse) return delValidated;
     const { sequence_id } = rawDelBody;

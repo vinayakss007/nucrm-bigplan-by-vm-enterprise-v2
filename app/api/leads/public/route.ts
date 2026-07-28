@@ -11,6 +11,7 @@ import { eq, and, sql, ilike, isNull } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createNotification } from '@/lib/notifications';
 import { fireWebhooks } from '@/lib/webhooks';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
     const limited = await checkRateLimit(request, { action: 'public_lead', max: 20, windowMinutes: 60 });
     if (limited) return limited;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const {
       first_name,
       last_name,

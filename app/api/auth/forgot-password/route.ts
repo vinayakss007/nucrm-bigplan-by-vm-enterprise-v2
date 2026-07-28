@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { users, passwordResets } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const limited = await checkRateLimit(request, { action: 'forgot_password', max: 3, windowMinutes: 60 });
     if (limited) return limited;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(schema, body);
     if (validated instanceof NextResponse) return validated;
     const { email } = validated.data;

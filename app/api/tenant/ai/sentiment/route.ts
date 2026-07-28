@@ -7,6 +7,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { apiError } from '@/lib/api-error';
 import { analyzeSentiment, updateDealSentiment } from '@/lib/ai/sentiment';
 import { requireAiFeature } from '@/lib/ai/plan-gate';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
     const gate = await requireAiFeature(ctx, 'ai_sentiment');
     if (gate) return gate;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { text, deal_id } = body;
 
     if (!text || typeof text !== 'string') {

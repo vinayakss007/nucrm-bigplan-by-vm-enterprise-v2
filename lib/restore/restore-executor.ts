@@ -14,7 +14,13 @@ import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { restoreSnapshots } from '@/drizzle/schema';
 import { eq, and, sql, type SQL } from 'drizzle-orm';
-import { extractTenantSQL, parseInsertStatement } from './backup-parser';
+import {
+  buildInsertIntoRegex,
+  countUnparsedInsertStatements,
+  extractTenantSQL,
+  parseInsertStatement,
+  unquoteIdentifier,
+} from './backup-parser';
 import { validateTableName } from '@/lib/sql-allowlist';
 
 /**
@@ -134,6 +140,12 @@ export interface RestoreResult {
   recordsAffected: Record<string, number>;
   recordsPerTable: Record<string, { new: number; updated: number; skipped: number }>;
   durationMs: number;
+  /**
+   * INSERT statements in the backup that could not be parsed, and therefore
+   * were NOT restored. When > 0 the restore is PARTIAL: `error` carries a
+   * human-readable warning and callers must not treat it as a clean success.
+   */
+  unparsedStatements: number;
   error?: string;
 }
 
@@ -222,6 +234,7 @@ export async function executeSelectiveRestore(
   const startTime = Date.now();
   const recordsAffected: Record<string, number> = {};
   const recordsPerTable: Record<string, { new: number; updated: number; skipped: number }> = {};
+  let unparsedStatements = 0;
   
   try {
     onProgress({
@@ -238,7 +251,15 @@ export async function executeSelectiveRestore(
       options.tables,
       options.userId
     );
-    
+
+    // Statements the parser could not read are skipped by extractTenantSQL.
+    // Count them up front so the result can admit to being partial instead of
+    // reporting a clean success over data that was never written.
+    unparsedStatements = await countUnparsedInsertStatements(
+      options.backupFilePath,
+      options.tables
+    );
+
     let totalStatements = 0;
     for (const statements of Object.values(tenantSQL)) {
       totalStatements += statements.length;
@@ -339,15 +360,33 @@ export async function executeSelectiveRestore(
     });
     
     const durationMs = Date.now() - startTime;
+
+    // A partial restore reports itself: the rows that DID parse are committed
+    // (aborting would lose them too), but the caller is told, in the result,
+    // exactly how many statements were unreadable and thus not restored.
+    const unparsedWarning = unparsedStatements > 0
+      ? `${unparsedStatements} INSERT statement(s) in the backup could not be parsed ` +
+        'and were NOT restored. This restore is PARTIAL.'
+      : undefined;
+
     onProgress({
       step: 'completed',
       currentCount: processedStatements,
       totalCount: totalStatements,
       status: 'completed',
-      message: `Restore completed in ${durationMs}ms`,
+      message: unparsedWarning
+        ? `Restore completed in ${durationMs}ms with warnings: ${unparsedWarning}`
+        : `Restore completed in ${durationMs}ms`,
     });
-    
-    return { success: true, recordsAffected, recordsPerTable, durationMs };
+
+    return {
+      success: true,
+      recordsAffected,
+      recordsPerTable,
+      durationMs,
+      unparsedStatements,
+      ...(unparsedWarning ? { error: unparsedWarning } : {}),
+    };
     
  
  
@@ -367,6 +406,7 @@ export async function executeSelectiveRestore(
       recordsAffected,
       recordsPerTable,
       durationMs,
+      unparsedStatements,
       error: error.message,
     };
   }
@@ -425,12 +465,17 @@ export async function validateTenant(tenantId: string): Promise<{
 function buildSafeInsertQuery(statement: string): SQL | null {
   const trimmed = statement.replace(/;\s*$/, '').trim();
   const insertMatch = trimmed.match(
-    /^\s*INSERT\s+INTO\s+(?:public\.)?(\w+)\s*\(([^)]+)\)\s*VALUES\s*\(([\s\S]*)\)\s*$/i
+    buildInsertIntoRegex(String.raw`\s*\(([^)]+)\)\s*VALUES\s*\(([\s\S]*)\)\s*$`, {
+      anchored: true,
+    })
   );
   if (!insertMatch) return null;
   
-  const [, tableName, columnsStr, valuesStr] = insertMatch;
-  if (!tableName || !columnsStr || !valuesStr) return null;
+  const [, rawTableName, columnsStr, valuesStr] = insertMatch;
+  if (!rawTableName || !columnsStr || !valuesStr) return null;
+  // sql.identifier() quotes the name, so a mixed-case table survives the
+  // round-trip; the schema prefix is dropped and the search_path applies.
+  const tableName = unquoteIdentifier(rawTableName);
   const columns = columnsStr.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
   const values = parseInsertValues(valuesStr);
   

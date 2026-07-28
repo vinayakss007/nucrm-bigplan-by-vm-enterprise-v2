@@ -5,13 +5,14 @@ import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { verifyTOTP } from '@/lib/auth/totp';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function POST(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const { totp_code } = await request.json();
+    const { totp_code } = await readJsonBody(request);
 
     if (!totp_code || !/^\d{6}$/.test(totp_code)) {
       return NextResponse.json({ error: 'Invalid 6-digit code' }, { status: 400 });

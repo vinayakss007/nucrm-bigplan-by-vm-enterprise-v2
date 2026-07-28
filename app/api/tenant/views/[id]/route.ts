@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { savedViews } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -59,7 +60,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return forbidden('Only the view owner or admin can update');
     }
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (body.name !== undefined) updates['name'] = body.name;
     if (body.filters !== undefined) updates['filters'] = body.filters;
@@ -104,7 +105,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     }
 
     await db.update(savedViews)
-      .set({ deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as any)
+      .set({ deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as Record<string, unknown>)
       .where(eq(savedViews.id, id));
 
     return NextResponse.json({ success: true });

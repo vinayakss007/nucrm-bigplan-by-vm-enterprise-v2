@@ -2,6 +2,7 @@ import { db } from '@/drizzle/db';
 import { customFieldDefs } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { formulaEngine } from './engine';
+import { logger } from '@/lib/logger';
 
 /**
  * Formula Synchronization Service
@@ -53,7 +54,15 @@ export async function syncCalculatedFields(
       WHERE id = ${entityId} AND tenant_id = ${tenantId}
     `);
   } catch (err) {
-    console.error('[FormulaSync] Failed to sync fields', err);
+    // Formula fields are derived data written into metadata. A failure here means
+    // the stored values are now stale relative to their inputs, which is a
+    // correctness problem for anything reading them (reports, filters, exports).
+    logger.error('[FormulaSync] Failed to sync formula fields', {
+      tenantId,
+      entityType,
+      entityId,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 

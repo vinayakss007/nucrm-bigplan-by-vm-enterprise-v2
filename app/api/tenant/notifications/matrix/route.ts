@@ -15,6 +15,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 const CHANNELS = ['in_app', 'email', 'telegram'] as const;
 type Channel = typeof CHANNELS[number];
@@ -104,7 +105,7 @@ export async function PATCH(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
 
     let body;
-    try { body = await req.json(); } catch (err) { console.error('[notifications/matrix] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch (err) { console.error('[notifications/matrix] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const incoming = body.matrix;
     if (!incoming || typeof incoming !== 'object')
       return NextResponse.json({ error: 'matrix object required' }, { status: 400 });

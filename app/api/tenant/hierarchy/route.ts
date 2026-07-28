@@ -5,7 +5,7 @@ import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { tenantHierarchy, hierarchyPermissions } from '@/drizzle/schema/hierarchy';
 import { eq, and, isNull } from 'drizzle-orm';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createHierarchySchema, updateHierarchySchema } from '@/lib/api/schemas';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     const gate = await requireModule(ctx.tenantId, 'core-crm', ctx.isSuperAdmin);
     if (gate) return gate;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const parsed = validateBody(createHierarchySchema, body);
     if (parsed instanceof NextResponse) return parsed;
 
@@ -108,7 +108,7 @@ export async function PUT(req: NextRequest) {
     const gate = await requireModule(ctx.tenantId, 'core-crm', ctx.isSuperAdmin);
     if (gate) return gate;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const parsed = validateBody(updateHierarchySchema, body);
     if (parsed instanceof NextResponse) return parsed;
 

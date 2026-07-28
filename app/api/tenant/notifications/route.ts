@@ -6,6 +6,7 @@ import { notifications } from '@/drizzle/schema';
 import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(request: NextRequest) {
   try {
@@ -70,7 +71,7 @@ export async function PATCH(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     if (body.action === 'mark_all_read' || body.markAllRead === true) {
       await db.update(notifications)
@@ -119,7 +120,7 @@ export async function DELETE(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
 
     let body;
-    try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(request); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     if (body.id) {
       const concurrencyWhere = concurrencyGuard(notifications, body.expectedUpdatedAt);

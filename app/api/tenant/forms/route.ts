@@ -5,7 +5,7 @@ import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
 import { forms } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createFormSchema } from '@/lib/api/schemas';
 
 export async function GET(req: NextRequest) {
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     const overLimit = await checkLimit(ctx, 'forms');
     if (overLimit) return overLimit;
 
-    const rawBody = await req.json();
+    const rawBody = await readJsonBody(req);
     const validated = validateBody(createFormSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

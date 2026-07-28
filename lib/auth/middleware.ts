@@ -97,6 +97,56 @@ async function getDemoContext(): Promise<AuthContext | null> {
  * connection and applies to subsequent handler queries within the
  * same request.
  */
+/**
+ * Decide whether a cached auth context may still be trusted.
+ *
+ * The cached context carries tenantId, roleSlug, permissions and the admin
+ * flags, with a TTL measured in minutes. Re-checking only that the session row
+ * still exists — which is all this used to do — meant an authorization change
+ * did not take effect until the entry expired: revoking a member's access, or
+ * downgrading their role, left them with their previous tenant and permissions
+ * across every route for the rest of the TTL, and `setTenantContext` kept
+ * setting the RLS GUCs to the old tenant.
+ *
+ * So the membership itself is re-checked, not just the session. This costs one
+ * additional indexed lookup on the cache-hit path; that is the price of
+ * revocation taking effect immediately.
+ *
+ * Residual gap, deliberately not closed here: editing the permissions *on an
+ * existing role in place* leaves roleSlug unchanged and is therefore still
+ * served from cache until the TTL expires. Closing that needs a version stamp
+ * on the role, which is a schema change.
+ */
+async function isCachedContextStillAuthorized(
+  tokenHash: string,
+  cached: AuthContext
+): Promise<boolean> {
+  const sessionExists = await db.select({ count: sql`count(*)` })
+    .from(sessions)
+    .where(and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date())));
+
+  if (!(Number(sessionExists[0]?.count) > 0)) return false;
+
+  // Super admins have no tenant_members row to validate against.
+  if (cached.isSuperAdmin) return true;
+
+  const [membership] = await db.select({
+    status: tenantMembers.status,
+    roleSlug: tenantMembers.roleSlug,
+  })
+    .from(tenantMembers)
+    .where(and(
+      eq(tenantMembers.userId, cached.userId),
+      eq(tenantMembers.tenantId, cached.tenantId)
+    ))
+    .limit(1);
+
+  if (!membership || membership.status !== 'active') return false;
+
+  // A role change must invalidate the cached permission set.
+  return (membership.roleSlug ?? '') === cached.roleSlug;
+}
+
 export async function requireAuth(request: NextRequest): Promise<AuthContext | NextResponse> {
   const requestId = request.headers.get('x-request-id') || requestContext.generateId();
   return withRequestId(requestId, async () => {
@@ -142,11 +192,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     // Use cached context if available
     const cached = await requestContext.getCached(tokenHash);
     if (cached) {
-      const sessionExists = await db.select({ count: sql`count(*)` })
-        .from(sessions)
-        .where(and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date())));
-
-      if (Number(sessionExists[0]?.count) > 0) {
+      if (await isCachedContextStillAuthorized(tokenHash, cached as AuthContext)) {
         await setTenantContext((cached as AuthContext).tenantId, (cached as AuthContext).userId);
         requestContext.set(requestId, cached);
         return cached as AuthContext;

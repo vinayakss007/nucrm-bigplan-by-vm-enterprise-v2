@@ -88,16 +88,33 @@ async function main() {
 
   console.log('[migrate] Connecting to database...');
 
+  // The ledger drizzle's migrate() actually consults is "drizzle"."__drizzle_migrations".
+  //
+  // This recovery block used to create and seed an UNQUALIFIED
+  // "__drizzle_migrations", which lands in `public` — a table drizzle never
+  // reads. So on a database provisioned with db:push/db:sync (schema already
+  // present, no ledger), recovery reported success, seeded 40 rows into
+  // public, and then migrate() found ITS ledger empty and tried to replay every
+  // migration from 0000_init over the live schema. Verified against PostgreSQL
+  // 16: `public = 40, drizzle = 0`, then `42P07 relation already exists` and a
+  // non-zero exit. Data survived only because the first failing statement
+  // happened to be a CREATE TABLE; a migration opening with ALTER or DROP would
+  // have damaged it.
+  //
+  // drizzle decides what is outstanding by comparing each migration's
+  // folderMillis against the newest `created_at` in that table — not by hash —
+  // so seeding the journal's `when` values is enough to mark them applied.
+  await db.execute(sql.raw(`CREATE SCHEMA IF NOT EXISTS "drizzle";`));
   await db.execute(sql.raw(`
-    CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
+    CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (
       id SERIAL PRIMARY KEY,
       hash text NOT NULL,
-      created_at bigint NOT NULL
+      created_at bigint
     );
   `));
 
   const count = await db.execute<{ cnt: string }>(
-    sql.raw(`SELECT COUNT(*)::text AS cnt FROM "__drizzle_migrations"`),
+    sql.raw(`SELECT COUNT(*)::text AS cnt FROM "drizzle"."__drizzle_migrations"`),
   );
   const rowCount = parseInt(count.rows[0].cnt, 10);
 
@@ -107,14 +124,17 @@ async function main() {
     );
 
     if (schemaExists.rows[0].exists) {
-      console.log(`[migrate] Recovery: schema exists but tracking table is empty.`);
-      console.log(`[migrate] Seeding __drizzle_migrations with ${journal.entries.length} entries...`);
+      console.log('[migrate] Recovery: schema already exists but the migration ledger is empty.');
+      console.log('[migrate] This database was provisioned with db:push/db:sync or restored');
+      console.log('[migrate] from a dump. Stamping the journal as applied rather than replaying');
+      console.log(`[migrate] it over live tables. Seeding ${journal.entries.length} entries...`);
       for (const entry of journal.entries) {
         await db.execute(
-          sql`INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES (${entry.tag}, ${entry.when})`,
+          sql`INSERT INTO "drizzle"."__drizzle_migrations" (hash, created_at)
+              VALUES (${entry.tag}, ${entry.when})`,
         );
       }
-      console.log('[migrate] Recovery complete.');
+      console.log('[migrate] Recovery complete — no migration SQL was executed.');
     } else {
       console.log('[migrate] Fresh database detected. Running all migrations...');
     }

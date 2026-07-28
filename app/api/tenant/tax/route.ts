@@ -6,7 +6,7 @@ import { db } from '@/drizzle/db';
 import { taxRates } from '@/drizzle/schema/financial';
 import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     const gate = await requireModule(ctx.tenantId, 'sales-quotes', ctx.isSuperAdmin);
     if (gate) return gate;
 
-    const raw = await req.json();
+    const raw = await readJsonBody(req);
     const parsed = validateBody(createTaxRateSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const { name, rate, type, country, state, isDefault } = parsed.data;
@@ -110,7 +110,7 @@ export async function PUT(req: NextRequest) {
     const gate = await requireModule(ctx.tenantId, 'sales-quotes', ctx.isSuperAdmin);
     if (gate) return gate;
 
-    const raw = await req.json();
+    const raw = await readJsonBody(req);
     const parsed = validateBody(updateTaxRateSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const { id, ...updates } = parsed.data;
@@ -165,7 +165,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     const [row] = await db.update(taxRates)
-      .set({ isActive: false, deletedAt: sql`now()`, deletedBy: ctx.userId, updatedAt: new Date() } as any)
+      .set({ isActive: false, deletedAt: sql`now()`, deletedBy: ctx.userId, updatedAt: new Date() } as Record<string, unknown>)
       .where(and(eq(taxRates.id, id), eq(taxRates.tenantId, ctx.tenantId)))
       .returning();
 

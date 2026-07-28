@@ -1,6 +1,6 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateContactSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -23,7 +23,7 @@ export async function POST(
     }
 
     const { id } = await params;
-    const rawBody = await request.json();
+    const rawBody = await readJsonBody(request);
     const validated = validateBody(updateContactSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const _v = validated.data;

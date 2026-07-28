@@ -17,7 +17,7 @@ import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { tagActionSchema } from '@/lib/api/schemas';
 
 type Counts = { leads: number; contacts: number; companies: number; total: number };
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const parsed = validateBody(tagActionSchema, body);
     if (parsed instanceof NextResponse) return parsed;
     const { action, tag: fromTag, new_tag: toTag, tags } = parsed.data;

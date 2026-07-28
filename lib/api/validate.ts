@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ZodError, ZodSchema } from 'zod';
+import { logger } from '@/lib/logger';
 
 /**
  * Validate request body against a Zod schema.
@@ -94,17 +95,53 @@ export function withValidation<T>(
 }
 
 /**
- * Safe JSON parser with error handling.
+ * Thrown when the request body is not parseable JSON.
+ *
+ * This exists as a distinct type so `apiError()` can answer 400 instead of 500
+ * without having to guess. A bare `SyntaxError` is not a safe signal: a
+ * server-side `JSON.parse` of corrupt stored data throws exactly the same
+ * messages, and reporting that as a client error would hide real corruption.
  */
- 
- 
+export class InvalidJsonBodyError extends Error {
+  constructor(cause?: unknown) {
+    super('Invalid JSON body', { cause });
+    this.name = 'InvalidJsonBodyError';
+  }
+}
+
+/**
+ * Read and parse a JSON request body.
+ *
+ * Drop-in replacement for `await request.json()`. The only difference is the
+ * failure mode: a malformed body raises {@link InvalidJsonBodyError}, which
+ * `apiError()` renders as a 400. Calling `request.json()` directly produced an
+ * untagged `SyntaxError`, which every route's catch block turned into a 500 —
+ * telling the caller the server broke when in fact their request was malformed.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function readJsonBody(request: Request): Promise<any> {
+  try {
+    return await request.json();
+  } catch (e) {
+    throw new InvalidJsonBodyError(e);
+  }
+}
+
+/**
+ * Safe JSON parser that returns a 400 response instead of throwing.
+ *
+ * Prefer {@link readJsonBody} in routes that already have a try/catch ending in
+ * `apiError()` — it keeps the happy path free of response plumbing. This variant
+ * suits routes that want to branch on the failure inline.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function safeJson(request: Request): Promise<{ data: any } | NextResponse> {
   try {
-    const data = await request.json();
-    return { data };
+    return { data: await readJsonBody(request) };
   } catch (e) {
-    console.error('[Validate] Invalid JSON body', e);
+    logger.warn('[validate] Rejected malformed JSON body', {
+      error: e instanceof Error ? e.message : String(e),
+    });
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 }

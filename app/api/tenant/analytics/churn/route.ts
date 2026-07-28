@@ -7,6 +7,7 @@ import { contacts } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * GET /api/tenant/analytics/churn
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { contact_id } = body;
 
     if (!contact_id) {
@@ -119,7 +120,7 @@ export async function PATCH(
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { id, expectedUpdatedAt: expectedUpdatedAtRaw } = body;
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
 

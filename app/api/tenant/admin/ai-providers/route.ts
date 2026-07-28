@@ -21,7 +21,7 @@ import { tenants } from '@/drizzle/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateAiProvidersSchema } from '@/lib/api/schemas';
 import {
   setProviderKey,
@@ -106,7 +106,7 @@ export async function PATCH(req: NextRequest) {
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     let body;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const parsed = validateBody(updateAiProvidersSchema, body);
     if (parsed instanceof NextResponse) return parsed;
     const incoming = parsed.data.providers;

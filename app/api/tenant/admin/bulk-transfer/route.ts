@@ -20,6 +20,7 @@ import { tenantMembers, leads, contacts, deals, tasks, supportTickets as tickets
 import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
+import { readJsonBody } from '@/lib/api/validate';
 
 const RESOURCES = ['leads', 'contacts', 'deals', 'tasks', 'tickets'] as const;
 type Resource = typeof RESOURCES[number];
@@ -112,7 +113,7 @@ export async function POST(req: NextRequest) {
     ctx = auth.ctx!;
 
     let body;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const fromUserId: string | undefined = body.from_user_id;
     const toUserId:   string | undefined = body.to_user_id;
     const resources: Resource[] = Array.isArray(body.resources) ? body.resources : [];

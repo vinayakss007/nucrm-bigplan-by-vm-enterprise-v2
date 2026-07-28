@@ -1,7 +1,7 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, users, tenantBackupRecords, tenantRestoreRecords } from '@/drizzle/schema';
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validated = validateBody(backupSchema, body);
     if (validated instanceof NextResponse) return validated;
     const { tenantId, includeTables, backupNote } = validated.data;
@@ -168,7 +168,7 @@ export async function PUT(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validated = validateBody(restoreSchema, body);
     if (validated instanceof NextResponse) return validated;
     const { backupId, tenantId, restoreOptions } = validated.data;

@@ -5,6 +5,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     let reason = '';
     try {
-      const body = await request.json();
+      const body = await readJsonBody(request);
       reason = (body.reason ?? '').trim();
     } catch { /* no body is fine */ }
 

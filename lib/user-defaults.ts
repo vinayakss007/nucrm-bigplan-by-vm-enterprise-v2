@@ -1,6 +1,7 @@
 import { db } from '@/drizzle/db';
 import { users, tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { logger } from '@/lib/logger';
 
 const VALID_VIEWS = ['list', 'kanban', 'card', 'calendar'] as const;
 
@@ -30,7 +31,15 @@ export async function getUserDefaultView(tenantId: string, userId: string): Prom
     }
 
     return 'list';
-  } catch {
+  } catch (err) {
+    // Falling back to 'list' is correct behaviour for a preference lookup, but a
+    // failure here means the database is unreachable or the query is broken.
+    // Swallowing it silently made a DB outage look like "user has no preference".
+    logger.error('[user-defaults] Failed to read default view, falling back to list', {
+      tenantId,
+      userId,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return 'list';
   }
 }

@@ -4,6 +4,7 @@ import { services } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(
   request: NextRequest,
@@ -46,7 +47,7 @@ export async function PATCH(
     const { tenantId, userId } = ctx;
     const { id } = await params;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { 
       name, description, category, pricingType, 
       unitPrice, hourlyRate, monthlyPrice, yearlyPrice, 

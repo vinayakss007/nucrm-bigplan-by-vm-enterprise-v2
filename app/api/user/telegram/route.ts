@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateTelegramSchema } from '@/lib/api/schemas';
 
 // GET /api/user/telegram - Get user's Telegram settings
@@ -63,7 +63,7 @@ export async function PATCH(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const rawBody = await request.json();
+    const rawBody = await readJsonBody(request);
     const validated = validateBody(updateTelegramSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const body = validated.data;

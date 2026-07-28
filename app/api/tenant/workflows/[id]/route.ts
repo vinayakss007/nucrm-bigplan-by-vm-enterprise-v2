@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { workflows, workflowActions, workflowExecutions } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * GET /api/tenant/workflows/[id]
@@ -76,7 +77,7 @@ export async function PATCH(
     }
     const { id } = await params;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const {
       name,
       description,
@@ -211,7 +212,7 @@ export async function POST(
     }
     const { id } = await params;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { trigger_entity_type, trigger_entity_id } = body;
 
     if (!trigger_entity_type || !trigger_entity_id) {

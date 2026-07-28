@@ -11,6 +11,7 @@ import { leadWarmingReplies, leadWarmingMessages } from '@/drizzle/schema/lead-w
 import { contacts } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { processIncomingReply } from '@/lib/lead-warming/reply-analyzer';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(req: NextRequest) {
   try {
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { message_id, reply_content, channel } = body;
 
     if (!message_id || !reply_content) {

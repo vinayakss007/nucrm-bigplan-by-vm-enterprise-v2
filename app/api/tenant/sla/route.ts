@@ -6,6 +6,7 @@ import { db } from '@/drizzle/db';
 import { slaPolicies, slaBreaches } from '@/drizzle/schema/sla';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(req: NextRequest) {
   try {
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
     const moduleGate = await requireModule(ctx.tenantId, 'service-helpdesk', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { name, priority, responseTimeMinutes, resolutionTimeMinutes, escalationRules } = body;
 
     if (!name || !priority) {
@@ -89,7 +90,7 @@ export async function PUT(req: NextRequest) {
     const moduleGate = await requireModule(ctx.tenantId, 'service-helpdesk', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { id } = body;
 
     if (!id) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { productTemplates, tenantTemplates } from '@/drizzle/schema';
@@ -21,7 +21,7 @@ export async function POST(
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { id } = await params;
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validated = validateBody(assignSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

@@ -6,6 +6,7 @@ import { notes, contacts, deals, leads, companies, tasks } from '@/drizzle/schem
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
+import { readJsonBody } from '@/lib/api/validate';
 const MAX_BULK = 500;
 const VALID_ENTITY_TYPES = ['contact', 'deal', 'lead', 'company', 'task'] as const;
 
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { entity_type, entity_ids, content } = body;
 
     if (!entity_type || !VALID_ENTITY_TYPES.includes(entity_type)) {

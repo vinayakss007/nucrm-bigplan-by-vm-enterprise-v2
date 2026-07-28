@@ -7,6 +7,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { getAllProviders, getProviderDef } from '@/lib/integrations/registry';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(request: NextRequest) {
   try {
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     if (!body.provider_id || !body.name) {
       return NextResponse.json({ error: 'provider_id and name are required' }, { status: 400 });
     }
@@ -113,7 +114,7 @@ export async function PATCH(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     if (!body.id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
 
  

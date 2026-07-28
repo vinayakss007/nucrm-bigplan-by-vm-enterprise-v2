@@ -4,6 +4,7 @@ import { db } from '@/drizzle/db';
 import { portalClients, platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import { readJsonBody } from '@/lib/api/validate';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
 
@@ -22,7 +23,7 @@ async function getPortalConfig(tenantId: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, token, tenant_id } = await request.json();
+    const { email, token, tenant_id } = await readJsonBody(request);
 
     if (!email || !token) {
       return NextResponse.json({ error: 'Email and token required' }, { status: 400 });

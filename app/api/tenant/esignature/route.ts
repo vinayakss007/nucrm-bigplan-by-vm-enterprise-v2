@@ -6,6 +6,7 @@ import { createSigningRequest } from '@/lib/esignature';
 import { db } from '@/drizzle/db';
 import { signingRequests } from '@/drizzle/schema/esignature';
 import { eq, and, desc } from 'drizzle-orm';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * GET /api/tenant/esignature
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
     const gate = await requireModule(ctx.tenantId, 'sales-quotes', ctx.isSuperAdmin);
     if (gate) return gate;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { documentId, signers, provider } = body;
 
     if (!documentId) {

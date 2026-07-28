@@ -1,6 +1,6 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createPlanSchema, updatePlanSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
     
-    const rawBody = await request.json();
+    const rawBody = await readJsonBody(request);
     const validated = validateBody(createPlanSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -94,7 +94,7 @@ export async function PATCH(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
     
-    const rawBody = await request.json();
+    const rawBody = await readJsonBody(request);
     const validated = validateBody(updatePlanSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -167,7 +167,7 @@ export async function DELETE(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
     
-    const { id } = await request.json();
+    const { id } = await readJsonBody(request);
     if (!id) return NextResponse.json({ error: 'Plan ID required' }, { status: 400 });
 
     // Check if any tenants use this plan

@@ -17,7 +17,7 @@ import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 const checkoutSchema = z.object({
   plan: z.enum(['starter', 'pro', 'enterprise'], { message: 'Invalid plan. Choose starter, pro, or enterprise.' }),
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Payment processing is not configured. Contact support.' }, { status: 503 });
     }
 
-    const raw = await request.json();
+    const raw = await readJsonBody(request);
     const parsed = validateBody(checkoutSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const { plan, interval } = parsed.data;

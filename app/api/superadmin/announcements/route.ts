@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { announcements } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createAnnouncementSchema, updateAnnouncementSchema, deleteAnnouncementSchema } from '@/lib/api/schemas';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     
-    const b = await request.json();
+    const b = await readJsonBody(request);
     const result = validateBody(createAnnouncementSchema, b);
     if (result instanceof NextResponse) return result;
     const content = result.data.body || result.data.content;
@@ -94,7 +94,7 @@ export async function PATCH(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const b = await request.json();
+    const b = await readJsonBody(request);
     const result = validateBody(updateAnnouncementSchema, b);
     if (result instanceof NextResponse) return result;
 
@@ -132,7 +132,7 @@ export async function DELETE(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     
-    const b = await request.json();
+    const b = await readJsonBody(request);
     const result = validateBody(deleteAnnouncementSchema, b);
     if (result instanceof NextResponse) return result;
 

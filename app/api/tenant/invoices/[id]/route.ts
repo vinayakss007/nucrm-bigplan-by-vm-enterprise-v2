@@ -6,6 +6,7 @@ import { invoices } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -50,9 +51,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (deny) return deny;
 
     const invoiceId = (await params).id;
-    const body = await req.json();
+    const body = await readJsonBody(req);
 
-    const numericFields = ['subtotal', 'discountAmount', 'taxAmount', 'totalAmount', 'amountPaid', 'balanceDue'] as const;
+    const numericFields = ['subtotal', 'discountAmount', 'taxAmount', 'totalAmount'] as const;
     for (const field of numericFields) {
       if (body[field] !== undefined) {
         const v = parseFloat(body[field]);
@@ -67,9 +68,31 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allowedFields: Record<string, any> = {};
-    const mutable = ['title', 'status', 'subtotal', 'discountType', 'discountValue', 'discountAmount', 'taxRate', 'taxAmount', 'totalAmount', 'amountPaid', 'balanceDue', 'notes', 'terms', 'footer', 'issueDate', 'dueDate', 'paymentMethod', 'paymentReference'] as const;
+    // amountPaid / balanceDue are deliberately NOT mutable here. They are
+    // derived from the invoice_payments ledger (lib/billing/payments.ts) and
+    // recomputed on every payment mutation. Allowing them to be set by hand is
+    // how a summary ends up disagreeing with the payments that justify it, with
+    // nothing to reconcile against. Use the payments endpoints instead:
+    //   POST   /api/tenant/invoices/:id/payments
+    //   DELETE /api/tenant/invoices/:id/payments/:paymentId
+    const mutable = ['title', 'status', 'subtotal', 'discountType', 'discountValue', 'discountAmount', 'taxRate', 'taxAmount', 'totalAmount', 'notes', 'terms', 'footer', 'issueDate', 'dueDate', 'paymentMethod', 'paymentReference'] as const;
     for (const key of mutable) {
       if (body[key] !== undefined) allowedFields[key] = body[key];
+    }
+
+    // Reject rather than silently ignore, so an integration written against the
+    // old behaviour finds out instead of believing it recorded a payment.
+    for (const derived of ['amountPaid', 'balanceDue'] as const) {
+      if (body[derived] !== undefined) {
+        return NextResponse.json(
+          {
+            error:
+              `${derived} is derived from the payment ledger and cannot be set directly. ` +
+              `Record a payment via POST /api/tenant/invoices/${invoiceId}/payments.`,
+          },
+          { status: 422 }
+        );
+      }
     }
 
     // Handle status-specific timestamp updates

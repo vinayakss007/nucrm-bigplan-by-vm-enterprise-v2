@@ -7,6 +7,7 @@ import { contacts, deals } from '@/drizzle/schema';
 import { activities } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { can } from '@/lib/auth/middleware';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * POST /api/tenant/ai/insights
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { entity_type, entity_id } = body;
 
     if (!entity_type || !entity_id) {

@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
+import { readJsonBody } from '@/lib/api/validate';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
 
@@ -50,7 +51,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const config = await request.json();
+    const config = await readJsonBody(request);
 
     await db
       .insert(platformSettings)

@@ -1,7 +1,7 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { backupRecords, errorLogs } from '@/drizzle/schema';
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(restoreSchema, body);
     if (validated instanceof NextResponse) return validated;
     const { backup_id, confirm_restore: _confirm_restore } = validated.data;

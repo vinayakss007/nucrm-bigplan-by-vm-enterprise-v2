@@ -6,6 +6,7 @@ import { customPlugins } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { executePluginAction } from '@/lib/plugins/engine';
 import type { PluginDefinition, PluginAction, PluginAuthConfig } from '@/lib/plugins/types';
+import { readJsonBody } from '@/lib/api/validate';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (ctx instanceof NextResponse) return ctx;
 
     const { id } = await context.params;
-    const body = await request.json() as Record<string, unknown>;
+    const body = await readJsonBody(request) as Record<string, unknown>;
 
     const actionName = body['action'] as string | undefined;
     if (!actionName) {

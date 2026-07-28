@@ -3,6 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
 import { calculateTax, calculateCompoundTax, applyTaxToLineItems } from '@/lib/tax';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * POST /api/tenant/tax/calculate
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
     const gate = await requireModule(ctx.tenantId, 'sales-quotes', ctx.isSuperAdmin);
     if (gate) return gate;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { amount, taxRateIds, items } = body;
 
     // If items are provided, apply tax to line items

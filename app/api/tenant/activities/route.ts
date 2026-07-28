@@ -6,7 +6,7 @@ import { activities } from '@/drizzle/schema';
 import { users } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 const createActivitySchema = z.object({
   type: z.string().min(1, 'type is required'),
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const raw = await request.json();
+    const raw = await readJsonBody(request);
     const parsed = validateBody(createActivitySchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const { type, description, deal_id, contact_id, metadata } = parsed.data;

@@ -7,7 +7,7 @@ import { smsMessages } from '@/drizzle/schema/sms';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { sendSMS, sendTemplateSMS } from '@/lib/sms';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 const sendSMSSchema = z.object({
   to: z.string().min(1),
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     const moduleGate = await requireModule(ctx.tenantId, 'whatsapp-bot', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validated = validateBody(sendSMSSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

@@ -13,6 +13,7 @@ import { supportTickets } from '@/drizzle/schema';
 import { eq, and, inArray, or, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 const MAX_BULK = 500;
 
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
     const modErr = await requirePerm(ctx, 'tickets.manage');
     if (modErr) return modErr;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { action, payload = {} } = body;
     const selectAll = body.selectAll === true;
     const filters = body.filters as { q?: string; status?: string } | undefined;

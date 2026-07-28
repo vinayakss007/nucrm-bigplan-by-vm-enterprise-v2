@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateWebhookSchema } from '@/lib/api/schemas';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
@@ -17,7 +17,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
     const { id } = await params;
 
-    const rawBody = await req.json();
+    const rawBody = await readJsonBody(req);
     const validated = validateBody(updateWebhookSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const body = validated.data;

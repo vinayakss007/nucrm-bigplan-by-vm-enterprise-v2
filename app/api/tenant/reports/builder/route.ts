@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * Custom Report Builder API
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
     const limited = await checkRateLimit(request, { action: 'report-builder', max: 20, windowMinutes: 1 });
     if (limited) return limited;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const {
       entity,
       metric = 'count',

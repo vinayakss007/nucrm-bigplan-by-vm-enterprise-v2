@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
 import { sendMessage, getSessionMessages } from '@/lib/chat';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 const sendMessageSchema = z.object({
   content: z.string().min(1),
@@ -47,7 +47,7 @@ export async function POST(
     if (moduleGate) return moduleGate;
 
     const { sessionId } = await params;
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validated = validateBody(sendMessageSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

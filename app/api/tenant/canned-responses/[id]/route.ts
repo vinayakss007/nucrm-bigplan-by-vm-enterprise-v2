@@ -6,6 +6,7 @@ import { cannedResponses } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 const updateCannedSchema = z.object({
   category: z.string().min(1).max(100).optional(),
@@ -25,7 +26,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (permErr) return permErr;
 
     const { id } = await params;
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = updateCannedSchema.safeParse(body);
     if (!validated.success) {
       return NextResponse.json({ error: validated.error.flatten().fieldErrors }, { status: 400 });

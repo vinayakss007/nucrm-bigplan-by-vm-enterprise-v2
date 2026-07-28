@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { savedReports, reportExecutions, users } from '@/drizzle/schema';
 import { eq, and, or, desc, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * GET /api/tenant/reports/[id]
@@ -89,7 +90,7 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const body = await request.json();
+    const body = await readJsonBody(request);
     
     // Whitelist allowed update fields
     const {
@@ -190,7 +191,7 @@ export async function POST(
     }
 
     const { id } = await params;
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { filters = {} } = body;
 
     // Execute report using database function (keeping sql.raw for DB function call)

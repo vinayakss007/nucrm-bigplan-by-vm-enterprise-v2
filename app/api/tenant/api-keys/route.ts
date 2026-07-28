@@ -1,7 +1,7 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, can } from '@/lib/auth/middleware';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createApiKeySchema } from '@/lib/api/schemas';
 import { generateApiKey } from '@/lib/auth/api-key';
 import { db } from '@/drizzle/db';
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(createApiKeySchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

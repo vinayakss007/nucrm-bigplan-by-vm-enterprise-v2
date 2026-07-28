@@ -14,6 +14,7 @@ import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { sendEmail } from '@/lib/email/service';
 import { sanitizeHTMLServer } from '@/lib/sanitize';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
 
     let body: { to_email?: string; message?: string };
-    try { body = await req.json() as { to_email?: string; message?: string }; } catch { body = {}; }
+    try { body = await readJsonBody(req) as { to_email?: string; message?: string }; } catch { body = {}; }
 
     // Resolve email
     let toEmail = body.to_email?.trim() || null;

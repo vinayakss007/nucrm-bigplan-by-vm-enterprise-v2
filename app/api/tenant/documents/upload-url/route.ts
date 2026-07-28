@@ -17,7 +17,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { getSignedPutUrl } from '@/lib/storage/s3';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 const uploadUrlSchema = z.object({
   name: z.string().min(1, 'name is required'),
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
   if (ctx instanceof NextResponse) return ctx;
 
   let raw;
-  try { raw = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+  try { raw = await readJsonBody(request); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
   const parsed = validateBody(uploadUrlSchema, raw);
   if (parsed instanceof NextResponse) return parsed;
   const { name: nameRaw, mime_type: mimeType, size_bytes: sizeBytes } = parsed.data;
