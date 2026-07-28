@@ -565,7 +565,8 @@ export const formSubmissions = pgTable('form_submissions', {
   formId: uuid('form_id').notNull().references(() => forms.id, { onDelete: 'cascade' }),
   tenantId: utils.tenantId(),
   data: jsonb('data').default({}),
-  contactId: uuid('contact_id').references(() => contacts.id),
+  // SET NULL: keep the submission, drop only the dead link (0049).
+  contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
   submittedBy: text('submitted_by'),
   sourceUrl: text('source_url'),
   ...utils.lifecycle(),
@@ -616,8 +617,10 @@ export const contactLifecycleHistory = pgTable('contact_lifecycle_history', {
 export const contactMergeHistory = pgTable('contact_merge_history', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
-  primaryContactId: uuid('primary_contact_id').notNull().references(() => contacts.id),
-  mergedContactId: uuid('merged_contact_id').notNull().references(() => contacts.id),
+  // CASCADE: both are NOT NULL, and a merge record naming two purged contacts
+  // describes nothing. The durable trail is audit_logs (0048). See 0049.
+  primaryContactId: uuid('primary_contact_id').notNull().references(() => contacts.id, { onDelete: 'cascade' }),
+  mergedContactId: uuid('merged_contact_id').notNull().references(() => contacts.id, { onDelete: 'cascade' }),
   mergedFields: jsonb('merged_fields').default({}),
   mergedBy: uuid('merged_by').references(() => users.id),
   mergedAt: timestamp('merged_at', { withTimezone: true }).defaultNow().notNull(),

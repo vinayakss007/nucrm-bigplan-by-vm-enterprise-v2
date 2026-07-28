@@ -125,7 +125,8 @@ export const emailDrafts = pgTable('comm_email_drafts', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
   contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'cascade' }),
-  dealId: uuid('deal_id').references(() => deals.id),
+  // SET NULL so purging a deal cannot block on a draft (migration 0049).
+  dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'set null' }),
   purpose: text('purpose').notNull(),
   subject: text('subject').notNull(),
   body: text('body').notNull(),
@@ -184,7 +185,8 @@ export const integrations = pgTable('integrations', {
 export const emailLog = pgTable('email_log', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
-  contactId: uuid('contact_id').references(() => contacts.id),
+  // SET NULL: a delivery log outlives the contact it was sent to (0049).
+  contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
   fromEmail: text('from_email').notNull(),
   toEmail: text('to_email').notNull(),
   subject: text('subject'),

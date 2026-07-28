@@ -96,35 +96,50 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [contactResult, companyResult, dealResult, taskResult, leadResult] = await db.transaction(async (tx) => {
-      return await Promise.all([
-        tx.delete(contacts).where(and(
-          eq(contacts.tenantId, ctx.tenantId),
-          isNotNull(contacts.deletedAt),
-          lt(contacts.deletedAt, cutoffDate)
-        )),
-        tx.delete(companies).where(and(
-          eq(companies.tenantId, ctx.tenantId),
-          isNotNull(companies.deletedAt),
-          lt(companies.deletedAt, cutoffDate)
-        )),
-        tx.delete(deals).where(and(
-          eq(deals.tenantId, ctx.tenantId),
-          isNotNull(deals.deletedAt),
-          lt(deals.deletedAt, cutoffDate)
-        )),
-        tx.delete(tasks).where(and(
-          eq(tasks.tenantId, ctx.tenantId),
-          isNotNull(tasks.deletedAt),
-          lt(tasks.deletedAt, cutoffDate)
-        )),
-        tx.delete(leads).where(and(
-          eq(leads.tenantId, ctx.tenantId),
-          isNotNull(leads.deletedAt),
-          lt(leads.deletedAt, cutoffDate)
-        ))
-      ]);
-    });
+    // Each entity is purged in its OWN transaction, not one shared transaction.
+    //
+    // Previously all five deletes shared a transaction, so a single child row with
+    // an ON DELETE NO ACTION foreign key aborted the whole batch — a purgeable
+    // lead with no children was rolled back because some contact was once
+    // emailed. Migration 0049 fixed the four FKs that caused this, but the
+    // structural fragility remains: any future table added with a blocking FK
+    // would silently stop the entire retention policy again.
+    //
+    // Isolating each entity means one blocked entity is reported and the rest
+    // still purge. There is no cross-entity atomicity requirement here: these are
+    // independent deletions of already-soft-deleted rows, not a single business
+    // operation.
+    const entities = [
+      { name: 'contacts' as const, table: contacts },
+      { name: 'companies' as const, table: companies },
+      { name: 'deals' as const, table: deals },
+      { name: 'tasks' as const, table: tasks },
+      { name: 'leads' as const, table: leads },
+    ];
+
+    const cleanedUp: Record<string, number> = {
+      contacts: 0, companies: 0, deals: 0, tasks: 0, leads: 0,
+    };
+    const failures: Record<string, string> = {};
+
+    for (const entity of entities) {
+      try {
+        const result = await db.transaction(async (tx) =>
+          tx.delete(entity.table).where(and(
+            eq(entity.table.tenantId, ctx.tenantId),
+            isNotNull(entity.table.deletedAt),
+            lt(entity.table.deletedAt, cutoffDate)
+          ))
+        );
+        cleanedUp[entity.name] = result.rowCount || 0;
+      } catch (err) {
+        // Report rather than swallow: a permanently blocked purge means the trash
+        // grows without bound, which the operator must be able to see.
+        const message = err instanceof Error ? err.message : String(err);
+        failures[entity.name] = message;
+        console.error(`[trash-auto-cleanup] failed to purge ${entity.name}:`, message);
+      }
+    }
 
  
  
@@ -142,14 +157,8 @@ export async function POST(request: NextRequest) {
       countQuery(leads, ctx.tenantId)
     ]);
 
-    const cleanedUp = {
-      contacts: contactResult.rowCount || 0,
-      companies: companyResult.rowCount || 0,
-      deals: dealResult.rowCount || 0,
-      tasks: taskResult.rowCount || 0,
-      leads: leadResult.rowCount || 0,
-    };
     const totalPurged = Object.values(cleanedUp).reduce((a, b) => a + b, 0);
+    const failedEntities = Object.keys(failures);
 
     // This is the only record that will exist of a permanent deletion — the rows
     // themselves are gone. Always logged, even at zero, so the schedule is
@@ -168,6 +177,7 @@ export async function POST(request: NextRequest) {
         ...(retention.invalidValue !== undefined
           ? { invalid_retention_setting: retention.invalidValue }
           : {}),
+        ...(failedEntities.length > 0 ? { failed: failures } : {}),
       },
     });
 
@@ -188,7 +198,9 @@ export async function POST(request: NextRequest) {
             warning: `Configured ${TRASH_RETENTION_KEY} ("${retention.invalidValue}") is invalid; used the ${DEFAULT_RETENTION_DAYS}-day default.`,
           }
         : {}),
-    });
+      // A blocked entity means the retention policy is not fully running.
+      ...(failedEntities.length > 0 ? { failed: failures } : {}),
+    }, failedEntities.length > 0 ? { status: 207 } : undefined);
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
