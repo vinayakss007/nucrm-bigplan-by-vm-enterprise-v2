@@ -1,5 +1,6 @@
 import { pgTable, uuid, text, timestamp, boolean, index, uniqueIndex, date } from 'drizzle-orm/pg-core';
 import { users } from './core';
+import { companies } from './crm';
 import { tasks } from './tasks';
 import * as utils from './utils';
 
@@ -16,10 +17,9 @@ export const projects = pgTable('projects', {
 
   ownerId: uuid('owner_id').references(() => users.id, { onDelete: 'set null' }),
 
-  // The company this project is for (WF-05). FK to companies enforced at the DB
-  // layer (migration) to avoid a schema-file import cycle. Leads/deals/contacts
-  // group to the project via the polymorphic record_links table.
-  companyId: uuid('company_id'),
+  // The company this project is for (WF-05). Leads/deals/contacts group to the
+  // project via the polymorphic record_links table.
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
 
   metadata: utils.metadata(),
   ...utils.audit(),

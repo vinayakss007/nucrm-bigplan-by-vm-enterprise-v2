@@ -124,6 +124,7 @@ import {
   leadTags,
   followUps,
   revenueForecastSummary,
+  services,
 } from './crm';
 
 import {
@@ -247,7 +248,6 @@ import {
 } from './security';
 
 import {
-  services,
   serviceCategories,
   invoices,
   invoiceLineItems,

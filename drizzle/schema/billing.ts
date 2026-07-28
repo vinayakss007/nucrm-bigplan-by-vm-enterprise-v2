@@ -2,13 +2,7 @@ import { uniqueIndex, pgTable, uuid, text, timestamp, jsonb, decimal, integer, b
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import * as utils from './utils';
-import {
-  companies as _companies,
-  contacts as _contacts,
-  products as _products,
-  quotes as _quotes,
-  deals as _deals,
-} from './crm';
+import { companies as _companies, contacts as _contacts, products as _products, quotes as _quotes, deals as _deals, services } from './crm';
 
 // Aliases to match existing references in table definitions
 const companies = _companies;
@@ -17,51 +11,6 @@ const products = _products;
 const quotes = _quotes;
 const deals = _deals;
 
-// ── SERVICES MODULE ─────────────────────────────────────
-export const services = pgTable('services', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  
-  contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
-  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
-  
-  name: text('name').notNull(),
-  description: text('description'),
-  category: text('category'),
-  
-  pricingType: text('pricing_type').notNull().default('fixed'),
-  unitPrice: decimal('unit_price', { precision: 15, scale: 2 }),
-  hourlyRate: decimal('hourly_rate', { precision: 15, scale: 2 }),
-  monthlyPrice: decimal('monthly_price', { precision: 15, scale: 2 }),
-  yearlyPrice: decimal('yearly_price', { precision: 15, scale: 2 }),
-  
-  taxRate: decimal('tax_rate', { precision: 5, scale: 2 }).default('0'),
-  taxable: boolean('taxable').default(true),
-  currency: text('currency').default('USD'),
-  
-  isActive: boolean('is_active').default(true),
-  isFeatured: boolean('is_featured').default(false),
-  
-  durationMinutes: integer('duration_minutes'),
-  durationHours: integer('duration_hours'),
-  imageUrl: text('image_url'),
-  
-  timesUsed: integer('times_used').default(0),
-  totalRevenue: decimal('total_revenue', { precision: 15, scale: 2 }).default('0'),
-  
-  tags: text('tags').array().default(sql`'{}'`),
-  customFields: jsonb('custom_fields').default({}),
-  metadata: utils.metadata(),
-  
-  ...utils.audit(),
-}, (table) => ({
-  tenantIdx: utils.tenantIdx(table),
-  nameIdx: index('idx_services_name').on(table.name),
-  categoryIdx: index('idx_services_category').on(table.category),
-  contactIdx: index('idx_services_contact').on(table.contactId),
-  companyIdx: index('idx_services_company').on(table.companyId),
-  activeIdx: utils.activeIdx(table),
-}));
 
 export const serviceCategories = pgTable('service_categories', {
   id: utils.pk(),

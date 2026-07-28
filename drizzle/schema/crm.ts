@@ -1,6 +1,7 @@
 import { uniqueIndex, pgTable, uuid, text, timestamp, jsonb, decimal, integer, boolean, index, primaryKey, bigint, date, numeric } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from './core';
+import { teams } from './teams';
 import * as utils from './utils';
 
 // ── 1. CRM MODULE ─────────────────────────────────────
@@ -105,9 +106,8 @@ export const contacts = pgTable('contacts', {
   isCustomer: boolean('is_customer').default(false),
   
   leadAccess: text('lead_access').default('team'),
-  // Owning team (WF-04) — the concrete backing for lead_access='team'. FK to
-  // teams enforced at the DB layer (migration).
-  teamId: uuid('team_id'),
+  // Owning team (WF-04) — the concrete backing for lead_access='team'.
+  teamId: uuid('team_id').references(() => teams.id, { onDelete: 'set null' }),
   ownerNotes: text('owner_notes'),
   notes: text('notes'),
   tags: text('tags').array().default(sql`'{}'`),
@@ -206,11 +206,12 @@ export const leads = pgTable('leads', {
   // or neither may be set. SET NULL on delete — losing a catalogue item must
   // never delete the lead that referenced it.
   requestedProductId: uuid('requested_product_id').references(() => products.id, { onDelete: 'set null' }),
-  requestedServiceId: uuid('requested_service_id'),
+  // Defined further down in this file, so the lazy callback resolves fine.
+  requestedServiceId: uuid('requested_service_id')
+    .references(() => services.id, { onDelete: 'set null' }),
 
-  // Owning team (WF-04). FK to teams enforced at the DB layer (migration) to
-  // avoid a schema-file import cycle. SET NULL on team delete.
-  teamId: uuid('team_id'),
+  // Owning team (WF-04).
+  teamId: uuid('team_id').references(() => teams.id, { onDelete: 'set null' }),
   
   metadata: utils.metadata(),
   
@@ -363,6 +364,57 @@ export const products = pgTable('products', {
     activeIdx: utils.activeIdx(table),
   };
 });
+
+// ── SERVICES (catalogue) ──────────────────────────────
+// Lives here rather than in billing.ts: it is a catalogue alongside `products`,
+// it references `contacts`/`companies` from this file, and `leads` references it.
+// Keeping it in billing.ts forced crm.ts to import billing.ts while billing.ts
+// imports crm.ts — a real cycle that crashed at module init with
+// "Cannot access 'companies' before initialization".
+export const services = pgTable('services', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  
+  contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
+  
+  name: text('name').notNull(),
+  description: text('description'),
+  category: text('category'),
+  
+  pricingType: text('pricing_type').notNull().default('fixed'),
+  unitPrice: decimal('unit_price', { precision: 15, scale: 2 }),
+  hourlyRate: decimal('hourly_rate', { precision: 15, scale: 2 }),
+  monthlyPrice: decimal('monthly_price', { precision: 15, scale: 2 }),
+  yearlyPrice: decimal('yearly_price', { precision: 15, scale: 2 }),
+  
+  taxRate: decimal('tax_rate', { precision: 5, scale: 2 }).default('0'),
+  taxable: boolean('taxable').default(true),
+  currency: text('currency').default('USD'),
+  
+  isActive: boolean('is_active').default(true),
+  isFeatured: boolean('is_featured').default(false),
+  
+  durationMinutes: integer('duration_minutes'),
+  durationHours: integer('duration_hours'),
+  imageUrl: text('image_url'),
+  
+  timesUsed: integer('times_used').default(0),
+  totalRevenue: decimal('total_revenue', { precision: 15, scale: 2 }).default('0'),
+  
+  tags: text('tags').array().default(sql`'{}'`),
+  customFields: jsonb('custom_fields').default({}),
+  metadata: utils.metadata(),
+  
+  ...utils.audit(),
+}, (table) => ({
+  tenantIdx: utils.tenantIdx(table),
+  nameIdx: index('idx_services_name').on(table.name),
+  categoryIdx: index('idx_services_category').on(table.category),
+  contactIdx: index('idx_services_contact').on(table.contactId),
+  companyIdx: index('idx_services_company').on(table.companyId),
+  activeIdx: utils.activeIdx(table),
+}));
 
 export const quotes = pgTable('quotes', {
   id: utils.pk(),
