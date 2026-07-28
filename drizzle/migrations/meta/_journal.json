@@ -288,6 +288,13 @@
       "when": 1700000040000,
       "tag": "0046_teams",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1700000041000,
+      "tag": "0047_project_company",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,7 @@ export const createProjectSchema = z.object({
   start_date: z.string().date().optional().nullable(),
   end_date: z.string().date().optional().nullable(),
   owner_id: uuid,
+  company_id: uuid,
 });
 
 export const updateProjectSchema = createProjectSchema.partial();

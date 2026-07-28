@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
         startDate: v.start_date ?? null,
         endDate: v.end_date ?? null,
         ownerId: v.owner_id || ctx.userId,
+        companyId: v.company_id || null,
         createdBy: ctx.userId,
         updatedBy: ctx.userId,
       })

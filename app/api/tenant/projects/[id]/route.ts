@@ -107,6 +107,7 @@ export async function PATCH(
         ...(v.start_date !== undefined && { startDate: v.start_date }),
         ...(v.end_date !== undefined && { endDate: v.end_date }),
         ...(v.owner_id !== undefined && { ownerId: v.owner_id }),
+        ...(v.company_id !== undefined && { companyId: v.company_id || null }),
         updatedAt: new Date(),
         updatedBy: ctx.userId,
       })

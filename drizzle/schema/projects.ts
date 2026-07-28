@@ -16,6 +16,11 @@ export const projects = pgTable('projects', {
 
   ownerId: uuid('owner_id').references(() => users.id, { onDelete: 'set null' }),
 
+  // The company this project is for (WF-05). FK to companies enforced at the DB
+  // layer (migration) to avoid a schema-file import cycle. Leads/deals/contacts
+  // group to the project via the polymorphic record_links table.
+  companyId: uuid('company_id'),
+
   metadata: utils.metadata(),
   ...utils.audit(),
 }, (table) => {
@@ -23,6 +28,7 @@ export const projects = pgTable('projects', {
     tenantIdx: utils.tenantIdx(table),
     statusIdx: index('idx_projects_status').on(table.tenantId, table.status),
     ownerIdx: index('idx_projects_owner').on(table.ownerId),
+    companyIdx: index('idx_projects_company').on(table.tenantId, table.companyId),
     activeIdx: utils.activeIdx(table),
   };
 });
