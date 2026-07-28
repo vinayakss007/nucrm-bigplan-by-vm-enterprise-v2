@@ -6,6 +6,7 @@ import { notifications } from '@/drizzle/schema';
 import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { publishUnreadCount } from '@/lib/realtime/publish';
 
 export async function GET(request: NextRequest) {
   try {
@@ -80,6 +81,9 @@ export async function PATCH(request: NextRequest) {
           eq(notifications.userId, ctx.userId),
           isNull(notifications.readAt),
         ));
+      // Push the authoritative count so every other tab/device for this user
+      // clears its badge instead of waiting for a poll (#644). Best-effort.
+      void publishUnreadCount(ctx.tenantId, ctx.userId, 0);
       return NextResponse.json({ success: true });
     }
 
