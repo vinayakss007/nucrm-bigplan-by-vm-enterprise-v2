@@ -170,7 +170,7 @@ export default function ComplianceSettingsPage() {
               className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium ${
                 activeTab === tab.id
                   ? 'border-violet-500 text-violet-600 dark:text-violet-400'
-                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
               {tab.label}
@@ -239,10 +239,10 @@ export default function ComplianceSettingsPage() {
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead className="bg-gray-50 dark:bg-gray-800">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Entity</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Retention</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Action</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Entity</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Retention</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Action</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -252,7 +252,7 @@ export default function ComplianceSettingsPage() {
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{p.retentionDays} days</td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 capitalize">{p.action}</td>
                       <td className="px-4 py-3 text-sm">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${p.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${p.isActive ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
                           {p.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </td>
@@ -292,10 +292,10 @@ export default function ComplianceSettingsPage() {
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                   <thead className="bg-gray-50 dark:bg-gray-800">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Type</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Requested</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Completed</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Requested</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Completed</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -304,8 +304,8 @@ export default function ComplianceSettingsPage() {
                         <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{r.type}</td>
                         <td className="px-4 py-3 text-sm">
                           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                            r.status === 'completed' ? 'bg-green-100 text-green-700' :
-                            r.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
+                            r.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                            r.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
                           }`}>
                             {r.status}
                           </span>
@@ -340,9 +340,9 @@ export default function ComplianceSettingsPage() {
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                   <thead className="bg-gray-50 dark:bg-gray-800">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Report</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Generated</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Report</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Generated</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -351,8 +351,8 @@ export default function ComplianceSettingsPage() {
                         <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">SOC 2 Compliance Report</td>
                         <td className="px-4 py-3 text-sm">
                           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                            r.status === 'completed' ? 'bg-green-100 text-green-700' :
-                            r.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
+                            r.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                            r.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
                           }`}>
                             {r.status}
                           </span>

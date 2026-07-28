@@ -49,7 +49,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
   active:   { label: 'Active',   color: 'text-emerald-700', bg: 'bg-emerald-50 dark:bg-emerald-950/30', icon: Play },
   paused:   { label: 'Paused',   color: 'text-amber-700',   bg: 'bg-amber-50 dark:bg-amber-950/30',     icon: Pause },
   draft:    { label: 'Draft',    color: 'text-slate-700',   bg: 'bg-slate-50 dark:bg-slate-950/30',     icon: FileText },
-  archived: { label: 'Archived', color: 'text-gray-700',    bg: 'bg-gray-50 dark:bg-gray-950/30',       icon: Archive },
+  archived: { label: 'Archived', color: 'text-gray-700 dark:text-gray-300',    bg: 'bg-gray-50 dark:bg-gray-950/30',       icon: Archive },
 };
 
 const INTENT_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -61,7 +61,7 @@ const INTENT_CONFIG: Record<string, { label: string; color: string; bg: string }
   out_of_office:    { label: 'Out of Office',   color: 'text-slate-700',   bg: 'bg-slate-50 dark:bg-slate-950/30' },
   unsubscribe:      { label: 'Unsubscribe',     color: 'text-red-700',     bg: 'bg-red-50 dark:bg-red-950/30' },
   positive_social:  { label: 'Social',          color: 'text-violet-700',  bg: 'bg-violet-50 dark:bg-violet-950/30' },
-  unknown:          { label: 'Unknown',         color: 'text-gray-700',    bg: 'bg-gray-50 dark:bg-gray-950/30' },
+  unknown:          { label: 'Unknown',         color: 'text-gray-700 dark:text-gray-300',    bg: 'bg-gray-50 dark:bg-gray-950/30' },
 };
 
 const CHANNEL_ICONS: Record<string, typeof Mail> = { email: Mail, whatsapp: MessageSquare, sms: Phone };

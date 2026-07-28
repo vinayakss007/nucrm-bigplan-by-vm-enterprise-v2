@@ -106,7 +106,7 @@ export default function RBACSettingsPage() {
               className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium ${
                 activeTab === tab.id
                   ? 'border-violet-500 text-violet-600 dark:text-violet-400'
-                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
               {tab.label}
@@ -126,10 +126,10 @@ export default function RBACSettingsPage() {
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead className="bg-gray-50 dark:bg-gray-800">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Role</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Entity</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Field</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Access</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Role</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Entity</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Field</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Access</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -140,8 +140,8 @@ export default function RBACSettingsPage() {
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{fp.fieldName}</td>
                       <td className="px-4 py-3 text-sm">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                          fp.access === 'write' ? 'bg-green-100 text-green-700' :
-                          fp.access === 'read' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                          fp.access === 'write' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                          fp.access === 'read' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
                         }`}>
                           {fp.access}
                         </span>
@@ -173,9 +173,9 @@ export default function RBACSettingsPage() {
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead className="bg-gray-50 dark:bg-gray-800">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Role</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Entity</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Access Level</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Role</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Entity</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Access Level</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -213,7 +213,7 @@ export default function RBACSettingsPage() {
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">{rule.name}</h4>
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      rule.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                      rule.isActive ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
                     }`}>
                       {rule.isActive ? 'Active' : 'Inactive'}
                     </span>
