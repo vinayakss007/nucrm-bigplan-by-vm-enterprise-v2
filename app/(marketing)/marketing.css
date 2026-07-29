@@ -1,0 +1,530 @@
+/*
+ * Marketing site styles.
+ *
+ * Two things about the app shell that this file has to work around:
+ *  1. globals.css sets `html { font-size: 125% }`, so every rem-based Tailwind
+ *     text utility renders 25% larger than designed. Marketing typography
+ *     therefore uses px-based clamp() classes declared here, which are immune.
+ *  2. globals.css applies element-level heading sizes and `font-weight: 500` to
+ *     p/span/div/li. Class selectors below win on specificity.
+ *
+ * Colours are hard-coded dark on purpose: the marketing site is a fixed
+ * composition and must not shift when a visitor's app theme is light.
+ */
+
+.mk-root {
+  --mk-bg: #06060e;
+  --mk-bg-soft: #0a0a16;
+  --mk-line: rgba(255, 255, 255, 0.08);
+  --mk-line-strong: rgba(255, 255, 255, 0.14);
+  --mk-panel: rgba(255, 255, 255, 0.028);
+  --mk-panel-hi: rgba(255, 255, 255, 0.055);
+  --mk-text: #ffffff;
+  --mk-muted: #9aa4b8;
+  --mk-dim: #6b7488;
+  --mk-violet: #8b5cf6;
+  --mk-indigo: #6366f1;
+  --mk-cyan: #22d3ee;
+
+  color-scheme: dark;
+  background: var(--mk-bg);
+  color: var(--mk-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Typography scale (px-based, immune to the 125% root) ───────────── */
+
+.mk-display {
+  font-size: clamp(38px, 6.6vw, 82px);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  font-weight: 800;
+}
+.mk-h1 {
+  font-size: clamp(32px, 5vw, 60px);
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+}
+.mk-h2 {
+  font-size: clamp(27px, 3.6vw, 46px);
+  line-height: 1.1;
+  letter-spacing: -0.028em;
+  font-weight: 800;
+}
+.mk-h3 {
+  font-size: clamp(20px, 2vw, 26px);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+.mk-h4 {
+  font-size: 17px;
+  line-height: 1.35;
+  letter-spacing: -0.012em;
+  font-weight: 700;
+}
+.mk-lead {
+  font-size: clamp(16px, 1.35vw, 19px);
+  line-height: 1.62;
+  font-weight: 400;
+  color: var(--mk-muted);
+}
+.mk-body {
+  font-size: 15px;
+  line-height: 1.68;
+  font-weight: 400;
+  color: var(--mk-muted);
+}
+.mk-small {
+  font-size: 13.5px;
+  line-height: 1.6;
+  font-weight: 400;
+  color: var(--mk-dim);
+}
+.mk-tiny {
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 500;
+  color: var(--mk-dim);
+}
+.mk-eyebrow {
+  font-size: 11.5px;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.mk-mono {
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+/* Reset the inherited semi-bold body weight inside marketing prose. */
+.mk-root p,
+.mk-root li {
+  font-weight: 400;
+}
+.mk-root strong {
+  font-weight: 650;
+  color: #e8ecf5;
+}
+
+/* ── Surfaces ───────────────────────────────────────────────────────── */
+
+.mk-card {
+  background: var(--mk-panel);
+  border: 1px solid var(--mk-line);
+  border-radius: 18px;
+  backdrop-filter: blur(12px);
+  transition: border-color 0.35s ease, background 0.35s ease, transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mk-card-hover:hover {
+  background: var(--mk-panel-hi);
+  border-color: var(--mk-line-strong);
+  transform: translateY(-3px);
+}
+.mk-glass {
+  background: rgba(10, 10, 22, 0.72);
+  border: 1px solid var(--mk-line);
+  backdrop-filter: blur(20px) saturate(160%);
+}
+
+/* Hairline gradient edge used on hero panels and feature cards. */
+.mk-edge {
+  position: relative;
+}
+.mk-edge::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(160deg, rgba(139, 92, 246, 0.5), rgba(255, 255, 255, 0.04) 35%, transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ── Text effects ───────────────────────────────────────────────────── */
+
+.mk-grad {
+  background: linear-gradient(103deg, #ffffff 0%, #e9d5ff 34%, #a78bfa 62%, #67e8f9 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.mk-grad-violet {
+  background: linear-gradient(100deg, #a78bfa, #818cf8 55%, #22d3ee);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ── Backdrops ──────────────────────────────────────────────────────── */
+
+.mk-grid-bg {
+  background-image: linear-gradient(rgba(148, 163, 184, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+.mk-dot-bg {
+  background-image: radial-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.mk-fade-y {
+  -webkit-mask-image: linear-gradient(#000, #000 55%, transparent);
+  mask-image: linear-gradient(#000, #000 55%, transparent);
+}
+.mk-fade-x {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+/* Slow-drifting aurora blobs behind hero sections. */
+@keyframes mk-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(4%, -6%, 0) scale(1.09);
+  }
+  66% {
+    transform: translate3d(-5%, 4%, 0) scale(0.95);
+  }
+}
+.mk-aurora {
+  animation: mk-drift 26s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Conic sheen that sweeps across featured panels. */
+@keyframes mk-sweep {
+  0% {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(320%) skewX(-18deg);
+  }
+}
+.mk-sweep::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 34%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.09), transparent);
+  animation: mk-sweep 5.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Marquee rails. */
+@keyframes mk-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.mk-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: mk-marquee 42s linear infinite;
+}
+.mk-marquee-track.reverse {
+  animation-direction: reverse;
+}
+.mk-marquee:hover .mk-marquee-track {
+  animation-play-state: paused;
+}
+
+/* Pulsing live dot. */
+@keyframes mk-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+.mk-ping::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: currentColor;
+  animation: mk-ping 1.9s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Bar-chart grow used in the analytics mock. */
+@keyframes mk-grow {
+  from {
+    transform: scaleY(0.05);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.mk-bar {
+  transform-origin: bottom;
+  animation: mk-grow 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Dashed line that flows along automation connectors. */
+@keyframes mk-flow {
+  to {
+    stroke-dashoffset: -60;
+  }
+}
+.mk-flow {
+  stroke-dasharray: 5 7;
+  animation: mk-flow 1.6s linear infinite;
+}
+
+/* Caret for the AI typing mock. */
+@keyframes mk-caret {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+.mk-caret {
+  animation: mk-caret 1.05s step-end infinite;
+}
+
+/* ── Controls ───────────────────────────────────────────────────────── */
+
+.mk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  border-radius: 12px;
+  padding: 12px 20px;
+  min-height: 46px;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, background 0.25s ease,
+    border-color 0.25s ease, color 0.25s ease;
+  white-space: nowrap;
+}
+.mk-btn-primary {
+  color: #ffffff;
+  background: linear-gradient(135deg, #7c3aed, #6366f1);
+  box-shadow: 0 10px 30px -10px rgba(124, 58, 237, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+.mk-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 40px -12px rgba(124, 58, 237, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.mk-btn-ghost {
+  color: #e6e9f2;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--mk-line-strong);
+}
+.mk-btn-ghost:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.085);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+.mk-btn-light {
+  color: #0b0b18;
+  background: #ffffff;
+}
+.mk-btn-light:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 40px -14px rgba(255, 255, 255, 0.4);
+}
+
+.mk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--mk-line);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+  font-weight: 600;
+  color: #cbd3e1;
+}
+
+/* Underline that grows in on hover, used for inline text links. */
+.mk-link {
+  color: #c4b5fd;
+  font-weight: 600;
+  position: relative;
+}
+.mk-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 100%;
+  bottom: -2px;
+  height: 1px;
+  background: currentColor;
+  transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mk-link:hover::after {
+  right: 0;
+}
+
+/* ── Scroll reveal (driven by components/marketing/reveal.tsx) ───────── */
+
+.mk-reveal {
+  opacity: 0;
+  transform: translateY(26px);
+  transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), transform 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mk-reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .mk-aurora,
+  .mk-marquee-track,
+  .mk-bar,
+  .mk-flow,
+  .mk-caret,
+  .mk-sweep::after,
+  .mk-ping::before {
+    animation: none !important;
+  }
+}
+
+/* ── Tables ─────────────────────────────────────────────────────────── */
+
+.mk-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+}
+.mk-table th,
+.mk-table td {
+  padding: 14px 16px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--mk-line);
+}
+.mk-table thead th {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mk-dim);
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.02);
+  position: sticky;
+  top: 64px;
+  backdrop-filter: blur(10px);
+  z-index: 1;
+}
+.mk-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.022);
+}
+.mk-table .mk-col-own {
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.11), rgba(124, 58, 237, 0.045));
+  border-left: 1px solid rgba(139, 92, 246, 0.22);
+  border-right: 1px solid rgba(139, 92, 246, 0.22);
+  color: #f4f2ff;
+}
+
+
+/* ── Long-form prose (legal pages) ──────────────────────────────────── */
+
+.mk-prose {
+  font-size: 15px;
+  line-height: 1.75;
+  color: #9aa4b8;
+}
+.mk-prose h2 {
+  font-size: 21px;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  color: #ffffff;
+  margin-top: 2.5em;
+  margin-bottom: 0.6em;
+  scroll-margin-top: 90px;
+}
+.mk-prose h2:first-child {
+  margin-top: 0;
+}
+.mk-prose h3 {
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 700;
+  color: #e2e8f2;
+  margin-top: 1.8em;
+  margin-bottom: 0.4em;
+}
+.mk-prose p {
+  margin-bottom: 1.1em;
+  font-weight: 400;
+}
+.mk-prose ul {
+  margin: 0 0 1.3em;
+  padding: 0;
+  list-style: none;
+}
+.mk-prose ul li {
+  position: relative;
+  padding-left: 1.15em;
+  margin-bottom: 0.5em;
+  font-weight: 400;
+}
+.mk-prose ul li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.72em;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(167, 139, 250, 0.7);
+}
+.mk-prose strong {
+  color: #e8ecf5;
+  font-weight: 650;
+}
+.mk-prose a {
+  color: #c4b5fd;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.mk-prose table {
+  width: 100%;
+  margin-bottom: 1.4em;
+  font-size: 14px;
+  border-collapse: collapse;
+}
+.mk-prose th,
+.mk-prose td {
+  border: 1px solid var(--mk-line);
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+.mk-prose th {
+  background: rgba(255, 255, 255, 0.03);
+  color: #e2e8f2;
+  font-weight: 650;
+  font-size: 12.5px;
+}
