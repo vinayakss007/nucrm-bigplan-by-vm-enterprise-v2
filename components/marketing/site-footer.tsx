@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { BRAND, FOOTER, TRUST_BADGES } from '@/lib/marketing/site';
+import { BRAND, FOOTER, SOCIAL, TRUST_BADGES } from '@/lib/marketing/site';
 import { STUDIO_PRODUCTS } from '@/lib/marketing/abetworks';
 import { Icon } from './icon';
 import { AbetworksWordmark, Logo } from './logo';
+import { SocialIcon } from './social-icons';
 
 /**
  * Mega footer.
@@ -98,6 +99,24 @@ export function SiteFooter() {
             reserved.
           </p>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            {/* Renders only once SOCIAL has entries, so an unlaunched profile is
+                never linked. See lib/marketing/site.ts. */}
+            {SOCIAL.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                {SOCIAL.map((s) => (
+                  <a
+                    key={s.href}
+                    href={s.href}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    aria-label={`${BRAND.maker} on ${s.label}`}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-slate-400 transition-colors hover:border-violet-400/30 hover:bg-white/[0.07] hover:text-violet-300"
+                  >
+                    <SocialIcon icon={s.icon} />
+                  </a>
+                ))}
+              </div>
+            )}
             <a href={`mailto:${BRAND.email}`} className="mk-tiny transition-colors hover:text-violet-300">
               {BRAND.email}
             </a>

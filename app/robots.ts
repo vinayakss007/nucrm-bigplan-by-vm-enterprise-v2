@@ -8,7 +8,7 @@ import type { MetadataRoute } from 'next';
  * surveys, shared forms) must not be — those URLs are private by obscurity and
  * indexing them would expose customer data.
  */
-const BASE = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://nucrm.abetworks.com').replace(/\/$/, '');
+const BASE = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://nucrm.io').replace(/\/$/, '');
 
 export default function robots(): MetadataRoute.Robots {
   return {
