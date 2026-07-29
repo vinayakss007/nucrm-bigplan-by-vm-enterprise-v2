@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { BRAND, PLATFORM_STATS } from '@/lib/marketing/site';
 import { PILLARS } from '@/lib/marketing/features';
+import { softLower } from '@/lib/marketing/text';
 import { SOLUTIONS } from '@/lib/marketing/solutions';
 import { MODULES } from '@/lib/marketing/modules';
 import { PLANS, PRICING_FAQ } from '@/lib/marketing/pricing';
@@ -265,7 +266,7 @@ export default function LandingPage() {
       </div>
 
       {/* ══════════════════════ THE STACK ═════════════════════════ */}
-      <Section tone="soft">
+      <Section id="why" tone="soft">
         <Container>
           <SectionHeading
             eyebrow="Why teams move"
@@ -349,7 +350,7 @@ export default function LandingPage() {
       </Section>
 
       {/* ═══════════════════════ STATS ════════════════════════════ */}
-      <Section className="!py-14">
+      <Section id="scale" className="!py-14">
         <Container>
           <div className="grid grid-cols-2 gap-x-6 gap-y-10 lg:grid-cols-4">
             {PLATFORM_STATS.map((s, i) => (
@@ -407,7 +408,7 @@ export default function LandingPage() {
                         </div>
                       )}
                       <span className="mk-link mt-5 inline-flex items-center gap-1.5 text-[13px]">
-                        Explore {p.short.toLowerCase()}
+                        Explore {softLower(p.short)}
                         <Icon
                           name="ArrowUpRight"
                           className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"

@@ -45,6 +45,7 @@ import {
   Flame,
   FolderKanban,
   Gauge,
+  Gift,
   GitBranch,
   GitCompareArrows,
   Globe,
@@ -87,6 +88,7 @@ import {
   SendHorizontal,
   ShieldCheck,
   ShoppingCart,
+  Shuffle,
   SlidersHorizontal,
   Smartphone,
   Smile,
@@ -104,6 +106,7 @@ import {
   Webhook,
   WifiOff,
   X,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -146,6 +149,7 @@ const ICONS: Record<string, LucideIcon> = {
   Flame,
   FolderKanban,
   Gauge,
+  Gift,
   GitBranch,
   GitCompareArrows,
   Globe,
@@ -188,6 +192,7 @@ const ICONS: Record<string, LucideIcon> = {
   SendHorizontal,
   ShieldCheck,
   ShoppingCart,
+  Shuffle,
   SlidersHorizontal,
   Smartphone,
   Smile,
@@ -205,6 +210,7 @@ const ICONS: Record<string, LucideIcon> = {
   Webhook,
   WifiOff,
   X,
+  Zap,
 };
 
 export function Icon({
@@ -216,7 +222,21 @@ export function Icon({
   className?: string;
   strokeWidth?: number;
 }) {
-  const Cmp = ICONS[name] ?? Sparkles;
+  const Cmp = ICONS[name];
+
+  if (!Cmp) {
+    // A silent fallback shipped a sparkle where a lightning bolt belonged on the
+    // landing page's main feature grid, and nothing failed. Make it loud in
+    // development so a typo or an unregistered icon is caught immediately.
+    if (process.env.NODE_ENV !== 'production') {
+      console.error(
+        `[marketing/Icon] "${name}" is not registered in components/marketing/icon.tsx. ` +
+          'Add it to the imports and the ICONS map, or the wrong glyph will ship.',
+      );
+    }
+    return <Sparkles className={className} strokeWidth={strokeWidth} aria-hidden />;
+  }
+
   return <Cmp className={className} strokeWidth={strokeWidth} aria-hidden />;
 }
 
