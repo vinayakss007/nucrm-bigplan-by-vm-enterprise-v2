@@ -158,7 +158,9 @@ export function AppPreview() {
             <span className="hidden items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[10.5px] text-slate-400 sm:flex">
               <Icon name="Users" className="h-3 w-3" /> All owners
             </span>
-            <span className="mk-mono ml-auto hidden text-[10px] text-slate-500 sm:block">⌘K</span>
+            {/* Spelled out rather than the ⌘ glyph, which renders as tofu in the
+                mock's monospace stack. */}
+            <span className="mk-mono ml-auto hidden text-[10px] text-slate-500 sm:block">Cmd K</span>
             <span className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-2.5 py-1 text-[10.5px] font-semibold text-white">
               New deal
             </span>

@@ -175,7 +175,7 @@ export default function ModulesPage() {
                 </p>
                 <div className="mt-7 flex flex-wrap gap-2.5">
                   <GhostCta href="/integrations#api">Developer API</GhostCta>
-                  <GhostCta href="/docs">Documentation</GhostCta>
+                  <GhostCta href="/contact">Talk to an engineer</GhostCta>
                 </div>
               </div>
               <ul className="space-y-3">

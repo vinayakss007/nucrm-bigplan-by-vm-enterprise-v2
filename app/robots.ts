@@ -18,6 +18,9 @@ export default function robots(): MetadataRoute.Robots {
         allow: '/',
         disallow: [
           '/api/',
+          // Operator install guide: names infrastructure and shows connection
+          // strings. Publicly reachable today, but must not be indexed.
+          '/docs',
           '/tenant/',
           '/superadmin/',
           '/portal/',

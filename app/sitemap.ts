@@ -41,7 +41,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
     entry('/security', 0.7),
     entry('/abetworks', 0.7),
     entry('/contact', 0.6),
-    entry('/docs', 0.5),
+    // /docs is deliberately absent. It is an operator install guide (setup
+    // prerequisites, connection strings, deployment steps) rather than customer
+    // documentation, and it names infrastructure we do not disclose publicly.
+    // See the matching Disallow in app/robots.ts.
 
     ...PILLARS.map((p) => entry(`/features/${p.slug}`, 0.8)),
     ...SOLUTIONS.map((s) => entry(`/solutions/${s.slug}`, 0.7)),
