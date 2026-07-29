@@ -281,6 +281,41 @@
       "when": 1700000039000,
       "tag": "0045_rls_fail_closed_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1700000040000,
+      "tag": "0045_lead_product_service_request",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1700000041000,
+      "tag": "0046_teams",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1700000042000,
+      "tag": "0048_audit_log_immutability",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1700000043000,
+      "tag": "0050_audit_logs_retain_actor",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1700000044000,
+      "tag": "0051_backup_verification",
+      "breakpoints": true
     }
   ]
 }

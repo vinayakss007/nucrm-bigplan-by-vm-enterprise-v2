@@ -46,9 +46,10 @@ describe('Schema Migration Coverage (Issue #219)', () => {
   // what actually guarantees coverage; this one stops a table appearing silently.
   //
   // 219 -> 220: record_links (0044_cross_module_record_linking).
-  it('should have exactly 220 tables defined in schema', () => {
+  // 220 -> 222: teams + team_members (0046_teams).
+  it('should have exactly 222 tables defined in schema', () => {
     const schemaTables = extractPgTables(schemaDir);
-    expect(schemaTables.size).toBe(220);
+    expect(schemaTables.size).toBe(222);
   });
 
   it('migration 0036 should create all 4 missing tables', () => {

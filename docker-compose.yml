@@ -123,6 +123,54 @@ services:
     networks:
       - nucrm-net
 
+  # ── Realtime (socket.io + Redis) ──────────────────────────────────────────
+  # Separate process because `next start` owns its own HTTP server and offers no
+  # hook to attach socket.io. nginx proxies /socket.io/ here. Safe to scale: the
+  # Redis adapter shares room membership across replicas. See issue #644.
+  realtime:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    command: ["node", "--import", "tsx", "realtime.ts"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - JWT_SECRET=${JWT_SECRET:?REQUIRED}
+      - SESSION_SECRET=${SESSION_SECRET:?REQUIRED}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?REQUIRED}
+      - DATABASE_SSL=${DATABASE_SSL:-true}
+      - REALTIME_PORT=4001
+    expose:
+      - "4001"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:4001/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 384M
+          cpus: "0.5"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
   # ── PostgreSQL ───────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
@@ -240,6 +288,12 @@ services:
       retries: 5
       start_period: 10s
   # ── MinIO (S3-compatible storage) ─────────────────────────────────────────
+  # DEV/LOCAL ONLY. MinIO is a single-instance S3-compatible store for
+  # development. In production, use a managed object-storage service (AWS S3,
+  # Cloudflare R2, or any S3-compatible provider) — the app speaks the standard
+  # S3 API via @aws-sdk/client-s3 and connects to whatever S3_ENDPOINT is set.
+  # The MinIO single-instance is NOT production-grade: no replication, no
+  # cross-region, and a disk failure loses every uploaded file.
   minio:
     image: minio/minio:latest
     container_name: nucrm-s3

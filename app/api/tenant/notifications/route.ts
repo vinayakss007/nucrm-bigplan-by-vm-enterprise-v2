@@ -6,7 +6,7 @@ import { notifications } from '@/drizzle/schema';
 import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
-import { readJsonBody } from '@/lib/api/validate';
+import { publishUnreadCount } from '@/lib/realtime/publish';
 
 export async function GET(request: NextRequest) {
   try {
@@ -71,7 +71,7 @@ export async function PATCH(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await readJsonBody(request);
+    const body = await request.json();
 
     if (body.action === 'mark_all_read' || body.markAllRead === true) {
       await db.update(notifications)
@@ -81,6 +81,9 @@ export async function PATCH(request: NextRequest) {
           eq(notifications.userId, ctx.userId),
           isNull(notifications.readAt),
         ));
+      // Push the authoritative count so every other tab/device for this user
+      // clears its badge instead of waiting for a poll (#644). Best-effort.
+      void publishUnreadCount(ctx.tenantId, ctx.userId, 0);
       return NextResponse.json({ success: true });
     }
 
@@ -120,7 +123,7 @@ export async function DELETE(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
 
     let body;
-    try { body = await readJsonBody(request); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     if (body.id) {
       const concurrencyWhere = concurrencyGuard(notifications, body.expectedUpdatedAt);

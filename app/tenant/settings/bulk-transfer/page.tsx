@@ -26,6 +26,8 @@ export default function BulkTransferPage() {
 
   const [fromUser, setFromUser] = useState<string>('');
   const [toUser, setToUser]     = useState<string>('');
+  const [toTeam, setToTeam]     = useState<string>('');
+  const [teams, setTeams]       = useState<{ id: string; name: string }[]>([]);
   const [onlyOpen, setOnlyOpen] = useState(true);
   const [enabledResources, setEnabledResources] = useState<Set<keyof Counts>>(
     new Set(['leads', 'contacts', 'deals', 'tasks', 'tickets'])
@@ -42,13 +44,15 @@ export default function BulkTransferPage() {
     Promise.all([
       fetch('/api/tenant/members').then(r => r.ok ? r.json() : { data: [] }),
       fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
+      fetch('/api/tenant/teams').then(r => r.ok ? r.json() : { data: [] }),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ]).then(([mem, me]: any[]) => { if (ignore) return; 
+    ]).then(([mem, me, tms]: any[]) => { if (ignore) return; 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setMembers((mem.data ?? []).map((m: any) => ({
         user_id: m.userId, full_name: m.fullName ?? m.email, email: m.email, role_slug: m.roleSlug ?? '',
        } )));
       setMe({ id: me?.user?.id ?? '', is_admin: me?.is_admin ?? false });
+      setTeams(tms.data ?? []);
     }).finally(() => setLoadingMembers(false));
     return () => { ignore = true; };
 }, []);
@@ -85,6 +89,7 @@ export default function BulkTransferPage() {
       body: JSON.stringify({
         from_user_id: fromUser,
         to_user_id: toUser,
+        to_team_id: toTeam || undefined,
         resources: Array.from(enabledResources),
         only_open: onlyOpen,
       }),
@@ -159,6 +164,22 @@ export default function BulkTransferPage() {
               </option>
             ))}
           </select>
+          {teams.length > 0 && (
+            <div className="mt-3">
+              <label className="text-xs font-medium text-muted-foreground">Also tag with team (optional)</label>
+              <select
+                className={inp}
+                value={toTeam}
+                onChange={e => setToTeam(e.target.value)}
+                disabled={!fromUser}
+                aria-label="Also tag transferred leads and contacts with a team"
+              >
+                <option value="">— Keep current team —</option>
+                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+              <p className="text-[11px] text-muted-foreground mt-1">Sets the owning team on transferred leads &amp; contacts.</p>
+            </div>
+          )}
         </div>
       </div>
 

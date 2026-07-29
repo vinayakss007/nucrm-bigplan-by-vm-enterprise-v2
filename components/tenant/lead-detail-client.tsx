@@ -58,6 +58,7 @@ export interface Lead {
   timeline?: string; timeline_target_date?: string; lead_status?: string; lifecycle_stage?: string;
   lead_source?: string; score?: number; assigned_name?: string; assigned_to?: string; linkedin_url?: string;
   country?: string; city?: string; tags?: string[]; notes?: string; created_at?: string; last_activity_at?: string;
+  requested_product_name?: string; requested_service_name?: string; team_name?: string;
 }
 
 export interface Activity { id: string; description?: string; performed_at?: string; performed_by_name?: string }
@@ -514,6 +515,36 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
               )}
             </div>
           </div>
+
+          {/* Request & Ownership (WF-02/WF-04) */}
+          {(lead.requested_product_name || lead.requested_service_name || lead.team_name) && (
+            <div className="admin-card p-6 space-y-4">
+              <h3 className="font-semibold flex items-center gap-2">
+                <Briefcase className="w-4 h-4" />
+                Request &amp; Ownership
+              </h3>
+              <div className="space-y-3">
+                {lead.requested_product_name && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Requested product</p>
+                    <p className="text-sm font-medium">{lead.requested_product_name}</p>
+                  </div>
+                )}
+                {lead.requested_service_name && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Requested service</p>
+                    <p className="text-sm font-medium">{lead.requested_service_name}</p>
+                  </div>
+                )}
+                {lead.team_name && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Owning team</p>
+                    <p className="text-sm font-medium">{lead.team_name}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* BANT Qualification */}
           <div className="admin-card p-6 space-y-4">

@@ -40,6 +40,16 @@ export async function GET(request: NextRequest) {
         await fetch('https://api.resend.com/domains', { headers: { Authorization: `Bearer ${key}` } });
         return { latency_ms: Date.now() - t, message: 'Resend OK' };
       }),
+      runCheck('object_storage', async () => {
+        const { getS3Config } = await import('@/lib/storage/s3-config');
+        const cfg = getS3Config();
+        if (!cfg.configured) return { latency_ms: 0, message: 'Not configured (MinIO dev-only)' };
+        const { S3Client, HeadBucketCommand } = await import('@aws-sdk/client-s3');
+        const client = new S3Client({ region: cfg.region, endpoint: cfg.endpoint, credentials: cfg.credentials });
+        const t = Date.now();
+        await client.send(new HeadBucketCommand({ Bucket: cfg.bucket }));
+        return { latency_ms: Date.now() - t, message: `Bucket ${cfg.bucket} reachable` };
+      }),
     ]);
 
     // Persist

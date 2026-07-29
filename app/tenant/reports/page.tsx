@@ -99,6 +99,10 @@ export default function ReportsPage() {
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-accent text-xs font-medium transition-colors">
             <Clock className="w-3.5 h-3.5" />Scheduled
           </Link>
+          <Link href="/tenant/reports/team-performance"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-accent text-xs font-medium transition-colors">
+            <Users className="w-3.5 h-3.5" />Team Performance
+          </Link>
           <Link href="/tenant/reports/custom"
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium transition-colors">
             <FilePlus className="w-3.5 h-3.5" />Custom Builder

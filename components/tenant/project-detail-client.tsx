@@ -11,6 +11,7 @@ import { cn, formatDate } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import ProjectRelatedPanel from '@/components/tenant/project-related-panel';
 import toast from 'react-hot-toast';
 
 const STATUS_CFG: Record<string, { label: string; badge: string }> = {
@@ -570,6 +571,9 @@ export default function ProjectDetailClient({
           </div>
         )}
       </div>
+
+      {/* Everything for this project in one place (WF-05) */}
+      <ProjectRelatedPanel projectId={project.id} />
     </div>
   );
 }

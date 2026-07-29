@@ -105,6 +105,9 @@ export const contacts = pgTable('contacts', {
   isCustomer: boolean('is_customer').default(false),
   
   leadAccess: text('lead_access').default('team'),
+  // Owning team (WF-04) — the concrete backing for lead_access='team'. FK to
+  // teams enforced at the DB layer (migration).
+  teamId: uuid('team_id'),
   ownerNotes: text('owner_notes'),
   notes: text('notes'),
   tags: text('tags').array().default(sql`'{}'`),
@@ -197,6 +200,17 @@ export const leads = pgTable('leads', {
 
   // Which product entry the lead came in through (lib/products/registry.ts key)
   productId: text('product_id'),
+
+  // What the lead is a request FOR: an item from the tenant's real catalogue.
+  // Distinct from productId above (which is the arrival channel). Either, both,
+  // or neither may be set. SET NULL on delete — losing a catalogue item must
+  // never delete the lead that referenced it.
+  requestedProductId: uuid('requested_product_id').references(() => products.id, { onDelete: 'set null' }),
+  requestedServiceId: uuid('requested_service_id'),
+
+  // Owning team (WF-04). FK to teams enforced at the DB layer (migration) to
+  // avoid a schema-file import cycle. SET NULL on team delete.
+  teamId: uuid('team_id'),
   
   metadata: utils.metadata(),
   

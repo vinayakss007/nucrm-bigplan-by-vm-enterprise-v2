@@ -190,7 +190,7 @@ describe('verifyRollbackCoverage', () => {
       '0043_tenant_isolation_hardening',
       '0044_cross_module_record_linking',
       '0042_backup_records_checksum',
-      '0045_rls_fail_closed_policy',
+      '0045_lead_product_service_request',
     ]) {
       expect(coverage.withRollback).toContain(tag);
     }
