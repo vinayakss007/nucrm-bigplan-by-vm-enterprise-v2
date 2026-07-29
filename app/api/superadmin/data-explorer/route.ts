@@ -397,7 +397,7 @@ export async function PUT(req: NextRequest) {
 
     const allowedTables = [
       'tenants', 'contacts', 'leads', 'deals', 'companies',
-      'tasks', 'users', 'roles', 'webhooks', 'api_keys',
+      'tasks', 'webhooks',
       'email_templates', 'workflows', 'automations', 'forms',
       'pipelines', 'deal_stages', 'tags', 'modules',
     ];
