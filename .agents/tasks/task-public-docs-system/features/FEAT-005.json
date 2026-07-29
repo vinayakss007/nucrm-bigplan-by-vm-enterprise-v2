@@ -2,7 +2,7 @@
   "id": "FEAT-005",
   "type": "fix",
   "description": "Fix 6 issues identified in semantic review: (1) client-side MDX defeats SSG, (2) doubled anchor elements, (3) ghost articles in sidebar, (4) TOC timing, (5) CopyButton scoping, (6) hydration mismatch in DocsSearch.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Move MDX import to server level in page.tsx, simplify MDXContent.tsx",
     "Remove rehype-autolink-headings from next.config.mjs since custom HeadingLink handles anchors",
@@ -24,5 +24,5 @@
     "Run typecheck: export NVM_DIR='/root/.nvm' && . \"$NVM_DIR/nvm.sh\" && cd /projects/sandbox/nucrm-bigplan-by-vm-enterprise-v2 && npx tsc --noEmit --pretty"
   ],
   "blocked_reason": null,
-  "findings": null
+  "findings": "All 6 review issues resolved. TypeScript compiles cleanly. Pre-commit hooks pass with nvm loaded. Root mdx-components.tsx added for Next.js MDX component resolution. The rehype-autolink-headings package remains in package.json but is no longer imported in next.config.mjs."
 }
