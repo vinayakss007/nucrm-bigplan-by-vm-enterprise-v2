@@ -10,6 +10,7 @@ import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { withConcurrencyGuard } from '@/lib/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { apiError } from '@/lib/api-error';
 
 /**
  * GET /api/tenant/leads/[id]
@@ -90,10 +91,7 @@ export async function GET(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('Error fetching lead:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch lead' },
-      { status: 500 }
-    );
+    return apiError(error);
   }
 }
 
@@ -216,10 +214,7 @@ export async function PATCH(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('Error updating lead:', error);
-    return NextResponse.json(
-      { error: 'Failed to update lead' },
-      { status: 500 }
-    );
+    return apiError(error);
   }
 }
 
@@ -275,9 +270,6 @@ export async function DELETE(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('Error deleting lead:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete lead' },
-      { status: 500 }
-    );
+    return apiError(error);
   }
 }
