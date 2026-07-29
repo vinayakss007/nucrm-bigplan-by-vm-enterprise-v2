@@ -68,8 +68,9 @@ export interface DlpCheckResult {
 /**
  * Get DLP configuration for a tenant
  */
-export async function getDlpConfig(_tenantId?: string): Promise<DlpConfig> {
+export async function getDlpConfig(tenantId?: string): Promise<DlpConfig> {
   const defaultConfig: DlpConfig = {
+    tenantId,
     maskSensitiveFields: true,
     logExports: true,
     maxExportRows: 10000,
@@ -91,15 +92,15 @@ export async function getDlpConfig(_tenantId?: string): Promise<DlpConfig> {
       const config = typeof setting.value === 'string'
         ? JSON.parse(setting.value)
         : setting.value;
-      return { ...defaultConfig, ...config };
+      return { ...defaultConfig, ...config, tenantId };
     }
   } catch (err) {
     // Returning defaults keeps DLP enforcement active (fail-safe), but a failure
-    // here means the configured policy is NOT being applied — the tenant may be
+    // here means the configured policy is NOT being applied -- the tenant may be
     // operating under stricter or looser rules than they configured. That must
     // be visible.
     logger.error('[DLP] Failed to load config, falling back to defaults', {
-      tenantId: _tenantId,
+      tenantId,
       error: err instanceof Error ? err.message : String(err),
     });
   }
