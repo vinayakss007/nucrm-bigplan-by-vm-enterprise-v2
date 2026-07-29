@@ -99,6 +99,9 @@ function KanbanColumn({ status, leads, onNavigate }: { status: string; leads: Le
   );
 }
 
+interface ProductOpt { id: string; name: string; price?: number | string | null }
+interface ServiceOpt { id: string; name: string }
+
 function QuickAddModal({ companies, teamMembers, contacts, onClose, onSuccess }: { companies: CompanyOpt[]; teamMembers: TeamMemberOpt[]; contacts: ContactOpt[]; onClose: () => void; onSuccess: () => void }) {
   const [contactSearch, setContactSearch] = useState('');
   const [selectedContactId, setSelectedContactId] = useState('');
@@ -106,8 +109,25 @@ function QuickAddModal({ companies, teamMembers, contacts, onClose, onSuccess }:
   const contactInputRef = useRef<HTMLInputElement>(null);
   const contactDropdownRef = useRef<HTMLDivElement>(null);
 
-  const [data,setData]=useState({first_name:'',last_name:'',email:'',phone:'',title:'',company_name:'',lead_source:'website',budget:'',timeline:'',authority_level:'unknown',assigned_to:'',tags:''});
+  const [products, setProducts] = useState<ProductOpt[]>([]);
+  const [services, setServices] = useState<ServiceOpt[]>([]);
+
+  const [data,setData]=useState({first_name:'',last_name:'',email:'',phone:'',title:'',company_name:'',lead_source:'website',budget:'',timeline:'',authority_level:'unknown',assigned_to:'',tags:'',requested_product_id:'',requested_service_id:'',notes:'',expected_value:''});
   const [saving,setSaving]=useState(false);
+
+  // Load product & service catalogues for the "What They Want" picker
+  useEffect(() => {
+    const abort = new AbortController();
+    fetch('/api/tenant/products?limit=200', { signal: abort.signal })
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(d => { if (!abort.signal.aborted) setProducts(d.data ?? []); })
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads] Failed to load products:', err); });
+    fetch('/api/tenant/services?limit=200', { signal: abort.signal })
+      .then(r => r.ok ? r.json() : { services: [] })
+      .then(d => { if (!abort.signal.aborted) setServices(d.data ?? d.services ?? []); })
+      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads] Failed to load services:', err); });
+    return () => abort.abort();
+  }, []);
 
   const filteredContacts = useMemo(() => {
     const q = contactSearch.toLowerCase();
@@ -146,6 +166,11 @@ function QuickAddModal({ companies, teamMembers, contacts, onClose, onSuccess }:
       const tagsArray = data.tags ? data.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
       const body: Record<string, unknown> = { ...data, tags: tagsArray };
       if (selectedContactId) body.contact_id = selectedContactId;
+      // Map form fields to schema field names
+      if (data.requested_product_id) body.requested_product_id = data.requested_product_id;
+      if (data.requested_service_id) body.requested_service_id = data.requested_service_id;
+      if (data.notes) body.notes = data.notes;
+      if (data.expected_value) body.value = data.expected_value;
       const res=await fetch('/api/tenant/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const json=await res.json();
       if(!res.ok){toast.error(json.error||'Failed');return;}
@@ -239,6 +264,28 @@ function QuickAddModal({ companies, teamMembers, contacts, onClose, onSuccess }:
                   {(companies||[]).map((c)=>(<option key={c.id} value={c.name}>{c.name}</option>))}
                 </select>
               </div>
+            </div>
+          </div>
+          {/* What They Want - Product/Service */}
+          <div className="border-t border-border/50 pt-4">
+            <p className="text-xs font-extrabold uppercase tracking-widest text-foreground/70 mb-3 flex items-center gap-2"><Target className="w-3.5 h-3.5"/>What They Want</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lbl}>Product</label>
+                <select className={inp} value={data.requested_product_id} onChange={e=>setData(p=>({...p,requested_product_id:e.target.value}))}>
+                  <option value="">No product</option>
+                  {products.map((p)=>(<option key={p.id} value={p.id}>{p.name}{p.price ? ` — ${formatCurrency(Number(p.price))}` : ''}</option>))}
+                </select>
+              </div>
+              <div><label className={lbl}>Service</label>
+                <select className={inp} value={data.requested_service_id} onChange={e=>setData(p=>({...p,requested_service_id:e.target.value}))}>
+                  <option value="">No service</option>
+                  {services.map((s)=>(<option key={s.id} value={s.id}>{s.name}</option>))}
+                </select>
+              </div>
+              <div className="col-span-2"><label className={lbl}>Requirements / Notes</label>
+                <textarea className={cn(inp, 'min-h-[80px] resize-y')} placeholder="What specifically the lead needs, any pricing discussion, context..." value={data.notes} onChange={e=>setData(p=>({...p,notes:e.target.value}))}/>
+              </div>
+              <div><label className={lbl}>Expected Value (USD)</label><input className={inp} type="number" placeholder="e.g. 25000" value={data.expected_value} onChange={e=>setData(p=>({...p,expected_value:e.target.value}))}/></div>
             </div>
           </div>
           <div className="border-t border-border/50 pt-4">
