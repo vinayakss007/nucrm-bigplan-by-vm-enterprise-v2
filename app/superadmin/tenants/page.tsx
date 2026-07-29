@@ -319,12 +319,10 @@ export default function SuperAdminTenantsPage() {
   const impersonate = async (tenantId:string, tenantName:string) => {
     await confirmThen(`Enter "${tenantName}" as superadmin? You will see everything as if you are them.`, async () => {
       setImpersonating(tenantId);
+      // Use server API which sets HTTP-only session cookie server-side
       const res = await fetch('/api/superadmin/impersonate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tenantId})});
       const d = await res.json();
       if(res.ok) {
-        if (d.cookie) {
-          document.cookie = `session=${d.cookie}; Path=/; SameSite=Lax`;
-        }
         sessionStorage.setItem('isImpersonating', 'true');
         sessionStorage.setItem('impersonateSessionId', d.sessionId || '');
         window.location.href = `/tenant/dashboard`;
