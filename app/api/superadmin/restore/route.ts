@@ -11,7 +11,6 @@ import { spawn } from 'child_process';
 import { downloadFromS3, checkFileExists, deleteFile } from '@/lib/restore/runtime-fs';
 import { logError } from '@/lib/errors-server';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
-import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 /**
  * Safely run pg_restore with input validation.
@@ -103,17 +102,18 @@ const restoreSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     // A restore is the most dangerous operation after a hard-delete: it replaces
-    // live data with a backup. Rate-limit to at most 1 per hour per admin.
+    // live data with a backup. Rate-limited before auth, matching the convention
+    // in the other mutating routes, so a flood is rejected before we hit the DB.
+    // Note: 'restore' has no entry in MUTATING_LIMITS, so this falls back to
+    // DEFAULT_LIMITS (15/min) keyed by IP, unless a 'restore_post' limit is
+    // configured in the DB. It is not the "1 per hour per admin" a previous
+    // comment here claimed.
     const limited = await rateLimitMutating(request, 'restore', 'post');
     if (limited) return limited;
 
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
-
-    // Rate limit: max 1 restore per hour
-    const limited = await rateLimitMutating(request, 'restore', 'post');
-    if (limited) return limited;
 
     const body = await readJsonBody(request);
     const validated = validateBody(restoreSchema, body);
