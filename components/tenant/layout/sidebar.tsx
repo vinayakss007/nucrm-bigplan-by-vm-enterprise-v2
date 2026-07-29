@@ -8,6 +8,7 @@ import {
   LifeBuoy, FileText, ShoppingCart, FileSignature, RefreshCw, Library,
   Command, Star, Database, Upload, Workflow, Mail, MessageSquare,
   Trophy, Wrench, Boxes, Sparkles, ListChecks, ArrowRightLeft, Tag, Filter, Send, ShieldCheck, FolderKanban,
+  Video, Activity, PieChart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -49,7 +50,11 @@ const NAV_SECTIONS: NavSection[] = [
       { href:'/tenant/tasks',     label:'Tasks',      icon:CheckSquare,     shortcut:'⌘6', keywords:'todo activities' },
       { href:'/tenant/projects',  label:'Projects',   icon:FolderKanban,    keywords:'project milestone tracking', module:'project-management' },
       { href:'/tenant/calendar',  label:'Calendar',   icon:Calendar,        keywords:'meetings events' },
+      { href:'/tenant/meetings',  label:'Meetings',   icon:Video,           keywords:'meetings calls video conference' },
       { href:'/tenant/follow-ups', label:'Follow-Ups', icon:ListChecks, keywords:'follow up missed overdue reminders' },
+      { href:'/tenant/activities', label:'Activities', icon:Activity,       keywords:'activity timeline history log' },
+      { href:'/tenant/emails',    label:'Emails',     icon:Mail,            keywords:'email compose send inbox' },
+      { href:'/tenant/segments',  label:'Segments',   icon:PieChart,        keywords:'segment audience filter group targeting' },
     ],
   },
   {
