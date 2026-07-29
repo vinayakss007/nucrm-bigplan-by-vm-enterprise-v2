@@ -1,4 +1,4 @@
--- Rollback for 0044_cross_module_record_linking
+-- Rollback for 0038_cross_module_record_linking
 -- Kept in a separate file: drizzle's migrate() has no concept of a DOWN
 -- section and would execute these statements as part of the forward
 -- migration, undoing it immediately.

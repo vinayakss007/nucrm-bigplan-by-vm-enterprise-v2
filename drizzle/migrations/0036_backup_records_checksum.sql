@@ -1,6 +1,6 @@
--- Migration ID: 0042_backup_records_checksum
+-- Migration ID: 0036_backup_records_checksum
 -- Name: Record a content digest for every backup artefact
--- Dependencies: 0041_add_form_views_count
+-- Dependencies: 0034_add_form_views_count
 
 -- A backup that cannot be proven byte-identical to what was written is an
 -- assumption, not a backup. Storing the digest alongside the record lets a

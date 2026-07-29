@@ -1,6 +1,6 @@
--- Migration ID: 0050_audit_logs_retain_actor
+-- Migration ID: 0043_audit_logs_retain_actor
 -- Name: audit_logs.user_id retains the actor when a user is deleted
--- Dependencies: 0048_audit_log_immutability, 0049_purge_blocking_fks
+-- Dependencies: 0042_audit_log_immutability
 
 -- WHY THIS EXISTS
 -- ---------------

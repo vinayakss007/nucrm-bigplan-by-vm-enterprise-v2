@@ -1,9 +1,9 @@
--- Rollback for 0050_audit_logs_retain_actor
+-- Rollback for 0043_audit_logs_retain_actor
 --
 -- WARNING: restoring this FK re-introduces both defects — deleting a user will
--- erase attribution from every audit entry, and (while 0048 is applied) user
+-- erase attribution from every audit entry, and (while 0042 is applied) user
 -- deletion will fail outright because ON DELETE SET NULL fires the blocked UPDATE
--- trigger. Roll back 0048 as well if you need user deletion to work.
+-- trigger. Roll back 0042 as well if you need user deletion to work.
 BEGIN;
 
 DROP INDEX IF EXISTS idx_audit_logs_user;

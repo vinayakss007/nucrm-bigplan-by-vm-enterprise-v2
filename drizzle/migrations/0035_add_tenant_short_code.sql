@@ -1,4 +1,4 @@
--- Migration ID: 0041_add_tenant_short_code
+-- Migration ID: 0035_add_tenant_short_code
 -- Name: Add short_code column to tenants for structured ID system
 -- Dependencies: 0040_add_migration_template
 -- Issue: #600

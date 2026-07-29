@@ -1,6 +1,6 @@
--- Migration ID: 0044_cross_module_record_linking
+-- Migration ID: 0038_cross_module_record_linking
 -- Name: Connect tasks, tickets, activities, quotes and invoices across modules
--- Dependencies: 0043_tenant_isolation_hardening
+-- Dependencies: 0037_tenant_isolation_hardening
 
 -- WHY THIS EXISTS
 -- ---------------

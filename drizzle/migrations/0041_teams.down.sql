@@ -1,4 +1,4 @@
--- Rollback for 0046_teams
+-- Rollback for 0041_teams
 -- Kept in a separate file: drizzle's migrate() has no concept of a DOWN section.
 BEGIN;
 

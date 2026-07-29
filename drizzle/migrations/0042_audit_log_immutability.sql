@@ -1,6 +1,6 @@
--- Migration ID: 0048_audit_log_immutability
+-- Migration ID: 0042_audit_log_immutability
 -- Name: Make the audit hash chain actually immutable (triggers)
--- Dependencies: 0047_project_company
+-- Dependencies: 0041_teams
 
 -- WHY THIS EXISTS
 -- ---------------

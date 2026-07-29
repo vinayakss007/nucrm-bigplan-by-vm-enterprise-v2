@@ -1,10 +1,8 @@
--- Migration ID: 0046_teams
--- Name: Teams — group users for routing and reporting
--- Dependencies: 0045_lead_product_service_request
+-- Migration ID: 0041_teams
+-- Name: Teams -- group users for routing and reporting
+-- Dependencies: 0040_lead_product_service_request
 --
--- RENUMBER NOTE: if PR #753's 0045 lands first, 0045 here becomes 0046 and this
--- becomes 0047. All statements are idempotent so re-running after a renumber is
--- harmless.
+-- RENUMBER NOTE: migration numbering has been fixed; this is now at its correct position.
 
 -- WHY THIS EXISTS
 -- ---------------
