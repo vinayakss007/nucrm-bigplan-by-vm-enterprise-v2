@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import Link from 'next/link';
 
 interface Deal {
   id: string;
@@ -153,7 +152,7 @@ const StageColumn = memo(function StageColumn({ stage, deals, _onDealMove }: { s
 export default function DealsKanbanPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
-  const { data: res, isLoading } = useSWR('/api/tenant/deals');
+  const { data: res, isLoading, mutate } = useSWR('/api/tenant/deals');
   const { data: stagesRes } = useSWR('/api/tenant/pipelines');
   const [deals, setDeals] = useState<Deal[]>([]);
   const loading = isLoading && deals.length === 0;
@@ -218,6 +217,7 @@ export default function DealsKanbanPage() {
         
         if (res.ok) {
           setDeals(prev => prev.map(d => d.id === activeDeal.id ? { ...d, stageId: newStageId } : d));
+          mutate();
           toast.success(`Deal moved to ${stages.find(s => s.id === newStageId)?.name}`);
         }
       } catch {
