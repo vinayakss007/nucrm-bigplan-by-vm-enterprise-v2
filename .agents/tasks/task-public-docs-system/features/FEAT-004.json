@@ -2,7 +2,7 @@
   "id": "FEAT-004",
   "type": "feat",
   "description": "Implement client-side search for the documentation system. Add full-text search across all doc titles, descriptions, and content headings. Build a search index at build time from the docs tree metadata.",
-  "status": "pending",
+  "status": "in_progress",
   "steps": [
     "Enhance components/marketing/docs/DocsSearch.tsx to implement a proper client-side search: (a) Import the full docs tree from lib/marketing/docs.ts. (b) Build a search index from titles, descriptions, section names, and keywords. (c) Implement fuzzy substring matching with result ranking (exact title match > title contains > description contains). (d) Show results in a dropdown with section labels, article titles, and brief descriptions. (e) Keyboard navigation (arrow keys, Enter to navigate, Escape to close). (f) Debounce input to 150ms.",
     "Add a search overlay/modal that can be triggered from the docs layout header area (beyond just the sidebar search). Add Cmd+K or Ctrl+K shortcut specifically within docs pages to open search.",
