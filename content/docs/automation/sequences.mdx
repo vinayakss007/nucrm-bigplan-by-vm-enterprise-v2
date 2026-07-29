@@ -1,0 +1,54 @@
+{/* title: Email sequences */}
+{/* description: Set up multi-step drip campaigns that send personalised emails on a schedule, with automatic exit when someone replies. */}
+
+## What sequences do
+
+A sequence is an ordered series of emails sent to a contact over time. Each step has a delay (e.g. "wait 3 days"), a template, and personalisation variables. The sequence stops automatically when the contact replies, unsubscribes, or meets an exit condition you define.
+
+## Creating a sequence
+
+1. Go to **Automations > Sequences**
+2. Click **New sequence**
+3. Name it and set its purpose (e.g. "Post-demo follow-up")
+4. Add steps: for each step, choose a delay, pick or create an email template, and set any conditions
+
+### Step configuration
+
+Each step has:
+
+- **Delay** — how long to wait since the previous step (or since enrolment for step 1)
+- **Template** — the email to send, with merge fields like `{{first_name}}`, `{{deal_name}}`
+- **Send window** — optionally restrict to business hours so emails arrive at sensible times
+- **Skip condition** — optionally skip this step if a field meets a criteria (e.g. skip step 3 if deal stage has already advanced)
+
+## Enrolling contacts
+
+Contacts enter a sequence by:
+
+- Manual enrolment from the contact or deal detail view
+- A workflow action ("Enrol in sequence")
+- A segment rule (everyone matching a filter joins automatically)
+- A form submission trigger
+
+<Callout variant="warning">
+A contact can only be in one sequence at a time. Enrolling them in a new one exits them from the current one.
+</Callout>
+
+## Exit rules
+
+A contact exits automatically when:
+
+- They reply to any email in the sequence
+- They reach the end of all steps
+- They are manually removed
+- An exit condition you defined is met (e.g. deal moves to a later stage)
+- They unsubscribe
+
+## Monitoring
+
+The sequence dashboard shows:
+
+- How many contacts are currently enrolled
+- Which step each is on
+- Open and reply rates per step
+- Drop-off and completion rates

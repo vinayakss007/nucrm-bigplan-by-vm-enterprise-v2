@@ -1,0 +1,60 @@
+{/* title: Audit logs and change history */}
+{/* description: Every change in your workspace is recorded — who did it, when, what the value was before and after. */}
+
+## What is logged
+
+NuCRM maintains two levels of history:
+
+1. **Audit log** — a workspace-wide, immutable record of every significant action
+2. **Change history** — per-record, per-field before/after values
+
+Together they answer: "Who changed the deal value in March, and what was it before?"
+
+## Viewing the audit log
+
+Go to **Settings > Audit** to see a chronological stream of events:
+
+- Record created, updated, deleted, restored
+- User invited, role changed, deactivated
+- Settings changed (pipeline stages, permissions, modules)
+- Login, logout, failed login attempts
+- Impersonation sessions started and ended
+- Export and bulk operations
+
+Each entry shows:
+
+| Column | Detail |
+|---|---|
+| Timestamp | When it happened (to the second) |
+| User | Who did it (or "System" for automated actions) |
+| Action | What was done (create, update, delete, login, export) |
+| Entity | Which record or setting was affected |
+| Details | Specific fields changed (with old → new values for updates) |
+
+## Change history on a record
+
+Open any contact, deal or ticket and click the **History** tab. You see every field change with:
+
+- The date of the change
+- Who made it
+- The field name
+- The value before
+- The value after
+
+This is especially useful for:
+
+- Tracking deal value changes (was it discounted without approval?)
+- Seeing who reassigned a contact (and when)
+- Proving what was communicated to a customer at a given date
+
+<Callout variant="info">
+The audit log is immutable. Not even administrators can delete or edit entries. This is by design — the log's value as evidence depends on nobody being able to tamper with it.
+</Callout>
+
+## Filtering and exporting
+
+Filter the audit log by date range, user, action type, or entity. Export filtered results as CSV for compliance evidence or internal review.
+
+## Retention
+
+Audit log entries are retained according to your workspace's retention policy (configurable in Settings). Enterprise plans support extended retention periods.

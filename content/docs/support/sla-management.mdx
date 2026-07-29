@@ -1,0 +1,54 @@
+{/* title: SLA management */ }
+{/* description: Define response and resolution targets by priority, and get alerted before they breach. */}
+
+## What SLA policies control
+
+An SLA (Service Level Agreement) policy defines the maximum time allowed for:
+
+- **First response** — how quickly an agent must acknowledge the ticket
+- **Resolution** — how quickly the ticket must be resolved
+
+Different priorities can have different targets.
+
+## Setting up SLA policies
+
+Go to **Settings > SLA** and create a policy:
+
+| Priority | First response target | Resolution target |
+|---|---|---|
+| Urgent | 15 minutes | 4 hours |
+| High | 1 hour | 8 hours |
+| Normal | 4 hours | 24 hours |
+| Low | 8 hours | 48 hours |
+
+Define business hours (e.g. Monday–Friday 9am–6pm) so SLA timers pause outside working hours.
+
+## SLA indicators
+
+On every ticket, a visual indicator shows:
+
+- **Green** — within target, plenty of time remaining
+- **Amber** — approaching the target (configurable threshold, e.g. 75% of time elapsed)
+- **Red** — breached
+
+The ticket list and kanban views both show these indicators, so breaches are visible at a glance without opening each ticket.
+
+## Breach alerts
+
+When a ticket breaches its SLA:
+
+- The assigned agent receives an immediate notification
+- The ticket is flagged in the queue with a red SLA badge
+- Optionally, an automation can trigger: escalate to manager, reassign, notify a channel
+
+<Callout variant="warning">
+SLA breaches are recorded permanently on the ticket. Even if you respond immediately after a breach, the historical record shows it was late. This matters for reporting and customer reviews.
+</Callout>
+
+## SLA reporting
+
+View SLA compliance across your team from **Reports > Support**:
+
+- Compliance rate by agent, team and period
+- Average first-response and resolution times
+- Breach frequency and patterns (time of day, priority, requester)

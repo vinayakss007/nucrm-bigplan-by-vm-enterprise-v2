@@ -1,0 +1,55 @@
+{/* title: Triggers and actions */}
+{/* description: The full list of events that can start a workflow and the actions each step can perform. */}
+
+## Triggers
+
+A trigger is the event that starts your workflow. Each workflow has exactly one trigger.
+
+### Record events
+
+| Trigger | Fires when |
+|---|---|
+| Contact created | A new contact is added (manually, via import, or from a form) |
+| Contact updated | Any field on a contact changes |
+| Deal created | A new deal is added |
+| Deal stage changed | A deal moves to a specific stage |
+| Deal won | A deal is marked as won |
+| Deal lost | A deal is marked as lost |
+| Lead created | A new lead arrives |
+| Task completed | A task is marked done |
+| Ticket created | A new support ticket is opened |
+| Ticket SLA breached | A ticket exceeds its response or resolution target |
+| Form submitted | A public form receives a submission |
+| Invoice paid | Payment is recorded against an invoice |
+
+### Time-based triggers
+
+| Trigger | Fires when |
+|---|---|
+| Scheduled | At a time you define (daily, weekly, monthly) |
+| Date field approaching | A date field on a record is N days away |
+
+## Actions
+
+Actions are the steps your workflow performs after the trigger fires.
+
+| Action | What it does |
+|---|---|
+| Send email | Sends a templated email to the contact or a specified address |
+| Send SMS | Sends an SMS message |
+| Send WhatsApp | Sends a WhatsApp template message |
+| Create task | Creates a task with title, owner, priority and due date |
+| Update field | Sets a field value on the trigger record |
+| Assign owner | Changes the record owner (supports round-robin) |
+| Add tag | Adds a tag to the record |
+| Remove tag | Removes a tag |
+| Create deal | Creates a new deal linked to the contact |
+| Notify channel | Posts a message to Slack or a notification channel |
+| Call webhook | Sends an HTTP POST to an external URL |
+| Log activity | Adds an activity note to the record timeline |
+| Enrol in sequence | Adds the contact to an email sequence |
+| Wait | Pauses for a specified duration before continuing |
+
+<Callout variant="note">
+Actions can use merge fields from the trigger record. For example, a "Send email" action can include the deal name, value and owner in the template.
+</Callout>

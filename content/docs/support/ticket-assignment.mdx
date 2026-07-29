@@ -1,0 +1,40 @@
+{/* title: Ticket assignment */}
+{/* description: Route tickets to the right agent or team automatically, or assign manually when judgment is needed. */}
+
+## Automatic assignment
+
+Set up assignment rules under **Settings > Assignment rules** (select "Tickets" as the entity type):
+
+- **Round-robin** — distribute evenly across available agents
+- **Load-balanced** — assign to the agent with the fewest open tickets
+- **Rule-based** — route by priority, tag, requester company, or custom field (e.g. enterprise customers always go to senior agents)
+
+Rules are evaluated in order. The first match wins.
+
+## Manual assignment
+
+Assign or reassign a ticket from:
+
+- The ticket detail view (click the owner field)
+- The ticket list (select tickets → bulk action → reassign)
+- The kanban board (drag to a team column if configured)
+
+## Team assignment
+
+Assign to a team rather than an individual when you want any available agent to pick it up. Team inboxes show tickets assigned to the team that nobody has claimed yet.
+
+<Callout variant="tip">
+Combine team assignment with an "unclaimed for 10 minutes" automation that escalates or re-routes. This prevents tickets from sitting in a shared queue when the team is busy.
+</Callout>
+
+## Out-of-office
+
+When an agent is marked as out of office, new tickets skip them in the round-robin. Tickets already assigned stay put unless you enable automatic reassignment in the OOO settings.
+
+## Escalation
+
+Build escalation into your automation rules:
+
+- If a ticket is unassigned for more than N minutes, assign to a backup
+- If priority is "urgent" and the assigned agent has not responded in 15 minutes, notify the manager
+- If SLA is at risk, reassign to the team lead

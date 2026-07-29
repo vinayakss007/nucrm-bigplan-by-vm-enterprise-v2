@@ -1,0 +1,46 @@
+{/* title: Sentiment analysis */}
+{/* description: Automatically score the tone of inbound customer messages and surface negative trends before they become churn. */}
+
+## What sentiment analysis does
+
+Every inbound message (email, chat, WhatsApp) is optionally scored for sentiment: positive, neutral or negative. The score attaches to the message on the timeline and rolls up to the contact level as an overall sentiment trend.
+
+## Enabling sentiment
+
+Sentiment analysis is part of the AI Assistant module. To enable:
+
+1. Go to **Settings > AI**
+2. Toggle **Sentiment analysis** on
+3. Choose which channels to analyse (email, chat, WhatsApp, all)
+
+Once enabled, new inbound messages are scored automatically. It does not retroactively score historical messages unless you trigger a manual rescore.
+
+## Reading sentiment
+
+On the contact timeline, each inbound message shows a small sentiment indicator (green/grey/red dot). The contact's overall sentiment is summarised at the top of their detail view:
+
+- **Positive trend** — recent messages are consistently positive
+- **Neutral** — mixed or informational tone
+- **Negative trend** — recent messages carry frustration, urgency or dissatisfaction
+
+<Callout variant="warning">
+Sentiment analysis is a signal, not a diagnosis. A single negative message after a billing error does not mean the customer is churning. Look at the trend over the last 5–10 messages.
+</Callout>
+
+## Acting on sentiment
+
+Combine sentiment with automation:
+
+- Trigger a notification to the account owner when a contact's sentiment turns negative
+- Create an at-risk flag when 3+ consecutive messages score negative
+- Surface negative-sentiment contacts in a saved view for proactive outreach
+
+## Accuracy and limits
+
+Sentiment works best on:
+
+- Messages longer than one sentence
+- English text (other languages are supported but with lower accuracy)
+- Direct communication (not forwarded threads or automated replies)
+
+Short responses like "OK" or "Thanks" typically score neutral regardless of context.

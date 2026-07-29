@@ -1,0 +1,58 @@
+{/* title: Webhooks */}
+{/* description: Push events to external systems as they happen, with retries and a queue you can inspect and replay when things fail. */}
+
+## Outbound webhooks
+
+An outbound webhook sends an HTTP POST to a URL you specify whenever a chosen event fires in NuCRM. Use webhooks to:
+
+- Notify your own systems when a deal is won
+- Trigger an external process when a form is submitted
+- Sync data to a warehouse or analytics tool
+- Alert a monitoring channel when an SLA breaches
+
+## Setting up a webhook
+
+1. Go to **Settings > Webhooks**
+2. Click **New webhook**
+3. Enter the destination URL
+4. Choose which events to subscribe to (deal.created, contact.updated, ticket.sla_breached, etc.)
+5. Optionally add a secret — NuCRM signs each payload so your receiver can verify authenticity
+6. Save and activate
+
+## Delivery and retries
+
+When a webhook fires:
+
+1. NuCRM sends a POST with the event payload as JSON
+2. If the receiver responds with a 2xx status, delivery is marked successful
+3. If it fails (timeout, 5xx, network error), the delivery is retried with exponential backoff
+4. After all retries are exhausted, the event lands in the **dead-letter queue**
+
+## The dead-letter queue
+
+Failed deliveries that exhausted retries are not lost. They sit in the dead-letter queue where you can:
+
+- Inspect the payload that was sent
+- See the failure reason and response code
+- **Replay** — re-send to the same URL (useful after you fix the receiver)
+- **Discard** — acknowledge and remove
+
+<Callout variant="tip">
+Check the dead-letter queue weekly. A recurring failure pattern usually means the receiver has moved or its authentication has expired.
+</Callout>
+
+## Delivery logs
+
+Every delivery attempt is logged with:
+
+- Timestamp
+- HTTP status received
+- Response time
+- Payload sent
+- Attempt number
+
+Access logs from **Settings > Webhooks > Logs**.
+
+## Inbound webhooks
+
+NuCRM can also receive webhooks from external systems. Inbound webhook URLs create or update records in your workspace when called. Configure them under **Settings > Webhooks > Inbound**.

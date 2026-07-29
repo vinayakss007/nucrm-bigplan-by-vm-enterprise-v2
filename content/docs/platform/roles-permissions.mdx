@@ -1,0 +1,59 @@
+{/* title: Roles and permissions */}
+{/* description: Control who can see, edit, delete and export data using built-in roles, custom roles, and field-level rules. */}
+
+## Built-in roles
+
+Every workspace ships with four roles:
+
+| Role | Access level |
+|---|---|
+| **Admin** | Full access to all records, settings, billing and user management |
+| **Manager** | Access to own team's records, can edit settings but not billing |
+| **Sales rep** | Access to own records and shared records assigned to them |
+| **Viewer** | Read-only access, cannot create or edit |
+
+## Custom roles
+
+Need more granularity? Create custom roles under **Settings > Roles**:
+
+1. Click **New role**
+2. Name it (e.g. "Finance", "Support agent", "External consultant")
+3. For each module, set permissions: View, Create, Edit, Delete, Export
+4. Optionally restrict to "Own records only" or "Own team records"
+5. Save
+
+Users are assigned one role. Changing their role takes effect immediately.
+
+## Record-level permissions
+
+Beyond roles, you can restrict access to individual records:
+
+- **Private records** — visible only to the owner and admins
+- **Team-visible** — visible to everyone in the owner's team
+- **Public** — visible to everyone in the workspace (default)
+
+Set this per record from its detail view, or in bulk from a list view.
+
+## Field-level permissions
+
+Restrict visibility of sensitive fields (e.g. salary, deal discount, personal identifiers):
+
+1. Go to **Settings > Custom fields**
+2. Select a field
+3. Under **Visibility**, choose which roles can see and which can edit this field
+
+Users without visibility permission see the field as blank. They do not see a "restricted" label — the field simply does not appear for them.
+
+<Callout variant="warning">
+Field-level permissions are enforced in the interface and the API. A user without permission cannot read the field through any channel, including exports and the REST API.
+</Callout>
+
+## Hierarchy
+
+Permissions respect the team hierarchy:
+
+- A manager sees their own records plus all records owned by their reports
+- A director sees everything their managers see
+- An admin sees everything regardless of hierarchy
+
+Configure hierarchy under **Settings > Hierarchy**.

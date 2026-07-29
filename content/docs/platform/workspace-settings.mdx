@@ -1,0 +1,54 @@
+{/* title: Workspace settings */ }
+{/* description: General workspace configuration — name, branding, locale, timezone, and the settings that apply to every user in the workspace. */}
+
+## Accessing settings
+
+Click **Settings** in the sidebar (visible to admins and managers). The settings area is organised into sections — each accessible from the left navigation within Settings.
+
+## General
+
+| Setting | What it controls |
+|---|---|
+| Workspace name | Displayed in the header and on shared documents |
+| Subdomain | Your workspace URL (e.g. yourcompany.nucrm.io) |
+| Timezone | Default timezone for reports, schedules and date displays |
+| Date format | How dates are displayed (DD/MM/YYYY, MM/DD/YYYY, etc.) |
+| Currency | Default currency for deals and invoices (individual deals can override) |
+| Language | Interface language (affects UI labels, not your data) |
+
+## Branding
+
+Upload your logo, set brand colours, and optionally configure a custom domain. Branding applies to:
+
+- The workspace header
+- The customer portal
+- PDF documents (quotes, invoices)
+- Email headers
+
+<Callout variant="tip">
+If you serve multiple clients from one account (on an Enterprise plan with multiple workspaces), each workspace can have its own branding — so your customer portal matches each client's brand, not yours.
+</Callout>
+
+## Notifications
+
+Configure workspace-wide notification defaults:
+
+- Which events trigger notifications (deal won, ticket created, SLA breach, etc.)
+- Default channels (in-app, email digest, Slack, Telegram)
+- Quiet hours (no notifications outside defined hours)
+
+Individual users can override these from their personal preferences.
+
+## Modules
+
+Toggle modules on or off for your workspace. Switching a module off hides its navigation items and features from all users, but does not delete any data. Switch it back on and everything reappears.
+
+## Data retention
+
+Configure how long deleted records stay in trash before permanent removal, how long audit logs are retained, and when inactive records are flagged for review.
+
+## Danger zone
+
+- **Export workspace** — full structured export of all data
+- **Transfer ownership** — hand admin rights to another user
+- **Delete workspace** — permanently removes all data (requires confirmation and a waiting period)

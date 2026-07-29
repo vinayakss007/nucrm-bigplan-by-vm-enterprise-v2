@@ -1,0 +1,57 @@
+{/* title: AI credits and governance */}
+{/* description: How AI credit budgets work, how to bring your own provider key, and how administrators control AI usage across the workspace. */}
+
+## Credit system
+
+Every AI action consumes credits from your workspace's monthly budget:
+
+| Action | Typical cost |
+|---|---|
+| Email draft | 1–2 credits |
+| Lead scoring (batch) | 1 credit per 10 leads |
+| Summarisation | 1–3 credits |
+| Sentiment analysis | 0.5 credits per message |
+| Content generation | 2–4 credits |
+
+Your remaining budget is visible in:
+
+- The AI workspace header
+- The email composer (before you draft)
+- **Settings > AI > Usage** (full breakdown by user and feature)
+
+When credits are exhausted, AI features show a notification instead of producing output. They resume at the start of the next billing period, or when you top up.
+
+## Bring your own key
+
+If you prefer to use your own AI provider account:
+
+1. Go to **Settings > AI providers**
+2. Add your provider key (supports multiple providers)
+3. Choose which features should use your key vs the platform allowance
+
+When your own key is configured, those requests go directly to your provider account under your terms. The workspace credit budget is not consumed for those calls.
+
+<Callout variant="info">
+Bring-your-own-key means the platform never sees your prompts or responses for those calls. Useful for organisations with strict data residency requirements.
+</Callout>
+
+## Admin controls
+
+Administrators can:
+
+- **Set a monthly budget** per workspace
+- **View usage** broken down by user, feature and date
+- **Manage prompt templates** that guide AI output (keeping it on-brand)
+- **Disable AI features** entirely at workspace level
+- **Restrict which roles** can use AI features
+
+## Audit trail
+
+Every AI action is logged:
+
+- Who triggered it
+- Which feature was used
+- How many credits it consumed
+- The record it was applied to
+
+This log is accessible from **Settings > AI > Usage log** and is included in the workspace audit trail.

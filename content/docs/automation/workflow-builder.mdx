@@ -1,0 +1,48 @@
+{/* title: Visual workflow builder */}
+{/* description: Build multi-step automations by dragging nodes and connecting them on a canvas, with conditions, delays and branching. */}
+
+## Opening the builder
+
+Navigate to **Automations** in the sidebar and click **New workflow**. The builder opens as a full-screen canvas.
+
+## How it works
+
+A workflow is a directed graph: a **trigger** starts it, and **action nodes** execute in sequence along the connections you draw. Between actions you can place **condition nodes** (if/else branches) and **delay nodes** (wait a set time or until a condition is met).
+
+### Building a workflow
+
+1. **Add a trigger** — the event that starts the workflow (e.g. deal moved to "Won")
+2. **Drag action nodes** onto the canvas from the panel on the left
+3. **Connect them** by drawing a line from one node's output to the next node's input
+4. **Configure each node** by clicking it and filling in its settings
+5. **Test** the workflow against a sample record before activating
+
+<Callout variant="tip">
+Start simple. A trigger, one action and one delay already covers most follow-up use cases. Add branching only when the logic genuinely differs by path.
+</Callout>
+
+### Available node types
+
+| Type | Purpose | Example |
+|---|---|---|
+| Trigger | Starts the workflow | "When deal stage changes to Negotiation" |
+| Action | Does something | Send email, create task, update field, assign owner |
+| Condition | Branches the path | "If deal value > $50,000, take the left path" |
+| Delay | Pauses execution | "Wait 3 days", "Wait until field X is not empty" |
+
+## Conditions and branching
+
+A condition node has two outputs: **Yes** and **No**. Connect each to a different set of actions. Conditions can test:
+
+- Any field value on the trigger record
+- Time since an event
+- Whether a related record exists
+- A calculated or formula field result
+
+## Activating and monitoring
+
+Toggle the workflow to **Active** when ready. From that point, every time the trigger event fires, the workflow runs. Monitor it from the **Runs** tab — each run shows the path taken, the outcome of each step, and any failures.
+
+## Editing a live workflow
+
+You can edit a workflow without deactivating it. Changes apply to new runs only; runs already in progress complete on the version they started with.

@@ -1,0 +1,51 @@
+{/* title: Backup and restore */ }
+{/* description: Automated backups, point-in-time restore and selective restore so mistakes are recoverable instead of terminal. */}
+
+## How backups work
+
+Your workspace is backed up automatically on a schedule. Backups capture:
+
+- All records (contacts, deals, tasks, tickets, invoices, etc.)
+- Custom field definitions and their values
+- Pipeline configuration, roles, permissions
+- Documents and attachments metadata
+- Automation rules and workflows
+
+## Viewing backup status
+
+Go to **Settings > Backup** to see:
+
+- When the last backup completed
+- Backup schedule and frequency
+- History of recent backups with their sizes and statuses
+
+## Point-in-time restore
+
+If something goes wrong — a bad import, a bulk delete, a data corruption — you can restore your workspace to a previous point in time:
+
+1. Go to **Settings > Backup**
+2. Click **Restore**
+3. Choose a backup point from the list (shows date, time and what changed since)
+4. Confirm
+
+<Callout variant="warning">
+A full restore replaces current data with the backup state. Any changes made after the backup point are lost. Consider selective restore (below) if you only need to recover specific records.
+</Callout>
+
+## Selective restore
+
+When you only need to undo one mistake (e.g. a bulk-deleted set of contacts), selective restore lets you recover specific records without rolling back everything:
+
+1. Go to **Settings > Backup**
+2. Click **Selective restore**
+3. Browse the backup to find the records you need
+4. Select them and click **Restore selected**
+5. The records are added back to your current workspace
+
+## Recoverable trash
+
+Before reaching for a backup, check the trash. Deleted records (soft delete) sit in **Trash** for a configurable period (default 30 days), and can be restored with one click without touching the backup system.
+
+## Tested restore procedures
+
+Backups are only useful if they have been restored. NuCRM's backup system is regularly tested to verify that a backup can actually be used to recover data — not just that it was created successfully.

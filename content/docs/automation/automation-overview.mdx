@@ -1,0 +1,45 @@
+{/* title: Automation overview */}
+{/* description: Understand what NuCRM automation can do, when to use it, and how the different pieces fit together. */}
+
+## What automation means here
+
+Automation in NuCRM is anything that happens without someone clicking a button: a lead gets assigned, a follow-up email sends, a task is created, a webhook fires. It ranges from simple one-click rules that run silently to complex multi-step workflows you design visually.
+
+## The pieces
+
+| Component | What it does | Complexity |
+|---|---|---|
+| **One-click automations** | Five pre-built rules every workspace gets on day one (welcome email, task reminders, deal stage alerts, lead assignment notify, trial expiry) | None — already on |
+| **Assignment rules** | Route leads and contacts automatically by source, territory, value or custom field | Low |
+| **Email sequences** | Multi-step drip campaigns with personalisation, delays and exit rules | Medium |
+| **Visual workflows** | The full builder — triggers, conditions, branches, delays, and any combination of actions | High |
+| **Webhooks** | Push events to external systems with retries and a replayable dead-letter queue | Medium |
+| **Lead warming** | Automated festival, birthday and anniversary touchpoints with reply-intent detection | Medium |
+
+## When to automate
+
+Automate when:
+
+- The same manual step happens every time a record reaches a certain state
+- Someone forgetting a step costs you money or reputation
+- The decision logic is clear and consistent (if X, then always Y)
+
+<Callout variant="warning">
+Do not automate something you have not done manually at least ten times. If the process is not settled, the automation will encode the wrong behaviour and hide it from view.
+</Callout>
+
+## Where automation lives
+
+- **Automations** in the sidebar — the visual workflow builder and sequence manager
+- **Settings > Assignment rules** — routing configuration
+- **Settings > Webhooks** — outbound event delivery
+- Each record's timeline shows which automations have fired against it
+
+## Execution visibility
+
+Every automation run is logged. You can see:
+
+- Which automation fired, when, and on which record
+- What each step did (email sent, task created, field updated)
+- Whether a step failed and why
+- Webhook delivery attempts and their response codes

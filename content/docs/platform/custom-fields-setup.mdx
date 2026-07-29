@@ -1,0 +1,52 @@
+{/* title: Custom fields */ }
+{/* description: Add fields to contacts, companies, deals, leads, tickets and other entities to capture the data your business actually needs. */}
+
+## Why custom fields
+
+Every business tracks different things. A real estate agency needs "Property type" on deals; a SaaS company needs "Subscription plan" on companies. Custom fields let you capture this without workaround columns or overloaded notes.
+
+## Creating a custom field
+
+1. Go to **Settings > Custom fields**
+2. Choose the entity: Contacts, Companies, Deals, Leads, Tasks or Tickets
+3. Click **Add field**
+4. Configure:
+   - **Label** — what users see (e.g. "Property type")
+   - **Internal key** — auto-generated from the label, used in the API and automations
+   - **Type** — text, number, date, email, phone, URL, select (dropdown), multi-select, checkbox, textarea, currency, formula
+   - **Required** — must be filled when creating or editing
+   - **Default value** — pre-filled if the user does not provide one
+   - **Visibility** — which roles can see and edit this field (see Roles & Permissions)
+5. Save
+
+The field appears on every record of that entity immediately.
+
+## Field types
+
+| Type | Best for |
+|---|---|
+| Text | Short free-form values (company registration number, tracking ID) |
+| Number | Quantities, scores, counts |
+| Currency | Monetary values (respects workspace currency settings) |
+| Date | Milestones, deadlines, start dates |
+| Select | Controlled vocabulary, single choice (e.g. industry, source) |
+| Multi-select | Multiple values (e.g. interests, regions served) |
+| Checkbox | Yes/no flags (e.g. "Is technical contact") |
+| Formula | Computed from other fields (e.g. days since last activity, revenue per seat) |
+
+## Ordering and grouping
+
+Drag custom fields to reorder them on the record form. Group related fields under a section header for clarity (e.g. "Financial details" containing deal value, currency, payment terms, tax exemption).
+
+## Using custom fields in reports and automations
+
+Custom fields are available everywhere standard fields are:
+
+- As filter criteria in reports and saved views
+- As conditions in automation workflows
+- As merge variables in email templates (`{{field_key}}`)
+- In the API (read and write)
+
+<Callout variant="note">
+Changing a field's type after data exists may lose existing values. If you need to change type, create a new field, migrate the data, then remove the old one.
+</Callout>

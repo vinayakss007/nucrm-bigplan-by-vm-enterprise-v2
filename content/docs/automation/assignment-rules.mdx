@@ -1,0 +1,34 @@
+{/* title: Assignment rules */}
+{/* description: Automatically route new leads, contacts and tickets to the right owner without manual triage. */}
+
+## Why automatic assignment matters
+
+When a new lead arrives from a form at 2am, someone needs to own it by morning. Manual assignment means delay; round-robin assignment means even distribution; rule-based assignment means the right person gets it based on territory, value or source.
+
+## Setting up rules
+
+Go to **Settings > Assignment rules**. Create a rule by defining:
+
+1. **Which records** — leads, contacts, tickets, or deals
+2. **Conditions** — when this rule applies (e.g. source = "Website", region = "EMEA", value > $50,000)
+3. **Assignment method**:
+   - **Round-robin** — distributes evenly across a group of users
+   - **Load-balanced** — assigns to the person with the fewest open records
+   - **Specific user** — always assigns to one named person
+   - **Team** — assigns to a team; any member can pick it up
+
+### Rule priority
+
+Rules are evaluated in order from top to bottom. The first matching rule wins. Drag to reorder. If no rule matches, the record stays unassigned and appears in the shared queue.
+
+<Callout variant="tip">
+Create a catch-all rule at the bottom that assigns to a team inbox, so nothing ever sits with no owner.
+</Callout>
+
+## Out-of-office handling
+
+When a user marks themselves as out of office, their assignment rules are paused and their allocation is redistributed to the remaining active users in their pool. Records already assigned to them stay put unless you enable the "reassign on OOO" option.
+
+## Assignment in workflows
+
+The workflow builder also has an "Assign owner" action node that supports round-robin. Use this when assignment should happen mid-workflow (e.g. after a qualification step) rather than immediately on creation.

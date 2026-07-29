@@ -1,0 +1,45 @@
+{/* title: Revenue forecasting */}
+{/* description: Weighted pipeline forecasting that reflects reality by accounting for stage probability and close date. */}
+
+## How forecasting works
+
+NuCRM calculates a weighted forecast from your open deals:
+
+**Forecast value = Deal value × Stage probability × Close date likelihood**
+
+Each pipeline stage carries a win probability (configured in **Settings > Pipelines**). A $100,000 deal at the "Proposal" stage with a 40% probability contributes $40,000 to the forecast.
+
+## Viewing the forecast
+
+Go to **Reports > Forecast** or check the forecast widget on your sales dashboard. The forecast view shows:
+
+- **Committed** — deals in final stages with high probability
+- **Best case** — committed plus deals in middle stages
+- **Pipeline** — total open value regardless of stage
+- **Closed to date** — won deals this period, for comparison
+
+## Adjusting stage probabilities
+
+Go to **Settings > Pipelines**, select your pipeline, and edit each stage's default probability:
+
+| Stage | Typical probability |
+|---|---|
+| Qualified | 10% |
+| Discovery | 20% |
+| Proposal | 40% |
+| Negotiation | 60% |
+| Verbal yes | 80% |
+
+These are defaults. If your historical data shows different conversion rates, adjust them.
+
+## Forecast by period
+
+Toggle between this month, this quarter and this year. The forecast only includes deals with a close date falling within the selected period.
+
+<Callout variant="note">
+A forecast is only as good as the close dates on your deals. If reps habitually set optimistic close dates and then push them, the quarterly forecast will always look better than reality. Review close-date accuracy in your pipeline health report.
+</Callout>
+
+## Forecast vs actual
+
+At the end of each period, compare forecast to actual closed revenue. If there is a consistent gap, either stage probabilities are wrong, close dates are optimistic, or deals are being lost that the pipeline did not flag. This comparison is the most valuable input to improving your process.

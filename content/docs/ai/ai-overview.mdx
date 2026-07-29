@@ -1,0 +1,38 @@
+{/* title: AI assistant overview */}
+{/* description: What the NuCRM AI assistant does, where it appears, and how it is governed by workspace credits and admin controls. */}
+
+## What the assistant does
+
+The AI assistant handles the administrative work that sits between knowing what to do and having done it: drafting the follow-up you keep postponing, scoring the lead you have not looked at yet, summarising the thread you need to catch up on before a call, and flagging the account that stopped replying three weeks ago.
+
+It does not send anything on your behalf unless you explicitly enable an automation that does so. Every output is presented for your review first.
+
+## Where it appears
+
+| Location | What it does |
+|---|---|
+| Email composer | Drafts a reply or follow-up from the record's context |
+| Contact detail | Summarises the contact, scores them, detects sentiment |
+| Deal detail | Predicts win probability, suggests next steps |
+| Ticket detail | Summarises the thread, detects urgency |
+| Lead list | Scores leads 0–100 and explains the reasoning |
+| AI workspace | A dedicated space for drafting, summarising and analysis |
+| Automation actions | Can trigger AI drafting, scoring or warming on a schedule |
+
+## What it does not do
+
+- It does not access data outside your workspace
+- It does not send messages without your explicit approval (unless you build an automation that enables it)
+- It does not make irreversible changes to records
+- It does not learn from one workspace and apply that to another
+
+<Callout variant="info">
+Every AI action is written to the audit trail with the user, the feature used, and the credit cost. Your administrators can see exactly what was generated and by whom.
+</Callout>
+
+## Governance
+
+- **Credits** — each workspace has a monthly AI credit budget, visible in Settings
+- **Provider keys** — you can supply your own provider key so calls go to your account
+- **Prompt templates** — admins can manage the system prompts that guide output, keeping it on-brand
+- **Kill switch** — AI features can be disabled entirely at workspace level

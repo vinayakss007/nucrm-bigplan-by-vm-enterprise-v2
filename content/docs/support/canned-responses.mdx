@@ -1,0 +1,48 @@
+{/* title: Canned responses */ }
+{/* description: Save reusable reply templates so agents respond quickly and consistently without retyping common answers. */}
+
+## What canned responses are
+
+A canned response is a pre-written reply that agents can insert into a ticket response with one click. They are shorter and more conversational than knowledge-base articles — think "acknowledgement of receipt" or "asking for a screenshot" rather than a full how-to guide.
+
+## Creating canned responses
+
+1. Go to **Settings > Canned responses**
+2. Click **New response**
+3. Give it a short name (e.g. "Request screenshot", "Acknowledge receipt", "Escalation notice")
+4. Write the response body — you can include merge fields like `{{first_name}}` and `{{ticket_subject}}`
+5. Optionally assign it to a category for organisation
+
+<Callout variant="tip">
+Keep canned responses short and human. An agent should be able to insert one, add a sentence of personalisation, and send. If it reads like a robot wrote it, the customer notices.
+</Callout>
+
+## Using canned responses
+
+When composing a reply on a ticket:
+
+1. Click the **Canned response** button (or type a shortcut if configured)
+2. Search by name or browse categories
+3. Click to insert — the text appears in the composer with merge fields resolved
+4. Edit as needed, then send
+
+## Personalisation
+
+Merge fields in canned responses are resolved at insertion time:
+
+- `{{first_name}}` — the requester's first name
+- `{{ticket_subject}}` — the ticket subject
+- `{{agent_name}}` — the replying agent's name
+- `{{company}}` — the requester's company
+
+## Team sharing
+
+Canned responses are shared across the workspace by default. Individual agents can also create personal responses that only they see, using the "Personal" toggle.
+
+## When to use canned responses vs KB articles
+
+| Canned response | KB article |
+|---|---|
+| Short, conversational, agent-facing | Long, detailed, customer-facing |
+| Inserted into a reply | Linked or published on the portal |
+| "Let me look into this for you" | "Here is how to reset your password" |
