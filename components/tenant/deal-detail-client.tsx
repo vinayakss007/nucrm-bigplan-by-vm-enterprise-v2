@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, DollarSign, Calendar, User, Building2, TrendingUp,
-  Edit, Trash2, Activity,
+  Edit, Trash2, Activity, Phone, StickyNote,
   FileText, Plus, MoreHorizontal
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency, formatRelativeTime } from '@/lib/utils';
@@ -61,7 +61,7 @@ interface Props {
 
 export default function DealDetailClient({ deal, tasks, activities, permissions, _tenantId, _userId }: Props) {
   // Fetch dynamic pipeline stages; fall back to defaults if unavailable (#756 item 8).
-  const [STAGES, setSTAGES] = useState(DEFAULT_STAGES);
+  const [_STAGES, setSTAGES] = useState(DEFAULT_STAGES);
   useEffect(() => {
     fetch('/api/tenant/pipelines')
       .then(r => r.ok ? r.json() : null)
@@ -89,6 +89,14 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
     description: deal.description || deal.notes || '',
   });
   const [saving, setSaving] = useState(false);
+
+  // Activity logging state
+  const [showAddNote, setShowAddNote] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [showLogCall, setShowLogCall] = useState(false);
+  const [callForm, setCallForm] = useState({ subject: '', notes: '' });
+  const [callSaving, setCallSaving] = useState(false);
 
   // Fetch pipeline stages from API (falls back to defaults)
   useEffect(() => {
@@ -181,6 +189,69 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
       router.refresh();
     } catch {
       toast.error('Failed to update task');
+    }
+  };
+
+  const handleAddNote = async () => {
+    if (!noteText.trim()) return;
+    setNoteSaving(true);
+    try {
+      const res = await fetch('/api/tenant/activities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'note',
+          description: noteText.trim(),
+          deal_id: deal.id,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || 'Failed to add note');
+        return;
+      }
+      toast.success('Note added');
+      setNoteText('');
+      setShowAddNote(false);
+      router.refresh();
+    } catch {
+      toast.error('Failed to add note');
+    } finally {
+      setNoteSaving(false);
+    }
+  };
+
+  const handleLogCall = async () => {
+    if (!deal.contact_id) {
+      toast.error('No contact linked to this deal');
+      return;
+    }
+    setCallSaving(true);
+    try {
+      const res = await fetch('/api/tenant/calls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contact_id: deal.contact_id,
+          deal_id: deal.id,
+          direction: 'outbound',
+          duration: 0,
+          notes: [callForm.subject, callForm.notes].filter(Boolean).join(' - '),
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || 'Failed to log call');
+        return;
+      }
+      toast.success('Call logged');
+      setCallForm({ subject: '', notes: '' });
+      setShowLogCall(false);
+      router.refresh();
+    } catch {
+      toast.error('Failed to log call');
+    } finally {
+      setCallSaving(false);
     }
   };
 
@@ -401,8 +472,16 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
 
       {activeTab === 'activities' && (
         <div className="admin-card overflow-hidden">
-          <div className="px-5 py-3 border-b border-border">
+          <div className="px-5 py-3 border-b border-border flex items-center justify-between">
             <h2 className="text-sm font-semibold">Activity Log ({activities.length})</h2>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" className="text-xs" onClick={() => setShowAddNote(true)}>
+                <StickyNote className="w-3 h-3 mr-1" /> Add Note
+              </Button>
+              <Button size="sm" variant="outline" className="text-xs" onClick={() => setShowLogCall(true)}>
+                <Phone className="w-3 h-3 mr-1" /> Log Call
+              </Button>
+            </div>
           </div>
           {!activities.length ? (
             <p className="px-5 py-6 text-sm text-muted-foreground text-center">No activities yet</p>
@@ -515,6 +594,69 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDelete(false)}>Cancel</Button>
             <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Note Dialog */}
+      <Dialog open={showAddNote} onOpenChange={setShowAddNote}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Note</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <textarea
+              className={inp}
+              rows={4}
+              placeholder="Write your note..."
+              value={noteText}
+              onChange={e => setNoteText(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddNote(false)}>Cancel</Button>
+            <Button onClick={handleAddNote} disabled={noteSaving || !noteText.trim()}>
+              {noteSaving ? 'Saving...' : 'Save Note'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Log Call Dialog */}
+      <Dialog open={showLogCall} onOpenChange={setShowLogCall}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Log Call</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {!deal.contact_id && (
+              <p className="text-xs text-amber-600">No contact linked to this deal. A contact is required to log a call.</p>
+            )}
+            <div>
+              <label className={lbl}>Subject</label>
+              <input
+                className={inp}
+                placeholder="Call subject..."
+                value={callForm.subject}
+                onChange={e => setCallForm(f => ({ ...f, subject: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className={lbl}>Notes</label>
+              <textarea
+                className={inp}
+                rows={3}
+                placeholder="Call notes..."
+                value={callForm.notes}
+                onChange={e => setCallForm(f => ({ ...f, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowLogCall(false)}>Cancel</Button>
+            <Button onClick={handleLogCall} disabled={callSaving || !deal.contact_id}>
+              {callSaving ? 'Saving...' : 'Log Call'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
