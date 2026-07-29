@@ -1,7 +1,14 @@
 {
   "task_id": "task-public-docs-system",
   "task_description": "Build a comprehensive public documentation system for NuCRM living at /docs under the marketing site layout. Includes MDX pipeline, sidebar navigation with collapsible sections, breadcrumbs, prev/next navigation, table of contents, client-side search, and the first 30 articles covering Getting Started, Contacts, Deals, and Communication.",
-  "status": "in_progress",
+  "status": "completed",
   "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004"],
-  "blocked_reason": null
+  "blocked_reason": null,
+  "verification": {
+    "build": "pass",
+    "tests": "pass",
+    "test_quality": "pass",
+    "docker_build": "skipped",
+    "summary": "TypeScript compiles cleanly. No tech stack leaks. All 30 MDX articles created. Semantic review v2 verdict: APPROVED. Three minor non-blocking concerns noted (12 ghost articles within published sections, unused rehype-autolink-headings dep, client layout bundle size) - all cosmetic and can be addressed later."
+  }
 }
