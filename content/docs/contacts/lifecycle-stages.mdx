@@ -1,0 +1,159 @@
+{/* title: Lifecycle stages */}
+{/* description: Understand lifecycle stages in NuCRM, configure stage transitions, and automate how contacts move through your sales funnel. */}
+
+## Overview
+
+Lifecycle stages represent where a contact sits in your overall customer journey, from first awareness through to long-term loyalty. Unlike deal stages (which track individual sales opportunities), lifecycle stages describe the relationship status between your organization and a person. NuCRM provides default stages and allows you to customize them to match your business model.
+
+## Default lifecycle stages
+
+NuCRM includes these stages out of the box:
+
+| Stage | Description | Typical contacts |
+|-------|-------------|-----------------|
+| Subscriber | Opted in to receive content | Newsletter signups, blog readers |
+| Lead | Showed interest but not yet qualified | Form fillers, demo requesters |
+| Marketing Qualified (MQL) | Met marketing criteria for sales readiness | Scored leads, engaged prospects |
+| Sales Qualified (SQL) | Accepted by sales as a viable opportunity | Contacts with a scheduled meeting |
+| Opportunity | Linked to an active deal | Contacts in active negotiations |
+| Customer | Purchased your product or service | Closed-won deal contacts |
+| Evangelist | Highly satisfied, refers others | Promoters, referral sources |
+
+## Viewing lifecycle stages
+
+### On individual contacts
+
+Each contact displays their lifecycle stage as a colored badge in the profile header:
+
+- **Subscriber** - Gray
+- **Lead** - Blue
+- **MQL** - Orange
+- **SQL** - Purple
+- **Opportunity** - Yellow
+- **Customer** - Green
+- **Evangelist** - Gold
+
+### In list views
+
+The Lifecycle stage column shows the stage badge for each contact. Filter by stage to view all contacts in a particular phase.
+
+### In reporting
+
+The lifecycle funnel report shows:
+
+- Contact count in each stage
+- Conversion rate between stages
+- Average time spent in each stage
+- Trends over time
+
+## Manually changing stages
+
+1. Open the contact detail page
+2. Click the lifecycle stage badge in the header
+3. Select the new stage from the dropdown
+4. The change is saved immediately and logged in the timeline
+
+<Callout variant="note">
+Lifecycle stages should generally progress forward (Lead to MQL to SQL). Moving backwards is allowed but is tracked separately in reporting. A "stage regression" entry appears in the timeline when a contact moves to an earlier stage.
+</Callout>
+
+## Automatic stage transitions
+
+Configure rules that automatically advance contacts through stages when certain conditions are met.
+
+### Setting up automation rules
+
+1. Go to **Settings > Contacts > Lifecycle stages**
+2. Click **Automation rules**
+3. Click **Add rule**
+4. Define the trigger condition and the target stage
+
+### Common automation examples
+
+| Trigger | New stage |
+|---------|-----------|
+| Lead score exceeds 70 | Marketing Qualified (MQL) |
+| Meeting is scheduled | Sales Qualified (SQL) |
+| Deal is created and linked | Opportunity |
+| Deal is closed won | Customer |
+| Contact submits a referral | Evangelist |
+
+### Rule configuration
+
+Each automation rule includes:
+
+1. **Trigger event** - What action or data change causes the transition
+2. **Conditions** - Additional criteria that must be true (optional)
+3. **Target stage** - Which stage the contact moves to
+4. **Notification** - Optionally notify the contact owner when a transition occurs
+
+<Callout variant="tip">
+Start with the most clear-cut transitions (deal closed = Customer) and add more nuanced rules gradually. Over-automating lifecycle stages before you understand your funnel can create confusion.
+</Callout>
+
+## Customizing stages
+
+### Adding a custom stage
+
+1. Go to **Settings > Contacts > Lifecycle stages**
+2. Click **Add stage**
+3. Enter the stage name, color, and position in the sequence
+4. Click **Save**
+
+### Editing a stage
+
+1. Click the edit icon next to any stage
+2. Modify the name, color, or position
+3. Click **Save**
+
+### Removing a stage
+
+1. Click the trash icon next to the stage
+2. Choose what happens to contacts currently in this stage:
+   - Move them to a different stage
+   - Leave them unassigned (not recommended)
+3. Confirm deletion
+
+<Callout variant="warning">
+Removing a lifecycle stage affects reporting history. Historical data for that stage in funnel reports will show as "Archived stage." Consider renaming or merging instead of deleting.
+</Callout>
+
+## Stage-based workflows
+
+Lifecycle stages connect to other NuCRM features:
+
+### Segment by stage
+
+Create segments filtered by lifecycle stage to group contacts for targeted communication:
+
+- "All MQLs created this month"
+- "Customers with no support ticket in 90 days"
+- "SQLs not yet linked to a deal"
+
+### Stage-triggered automation
+
+Build workflows that fire when a contact enters or leaves a specific stage:
+
+- Send a welcome email when someone becomes a Customer
+- Assign a sales rep when a lead reaches MQL
+- Create a follow-up task when an Opportunity stalls for 14 days
+
+### Stage-based reporting
+
+Track funnel performance:
+
+- Conversion rates between stages
+- Time-to-convert from Lead to Customer
+- Drop-off points where contacts fail to advance
+- Team performance by stage throughput
+
+## Best practices
+
+1. **Keep stages simple** - Five to seven stages covers most business models
+2. **Define clear criteria** - Document what qualifies a contact for each stage so your team is consistent
+3. **Automate where possible** - Manual stage management does not scale beyond a few hundred contacts
+4. **Review monthly** - Check for stage bottlenecks where contacts accumulate without advancing
+
+## Next steps
+
+Continue to the lead scoring guide to learn how NuCRM assigns numerical scores to contacts based on their behavior and attributes, helping you prioritize who to engage first.

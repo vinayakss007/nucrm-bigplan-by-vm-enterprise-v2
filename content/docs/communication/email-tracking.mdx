@@ -1,0 +1,204 @@
+{/* title: Email tracking */}
+{/* description: Monitor email opens, link clicks, and engagement analytics in NuCRM to understand how recipients interact with your messages. */}
+
+## Overview
+
+Email tracking tells you whether recipients opened your messages and clicked any links inside them. This information helps you time follow-ups perfectly, identify engaged prospects, and measure the effectiveness of your outreach. NuCRM provides open tracking, click tracking, and per-email analytics on every message you send.
+
+## How tracking works
+
+### Open tracking
+
+NuCRM embeds a tiny invisible image (tracking pixel) in outgoing emails. When the recipient's email client loads this image, NuCRM records an "open" event with:
+
+- Timestamp of when the email was opened
+- Approximate location (city/country based on IP)
+- Device type (desktop, mobile, tablet)
+- Number of times the email was reopened
+
+### Click tracking
+
+Links in your emails are routed through NuCRM's tracking service. When a recipient clicks a link:
+
+- The click is recorded with a timestamp
+- The original URL destination is identified
+- The contact is redirected to the intended page seamlessly
+- Multiple clicks on the same link are tracked individually
+
+<Callout variant="note">
+Some email clients (particularly Apple Mail with privacy settings enabled) may pre-load tracking pixels, which can inflate open counts. NuCRM accounts for this by flagging potential automated opens and providing a "reliable opens" metric that excludes suspected bots.
+</Callout>
+
+## Enabling tracking
+
+### Global settings
+
+1. Go to **Settings > Email > Tracking**
+2. Configure defaults:
+   - **Open tracking** - Enabled by default for all outgoing emails
+   - **Click tracking** - Enabled by default for all links
+   - **Reply tracking** - Track when recipients reply (always on)
+3. Click **Save**
+
+### Per-email override
+
+When composing an email, you can toggle tracking for that specific message:
+
+1. Open the email composer
+2. Click the **tracking toggle** at the bottom (eye icon)
+3. Enable or disable open/click tracking for this email only
+4. Useful for sensitive communications where tracking may be inappropriate
+
+## Viewing tracking data
+
+### On the email record
+
+Each sent email displays tracking indicators:
+
+| Indicator | Meaning |
+|-----------|---------|
+| Gray circle | Sent but not yet opened |
+| Blue eye icon | Opened (with count if opened multiple times) |
+| Green link icon | At least one link was clicked |
+| Purple reply icon | Recipient replied to this email |
+
+Click the tracking icons for detailed information:
+
+- Exact open timestamps (multiple opens listed)
+- Which links were clicked and when
+- Device and location data (when available)
+
+### On the contact timeline
+
+Timeline entries for emails include tracking status:
+
+- "Opened 3 times, last opened 2 hours ago"
+- "Clicked 'Pricing page' link at 10:32 AM"
+- "Replied at 11:15 AM"
+
+### In the Communication inbox
+
+The email list view shows status indicators:
+
+- Column showing open/click status at a glance
+- Filter emails by "opened," "clicked," or "no engagement"
+- Sort by most recently opened to identify hot leads
+
+<Callout variant="tip">
+Set up a saved view in your Communication inbox filtered to "Opened in last 24 hours but not replied." This gives you a daily list of warm prospects who saw your message but have not responded yet, providing perfect follow-up timing.
+</Callout>
+
+## Real-time notifications
+
+Get alerted immediately when a recipient engages:
+
+### Setting up tracking notifications
+
+1. Go to **Settings > Notifications > Email tracking**
+2. Enable the notifications you want:
+   - **First open** - Notified when the email is first opened
+   - **Link click** - Notified when any link is clicked
+   - **Re-open** - Notified when opened again after 24+ hours
+3. Choose notification channel: in-app, browser push, or both
+4. Click **Save**
+
+### When to act on notifications
+
+| Event | Suggested action |
+|-------|-----------------|
+| Email opened multiple times | Contact is considering your proposal; follow up |
+| Pricing link clicked | High intent signal; call immediately |
+| Opened after 7+ days of silence | Re-engage with a fresh angle |
+| Forwarded (multiple unique opens) | Multiple stakeholders reviewing; prepare for committee |
+
+## Email analytics dashboard
+
+View aggregate tracking data from **Reports > Email analytics**:
+
+### Key metrics
+
+| Metric | Description |
+|--------|-------------|
+| Open rate | % of sent emails that were opened |
+| Click rate | % of opened emails where a link was clicked |
+| Reply rate | % of emails that received a response |
+| Bounce rate | % that could not be delivered |
+| Unsubscribe rate | % who opted out |
+
+### Breakdowns
+
+Analyze performance by:
+
+- **By sender** - Which team member gets the best engagement
+- **By template** - Which templates perform highest
+- **By day/time** - When emails get the most opens
+- **By subject line** - Which subjects drive engagement
+- **By recipient segment** - Which audience is most responsive
+
+<Callout variant="info">
+The best time to send emails varies by audience. Use the "By day/time" breakdown to identify when your specific contacts are most likely to open. NuCRM can then suggest optimal send times when you schedule emails.
+</Callout>
+
+## Link tracking details
+
+### Tracking specific links
+
+For emails with multiple links, see which ones get clicked:
+
+- Each unique URL is tracked separately
+- View click counts per link
+- Identify the most compelling content or offers
+- Use this data to optimize future email layout (put highest-value links near the top)
+
+### Link naming
+
+Name your links for clearer reporting:
+
+1. When inserting a link, add a tracking label
+2. Reports show the label instead of the raw URL
+3. Examples: "CTA - Book Demo," "Pricing page," "Case study PDF"
+
+## Privacy considerations
+
+### Respecting recipient preferences
+
+- If a contact has requested no tracking, honor that request by disabling tracking on individual emails
+- Some organizations block tracking pixels; do not assume non-opens mean non-engagement
+- Never use tracking data to pressure or manipulate recipients
+
+### Compliance
+
+- Tracking is standard industry practice for business email
+- Include appropriate privacy disclosures if required by your region
+- Data is stored securely and only accessible to workspace members with email access
+
+<Callout variant="warning">
+Do not make business decisions based solely on open data. Email clients with privacy features, corporate firewalls, and plain-text preferences can all prevent accurate open tracking. Use opens as one signal among many.
+</Callout>
+
+## Troubleshooting
+
+### Low open rate
+
+- Check that subject lines are compelling and not triggering spam filters
+- Verify your email domain reputation is healthy
+- Confirm emails are not landing in spam (ask a test recipient to check)
+- Consider that privacy-conscious email clients may block pixels
+
+### Tracking not working
+
+- Verify tracking is enabled in Settings
+- Check that the per-email toggle was not accidentally turned off
+- Ensure your email domain is properly authenticated (SPF, DKIM, DMARC)
+
+## Best practices
+
+1. **Follow up on opens** - An opened email is permission to follow up (but do not mention you tracked them)
+2. **Track link clicks for intent** - Pricing page clicks signal buying intent more than generic opens
+3. **Use notifications wisely** - Only enable real-time notifications for high-value prospects to avoid alert fatigue
+4. **Measure and improve** - Use analytics to refine your templates and subject lines over time
+5. **Respect boundaries** - If someone has not opened five emails in a row, they may not be interested
+
+## Next steps
+
+Learn about WhatsApp messaging in NuCRM to reach contacts who prefer instant messaging over email.

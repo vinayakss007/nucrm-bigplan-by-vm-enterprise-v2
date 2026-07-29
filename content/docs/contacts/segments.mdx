@@ -1,0 +1,149 @@
+{/* title: Segments & dynamic lists */}
+{/* description: Create dynamic segments in NuCRM that automatically group contacts based on filter rules, behaviors, and attributes. */}
+
+## Overview
+
+Segments are dynamic lists of contacts that automatically update as people match or stop matching your defined criteria. Unlike static lists that require manual management, segments stay current in real time. Use them for targeted email campaigns, workflow triggers, reporting, and pipeline analysis.
+
+## Creating a segment
+
+1. Navigate to **Contacts** in the sidebar
+2. Click the **Segments** tab (next to "All contacts")
+3. Click **+ New segment**
+4. Enter a segment name (for example, "Hot leads - Enterprise")
+5. Define your filter rules (see below)
+6. Click **Save segment**
+
+## Defining filter rules
+
+Segments are powered by filter rules. You can combine multiple conditions with AND/OR logic.
+
+### Available filter fields
+
+Filter by any standard or custom field:
+
+- **Contact fields** - Name, email, phone, job title, lifecycle stage, lead score, tags, owner, created date
+- **Company fields** - Company name, industry, size, revenue
+- **Activity fields** - Last email sent, last email opened, last activity date, total activities
+- **Deal fields** - Has open deal, total deal value, deal stage
+
+### Operators
+
+| Operator | Example |
+|----------|---------|
+| is / is not | Lifecycle stage is "Lead" |
+| contains / does not contain | Email contains "@enterprise.com" |
+| is empty / is not empty | Phone is not empty |
+| greater than / less than | Lead score greater than 70 |
+| between | Created between Jan 1 and Mar 31 |
+| is before / is after | Last activity is before 30 days ago |
+| includes any / includes all | Tags includes any of "VIP", "Enterprise" |
+
+### Combining conditions
+
+**AND logic** (all conditions must match):
+- Lifecycle stage is "Lead"
+- AND Lead score greater than 50
+- AND Company size is "201-500"
+
+**OR logic** (any condition can match):
+- Email contains "@acme.com"
+- OR Email contains "@acmecorp.com"
+
+**Groups** (combine AND/OR in nested groups):
+- (Lifecycle stage is "Lead" AND Lead score > 50)
+- OR (Lifecycle stage is "Qualified" AND Has no open deal)
+
+<Callout variant="tip">
+Start with broad conditions and refine gradually. Check the contact count in the preview to ensure your segment is not too narrow (missing people) or too broad (including irrelevant contacts).
+</Callout>
+
+## Dynamic behavior
+
+Segments update automatically:
+
+- When a new contact is created that matches the rules, they appear in the segment immediately
+- When an existing contact's data changes so they no longer match, they are removed automatically
+- No manual maintenance required
+
+### Example
+
+Segment: "Inactive customers" defined as:
+- Lifecycle stage is "Customer"
+- AND Last activity is before 60 days ago
+
+As time passes, customers who have not had any interaction in 60 days automatically enter this segment. Once you engage them again (send an email, log a call), they leave the segment automatically.
+
+## Managing segments
+
+### Viewing segment contacts
+
+1. Go to the **Segments** tab
+2. Click any segment name
+3. The contacts list filters to show only segment members
+4. You can further filter, sort, and perform bulk actions on segment members
+
+### Editing a segment
+
+1. Open the segment
+2. Click **Edit rules** (pencil icon)
+3. Modify your filter conditions
+4. Click **Save**
+5. The segment immediately recalculates membership
+
+### Segment statistics
+
+Each segment card shows:
+
+- Current contact count
+- Change from last week (growth or decline)
+- Date created
+- Last modified date
+
+<Callout variant="note">
+Segment counts update in near real-time. After importing a large batch of contacts, allow a few minutes for all segment memberships to recalculate.
+</Callout>
+
+## Using segments across NuCRM
+
+Segments integrate with other features:
+
+### Email campaigns
+
+Select a segment as the recipient list when sending bulk emails. Only current segment members receive the message at send time.
+
+### Automation triggers
+
+Use "Contact enters segment" or "Contact leaves segment" as workflow triggers. For example, automatically send a re-engagement email when someone enters the "Inactive customers" segment.
+
+### Reporting
+
+Filter reports by segment to analyze metrics for specific groups. For example, view email open rates for your "Enterprise leads" segment versus "SMB leads."
+
+### Lead assignment
+
+Configure assignment rules that route new contacts to specific team members based on segment membership.
+
+## Static lists vs. dynamic segments
+
+| Feature | Static list | Dynamic segment |
+|---------|-------------|----------------|
+| Membership | Manual add/remove | Automatic by rules |
+| Updates | Only when you edit | Real-time |
+| Use case | One-time campaigns, event attendees | Ongoing targeting, automation |
+| Contact movement | Contacts stay until removed | Contacts enter/leave based on data |
+
+<Callout variant="info">
+You can convert a segment into a static list at any point if you want to freeze the membership for a specific campaign. Click "Convert to static list" from the segment menu.
+</Callout>
+
+## Best practices
+
+1. **Name segments descriptively** - Use names that explain the criteria (for example, "Leads with score > 80 and no demo booked")
+2. **Review segment sizes regularly** - Segments that are too large or too small may indicate rule issues
+3. **Combine with lifecycle stages** - Use segments to sub-divide lifecycle stages for more targeted communication
+4. **Limit rule complexity** - Keep segments to 5 or fewer conditions when possible for maintainability
+
+## Next steps
+
+Learn how lifecycle stages work in NuCRM and how contacts transition between Lead, Prospect, and Customer status automatically.

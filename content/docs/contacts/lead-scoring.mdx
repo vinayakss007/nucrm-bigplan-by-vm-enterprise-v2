@@ -1,0 +1,175 @@
+{/* title: Lead scoring */}
+{/* description: Learn how to configure lead scoring in NuCRM using BANT criteria, behavioral signals, AI scoring, and custom rules. */}
+
+## Overview
+
+Lead scoring assigns a numerical value to each contact based on how well they fit your ideal customer profile and how engaged they are with your business. Higher scores indicate contacts more likely to convert, helping your sales team prioritize outreach and focus on the most promising opportunities.
+
+## How scoring works
+
+NuCRM calculates lead scores using two categories:
+
+- **Fit score** (demographic/firmographic) - Based on who the person is (job title, company size, industry, location)
+- **Engagement score** (behavioral) - Based on what the person does (email opens, website visits, form submissions, content downloads)
+
+The total lead score is the sum of both components, typically on a 0-100 scale.
+
+## Setting up scoring rules
+
+### Accessing scoring settings
+
+1. Go to **Settings > Contacts > Lead scoring**
+2. You see two sections: **Fit criteria** and **Engagement criteria**
+3. Click **Add rule** in either section to build your scoring model
+
+### Fit score rules
+
+Define points based on contact attributes:
+
+| Criterion | Points example |
+|-----------|---------------|
+| Job title contains "Director" or "VP" | +15 |
+| Company size is 201-1000 | +10 |
+| Industry is "SaaS" or "Technology" | +10 |
+| Location is within target region | +5 |
+| Has a business email (not gmail/yahoo) | +5 |
+| Company revenue > $10M | +10 |
+
+### Engagement score rules
+
+Award points when contacts perform actions:
+
+| Action | Points example |
+|--------|---------------|
+| Opens an email | +2 |
+| Clicks a link in an email | +5 |
+| Visits pricing page | +10 |
+| Submits a contact form | +15 |
+| Attends a webinar | +8 |
+| Downloads a whitepaper | +5 |
+| Replies to an email | +10 |
+| Books a demo/meeting | +20 |
+
+<Callout variant="tip">
+Assign higher points to actions that indicate buying intent (visiting pricing, booking a demo) and lower points to passive engagement (opening emails). This ensures your highest scores reflect genuine purchase readiness.
+</Callout>
+
+## Score decay
+
+Engagement fades over time. Configure score decay to prevent stale leads from maintaining high scores:
+
+1. Go to **Lead scoring > Decay settings**
+2. Enable score decay
+3. Set the decay rate:
+   - **Moderate** - Reduce engagement score by 5 points per 14 days of inactivity
+   - **Aggressive** - Reduce by 10 points per 7 days of inactivity
+   - **Custom** - Define your own decay rate and interval
+
+Score decay only affects the engagement component. Fit scores remain static unless contact attributes change.
+
+<Callout variant="note">
+Score decay ensures your lead list stays fresh. A contact who was highly engaged six months ago but has gone silent will gradually lose their top position, making room for currently active prospects.
+</Callout>
+
+## AI-powered scoring
+
+NuCRM offers an AI scoring model that analyzes your historical data to predict conversion likelihood:
+
+### How AI scoring works
+
+1. The AI examines contacts who converted (became customers) in the past
+2. It identifies patterns in their attributes and behaviors
+3. It applies those patterns to current contacts to predict their likelihood of converting
+4. The prediction appears as an "AI score" alongside your rule-based score
+
+### Enabling AI scoring
+
+1. Go to **Settings > Contacts > Lead scoring > AI scoring**
+2. Click **Enable AI scoring**
+3. The system requires at least 100 converted contacts in your history to build an accurate model
+4. Once enabled, AI scores update daily
+
+### Using AI scores
+
+AI scores appear as a percentage (0-100%) representing predicted conversion probability. Use them to:
+
+- Prioritize daily outreach
+- Identify hidden gems (low rule-based score but high AI score)
+- Validate your manual scoring rules
+
+## Viewing lead scores
+
+### On the contact list
+
+The lead score column shows each contact's current score. Click the column header to sort by score (highest first).
+
+### On the contact detail page
+
+The header shows the total score with a visual gauge. Click the score to see a breakdown:
+
+- Fit score component
+- Engagement score component
+- AI score (if enabled)
+- Recent score changes with reasons
+
+### Scoring distribution report
+
+View the distribution of scores across your database:
+
+- Average score
+- Score histogram
+- Contacts per score range (0-25, 26-50, 51-75, 76-100)
+- Trends over time
+
+## Score thresholds and automation
+
+Define thresholds that trigger actions:
+
+### Setting thresholds
+
+1. Go to **Lead scoring > Thresholds**
+2. Define score ranges and their labels:
+   - 0-25: Cold
+   - 26-50: Warm
+   - 51-75: Hot
+   - 76-100: On fire
+
+### Automated actions at thresholds
+
+| When score reaches... | Trigger action |
+|----------------------|----------------|
+| 50+ | Change lifecycle stage to MQL |
+| 70+ | Notify assigned sales rep |
+| 80+ | Create a task: "Book demo call" |
+| Below 25 after being above 50 | Move to nurture sequence |
+
+<Callout variant="info">
+Threshold-based automation bridges the gap between marketing and sales. When a contact crosses the threshold into MQL territory, sales receives an immediate notification with context about why the score is high.
+</Callout>
+
+## Custom scoring models
+
+Create multiple scoring models for different use cases:
+
+- **Product A leads** - Weighted toward product-specific page visits
+- **Enterprise leads** - Heavy emphasis on company size and title seniority
+- **Event leads** - Points for event attendance and booth visits
+
+### Creating a custom model
+
+1. Go to **Lead scoring > Models**
+2. Click **Create model**
+3. Name it and define which contacts it applies to (all, or a filtered segment)
+4. Add fit and engagement rules specific to this model
+5. Save and activate
+
+## Best practices
+
+1. **Start simple** - Begin with 5-10 rules and refine as you learn what predicts conversion
+2. **Review quarterly** - Analyze which scored leads actually converted and adjust point values
+3. **Align with sales** - Ensure your sales team agrees on what score qualifies a lead for their attention
+4. **Do not over-score** - If everyone is at 90+, your scoring is too generous. Differentiation matters more than absolute values
+
+## Next steps
+
+Continue to the duplicate detection guide to learn how NuCRM identifies and merges duplicate contact records to keep your database clean.

@@ -1,0 +1,182 @@
+{/* title: Revenue forecasting */}
+{/* description: Use NuCRM's forecasting tools to predict revenue, track pipeline coverage, and compare projections against team quotas. */}
+
+## Overview
+
+Revenue forecasting in NuCRM combines your pipeline data with historical close rates to project future revenue. Accurate forecasts help sales leaders make informed decisions about hiring, spending, and resource allocation. This guide covers the forecasting views, methods, and configuration options available in NuCRM.
+
+## Accessing forecasts
+
+1. Click **Deals** in the sidebar
+2. Select the **Forecast** tab at the top (next to Pipeline and List)
+3. The forecast dashboard appears with monthly projections
+
+## Forecast methods
+
+NuCRM calculates forecasts using multiple methods simultaneously:
+
+### Weighted pipeline
+
+Multiplies each open deal's value by its stage win probability:
+
+- Deal in Qualified (25%): $100,000 x 0.25 = $25,000 forecast
+- Deal in Proposal (50%): $80,000 x 0.50 = $40,000 forecast
+- Deal in Negotiation (75%): $60,000 x 0.75 = $45,000 forecast
+- **Total weighted forecast: $110,000**
+
+### Best case
+
+Sums all open deals that have a realistic chance of closing (deals in Proposal stage or later, excluding stale deals with no recent activity):
+
+- Includes deals from Proposal, Negotiation, and verbal-commit stages
+- Excludes deals with no activity in the last 30 days
+- Excludes deals past their expected close date without an update
+
+### Commit
+
+Only deals that the owner has manually marked as "committed" (high confidence they will close this period):
+
+1. Open any deal
+2. Click the **Forecast category** field
+3. Select **Commit**
+4. This deal now appears in the Commit forecast number
+
+### Closed
+
+Actual closed-won revenue already booked this period. This number only increases as deals close.
+
+<Callout variant="note">
+The gap between your Weighted forecast and your Commit number indicates pipeline risk. A large gap means your forecast relies on deals that have not yet been confirmed by your sales team.
+</Callout>
+
+## Forecast categories
+
+Each deal can be assigned a forecast category by its owner:
+
+| Category | Meaning |
+|----------|---------|
+| Pipeline | In the pipeline but too early to predict |
+| Best case | Good chance of closing this period |
+| Commit | High confidence (90%+) of closing |
+| Closed | Already won |
+| Omitted | Excluded from forecasts (deal is stalled or deprioritized) |
+
+### Setting a deal's forecast category
+
+1. Open the deal detail page
+2. Find the **Forecast category** field
+3. Select the appropriate category
+4. This updates the deal's contribution to the forecast immediately
+
+## Forecast dashboard
+
+The forecast view displays:
+
+### Revenue chart
+
+A bar chart showing monthly forecasted revenue:
+
+- Stacked bars: Closed (dark), Commit (medium), Best case (light), Pipeline (outline)
+- Quota line overlaid for comparison
+- Toggle between monthly and quarterly views
+
+### Summary metrics
+
+| Metric | Description |
+|--------|-------------|
+| Quota | Target revenue for the period |
+| Closed | Revenue already booked |
+| Commit | Deals marked as committed |
+| Best case | Total including best-case deals |
+| Gap to quota | Difference between commit and quota |
+| Coverage ratio | Pipeline value divided by quota |
+
+<Callout variant="tip">
+A healthy pipeline coverage ratio is 3x to 4x your quota. If your quota is $100,000 and your total pipeline is $300,000, you have adequate coverage to absorb deals that slip or are lost.
+</Callout>
+
+### Team breakdown
+
+View forecasts by individual team member:
+
+- Each rep's closed, commit, and best-case numbers
+- Personal quota attainment percentage
+- Pipeline coverage per rep
+- Visual indicators for reps at risk of missing quota
+
+## Configuring quotas
+
+### Setting team quotas
+
+1. Go to **Settings > Deals > Quotas**
+2. Select the time period (monthly or quarterly)
+3. Enter the overall team quota
+4. Click **Save**
+
+### Individual quotas
+
+1. On the Quotas page, click **Individual quotas**
+2. Enter each team member's personal target
+3. Individual quotas should sum to the team quota
+4. Click **Save**
+
+### Quota period
+
+Choose your fiscal calendar:
+
+- Calendar year (January to December)
+- Fiscal year (custom start month)
+- Monthly targets that can vary (higher in Q4, lower in January)
+
+## Historical forecast accuracy
+
+NuCRM tracks how accurate your forecasts were over time:
+
+### Accuracy report
+
+1. Go to **Reports > Forecast accuracy**
+2. View a comparison of forecasted vs. actual revenue for past periods
+3. See which forecast method was most accurate (weighted, best case, commit)
+4. Identify systematic patterns (do you consistently over-forecast or under-forecast?)
+
+### Improving accuracy
+
+- **If you over-forecast**: Lower stage probabilities or enforce stricter commit criteria
+- **If you under-forecast**: Review whether late-stage deals are being accurately captured
+- **If accuracy varies by rep**: Provide individual coaching on realistic deal assessment
+
+<Callout variant="info">
+Forecast accuracy improves over time as NuCRM accumulates more historical close data. The AI forecasting model (when enabled) learns from your specific patterns and adjusts predictions accordingly.
+</Callout>
+
+## Forecast reports and exports
+
+### Scheduled forecast emails
+
+Send forecast summaries to stakeholders automatically:
+
+1. Go to **Reports > Scheduled reports**
+2. Click **New report**
+3. Select "Forecast summary" as the report type
+4. Choose recipients and frequency (weekly recommended)
+5. Click **Save**
+
+### Export forecast data
+
+Export the forecast view to a spreadsheet:
+
+1. On the Forecast tab, click **Export**
+2. Choose CSV or XLSX format
+3. Data includes deal name, value, category, owner, and close date
+4. Use this for board presentations or external modeling
+
+## Best practices
+
+1. **Update forecast categories weekly** - Deal owners should re-categorize deals each week during pipeline review
+2. **Use commit conservatively** - Only mark deals as committed when you have verbal or written confirmation
+3. **Track coverage ratio** - Alert when coverage drops below 3x quota to allow time for pipeline building
+4. **Review quarterly** - Compare forecast accuracy and adjust probabilities and processes accordingly
+
+## Next steps
+
+Continue to the multi-currency guide to learn how NuCRM handles deals in different currencies with exchange rate management and unified reporting.

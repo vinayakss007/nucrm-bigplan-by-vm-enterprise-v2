@@ -1,0 +1,206 @@
+{/* title: Won/lost analysis */}
+{/* description: Analyze why deals are won or lost in NuCRM using win/loss reasons, performance metrics, and actionable insights. */}
+
+## Overview
+
+Understanding why you win and lose deals is critical to improving your sales process. NuCRM captures win and loss reasons on every closed deal, then aggregates this data into reports that reveal patterns. This guide covers how to configure reasons, analyze outcomes, and apply insights to improve close rates.
+
+## Configuring win/loss reasons
+
+### Setting up loss reasons
+
+1. Go to **Settings > Deals > Win/Loss reasons**
+2. Under **Loss reasons**, add your common reasons:
+   - Went with a competitor
+   - Budget constraints
+   - No decision made / Timing
+   - Missing features or capabilities
+   - Poor fit / Wrong solution
+   - Lost contact / Went dark
+   - Internal reorganization
+   - Price too high
+   - Existing vendor renewed
+3. Click **Save**
+
+### Setting up win reasons
+
+Under **Win reasons**, add:
+
+- Best product fit
+- Strongest relationship
+- Most competitive price
+- Fastest implementation
+- Best support reputation
+- Referral/recommendation
+- Incumbent advantage
+- Superior demo/POC
+- Bundled offering
+
+<Callout variant="tip">
+Keep your reason lists to 8-12 options. Too many choices slow down the close process and dilute analysis. Too few prevent meaningful pattern detection.
+</Callout>
+
+### Mandatory reason capture
+
+Make win/loss reasons required when closing deals:
+
+1. In the Win/Loss reasons settings, enable **Require reason on close**
+2. When anyone moves a deal to Closed Won or Closed Lost, they must select a reason before the transition completes
+3. Optionally require a written note alongside the reason for additional context
+
+## Recording reasons when closing deals
+
+### Closing a deal as won
+
+1. Move the deal to the **Closed Won** stage (drag-and-drop or via the stage selector)
+2. A dialog appears asking for:
+   - **Win reason** - Select from the configured list (required if enabled)
+   - **Final value** - Confirm or adjust the deal value
+   - **Close note** - Optional text describing key factors
+3. Click **Confirm close**
+
+### Closing a deal as lost
+
+1. Move the deal to the **Closed Lost** stage
+2. A dialog appears asking for:
+   - **Loss reason** - Select from the configured list
+   - **Competitor** - If lost to a competitor, name them (optional field)
+   - **Close note** - Context about why the deal was lost
+3. Click **Confirm close**
+
+<Callout variant="note">
+Ask reps to record reasons immediately when closing rather than filling them in later. The fresher the context, the more accurate and useful the data will be for analysis.
+</Callout>
+
+## Win/loss dashboard
+
+Access the analysis dashboard at **Reports > Win/Loss Analysis**:
+
+### Win rate metrics
+
+| Metric | Calculation |
+|--------|-------------|
+| Overall win rate | Won deals / (Won + Lost) deals |
+| Win rate by source | Win percentage grouped by deal source |
+| Win rate by owner | How each rep performs |
+| Win rate by value range | Do you win more large or small deals? |
+| Win rate by industry | Which verticals have the highest close rates |
+
+### Loss reason breakdown
+
+A bar chart showing the frequency of each loss reason:
+
+- Visualize which reasons appear most often
+- Identify the #1 reason you lose deals
+- Track how loss reasons change over time (monthly trend)
+
+### Win reason breakdown
+
+Similarly, see which factors contribute most to your victories:
+
+- Understand your competitive advantages
+- Identify what to emphasize in future sales conversations
+- Share winning patterns with the team
+
+## Competitor analysis
+
+If you track competitor names on lost deals:
+
+### Competitor win rate
+
+See how often you win or lose against specific competitors:
+
+| Competitor | Deals faced | Won | Lost | Win rate |
+|-----------|------------|-----|------|----------|
+| CompetitorX | 24 | 14 | 10 | 58% |
+| CompetitorY | 18 | 7 | 11 | 39% |
+| CompetitorZ | 12 | 9 | 3 | 75% |
+
+### Loss reasons by competitor
+
+Drill into why you lose to each competitor:
+
+- "CompetitorX: Lost primarily on price (60%) and features (25%)"
+- "CompetitorY: Lost primarily on relationship (45%) and speed (30%)"
+
+This data informs competitive positioning and product roadmap priorities.
+
+<Callout variant="info">
+Competitor intelligence gathered from lost deals is one of the most valuable data sources for your product and marketing teams. Share these reports cross-functionally on a quarterly basis.
+</Callout>
+
+## Time-based analysis
+
+### Sales cycle duration
+
+Compare how long winning deals take versus losing deals:
+
+- Average days to win: Track by stage to find where winning deals accelerate
+- Average days to lose: Identify when to cut losses on stalled deals
+- Stage-by-stage velocity: See which stages take longest
+
+### Decay analysis
+
+How does win rate change based on time in pipeline?
+
+- Deals open less than 30 days: 40% win rate
+- Deals open 30-60 days: 25% win rate
+- Deals open 60-90 days: 12% win rate
+- Deals open 90+ days: 5% win rate
+
+This data helps establish "deal expiry" guidelines for cleaning up stale pipeline.
+
+## Performance metrics by team member
+
+### Individual win rates
+
+Compare team members on:
+
+- Total deals closed (won + lost)
+- Win rate percentage
+- Average deal size won
+- Top loss reasons per rep
+- Sales cycle length
+
+### Coaching opportunities
+
+Use loss reason data for targeted coaching:
+
+- Rep A loses primarily on price: Coach on value selling
+- Rep B loses to "no decision": Coach on creating urgency
+- Rep C loses to competitors: Coach on competitive differentiation
+
+<Callout variant="warning">
+Win/loss data should be used for coaching and process improvement, not punishment. Creating a blame culture around loss reasons discourages honest reporting and degrades data quality.
+</Callout>
+
+## Acting on insights
+
+### Common improvements based on win/loss data
+
+| Finding | Action |
+|---------|--------|
+| 40% of losses are "price" | Revisit pricing or create ROI calculator tools |
+| 30% lost to "no decision" | Add urgency-building steps to your process |
+| High win rate from referrals | Invest in referral program |
+| Low win rate for enterprise deals | Develop enterprise-specific sales playbook |
+| Losses spike after demo stage | Improve demo quality and customization |
+
+### Sharing insights
+
+1. Schedule monthly or quarterly win/loss review meetings
+2. Share the dashboard with sales, product, and marketing leadership
+3. Create action items from each review
+4. Track improvement over time by monitoring the metrics you targeted
+
+## Best practices
+
+1. **Make reasons required** - Optional fields get skipped, making your data incomplete
+2. **Review reasons quarterly** - Add new reasons that emerge and retire ones rarely used
+3. **Be specific** - "Budget" is less useful than "Budget cut mid-cycle" vs. "Never had budget"
+4. **Analyze trends, not snapshots** - One month's data may be noisy; look at 3-6 month trends
+5. **Close the loop** - Ensure insights lead to concrete actions, not just awareness
+
+## Next steps
+
+You now have a complete understanding of NuCRM's pipeline management capabilities. Explore the Communication section to learn about email, WhatsApp, and SMS tools that help you stay in touch with your prospects and customers.

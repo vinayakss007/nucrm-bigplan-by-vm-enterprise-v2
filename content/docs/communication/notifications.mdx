@@ -1,0 +1,219 @@
+{/* title: Notifications */}
+{/* description: Configure in-app notifications, email digests, and real-time alerts in NuCRM to stay informed about important activity. */}
+
+## Overview
+
+NuCRM notifications keep you informed about changes and activity that matter to you. From real-time in-app alerts to daily email digests, you can customize exactly what you are notified about and how. This guide covers all notification channels, configuration options, and best practices for staying informed without being overwhelmed.
+
+## Notification channels
+
+NuCRM delivers notifications through three channels:
+
+| Channel | Speed | Best for |
+|---------|-------|----------|
+| In-app (bell icon) | Instant | Day-to-day activity while working in NuCRM |
+| Browser push | Instant | Getting alerted even when NuCRM is not the active tab |
+| Email digest | Scheduled | End-of-day summaries and catching up on missed activity |
+
+## In-app notifications
+
+### The notification center
+
+Click the **bell icon** in the top-right corner to open the notification panel:
+
+- Unread notifications are highlighted with a blue dot
+- Badge count shows total unread notifications
+- Notifications are grouped by time (Today, Yesterday, Earlier this week)
+- Click any notification to navigate to the relevant record
+
+### Notification types
+
+| Category | Example notifications |
+|----------|---------------------|
+| Deals | Deal stage changed, deal assigned to you, deal closed |
+| Contacts | New contact assigned, contact lifecycle stage changed |
+| Tasks | Task assigned to you, task due today, task overdue |
+| Email | Reply received, email opened (if tracking alerts enabled) |
+| Mentions | Someone @mentioned you in a note or comment |
+| System | Import completed, export ready, billing alert |
+| Team | New team member joined, permission change |
+
+### Managing notifications
+
+From the notification panel:
+
+- **Mark all as read** - Clear the badge count
+- **Mark individual as read** - Click the blue dot
+- **Archive** - Remove from the list (still searchable in notification history)
+- **Mute** - Stop notifications for a specific record (useful for noisy deals)
+
+<Callout variant="tip">
+Use the "Mute" option on deals or contacts that generate excessive notifications but do not require your immediate attention. You can always unmute later when you need updates again.
+</Callout>
+
+## Configuring notification preferences
+
+### Accessing settings
+
+1. Click your **profile avatar** in the top-right corner
+2. Select **Notification preferences**
+3. Or go to **Settings > Personal > Notifications**
+
+### Per-category configuration
+
+For each notification category, choose:
+
+| Setting | Options |
+|---------|---------|
+| In-app | On / Off |
+| Push | On / Off |
+| Email | Immediately / Daily digest / Off |
+
+### Recommended configuration for sales reps
+
+- **Deal assigned to me** - All channels ON
+- **Deal stage changed (my deals)** - In-app and push ON
+- **Task due today** - All channels ON
+- **Email reply received** - In-app ON, push ON
+- **@Mention** - All channels ON
+- **Contact assigned** - In-app ON
+- **System notifications** - Email digest only
+
+<Callout variant="note">
+Notification preferences are personal. Each team member configures their own settings independently. Workspace admins cannot override personal notification preferences, but they can control which notification types are available.
+</Callout>
+
+## Browser push notifications
+
+### Enabling push notifications
+
+1. Go to **Notification preferences**
+2. Toggle on **Browser push notifications**
+3. Your browser will prompt you to allow notifications from NuCRM
+4. Click **Allow**
+5. Push notifications now appear even when NuCRM is not the active tab
+
+### Push notification behavior
+
+- Clicking the notification opens NuCRM and navigates to the relevant record
+- Notifications show a brief preview (title and short description)
+- Sound can be enabled or disabled in browser settings
+- Push notifications respect your "Do not disturb" hours (see below)
+
+## Email digests
+
+### Daily digest
+
+Receive a summary email at the end of each business day:
+
+1. Go to **Notification preferences**
+2. Under **Email digest**, select **Daily**
+3. Choose the delivery time (default: 6:00 PM in your time zone)
+4. The digest includes:
+   - Tasks due tomorrow
+   - Deals with no activity in 7+ days
+   - New contacts assigned to you
+   - Mentions you have not yet seen
+   - Team performance highlights
+
+### Weekly digest
+
+A broader summary sent once per week:
+
+- Deals closed this week (won and lost)
+- Revenue summary
+- Tasks completed vs. created
+- Top-performing team members
+- Upcoming meetings for next week
+
+### Disabling digests
+
+If you prefer real-time notifications only:
+
+1. Set email digest to **Off** for all categories
+2. Or selectively disable for categories you already monitor in-app
+
+## Do not disturb
+
+### Setting quiet hours
+
+Prevent notifications from interrupting you outside work:
+
+1. Go to **Notification preferences > Schedule**
+2. Enable **Do not disturb**
+3. Set start and end times (for example, 7:00 PM to 8:00 AM)
+4. Choose which days (weekdays only, or include weekends)
+5. Click **Save**
+
+During quiet hours:
+- In-app notifications still accumulate but do not trigger sounds or badges
+- Push notifications are suppressed entirely
+- Email notifications are held and delivered when DND ends
+
+<Callout variant="info">
+Do not disturb respects your personal time zone setting, not the workspace time zone. If you travel across time zones, update your time zone in profile settings to keep DND aligned with your actual schedule.
+</Callout>
+
+## Notification rules (admin)
+
+Workspace admins can create custom notification rules:
+
+### Creating a rule
+
+1. Go to **Settings > Workspace > Notification rules** (admin only)
+2. Click **Add rule**
+3. Define:
+   - **Trigger** - What event fires the notification (for example, deal value exceeds $100,000)
+   - **Recipients** - Who receives it (specific users, roles, or "deal owner")
+   - **Channel** - In-app, email, or both
+   - **Message** - Custom notification text
+4. Click **Save**
+
+### Example rules
+
+| Trigger | Recipient | Message |
+|---------|-----------|---------|
+| Deal value > $100K created | Sales VP | "High-value deal created: {{deal_name}} (${{deal_value}})" |
+| Contact lifecycle changed to Customer | Customer success team | "New customer: {{contact_name}} from {{company}}" |
+| Task overdue by 3+ days | Manager of task owner | "Overdue task: {{task_name}} (owner: {{owner_name}})" |
+| Import completed | The user who ran it | "Your import is complete: {{created_count}} contacts added" |
+
+## Mobile notifications
+
+If you access NuCRM on a mobile device:
+
+- Push notifications work the same as desktop
+- Tap a notification to open the NuCRM mobile interface at the relevant record
+- Manage preferences from the mobile settings menu
+
+## Troubleshooting
+
+### Not receiving notifications
+
+1. Check that in-app notifications are enabled for the category in your preferences
+2. Verify browser push permissions (look for the blocked icon in your browser address bar)
+3. Ensure you have not activated Do Not Disturb during the time you expected notifications
+4. Check your email spam folder for digest emails
+
+### Too many notifications
+
+1. Review your preferences and disable categories you do not need
+2. Use the "Mute" feature on noisy records
+3. Switch from immediate email to daily digest
+4. Set up Do Not Disturb for after-hours quiet
+
+<Callout variant="warning">
+Notification fatigue leads to missed important alerts. Be selective about what you enable. It is better to receive fewer notifications that you always act on than many notifications you learn to ignore.
+</Callout>
+
+## Best practices
+
+1. **Start minimal** - Enable only critical notifications first, add more as needed
+2. **Use different channels for different urgency** - Push for urgent, in-app for standard, digest for informational
+3. **Review monthly** - Check your notification history to see if you are missing things or getting too much noise
+4. **Educate your team** - Ensure everyone configures their preferences during onboarding
+5. **Leverage @mentions** - Instead of DM or email, @mention colleagues in notes for contextual notifications
+
+## Next steps
+
+You have completed the Communication basics section. Explore the Automation section to learn how to build workflows that trigger based on contact activity, deal changes, and time-based conditions.

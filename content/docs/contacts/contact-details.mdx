@@ -1,0 +1,189 @@
+{/* title: Contact detail view */}
+{/* description: Explore the contact detail page including profile information, activity timeline, linked entities, and custom fields. */}
+
+## Overview
+
+The contact detail view is the central hub for all information about a person in your database. It brings together profile data, communication history, linked deals, tasks, files, and custom fields into a single comprehensive page. This guide explains each section and how to make the most of the detail view.
+
+## Opening a contact
+
+Navigate to the contact detail view by:
+
+- Clicking a contact name in any list view
+- Clicking a contact link on a deal, task, or company page
+- Using the command palette (Cmd+K) and searching by name or email
+
+## Profile header
+
+The top section displays essential information at a glance:
+
+- **Avatar** - Automatically generated from initials or fetched from Gravatar based on the email address
+- **Full name** - Click to edit inline
+- **Job title and company** - Company name is clickable and navigates to the company record
+- **Primary email** - Click to compose an email, or click the copy icon
+- **Primary phone** - Click to initiate a call log or copy the number
+- **Lifecycle stage badge** - Color-coded indicator (Lead = blue, Qualified = orange, Customer = green)
+- **Lead score** - Numerical score with a visual gauge if lead scoring is enabled
+
+### Quick action buttons
+
+The header includes action buttons for common workflows:
+
+- **Send email** - Opens the email composer
+- **Log call** - Record a phone conversation
+- **Create task** - Add a follow-up linked to this contact
+- **Create deal** - Start a new deal with this contact pre-linked
+- **More actions (...)** - Schedule meeting, add to sequence, merge with another record
+
+## Information tabs
+
+Below the header, the contact page is organized into tabs:
+
+### Details tab
+
+Displays all contact fields organized in sections:
+
+**Standard fields:**
+- First name, Last name
+- Email addresses (primary and additional)
+- Phone numbers (work, mobile, home)
+- Job title, Department
+- Company link
+- Address (street, city, state, zip, country)
+- Lifecycle stage
+- Lead source
+- Owner
+- Tags
+
+**Custom fields:**
+
+Any custom fields you have created appear in their designated section. Field types include:
+
+| Type | Example |
+|------|---------|
+| Text | "Preferred language: Spanish" |
+| Number | "Contract seats: 50" |
+| Date | "Contract renewal: 2025-08-15" |
+| Dropdown | "Industry: Healthcare" |
+| Multi-select | "Interests: Product A, Product C" |
+| Checkbox | "Opted into newsletter: Yes" |
+| Currency | "Annual budget: $250,000" |
+
+<Callout variant="tip">
+Click any field value to edit it inline. Changes save automatically and are logged in the timeline audit trail.
+</Callout>
+
+### Activity timeline tab
+
+A chronological feed showing every interaction with this contact:
+
+- Emails sent and received
+- Phone calls logged
+- Meetings completed
+- Notes added by team members
+- Deal stage changes
+- Task completions
+- Form submissions
+- Lifecycle stage transitions
+- Field changes (audit trail)
+
+**Timeline filters:**
+
+Use the filter buttons to show only specific activity types. The timeline supports infinite scroll for contacts with extensive history.
+
+**Pinned entries:**
+
+Important timeline entries can be pinned to the top for quick reference. Right-click any entry and select "Pin" to keep it visible above the chronological feed.
+
+### Deals tab
+
+Shows all deals associated with this contact:
+
+- Active deals with current stage and value
+- Won deals with closed date and final value
+- Lost deals with lost reason
+
+Click any deal to navigate to its detail page.
+
+### Tasks tab
+
+Lists all tasks linked to this contact:
+
+- **Open tasks** - Due date, assignee, and priority
+- **Completed tasks** - Finished date and who completed them
+- **Overdue tasks** - Highlighted in red for immediate attention
+
+Create a new task directly from this tab by clicking **Add task**.
+
+### Emails tab
+
+Full email conversation history with this contact:
+
+- All emails sent from NuCRM to this contact
+- All replies received (if email sync is enabled)
+- Open and click tracking indicators per email
+- Ability to compose a new email from this tab
+
+### Notes tab
+
+Internal team notes about this contact:
+
+- Rich-text notes with formatting, bullet lists, and @mentions
+- Note creator and timestamp
+- Searchable content
+- Option to pin critical notes
+
+### Files tab
+
+Documents and attachments linked to this contact:
+
+- Uploaded files (PDFs, images, spreadsheets)
+- Files attached to emails
+- Proposals and contracts linked from deals
+- Click to preview or download
+
+<Callout variant="note">
+Files uploaded to a contact are visible to anyone who has access to that contact record. Be mindful of sensitive documents and use field-level permissions if needed.
+</Callout>
+
+## Linked entities
+
+The right sidebar (on desktop) shows related records:
+
+- **Company** - The organization this contact belongs to
+- **Deals** - Active and historical deals
+- **Related contacts** - Other people at the same company
+- **Recent tasks** - Upcoming follow-ups
+
+Click any linked entity to navigate directly to its detail page.
+
+## Editing contact information
+
+### Inline editing
+
+1. Click any field value on the Details tab
+2. The field becomes editable
+3. Make your change
+4. Click away or press Enter to save
+
+### Full edit form
+
+1. Click the **Edit** button in the top-right corner
+2. The full edit form opens with all fields
+3. Make multiple changes
+4. Click **Save**
+
+## Deleting a contact
+
+1. Click the three-dot menu in the top-right corner
+2. Select **Delete**
+3. Confirm the deletion
+4. The contact moves to trash and can be recovered within your retention period
+
+<Callout variant="warning">
+Deleting a contact does not automatically delete their associated deals or tasks. Those records remain but lose the contact link. If you want to remove all related data, delete deals and tasks separately first.
+</Callout>
+
+## Next steps
+
+Continue to the Companies guide to learn how organizations are structured in NuCRM and how they link to individual contacts.

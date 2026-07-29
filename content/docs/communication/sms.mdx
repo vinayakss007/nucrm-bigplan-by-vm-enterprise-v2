@@ -1,0 +1,217 @@
+{/* title: SMS messaging */}
+{/* description: Send SMS text messages from NuCRM with templates, automation triggers, and conversation tracking on contact timelines. */}
+
+## Overview
+
+SMS text messaging provides a direct, high-open-rate channel for time-sensitive communications. NuCRM lets you send individual and bulk SMS messages, create templates with personalization, and automate messages based on triggers. All SMS conversations are logged on contact timelines alongside emails and other communications.
+
+## Setting up SMS
+
+### Connecting an SMS provider
+
+1. Go to **Settings > Integrations > SMS**
+2. Choose your SMS provider or use NuCRM's built-in messaging
+3. Enter your account credentials or API key
+4. Configure your sender number(s)
+5. Send a test message to verify the connection
+6. Click **Save**
+
+### Sender numbers
+
+You can register one or multiple phone numbers for sending SMS:
+
+| Number type | Use case |
+|-------------|----------|
+| Local number | Familiar area code for regional contacts |
+| Toll-free | Professional appearance, no cost to recipient |
+| Short code | High-volume messaging (for example, 5-digit numbers) |
+| Your existing business number | Maintain brand consistency |
+
+<Callout variant="note">
+SMS sender regulations vary by country. Some countries require pre-registration of sender IDs or mandate specific opt-in procedures. Check the compliance requirements for each region where your contacts are located.
+</Callout>
+
+## Sending an SMS
+
+### From a contact record
+
+1. Open a contact with a valid mobile phone number
+2. Click the **SMS** icon in the actions bar
+3. Type your message (character limit: 160 per segment, longer messages split automatically)
+4. Click **Send**
+
+### From the Communication inbox
+
+1. Click **Communication** in the sidebar
+2. Click **Compose**
+3. Select **SMS** as the channel
+4. Search for a contact or enter a phone number
+5. Type and send your message
+
+### Message length
+
+| Characters | Segments | Notes |
+|-----------|----------|-------|
+| 1-160 | 1 | Standard single message |
+| 161-306 | 2 | Split into two parts |
+| 307-459 | 3 | Three-part message |
+
+<Callout variant="tip">
+Keep SMS messages short and actionable. Under 160 characters is ideal to avoid multi-segment charges. Save detailed information for email and use SMS for reminders, confirmations, and quick prompts.
+</Callout>
+
+## SMS templates
+
+### Creating a template
+
+1. Go to **Settings > SMS > Templates**
+2. Click **+ New template**
+3. Enter:
+   - **Template name** - Internal label
+   - **Message body** - Text with personalization variables
+4. Click **Save**
+
+### Personalization variables
+
+Use the same variables available in email:
+
+- `{{first_name}}` - Contact's first name
+- `{{company}}` - Company name
+- `{{deal_name}}` - Related deal name
+- `{{owner_name}}` - Your name
+- `{{meeting_time}}` - Scheduled meeting date/time
+- Custom field variables
+
+### Example templates
+
+**Appointment reminder:**
+> Hi {{first_name}}, this is a reminder about your meeting with {{owner_name}} tomorrow at {{meeting_time}}. Reply YES to confirm or call us to reschedule.
+
+**Follow-up after missed call:**
+> Hi {{first_name}}, we tried reaching you today. Would you be available for a quick 10-minute call this week? Reply with a time that works.
+
+**Deal update:**
+> Hi {{first_name}}, your proposal for {{deal_name}} is ready. Check your email for the full details. Questions? Reply to this message.
+
+## Two-way SMS conversations
+
+### Receiving inbound SMS
+
+When a contact replies to your SMS:
+
+- The reply appears in the **Communication** inbox
+- It is logged on the contact timeline
+- A notification is sent to the message sender (or assigned owner)
+- You can reply to continue the conversation thread
+
+### Conversation view
+
+SMS conversations display as a chat-style thread:
+
+- Your outbound messages on the right (in a colored bubble)
+- Inbound replies on the left (gray bubble)
+- Timestamps between messages
+- Read status indicators
+
+## Bulk SMS
+
+Send SMS to multiple contacts simultaneously:
+
+1. Go to **Contacts** and select recipients (or use a segment)
+2. Click **Send SMS** from bulk actions
+3. Select a template or compose a message
+4. Preview personalized messages for sample recipients
+5. Click **Send to all**
+
+### Delivery tracking
+
+After sending bulk SMS, track:
+
+| Metric | Description |
+|--------|-------------|
+| Sent | Messages dispatched to the carrier |
+| Delivered | Confirmed delivery to the device |
+| Failed | Could not be delivered (invalid number, carrier block) |
+| Opted out | Recipient replied STOP |
+| Replies | Inbound responses received |
+
+<Callout variant="warning">
+Always include opt-out instructions in bulk SMS. In many regions, including the US, regulatory compliance requires that recipients can reply STOP to unsubscribe from future messages. NuCRM handles STOP replies automatically.
+</Callout>
+
+## SMS automation
+
+### Trigger-based SMS
+
+Set up automatic messages in the workflow builder:
+
+| Trigger | Automated SMS |
+|---------|--------------|
+| Meeting scheduled | Send confirmation with date/time |
+| Meeting in 1 hour | Send a reminder |
+| Form submitted | Send thank-you acknowledgment |
+| Deal stage change | Notify the contact of progress |
+| Invoice overdue | Send payment reminder |
+
+### Adding SMS to sequences
+
+Include SMS steps in multi-channel sequences:
+
+1. Open the sequence editor
+2. Add a step and select **SMS** as the channel
+3. Choose a template or write a custom message
+4. Set the delay from the previous step
+5. The SMS sends automatically when the sequence reaches that step
+
+### Auto-response rules
+
+Configure automatic replies for common inbound messages:
+
+- If contact texts "HOURS" -> Reply with business hours
+- If contact texts "STATUS" -> Reply with their deal status
+- If contact texts "HELP" -> Reply with support contact information
+
+## SMS analytics
+
+Track performance from **Reports > SMS**:
+
+- Messages sent by day/week/month
+- Delivery rate percentage
+- Reply rate
+- Opt-out rate (should stay below 2%)
+- Average response time from your team
+- Cost per message
+
+## Compliance
+
+### Opt-in management
+
+- Require explicit consent before sending SMS
+- Record consent source (web form, verbal, written)
+- Maintain an opt-out list that automatically prevents messaging
+- Honor STOP/UNSUBSCRIBE keywords immediately
+
+### Regional regulations
+
+| Region | Key requirement |
+|--------|----------------|
+| United States | TCPA compliance, express written consent for marketing |
+| European Union | GDPR consent required, right to withdraw |
+| India | DND registry check, TRAI regulations |
+| Australia | Spam Act compliance, opt-out in every message |
+
+<Callout variant="info">
+NuCRM automatically suppresses SMS to contacts who have opted out. The suppression list is maintained globally across your workspace, so no team member can accidentally message an opted-out contact.
+</Callout>
+
+## Best practices
+
+1. **Keep messages concise** - Under 160 characters avoids multi-segment costs and is easier to read
+2. **Timing matters** - Send during business hours in the recipient's time zone
+3. **Identify yourself** - Start with your name or company since contacts may not have your number saved
+4. **One CTA per message** - Make it clear what you want the recipient to do
+5. **Respect frequency** - Limit SMS to 2-3 messages per week per contact maximum
+
+## Next steps
+
+Learn about in-app notifications and email digest settings in the next guide to ensure your team never misses important updates and activity alerts.

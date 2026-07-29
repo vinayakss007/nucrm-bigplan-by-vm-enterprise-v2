@@ -1,0 +1,200 @@
+{/* title: Pipeline overview */}
+{/* description: Understand how NuCRM's visual sales pipeline works, including the kanban board, deal cards, drag-and-drop functionality, and multiple pipelines. */}
+
+## Overview
+
+The sales pipeline is a visual representation of your active deals organized by stage. NuCRM displays your pipeline as a kanban board where each column represents a stage in your sales process and each card represents an individual deal. This view lets you see your entire revenue opportunity at a glance and move deals forward with simple drag-and-drop interactions.
+
+## Accessing the pipeline
+
+1. Click **Deals** in the sidebar
+2. The pipeline kanban board is the default view
+3. Toggle between **Kanban** and **List** view using the view selector at the top
+
+## The kanban board
+
+### Layout
+
+The board displays horizontally scrollable columns:
+
+- Each column represents a pipeline stage
+- Column headers show the stage name, deal count, and total value
+- Deal cards stack vertically within each column
+- The total pipeline value is shown in the top bar
+
+### Deal cards
+
+Each card shows key deal information:
+
+- Deal name (bold, clickable)
+- Company name
+- Deal value and currency
+- Expected close date
+- Deal owner avatar
+- Health indicator (colored dot: green, yellow, or red)
+- Days in current stage
+
+<Callout variant="tip">
+Hover over a deal card to see a quick preview with additional details including contacts, last activity, and next scheduled task. Click the card to open the full deal detail page.
+</Callout>
+
+### Drag and drop
+
+Move deals between stages:
+
+1. Click and hold a deal card
+2. Drag it horizontally to the target stage column
+3. Drop it at the desired position within that column
+4. The stage change is saved immediately and logged in the deal timeline
+
+Vertical ordering within a column is manual. Drag cards up or down to prioritize deals within the same stage.
+
+## Pipeline summary bar
+
+Above the board, a summary bar displays:
+
+| Metric | Description |
+|--------|-------------|
+| Total pipeline value | Sum of all open deals |
+| Weighted value | Value adjusted by stage win probability |
+| Deals count | Number of active deals |
+| Avg. deal size | Average deal value |
+| Avg. time in pipeline | Average days from creation to close |
+
+## Filtering the pipeline
+
+Narrow the pipeline view to focus on specific deals:
+
+### Quick filters
+
+- **My deals** - Only deals you own
+- **Closing this month** - Deals with close dates in the current month
+- **At risk** - Deals with red health indicators
+
+### Advanced filters
+
+Click **Filter** to combine conditions:
+
+- Deal owner
+- Company
+- Close date range
+- Value range
+- Tags
+- Custom fields
+
+<Callout variant="note">
+Filters persist during your session. A badge on the filter button indicates when filters are active. Click "Clear all" to reset to the full pipeline view.
+</Callout>
+
+## Multiple pipelines
+
+NuCRM supports multiple pipelines for different sales processes:
+
+### When to use multiple pipelines
+
+- Different product lines with distinct sales processes
+- Separate geographic regions with different stage definitions
+- New business vs. renewals/upsells
+- Partner-sourced deals vs. direct sales
+
+### Creating a new pipeline
+
+1. Go to **Settings > Deals > Pipelines**
+2. Click **Add pipeline**
+3. Enter a name (for example, "Enterprise Pipeline" or "Renewal Pipeline")
+4. Define stages for this pipeline (see the Deal stages guide)
+5. Click **Create**
+
+### Switching between pipelines
+
+Use the pipeline selector dropdown at the top-left of the board:
+
+1. Click the current pipeline name
+2. Select a different pipeline from the list
+3. The board refreshes to show deals in that pipeline
+
+### Moving deals between pipelines
+
+If a deal needs to transfer to a different pipeline:
+
+1. Open the deal detail page
+2. Click the pipeline name in the header
+3. Select the target pipeline
+4. Map the current stage to an equivalent stage in the new pipeline
+5. Click **Move**
+
+## Pipeline views
+
+### Kanban view
+
+The default visual board with columns and cards. Best for:
+- Quick status overview
+- Dragging deals between stages
+- Spotting bottlenecks (columns with too many stalled deals)
+
+### List view
+
+A traditional table with sortable columns. Best for:
+- Searching deals by name
+- Sorting by value or close date
+- Bulk operations
+- Exporting deal data
+
+### Forecast view
+
+A time-based view showing expected revenue by month. Best for:
+- Revenue planning
+- Identifying months with gaps
+- Comparing forecast to quota
+
+<Callout variant="info">
+Toggle between views using the icons at the top-right of the deals page. Your preferred view is remembered and loads by default on your next visit.
+</Callout>
+
+## Customizing the board
+
+### Column width
+
+Drag the column edges to resize. Narrower columns fit more stages on screen; wider columns show more card detail.
+
+### Card display settings
+
+Choose which fields appear on deal cards:
+
+1. Click the **gear icon** at the top of the board
+2. Toggle fields on or off:
+   - Close date
+   - Company name
+   - Owner avatar
+   - Health indicator
+   - Tags
+3. Click **Apply**
+
+### Color coding
+
+Color deal cards by a field value:
+
+- By owner (each rep gets a color)
+- By priority (High = red, Medium = yellow, Low = green)
+- By tag
+- By health status
+
+## Pipeline metrics
+
+Click **Analytics** at the top to view pipeline performance:
+
+- **Conversion rates** - Percentage of deals that advance from each stage to the next
+- **Stage velocity** - Average days deals spend in each stage
+- **Win rate** - Percentage of deals that reach Closed Won
+- **Pipeline coverage** - Ratio of pipeline value to quota
+
+## Best practices
+
+1. **Review the pipeline weekly** - Hold a pipeline review meeting to discuss stuck deals and stale opportunities
+2. **Keep stages under 8** - Too many stages dilute the visual impact and make drag-and-drop cumbersome
+3. **Close stale deals** - Deals with no activity for 30+ days should be re-evaluated and closed if unresponsive
+4. **Use health indicators** - Let the color coding alert you to problems before they become emergencies
+
+## Next steps
+
+Learn how to create individual deals and fill in all the relevant fields in the next guide: Creating deals.

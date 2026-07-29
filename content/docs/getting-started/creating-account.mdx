@@ -1,0 +1,91 @@
+{/* title: Creating your account */}
+{/* description: Step-by-step guide to signing up for NuCRM, verifying your email, and completing your first login. */}
+
+## Overview
+
+Creating your NuCRM account takes less than two minutes. Once your account is active, you will have immediate access to your workspace where you can start adding contacts, creating deals, and inviting teammates.
+
+## Sign-up process
+
+<Callout variant="info">
+You can sign up using an email address and password, or use single sign-on through Google or Microsoft if your organization supports it.
+</Callout>
+
+### Step-by-step registration
+
+1. Navigate to the NuCRM sign-up page
+2. Choose your sign-up method:
+   - **Email and password** - Enter your work email and create a strong password (minimum 8 characters, at least one uppercase letter and one number)
+   - **Google sign-on** - Click the Google button and authorize access
+   - **Microsoft sign-on** - Click the Microsoft button and authorize access
+3. Enter your full name and your company or organization name
+4. Choose your workspace URL (this will be your unique subdomain, for example `yourcompany.nucrm.com`)
+5. Select your time zone and preferred currency
+6. Click **Create Account**
+
+### Email verification
+
+After submitting the form, NuCRM sends a verification email to the address you provided:
+
+1. Open the verification email (check your spam folder if it does not arrive within a few minutes)
+2. Click the **Verify Email** button in the message
+3. You will be redirected to your new workspace and logged in automatically
+
+<Callout variant="warning">
+If you do not verify your email within 24 hours, your account will remain in a pending state and you will not be able to access some features. You can request a new verification email from the login page at any time.
+</Callout>
+
+## First login experience
+
+When you log in for the first time, NuCRM guides you through a brief onboarding wizard:
+
+1. **Welcome screen** - Confirms your workspace name and shows your unique workspace URL
+2. **Team size** - Select how many people will use NuCRM (this helps tailor the setup recommendations)
+3. **Primary use case** - Choose your main workflow: Sales, Support, Account Management, or General CRM
+4. **Industry** - Select your industry for recommended templates and pipeline configurations
+5. **Finish** - Click **Go to Dashboard** to enter your workspace
+
+### What the wizard sets up for you
+
+Based on your selections, NuCRM automatically configures:
+
+- A default sales pipeline with standard stages (Lead, Qualified, Proposal, Negotiation, Closed Won, Closed Lost)
+- Sample contact fields relevant to your industry
+- Recommended dashboard widgets
+- An introductory task list to guide your first session
+
+## Account security
+
+During registration, NuCRM implements several security measures:
+
+| Security feature | Default behavior |
+|-----------------|-----------------|
+| Password hashing | Passwords are encrypted and never stored in plain text |
+| Session timeout | Sessions expire after 30 days of inactivity |
+| Login alerts | Email notification on login from a new device |
+| Rate limiting | Accounts are temporarily locked after 5 failed login attempts |
+
+<Callout variant="tip">
+Enable two-factor authentication from your account settings immediately after your first login. This adds a one-time code requirement from an authenticator app, making unauthorized access significantly more difficult.
+</Callout>
+
+## Troubleshooting
+
+### I did not receive the verification email
+
+- Check your spam or junk folder
+- Confirm you entered the correct email address during sign-up
+- Request a new verification email from the login page by clicking **Resend verification**
+- If you use a corporate email, ask your IT team to allow emails from `notifications@nucrm.com`
+
+### My workspace URL is taken
+
+Workspace URLs are unique across all NuCRM accounts. If your preferred URL is taken, try adding a suffix like a region code or department name (for example, `yourcompany-sales`).
+
+### I forgot my password before first login
+
+Click **Forgot password** on the login page, enter your email, and follow the reset link in the email you receive.
+
+## Next steps
+
+Once your account is created and verified, proceed to the workspace setup guide to configure your branding, invite team members, and tailor NuCRM to your organization.

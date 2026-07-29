@@ -1,0 +1,185 @@
+{/* title: Email overview */}
+{/* description: Send, receive, and track emails directly from NuCRM with templates, personalization, and full conversation history on contact timelines. */}
+
+## Overview
+
+Email is the backbone of sales communication. NuCRM integrates email directly into the platform so you can send messages, track opens and clicks, use templates, and maintain a complete conversation history on every contact record. No need to switch between your inbox and your CRM.
+
+## Email capabilities in NuCRM
+
+| Feature | Description |
+|---------|-------------|
+| Send email | Compose and send from within NuCRM |
+| Two-way sync | Sync with Gmail or Outlook to capture all conversations |
+| Templates | Save and reuse common messages |
+| Personalization | Insert contact fields dynamically |
+| Tracking | Monitor opens, clicks, and replies |
+| Scheduling | Send emails at a future time |
+| Bulk email | Send to multiple contacts at once |
+| Sequences | Automated multi-step follow-up series |
+
+## Sending an email
+
+### From a contact record
+
+1. Open any contact detail page
+2. Click **Send email** in the action bar
+3. The email composer opens with the recipient pre-filled
+
+### From the command palette
+
+1. Press **Cmd+K** (Mac) or **Ctrl+K** (Windows/Linux)
+2. Type "Send email"
+3. Select the contact you want to email
+
+### From the Communication inbox
+
+1. Click **Communication** in the sidebar
+2. Click **Compose** at the top
+3. Start typing the recipient name or email to search your contacts
+
+## The email composer
+
+The composer provides a full-featured editing experience:
+
+### Fields
+
+- **From** - Your connected email address (if you have multiple, select one)
+- **To** - Recipient email address (search contacts by name)
+- **CC / BCC** - Additional recipients (click CC/BCC to show these fields)
+- **Subject** - Email subject line
+- **Body** - Rich text message content
+
+### Formatting toolbar
+
+- Bold, italic, underline, strikethrough
+- Headings (H1, H2, H3)
+- Bullet and numbered lists
+- Links (highlight text and add URL)
+- Images (upload or paste from clipboard)
+- Attachments (click paperclip icon or drag files)
+- Code blocks (for technical content)
+- Horizontal divider
+
+<Callout variant="tip">
+Press Cmd+Enter (Mac) or Ctrl+Enter (Windows) to send the email immediately. This keyboard shortcut works from anywhere in the composer.
+</Callout>
+
+### Personalization variables
+
+Insert contact data dynamically:
+
+1. Click the **{ }** icon in the toolbar (or type `{{`)
+2. Select a variable from the dropdown:
+   - `{{first_name}}` - Contact's first name
+   - `{{last_name}}` - Contact's last name
+   - `{{company}}` - Contact's company name
+   - `{{job_title}}` - Contact's job title
+   - `{{deal_name}}` - Related deal name
+   - Custom field variables
+3. The variable is replaced with the actual value when sent
+
+### Attachments
+
+Attach files to your emails:
+
+- Drag and drop files onto the composer
+- Click the paperclip icon to browse your computer
+- Maximum attachment size: 25 MB total per email
+- Common formats: PDF, DOCX, XLSX, images
+
+## Scheduling emails
+
+Send an email at a future time when it is more likely to be read:
+
+1. Compose your email
+2. Instead of clicking **Send**, click the dropdown arrow next to the Send button
+3. Select **Schedule send**
+4. Choose a date and time (or pick a suggested time like "Tomorrow at 9 AM")
+5. Click **Schedule**
+
+The email is held and sent automatically at the scheduled time. You can cancel or edit scheduled emails from **Communication > Scheduled**.
+
+<Callout variant="note">
+Scheduling emails in the recipient's local time zone improves open rates. NuCRM can detect the contact's time zone from their location data and suggest optimal send times.
+</Callout>
+
+## Email signatures
+
+### Setting up your signature
+
+1. Go to **Settings > Email > Signatures**
+2. Click **Create signature**
+3. Design your signature using the rich text editor:
+   - Name and title
+   - Company name
+   - Phone number
+   - Website link
+   - Logo or headshot image
+4. Click **Save**
+
+### Multiple signatures
+
+Create different signatures for different contexts:
+
+- Formal (full company details and logo)
+- Casual (just name and phone)
+- Specific product (includes product-specific links)
+
+Select which signature to use when composing, or set a default.
+
+## Email in the contact timeline
+
+Every email sent or received appears on the contact timeline:
+
+- **Sent emails** show with a paper plane icon and tracking status
+- **Received emails** show with an inbox icon
+- **Threads** are grouped so replies appear nested under the original message
+- Click any email to expand its full content inline
+
+## Email threading
+
+NuCRM groups related emails into conversation threads:
+
+- Original email and all replies appear together
+- Thread count badge shows how many messages are in the conversation
+- Expand a thread to read the full history
+- Reply inline to continue the conversation
+
+## Bulk email
+
+Send personalized emails to multiple contacts:
+
+1. Go to **Contacts** and select the recipients (filter or manually select)
+2. Click **Send email** in the bulk actions toolbar
+3. Compose your message using personalization variables
+4. Preview how it will look for individual recipients
+5. Click **Send to all** (or schedule)
+
+<Callout variant="warning">
+Bulk email should be used for legitimate business communication with contacts who expect to hear from you. NuCRM is not a mass email marketing tool. For large campaigns (1,000+ recipients), use the dedicated campaign feature with proper unsubscribe handling.
+</Callout>
+
+## Email settings
+
+Configure email behavior in **Settings > Email**:
+
+| Setting | Options |
+|---------|---------|
+| Default from address | Select which connected account sends by default |
+| Reply tracking | Enable automatic reply detection |
+| Send delay | Add a 5-30 second delay after hitting Send (for catching mistakes) |
+| Thread handling | Group by subject line or by header references |
+| Auto-BCC | Copy all outbound emails to a specific address |
+
+## Best practices
+
+1. **Connect your email first** - Sync your Gmail or Outlook before sending to maintain history
+2. **Use templates for repetition** - If you send similar emails regularly, save them as templates
+3. **Personalize every message** - Use variables to avoid generic emails that get ignored
+4. **Track responsibly** - Respect recipient privacy and follow email tracking regulations
+5. **Review sent emails** - Periodically check your Communication tab to ensure messages were delivered
+
+## Next steps
+
+Set up two-way email sync with Gmail or Outlook to ensure every conversation is automatically captured in NuCRM. Continue to the email sync guide.

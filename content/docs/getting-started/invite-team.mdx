@@ -1,0 +1,163 @@
+{/* title: Inviting your team */}
+{/* description: Learn how to invite team members to your NuCRM workspace, assign roles, and manage user permissions for secure collaboration. */}
+
+## Overview
+
+NuCRM is built for teams. Inviting your colleagues allows everyone to collaborate on shared contacts, deals, and tasks while maintaining appropriate access control through roles and permissions. This guide covers the invitation process, role assignment, and initial permission configuration.
+
+## Inviting new users
+
+### From workspace settings
+
+1. Click your workspace name in the bottom-left corner of the sidebar
+2. Select **Settings**
+3. Navigate to **Team members**
+4. Click **Invite members**
+
+### The invitation form
+
+1. Enter one or more email addresses (comma-separated for bulk invites)
+2. Select a role for each invitee:
+   - **Admin** - Full access to all records, settings, and team management
+   - **Manager** - Access to all records in their department plus reporting
+   - **Member** - Access to their own records and shared resources
+   - **Read-only** - Can view records but cannot create, edit, or delete
+3. Optionally assign a team or department
+4. Click **Send invitations**
+
+<Callout variant="info">
+You can invite up to 50 users in a single batch. Each recipient receives an email with a link to join your workspace. They will need to create an account (or link an existing one) to accept the invitation.
+</Callout>
+
+### What recipients see
+
+The invitation email includes:
+
+- Your workspace name and the inviter name
+- A prominent **Accept invitation** button
+- Instructions for creating an account or signing in
+- The role they have been assigned
+
+### Invitation status
+
+Track pending invitations from the Team members page:
+
+| Status | Meaning |
+|--------|---------|
+| Pending | Invitation sent, not yet accepted |
+| Accepted | User has joined and is active |
+| Expired | Invitation not accepted within 7 days |
+| Revoked | Admin cancelled the invitation |
+
+You can resend expired invitations or revoke pending ones from the actions menu (three-dot icon) on each row.
+
+## Understanding roles
+
+Roles define what a user can see and do inside NuCRM. The built-in roles cover most scenarios, and custom roles can be created for specific needs.
+
+### Built-in roles
+
+**Owner** (one per workspace):
+- Full access to everything including billing and workspace deletion
+- Cannot be removed (can transfer ownership to another admin)
+
+**Admin**:
+- Access to all records, settings, imports, and team management
+- Can create and modify custom roles
+- Can invite and remove team members
+
+**Manager**:
+- Can view and edit all records in their assigned department
+- Access to team reports and dashboards
+- Cannot modify workspace settings or manage other admins
+
+**Member**:
+- Can create and edit their own records
+- Can view shared records (based on sharing rules)
+- Can be granted access to specific pipelines and views
+
+**Read-only**:
+- Can view records shared with them
+- Cannot create, edit, or delete any records
+- Useful for executives who need visibility without interaction
+
+<Callout variant="tip">
+Start with the built-in roles and create custom roles only after you have identified specific access needs. Most teams find that Admin, Manager, and Member cover 90% of their use cases.
+</Callout>
+
+## Permission settings
+
+Permissions control access at a granular level within each role:
+
+### Record-level permissions
+
+- **Own records** - User can only see records they created or are assigned to
+- **Department records** - User sees all records belonging to their team
+- **All records** - User sees everything in the workspace
+
+### Action permissions
+
+| Permission | Controls |
+|-----------|----------|
+| Create | Can create new records of this type |
+| Read | Can view records |
+| Edit | Can modify existing records |
+| Delete | Can move records to trash |
+| Export | Can export records to CSV |
+| Bulk edit | Can modify multiple records at once |
+| Import | Can run data imports |
+
+### Module access
+
+Toggle which modules each role can access:
+
+- Contacts and Companies
+- Deals and Pipeline
+- Tasks and Calendar
+- Communication (Email, WhatsApp, SMS)
+- Automation
+- Reports and Dashboards
+- Billing and Invoices
+- Settings
+
+## Managing active users
+
+### Changing a user's role
+
+1. Go to **Settings > Team members**
+2. Find the user in the list
+3. Click the three-dot menu on their row
+4. Select **Change role**
+5. Choose the new role from the dropdown
+6. Click **Save**
+
+### Deactivating a user
+
+When someone leaves the team:
+
+1. Go to **Settings > Team members**
+2. Click the three-dot menu on the user's row
+3. Select **Deactivate**
+4. Choose what happens to their records:
+   - **Reassign to another user** - Select a team member to inherit their contacts, deals, and tasks
+   - **Keep unassigned** - Records remain but have no owner
+5. Confirm deactivation
+
+<Callout variant="warning">
+Deactivated users cannot log in, but their historical activity (notes, emails, timeline entries) remains intact for audit purposes. Deactivation does not delete any data.
+</Callout>
+
+### Reactivating a user
+
+If someone returns to the team, go to **Settings > Team members**, filter by "Inactive," find the user, and select **Reactivate**. Their previous role and permissions are restored.
+
+## Best practices for team setup
+
+1. **Start with clear ownership** - Assign every contact and deal an owner so nothing falls through the cracks
+2. **Use departments** - Group users into departments for cleaner reporting and easier permission management
+3. **Review permissions quarterly** - As your team grows, audit who has access to sensitive data like billing and export capabilities
+4. **Set up notification rules** - Ensure new team members have appropriate notification settings so they do not miss assigned tasks or deal updates
+
+## Next steps
+
+Your workspace is now ready for collaboration. With your team invited and roles configured, you can begin building out your sales pipeline and communication workflows. Continue exploring the documentation to learn about managing contacts, configuring pipeline stages, and automating your workflows.

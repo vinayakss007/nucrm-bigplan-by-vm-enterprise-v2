@@ -1,0 +1,181 @@
+{/* title: Managing contacts */}
+{/* description: Learn how to view, filter, sort, and manage your contacts in NuCRM using list views, saved views, and bulk operations. */}
+
+## Overview
+
+The Contacts section is where you manage every person in your database. NuCRM provides a powerful list view with filtering, sorting, saved views, and bulk operations that let you find and act on contacts efficiently, whether you have hundreds or hundreds of thousands of records.
+
+## Accessing contacts
+
+Click **Contacts** in the sidebar to open the contacts list. By default, you see all contacts you have permission to view, sorted by most recently created.
+
+## List view layout
+
+The contacts list displays as a scrollable table with columns:
+
+| Default column | Description |
+|---------------|-------------|
+| Name | Full name with avatar |
+| Email | Primary email address |
+| Company | Linked company name |
+| Phone | Primary phone number |
+| Lifecycle stage | Current stage (Lead, Customer, etc.) |
+| Owner | Assigned team member |
+| Created | Date the contact was added |
+
+### Customizing columns
+
+1. Click the **Columns** button above the list
+2. Check boxes next to fields you want visible
+3. Uncheck fields you want hidden
+4. Drag field names to reorder columns
+5. Click **Apply**
+
+Your column configuration is saved to your personal preferences and persists across sessions.
+
+## Filtering contacts
+
+Filters let you narrow down the list to find exactly the contacts you need.
+
+### Quick filters
+
+The top bar includes one-click filter buttons:
+
+- **My contacts** - Only contacts assigned to you
+- **Unassigned** - Contacts with no owner
+- **New this week** - Created in the last 7 days
+
+### Advanced filters
+
+1. Click **Filter** to open the advanced filter panel
+2. Click **Add condition**
+3. Select a field (for example, Lifecycle stage)
+4. Select an operator (is, is not, contains, is empty)
+5. Enter or select a value
+6. Add more conditions as needed
+
+<Callout variant="tip">
+Combine multiple filter conditions to create precise segments. For example, filter by "Lifecycle stage is Lead" AND "Created after January 1" AND "Company industry is SaaS" to find recent SaaS leads.
+</Callout>
+
+### Filter logic
+
+By default, multiple conditions use AND logic (all must be true). Toggle to OR logic for broader results where any condition matching is sufficient.
+
+## Sorting contacts
+
+Click any column header to sort by that field:
+
+- Click once for ascending (A to Z, oldest first)
+- Click again for descending (Z to A, newest first)
+- A small arrow icon indicates the active sort direction
+
+## Saved views
+
+Save your current filter and sort configuration as a reusable named view:
+
+### Creating a saved view
+
+1. Set up your desired filters, sort, and columns
+2. Click **Save view** (or the bookmark icon)
+3. Enter a descriptive name (for example, "Enterprise leads - West Coast")
+4. Choose visibility:
+   - **Private** - Only visible to you
+   - **Shared** - Visible to all workspace members
+5. Click **Save**
+
+### Switching between views
+
+Use the view selector dropdown at the top-left of the list to switch between saved views. Your default view loads each time you visit the Contacts page.
+
+### Setting a default view
+
+1. Open the view selector
+2. Hover over the view you want as default
+3. Click the pin icon
+4. This view now loads automatically when you open Contacts
+
+<Callout variant="note">
+Shared views are read-only for other team members. They can duplicate a shared view to customize it without affecting the original.
+</Callout>
+
+## Searching contacts
+
+### Full-text search
+
+Type in the search box above the list to search across:
+
+- First and last name
+- Email addresses
+- Phone numbers
+- Company name
+- Notes content
+
+Results update as you type with highlighted matches.
+
+### Search tips
+
+- Use quotes for exact phrase matching: `"sarah johnson"`
+- Search by domain to find all contacts at a company: `@acme.com`
+- Search by partial phone number: `555-012`
+
+## Bulk operations
+
+Select multiple contacts to perform actions in batch:
+
+### Selecting contacts
+
+- Click the checkbox on individual rows to select specific contacts
+- Click the "select all" checkbox in the header to select all visible contacts
+- Click "Select all X contacts matching this filter" to select beyond the current page
+
+### Available bulk actions
+
+Once contacts are selected, the bulk action toolbar appears:
+
+| Action | Description |
+|--------|-------------|
+| Assign owner | Set or change the owner for all selected contacts |
+| Change stage | Update lifecycle stage |
+| Add tags | Apply one or more tags |
+| Remove tags | Remove specific tags |
+| Send email | Send a bulk email (with personalization variables) |
+| Export | Download selected contacts as CSV |
+| Delete | Move selected contacts to trash |
+| Add to sequence | Enroll in an email automation sequence |
+
+### Performing a bulk action
+
+1. Select the contacts you want to modify
+2. Click the desired action button in the toolbar
+3. Configure the action (for example, select the new owner)
+4. Review the confirmation showing how many contacts will be affected
+5. Click **Apply** to execute
+
+<Callout variant="warning">
+Bulk actions cannot be undone individually. Before performing a bulk delete or stage change, double-check your filter to ensure you have selected the correct contacts. Deleted contacts go to trash and can be recovered within your workspace retention period.
+</Callout>
+
+## Contact card view
+
+Switch to card view for a visual layout:
+
+1. Click the **View** toggle button above the list
+2. Select **Cards**
+3. Contacts display as individual cards showing avatar, name, company, and stage
+4. Drag cards to reorder or use the sort controls
+
+## Exporting contacts
+
+Export your filtered contacts to CSV:
+
+1. Apply any filters to narrow the export
+2. Click the **Export** button (download icon)
+3. Choose which fields to include in the export
+4. Click **Download CSV**
+
+The file downloads immediately for lists under 10,000 records. Larger exports are processed in the background and delivered via email notification.
+
+## Next steps
+
+Now that you understand the contacts list, continue to the contact detail view guide to learn about individual contact profiles, timelines, and linked entities.

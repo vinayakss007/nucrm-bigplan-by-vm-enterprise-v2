@@ -1,0 +1,213 @@
+{/* title: Email sync (Gmail & Outlook) */}
+{/* description: Set up two-way email sync between NuCRM and your Gmail or Outlook account to automatically log all conversations. */}
+
+## Overview
+
+Two-way email sync connects your Gmail or Microsoft Outlook account to NuCRM so that emails you send and receive outside the CRM are automatically logged on the relevant contact timelines. This eliminates manual email forwarding and ensures your team always has the complete conversation history.
+
+## How email sync works
+
+Once connected:
+
+- **Outbound emails** you send from Gmail/Outlook to known contacts are logged on their NuCRM timeline
+- **Inbound emails** from known contacts to your inbox are captured and displayed in NuCRM
+- **Replies** maintain thread context, grouping related messages together
+- Sync runs continuously, typically updating within 1-2 minutes of a message being sent or received
+
+<Callout variant="note">
+Email sync only logs conversations with email addresses that exist as contacts in your NuCRM workspace. Emails to or from unknown addresses are not captured unless you create a contact for that address.
+</Callout>
+
+## Connecting Gmail
+
+### Prerequisites
+
+- A Google Workspace or personal Gmail account
+- Permission to authorize third-party applications (check with your IT admin for organization-managed accounts)
+
+### Setup steps
+
+1. Go to **Settings > Email > Connected accounts**
+2. Click **Connect Gmail**
+3. A Google sign-in window opens
+4. Select the Gmail account you want to connect
+5. Review the permissions requested:
+   - Read your emails (to log conversations)
+   - Send emails on your behalf (to send from NuCRM)
+   - Manage labels (optional, for sync filtering)
+6. Click **Allow**
+7. You are redirected back to NuCRM with a "Connected successfully" confirmation
+
+### Gmail sync options
+
+After connecting, configure what gets synced:
+
+| Option | Description |
+|--------|-------------|
+| Sync all email | Every email to/from contacts is logged |
+| Sync labeled only | Only emails with a specific Gmail label are synced |
+| Exclude folders | Skip emails in specific folders (e.g., newsletters, notifications) |
+| Sync direction | Two-way (default), inbound only, or outbound only |
+
+<Callout variant="tip">
+If your inbox is noisy with newsletters and notifications, use the "Exclude folders" option to prevent irrelevant emails from cluttering contact timelines. Exclude categories like Promotions, Social, and Updates.
+</Callout>
+
+## Connecting Microsoft Outlook
+
+### Prerequisites
+
+- A Microsoft 365 or Outlook.com account
+- Admin consent may be required for organizational accounts
+
+### Setup steps
+
+1. Go to **Settings > Email > Connected accounts**
+2. Click **Connect Outlook**
+3. A Microsoft sign-in window opens
+4. Enter your Microsoft credentials
+5. Review and accept the permissions
+6. Click **Accept**
+7. Return to NuCRM with confirmation
+
+### Outlook sync options
+
+Same options as Gmail:
+
+- Sync scope (all, specific folders, or labeled only)
+- Direction (two-way, inbound, outbound)
+- Folder exclusions
+- Shared mailbox support (connect team mailboxes visible to multiple users)
+
+## Sync behavior
+
+### What gets synced
+
+- Regular one-to-one emails
+- Emails with CC recipients (logged on all recognized contacts)
+- Reply chains (threaded together)
+- Attachments (stored with the email record in NuCRM)
+
+### What does NOT sync
+
+- Calendar invites (use Calendar sync separately)
+- Emails to/from addresses not in your contact database
+- Emails in folders you have excluded
+- Draft emails (only sent messages sync)
+- Encrypted emails (cannot be read by the sync process)
+
+### Sync timing
+
+| Event | Typical delay |
+|-------|--------------|
+| Email sent from your inbox | 1-2 minutes to appear in NuCRM |
+| Email received in your inbox | 1-2 minutes to appear in NuCRM |
+| Initial historical sync | Up to 24 hours for full history |
+
+<Callout variant="info">
+When you first connect your account, NuCRM performs a historical sync that pulls in emails from the past 30 days. This gives you immediate context on recent conversations without waiting for new emails to arrive.
+</Callout>
+
+## Historical sync
+
+### Initial sync depth
+
+Choose how far back to sync when first connecting:
+
+- Last 7 days
+- Last 30 days (default)
+- Last 90 days
+- Last 6 months
+- All time (may take several hours for large mailboxes)
+
+### Syncing older emails
+
+After the initial sync, request additional history:
+
+1. Go to **Settings > Email > Connected accounts**
+2. Click the three-dot menu on your connected account
+3. Select **Sync more history**
+4. Choose the extended period
+5. The background sync processes older emails over the next few hours
+
+## Managing connected accounts
+
+### Viewing sync status
+
+From the Connected accounts page:
+
+- **Active** (green) - Sync is running normally
+- **Paused** (yellow) - Sync is temporarily stopped
+- **Error** (red) - Authentication expired or connection issue
+
+### Reconnecting after an error
+
+If sync shows an error:
+
+1. Click **Reconnect** on the account
+2. Re-authenticate with your email provider
+3. Sync resumes from where it left off (no duplicate emails)
+
+### Disconnecting an account
+
+1. Click the three-dot menu on the account
+2. Select **Disconnect**
+3. Choose what happens to synced emails:
+   - Keep existing records (recommended)
+   - Remove all synced email records
+4. Confirm disconnection
+
+<Callout variant="warning">
+Disconnecting does not delete emails from your Gmail/Outlook inbox. It only stops the sync and optionally removes email records from NuCRM. Your actual email is never modified or deleted.
+</Callout>
+
+## Privacy and security
+
+### Data handling
+
+- NuCRM stores email content on secure, encrypted servers
+- Only workspace members with access to a contact can see their email timeline
+- Email content is never shared with third parties
+
+### Selective sync
+
+For sensitive communications you do not want in the CRM:
+
+- Compose in your email client and add a specific label (for example, "No CRM") to exclude from sync
+- Or use the "Exclude contacts" list to prevent sync for specific email addresses
+
+### Compliance
+
+- Email sync respects your organization's data retention policies
+- Synced emails follow the same backup and deletion rules as other NuCRM data
+- Audit logs record when emails are accessed or exported
+
+## Troubleshooting
+
+### Emails not appearing in NuCRM
+
+1. Verify the sender/recipient email exists as a contact in your workspace
+2. Check that the connected account shows "Active" status
+3. Confirm the email is not in an excluded folder
+4. Wait 5 minutes (sync may be slightly delayed)
+5. If still missing, click "Force sync" on the connected account page
+
+### Duplicate emails
+
+If you see duplicate entries:
+
+- Ensure you have not connected the same account twice
+- Check that both the contact's email and an alias are not creating separate logs
+- Remove duplicate connections from the Connected accounts page
+
+## Best practices
+
+1. **Connect immediately** - Set up email sync as the first step so no conversations are missed
+2. **Exclude noise** - Filter out newsletters, notifications, and automated emails
+3. **Use two-way sync** - Capture both sent and received for complete context
+4. **Verify contacts exist** - Emails only sync for known contacts, so ensure your database is populated
+5. **Monitor sync status** - Check monthly that connections are active and not expired
+
+## Next steps
+
+Learn how to create reusable email templates in the next guide, so your team can send consistent, professional messages with personalization in seconds.

@@ -1,0 +1,154 @@
+{/* title: Multi-currency deals */}
+{/* description: Configure multi-currency support in NuCRM to manage deals in different currencies with exchange rates and unified reporting. */}
+
+## Overview
+
+For businesses selling internationally, NuCRM supports multiple currencies on deals, quotes, and invoices. You can set exchange rates manually or let them update automatically, and all reporting rolls up to your workspace base currency for consistent analysis.
+
+## Enabling multi-currency
+
+1. Go to **Settings > Workspace > Currencies**
+2. Your workspace base currency is shown at the top (set during workspace creation)
+3. Click **Add currency** to enable additional currencies
+4. Select currencies from the dropdown (50+ supported including USD, EUR, GBP, INR, JPY, AUD, CAD, and more)
+5. Click **Save**
+
+## Exchange rates
+
+### Automatic rates
+
+NuCRM can fetch exchange rates daily:
+
+1. On the Currencies settings page, enable **Auto-update rates**
+2. Rates refresh once per day at midnight UTC
+3. The last update timestamp is shown next to each rate
+
+### Manual rates
+
+For businesses with negotiated or fixed rates:
+
+1. Click the exchange rate value next to any currency
+2. Enter your custom rate
+3. Click **Save**
+4. Disable auto-update for that currency if you always want manual control
+
+<Callout variant="note">
+When a deal is created, the exchange rate at that moment is locked onto the deal. This ensures the deal value in your base currency remains stable regardless of future rate fluctuations. You can manually update the rate on individual deals if needed.
+</Callout>
+
+### Rate history
+
+View historical exchange rates:
+
+1. Click the clock icon next to any currency
+2. A chart shows the rate over the past 90 days
+3. Useful for understanding the impact of currency changes on your pipeline
+
+## Creating deals in other currencies
+
+When creating or editing a deal:
+
+1. Click the **Currency** dropdown in the value field
+2. Select the deal's currency (for example, EUR for a European customer)
+3. Enter the deal value in that currency
+4. NuCRM automatically shows the converted value in your base currency underneath
+
+### Currency on the pipeline board
+
+Deal cards show:
+- The deal value in its original currency (for example, EUR 25,000)
+- Column totals display in base currency for consistent comparison
+- The pipeline summary bar shows total values in your base currency
+
+## Reporting with multiple currencies
+
+### Pipeline reports
+
+All pipeline reports automatically convert deal values to your base currency:
+
+- Total pipeline value (converted)
+- Stage-by-stage totals (converted)
+- Individual deal values show both original and converted amounts
+- Forecasts use converted values for quota comparison
+
+### Currency breakdown report
+
+A dedicated report shows revenue split by currency:
+
+| Currency | Deals | Original total | Converted total (USD) |
+|----------|-------|----------------|-----------------------|
+| USD | 45 | $1,250,000 | $1,250,000 |
+| EUR | 12 | EUR 380,000 | $412,000 |
+| GBP | 8 | GBP 195,000 | $247,000 |
+| INR | 20 | INR 8,500,000 | $102,000 |
+
+<Callout variant="tip">
+Use the currency breakdown report to identify which markets contribute most to your revenue. This helps prioritize where to invest in sales resources and localization.
+</Callout>
+
+## Currency on quotes and invoices
+
+When generating quotes or invoices from deals:
+
+- The document currency matches the deal currency by default
+- The customer sees amounts in their local currency
+- Tax calculations use the document currency
+- Payment tracking records amounts in the document currency
+
+### Overriding currency on documents
+
+You can change the currency on a quote or invoice independently of the deal:
+
+1. Open the quote or invoice
+2. Click the currency indicator
+3. Select a different currency
+4. Amounts are recalculated at the current exchange rate
+
+## Managing exchange rate risk
+
+### Rate lock on deals
+
+By default, deals lock their exchange rate at creation. To update:
+
+1. Open the deal
+2. Click the currency conversion info below the value
+3. Click **Update to current rate**
+4. The base currency value recalculates
+
+### Bulk rate refresh
+
+For businesses that want all open deals to reflect current rates:
+
+1. Go to **Settings > Currencies**
+2. Click **Refresh all open deals**
+3. Confirm the action
+4. All open deal values are recalculated at today's rates
+
+<Callout variant="warning">
+Bulk rate refresh changes forecasted revenue numbers immediately. Run this before pipeline reviews so the team sees accurate converted values, but be aware that revenue projections may shift significantly after a refresh.
+</Callout>
+
+## Regional currency formatting
+
+NuCRM formats currency amounts according to locale conventions:
+
+| Currency | Format example |
+|----------|---------------|
+| USD | $1,234,567.89 |
+| EUR | 1.234.567,89 EUR |
+| GBP | GBP 1,234,567.89 |
+| INR | INR 12,34,567.89 |
+| JPY | JPY 1,234,568 (no decimals) |
+
+Configure your preferred format in **Settings > Workspace > Regional** under "Number formatting."
+
+## Best practices
+
+1. **Set a clear base currency** - Choose the currency your board and investors expect to see in reports
+2. **Update rates regularly** - Enable auto-update for the most common currencies your deals use
+3. **Lock rates for closed deals** - Never refresh rates on closed-won deals as it changes historical revenue figures
+4. **Train your team** - Ensure reps know how to set the correct currency when creating deals for international customers
+
+## Next steps
+
+Learn how to log activities and notes on deals in the next guide, including calls, meetings, and collaboration features that keep your team aligned on deal progress.

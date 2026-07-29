@@ -1,0 +1,146 @@
+{/* title: Importing your data */}
+{/* description: Learn how to import contacts, companies, and deals from CSV files into NuCRM with field mapping and duplicate handling. */}
+
+## Overview
+
+NuCRM makes it simple to bring your existing customer data into the platform. Whether you are migrating from another CRM, a spreadsheet, or an email marketing tool, the import wizard handles CSV files with automatic field detection, smart mapping suggestions, and duplicate prevention.
+
+## Preparing your data
+
+Before importing, take a few minutes to prepare your CSV file for the best results:
+
+### File requirements
+
+- **Format** - CSV (comma-separated values) or XLSX
+- **Encoding** - UTF-8 (recommended for special characters and international names)
+- **Maximum size** - 50 MB per file (approximately 500,000 rows)
+- **Headers** - First row must contain column names
+
+### Recommended cleanup
+
+1. Remove completely empty rows
+2. Ensure email addresses are in a consistent format
+3. Standardize phone number formats (include country codes)
+4. Split full names into first name and last name columns if possible
+5. Check for consistent date formats (use YYYY-MM-DD for best results)
+
+<Callout variant="tip">
+If your data is in another CRM, look for a "bulk export" or "data export" option in that platform. Most CRMs allow exporting to CSV directly.
+</Callout>
+
+## Starting the import
+
+1. Go to **Contacts** in the sidebar (or **Companies** or **Deals** depending on what you are importing)
+2. Click the **Import** button in the top-right toolbar
+3. Select **CSV file upload**
+4. Drag and drop your file or click **Browse** to select it from your computer
+5. Click **Continue**
+
+## Field mapping
+
+After uploading, NuCRM displays a mapping screen showing your CSV columns on the left and NuCRM fields on the right:
+
+### Automatic mapping
+
+NuCRM automatically maps columns when the header names match common patterns:
+
+| CSV column | Auto-mapped to |
+|-----------|---------------|
+| email, Email, Email Address | Email (primary) |
+| first_name, First Name | First name |
+| last_name, Last Name | Last name |
+| phone, Phone Number | Phone |
+| company, Company Name | Company |
+| city, City | City |
+
+### Manual mapping
+
+For columns that are not auto-detected:
+
+1. Click the dropdown next to the unmapped column
+2. Search for or select the target NuCRM field
+3. If no matching field exists, select **Create new custom field** and define the field type
+
+### Skipping columns
+
+If your CSV contains columns you do not want to import (such as internal IDs from another system), click **Skip** next to that column to exclude it from the import.
+
+<Callout variant="note">
+You can save your field mapping as a template for future imports. This is especially helpful if you receive regular data files from partners or marketing campaigns with the same column structure.
+</Callout>
+
+## Duplicate handling
+
+NuCRM checks for duplicates during import to prevent cluttering your database:
+
+### Detection rules
+
+Choose which field to use for duplicate detection:
+
+- **Email address** (most common and recommended)
+- **Phone number**
+- **Company name + contact name combination**
+- **Custom field** (any unique identifier you use)
+
+### Actions for duplicates
+
+When a duplicate is found, choose what NuCRM should do:
+
+1. **Skip** - Do not import the duplicate row (keeps existing record unchanged)
+2. **Update** - Overwrite existing field values with the new data
+3. **Merge** - Combine information, keeping existing values where the import row is empty
+
+## Running the import
+
+1. Review the summary screen showing:
+   - Total rows to import
+   - Number of mapped fields
+   - Duplicate handling rule
+   - Estimated time
+2. Click **Start import**
+3. NuCRM processes the file in the background - you can continue working while it runs
+
+### Import progress
+
+Track progress from the notification bell icon:
+
+- A progress bar shows percentage complete
+- Once finished, you receive a notification with results
+- A summary report shows: rows imported, rows skipped (duplicates), rows with errors
+
+## Handling import errors
+
+If some rows fail, NuCRM provides a downloadable error report:
+
+1. Click **Download error report** in the import summary
+2. The report is a CSV listing each failed row with the error reason
+3. Common errors include:
+   - Invalid email format
+   - Required field missing
+   - Value exceeds character limit
+   - Unrecognized date format
+4. Fix the issues in the error file
+5. Re-import only the corrected rows
+
+<Callout variant="warning">
+Never re-import your entire original file after fixing errors. Only re-import the rows that failed. Otherwise you may create duplicates if your duplicate detection field was the one with errors.
+</Callout>
+
+## Import history
+
+View all past imports from **Settings > Import History**:
+
+- Date and time of each import
+- File name and record count
+- Status (completed, partial, failed)
+- Option to undo an import within 48 hours
+
+## Tips for large imports
+
+- Split files larger than 100,000 rows into multiple batches for faster processing
+- Schedule large imports during off-peak hours to avoid interface slowdowns for your team
+- Use the "dry run" option first to preview how mapping and deduplication will work without actually creating records
+
+## Next steps
+
+With your data imported, you are ready to explore the NuCRM interface. Continue to the navigation overview to learn your way around the sidebar, command palette, and keyboard shortcuts.

@@ -1,0 +1,180 @@
+{/* title: Duplicate detection & merge */}
+{/* description: Identify and merge duplicate contact records in NuCRM to maintain a clean, accurate database with no redundant entries. */}
+
+## Overview
+
+Duplicate contacts create confusion. Sales reps waste time reaching out to the same person twice, reporting becomes inaccurate, and automation sequences can send conflicting messages. NuCRM provides automated duplicate detection and a guided merge process to keep your database clean and trustworthy.
+
+## How duplicate detection works
+
+NuCRM identifies potential duplicates by matching contacts on key fields:
+
+### Detection criteria
+
+| Match field | Confidence level |
+|------------|-----------------|
+| Email address (exact match) | High |
+| Phone number (normalized) | High |
+| First name + Last name + Company | Medium |
+| First name + Last name (same domain) | Medium |
+| Email domain + Last name | Low |
+
+Matches are scored on confidence. High-confidence matches are almost certainly duplicates. Medium and low-confidence matches require manual review.
+
+### When detection runs
+
+Duplicate detection triggers at:
+
+- **Contact creation** - Before saving a new contact, NuCRM checks for existing matches
+- **Data import** - During CSV import, duplicates are flagged per your import settings
+- **Scheduled scan** - A background job scans the entire database weekly for new duplicates
+- **Manual scan** - You can trigger a full scan on demand from Settings
+
+## Viewing duplicate suggestions
+
+### Duplicates dashboard
+
+1. Go to **Contacts > Duplicates** (tab at the top)
+2. View a list of duplicate pairs or groups
+3. Each entry shows:
+   - The contacts suspected to be duplicates
+   - The match reason (which field matched)
+   - Confidence level (High, Medium, Low)
+   - Date detected
+
+### Inline warnings
+
+When you open a contact that has potential duplicates, a yellow banner appears at the top:
+
+> "This contact may be a duplicate of Sarah Johnson (sarah@acme.com). Review and merge?"
+
+Click the banner to start the merge process.
+
+<Callout variant="note">
+NuCRM never auto-merges contacts without your confirmation. All duplicate resolution requires manual review to prevent accidental data loss.
+</Callout>
+
+## Merging duplicates
+
+### The merge wizard
+
+1. From the duplicates list or the inline warning, click **Review & merge**
+2. The merge wizard shows both records side by side
+3. For each field, choose which value to keep:
+   - **Record A value** - Keep the left record's data
+   - **Record B value** - Keep the right record's data
+   - **Both** (for multi-value fields like phone numbers or tags)
+4. Review the preview showing the merged result
+5. Click **Merge contacts**
+
+### What happens during merge
+
+- One record becomes the "master" (surviving record)
+- The other record is absorbed into the master
+- All associated data transfers to the master:
+  - Email conversations
+  - Timeline activities
+  - Notes and files
+  - Deal links
+  - Task assignments
+  - Form submissions
+- The absorbed record is permanently deleted (not sent to trash)
+
+<Callout variant="warning">
+Merging cannot be undone. Once two contacts are merged, they cannot be separated again. Review the field choices carefully before confirming, especially for contacts with extensive activity history.
+</Callout>
+
+### Choosing the master record
+
+By default, the older record (created first) becomes the master. You can override this:
+
+1. In the merge wizard, click **Swap primary** to switch which record survives
+2. The master record keeps its original contact ID, which matters for API integrations and external system links
+
+## Bulk duplicate resolution
+
+For large databases, handle duplicates in batches:
+
+### Bulk merge
+
+1. Go to **Contacts > Duplicates**
+2. Filter by confidence level (start with "High" for safe batch merging)
+3. Select multiple duplicate pairs using checkboxes
+4. Click **Bulk merge**
+5. Choose the default field resolution strategy:
+   - Keep most recently updated values
+   - Keep oldest (original) values
+   - Keep the most complete record's values
+6. Review the summary showing how many contacts will be merged
+7. Click **Confirm bulk merge**
+
+<Callout variant="tip">
+Process high-confidence duplicates (exact email matches) in bulk since they are almost always true duplicates. Review medium and low-confidence matches individually to avoid merging distinct people who happen to share a name.
+</Callout>
+
+### Dismissing false positives
+
+If two contacts look similar but are genuinely different people:
+
+1. Click **Not a duplicate** on the duplicate pair
+2. NuCRM permanently dismisses this pair and will not suggest them again
+3. Optionally add a note explaining why they are separate records
+
+## Prevention strategies
+
+### Deduplication at entry points
+
+**Contact forms:**
+- Enable "Check for existing contacts" on web forms
+- If a match is found, update the existing record instead of creating a new one
+
+**Email sync:**
+- When NuCRM encounters an email from an address that already exists, it automatically logs the activity on the existing contact rather than creating a duplicate
+
+**Import settings:**
+- Always enable duplicate checking during CSV imports
+- Choose "Update existing" rather than "Create new" when a match is found
+
+### Team training
+
+- Encourage team members to search for existing contacts before creating new ones
+- Use the command palette (Cmd+K) to quickly check if someone already exists
+- Set up duplicate warnings that alert users during creation
+
+## Configuration
+
+### Adjusting detection sensitivity
+
+1. Go to **Settings > Contacts > Duplicate detection**
+2. Choose detection sensitivity:
+   - **Strict** - Only exact matches on email or phone
+   - **Balanced** (recommended) - Exact matches plus strong name+company matches
+   - **Aggressive** - Includes fuzzy name matching and partial field matches
+3. Enable or disable specific match fields
+4. Set the minimum confidence threshold for showing suggestions
+
+### Scheduled scan frequency
+
+Configure how often the background duplicate scan runs:
+
+- Daily (recommended for active databases with frequent imports)
+- Weekly (default)
+- Monthly (for stable databases with minimal new data)
+
+## Duplicate reports
+
+Track your database health over time:
+
+- Total duplicate pairs detected
+- Duplicates resolved this month
+- False positives dismissed
+- Duplicate rate (percentage of database with duplicates)
+- Trend chart showing improvement over time
+
+<Callout variant="info">
+A healthy database should maintain a duplicate rate below 3%. If your rate is higher, consider tightening prevention controls at entry points and running bulk deduplication.
+</Callout>
+
+## Next steps
+
+Learn how to import and export contact data efficiently in the next guide, including CSV formatting, field mapping, scheduled exports, and integration with external systems.

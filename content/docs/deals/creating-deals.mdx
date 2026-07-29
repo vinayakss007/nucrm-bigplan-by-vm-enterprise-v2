@@ -1,0 +1,166 @@
+{/* title: Creating deals */}
+{/* description: Learn how to create new deals in NuCRM, fill in required fields, link contacts and companies, and set up deal details. */}
+
+## Overview
+
+A deal in NuCRM represents a specific sales opportunity with a potential revenue value. Creating a deal captures all the information your team needs to track the opportunity from initial qualification through to a closed outcome. This guide covers every aspect of deal creation and initial setup.
+
+## Ways to create a deal
+
+### From the pipeline board
+
+1. Click **Deals** in the sidebar
+2. Click **+ New deal** at the top-right corner
+3. The deal creation form opens in a slide-over panel
+
+### From within a stage column
+
+1. Click the **+** icon at the top of any stage column
+2. The deal is created directly in that stage
+3. Fill in the quick-create fields (name, value, contact)
+4. Click **Create**
+
+### From a contact record
+
+1. Open any contact detail page
+2. Click **Create deal** in the action buttons
+3. The contact is pre-linked to the new deal
+
+### From the command palette
+
+1. Press **Cmd+K** (Mac) or **Ctrl+K** (Windows/Linux)
+2. Type "Create deal" or "New deal"
+3. Press **Enter**
+
+## Deal creation form
+
+### Required fields
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| Deal name | A clear identifier for this opportunity | "Acme Corp - Pro Plan Annual" |
+| Pipeline | Which sales process this belongs to | Default Sales Pipeline |
+| Stage | Starting position in the pipeline | Qualified |
+| Deal value | Expected revenue amount | $36,000 |
+
+### Recommended fields
+
+- **Contact** - Primary person involved in the purchase decision
+- **Company** - Organization making the purchase
+- **Close date** - Expected date the deal will close
+- **Owner** - Team member responsible for this deal
+- **Currency** - Defaults to workspace setting, override per deal if needed
+
+### Optional fields
+
+- **Deal source** - Where this opportunity originated (inbound, referral, cold outreach)
+- **Priority** - High, Medium, or Low
+- **Tags** - Custom labels for filtering and reporting
+- **Description** - Free-text details about the opportunity
+- **Products** - Line items from your product catalog (if applicable)
+- **Custom fields** - Any additional fields your team has defined
+
+<Callout variant="tip">
+Set the deal name to a format your team agrees on. A common pattern is "Company - Product/Plan - Term." This makes deals instantly recognizable on the kanban board without opening them.
+</Callout>
+
+## Linking contacts and companies
+
+### Primary contact
+
+Every deal should have at least one linked contact:
+
+1. In the **Contact** field, start typing a name or email
+2. Select from the dropdown of matching contacts
+3. If the contact does not exist, click **Create new contact** to add them inline
+4. The primary contact appears on the deal card and receives deal-related notifications
+
+### Additional contacts
+
+Deals often involve multiple stakeholders:
+
+1. Open the deal after creation
+2. Navigate to the **Contacts** tab
+3. Click **Add contact**
+4. Search and select additional contacts
+5. Assign a role to each (Decision maker, Influencer, Champion, Blocker, End user)
+
+### Company linking
+
+If the primary contact has a linked company, it auto-populates on the deal. Otherwise:
+
+1. Click the **Company** field
+2. Search for the company
+3. Select to link it to the deal
+
+<Callout variant="note">
+Linking multiple contacts with their roles helps your team understand the buying committee. Knowing who the decision maker is versus who the champion is can change your deal strategy significantly.
+</Callout>
+
+## Adding products and line items
+
+If your workspace has a product catalog configured:
+
+1. In the deal creation form (or after creation), find the **Products** section
+2. Click **Add product**
+3. Search for a product from your catalog
+4. Set the quantity and any applicable discount
+5. The deal value automatically recalculates based on line items
+6. Add multiple products for complex deals
+
+### Manual value vs. product-based value
+
+- **Manual** - Enter a single deal value in the value field
+- **Product-based** - Add line items and let the system calculate the total
+- You can override the calculated total by toggling to manual mode
+
+## Deal creation settings
+
+### Default values
+
+Configure defaults that pre-fill for new deals:
+
+1. Go to **Settings > Deals > Defaults**
+2. Set default pipeline, stage, and owner
+3. These values pre-populate but can be overridden per deal
+
+### Required fields
+
+Make specific fields mandatory for deal creation:
+
+1. Go to **Settings > Deals > Required fields**
+2. Toggle fields that must be filled before saving
+3. Recommended required fields: Deal name, Value, Contact, Close date
+
+<Callout variant="warning">
+Do not make too many fields required at creation time. Sales reps often need to create deals quickly during calls. Allow them to add details later rather than blocking creation with extensive forms.
+</Callout>
+
+## After creating a deal
+
+Once saved, the deal appears:
+
+- On the pipeline kanban board in the selected stage
+- In the contact's Deals tab
+- In the company's Deals section
+- In your personal deal list (if you are the owner)
+
+### First actions after creation
+
+1. **Add a note** describing the context (how you met, what prompted the opportunity)
+2. **Create a follow-up task** with a due date for your next action
+3. **Set a realistic close date** based on your typical sales cycle length
+4. **Tag the deal** for easy filtering (for example, "inbound," "partner-referred," or product name)
+
+## Bulk deal creation
+
+For importing multiple deals at once:
+
+1. Go to **Deals** and click **Import**
+2. Upload a CSV with columns for deal name, value, stage, contact email, and close date
+3. Map fields and run the import
+4. Imported deals appear on the pipeline board
+
+## Next steps
+
+Now that you know how to create deals, continue to the deal stages guide to learn how to customize your pipeline stages, set win probabilities, and configure stage-based automation.

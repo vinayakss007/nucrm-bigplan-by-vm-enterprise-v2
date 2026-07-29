@@ -1,0 +1,168 @@
+{/* title: Import & export */}
+{/* description: Learn how to import contacts from CSV/XLSX files and export your data from NuCRM with field selection, scheduling, and format options. */}
+
+## Overview
+
+NuCRM supports importing and exporting contact data in standard file formats. Whether you are migrating from another system, syncing with a marketing platform, or creating backups, the import/export tools give you full control over how data flows in and out of your workspace.
+
+## Importing contacts
+
+### Supported formats
+
+| Format | Max file size | Notes |
+|--------|--------------|-------|
+| CSV | 50 MB | Comma-separated, UTF-8 encoding recommended |
+| XLSX | 50 MB | First sheet is used; formatting is ignored |
+| VCF (vCard) | 10 MB | Standard contact card format |
+
+### Starting an import
+
+1. Go to **Contacts** in the sidebar
+2. Click **Import** in the toolbar (upload icon)
+3. Select your file format
+4. Drag and drop your file or click **Browse** to select it
+5. Click **Upload and continue**
+
+### Field mapping
+
+After uploading, the mapping screen shows:
+
+- **Your columns** - Headers from your file (left side)
+- **NuCRM fields** - Available contact fields (right side)
+- **Auto-mapped** - Green checkmarks indicate automatic matches
+- **Unmapped** - Yellow indicators show columns that need manual mapping
+
+For each unmapped column:
+1. Click the dropdown
+2. Search for or select the matching NuCRM field
+3. If no match exists, click **Create custom field** to define a new one
+4. To skip a column entirely, select **Do not import**
+
+<Callout variant="tip">
+Save your field mapping as a template by clicking "Save mapping." Next time you import a file with the same structure, load the template to skip the mapping step entirely.
+</Callout>
+
+### Duplicate handling during import
+
+Choose how NuCRM handles rows that match existing contacts:
+
+| Option | Behavior |
+|--------|----------|
+| Skip duplicates | Ignore rows where a match is found |
+| Update existing | Overwrite existing field values with import data |
+| Create anyway | Create a new record regardless of matches (not recommended) |
+
+Select the match field used for duplicate detection:
+- Email address (recommended)
+- Phone number
+- Full name + company
+- Any custom unique identifier
+
+### Import options
+
+Before starting the import, configure:
+
+- **Owner assignment** - Assign all imported contacts to a specific team member, or map an "owner" column from the file
+- **Tags** - Automatically tag all imported contacts (for example, "Import - March 2025")
+- **Lifecycle stage** - Set a default stage for imported contacts
+- **Lists** - Add imported contacts to a specific static list
+
+### Running the import
+
+1. Review the summary:
+   - Rows to import
+   - Fields mapped
+   - Duplicate handling rule
+   - Default values
+2. Click **Start import**
+3. The import runs in the background (you can continue working)
+4. Receive a notification when complete with a results summary
+
+### Import results
+
+The completion summary shows:
+
+- **Created** - New contacts added
+- **Updated** - Existing contacts modified (if "Update existing" was chosen)
+- **Skipped** - Duplicates that were not imported
+- **Errors** - Rows that failed with reasons
+
+Download the error report to review and fix failed rows:
+- Invalid email format
+- Missing required fields
+- Character limit exceeded
+- Unrecognized values for dropdown fields
+
+<Callout variant="warning">
+Always import to a test batch first when bringing in a large dataset. Import 50-100 rows, verify the results look correct, then proceed with the full file. This catches mapping errors before they affect thousands of records.
+</Callout>
+
+## Exporting contacts
+
+### Quick export
+
+1. Go to **Contacts** and apply any filters to narrow the export set
+2. Click **Export** (download icon) in the toolbar
+3. Choose fields to include:
+   - All fields
+   - Visible columns only (matches your current view)
+   - Custom selection (pick individual fields)
+4. Select format: CSV or XLSX
+5. Click **Export**
+
+### Export delivery
+
+- Files under 10,000 contacts download immediately
+- Larger exports are processed in the background
+- You receive an email with a secure download link when ready
+- Download links expire after 48 hours
+
+### Scheduled exports
+
+Set up recurring exports that run automatically:
+
+1. Go to **Settings > Data > Scheduled exports**
+2. Click **New scheduled export**
+3. Configure:
+   - **Record type** - Contacts, companies, or deals
+   - **Filter** - Which records to include (all, or a saved view/segment)
+   - **Fields** - Which data columns to export
+   - **Format** - CSV or XLSX
+   - **Schedule** - Daily, weekly, or monthly
+   - **Delivery** - Email to specified addresses or save to connected cloud storage
+4. Click **Save**
+
+<Callout variant="info">
+Scheduled exports are useful for keeping external systems in sync, generating regular backups, or providing data to partners who do not have direct access to your NuCRM workspace.
+</Callout>
+
+## Import history
+
+Track all past imports from **Settings > Data > Import history**:
+
+- Date and time
+- File name
+- Record count (created, updated, skipped, errors)
+- Who performed the import
+- Option to undo within 48 hours (reverts all created records)
+
+## Export history
+
+View past exports from **Settings > Data > Export history**:
+
+- Date and time
+- Export parameters (record type, filter, field count)
+- Download link (if still valid)
+- File size
+
+## Best practices
+
+1. **Clean data before importing** - Remove duplicates and fix formatting in your source file first
+2. **Use consistent formats** - Standardize dates (YYYY-MM-DD), phone numbers (with country code), and country names before import
+3. **Tag imported records** - Always apply a tag like "Import - [Date] - [Source]" so you can identify and roll back if needed
+4. **Export regularly** - Schedule weekly exports as a backup independent of your workspace backups
+5. **Review mapping carefully** - One wrong mapping can overwrite good data across thousands of records
+
+## Next steps
+
+Now that you understand how data flows in and out of NuCRM, explore the segments guide to learn how to create dynamic lists that automatically group contacts based on attributes and behaviors.

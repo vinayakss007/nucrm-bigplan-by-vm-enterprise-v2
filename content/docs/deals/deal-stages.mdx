@@ -1,0 +1,185 @@
+{/* title: Deal stages & customization */}
+{/* description: Customize your pipeline stages in NuCRM with win probabilities, automated actions, and stage-specific requirements. */}
+
+## Overview
+
+Deal stages define the steps in your sales process. Each stage represents a milestone that a deal passes through on its way to a final outcome. NuCRM lets you fully customize stages, assign win probabilities for forecasting, and configure automated actions that fire when deals enter or leave specific stages.
+
+## Default pipeline stages
+
+NuCRM provides a starting pipeline with these stages:
+
+| Stage | Win probability | Description |
+|-------|----------------|-------------|
+| Lead | 10% | Initial interest identified |
+| Qualified | 25% | Budget, authority, need, timeline confirmed |
+| Proposal | 50% | Quote or proposal delivered |
+| Negotiation | 75% | Terms being discussed |
+| Closed Won | 100% | Deal successfully closed |
+| Closed Lost | 0% | Deal did not close |
+
+## Customizing stages
+
+### Accessing stage settings
+
+1. Go to **Settings > Deals > Pipelines**
+2. Click the pipeline you want to edit
+3. You see the list of stages with their current configuration
+
+### Adding a new stage
+
+1. Click **Add stage**
+2. Enter the stage name
+3. Set the win probability (used for weighted pipeline forecasting)
+4. Choose the position (drag to reorder)
+5. Pick a color for the stage indicator
+6. Click **Save**
+
+### Editing an existing stage
+
+1. Click the pencil icon next to any stage
+2. Modify:
+   - **Name** - What the stage is called
+   - **Win probability** - Percentage likelihood of closing
+   - **Color** - Visual indicator on the board
+   - **Description** - Internal note explaining stage criteria
+3. Click **Save**
+
+### Removing a stage
+
+1. Click the trash icon next to the stage
+2. Choose what happens to deals currently in this stage:
+   - Move to a different stage
+   - Leave them (they will show in an "unassigned" state until moved)
+3. Click **Confirm**
+
+<Callout variant="warning">
+Removing a stage affects historical reporting. Deals that were once in that stage will show "Archived stage" in their timeline. Consider renaming the stage instead of deleting if it has historical data.
+</Callout>
+
+## Win probabilities and forecasting
+
+### How probability works
+
+Each stage has a win probability percentage that represents the historical likelihood of a deal at that stage eventually closing successfully:
+
+- **Lead (10%)** - Only 1 in 10 leads typically converts
+- **Qualified (25%)** - One-quarter of qualified deals close
+- **Proposal (50%)** - Half of deals with proposals out will close
+- **Negotiation (75%)** - Three-quarters of negotiating deals close
+
+### Weighted pipeline value
+
+The weighted pipeline multiplies each deal's value by its stage probability:
+
+- Deal A: $50,000 in Qualified (25%) = $12,500 weighted
+- Deal B: $30,000 in Negotiation (75%) = $22,500 weighted
+- Total weighted pipeline: $35,000
+
+This gives a more realistic revenue forecast than the raw pipeline total.
+
+<Callout variant="tip">
+Review and adjust your win probabilities quarterly based on actual close rates. If your Proposal stage historically converts at 65%, update the probability from 50% to 65% for more accurate forecasting.
+</Callout>
+
+## Stage requirements
+
+Define what must happen before a deal can advance to the next stage:
+
+### Setting requirements
+
+1. Open stage settings for any stage
+2. Scroll to **Entry requirements**
+3. Add conditions that must be true:
+   - Contact must have a phone number
+   - Deal must have a close date set
+   - At least one note must be logged
+   - A specific custom field must be filled
+4. Click **Save**
+
+### Enforcement behavior
+
+When requirements are set:
+
+- **Soft enforcement** - Shows a warning when requirements are unmet but allows the move
+- **Hard enforcement** - Blocks the stage transition until requirements are satisfied
+
+Choose the enforcement level per requirement.
+
+<Callout variant="note">
+Stage requirements help maintain data quality. If your team consistently skips important qualification steps, hard requirements ensure deals cannot progress until those steps are completed.
+</Callout>
+
+## Stage automation
+
+Configure actions that trigger automatically when a deal enters a stage:
+
+### Common stage automations
+
+| When deal enters... | Automatic action |
+|--------------------|--------------------|
+| Qualified | Create task: "Schedule discovery call" |
+| Proposal | Send email notification to sales manager |
+| Negotiation | Change deal priority to High |
+| Closed Won | Create task: "Send welcome package" |
+| Closed Won | Update contact lifecycle stage to Customer |
+| Closed Lost | Create task: "Send loss survey" |
+
+### Setting up stage automation
+
+1. Open the stage in Settings
+2. Scroll to **Automation**
+3. Click **Add action**
+4. Select the action type:
+   - Create task
+   - Send notification
+   - Update field
+   - Send email
+   - Add tag
+   - Change lifecycle stage
+5. Configure the action details
+6. Click **Save**
+
+## Stage ordering and grouping
+
+### Open stages vs. closed stages
+
+Stages are categorized as:
+
+- **Open** - Deals are active and in progress (Lead, Qualified, Proposal, Negotiation)
+- **Closed Won** - Deal was successful (only one stage of this type per pipeline)
+- **Closed Lost** - Deal was unsuccessful (only one stage of this type per pipeline)
+
+This categorization determines:
+- Which deals appear in the "open pipeline" value
+- How win/loss rates are calculated
+- When deals stop appearing on the active board
+
+### Reordering stages
+
+Drag and drop stages in the settings list to change their left-to-right order on the kanban board. The order should reflect your actual sales process sequence.
+
+## Pipeline templates
+
+NuCRM offers pre-built pipeline templates for common business types:
+
+| Template | Stages |
+|----------|--------|
+| B2B Sales | Lead > Qualified > Demo > Proposal > Negotiation > Closed |
+| Real Estate | Inquiry > Viewing > Offer > Under Contract > Closed |
+| Recruitment | Applied > Screened > Interview > Offer > Hired |
+| SaaS Sales | Trial > Qualified > POC > Procurement > Closed |
+
+Apply a template when creating a new pipeline or use it as a starting point and customize from there.
+
+## Best practices
+
+1. **Keep stages between 4 and 7** - Too few gives no visibility; too many creates confusion
+2. **Define clear exit criteria** - Document what must be true for a deal to move forward
+3. **Match your actual process** - Stages should reflect reality, not an ideal that nobody follows
+4. **Separate pipelines for different processes** - Do not force fundamentally different sales cycles into one pipeline
+5. **Review monthly** - Check where deals get stuck and whether stages need splitting or merging
+
+## Next steps
+
+Learn about revenue forecasting in the next guide, where you can use weighted pipeline values, time-based projections, and team quota tracking to predict your monthly and quarterly revenue.

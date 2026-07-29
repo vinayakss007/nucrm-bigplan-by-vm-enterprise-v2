@@ -1,0 +1,159 @@
+{/* title: Creating your first contact */}
+{/* description: Walk through creating your first contact record in NuCRM, adding details, notes, and understanding the contact timeline. */}
+
+## Overview
+
+Contacts are the foundation of NuCRM. Every deal, email, task, and activity links back to a contact record. This guide walks you through creating your first contact, filling in key details, and understanding the timeline that automatically tracks every interaction.
+
+## Creating a new contact
+
+There are multiple ways to create a contact:
+
+### From the sidebar
+
+1. Click **Contacts** in the sidebar
+2. Click the **+ New contact** button in the top-right corner
+3. The contact creation form opens
+
+### From the command palette
+
+1. Press **Cmd+K** (Mac) or **Ctrl+K** (Windows/Linux)
+2. Type "Create contact"
+3. Press **Enter**
+
+### From anywhere (quick action)
+
+1. Click the **+** button in the top bar
+2. Select **Contact**
+
+## Filling in contact details
+
+The contact form has required fields (marked with an asterisk) and optional fields you can complete now or later:
+
+### Required fields
+
+| Field | Description | Example |
+|-------|------------|---------|
+| First name | Contact's given name | Sarah |
+| Last name | Contact's family name | Johnson |
+| Email | Primary email address | sarah.johnson@acme.com |
+
+### Recommended fields
+
+- **Phone** - Primary phone number with country code
+- **Company** - Link to an existing company or create one inline
+- **Job title** - Their role at the organization
+- **Lifecycle stage** - Where they are in your funnel (Lead, Prospect, Customer)
+
+### Adding the contact
+
+1. Fill in the required and any additional fields
+2. Click **Save contact**
+3. NuCRM creates the record and opens the contact detail view
+
+<Callout variant="tip">
+If you add a company name that does not yet exist in NuCRM, the system will offer to create a new company record and automatically link the contact to it.
+</Callout>
+
+## The contact detail view
+
+After creating a contact, you land on their detail page, which has several sections:
+
+### Profile header
+
+The top section shows:
+
+- Contact name and avatar (auto-generated from initials or pulled from Gravatar)
+- Job title and company name (clickable link to the company record)
+- Primary email and phone (click to copy or initiate communication)
+- Lifecycle stage badge
+- Lead score indicator
+
+### Information panel
+
+Below the header, organized in tabs:
+
+- **Details** - All fields including custom fields, organized in a two-column layout
+- **Activity** - Timeline of all interactions (see below)
+- **Deals** - Any deals associated with this contact
+- **Tasks** - Open and completed tasks linked to this contact
+- **Emails** - Full email conversation history
+- **Notes** - Internal notes from your team
+- **Files** - Attached documents and files
+
+## Adding a note
+
+Notes are internal comments visible only to your team. They are useful for capturing context from phone calls, meeting summaries, or observations:
+
+1. From the contact detail view, click the **Notes** tab (or use the quick note icon on the activity tab)
+2. Click **Add note**
+3. Type your note in the rich text editor (supports bold, italic, bullet lists, and @mentions of team members)
+4. Click **Save**
+
+The note appears immediately on the contact timeline with your name and timestamp.
+
+<Callout variant="note">
+Use @mentions in notes to notify a colleague. For example, typing "@David" will send David a notification that he was mentioned on this contact record.
+</Callout>
+
+## Understanding the timeline
+
+The timeline is a chronological record of every interaction with a contact, displayed on the Activity tab:
+
+### What appears on the timeline
+
+- Emails sent and received
+- Notes added by team members
+- Phone calls logged
+- Meetings scheduled and completed
+- Deal creation and stage changes
+- Task completion
+- Form submissions
+- Lifecycle stage transitions
+- WhatsApp and SMS messages
+
+### Filtering the timeline
+
+Use the filter buttons above the timeline to show only specific activity types:
+
+- **All** - Everything in chronological order
+- **Emails** - Only email interactions
+- **Notes** - Only internal notes
+- **Calls** - Only logged phone calls
+- **Meetings** - Only meeting records
+
+### Timeline actions
+
+From any timeline entry, you can:
+
+- **Reply** to an email directly inline
+- **Edit** a note you wrote
+- **Pin** important entries to the top of the timeline
+- **Delete** entries you created (requires appropriate permissions)
+
+## Editing contact information
+
+To update any field on a contact:
+
+1. Click the **Details** tab on the contact page
+2. Click on any field value to make it editable
+3. Make your change
+4. Press **Enter** or click away to save (changes save automatically)
+
+<Callout variant="info">
+All edits are tracked in the timeline. If a field is changed, NuCRM logs who changed it, when, and what the previous value was. This audit trail is helpful for understanding how contact information evolved over time.
+</Callout>
+
+## Quick actions on contacts
+
+From the contact detail page, use the action buttons in the header:
+
+- **Send email** - Opens the email composer pre-filled with the contact's address
+- **Log call** - Record details about a phone conversation
+- **Create task** - Add a follow-up task linked to this contact
+- **Create deal** - Start a new deal associated with this contact
+- **Schedule meeting** - Set up a meeting with calendar integration
+
+## Next steps
+
+Now that you have created your first contact, the next guide walks you through creating your first deal and moving it through your sales pipeline stages.

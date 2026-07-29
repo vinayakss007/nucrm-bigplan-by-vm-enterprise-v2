@@ -1,0 +1,161 @@
+{/* title: Workspace setup */}
+{/* description: Configure your NuCRM workspace with branding, timezone, currency, and team settings for a professional, organized experience. */}
+
+## Overview
+
+Your workspace is the shared environment where your entire team collaborates. Configuring it properly from the start ensures consistent branding, correct date and currency formatting, and clear organizational structure. This guide walks you through each setting step by step.
+
+## Accessing workspace settings
+
+1. Click your organization name in the bottom-left corner of the sidebar
+2. Select **Settings** from the menu
+3. Navigate to the **Workspace** tab
+
+## General settings
+
+### Workspace name and URL
+
+- **Workspace name** - Your company or team name as it appears in the interface and email notifications
+- **Workspace URL** - Your unique subdomain (can only be changed by workspace owners)
+
+To update your workspace name:
+
+1. Click into the **Workspace name** field
+2. Enter the new name
+3. Click **Save changes**
+
+### Logo and branding
+
+Upload your company logo to personalize the workspace:
+
+1. Click the **Upload logo** area
+2. Select a PNG or SVG file (recommended size: 200 x 50 pixels for the horizontal logo, 50 x 50 for the icon)
+3. Preview the logo as it will appear in the sidebar and email headers
+4. Click **Save**
+
+<Callout variant="tip">
+Use a logo with a transparent background for the best appearance on both light and dark interface themes.
+</Callout>
+
+### Color accent
+
+Choose a primary accent color that matches your brand. This color appears on buttons, active indicators, and highlights throughout the interface:
+
+1. Click the color swatch under **Accent color**
+2. Enter a hex code or use the color picker
+3. Preview the change in the live preview panel on the right
+4. Click **Apply**
+
+## Regional settings
+
+### Time zone
+
+Set the workspace time zone so that all timestamps, scheduled actions, and report dates align with your business hours:
+
+1. Open the **Time zone** dropdown
+2. Search for your city or UTC offset
+3. Select the correct zone
+4. Click **Save**
+
+<Callout variant="note">
+Individual team members can override the workspace time zone in their personal profile settings. The workspace time zone serves as the default for new users and system-level reporting.
+</Callout>
+
+### Date and time format
+
+Choose how dates and times are displayed:
+
+| Format option | Example |
+|--------------|---------|
+| MM/DD/YYYY | 03/15/2025 |
+| DD/MM/YYYY | 15/03/2025 |
+| YYYY-MM-DD | 2025-03-15 |
+| 12-hour clock | 2:30 PM |
+| 24-hour clock | 14:30 |
+
+### Currency
+
+Set your default workspace currency:
+
+1. Open the **Default currency** dropdown
+2. Select your currency (USD, EUR, GBP, INR, and 50+ others supported)
+3. Click **Save**
+
+Deals and invoices will default to this currency unless overridden on individual records.
+
+## Team structure
+
+### Departments and teams
+
+Organize your users into departments for cleaner reporting and permission management:
+
+1. Go to **Settings > Teams**
+2. Click **Add department**
+3. Enter the department name (for example, Sales, Support, Marketing)
+4. Optionally assign a department head
+5. Click **Create**
+
+### Business hours
+
+Define your standard operating hours:
+
+1. Go to **Settings > Business hours**
+2. Toggle on the days your team works
+3. Set start and end times for each active day
+4. Define holiday dates by clicking **Add holiday** and selecting dates from the calendar
+5. Click **Save**
+
+<Callout variant="info">
+Business hours affect SLA calculations in the helpdesk module and determine when automated actions with "business hours only" schedules will fire.
+</Callout>
+
+## Email and communication settings
+
+### Sender defaults
+
+Configure the default "from" name and reply-to address for system emails:
+
+1. Go to **Settings > Email**
+2. Enter the **Default sender name** (typically your company name)
+3. Enter the **Reply-to email address**
+4. Choose an email signature that will be appended to outbound messages
+5. Click **Save**
+
+### Notification preferences
+
+Control which workspace-level notifications are active:
+
+- New lead assigned alerts
+- Deal stage change notifications
+- Daily digest emails
+- Weekly team performance summaries
+
+## Data and privacy
+
+### Data retention
+
+Choose how long deleted records remain recoverable:
+
+- 30 days (default)
+- 60 days
+- 90 days
+
+### Export permissions
+
+Decide which roles can export data from the workspace:
+
+1. Go to **Settings > Privacy**
+2. Toggle **Allow data export** for each role as needed
+3. Click **Save**
+
+<Callout variant="warning">
+Restricting export permissions is recommended for workspaces handling sensitive customer data. Only grant export access to roles that require it for their daily workflow.
+</Callout>
+
+## Saving and applying changes
+
+All workspace settings take effect immediately upon saving. Team members will see updates on their next page load without needing to log out and log back in.
+
+## Next steps
+
+With your workspace configured, the next step is importing your existing customer data. Continue to the data import guide to learn how to bring contacts, companies, and deals into NuCRM.

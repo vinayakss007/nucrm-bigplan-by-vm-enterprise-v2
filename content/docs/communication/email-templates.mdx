@@ -1,0 +1,190 @@
+{/* title: Email templates */}
+{/* description: Create, manage, and use email templates in NuCRM for consistent messaging with personalization variables and team sharing. */}
+
+## Overview
+
+Email templates save your team time by providing pre-written messages for common scenarios. Instead of composing from scratch each time, select a template, let NuCRM fill in personalization variables, and send. Templates ensure consistent messaging across your team while still feeling personal to each recipient.
+
+## Creating a template
+
+### From Settings
+
+1. Go to **Settings > Email > Templates**
+2. Click **+ New template**
+3. The template editor opens
+
+### From the email composer
+
+1. Compose an email you want to save
+2. Before sending, click **Save as template** in the toolbar
+3. Enter a template name
+4. The email content becomes a reusable template
+
+## Template editor
+
+### Template fields
+
+| Field | Description |
+|-------|-------------|
+| Template name | Internal name for finding the template (not shown to recipients) |
+| Subject line | Pre-filled subject when template is used |
+| Body | The message content with formatting and variables |
+| Folder | Organize templates into folders (for example, "Prospecting", "Follow-up", "Onboarding") |
+| Visibility | Private (only you) or Shared (entire team) |
+
+### Body formatting
+
+The template body supports full rich text:
+
+- Bold, italic, underline
+- Bullet and numbered lists
+- Headers and dividers
+- Links and images
+- Attachments (added when template is used)
+
+### Personalization variables
+
+Insert dynamic placeholders that fill in automatically:
+
+1. Click the **{ }** icon or type `{{`
+2. Choose from available variables:
+
+| Variable | Resolves to |
+|----------|-------------|
+| `{{first_name}}` | Contact's first name |
+| `{{last_name}}` | Contact's last name |
+| `{{full_name}}` | Contact's full name |
+| `{{company}}` | Contact's company name |
+| `{{job_title}}` | Contact's job title |
+| `{{deal_name}}` | Related deal name |
+| `{{deal_value}}` | Related deal value |
+| `{{owner_name}}` | Your name (the sender) |
+| `{{owner_phone}}` | Your phone number |
+| `{{meeting_link}}` | Your personal scheduling link |
+
+<Callout variant="tip">
+Always include a fallback for variables that might be empty. For example, use "Hi {{first_name | there}}" so contacts without a first name see "Hi there" instead of "Hi {{first_name}}."
+</Callout>
+
+## Using a template
+
+### When composing an email
+
+1. Open the email composer (from a contact, deal, or the Communication inbox)
+2. Click the **Templates** button in the toolbar (page icon)
+3. Browse or search for the template you want
+4. Click the template to insert it
+5. The subject and body are populated with variables already resolved for the recipient
+6. Edit any details if needed
+7. Click **Send**
+
+### Preview before sending
+
+After inserting a template:
+
+- All variables show their resolved values (actual contact data)
+- Missing variables are highlighted in yellow so you can fill them manually
+- Review the entire message to ensure it makes sense for this specific recipient
+
+## Template folders
+
+Organize templates into logical groups:
+
+### Creating folders
+
+1. Go to **Settings > Email > Templates**
+2. Click **New folder** in the sidebar
+3. Name it (for example, "Cold outreach", "Demo follow-up", "Customer success")
+4. Drag templates into folders or assign the folder when creating a template
+
+### Suggested folder structure
+
+- **Prospecting** - Cold outreach, LinkedIn follow-up, introduction requests
+- **Qualification** - Discovery questions, BANT confirmation
+- **Proposals** - Quote delivery, package comparison
+- **Follow-up** - After meeting, after no response, check-in
+- **Closing** - Contract sent, negotiation, verbal acceptance confirmation
+- **Onboarding** - Welcome, setup assistance, training schedule
+- **Re-engagement** - Win-back, dormant lead, renewal reminder
+
+## Sharing templates
+
+### Team templates
+
+Make a template available to everyone:
+
+1. Open the template in the editor
+2. Set **Visibility** to **Shared with team**
+3. Click **Save**
+4. All workspace members can now use this template
+
+### Department-specific templates
+
+Restrict templates to specific teams:
+
+1. Set visibility to **Department only**
+2. Select which department(s) can access it
+3. Only members of those departments see the template in their list
+
+<Callout variant="note">
+Shared templates can only be edited by the creator or workspace admins. Team members who want to modify a shared template should duplicate it first to create their own version.
+</Callout>
+
+## Template analytics
+
+Track how well your templates perform:
+
+### Metrics per template
+
+| Metric | Description |
+|--------|-------------|
+| Times used | How often the template has been selected |
+| Open rate | Percentage of recipients who opened the email |
+| Click rate | Percentage who clicked a link |
+| Reply rate | Percentage who responded |
+| Last used | Date the template was most recently sent |
+
+### Comparing templates
+
+Use analytics to identify your best-performing templates:
+
+1. Go to **Settings > Email > Templates > Analytics**
+2. Sort by open rate or reply rate
+3. Identify top performers to recommend to the team
+4. Identify underperformers to rewrite or retire
+
+## Template best practices
+
+1. **Keep subject lines short** - Under 50 characters performs best for open rates
+2. **Personalize early** - Use `{{first_name}}` in the first sentence to grab attention
+3. **One clear CTA** - Each template should have one obvious next step for the recipient
+4. **Update quarterly** - Review and refresh templates to keep messaging current
+5. **A/B test** - Create two versions of key templates and compare performance
+6. **Avoid jargon** - Write in plain language that any recipient can understand
+
+<Callout variant="info">
+Templates with 50-125 words have the highest reply rates in NuCRM. Keep messages concise, focused, and actionable. Longer emails work for detailed proposals but not for initial outreach.
+</Callout>
+
+## Importing and exporting templates
+
+### Importing
+
+Bring templates from other tools:
+
+1. Go to **Settings > Email > Templates**
+2. Click **Import**
+3. Upload a CSV or JSON file with template name, subject, and body columns
+4. Map fields and import
+
+### Exporting
+
+Back up your templates or share with other workspaces:
+
+1. Select templates to export
+2. Click **Export**
+3. Download as CSV or JSON
+
+## Next steps
+
+Learn about email tracking (open and click monitoring) in the next guide to understand how recipients engage with your messages and when to follow up.

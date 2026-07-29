@@ -1,0 +1,201 @@
+{/* title: Companies */}
+{/* description: Learn how to create and manage company records in NuCRM, link contacts to companies, and organize company hierarchies. */}
+
+## Overview
+
+Companies (also called organizations or accounts) represent the businesses you work with. In NuCRM, a company record aggregates all contacts at that organization, their collective deal history, and total revenue. This guide covers creating companies, linking contacts, and using company hierarchies.
+
+## Creating a company
+
+### From the sidebar
+
+1. Click **Companies** in the sidebar
+2. Click **+ New company** in the top-right corner
+3. Fill in the company creation form
+
+### Inline from a contact
+
+When editing a contact's company field:
+
+1. Type the company name
+2. If it does not exist, click **Create "Company Name"**
+3. The company is created and linked automatically
+
+### Company fields
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| Company name | Official organization name | Acme Corporation |
+| Domain | Primary website domain | acme.com |
+| Industry | Business sector | Software & Technology |
+| Size | Employee count range | 51-200 |
+| Annual revenue | Estimated yearly revenue | $5,000,000 |
+| Phone | Main company phone | +1 (555) 100-2000 |
+| Address | Headquarters address | 123 Main St, San Francisco, CA |
+| Owner | Team member managing this account | David Miller |
+
+<Callout variant="tip">
+Enter the company domain (website URL) when creating a company. NuCRM can auto-enrich basic company information like logo, industry, and size from publicly available data.
+</Callout>
+
+## The company detail page
+
+The company detail view provides an aggregated overview:
+
+### Header section
+
+- Company name and logo (fetched from domain or uploaded manually)
+- Industry and size badges
+- Total revenue (sum of all closed-won deals)
+- Total contacts count
+- Active deals count
+
+### Contacts list
+
+All people linked to this company, showing:
+
+- Name and job title
+- Email and phone
+- Their lifecycle stage
+- Last activity date
+
+Add new contacts directly from the company page by clicking **Add contact** and either linking an existing record or creating a new one.
+
+### Deals section
+
+All deals associated with this company through linked contacts:
+
+- Open deals with stage and projected value
+- Won deals with close date
+- Lost deals with reason
+- Total deal pipeline value
+
+### Activity timeline
+
+Aggregated timeline showing all interactions across all contacts at this company:
+
+- Emails exchanged with anyone at the company
+- Meetings held with company contacts
+- Notes and calls logged
+- Deal progression events
+
+<Callout variant="note">
+The company timeline combines activity from all linked contacts, giving you a complete picture of your relationship with the organization without needing to check each contact individually.
+</Callout>
+
+## Linking contacts to companies
+
+### Automatic linking
+
+NuCRM can automatically link contacts to companies based on email domain:
+
+1. Go to **Settings > Contacts > Auto-linking**
+2. Enable **Link contacts by email domain**
+3. When a new contact is created with an email like `john@acme.com`, NuCRM checks for a company with the domain `acme.com` and links them automatically
+
+### Manual linking
+
+1. Open a contact record
+2. Click the **Company** field
+3. Search for and select the company
+4. Click **Save**
+
+### Unlinking
+
+1. Open the contact record
+2. Click the X next to the company name in the Company field
+3. The link is removed but neither record is deleted
+
+## Company hierarchy
+
+For organizations with parent-subsidiary relationships:
+
+### Setting up hierarchy
+
+1. Open the child company record
+2. Find the **Parent company** field
+3. Search for and select the parent company
+4. Click **Save**
+
+### Hierarchy view
+
+From a parent company page:
+
+- A **Subsidiaries** section shows all child companies
+- Revenue rolls up to show the total across all entities
+- Contact count includes all subsidiary contacts
+
+### Use cases for hierarchy
+
+- Corporate groups with regional offices
+- Franchise organizations with individual locations
+- Holding companies with portfolio businesses
+
+<Callout variant="info">
+You can create up to three levels of hierarchy: parent, child, and grandchild. This covers most organizational structures without overcomplicating navigation.
+</Callout>
+
+## Company list view
+
+The Companies list works similarly to the Contacts list:
+
+### Filtering
+
+Filter companies by:
+- Industry
+- Size (employee range)
+- Annual revenue range
+- Number of contacts
+- Number of active deals
+- Owner
+- Tags
+- Custom fields
+
+### Sorting
+
+Sort by company name, creation date, total revenue, number of deals, or last activity date.
+
+### Saved views
+
+Create and save filtered views like:
+- "Enterprise accounts (200+ employees)"
+- "Accounts with no active deals"
+- "My accounts in Healthcare"
+
+## Bulk operations on companies
+
+Select multiple companies to:
+
+- Assign or change owner
+- Add or remove tags
+- Update industry or other fields
+- Export to CSV
+- Delete (moves to trash)
+
+## Company enrichment
+
+NuCRM can fill in missing company data from publicly available information:
+
+1. Ensure the company has a valid domain entered
+2. Click the **Enrich** button on the company detail page (or enable auto-enrichment in Settings)
+3. Available data is populated: logo, description, industry, approximate size, social links, and founded year
+
+<Callout variant="tip">
+Enable auto-enrichment for new companies in Settings > Companies to automatically pull in public data whenever a company record is created. This saves manual data entry time.
+</Callout>
+
+## Merging duplicate companies
+
+If you discover two records for the same organization:
+
+1. Open one of the company records
+2. Click the three-dot menu and select **Merge with another company**
+3. Search for the duplicate record
+4. Review the merge preview showing which fields will be kept from each record
+5. Click **Merge**
+
+All contacts, deals, and activities from both records are combined into the surviving record.
+
+## Next steps
+
+Learn how to create dynamic segments of contacts in the next guide, where you can build filter-based lists that automatically update as contacts match or unmatch your criteria.

@@ -1,0 +1,164 @@
+{/* title: Creating your first deal */}
+{/* description: Learn how to create a deal in NuCRM, move it through pipeline stages, and track its progress from opportunity to close. */}
+
+## Overview
+
+Deals represent sales opportunities in NuCRM. Each deal tracks a potential revenue amount, the contacts involved, the current stage in your pipeline, and every activity leading toward a closed sale. This guide shows you how to create your first deal and move it through the pipeline.
+
+## Creating a new deal
+
+### From the pipeline view
+
+1. Click **Deals** in the sidebar to open the pipeline kanban board
+2. Click the **+ New deal** button in the top-right corner
+3. The deal creation form opens as a slide-over panel
+
+### From a contact record
+
+1. Open any contact detail page
+2. Click the **Create deal** button in the actions bar
+3. The contact is automatically linked to the new deal
+
+### From the command palette
+
+1. Press **Cmd+K** (Mac) or **Ctrl+K** (Windows/Linux)
+2. Type "New deal" or "Create deal"
+3. Press **Enter**
+
+## The deal creation form
+
+Fill in the following fields when creating a deal:
+
+### Required fields
+
+| Field | Description | Example |
+|-------|------------|---------|
+| Deal name | A descriptive name for this opportunity | Acme Corp - Enterprise Plan |
+| Pipeline | Which pipeline this deal belongs to | Default Sales Pipeline |
+| Stage | Current stage in the pipeline | Qualified |
+| Deal value | Expected revenue amount | $24,000 |
+
+### Recommended fields
+
+- **Contact** - The primary person you are negotiating with
+- **Company** - The organization purchasing
+- **Close date** - Expected date the deal will close (won or lost)
+- **Deal owner** - The team member responsible for this deal
+- **Currency** - Defaults to your workspace currency, can be overridden
+
+### Creating the deal
+
+1. Fill in the required fields
+2. Add any relevant optional fields
+3. Click **Create deal**
+4. The deal card appears in the selected stage on your pipeline board
+
+<Callout variant="tip">
+Be specific with deal names. Instead of "New opportunity," use a format like "Company - Product - Value" so deals are instantly recognizable on the kanban board.
+</Callout>
+
+## Understanding the pipeline
+
+Your pipeline is a visual representation of your sales process. Deals flow from left to right through stages:
+
+### Default stages
+
+NuCRM provides a default pipeline with these stages (you can customize later):
+
+1. **Lead** - Initial interest identified
+2. **Qualified** - Budget, authority, need, and timeline confirmed
+3. **Proposal** - Quote or proposal sent to the prospect
+4. **Negotiation** - Terms are being discussed
+5. **Closed Won** - Deal successfully closed
+6. **Closed Lost** - Deal did not result in a sale
+
+### Moving deals between stages
+
+You can advance a deal in two ways:
+
+**Drag and drop** (Kanban view):
+1. Click and hold a deal card
+2. Drag it to the target stage column
+3. Release to drop it in place
+
+**From the deal detail page**:
+1. Open the deal by clicking its name
+2. Click the **Stage** dropdown at the top
+3. Select the new stage
+4. The change is saved immediately
+
+<Callout variant="note">
+When you move a deal to a new stage, NuCRM logs the transition on the deal timeline with a timestamp. This data powers your pipeline velocity reports and helps identify deals that are stuck too long in a single stage.
+</Callout>
+
+## The deal detail view
+
+Click any deal card on the pipeline board to open its detail view:
+
+### Key sections
+
+- **Header** - Deal name, value, stage, close date, and owner
+- **Timeline** - All activities, emails, notes, and stage changes in chronological order
+- **Contacts** - People associated with this deal (you can link multiple contacts)
+- **Tasks** - Follow-up tasks and to-dos related to the deal
+- **Documents** - Attached proposals, contracts, and files
+- **Activity log** - Calls, meetings, and notes logged against this deal
+
+### Deal health indicators
+
+NuCRM shows visual indicators for deal health:
+
+- **Green** - Active, engaged, progressing normally
+- **Yellow** - No activity in the last 7 days
+- **Red** - No activity in 14+ days or past the expected close date
+
+## Logging activities on a deal
+
+Keep your deal timeline active by logging interactions:
+
+### Log a call
+
+1. Open the deal detail page
+2. Click **Log call** in the actions bar
+3. Enter the call summary, duration, and outcome
+4. Click **Save**
+
+### Add a note
+
+1. Click **Add note** on the deal page
+2. Write your meeting summary, key takeaways, or next steps
+3. Click **Save**
+
+### Schedule a follow-up
+
+1. Click **Create task** from the deal page
+2. Enter the task title (for example, "Send revised proposal")
+3. Set a due date
+4. Assign it to yourself or a teammate
+5. Click **Create**
+
+<Callout variant="info">
+Deals with consistent activity logs have higher close rates. Aim to log at least one meaningful interaction per deal per week to keep momentum and identify when engagement drops.
+</Callout>
+
+## Closing a deal
+
+When a deal reaches its conclusion:
+
+### Won deal
+
+1. Move the deal to the **Closed Won** stage
+2. NuCRM prompts you to confirm the final deal value
+3. Optionally add a won reason from the dropdown (for example, "Best price," "Product fit," "Existing relationship")
+4. The deal is marked as won and contributes to your revenue reports
+
+### Lost deal
+
+1. Move the deal to the **Closed Lost** stage
+2. Select a lost reason (for example, "Went with competitor," "Budget constraints," "No decision made")
+3. Optionally add a note explaining the loss
+4. The deal is archived but remains searchable and included in win/loss analytics
+
+## Next steps
+
+With your first deal created, you now have contacts and an active pipeline in NuCRM. The next guide covers inviting your team so everyone can collaborate on shared deals and contacts.
