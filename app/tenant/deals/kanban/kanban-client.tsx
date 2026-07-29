@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, memo, useMemo } from 'react';
+import Link from 'next/link';
 import useSWR from 'swr';
 import { 
   DndContext, DragOverlay, closestCorners, KeyboardSensor, 
