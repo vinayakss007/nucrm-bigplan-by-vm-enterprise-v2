@@ -2,7 +2,7 @@
   "id": "FEAT-003",
   "type": "feat",
   "description": "Write the first 30 documentation articles as MDX files covering the most critical user-facing topics: Getting Started (8), Contacts & Companies (8), Deals & Pipeline (7), and Communication basics (7). All content must be written from the end-user perspective describing UI workflows and capabilities. NEVER reference internal tech stack (Next.js, React, PostgreSQL, Drizzle, Tailwind, Vercel, Redis, TypeScript).",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Create app/(marketing)/docs/[...slug]/page.tsx - the catch-all route that dynamically imports and renders MDX content. It should: (a) receive the slug segments, (b) look up metadata from the docs tree, (c) dynamically import the MDX file, (d) render it wrapped in the mdx-components providers, (e) generate metadata (title, description) for SEO, (f) render DocsTableOfContents, DocsBreadcrumb, DocsPrevNext around the content.",
     "Create content/docs/ directory at project root for all MDX article files organized by section folder.",
@@ -26,5 +26,5 @@
     "Verify no tech stack leaks: grep -r 'Next.js\\|PostgreSQL\\|Drizzle\\|Tailwind\\|Vercel\\|Redis\\|TypeScript\\|React' content/docs/ (should return nothing)"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 30 MDX articles created and TypeScript compiles cleanly. Created MDXContent client component that uses dynamic import with @mdx-js/react MDXProvider to render MDX files. The catch-all route at app/(marketing)/docs/[...slug]/page.tsx is a server component that resolves slugs via lib/marketing/docs.ts helpers and renders breadcrumbs, title, content, and prev/next navigation. No tech stack leaks found (verified with grep -rw). Lint-staged passed without issues."
 }
