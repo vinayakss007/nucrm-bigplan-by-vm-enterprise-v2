@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Target, Mail, Phone, Building2, MapPin, Globe, Linkedin,
@@ -117,7 +117,16 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
 
   const [showConvert, setShowConvert] = useState(false);
   const [converting, setConverting] = useState(false);
-  const [convertDraft, setConvertDraft] = useState({ create_deal: false, deal_title: '', deal_value: '' });
+  const [convertDraft, setConvertDraft] = useState({ create_deal: false, deal_title: '', deal_value: '', pipeline_id: '', stage_id: '' });
+  const [pipelinesData, setPipelinesData] = useState<Array<{ id: string; name: string; stages?: Array<{ id: string; name: string }> }>>([]);
+
+  // Fetch pipelines for convert dialog
+  useEffect(() => {
+    fetch('/api/tenant/pipelines')
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(d => setPipelinesData(d.data ?? d.pipelines ?? d ?? []))
+      .catch(() => {});
+  }, []);
 
   const submitConvert = async () => {
     setConverting(true);
@@ -129,6 +138,8 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
           create_deal: convertDraft.create_deal,
           deal_title: convertDraft.deal_title || null,
           deal_value: convertDraft.deal_value ? Number(convertDraft.deal_value) : 0,
+          pipeline_id: convertDraft.pipeline_id || undefined,
+          stage_id: convertDraft.stage_id || undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -840,6 +851,38 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
                       disabled={converting}
                     />
                   </div>
+                  {pipelinesData.length > 0 && (
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground block mb-1">Pipeline</label>
+                      <select
+                        className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm"
+                        value={convertDraft.pipeline_id}
+                        onChange={(e) => setConvertDraft((p) => ({ ...p, pipeline_id: e.target.value, stage_id: '' }))}
+                        disabled={converting}
+                      >
+                        <option value="">Default Pipeline</option>
+                        {pipelinesData.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {convertDraft.pipeline_id && (() => {
+                    const selectedPipeline = pipelinesData.find(p => p.id === convertDraft.pipeline_id);
+                    const stages = selectedPipeline?.stages ?? [];
+                    return stages.length > 0 ? (
+                      <div>
+                        <label className="text-xs font-semibold text-muted-foreground block mb-1">Stage</label>
+                        <select
+                          className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm"
+                          value={convertDraft.stage_id}
+                          onChange={(e) => setConvertDraft((p) => ({ ...p, stage_id: e.target.value }))}
+                          disabled={converting}
+                        >
+                          <option value="">First Stage</option>
+                          {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
               )}
               <div className="flex justify-end gap-2 pt-1">

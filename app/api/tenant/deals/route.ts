@@ -5,7 +5,7 @@ import { createDealSchema, dealQuerySchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
-import { deals, contacts, companies, users, tenants, activities, pipelines, dealStages } from '@/drizzle/schema';
+import { deals, contacts, companies, users, tenants, activities, pipelines, dealStages, tasks } from '@/drizzle/schema';
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fireWebhooks } from '@/lib/webhooks';
@@ -168,6 +168,23 @@ export async function POST(request: NextRequest) {
           eventType: 'deal_update',
           action: 'create',
           description: `Created deal "${d.title}" with amount ${amount}`,
+        });
+
+      // Auto-create follow-up task (due in 2 days)
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 2);
+      await tx.insert(tasks)
+        .values({
+          tenantId: ctx.tenantId,
+          title: `Follow up on "${d.title}"`,
+          description: 'Auto-created follow-up task for new deal',
+          priority: 'medium',
+          status: 'pending',
+          dueDate,
+          dealId: d.id,
+          contactId: v.contact_id || null,
+          assignedTo: v.assigned_to || ctx.userId,
+          createdBy: ctx.userId,
         });
 
       return [d];
