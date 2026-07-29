@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 import { Activity, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface ActivityItem {

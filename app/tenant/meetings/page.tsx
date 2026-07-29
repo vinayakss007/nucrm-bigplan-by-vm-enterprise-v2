@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 import { Plus, Video, MapPin, Link as LinkIcon } from 'lucide-react';
 
 interface Meeting {
