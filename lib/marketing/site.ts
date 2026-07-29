@@ -19,10 +19,41 @@ export const BRAND = {
   promise: 'The revenue platform that replaces your whole tool stack.',
   description:
     'NuCRM is the all-in-one revenue platform for teams that run sales, support, billing and marketing in one place — with AI, automation and enterprise governance built in from day one.',
-  email: 'hello@abetworks.com',
-  sales: 'sales@abetworks.com',
-  support: 'support@abetworks.com',
+  /**
+   * Taken from the addresses and domains the shipping product already gives
+   * customers, so marketing does not advertise a mailbox nobody reads:
+   *  - sales@nucrm.io      — app/tenant/settings/billing
+   *  - support@nucrm.io    — app/tenant/trial-expired
+   *  - abetworks.in        — the "Powered by" mark on public forms
+   * Confirm these are the boxes you actually monitor before launch.
+   */
+  email: 'hello@abetworks.in',
+  sales: 'sales@nucrm.io',
+  support: 'support@nucrm.io',
+  /** Canonical marketing origin. Override with NEXT_PUBLIC_SITE_URL. */
+  domain: 'nucrm.io',
+  studioDomain: 'abetworks.in',
 } as const;
+
+/**
+ * Social profiles rendered in the footer and emitted as `sameAs` in the
+ * Organization structured data.
+ *
+ * Deliberately empty: there are no handles anywhere in this repository, and
+ * linking to a guessed URL is worse than linking to nothing — it either 404s or
+ * sends visitors to somebody else's account. Fill in the `href` values you
+ * actually own and the footer row appears automatically. Delete any line you do
+ * not use rather than leaving it blank.
+ */
+export type SocialLink = { label: string; href: string; icon: 'x' | 'linkedin' | 'github' | 'youtube' | 'instagram' };
+
+export const SOCIAL: SocialLink[] = [
+  // { label: 'X',         href: 'https://x.com/…',                  icon: 'x' },
+  // { label: 'LinkedIn',  href: 'https://linkedin.com/company/…',   icon: 'linkedin' },
+  // { label: 'GitHub',    href: 'https://github.com/…',             icon: 'github' },
+  // { label: 'YouTube',   href: 'https://youtube.com/@…',           icon: 'youtube' },
+  // { label: 'Instagram', href: 'https://instagram.com/…',          icon: 'instagram' },
+];
 
 export type NavLink = {
   label: string;
