@@ -44,6 +44,7 @@ export type SuperAdminAction =
   // Data Access
   | 'data.exported'
   | 'data.imported'
+  | 'data.updated'
   | 'data.deleted'
   | 'backup.created'
   | 'backup.restored'
