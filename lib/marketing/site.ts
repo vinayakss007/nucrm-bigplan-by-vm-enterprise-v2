@@ -30,8 +30,12 @@ export const BRAND = {
   email: 'hello@abetworks.in',
   sales: 'sales@nucrm.io',
   support: 'support@nucrm.io',
-  /** Canonical marketing origin. Override with NEXT_PUBLIC_SITE_URL. */
-  domain: 'nucrm.io',
+  /**
+   * Canonical marketing origin. Override with NEXT_PUBLIC_SITE_URL.
+   * Launching on the subdomain initially; moving to a dedicated domain later
+   * only requires changing this and NEXT_PUBLIC_SITE_URL.
+   */
+  domain: 'nucrm.abetworks.in',
   studioDomain: 'abetworks.in',
 } as const;
 
