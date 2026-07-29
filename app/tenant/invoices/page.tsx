@@ -237,8 +237,8 @@ function InvoicesPageInner() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
-                        <button onClick={() => router.push(`/tenant/invoices/${inv.id}`)} className="p-1.5 hover:bg-accent rounded transition-colors" title="View"><Eye className="w-3.5 h-3.5" /></button>
-                        <button onClick={async () => { try { const r = await fetch(`/api/tenant/invoices/${inv.id}/pdf`); if (!r.ok) throw new Error(); const blob = await r.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `invoice-${inv.invoiceNumber || inv.id}.pdf`; a.click(); URL.revokeObjectURL(url); } catch { toast.error('Failed to download PDF'); } }} className="p-1.5 hover:bg-accent rounded transition-colors" title="Download"><Download className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => router.push(`/tenant/invoices/${invoice.id}`)} className="p-1.5 hover:bg-accent rounded transition-colors" title="View" aria-label="View invoice"><Eye className="w-3.5 h-3.5" /></button>
+                        <button onClick={async () => { try { const r = await fetch(`/api/tenant/invoices/${invoice.id}/pdf`); if (!r.ok) throw new Error(); const blob = await r.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `invoice-${invoice.invoiceNumber || invoice.id}.pdf`; a.click(); URL.revokeObjectURL(url); } catch { toast.error('Failed to download PDF'); } }} className="p-1.5 hover:bg-accent rounded transition-colors" title="Download" aria-label="Download invoice"><Download className="w-3.5 h-3.5" /></button>
                       </div>
                     </td>
                   </tr>

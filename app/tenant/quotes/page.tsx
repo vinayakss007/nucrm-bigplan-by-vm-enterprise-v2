@@ -227,8 +227,8 @@ function QuotesPageInner() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
-                        <button onClick={() => router.push(`/tenant/quotes/${q.id}`)} className="p-1.5 hover:bg-accent rounded transition-colors" title="View"><FileText className="w-3.5 h-3.5" /></button>
-                        <button onClick={async () => { try { const r = await fetch(`/api/tenant/quotes/${q.id}/send`, { method: 'POST' }); if (!r.ok) throw new Error(); toast.success('Quote sent'); } catch { toast.error('Failed to send quote'); } }} className="p-1.5 hover:bg-accent rounded transition-colors" title="Send"><Send className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => router.push(`/tenant/quotes/${quote.id}`)} className="p-1.5 hover:bg-accent rounded transition-colors" title="View" aria-label="View quote"><FileText className="w-3.5 h-3.5" /></button>
+                        <button onClick={async () => { try { const r = await fetch(`/api/tenant/offers/${quote.id}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Failed to send quote'); toast.success('Quote sent'); } catch (e) { toast.error(e instanceof Error ? e.message : 'Failed to send quote'); } }} className="p-1.5 hover:bg-accent rounded transition-colors" title="Send" aria-label="Send quote"><Send className="w-3.5 h-3.5" /></button>
                       </div>
                     </td>
                   </tr>
