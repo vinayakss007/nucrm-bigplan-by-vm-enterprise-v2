@@ -14,7 +14,7 @@ import { STUDIO_PRODUCTS } from '@/lib/marketing/abetworks';
  *
  * Set NEXT_PUBLIC_SITE_URL to your canonical origin in production.
  */
-const BASE = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://nucrm.io').replace(/\/$/, '');
+const BASE = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://nucrm.abetworks.in').replace(/\/$/, '');
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
