@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { getProvider, getIntegrationConfig } from '@/lib/calendar-sync/service';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
     const deny = requirePerm(ctx, 'calendar.manage');
     if (deny) return deny;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { provider: providerType, action } = body;
 
     if (!['google', 'outlook'].includes(providerType)) {

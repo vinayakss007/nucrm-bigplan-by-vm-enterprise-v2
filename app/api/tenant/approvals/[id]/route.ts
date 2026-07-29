@@ -17,6 +17,7 @@ import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { approveRequest, rejectRequest } from '@/lib/rbac/approval-workflows';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 interface PatchBody {
   action?: 'approve' | 'reject';
@@ -35,7 +36,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!id) return NextResponse.json({ error: 'request id required' }, { status: 400 });
 
     let body: PatchBody;
-    try { body = await req.json() as PatchBody; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req) as PatchBody; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const action = body.action;
     if (action !== 'approve' && action !== 'reject') {
       return NextResponse.json({ error: "action must be 'approve' or 'reject'" }, { status: 400 });

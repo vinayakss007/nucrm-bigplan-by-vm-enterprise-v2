@@ -4,6 +4,7 @@ import { users } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import { timingSafeEqual } from 'crypto';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * Emergency Admin Recovery Endpoint
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let body: any;
   try {
-    body = await request.json();
+    body = await readJsonBody(request);
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }

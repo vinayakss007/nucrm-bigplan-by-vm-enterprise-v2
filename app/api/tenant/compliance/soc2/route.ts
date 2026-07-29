@@ -6,6 +6,7 @@ import { db } from '@/drizzle/db';
 import { complianceRequests } from '@/drizzle/schema/compliance';
 import { eq, and, desc } from 'drizzle-orm';
 import { generateSOC2Report } from '@/lib/compliance/soc2';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(req: NextRequest) {
   try {
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
     if (moduleGate) return moduleGate;
 
     let body;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const periodDays = body.periodDays || 90;
 
     // Create the compliance request record

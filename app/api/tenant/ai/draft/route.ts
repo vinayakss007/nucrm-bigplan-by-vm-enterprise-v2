@@ -39,6 +39,7 @@ import {
   SEED_DRAFT_TEMPLATES,
   type EntityType,
 } from '@/lib/ai/draft';
+import { readJsonBody } from '@/lib/api/validate';
 
 interface PostBody {
   template_id?: string;
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
     }
 
     let body: PostBody;
-    try { body = await req.json() as PostBody; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req) as PostBody; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     if (!isEntityType(body.entity_type)) {
       return NextResponse.json({ error: 'entity_type must be contact, deal, company, lead or ticket' }, { status: 400 });
     }

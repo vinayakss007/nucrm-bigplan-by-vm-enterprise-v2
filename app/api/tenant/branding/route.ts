@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, can } from '@/lib/auth/middleware';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { getBrandingForTenant, BrandingConfig } from '@/lib/branding';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
@@ -43,7 +43,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(brandingUpdateSchema, body);
     if (validated instanceof NextResponse) return validated;
 

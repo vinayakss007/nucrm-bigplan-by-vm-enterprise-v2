@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createNoteSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -55,7 +55,7 @@ export async function POST(
     if (ctx instanceof NextResponse) return ctx;
     
     const { id } = await params;
-    const rawBody = await request.json();
+    const rawBody = await readJsonBody(request);
     const validated = validateBody(createNoteSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -119,7 +119,7 @@ export async function DELETE(
     if (deny) return deny;
 
     const { id } = await params;
-    const { noteId } = await request.json();
+    const { noteId } = await readJsonBody(request);
 
     if (!noteId) {
       return NextResponse.json({ error: 'noteId required' }, { status: 400 });

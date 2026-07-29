@@ -6,7 +6,7 @@ import { callLogs } from '@/drizzle/schema';
 import { contacts, companies, users } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 const createCallSchema = z.object({
   contact_id: z.string().uuid('contact_id must be a valid UUID'),
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     const deny = requirePerm(ctx, 'contacts.edit');
     if (deny) return deny;
 
-    const raw = await req.json();
+    const raw = await readJsonBody(req);
     const parsed = validateBody(createCallSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const { contact_id, company_id, deal_id, direction, duration, notes, phone_number, recorded_url, assigned_to } = parsed.data;

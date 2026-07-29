@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateFollowUpSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { followUps } from '@/drizzle/schema';
@@ -19,7 +19,7 @@ export async function PATCH(req: NextRequest, { params }: any) {
     if (ctx instanceof NextResponse) return ctx;
 
     const id = (await params).id;
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validated = validateBody(updateFollowUpSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

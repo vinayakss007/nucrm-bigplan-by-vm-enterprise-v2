@@ -5,7 +5,7 @@ import { db } from '@/drizzle/db';
 import { supportTickets, tenants, users } from '@/drizzle/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 export async function GET(request: NextRequest) {
   try {
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(createTicketSchema, body);
     if (validated instanceof NextResponse) return validated;
     const { subject, body: ticketBody, category, priority, tenant_id } = validated.data;
@@ -119,7 +119,7 @@ export async function PATCH(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validated = validateBody(updateTicketSchema, body);
     if (validated instanceof NextResponse) return validated;
     const { id, status, resolution, assigned_to } = validated.data;

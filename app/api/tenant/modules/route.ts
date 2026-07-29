@@ -3,6 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { ModuleRegistry } from '@/lib/modules/registry';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(req: NextRequest) {
   try {
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
-    const { module_id, settings = {} } = await req.json();
+    const { module_id, settings = {} } = await readJsonBody(req);
     if (!module_id) return NextResponse.json({ error: 'module_id required' }, { status: 400 });
     const result = await ModuleRegistry.install(ctx.tenantId, module_id, ctx.userId, settings);
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
@@ -48,7 +49,7 @@ export async function PATCH(req: NextRequest) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
-    const { module_id, action, settings } = await req.json();
+    const { module_id, action, settings } = await readJsonBody(req);
     if (!module_id) return NextResponse.json({ error: 'module_id required' }, { status: 400 });
     if (action === 'disable') await ModuleRegistry.disable(ctx.tenantId, module_id);
     else if (action === 'update_settings' && settings) await ModuleRegistry.updateSettings(ctx.tenantId, module_id, settings);

@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { contacts, deals, companies, tasks } from '@/drizzle/schema';
 import { eq, and, or, ilike, gte, lte, desc, sql, inArray } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 /**
  * Advanced Search API — Multi-field filtering with pagination
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
     const limited = await checkRateLimit(request, { action: 'advanced-search', max: 30, windowMinutes: 1 });
     if (limited) return limited;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const {
       query: q,
       type = 'contacts',

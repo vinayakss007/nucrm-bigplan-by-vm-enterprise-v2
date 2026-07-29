@@ -30,6 +30,7 @@ import {
   readOfferMetadata,
   canTransition,
 } from '@/lib/offers';
+import { readJsonBody } from '@/lib/api/validate';
 
 interface SendBody {
   to_email?: string;
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ quo
     }
 
     let body: SendBody;
-    try { body = await req.json() as SendBody; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req) as SendBody; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const meta = readOfferMetadata(quote);
     const publicToken = meta.public_token || generatePublicToken();
 

@@ -9,6 +9,7 @@ import { requireAiFeature } from '@/lib/ai/plan-gate';
 import { db } from '@/drizzle/db';
 import { leadWarmingEvents } from '@/drizzle/schema/lead-warming';
 import { eq, and, or, isNull } from 'drizzle-orm';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(req: NextRequest) {
   try {
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const {
       name, description, event_type, recurrence,
       event_month, event_day, event_date,

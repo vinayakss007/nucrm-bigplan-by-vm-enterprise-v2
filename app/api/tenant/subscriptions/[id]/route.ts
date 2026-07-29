@@ -6,6 +6,7 @@ import { serviceSubscriptions } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -50,7 +51,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (deny) return deny;
 
     const subId = (await params).id;
-    const body = await req.json();
+    const body = await readJsonBody(req);
 
     // Validate numeric fields
     if (body.amount !== undefined) {

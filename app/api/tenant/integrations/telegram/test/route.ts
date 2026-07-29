@@ -5,13 +5,14 @@ import { apiError } from '@/lib/api-error';
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function POST(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { bot_token, chat_id } = body;
 
     if (!bot_token || !chat_id) {

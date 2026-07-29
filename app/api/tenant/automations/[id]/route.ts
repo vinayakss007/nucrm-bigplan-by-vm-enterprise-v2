@@ -4,7 +4,7 @@ import { requireAuth, requirePerm, requireModule } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { automations, automationRuns, users } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateAutomationSchema } from '@/lib/api/schemas';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
@@ -100,7 +100,7 @@ export async function PATCH(
     if (deny) return deny;
 
     const { id } = await params;
-    const rawBody = await req.json();
+    const rawBody = await readJsonBody(req);
     const validated = validateBody(updateAutomationSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const body = validated.data;

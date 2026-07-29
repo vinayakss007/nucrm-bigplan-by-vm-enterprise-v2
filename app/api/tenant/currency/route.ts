@@ -7,7 +7,7 @@ import {
   SUPPORTED_CURRENCIES,
 } from '@/lib/currency';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 const setCurrencySchema = z.object({
   currency: z.string().min(1, 'Currency code is required'),
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const raw = await req.json();
+    const raw = await readJsonBody(req);
     const parsed = validateBody(setCurrencySchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const { currency } = parsed.data;

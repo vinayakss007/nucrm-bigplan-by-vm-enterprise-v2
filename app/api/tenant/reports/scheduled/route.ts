@@ -6,6 +6,7 @@ import { scheduledReports } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
     const deny = requirePerm(ctx, 'reports.create');
     if (deny) return deny;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     if (!body.name || !body.type || !body.frequency) {
       return NextResponse.json({ error: 'Name, type, and frequency required' }, { status: 400 });
     }
@@ -80,7 +81,7 @@ export async function PATCH(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const { id, expectedUpdatedAt: expectedUpdatedAtRaw, ...updates } = await request.json();
+    const { id, expectedUpdatedAt: expectedUpdatedAtRaw, ...updates } = await readJsonBody(request);
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
 
     const expectedUpdatedAt = expectedUpdatedAtRaw ? new Date(expectedUpdatedAtRaw) : null;
@@ -110,7 +111,7 @@ export async function DELETE(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const { id } = await request.json();
+    const { id } = await readJsonBody(request);
     await db.update(scheduledReports)
       .set({ deletedAt: new Date() })
       .where(and(

@@ -7,7 +7,7 @@ import { territories } from '@/drizzle/schema/territories';
 import { eq, and } from 'drizzle-orm';
 import { getTerritoryTree } from '@/lib/territories';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     const gate = await requireModule(ctx.tenantId, 'core-crm', ctx.isSuperAdmin);
     if (gate) return gate;
 
-    const raw = await req.json();
+    const raw = await readJsonBody(req);
     const parsed = validateBody(createTerritorySchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const { name, type, parentId, geoConfig } = parsed.data;
@@ -81,7 +81,7 @@ export async function PUT(req: NextRequest) {
     const gate = await requireModule(ctx.tenantId, 'core-crm', ctx.isSuperAdmin);
     if (gate) return gate;
 
-    const raw = await req.json();
+    const raw = await readJsonBody(req);
     const parsed = validateBody(updateTerritorySchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const { id, name, type, parentId, geoConfig, assignedTo } = parsed.data;
@@ -134,7 +134,7 @@ export async function DELETE(req: NextRequest) {
     // Soft delete
     const [row] = await db
       .update(territories)
-      .set({ deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as any)
+      .set({ deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as Record<string, unknown>)
       .where(and(eq(territories.id, id), eq(territories.tenantId, ctx.tenantId)))
       .returning();
 

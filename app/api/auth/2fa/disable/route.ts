@@ -6,7 +6,7 @@ import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { verifyPassword } from '@/lib/auth/session';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 const disable2faBodySchema = z.object({
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const rateLimited = await checkRateLimit(req, { action: '2fa-disable', max: 3, windowMinutes: 15 });
     if (rateLimited) return rateLimited;
     
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const parsed = validateBody(disable2faBodySchema, body);
     if (parsed instanceof NextResponse) return parsed;
     const { password } = parsed.data;

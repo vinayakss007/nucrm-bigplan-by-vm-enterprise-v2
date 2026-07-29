@@ -12,6 +12,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function PATCH(
   req: NextRequest,
@@ -26,7 +27,7 @@ export async function PATCH(
 
     const { id } = await params;
     let body;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const { factor, weight, condition, active } = body;
 
     const [row] = await db

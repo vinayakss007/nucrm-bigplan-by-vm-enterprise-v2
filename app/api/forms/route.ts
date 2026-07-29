@@ -6,13 +6,14 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { createNotification } from '@/lib/notifications';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function POST(req: NextRequest) {
   try {
     const limited = await checkRateLimit(req, { action: 'form_submit', max: 20, windowMinutes: 60 });
     if (limited) return limited;
     
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { form_id, data: formData = {} } = body;
     if (!form_id) return NextResponse.json({ error: 'form_id required' }, { status: 400 });
 

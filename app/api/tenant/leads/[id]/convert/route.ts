@@ -6,7 +6,7 @@ import { apiError } from '@/lib/api-error';
  * Marks the lead as converted and stores the resulting contact_id.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { convertLeadSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -31,7 +31,7 @@ export async function POST(
 
     const { id } = await params;
     let rawBody;
-    try { rawBody = await request.json(); } catch (err) { console.error('[leads/convert] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { rawBody = await readJsonBody(request); } catch (err) { console.error('[leads/convert] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const validated = validateBody(convertLeadSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

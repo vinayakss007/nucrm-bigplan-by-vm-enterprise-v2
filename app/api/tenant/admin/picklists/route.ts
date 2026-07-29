@@ -24,6 +24,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export type PicklistEntry = { value: string; label: string; color?: string };
 export type PicklistCategory = 'lead_sources' | 'loss_reasons' | 'win_reasons' | 'activity_types' | 'deal_types' | 'industries';
@@ -122,7 +123,7 @@ export async function PATCH(req: NextRequest) {
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     let body;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const incoming = body.picklists;
     if (!incoming || typeof incoming !== 'object')
       return NextResponse.json({ error: 'picklists object required' }, { status: 400 });

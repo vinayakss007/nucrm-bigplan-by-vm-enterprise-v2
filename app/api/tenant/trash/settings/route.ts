@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
+import { readJsonBody } from '@/lib/api/validate';
 
 const TRASH_RETENTION_KEY = 'trash_retention_days';
 
@@ -54,7 +55,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const { retention_days } = await request.json();
+    const { retention_days } = await readJsonBody(request);
     
     if (!retention_days || retention_days < 1) {
       return NextResponse.json({ error: 'Invalid retention_days' }, { status: 400 });

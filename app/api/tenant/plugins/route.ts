@@ -6,6 +6,7 @@ import { customPlugins } from '@/drizzle/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import type { PluginAuthType, PluginAction, PluginAuthConfig } from '@/lib/plugins/types';
 import { encryptAuthConfig } from '@/lib/plugins/crypto';
+import { readJsonBody } from '@/lib/api/validate';
 
 const VALID_AUTH_TYPES: PluginAuthType[] = ['bearer', 'basic', 'api_key_header', 'api_key_query', 'oauth2_client_credentials', 'none'];
 
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await request.json() as Record<string, unknown>;
+    const body = await readJsonBody(request) as Record<string, unknown>;
 
     // Validate required fields
     const name = body['name'] as string | undefined;

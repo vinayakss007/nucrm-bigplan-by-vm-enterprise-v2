@@ -4,7 +4,7 @@ import { resolveDashboardLayout, saveLayout } from '@/lib/dashboard/layout-resol
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
  
  
@@ -41,7 +41,7 @@ export async function PUT(request: NextRequest) {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
 
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const parsed = validateBody(dashboardLayoutSchema, body);
   if (parsed instanceof NextResponse) return parsed;
   const { layout } = parsed.data;

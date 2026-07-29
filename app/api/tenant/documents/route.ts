@@ -8,6 +8,7 @@ import { eq, and, desc, isNull } from 'drizzle-orm';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 const s3 = new S3Client({
   region: process.env['AWS_REGION'] || 'us-east-1',
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
     const moduleGate = await requireModule(ctx.tenantId, 'core-crm', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { name, mimeType, sizeBytes, folderId, entityType, entityId, createFolder } = body;
 
     // Handle folder creation

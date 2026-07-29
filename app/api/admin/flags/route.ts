@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllFlags, isEnabled, setOverride, deleteOverride, DEFINED_FLAGS } from '@/lib/flags';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(_request: NextRequest) {
   const flags = await getAllFlags();
@@ -7,7 +8,7 @@ export async function GET(_request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const { key, enabled, tenantIds, userIds, percentage } = body;
 
   const def = DEFINED_FLAGS.find(f => f.key === key);

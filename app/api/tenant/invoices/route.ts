@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateBody, validateQuery } from '@/lib/api/validate';
+import { validateBody, validateQuery, readJsonBody } from '@/lib/api/validate';
 import { createInvoiceSchema, invoiceQuerySchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { invoices, invoiceLineItems } from '@/drizzle/schema';
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     const { tenantId, userId } = ctx;
 
-    const rawBody = await request.json();
+    const rawBody = await readJsonBody(request);
     const validated = validateBody(createInvoiceSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

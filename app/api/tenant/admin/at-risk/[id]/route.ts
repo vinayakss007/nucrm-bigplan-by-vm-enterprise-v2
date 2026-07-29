@@ -11,7 +11,7 @@ import { atRiskRules } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateAtRiskRuleSchema } from '@/lib/api/schemas';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
@@ -27,7 +27,7 @@ export async function PATCH(
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
     const { id } = await params;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validated = validateBody(updateAtRiskRuleSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

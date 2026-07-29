@@ -143,15 +143,26 @@ describe('api/schemas', () => {
     expect(result.password).toBe('newpassword');
   });
 
-  it('verify2faSchema validates 6-digit token', async () => {
+  it('verify2faSchema validates a 6-digit totp_code', async () => {
     const { verify2faSchema } = await import('@/lib/api/schemas');
-    const result = verify2faSchema.parse({ token: '123456', password: 'mypassword' });
-    expect(result.token).toBe('123456');
+    const result = verify2faSchema.parse({ totp_code: '123456' });
+    expect(result.totp_code).toBe('123456');
   });
 
-  it('verify2faSchema rejects non-6-digit token', async () => {
+  it('verify2faSchema rejects a non-6-digit totp_code', async () => {
     const { verify2faSchema } = await import('@/lib/api/schemas');
-    expect(() => verify2faSchema.parse({ token: '12345', password: 'mypassword' })).toThrow();
+    expect(() => verify2faSchema.parse({ totp_code: '12345' })).toThrow();
+    expect(() => verify2faSchema.parse({ totp_code: '1234567' })).toThrow();
+    expect(() => verify2faSchema.parse({ totp_code: 'abcdef' })).toThrow();
+    expect(() => verify2faSchema.parse({})).toThrow();
+  });
+
+  it('disable2faSchema requires a password and accepts an optional totp_code', async () => {
+    const { disable2faSchema } = await import('@/lib/api/schemas');
+    expect(disable2faSchema.parse({ password: 'mypassword' }).totp_code).toBeUndefined();
+    expect(disable2faSchema.parse({ password: 'mypassword', totp_code: '123456' }).totp_code).toBe('123456');
+    expect(() => disable2faSchema.parse({})).toThrow();
+    expect(() => disable2faSchema.parse({ password: 'mypassword', totp_code: '123' })).toThrow();
   });
 
   it('createInvoiceSchema requires a title', async () => {

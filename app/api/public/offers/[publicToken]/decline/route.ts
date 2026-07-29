@@ -19,7 +19,7 @@ import {
   canTransition,
 } from '@/lib/offers';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 const offerDeclineSchema = z.object({
   reason: z.string().max(500).optional().default(''),
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
     }
 
     let raw;
-    try { raw = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { raw = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const parsed = validateBody(offerDeclineSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const reason = (parsed.data.reason ?? '').trim();

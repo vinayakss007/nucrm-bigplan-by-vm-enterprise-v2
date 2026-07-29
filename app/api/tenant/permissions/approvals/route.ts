@@ -6,7 +6,7 @@ import { db } from '@/drizzle/db';
 import { approvalRequests } from '@/drizzle/schema/core';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 const approvalActionSchema = z.object({
   request_id: z.string().uuid(),
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validated = validateBody(approvalActionSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;

@@ -5,7 +5,7 @@ import { db } from '@/drizzle/db';
 import { ssoProviders } from '@/drizzle/schema/infra';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const ssoConfigSchema = z.object({
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validated = validateBody(ssoConfigSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -78,7 +78,7 @@ export async function PUT(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { id, ...updateFields } = body;
 
     if (!id) {
@@ -87,12 +87,12 @@ export async function PUT(req: NextRequest) {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
     const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
     const guard = await concurrencyGuard(db, ssoProviders, id, ctx.tenantId, expectedUpdatedAt);
     if (guard) return guard;
 
-    const updateData: Record<string, any> = { updatedAt: new Date() };
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (updateFields.name !== undefined) updateData['name'] = updateFields.name;
     if (updateFields.config !== undefined) updateData['config'] = updateFields.config;
     if (updateFields.isActive !== undefined) updateData['isActive'] = updateFields.isActive;

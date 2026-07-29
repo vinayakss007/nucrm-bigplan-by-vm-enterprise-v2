@@ -6,6 +6,7 @@ import { portalClients, platformSettings } from '@/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
 
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Enable portal in settings first' }, { status: 400 });
     }
 
-    const { name, email } = await request.json();
+    const { name, email } = await readJsonBody(request);
 
     if (!name || !email) {
       return NextResponse.json({ error: 'Name and email required' }, { status: 400 });
@@ -103,7 +104,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const { id } = await request.json();
+    const { id } = await readJsonBody(request);
 
     await db
       .delete(portalClients)

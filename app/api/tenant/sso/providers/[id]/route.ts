@@ -18,6 +18,7 @@ import {
 } from '../route';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { apiError } from '@/lib/api-error';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function PATCH(
   request: NextRequest,
@@ -42,7 +43,7 @@ export async function PATCH(
   }
 
   let body: (Parameters<typeof validateInput>[0] & { is_active?: boolean }) | null;
-  try { body = await request.json() as Parameters<typeof validateInput>[0] & { is_active?: boolean }; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+  try { body = await readJsonBody(request) as Parameters<typeof validateInput>[0] & { is_active?: boolean }; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
   const limited = await rateLimitMutating(request, 'ssoProviders', 'patch');
   if (limited) return limited;
   const validationError = validateInput(body, { secretRequired: false });

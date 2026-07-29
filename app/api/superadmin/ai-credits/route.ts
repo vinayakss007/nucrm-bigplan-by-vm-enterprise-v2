@@ -5,7 +5,7 @@ import { db } from '@/drizzle/db';
 import { tenantAiCredits } from '@/drizzle/schema/ai';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { allocateCredits, getCreditBalance, getAggregatedUsage, getCreditHistory } from '@/lib/ai/credits';
 
 const allocateSchema = z.object({
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const raw = await request.json();
+    const raw = await readJsonBody(request);
     const parsed = validateBody(allocateSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const { action, data } = parsed.data;

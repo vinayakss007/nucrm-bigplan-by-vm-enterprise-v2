@@ -9,7 +9,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { randomBytes } from 'crypto';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 
 const inviteSendSchema = z.object({
   email: z.string().email('Valid email is required'),
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Permission denied: team.invite required' }, { status: 403 });
     }
 
-    const raw = await request.json();
+    const raw = await readJsonBody(request);
     const parsed = validateBody(inviteSendSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
     const { email, roleSlug } = parsed.data;

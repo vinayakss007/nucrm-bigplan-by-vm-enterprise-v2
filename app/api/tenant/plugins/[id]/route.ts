@@ -8,6 +8,7 @@ import type { PluginAuthType, PluginAction, PluginAuthConfig } from '@/lib/plugi
 import { encryptAuthConfig, decryptAuthConfig, redactAuthConfig } from '@/lib/plugins/crypto';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 const VALID_AUTH_TYPES: PluginAuthType[] = ['bearer', 'basic', 'api_key_header', 'api_key_query', 'oauth2_client_credentials', 'none'];
 const VALID_STATUSES = ['active', 'disabled'] as const;
@@ -82,7 +83,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (ctx instanceof NextResponse) return ctx;
 
     const { id } = await context.params;
-    const body = await request.json() as Record<string, unknown>;
+    const body = await readJsonBody(request) as Record<string, unknown>;
 
     // Build update object
     const updates: Record<string, unknown> = {};

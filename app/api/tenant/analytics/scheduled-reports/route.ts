@@ -4,6 +4,7 @@ import { db } from '@/drizzle/db';
 import { scheduledReports } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function GET(_request: NextRequest) {
   try {
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
     const ctx = await requireTenantCtx();
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { name, type, frequency, recipients, config } = body;
 
     if (!name || !type || !frequency) {

@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { kbCategories } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,7 +14,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;
-    const body = await request.json();
+    const body = await readJsonBody(request);
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

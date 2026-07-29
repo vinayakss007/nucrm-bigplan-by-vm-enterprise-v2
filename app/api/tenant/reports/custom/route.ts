@@ -6,6 +6,7 @@ import { platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
 const CUSTOM_REPORTS_KEY = 'custom_reports';
 
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
     const deny = requirePerm(ctx, 'reports.create');
     if (deny) return deny;
 
-    const report = await request.json();
+    const report = await readJsonBody(request);
 
     if (!report.name || !report.type) {
       return NextResponse.json({ error: 'Name and type required' }, { status: 400 });
@@ -117,7 +118,7 @@ export async function DELETE(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const { id } = await request.json();
+    const { id } = await readJsonBody(request);
 
     const [setting] = await db
       .select({ value: platformSettings.value })
