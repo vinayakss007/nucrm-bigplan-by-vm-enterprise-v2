@@ -21,7 +21,10 @@ export default function DealTimeline({ dealId }: { dealId: string }) {
         const [actRes, callRes, meetRes] = await Promise.all([
           fetch(`/api/tenant/activities?deal_id=${dealId}`).then(r => r.ok ? r.json() : { data: [] }),
           fetch(`/api/tenant/calls?deal_id=${dealId}`).then(r => r.ok ? r.json() : { data: [] }),
-          fetch(`/api/tenant/meetings?deal_id=${dealId}`).then(r => r.ok ? r.json() : { data: [] }),
+          // NOTE: GET /api/tenant/meetings has no deal filter, so it is
+          // narrowed client-side on dealId below. Without that, every meeting
+          // in the tenant would appear on every deal's timeline.
+          fetch(`/api/tenant/meetings?limit=500`).then(r => r.ok ? r.json() : { data: [] }),
         ]);
 
         const activities: TimelineEntry[] = ((actRes.data ?? actRes.activities ?? actRes) as Array<Record<string, unknown>>).map((a) => ({
@@ -40,13 +43,15 @@ export default function DealTimeline({ dealId }: { dealId: string }) {
           created_at: (c.created_at ?? c.createdAt ?? c.start_time) as string,
         }));
 
-        const meetings: TimelineEntry[] = ((meetRes.data ?? meetRes.meetings ?? meetRes) as Array<Record<string, unknown>>).map((m) => ({
-          id: m.id as string,
-          type: 'meeting' as const,
-          title: (m.title ?? 'Meeting') as string,
-          description: m.description as string | undefined,
-          created_at: (m.created_at ?? m.createdAt ?? m.start_time) as string,
-        }));
+        const meetings: TimelineEntry[] = ((meetRes.data ?? meetRes.meetings ?? meetRes) as Array<Record<string, unknown>>)
+          .filter((m) => (m.dealId ?? m.deal_id) === dealId)
+          .map((m) => ({
+            id: m.id as string,
+            type: 'meeting' as const,
+            title: (m.title ?? 'Meeting') as string,
+            description: m.description as string | undefined,
+            created_at: (m.created_at ?? m.createdAt ?? m.start_time) as string,
+          }));
 
         const merged = [...activities, ...calls, ...meetings]
           .filter(e => e.created_at)
