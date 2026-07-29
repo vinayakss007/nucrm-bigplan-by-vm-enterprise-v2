@@ -30,6 +30,12 @@
   background: var(--mk-bg);
   color: var(--mk-text);
   -webkit-font-smoothing: antialiased;
+
+  /* Required, not cosmetic. The aurora washes, section glows and the CTA band
+     gradient are all painted on negative z-index layers. Without an explicit
+     stacking context here they resolve against the root and paint *behind*
+     this element's own background, which renders the whole site flat black. */
+  isolation: isolate;
 }
 
 /* ── Typography scale (px-based, immune to the 125% root) ───────────── */

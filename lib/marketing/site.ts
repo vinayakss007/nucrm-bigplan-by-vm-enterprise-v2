@@ -167,7 +167,9 @@ export const NAV: NavGroup[] = [
       {
         heading: 'Resources',
         links: [
-          { label: 'Documentation', href: '/docs', desc: 'Guides and API reference', icon: 'BookOpen' },
+          // Points at the public API overview, not /docs — that page is an
+          // operator install guide and discloses infrastructure detail.
+          { label: 'Developer API', href: '/integrations#api', desc: 'Endpoints, webhooks and the SDK', icon: 'BookOpen' },
           { label: 'Security', href: '/security', desc: 'How we protect your data', icon: 'ShieldCheck' },
           { label: 'FAQ', href: '/pricing#faq', desc: 'Answers to the common ones', icon: 'HelpCircle' },
         ],
@@ -239,7 +241,7 @@ export const FOOTER: { heading: string; links: NavLink[] }[] = [
       { label: 'Pricing', href: '/pricing' },
       { label: 'Module marketplace', href: '/modules' },
       { label: 'Integrations', href: '/integrations' },
-      { label: 'Documentation', href: '/docs' },
+      { label: 'Developer API', href: '/integrations#api' },
     ],
   },
   {

@@ -123,7 +123,6 @@ export default function IntegrationsPage() {
                 ))}
               </ul>
               <div className="mt-7 flex flex-wrap gap-2.5">
-                <GhostCta href="/docs">Read the documentation</GhostCta>
                 <GhostCta href="/contact">Ask an integration question</GhostCta>
               </div>
             </Reveal>
