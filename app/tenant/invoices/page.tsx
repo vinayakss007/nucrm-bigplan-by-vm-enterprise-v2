@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useMemo, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Plus, Search, Eye, Download, FileText, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -31,6 +31,7 @@ const statusColors: Record<string, string> = {
 
 function InvoicesPageInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const initialContactId = searchParams.get('contactId') || '';
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -236,8 +237,8 @@ function InvoicesPageInner() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
-                        <button onClick={() => toast('Invoice detail view coming soon')} className="p-1.5 hover:bg-accent rounded transition-colors" title="View"><Eye className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => toast('PDF download coming soon')} className="p-1.5 hover:bg-accent rounded transition-colors" title="Download"><Download className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => router.push(`/tenant/invoices/${inv.id}`)} className="p-1.5 hover:bg-accent rounded transition-colors" title="View"><Eye className="w-3.5 h-3.5" /></button>
+                        <button onClick={async () => { try { const r = await fetch(`/api/tenant/invoices/${inv.id}/pdf`); if (!r.ok) throw new Error(); const blob = await r.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `invoice-${inv.invoiceNumber || inv.id}.pdf`; a.click(); URL.revokeObjectURL(url); } catch { toast.error('Failed to download PDF'); } }} className="p-1.5 hover:bg-accent rounded transition-colors" title="Download"><Download className="w-3.5 h-3.5" /></button>
                       </div>
                     </td>
                   </tr>
