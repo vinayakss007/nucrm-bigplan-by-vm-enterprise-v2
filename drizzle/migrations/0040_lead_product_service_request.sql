@@ -1,10 +1,8 @@
--- Migration ID: 0045_lead_product_service_request
+-- Migration ID: 0040_lead_product_service_request
 -- Name: A lead can name the product or service it is a request for
--- Dependencies: 0044_cross_module_record_linking
+-- Dependencies: 0038_cross_module_record_linking
 --
--- RENUMBER NOTE: PR #753 (still open at time of writing) also introduces a
--- 0045. Whichever lands second must be renumbered to 0046. This migration is
--- fully idempotent so re-running after a renumber is harmless.
+-- RENUMBER NOTE: migration numbering has been fixed; this is now at its correct position.
 
 -- WHY THIS EXISTS
 -- ---------------

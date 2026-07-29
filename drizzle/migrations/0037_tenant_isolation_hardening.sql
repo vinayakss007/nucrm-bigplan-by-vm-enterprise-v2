@@ -1,6 +1,6 @@
--- Migration ID: 0043_tenant_isolation_hardening
+-- Migration ID: 0037_tenant_isolation_hardening
 -- Name: Repair row-level security and add referential integrity to the revenue chain
--- Dependencies: 0042_backup_records_checksum
+-- Dependencies: 0036_backup_records_checksum
 
 -- WHY THIS EXISTS
 -- ---------------

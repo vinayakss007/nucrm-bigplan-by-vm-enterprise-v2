@@ -1,6 +1,6 @@
--- Migration ID: 0045_rls_fail_closed_policy
+-- Migration ID: 0039_rls_fail_closed_policy
 -- Name: Make RLS policies fail-closed when tenant context is missing
--- Dependencies: 0043_tenant_isolation_hardening
+-- Dependencies: 0037_tenant_isolation_hardening
 --
 -- Problem: current_setting('app.current_tenant')::uuid throws
 -- "invalid input syntax for type uuid" when the GUC is empty ('').

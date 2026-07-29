@@ -1,4 +1,4 @@
--- Rollback for 0043_tenant_isolation_hardening
+-- Rollback for 0037_tenant_isolation_hardening
 -- Kept in a separate file: drizzle's migrate() has no concept of a DOWN
 -- section and would execute these statements as part of the forward
 -- migration, undoing it immediately.

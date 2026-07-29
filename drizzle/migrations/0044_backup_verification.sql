@@ -1,6 +1,6 @@
--- Migration ID: 0051_backup_verification
+-- Migration ID: 0044_backup_verification
 -- Name: Track automated backup restore verification
--- Dependencies: 0050_audit_logs_retain_actor
+-- Dependencies: 0043_audit_logs_retain_actor
 
 -- Adds columns to backup_records so /api/cron/backup-verify can record whether
 -- the most recent backup was proved restorable — the difference between "a

@@ -1,4 +1,4 @@
--- Rollback for 0048_audit_log_immutability
+-- Rollback for 0042_audit_log_immutability
 BEGIN;
 
 DROP TRIGGER IF EXISTS audit_logs_no_update ON audit_logs;
