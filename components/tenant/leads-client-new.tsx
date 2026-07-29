@@ -402,6 +402,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
         setLeads(Array.isArray(data.data) ? data.data : []);
         setTotal(typeof data.total === 'number' ? data.total : 0);
         setOffset(newOffset);
+        setSelectedLeads(new Set());
         
         // Small delay before removing loading state for smoother UI
         setTimeout(() => {

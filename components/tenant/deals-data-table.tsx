@@ -77,11 +77,12 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
   const [saving, setSaving] = useState(false)
   const [selectAllMatching, setSelectAllMatching] = useState(false)
 
-  const loadData = useCallback(async (page = 0, filterOverride?: string) => {
+  const loadData = useCallback(async (page = 0, filterOverride?: string, pageSizeOverride?: number) => {
     setLoading(true)
+    const size = pageSizeOverride ?? pagination.pageSize
     const params = new URLSearchParams({
-      limit: String(pagination.pageSize),
-      offset: String(page * pagination.pageSize),
+      limit: String(size),
+      offset: String(page * size),
     })
     const q = filterOverride !== undefined ? filterOverride : globalFilter
     if (q) params.set('q', q)
@@ -93,6 +94,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
     } catch (error) {
       console.error('Failed to load deals:', error)
     }
+    setSelectAllMatching(false)
     setLoading(false)
   }, [pagination.pageSize, globalFilter])
 
@@ -105,7 +107,8 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
 
   const handlePageSizeChange = useCallback((size: number) => {
     setPagination(prev => ({ ...prev, pageSize: size, pageIndex: 0 }))
-  }, [])
+    loadData(0, undefined, size)
+  }, [loadData])
 
   const handleGlobalFilterChange = useCallback((filter: string) => {
     setGlobalFilter(filter)
