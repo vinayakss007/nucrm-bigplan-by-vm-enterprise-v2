@@ -59,13 +59,14 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
   const [saving, setSaving] = useState(false)
   const [selectAllMatching, setSelectAllMatching] = useState(false)
 
-  const loadData = useCallback(async (page = 0) => {
+  const loadData = useCallback(async (page = 0, filterOverride?: string) => {
     setLoading(true)
+    const q = filterOverride !== undefined ? filterOverride : globalFilter
     const params = new URLSearchParams({
       limit: String(pagination.pageSize),
       offset: String(page * pagination.pageSize),
     })
-    if (globalFilter) params.set('q', globalFilter)
+    if (q) params.set('q', q)
     try {
       const res = await fetch(`/api/tenant/companies?${params}`)
       const data = await res.json()
@@ -90,7 +91,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
 
   const handleGlobalFilterChange = useCallback((filter: string) => {
     setGlobalFilter(filter)
-    loadData(0)
+    loadData(0, filter)
   }, [loadData])
 
   const addCompany = async (e: React.FormEvent) => {
