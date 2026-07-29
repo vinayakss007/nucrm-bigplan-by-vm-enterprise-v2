@@ -40,6 +40,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Create a dedicated non-root user and group
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/public ./public
@@ -52,11 +56,14 @@ COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/worker.ts ./worker.ts
 
-USER node
+# Set ownership of app directory to the non-root user
+RUN chown -R nextjs:nodejs /app
+
+USER nextjs
 
 EXPOSE 3000
 
-# Memory-limited start — prevents OOM on 4GB machines
+# Memory-limited start - prevents OOM on 4GB machines
 ENV NODE_OPTIONS="--max-old-space-size=2048"
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1
