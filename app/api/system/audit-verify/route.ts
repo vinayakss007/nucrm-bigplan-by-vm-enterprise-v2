@@ -3,15 +3,24 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { auditLogs } from '@/drizzle/schema';
-import { asc } from 'drizzle-orm';
 import { verifyAuditChain } from '@/lib/audit';
 
 /**
  * GET /api/system/audit-verify
- * Verifies the integrity of the audit log hash chain.
- * Protected: superadmin only.
  *
- * Returns the chain verification result — any tampered or missing entries.
+ * Verifies the integrity of the audit log hash chain. Superadmin only.
+ *
+ * The chain is per-tenant, not global: logAudit() derives each entry's
+ * previousHash from the last entry *of the same tenant*
+ * (getPreviousHash(tenantId) in lib/audit.ts). Verification therefore has to be
+ * done one tenant at a time — walking all tenants' rows in a single
+ * created_at ordering would compare an entry against another tenant's hash and
+ * report tampering on every healthy multi-tenant install.
+ *
+ * Query params:
+ *   tenant_id  verify just this tenant; omit to verify every tenant that has
+ *              audit rows
+ *   limit      max entries per tenant (default 1000, capped at 10000)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -20,35 +29,50 @@ export async function GET(request: NextRequest) {
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { searchParams } = new URL(request.url);
-    const limit = Math.min(Number(searchParams.get('limit') || '1000'), 10000);
+    const requestedLimit = Number(searchParams.get('limit') ?? '1000');
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(Math.floor(requestedLimit), 1), 10000)
+      : 1000;
+    const tenantId = searchParams.get('tenant_id');
 
-    // Fetch audit entries ordered by creation (chain order)
-    const entries = await db
-      .select({
-        id: auditLogs.id,
-        hash: auditLogs.hash,
-        previousHash: auditLogs.previousHash,
-        tenantId: auditLogs.tenantId,
-        userId: auditLogs.userId,
-        action: auditLogs.action,
-        entityType: auditLogs.entityType,
-        entityId: auditLogs.entityId,
-        createdAt: auditLogs.createdAt,
-      })
-      .from(auditLogs)
-      .orderBy(asc(auditLogs.createdAt))
-      .limit(limit);
+    const tenantIds = tenantId
+      ? [tenantId]
+      : (
+          await db.selectDistinct({ tenantId: auditLogs.tenantId }).from(auditLogs)
+        ).map((row) => row.tenantId);
 
-    // Verify chain integrity
-    const result = verifyAuditChain(entries);
+    // Sequential rather than Promise.all: each verifyAuditChain call pulls up to
+    // `limit` rows, so fanning out across every tenant at once could pin the
+    // pool on a large install.
+    const tenants: Array<{
+      tenant_id: string;
+      chain_valid: boolean;
+      total_checked: number;
+      broken_at_index: number | null;
+      broken_entry_id: string | null;
+      details: string;
+    }> = [];
+
+    for (const id of tenantIds) {
+      const result = await verifyAuditChain(id, limit);
+      tenants.push({
+        tenant_id: id,
+        chain_valid: result.valid,
+        total_checked: result.totalChecked,
+        broken_at_index: result.brokenAtIndex,
+        broken_entry_id: result.brokenEntryId,
+        details: result.details,
+      });
+    }
 
     return NextResponse.json({
       data: {
-        total_entries: entries.length,
-        chain_valid: result.valid,
-        broken_links: result.brokenLinks || [],
-        first_entry_at: entries[0]?.createdAt ?? null,
-        last_entry_at: entries[entries.length - 1]?.createdAt ?? null,
+        chain_valid: tenants.every((t) => t.chain_valid),
+        tenants_checked: tenants.length,
+        total_entries_checked: tenants.reduce((sum, t) => sum + t.total_checked, 0),
+        broken_tenants: tenants.filter((t) => !t.chain_valid).map((t) => t.tenant_id),
+        tenants,
+        limit_per_tenant: limit,
         verified_at: new Date().toISOString(),
       },
     });
