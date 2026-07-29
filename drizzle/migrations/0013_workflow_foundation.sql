@@ -145,3 +145,29 @@ COMMENT ON COLUMN tenant_ai_credentials.encrypted_api_key IS
   'AES-GCM encrypted key. Never store plaintext. Decrypted by lib/crypto/secrets.ts inside the gateway only.';
 COMMENT ON COLUMN tenant_ai_credentials.fallback_chain IS
   'JSON array of provider_keys in priority order. Used by the gateway on transient failures.';
+
+-- DOWN
+DROP INDEX IF EXISTS uniq_tenant_ai_credential_active;
+DROP INDEX IF EXISTS idx_tenant_ai_credentials_active;
+DROP INDEX IF EXISTS idx_tenant_ai_credentials_metadata_g;
+DROP INDEX IF EXISTS idx_tenant_ai_credentials_tenant_status;
+DROP INDEX IF EXISTS idx_tenant_ai_credentials_provider;
+DROP INDEX IF EXISTS idx_tenant_ai_credentials_tenant;
+DROP TABLE IF EXISTS tenant_ai_credentials CASCADE;
+DROP INDEX IF EXISTS idx_ai_providers_active;
+DROP INDEX IF EXISTS idx_ai_providers_metadata_g;
+DROP INDEX IF EXISTS idx_ai_providers_enabled;
+DROP INDEX IF EXISTS uniq_ai_providers_provider_key;
+DROP TABLE IF EXISTS ai_providers CASCADE;
+DROP INDEX IF EXISTS idx_lead_offers_active;
+DROP INDEX IF EXISTS idx_lead_offers_metadata_g;
+DROP INDEX IF EXISTS idx_lead_offers_tenant_status;
+DROP INDEX IF EXISTS idx_lead_offers_lead;
+DROP INDEX IF EXISTS idx_lead_offers_tenant;
+DROP TABLE IF EXISTS lead_offers CASCADE;
+DROP INDEX IF EXISTS idx_leads_tenant_product;
+DROP INDEX IF EXISTS idx_leads_tenant_oid;
+DROP INDEX IF EXISTS idx_leads_contact;
+ALTER TABLE leads DROP COLUMN IF EXISTS product_id;
+ALTER TABLE leads DROP COLUMN IF EXISTS lead_oid;
+ALTER TABLE leads DROP COLUMN IF EXISTS contact_id;

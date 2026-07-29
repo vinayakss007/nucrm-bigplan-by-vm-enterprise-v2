@@ -45,3 +45,11 @@ CREATE INDEX IF NOT EXISTS idx_documents_uploader
 
 COMMENT ON TABLE documents IS
   'Workspace file attachments. Bytes live in S3/R2 at storage_key.';
+
+-- DOWN
+DROP INDEX IF EXISTS idx_documents_uploader;
+DROP INDEX IF EXISTS idx_documents_link;
+DROP INDEX IF EXISTS idx_documents_metadata_g;
+DROP INDEX IF EXISTS idx_documents_active;
+DROP INDEX IF EXISTS idx_documents_tenant;
+DROP TABLE IF EXISTS documents CASCADE;
