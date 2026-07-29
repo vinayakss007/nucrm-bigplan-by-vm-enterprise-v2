@@ -10,6 +10,7 @@ import { spawn } from 'child_process';
 import { downloadFromS3, checkFileExists, deleteFile } from '@/lib/restore/runtime-fs';
 import { logError } from '@/lib/errors-server';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 /**
  * Safely run pg_restore with input validation.
@@ -103,6 +104,10 @@ export async function POST(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
+
+    // Rate limit: max 1 restore per hour
+    const limited = await rateLimitMutating(request, 'restore', 'post');
+    if (limited) return limited;
 
     const body = await readJsonBody(request);
     const validated = validateBody(restoreSchema, body);

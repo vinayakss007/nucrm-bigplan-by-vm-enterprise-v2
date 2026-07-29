@@ -7,8 +7,13 @@ import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { verifyPassword } from '@/lib/auth/session';
 
-const schema = z.object({ targetUserId: z.string().min(1) });
+const schema = z.object({
+  targetUserId: z.string().min(1),
+  current_password: z.string().min(1, 'Password required for verification'),
+  confirm_target_email: z.string().email('Must confirm target email'),
+});
 
 /**
  * POST /api/superadmin/transfer-admin
@@ -26,8 +31,19 @@ export async function POST(request: NextRequest) {
     const body = await readJsonBody(request);
     const validated = validateBody(schema, body);
     if (validated instanceof NextResponse) return validated;
-    const { targetUserId } = validated.data;
+    const { targetUserId, current_password, confirm_target_email } = validated.data;
     if (targetUserId === ctx.userId) return NextResponse.json({ error: 'Cannot transfer to yourself' }, { status: 400 });
+
+    // Re-authenticate caller with password
+    const [caller] = await db
+      .select({ passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, ctx.userId))
+      .limit(1);
+
+    if (!caller?.passwordHash || !await verifyPassword(current_password, caller.passwordHash)) {
+      return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
+    }
 
     // Verify target user exists
     const [target] = await db
@@ -37,6 +53,11 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (!target) return NextResponse.json({ error: 'Target user not found' }, { status: 404 });
+
+    // Verify confirmed email matches target
+    if (confirm_target_email.toLowerCase() !== target.email.toLowerCase()) {
+      return NextResponse.json({ error: 'Confirmed email does not match target user' }, { status: 400 });
+    }
 
     // Transfer: make target super admin, demote caller
     await db.transaction(async (tx) => {
@@ -51,7 +72,7 @@ export async function POST(request: NextRequest) {
         .where(eq(users.id, ctx.userId));
     });
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'role.updated',
