@@ -1,0 +1,32 @@
+{
+  "project_type": "Next.js 16 App Router marketing site with dark cinematic theme",
+  "language": "TypeScript + React 19",
+  "build_system": "npm scripts with Next.js build (NODE_OPTIONS='--max-old-space-size=4096' next build)",
+  "test_framework": "Vitest for unit tests, Playwright for E2E",
+  "build_command": "export NVM_DIR='/root/.nvm' && . \"$NVM_DIR/nvm.sh\" && cd /projects/sandbox/nucrm-bigplan-by-vm-enterprise-v2 && npx next build",
+  "test_command": "export NVM_DIR='/root/.nvm' && . \"$NVM_DIR/nvm.sh\" && cd /projects/sandbox/nucrm-bigplan-by-vm-enterprise-v2 && npx tsc --noEmit --pretty",
+  "verification_instructions": "1. Run typecheck (npx tsc --noEmit), 2. Run next build to confirm compilation, 3. Verify /docs paths are in proxy.ts PUBLIC_PATHS",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "export NVM_DIR='/root/.nvm' && . \"$NVM_DIR/nvm.sh\" && cd /projects/sandbox/nucrm-bigplan-by-vm-enterprise-v2 && npm install",
+  "environment_constraints": "OPEN_INTERNET - can install packages. Node 22.23.1 via nvm. html{font-size:125%} requires px-based typography. No framer-motion. Lucide icons. No middleware.ts - uses proxy.ts with PUBLIC_PATHS allowlist. NuCRM is closed-source - docs must NEVER mention internal stack (Next.js, React, PostgreSQL, Drizzle, Tailwind, Vercel, Redis, TypeScript).",
+  "contribution_requirements": "Dark cinematic marketing theme using mk-* CSS classes. px-based typography (immune to 125% root font). Use existing marketing component patterns: Container, Section, PageHero, Icon, Reveal from components/marketing/ui.tsx.",
+  "key_patterns": "Marketing pages live under app/(marketing)/ route group. Marketing CSS in app/(marketing)/marketing.css uses mk-* class prefixes with custom props (--mk-bg, --mk-text, etc). Legal pages use LegalShell component with sticky sidebar nav + mk-prose body. The site-header uses lib/marketing/site.ts NAV array for mega-menus. Footer uses FOOTER array from same file. Route access controlled by proxy.ts PUBLIC_PATHS/isPublic(). Tailwind content already includes **/*.mdx glob.",
+  "relevant_files": [
+    "app/(marketing)/layout.tsx",
+    "app/(marketing)/marketing.css",
+    "components/marketing/ui.tsx",
+    "components/marketing/legal-shell.tsx",
+    "components/marketing/site-header.tsx",
+    "components/marketing/site-footer.tsx",
+    "lib/marketing/site.ts",
+    "proxy.ts",
+    "next.config.mjs",
+    "tailwind.config.ts",
+    "tsconfig.json",
+    "package.json",
+    "app/docs/page.tsx",
+    "lib/modules/registry.ts",
+    "lib/modules/industry-templates.ts"
+  ],
+  "directory_structure": "app/(marketing)/ = public marketing site with dark theme. Features, solutions, compare, pricing, modules, integrations, security, legal, contact all have pages. components/marketing/ = shared marketing components (ui.tsx, legal-shell.tsx, site-header.tsx, mocks.tsx, reveal.tsx, icon.tsx, logo.tsx). lib/marketing/ = data files (site.ts, features.ts, modules.ts, solutions.ts). app/docs/page.tsx = EXISTING operator guide (needs to be removed/moved - leaks tech stack info)."
+}

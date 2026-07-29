@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-001",
+  "type": "chore",
+  "description": "Install MDX pipeline dependencies and configure Next.js for MDX rendering. Move/remove the existing /docs operator guide that leaks internal tech stack info. Update proxy.ts to allow /docs paths publicly.",
+  "status": "in_progress",
+  "steps": [
+    "Install packages: @next/mdx @mdx-js/react @mdx-js/loader rehype-slug rehype-autolink-headings remark-gfm rehype-pretty-code shiki (for code highlighting in docs). Run: npm install @next/mdx @mdx-js/react @mdx-js/loader rehype-slug rehype-autolink-headings remark-gfm rehype-pretty-code shiki",
+    "Update next.config.mjs to wrap the config with withMDX from @next/mdx. Configure MDX to use rehype-slug, rehype-autolink-headings, remark-gfm, rehype-pretty-code. Set pageExtensions to include 'mdx'. Keep existing Sentry and bundle-analyzer wrappers intact.",
+    "Delete app/docs/page.tsx entirely (it imports DocsClient which leaks PostgreSQL/Vercel info). The operator guide content belongs behind auth at /tenant/docs/ops or similar - but for now just remove the public /docs/page.tsx.",
+    "In proxy.ts, the PUBLIC_PATHS array already has '/docs' which works as a prefix match since isPublic() checks pathname.startsWith(p + '/'). Verify this and confirm /docs/anything will pass through. No change needed if isPublic already handles prefix matching.",
+    "Create app/(marketing)/docs/ directory for the public documentation that will live under the marketing layout.",
+    "Add a TypeScript declaration file at types/mdx.d.ts: declare module '*.mdx' { import type { ComponentType } from 'react'; const component: ComponentType; export default component; } - OR verify if @mdx-js/react already provides types."
+  ],
+  "acceptance_criteria": [
+    "npm install completes without errors for the MDX packages",
+    "next.config.mjs includes MDX configuration with rehype-slug, remark-gfm",
+    "app/docs/page.tsx no longer exists (operator guide removed from public)",
+    "proxy.ts PUBLIC_PATHS allows /docs and all sub-paths",
+    "app/(marketing)/docs/ directory exists ready for documentation pages",
+    "TypeScript can compile .mdx files without errors (pageExtensions includes mdx)"
+  ],
+  "verification": [
+    "Run typecheck: export NVM_DIR='/root/.nvm' && . \"$NVM_DIR/nvm.sh\" && cd /projects/sandbox/nucrm-bigplan-by-vm-enterprise-v2 && npx tsc --noEmit --pretty"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

@@ -1,0 +1,30 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Write the first 30 documentation articles as MDX files covering the most critical user-facing topics: Getting Started (8), Contacts & Companies (8), Deals & Pipeline (7), and Communication basics (7). All content must be written from the end-user perspective describing UI workflows and capabilities. NEVER reference internal tech stack (Next.js, React, PostgreSQL, Drizzle, Tailwind, Vercel, Redis, TypeScript).",
+  "status": "pending",
+  "steps": [
+    "Create app/(marketing)/docs/[...slug]/page.tsx - the catch-all route that dynamically imports and renders MDX content. It should: (a) receive the slug segments, (b) look up metadata from the docs tree, (c) dynamically import the MDX file, (d) render it wrapped in the mdx-components providers, (e) generate metadata (title, description) for SEO, (f) render DocsTableOfContents, DocsBreadcrumb, DocsPrevNext around the content.",
+    "Create content/docs/ directory at project root for all MDX article files organized by section folder.",
+    "Write Getting Started section (8 articles) in content/docs/getting-started/: (1) introduction.mdx - what NuCRM is, who it's for, key capabilities overview. (2) creating-account.mdx - signup flow, workspace creation, first login. (3) workspace-setup.mdx - branding, timezone, currency, team invite. (4) importing-data.mdx - CSV import, field mapping, handling duplicates. (5) navigation-overview.mdx - sidebar, command palette (Cmd+K), keyboard shortcuts, dark mode. (6) first-contact.mdx - creating a contact, adding notes, timeline. (7) first-deal.mdx - creating a deal, moving through pipeline stages. (8) invite-team.mdx - inviting users, assigning roles, understanding permissions.",
+    "Write Contacts & Companies section (8 articles) in content/docs/contacts/: (1) managing-contacts.mdx - list view, filters, saved views, bulk ops. (2) contact-details.mdx - profile, timeline, linked entities, custom fields. (3) companies.mdx - creating companies, linking contacts, hierarchy. (4) segments.mdx - dynamic segments, filter rules, segment-based actions. (5) lifecycle-stages.mdx - lead/contact/customer stages, automatic transitions. (6) lead-scoring.mdx - BANT scoring, AI scoring, custom rules. (7) duplicate-detection.mdx - merge detection, manual merge, bulk dedup. (8) import-export.mdx - CSV import with mapping, export options, scheduling.",
+    "Write Deals & Pipeline section (7 articles) in content/docs/deals/: (1) pipeline-overview.mdx - kanban view, drag-drop, multiple pipelines. (2) creating-deals.mdx - deal creation, required fields, linking to contacts. (3) deal-stages.mdx - customizing stages, win probability, stage automation. (4) forecasting.mdx - revenue forecasting, weighted pipeline, reports. (5) multi-currency.mdx - currency settings, exchange rates, deal values. (6) deal-activities.mdx - logging calls, meetings, notes on deals. (7) won-lost-analysis.mdx - win/loss reasons, performance metrics.",
+    "Write Communication basics section (7 articles) in content/docs/communication/: (1) email-overview.mdx - sending email from CRM, templates, tracking. (2) email-sync.mdx - Gmail/Outlook 2-way sync setup, auto-logging. (3) email-templates.mdx - creating templates, variables, personalization. (4) email-tracking.mdx - open tracking, click tracking, analytics. (5) whatsapp.mdx - WhatsApp Business setup, templates, campaigns. (6) sms.mdx - SMS sending, templates, automation triggers. (7) notifications.mdx - in-app notifications, email digests, real-time alerts.",
+    "Each MDX article should be 400-800 words of genuine procedural content describing how the user performs actions in the UI. Use Markdown headings (## for major sections, ### for sub-sections), ordered lists for step-by-step procedures, unordered lists for feature enumerations, callout components for tips/warnings, and tables where appropriate. Include realistic examples (e.g., example contact fields, example pipeline stages)."
+  ],
+  "acceptance_criteria": [
+    "app/(marketing)/docs/[...slug]/page.tsx correctly resolves slugs to MDX content",
+    "30 MDX files exist in content/docs/ across 4 section folders",
+    "Each article is 400-800 words of genuine procedural end-user documentation",
+    "No article references internal tech stack (Next.js, React, PostgreSQL, etc.)",
+    "Articles use callout components, step lists, and proper heading hierarchy",
+    "TypeScript compiles without errors",
+    "Each article has frontmatter or metadata with title and description"
+  ],
+  "verification": [
+    "Run typecheck: export NVM_DIR='/root/.nvm' && . \"$NVM_DIR/nvm.sh\" && cd /projects/sandbox/nucrm-bigplan-by-vm-enterprise-v2 && npx tsc --noEmit --pretty",
+    "Verify no tech stack leaks: grep -r 'Next.js\\|PostgreSQL\\|Drizzle\\|Tailwind\\|Vercel\\|Redis\\|TypeScript\\|React' content/docs/ (should return nothing)"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

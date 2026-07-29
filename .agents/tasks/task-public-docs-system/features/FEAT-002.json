@@ -1,0 +1,33 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Build the docs layout infrastructure: sidebar navigation with collapsible sections, breadcrumbs, prev/next navigation, table of contents per article, and the docs shell component. This creates the reusable framework for all documentation pages.",
+  "status": "pending",
+  "steps": [
+    "Create lib/marketing/docs.ts - the complete documentation tree structure. Define type DocNode = { slug: string; title: string; section: string; children?: DocNode[] }. Export the full table of contents hierarchy covering all ~150 planned articles organized into sections: Getting Started (8 articles), Contacts & Companies (12), Deals & Pipeline (10), Tasks & Calendar (8), Communication (12), Automation (10), Sales & Billing (12), Support & Helpdesk (10), Analytics & Reports (8), AI Features (8), Security & Access (10), Platform & Settings (12), Integrations (10), Modules & Add-ons (8), Industry Guides (13), API & Developer (9). Export helper functions: getDocBySlug(slug), getSection(sectionSlug), getPrevNext(slug), getBreadcrumbs(slug), getAllDocs(), getSections().",
+    "Create app/(marketing)/docs/layout.tsx - a nested layout that renders the sidebar on the left and content area on the right. Use the same mk-root dark theme from the parent marketing layout. Add a responsive sidebar that collapses to a drawer on mobile. The sidebar should show all sections with expand/collapse. Active article should be highlighted. Use useState for collapse state. Top of sidebar should have a search input (placeholder for now). Layout grid: sidebar 280px fixed on desktop, content area flexible with max-width ~820px for prose readability.",
+    "Create components/marketing/docs/ directory with these components: (a) DocsSidebar.tsx - collapsible section tree with active state highlighting using usePathname(). Each section is a disclosure that expands to show child links. (b) DocsTableOfContents.tsx - right-side sticky TOC that reads headings from the page using IntersectionObserver to highlight the current section. (c) DocsBreadcrumb.tsx - breadcrumb trail using getBreadcrumbs(). (d) DocsPrevNext.tsx - bottom navigation showing prev/next article using getPrevNext(). (e) DocsSearch.tsx - client-side search component that filters the doc tree by title/description match (simple substring for now, can upgrade to fuzzy later).",
+    "Create components/marketing/docs/mdx-components.tsx - custom MDX component overrides that apply the mk-prose styling plus docs-specific enhancements: headings with anchor links (using rehype-slug output), code blocks with copy button, callout/admonition components (Tip, Warning, Note, Info), step-by-step components, tables with horizontal scroll wrapper, images with caption. All typography px-based to match marketing.css patterns.",
+    "Create app/(marketing)/docs/page.tsx - the docs landing/index page showing all sections as cards with article counts and descriptions. Hero section with search bar prominently displayed. Grid of section cards that link to the first article in each section.",
+    "Add docs-specific CSS classes to app/(marketing)/marketing.css OR create a new app/(marketing)/docs/docs.css imported by the docs layout. Styles needed: sidebar active state, TOC highlight, callout boxes (tip/warning/note/info with left border accent colors), code block styling, step indicators, search results dropdown.",
+    "Update lib/marketing/site.ts: Add 'Docs' to the NAV array (either as a top-level link { label: 'Docs', href: '/docs' } or under the Company/Resources column). Also add to FOOTER links."
+  ],
+  "acceptance_criteria": [
+    "lib/marketing/docs.ts exports the full doc tree with ~150 article entries organized into 16 sections",
+    "app/(marketing)/docs/layout.tsx renders sidebar + content area with responsive behavior",
+    "DocsSidebar shows all sections with expand/collapse and highlights active page",
+    "DocsTableOfContents reads headings and uses IntersectionObserver for scroll highlighting",
+    "DocsBreadcrumb shows path from Docs root to current article",
+    "DocsPrevNext shows previous and next article links at page bottom",
+    "DocsSearch filters doc tree by title match",
+    "mdx-components.tsx provides styled overrides for all MDX elements",
+    "Docs landing page at /docs shows section overview cards",
+    "NAV in site.ts includes Docs link",
+    "TypeScript compiles without errors"
+  ],
+  "verification": [
+    "Run typecheck: export NVM_DIR='/root/.nvm' && . \"$NVM_DIR/nvm.sh\" && cd /projects/sandbox/nucrm-bigplan-by-vm-enterprise-v2 && npx tsc --noEmit --pretty"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

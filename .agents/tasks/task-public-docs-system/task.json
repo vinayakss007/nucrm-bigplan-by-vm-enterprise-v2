@@ -1,0 +1,7 @@
+{
+  "task_id": "task-public-docs-system",
+  "task_description": "Build a comprehensive public documentation system for NuCRM living at /docs under the marketing site layout. Includes MDX pipeline, sidebar navigation with collapsible sections, breadcrumbs, prev/next navigation, table of contents, client-side search, and the first 30 articles covering Getting Started, Contacts, Deals, and Communication.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004"],
+  "blocked_reason": null
+}

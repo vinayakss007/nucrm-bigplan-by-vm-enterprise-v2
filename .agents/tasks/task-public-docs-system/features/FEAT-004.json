@@ -1,0 +1,24 @@
+{
+  "id": "FEAT-004",
+  "type": "feat",
+  "description": "Implement client-side search for the documentation system. Add full-text search across all doc titles, descriptions, and content headings. Build a search index at build time from the docs tree metadata.",
+  "status": "pending",
+  "steps": [
+    "Enhance components/marketing/docs/DocsSearch.tsx to implement a proper client-side search: (a) Import the full docs tree from lib/marketing/docs.ts. (b) Build a search index from titles, descriptions, section names, and keywords. (c) Implement fuzzy substring matching with result ranking (exact title match > title contains > description contains). (d) Show results in a dropdown with section labels, article titles, and brief descriptions. (e) Keyboard navigation (arrow keys, Enter to navigate, Escape to close). (f) Debounce input to 150ms.",
+    "Add a search overlay/modal that can be triggered from the docs layout header area (beyond just the sidebar search). Add Cmd+K or Ctrl+K shortcut specifically within docs pages to open search.",
+    "Style the search results dropdown/modal with mk-* dark theme classes: dark background, border, result hover states matching the violet accent color scheme."
+  ],
+  "acceptance_criteria": [
+    "Search input in docs sidebar filters articles by title/description",
+    "Results show with section context and navigate to correct article on click",
+    "Keyboard navigation works (arrows + Enter + Escape)",
+    "Search is debounced and responsive",
+    "Styling matches the dark cinematic docs theme",
+    "TypeScript compiles without errors"
+  ],
+  "verification": [
+    "Run typecheck: export NVM_DIR='/root/.nvm' && . \"$NVM_DIR/nvm.sh\" && cd /projects/sandbox/nucrm-bigplan-by-vm-enterprise-v2 && npx tsc --noEmit --pretty"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
