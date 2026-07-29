@@ -288,7 +288,8 @@ export default function SuperAdminTenantsPage() {
   const activate  = async (id:string) => { const res=await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,status:'active'})}); if(res.ok){toast.success('Activated');load();}else{const d=await res.json();toast.error(d.error||'Failed');} };
   const grantLifetime = async (id:string,name:string) => {
     await confirmThen(`Grant lifetime access to "${name}"? This sets Pro plan + active + lifetime billing.`, async () => {
-      await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,plan_id:'pro',status:'active',billing_type:'lifetime'})});
+      const res = await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,plan_id:'pro',status:'active',billing_type:'lifetime'})});
+      if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error || 'Failed to grant lifetime'); return; }
       toast.success('Lifetime access granted'); load();
     });
   };
@@ -297,7 +298,8 @@ export default function SuperAdminTenantsPage() {
     const tenant = tenants.find(t=>t.id===id);
     const base = new Date(Math.max(Date.now(), new Date(tenant?.trial_ends_at||Date.now()).getTime()));
     base.setDate(base.getDate() + parseInt(days));
-    await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,trial_ends_at:base.toISOString(),status:'trialing'})});
+    const res = await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,trial_ends_at:base.toISOString(),status:'trialing'})});
+    if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error || 'Failed to extend trial'); return; }
     toast.success(`Trial extended ${days} days`); load();
   };
   const hardDelete = async (id:string,name:string) => {
@@ -545,7 +547,6 @@ export default function SuperAdminTenantsPage() {
         </table>
       </div>
 
-      {editTenant && <EditModal tenant={editTenant} onSave={()=>{setEditTenant(null);load();}} onClose={()=>setEditTenant(null)} />}
       {modulesTenant && <ModulesModal tenant={modulesTenant} onClose={()=>setModulesTenant(null)} _onSaved={()=>{setModulesTenant(null);load();}} />}
       {featuresTenant && <TenantFeaturesPanel tenantId={featuresTenant.id} tenantName={featuresTenant.name} plan={featuresTenant.plan_id} onClose={() => setFeaturesTenant(null)} />}
     </div>

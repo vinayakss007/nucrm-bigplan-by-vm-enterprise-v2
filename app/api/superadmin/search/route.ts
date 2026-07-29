@@ -54,7 +54,17 @@ export async function GET(request: NextRequest) {
     ]);
 
     const results = [...tenantResults, ...userResults]
-      .sort(() => Math.random() - 0.5)
+      .sort((a, b) => {
+        const aName = ((a as Record<string, unknown>).name ?? (a as Record<string, unknown>).full_name ?? '') as string;
+        const bName = ((b as Record<string, unknown>).name ?? (b as Record<string, unknown>).full_name ?? '') as string;
+        const qLower = q.toLowerCase();
+        const aExact = aName.toLowerCase() === qLower ? 0 : aName.toLowerCase().startsWith(qLower) ? 1 : 2;
+        const bExact = bName.toLowerCase() === qLower ? 0 : bName.toLowerCase().startsWith(qLower) ? 1 : 2;
+        if (aExact !== bExact) return aExact - bExact;
+        const aDate = (a as Record<string, unknown>).created_at as string | undefined;
+        const bDate = (b as Record<string, unknown>).created_at as string | undefined;
+        return (bDate ? new Date(bDate).getTime() : 0) - (aDate ? new Date(aDate).getTime() : 0);
+      })
       .slice(0, limit);
 
     return NextResponse.json({ results });

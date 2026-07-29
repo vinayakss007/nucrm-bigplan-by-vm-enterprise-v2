@@ -41,6 +41,8 @@ interface Column {
 const COLUMNS: Column[] = [
   { id: 'pending', name: 'Pending', color: 'bg-slate-400' },
   { id: 'in_progress', name: 'In Progress', color: 'bg-blue-400' },
+  { id: 'on_hold', name: 'On Hold', color: 'bg-amber-400' },
+  { id: 'deferred', name: 'Deferred', color: 'bg-purple-400' },
   { id: 'completed', name: 'Completed', color: 'bg-emerald-400' },
   { id: 'cancelled', name: 'Cancelled', color: 'bg-red-400' },
 ];
@@ -227,12 +229,20 @@ export default function TasksKanbanPage() {
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground">Drag tasks between columns to update status</p>
         </div>
-        <Link
-          href="/tenant/tasks"
-          className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg hover:bg-accent text-xs sm:text-sm font-medium"
-        >
-          List View
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/tenant/tasks"
+            className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg hover:bg-accent text-xs sm:text-sm font-medium"
+          >
+            List View
+          </Link>
+          <Link
+            href="/tenant/tasks?create=1"
+            className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 text-xs sm:text-sm font-medium"
+          >
+            + New Task
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}
