@@ -5,6 +5,7 @@ import { eq, and } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { apiError } from '@/lib/api-error';
 
 export async function GET(
   request: NextRequest,
@@ -31,7 +32,7 @@ export async function GET(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[services/[id]/GET]', error);
-    return NextResponse.json({ error: 'Failed to fetch service' }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -91,7 +92,7 @@ export async function PATCH(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[services/[id]/PATCH]', error);
-    return NextResponse.json({ error: 'Failed to update service' }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -121,6 +122,6 @@ export async function DELETE(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('[services/[id]/DELETE]', error);
-    return NextResponse.json({ error: 'Failed to delete service' }, { status: 500 });
+    return apiError(error);
   }
 }
