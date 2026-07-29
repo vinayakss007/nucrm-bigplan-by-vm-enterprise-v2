@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "chore",
   "description": "Install MDX pipeline dependencies and configure Next.js for MDX rendering. Move/remove the existing /docs operator guide that leaks internal tech stack info. Update proxy.ts to allow /docs paths publicly.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Install packages: @next/mdx @mdx-js/react @mdx-js/loader rehype-slug rehype-autolink-headings remark-gfm rehype-pretty-code shiki (for code highlighting in docs). Run: npm install @next/mdx @mdx-js/react @mdx-js/loader rehype-slug rehype-autolink-headings remark-gfm rehype-pretty-code shiki",
     "Update next.config.mjs to wrap the config with withMDX from @next/mdx. Configure MDX to use rehype-slug, rehype-autolink-headings, remark-gfm, rehype-pretty-code. Set pageExtensions to include 'mdx'. Keep existing Sentry and bundle-analyzer wrappers intact.",
@@ -23,5 +23,5 @@
     "Run typecheck: export NVM_DIR='/root/.nvm' && . \"$NVM_DIR/nvm.sh\" && cd /projects/sandbox/nucrm-bigplan-by-vm-enterprise-v2 && npx tsc --noEmit --pretty"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All steps completed successfully. Needed to delete .next/types to clear stale type references from removed app/docs/page.tsx. Pre-commit hooks require nvm to be sourced (export NVM_DIR='/root/.nvm' && . \"$NVM_DIR/nvm.sh\"). TypeScript compiles cleanly after removing stale .next/types. The MDX wrapper is applied as the innermost wrapper before Sentry and bundle-analyzer."
 }

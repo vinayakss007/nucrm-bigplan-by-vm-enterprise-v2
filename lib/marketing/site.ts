@@ -202,9 +202,8 @@ export const NAV: NavGroup[] = [
       {
         heading: 'Resources',
         links: [
-          // Points at the public API overview, not /docs — that page is an
-          // operator install guide and discloses infrastructure detail.
-          { label: 'Developer API', href: '/integrations#api', desc: 'Endpoints, webhooks and the SDK', icon: 'BookOpen' },
+          { label: 'Docs', href: '/docs', desc: 'Guides, tutorials and reference', icon: 'BookOpen' },
+          { label: 'Developer API', href: '/integrations#api', desc: 'Endpoints, webhooks and the SDK', icon: 'Code2' },
           { label: 'Security', href: '/security', desc: 'How we protect your data', icon: 'ShieldCheck' },
           { label: 'FAQ', href: '/pricing#faq', desc: 'Answers to the common ones', icon: 'HelpCircle' },
         ],
@@ -274,6 +273,7 @@ export const FOOTER: { heading: string; links: NavLink[] }[] = [
       { label: 'About abetworks', href: '/abetworks' },
       { label: 'Contact sales', href: '/contact' },
       { label: 'Pricing', href: '/pricing' },
+      { label: 'Docs', href: '/docs' },
       { label: 'Module marketplace', href: '/modules' },
       { label: 'Integrations', href: '/integrations' },
       { label: 'Developer API', href: '/integrations#api' },

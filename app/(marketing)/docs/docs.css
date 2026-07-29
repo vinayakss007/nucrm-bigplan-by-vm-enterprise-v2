@@ -1,0 +1,111 @@
+/*
+ * Docs-specific styles layered on top of marketing.css.
+ * All sizing is px-based (immune to the 125% root font-size).
+ */
+
+/* ── Sidebar ────────────────────────────────────────────────────────── */
+
+.docs-sidebar-active {
+  background: rgba(139, 92, 246, 0.08);
+  color: #c4b5fd;
+}
+
+/* ── TOC highlight ──────────────────────────────────────────────────── */
+
+.docs-toc-active {
+  color: #c4b5fd;
+  font-weight: 500;
+}
+
+/* ── Callout boxes ──────────────────────────────────────────────────── */
+
+.docs-callout {
+  margin-bottom: 20px;
+  border-radius: 12px;
+  border-left-width: 4px;
+  padding: 16px 20px;
+}
+
+.docs-callout-tip {
+  border-color: rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.docs-callout-warning {
+  border-color: rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.docs-callout-note {
+  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.docs-callout-info {
+  border-color: rgba(139, 92, 246, 0.5);
+  background: rgba(139, 92, 246, 0.05);
+}
+
+/* ── Code blocks ────────────────────────────────────────────────────── */
+
+.docs-prose pre {
+  font-family: var(--font-jetbrains-mono), monospace;
+}
+
+.docs-prose pre code {
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+/* ── Step indicators ────────────────────────────────────────────────── */
+
+.docs-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  background: rgba(139, 92, 246, 0.1);
+  font-size: 12px;
+  font-weight: 700;
+  color: #c4b5fd;
+  flex-shrink: 0;
+}
+
+/* ── Search results ─────────────────────────────────────────────────── */
+
+.docs-search-results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 50;
+  margin-top: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #0d0d1a;
+  padding: 8px;
+  box-shadow: 0 20px 60px -12px rgba(0, 0, 0, 0.6);
+}
+
+/* ── Prose image captions ───────────────────────────────────────────── */
+
+.docs-prose figure {
+  margin-bottom: 20px;
+}
+
+.docs-prose figure img {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.docs-prose figcaption {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 13px;
+  color: #6b7488;
+}

@@ -2,7 +2,7 @@
   "id": "FEAT-002",
   "type": "feat",
   "description": "Build the docs layout infrastructure: sidebar navigation with collapsible sections, breadcrumbs, prev/next navigation, table of contents per article, and the docs shell component. This creates the reusable framework for all documentation pages.",
-  "status": "pending",
+  "status": "in_progress",
   "steps": [
     "Create lib/marketing/docs.ts - the complete documentation tree structure. Define type DocNode = { slug: string; title: string; section: string; children?: DocNode[] }. Export the full table of contents hierarchy covering all ~150 planned articles organized into sections: Getting Started (8 articles), Contacts & Companies (12), Deals & Pipeline (10), Tasks & Calendar (8), Communication (12), Automation (10), Sales & Billing (12), Support & Helpdesk (10), Analytics & Reports (8), AI Features (8), Security & Access (10), Platform & Settings (12), Integrations (10), Modules & Add-ons (8), Industry Guides (13), API & Developer (9). Export helper functions: getDocBySlug(slug), getSection(sectionSlug), getPrevNext(slug), getBreadcrumbs(slug), getAllDocs(), getSections().",
     "Create app/(marketing)/docs/layout.tsx - a nested layout that renders the sidebar on the left and content area on the right. Use the same mk-root dark theme from the parent marketing layout. Add a responsive sidebar that collapses to a drawer on mobile. The sidebar should show all sections with expand/collapse. Active article should be highlighted. Use useState for collapse state. Top of sidebar should have a search input (placeholder for now). Layout grid: sidebar 280px fixed on desktop, content area flexible with max-width ~820px for prose readability.",
