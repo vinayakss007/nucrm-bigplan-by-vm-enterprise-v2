@@ -44,8 +44,13 @@ const MIGRATIONS_DIR = path.join(REPO_ROOT, 'drizzle', 'migrations');
 const TAG_DOWN_FILE = '0034_add_form_views_count';
 /** Migration with an inline `-- DOWN` / `-- END DOWN` section. */
 const TAG_INLINE = '0036_backup_records_checksum';
-/** Migration with no rollback SQL at all. */
-const TAG_NO_ROLLBACK = '0000_init';
+// There is deliberately no TAG_NO_ROLLBACK constant pointing at a real
+// migration. This file used to pin '0000_init' as "the migration with no
+// rollback", and #829 (rollback scripts for 16 migrations) gave 0000_init a
+// rollback, breaking five tests at once. Since #640/#829 exist precisely to
+// *grow* rollback coverage, any real migration named here is a test that fails
+// on progress — and once coverage reaches 100% no such migration exists at all.
+// The rollback-less cases therefore run against makeScenarioDir() below.
 
 const tempDirs: string[] = [];
 
@@ -53,6 +58,57 @@ function makeFixtureDir(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rollback-fixture-'));
   fs.mkdirSync(path.join(dir, 'meta'), { recursive: true });
   tempDirs.push(dir);
+  return dir;
+}
+
+/** Tags inside a scenario directory, oldest to newest. */
+const SCENARIO = {
+  downFile: '0000_with_down_file',
+  inline: '0001_with_inline',
+  noRollback: '0002_no_rollback',
+} as const;
+
+/**
+ * A self-contained migrations directory holding one migration of each kind:
+ * a `.down.sql` file, an inline `-- DOWN` section, and no rollback at all.
+ *
+ * Using a fixture keeps the rollback-less assertions independent of how much
+ * rollback coverage the real repo happens to have.
+ */
+function makeScenarioDir(): string {
+  const dir = makeFixtureDir();
+  const write = (name: string, body: string) =>
+    fs.writeFileSync(path.join(dir, name), body);
+
+  write(`${SCENARIO.downFile}.sql`, 'CREATE TABLE fixture_a (id int);');
+  write(`${SCENARIO.downFile}.down.sql`, 'DROP TABLE fixture_a;');
+  write(
+    `${SCENARIO.inline}.sql`,
+    [
+      'ALTER TABLE fixture_a ADD COLUMN b int;',
+      '-- DOWN',
+      'ALTER TABLE fixture_a DROP COLUMN b;',
+      '-- END DOWN',
+    ].join('\n'),
+  );
+  write(`${SCENARIO.noRollback}.sql`, 'CREATE TABLE fixture_c (id int);');
+
+  fs.writeFileSync(
+    path.join(dir, 'meta', '_journal.json'),
+    JSON.stringify(
+      {
+        version: '7',
+        dialect: 'postgresql',
+        entries: [
+          { idx: 0, version: '7', when: 1700000000000, tag: SCENARIO.downFile, breakpoints: true },
+          { idx: 1, version: '7', when: 1700000001000, tag: SCENARIO.inline, breakpoints: true },
+          { idx: 2, version: '7', when: 1700000002000, tag: SCENARIO.noRollback, breakpoints: true },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
   return dir;
 }
 
@@ -69,8 +125,8 @@ function makeFakeClient() {
 }
 
 /** Rows as stored by the recovery path in scripts/migrate.ts (hash = tag). */
-function stateRowsFromJournal(tags: string[]) {
-  const journal = readJournal(MIGRATIONS_DIR);
+function stateRowsFromJournal(tags: string[], migrationsDir: string = MIGRATIONS_DIR) {
+  const journal = readJournal(migrationsDir);
   return tags.map((tag, i) => {
     const entry = journal.find((e) => e.tag === tag);
     return { id: i + 1, hash: tag, created_at: String(entry?.when ?? 1700000000000 + i) };
@@ -132,7 +188,8 @@ describe('parseRollbackSql', () => {
   });
 
   it('returns null when no rollback exists', async () => {
-    expect(await parseRollbackSql(TAG_NO_ROLLBACK, MIGRATIONS_DIR)).toBeNull();
+    const dir = makeScenarioDir();
+    expect(await parseRollbackSql(SCENARIO.noRollback, dir)).toBeNull();
     expect(await parseRollbackSql('9998_does_not_exist', MIGRATIONS_DIR)).toBeNull();
   });
 
@@ -195,13 +252,26 @@ describe('verifyRollbackCoverage', () => {
       expect(coverage.withRollback).toContain(tag);
     }
 
-    // And the gap is real: most migrations still have none.
-    expect(coverage.withoutRollback).toContain(TAG_NO_ROLLBACK);
-    expect(coverage.missing).toBeGreaterThan(0);
+    // Note: no assertion that some specific migration is *un*covered, and none
+    // that `missing > 0`. Coverage is meant to keep rising, so both would be
+    // assertions against progress. The covered/uncovered split is verified
+    // exactly against a fixture in the test below instead.
+    expect(coverage.missing).toBeGreaterThanOrEqual(0);
     expect(coverage.coveragePercent).toBeCloseTo(
       Math.round((coverage.covered / coverage.total) * 1000) / 10,
       5,
     );
+  });
+
+  it('splits covered from uncovered migrations', () => {
+    const coverage = verifyRollbackCoverage(makeScenarioDir());
+
+    expect(coverage.total).toBe(3);
+    expect(coverage.covered).toBe(2);
+    expect(coverage.missing).toBe(1);
+    expect([...coverage.withRollback].sort()).toEqual([SCENARIO.downFile, SCENARIO.inline]);
+    expect(coverage.withoutRollback).toEqual([SCENARIO.noRollback]);
+    expect(coverage.coveragePercent).toBeCloseTo(66.7, 1);
   });
 
   it('records the source convention for each covered migration', () => {
@@ -209,21 +279,37 @@ describe('verifyRollbackCoverage', () => {
     const byTag = new Map(coverage.entries.map((e) => [e.tag, e]));
     expect(byTag.get('0034_add_form_views_count')?.source).toBe('down-file');
     expect(byTag.get('0036_backup_records_checksum')?.source).toBe('inline');
-    expect(byTag.get(TAG_NO_ROLLBACK)?.source).toBeNull();
+
+    // A migration with neither convention reports a null source.
+    const fixture = verifyRollbackCoverage(makeScenarioDir());
+    const fixtureByTag = new Map(fixture.entries.map((e) => [e.tag, e]));
+    expect(fixtureByTag.get(SCENARIO.downFile)?.source).toBe('down-file');
+    expect(fixtureByTag.get(SCENARIO.inline)?.source).toBe('inline');
+    expect(fixtureByTag.get(SCENARIO.noRollback)?.source).toBeNull();
   });
 });
 
 describe('listAppliedMigrations', () => {
   it('returns applied migrations newest-first with rollback availability', async () => {
+    const dir = makeScenarioDir();
     mockQuery.mockResolvedValue({
-      rows: stateRowsFromJournal([TAG_NO_ROLLBACK, TAG_DOWN_FILE, TAG_INLINE]),
+      rows: stateRowsFromJournal(
+        [SCENARIO.downFile, SCENARIO.inline, SCENARIO.noRollback],
+        dir,
+      ),
     });
 
-    const applied = await listAppliedMigrations(MIGRATIONS_DIR);
+    const applied = await listAppliedMigrations(dir);
 
-    expect(applied.map((m) => m.tag)).toEqual([TAG_INLINE, TAG_DOWN_FILE, TAG_NO_ROLLBACK]);
-    expect(applied[0]!.hasRollback).toBe(true);
-    expect(applied[2]!.hasRollback).toBe(false);
+    // Newest first, by the journal's `when`.
+    expect(applied.map((m) => m.tag)).toEqual([
+      SCENARIO.noRollback,
+      SCENARIO.inline,
+      SCENARIO.downFile,
+    ]);
+    expect(applied[0]!.hasRollback).toBe(false);
+    expect(applied[1]!.hasRollback).toBe(true);
+    expect(applied[2]!.hasRollback).toBe(true);
     expect(applied[0]!.appliedAt).toBeInstanceOf(Date);
     expect(applied[0]!.idx).toBeGreaterThanOrEqual(0);
     expect(mockQuery).toHaveBeenCalledTimes(1);
@@ -327,9 +413,10 @@ describe('rollbackMigration', () => {
   });
 
   it('throws when the migration has no rollback SQL', async () => {
-    mockQuery.mockResolvedValue({ rows: stateRowsFromJournal([TAG_NO_ROLLBACK]) });
+    const dir = makeScenarioDir();
+    mockQuery.mockResolvedValue({ rows: stateRowsFromJournal([SCENARIO.noRollback], dir) });
     await expect(
-      rollbackMigration(TAG_NO_ROLLBACK, { migrationsDir: MIGRATIONS_DIR }),
+      rollbackMigration(SCENARIO.noRollback, { migrationsDir: dir }),
     ).rejects.toThrow(/No rollback SQL found/i);
   });
 

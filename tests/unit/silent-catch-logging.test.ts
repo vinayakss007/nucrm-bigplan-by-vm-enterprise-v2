@@ -164,6 +164,9 @@ describe('lib/dlp getDlpConfig', () => {
     const config = await getDlpConfig('tenant-9');
 
     expect(config).toEqual({
+      // getDlpConfig echoes the requested tenant back on the default config
+      // (added when DLP config became tenant-aware in #673/#683).
+      tenantId: 'tenant-9',
       maskSensitiveFields: true,
       logExports: true,
       maxExportRows: 10000,

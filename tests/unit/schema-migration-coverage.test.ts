@@ -6,6 +6,16 @@ describe('Schema Migration Coverage (Issue #219)', () => {
   const schemaDir = join(import.meta.dirname!, '../../drizzle/schema');
   const migrationsDir = join(import.meta.dirname!, '../../drizzle/migrations');
 
+  /**
+   * The migration that adds dunning/csat/canned-response tables.
+   *
+   * #814 renumbered it from 0036_missing_tables to 0033_missing_tables while
+   * resolving migration numbering collisions. Git records it as R100 — a pure
+   * rename, identical content. Referenced through a constant so a future
+   * renumbering is a one-line change rather than four.
+   */
+  const MISSING_TABLES_TAG = '0033_missing_tables';
+
   function extractPgTables(dir: string): Set<string> {
     const tables = new Set<string>();
     const files = readdirSync(dir).filter(
@@ -52,9 +62,9 @@ describe('Schema Migration Coverage (Issue #219)', () => {
     expect(schemaTables.size).toBe(222);
   });
 
-  it('migration 0036 should create all 4 missing tables', () => {
+  it('the missing-tables migration creates all 4 tables', () => {
     const sql = readFileSync(
-      join(migrationsDir, '0036_missing_tables.sql'),
+      join(migrationsDir, `${MISSING_TABLES_TAG}.sql`),
       'utf8',
     );
 
@@ -74,9 +84,9 @@ describe('Schema Migration Coverage (Issue #219)', () => {
     }
   });
 
-  it('migration 0036 should define required indexes', () => {
+  it('the missing-tables migration defines required indexes', () => {
     const sql = readFileSync(
-      join(migrationsDir, '0036_missing_tables.sql'),
+      join(migrationsDir, `${MISSING_TABLES_TAG}.sql`),
       'utf8',
     );
 
@@ -101,9 +111,9 @@ describe('Schema Migration Coverage (Issue #219)', () => {
     }
   });
 
-  it('migration 0036 should define FK constraints', () => {
+  it('the missing-tables migration defines FK constraints', () => {
     const sql = readFileSync(
-      join(migrationsDir, '0036_missing_tables.sql'),
+      join(migrationsDir, `${MISSING_TABLES_TAG}.sql`),
       'utf8',
     );
 
@@ -122,13 +132,13 @@ describe('Schema Migration Coverage (Issue #219)', () => {
     }
   });
 
-  it('migration journal should include 0036_missing_tables', () => {
+  it('migration journal includes the missing-tables migration', () => {
     const journal = readFileSync(
       join(migrationsDir, 'meta/_journal.json'),
       'utf8',
     );
     const parsed = JSON.parse(journal);
     const tags = parsed.entries.map((e: { tag: string }) => e.tag);
-    expect(tags).toContain('0036_missing_tables');
+    expect(tags).toContain(MISSING_TABLES_TAG);
   });
 });
