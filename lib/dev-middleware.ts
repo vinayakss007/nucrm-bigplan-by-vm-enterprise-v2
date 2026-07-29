@@ -14,6 +14,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { devLogger } from '@/lib/dev-logger';
+import { trackRequest } from '@/lib/metrics';
 
 // Track slow requests
 const SLOW_REQUEST_THRESHOLD = 1000; // ms
@@ -56,6 +57,9 @@ export function middleware(request: NextRequest) {
     setTimeout(() => {
       const duration = Date.now() - startTime;
       
+      // Record metrics for all environments
+      trackRequest(method, pathname, response.status, duration);
+
       // Log the request
       devLogger.request(
         method,
