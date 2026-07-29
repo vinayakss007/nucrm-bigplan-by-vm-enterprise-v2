@@ -159,6 +159,7 @@ export function SiteHeader() {
             }`}
             onMouseEnter={() => hoverOpen(group.label)}
             aria-hidden={!on}
+            inert={!on ? true : undefined}
           >
             <div className="mk-glass mt-2 w-full max-w-[1100px] overflow-hidden rounded-2xl border border-white/[0.1] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.9)]">
               <div className={`grid gap-0 ${group.feature ? 'lg:grid-cols-[1fr_1fr_1fr_0.9fr]' : 'lg:grid-cols-3'}`}>

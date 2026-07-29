@@ -53,7 +53,12 @@ for (const s of shots) {
     colorScheme: 'dark',
   });
   const page = await context.newPage();
-  await page.goto(`${BASE}${s.path}`, { waitUntil: 'networkidle', timeout: 60000 });
+  const response = await page.goto(`${BASE}${s.path}`, { waitUntil: 'networkidle', timeout: 60000 });
+  if (!response || !response.ok()) {
+    console.error(`FAILED ${s.path} — status ${response?.status() ?? 'no response'}`);
+    await context.close();
+    continue;
+  }
   await primeReveals(page);
 
   if (s.scrollTo === 'bottom') {

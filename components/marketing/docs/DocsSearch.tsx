@@ -52,6 +52,18 @@ function buildIndex(sections: DocSection[]): IndexEntry[] {
 
 /* ─────────────────────────── Search logic ──────────────────────────── */
 
+/**
+ * Basic fuzzy match: checks whether all characters in the query appear in the
+ * text in order, allowing characters to be skipped between matches.
+ */
+function fuzzyMatch(text: string, query: string): boolean {
+  let qi = 0;
+  for (let i = 0; i < text.length && qi < query.length; i++) {
+    if (text[i] === query[qi]) qi++;
+  }
+  return qi === query.length;
+}
+
 function search(index: IndexEntry[], query: string, limit = 12): SearchResult[] {
   if (query.length < 2) return [];
   const q = query.toLowerCase().trim();
@@ -79,6 +91,10 @@ function search(index: IndexEntry[], query: string, limit = 12): SearchResult[] 
     // Rank 4: Description contains the query
     else if (entry.descriptionLower.includes(q)) {
       rank = 4;
+    }
+    // Rank 5: Fuzzy match on title
+    else if (fuzzyMatch(entry.titleLower, q)) {
+      rank = 5;
     }
 
     if (rank >= 0) {

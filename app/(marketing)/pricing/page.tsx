@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Fragment } from 'react';
 import { PLANS, PLAN_MATRIX, PRICING_FAQ } from '@/lib/marketing/pricing';
-import { MODULES } from '@/lib/marketing/modules';
+import { MODULES, type PlanKey } from '@/lib/marketing/modules';
 import { Icon } from '@/components/marketing/icon';
 import { Reveal } from '@/components/marketing/reveal';
 import { Faq } from '@/components/marketing/faq';
@@ -25,6 +25,13 @@ export const metadata: Metadata = {
 };
 
 const PLAN_KEYS = ['free', 'starter', 'pro', 'enterprise'] as const;
+
+const PLAN_LABEL: Record<PlanKey, string> = {
+  free: 'Free',
+  starter: 'Starter',
+  pro: 'Pro',
+  enterprise: 'Enterprise',
+};
 
 export default function PricingPage() {
   const addOns = MODULES.filter((m) => m.addOn > 0);
@@ -130,7 +137,7 @@ export default function PricingPage() {
                       <span className="mk-mono ml-auto shrink-0 text-[11px] text-violet-300">+${m.addOn}/mo</span>
                     </span>
                     <span className="mk-small mt-1 block">{m.summary}</span>
-                    <span className="mk-tiny mt-2 block uppercase tracking-wider">Available from {m.from}</span>
+                    <span className="mk-tiny mt-2 block uppercase tracking-wider">Available from {PLAN_LABEL[m.from]}</span>
                   </span>
                 </Link>
               </Reveal>

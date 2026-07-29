@@ -15,7 +15,6 @@ import {
   PrimaryCta,
   Section,
   SectionHeading,
-  TextLink,
 } from '@/components/marketing/ui';
 
 export const metadata: Metadata = {
@@ -170,7 +169,10 @@ export default function FeaturesPage() {
                   <span className="mk-h4 mt-4 text-white">{c.t}</span>
                   <span className="mk-small mt-1.5 flex-1">{c.d}</span>
                   <span className="mt-4">
-                    <TextLink href={c.h}>Open</TextLink>
+                    <span className="mk-link group inline-flex items-center gap-1.5 text-sm">
+                      Open
+                      <Icon name="ArrowUpRight" className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" strokeWidth={2.2} />
+                    </span>
                   </span>
                 </Link>
               </Reveal>

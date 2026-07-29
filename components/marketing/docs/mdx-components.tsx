@@ -111,9 +111,11 @@ function Ol({ children, ...props }: React.HTMLAttributes<HTMLOListElement>) {
 }
 
 function Li({ children, ...props }: React.HTMLAttributes<HTMLLIElement>) {
+  // When inside an <ol>, the list already has list-decimal styling; do not add
+  // the unordered-list dot pseudo-element.
   return (
     <li
-      className="relative pl-5 text-[15px] leading-[1.75] text-[#9aa4b8] before:absolute before:left-0 before:top-[0.72em] before:h-[5px] before:w-[5px] before:rounded-full before:bg-violet-400/70"
+      className="relative text-[15px] leading-[1.75] text-[#9aa4b8] [ol_&]:pl-0 [ul_&]:pl-5 [ul_&]:before:absolute [ul_&]:before:left-0 [ul_&]:before:top-[0.72em] [ul_&]:before:h-[5px] [ul_&]:before:w-[5px] [ul_&]:before:rounded-full [ul_&]:before:bg-violet-400/70"
       {...props}
     >
       {children}

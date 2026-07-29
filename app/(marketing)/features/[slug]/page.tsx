@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PILLARS, getPillar } from '@/lib/marketing/features';
 import { softLower } from '@/lib/marketing/text';
-import { MODULES } from '@/lib/marketing/modules';
+import { MODULES, type PlanKey } from '@/lib/marketing/modules';
 import { SOLUTIONS } from '@/lib/marketing/solutions';
 import { Icon } from '@/components/marketing/icon';
 import { Reveal } from '@/components/marketing/reveal';
@@ -27,6 +27,13 @@ import {
   Section,
   SectionHeading,
 } from '@/components/marketing/ui';
+
+const PLAN_LABEL: Record<PlanKey, string> = {
+  free: 'Free',
+  starter: 'Starter',
+  pro: 'Pro',
+  enterprise: 'Enterprise',
+};
 
 /** Which product screen illustrates each pillar. */
 const VISUALS: Record<string, () => React.ReactElement> = {
@@ -198,7 +205,7 @@ export default async function PillarPage({ params }: { params: Promise<{ slug: s
                     </div>
                     <span className="mk-h4 mt-4 text-white">{m.name}</span>
                     <span className="mk-small mt-1.5 flex-1">{m.summary}</span>
-                    <span className="mk-tiny mt-3 uppercase tracking-wider">From {m.from}</span>
+                    <span className="mk-tiny mt-3 uppercase tracking-wider">From {PLAN_LABEL[m.from]}</span>
                   </Link>
                 </Reveal>
               ))}

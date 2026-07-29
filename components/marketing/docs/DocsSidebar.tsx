@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getPublishedSections, type DocSection } from '@/lib/marketing/docs';
 import { Icon } from '@/components/marketing/icon';
 
@@ -41,6 +41,11 @@ function SidebarSection({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const isActive = pathname.startsWith(`/docs/${section.slug}`);
+
+  // Sync expanded state when the active section changes
+  useEffect(() => {
+    if (defaultOpen) setOpen(true);
+  }, [defaultOpen]);
 
   return (
     <div>

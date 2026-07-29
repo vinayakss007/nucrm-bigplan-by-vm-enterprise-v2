@@ -34,6 +34,7 @@ export function ContactForm({ tenantId }: { tenantId: string }) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (state === 'sending') return;
     setState('sending');
     setError('');
     try {
