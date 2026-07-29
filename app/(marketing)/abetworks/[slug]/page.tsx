@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { STUDIO_PRODUCTS, getStudioProduct } from '@/lib/marketing/abetworks';
 import { MODULES } from '@/lib/marketing/modules';
 import { getSolution } from '@/lib/marketing/solutions';
+import { softLower } from '@/lib/marketing/text';
 import { Icon } from '@/components/marketing/icon';
 import { Reveal } from '@/components/marketing/reveal';
 import { AppPreview } from '@/components/marketing/mocks';
@@ -243,7 +244,7 @@ export default async function StudioProductPage({ params }: { params: Promise<{ 
                   <div className="mk-eyebrow text-violet-300/90">Industry blueprint</div>
                   <h3 className="mk-h3 mt-3 text-white">{solution.name}</h3>
                   <p className="mk-body mt-2.5">
-                    This product ships with the {solution.name.toLowerCase()} blueprint: {solution.pipelines.length}{' '}
+                    This product ships with the {softLower(solution.name)} blueprint: {solution.pipelines.length}{' '}
                     pipeline{solution.pipelines.length > 1 ? 's' : ''}, {solution.fields.length} custom fields and{' '}
                     {solution.automations.length} automation{solution.automations.length === 1 ? '' : 's'}, installed for
                     you.

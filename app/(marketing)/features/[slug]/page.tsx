@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PILLARS, getPillar } from '@/lib/marketing/features';
+import { softLower } from '@/lib/marketing/text';
 import { MODULES } from '@/lib/marketing/modules';
 import { SOLUTIONS } from '@/lib/marketing/solutions';
 import { Icon } from '@/components/marketing/icon';
@@ -130,7 +131,7 @@ export default async function PillarPage({ params }: { params: Promise<{ slug: s
         <Container>
           <SectionHeading
             eyebrow="In full"
-            title={`Everything in ${pillar.name.toLowerCase()}`}
+            title={`Everything in ${softLower(pillar.name)}`}
             sub="The complete list, grouped by how you would actually use it."
           />
           <div className="mt-12 grid gap-5 lg:grid-cols-3">
@@ -262,7 +263,7 @@ export default async function PillarPage({ params }: { params: Promise<{ slug: s
       </Section>
 
       <CtaBand
-        title={`Try ${pillar.name.toLowerCase()} on your own data`}
+        title={`Try ${softLower(pillar.name)} on your own data`}
         sub="Start free, import your records, and see whether it holds up against how your team actually works."
       />
     </>

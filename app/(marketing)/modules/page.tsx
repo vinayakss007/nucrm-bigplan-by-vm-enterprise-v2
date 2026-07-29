@@ -77,7 +77,7 @@ export default function ModulesPage() {
               },
             ].map((c, i) => (
               <Reveal key={c.t} delay={i * 70} className="mk-card p-6">
-                <IconTile name={c.i === 'Gift' ? 'Check' : c.i} accent={c.accent} />
+                <IconTile name={c.i} accent={c.accent} />
                 <h2 className="mk-h4 mt-4 text-white">{c.t}</h2>
                 <p className="mk-body mt-2">{c.d}</p>
               </Reveal>

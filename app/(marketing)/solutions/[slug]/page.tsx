@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { SOLUTIONS, getSolution } from '@/lib/marketing/solutions';
+import { softLower } from '@/lib/marketing/text';
 import { MODULES } from '@/lib/marketing/modules';
 import { Icon } from '@/components/marketing/icon';
 import { Reveal } from '@/components/marketing/reveal';
@@ -30,7 +31,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     title: `${s.name} CRM — ${s.headline}`,
     description: `${s.sub} NuCRM installs the ${s.pipelines.map((p) => p.name).join(' and ')} pipeline${
       s.pipelines.length > 1 ? 's' : ''
-    } with the custom fields and automations ${s.name.toLowerCase()} teams need.`,
+    } with the custom fields and automations ${softLower(s.name)} teams need.`,
     alternates: { canonical: `/solutions/${s.slug}` },
     openGraph: { title: `NuCRM for ${s.name}`, description: s.sub },
   };
@@ -49,7 +50,7 @@ export default async function SolutionPage({ params }: { params: Promise<{ slug:
   return (
     <>
       <PageHero
-        eyebrow={`NuCRM for ${s.name.toLowerCase()}`}
+        eyebrow={`NuCRM for ${softLower(s.name)}`}
         title={s.headline}
         sub={s.sub}
         breadcrumb={[
@@ -72,7 +73,7 @@ export default async function SolutionPage({ params }: { params: Promise<{ slug:
               <SectionHeading
                 align="left"
                 eyebrow="Sound familiar?"
-                title={`What usually goes wrong in ${s.name.toLowerCase()}`}
+                title={`What usually goes wrong in ${softLower(s.name)}`}
               />
               <p className="mk-body mt-5">
                 These are the failure modes a general-purpose CRM leaves in place, because it has no opinion about how
@@ -265,7 +266,7 @@ export default async function SolutionPage({ params }: { params: Promise<{ slug:
       </Section>
 
       <CtaBand
-        title={`Set up your ${s.name.toLowerCase()} workspace today`}
+        title={`Set up your ${softLower(s.name)} workspace today`}
         sub="Start free, install the blueprint, import your contacts. If it does not fit, every part of it is yours to change."
       />
     </>

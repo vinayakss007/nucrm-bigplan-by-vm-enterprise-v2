@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 import { Icon } from './icon';
+import { softLower } from '@/lib/marketing/text';
 
 export type TourTab = {
   id: string;
@@ -81,7 +82,7 @@ export function ProductTour({ tabs }: { tabs: TourTab[] }) {
               ))}
             </ul>
             <Link href={current.href} className="mk-link group mt-6 inline-flex items-center gap-1.5 text-sm">
-              Go deeper on {current.label.toLowerCase()}
+              Go deeper on {softLower(current.label)}
               <Icon
                 name="ArrowUpRight"
                 className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
