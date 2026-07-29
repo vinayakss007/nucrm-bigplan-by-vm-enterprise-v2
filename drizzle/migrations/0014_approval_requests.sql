@@ -17,3 +17,9 @@ CREATE TABLE IF NOT EXISTS "approval_requests" (
 CREATE INDEX IF NOT EXISTS "idx_approval_requests_tenant" ON "approval_requests" ("tenant_id");
 CREATE INDEX IF NOT EXISTS "idx_approval_requests_entity" ON "approval_requests" ("tenant_id", "entity_type", "entity_id");
 CREATE INDEX IF NOT EXISTS "idx_approval_requests_status" ON "approval_requests" ("tenant_id", "status");
+
+-- DOWN
+DROP INDEX IF EXISTS idx_approval_requests_status;
+DROP INDEX IF EXISTS idx_approval_requests_entity;
+DROP INDEX IF EXISTS idx_approval_requests_tenant;
+DROP TABLE IF EXISTS approval_requests CASCADE;

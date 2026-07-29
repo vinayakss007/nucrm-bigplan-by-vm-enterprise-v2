@@ -266,3 +266,41 @@ CREATE INDEX "idx_services_tenant" ON "services" USING btree ("tenant_id");--> s
 CREATE INDEX "idx_services_name" ON "services" USING btree ("name");--> statement-breakpoint
 CREATE INDEX "idx_services_category" ON "services" USING btree ("category");--> statement-breakpoint
 CREATE INDEX "idx_services_active" ON "services" USING btree ("id") WHERE deleted_at IS NULL;
+
+-- DOWN
+DROP INDEX IF EXISTS idx_services_active;
+DROP INDEX IF EXISTS idx_services_category;
+DROP INDEX IF EXISTS idx_services_name;
+DROP INDEX IF EXISTS idx_services_tenant;
+DROP INDEX IF EXISTS idx_service_categories_name;
+DROP INDEX IF EXISTS idx_service_categories_tenant;
+DROP INDEX IF EXISTS idx_orders_active;
+DROP INDEX IF EXISTS idx_orders_status;
+DROP INDEX IF EXISTS idx_orders_company;
+DROP INDEX IF EXISTS idx_orders_contact;
+DROP INDEX IF EXISTS idx_orders_number;
+DROP INDEX IF EXISTS idx_orders_tenant;
+DROP INDEX IF EXISTS idx_order_line_items_order;
+DROP INDEX IF EXISTS idx_invoices_active;
+DROP INDEX IF EXISTS idx_invoices_due_date;
+DROP INDEX IF EXISTS idx_invoices_status;
+DROP INDEX IF EXISTS idx_invoices_company;
+DROP INDEX IF EXISTS idx_invoices_contact;
+DROP INDEX IF EXISTS idx_invoices_number;
+DROP INDEX IF EXISTS idx_invoices_tenant;
+DROP INDEX IF EXISTS idx_invoice_payments_date;
+DROP INDEX IF EXISTS idx_invoice_payments_invoice;
+DROP INDEX IF EXISTS idx_invoice_line_items_invoice;
+DROP INDEX IF EXISTS idx_contracts_active;
+DROP INDEX IF EXISTS idx_contracts_status;
+DROP INDEX IF EXISTS idx_contracts_company;
+DROP INDEX IF EXISTS idx_contracts_contact;
+DROP INDEX IF EXISTS idx_contracts_tenant;
+DROP TABLE IF EXISTS services CASCADE;
+DROP TABLE IF EXISTS service_categories CASCADE;
+DROP TABLE IF EXISTS order_line_items CASCADE;
+DROP TABLE IF EXISTS orders CASCADE;
+DROP TABLE IF EXISTS invoice_payments CASCADE;
+DROP TABLE IF EXISTS invoice_line_items CASCADE;
+DROP TABLE IF EXISTS invoices CASCADE;
+DROP TABLE IF EXISTS contracts CASCADE;

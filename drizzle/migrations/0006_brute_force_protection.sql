@@ -61,3 +61,19 @@ CREATE OR REPLACE TRIGGER cleanup_login_data
 AFTER INSERT ON login_attempts
 FOR EACH STATEMENT
 EXECUTE FUNCTION cleanup_old_login_attempts();
+
+-- DOWN
+DROP TRIGGER IF EXISTS cleanup_login_data ON login_attempts;
+DROP FUNCTION IF EXISTS cleanup_old_login_attempts();
+DROP INDEX IF EXISTS idx_security_events_time;
+DROP INDEX IF EXISTS idx_security_events_type;
+DROP INDEX IF EXISTS idx_security_events_user;
+DROP INDEX IF EXISTS idx_security_events_tenant;
+DROP TABLE IF EXISTS security_events CASCADE;
+DROP INDEX IF EXISTS idx_login_blocks_until;
+DROP INDEX IF EXISTS idx_login_blocks_identifier;
+DROP TABLE IF EXISTS login_blocks CASCADE;
+DROP INDEX IF EXISTS idx_login_attempts_time;
+DROP INDEX IF EXISTS idx_login_attempts_ip;
+DROP INDEX IF EXISTS idx_login_attempts_email;
+DROP TABLE IF EXISTS login_attempts CASCADE;

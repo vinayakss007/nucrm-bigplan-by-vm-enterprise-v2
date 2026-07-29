@@ -98,3 +98,22 @@ CREATE TABLE IF NOT EXISTS comm_email_drafts (
 CREATE INDEX IF NOT EXISTS idx_comm_email_drafts_tenant ON comm_email_drafts(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_comm_email_drafts_user ON comm_email_drafts(tenant_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_comm_email_drafts_status ON comm_email_drafts(tenant_id, status);
+
+-- DOWN
+DROP INDEX IF EXISTS idx_comm_email_drafts_status;
+DROP INDEX IF EXISTS idx_comm_email_drafts_user;
+DROP INDEX IF EXISTS idx_comm_email_drafts_tenant;
+DROP TABLE IF EXISTS comm_email_drafts CASCADE;
+DROP INDEX IF EXISTS idx_at_risk_rules_active;
+DROP INDEX IF EXISTS idx_at_risk_rules_stage;
+DROP INDEX IF EXISTS idx_at_risk_rules_tenant;
+DROP TABLE IF EXISTS at_risk_rules CASCADE;
+DROP INDEX IF EXISTS idx_ai_draft_templates_kind;
+DROP INDEX IF EXISTS idx_ai_draft_templates_slug;
+DROP INDEX IF EXISTS idx_ai_draft_templates_tenant;
+DROP TABLE IF EXISTS ai_draft_templates CASCADE;
+DROP INDEX IF EXISTS idx_ai_activity_status;
+DROP INDEX IF EXISTS idx_ai_activity_user;
+DROP INDEX IF EXISTS idx_ai_activity_action;
+DROP INDEX IF EXISTS idx_ai_activity_tenant_time;
+DROP TABLE IF EXISTS ai_activity CASCADE;
