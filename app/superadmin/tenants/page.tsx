@@ -23,6 +23,9 @@ const BILLING_TYPE_COLORS: Record<string,string> = {
   lifetime:      'text-purple-400',
   complimentary: 'text-pink-400',
 };
+// TODO: These arrays are hardcoded and should eventually be fetched from a
+// /api/superadmin/config or similar endpoint so new plans/statuses added to the
+// database are automatically reflected in the UI without a code deploy.
 const PLANS = ['free','starter','pro','enterprise'];
 const STATUSES = ['trialing','active','suspended','cancelled','past_due','trial_expired'];
 const BILLING_TYPES = ['trial','stripe','manual','lifetime','complimentary'];

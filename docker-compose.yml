@@ -258,7 +258,7 @@ services:
 
   # ── PgBouncer (Connection Pooling) ──────────────────────────────────────
   pgbouncer:
-    image: pgbouncer/pgbouncer:latest
+    image: edoburu/pgbouncer:latest
     container_name: nucrm-pgbouncer
     environment:
       - DB_USER=${POSTGRES_USER:-nucrm}
@@ -267,8 +267,9 @@ services:
       - DB_PORT=5432
       - DB_NAME=${POSTGRES_DB:-nucrm}
       - POOL_MODE=transaction
-      - DEFAULT_POOL_SIZE=50
+      - DEFAULT_POOL_SIZE=20
       - MAX_CLIENT_CONN=200
+      - AUTH_TYPE=scram-sha-256
     ports:
       - "6432:6432"
     depends_on:
