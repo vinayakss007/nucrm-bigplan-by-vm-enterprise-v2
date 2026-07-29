@@ -1,34 +1,16 @@
-import { cookies } from 'next/headers';
-import { redirect, notFound } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { verifyToken } from '@/lib/auth/session';
+import { requireTenantCtx } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
-import { companies, contacts as contactsTable, leads as leadsTable, deals as dealsTable, tenantMembers, dealStages } from '@/drizzle/schema';
+import { companies, contacts as contactsTable, leads as leadsTable, deals as dealsTable, dealStages } from '@/drizzle/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { ArrowLeft, Globe, Phone, Building2, Users, TrendingUp } from 'lucide-react';
 
 export default async function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: companyId } = await params;
-  const cookieStore = await cookies();
-  const token = cookieStore.get('nucrm_session')?.value;
-  if (!token) redirect('/auth/login');
-  const payload = await verifyToken(token);
-  if (!payload) redirect('/auth/login');
-
-  // Get current tenant
-  const [member] = await db.select({
-    tenantId: tenantMembers.tenantId
-  })
-  .from(tenantMembers)
-  .where(and(
-    eq(tenantMembers.userId, payload.userId),
-    eq(tenantMembers.status, 'active')
-  ))
-  .limit(1);
-
-  if (!member) redirect('/auth/no-workspace');
-  const tid = member.tenantId;
+  const ctx = await requireTenantCtx();
+  const tid = ctx.tenantId;
 
   // Fetch company with subquery counts using Drizzle
   // Since Drizzle doesn't support correlated subqueries in select as easily as raw SQL,
@@ -63,6 +45,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
       (SELECT count(*)::int FROM deals WHERE company_id = ${company.id} AND deleted_at IS NULL) AS deal_count,
       (SELECT COALESCE(sum(amount),0)::numeric FROM deals d LEFT JOIN deal_stages ds ON ds.id = d.stage_id WHERE d.company_id = ${company.id} AND ds.name NOT IN ('Lost', 'lost') AND d.deleted_at IS NULL) AS pipeline_value
   `);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const counts = (result as any).rows?.[0] ?? { contact_count: 0, lead_count: 0, deal_count: 0, pipeline_value: 0 };
 
   const [contacts, leads, deals] = await Promise.all([

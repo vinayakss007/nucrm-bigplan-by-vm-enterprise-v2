@@ -179,8 +179,31 @@ export async function PATCH(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    
-    return NextResponse.json({ ok: true });
+
+    const body = await readJsonBody(request);
+    const { id, enabled, schedule_type, retention_days } = body as {
+      id?: string;
+      enabled?: boolean;
+      schedule_type?: string;
+      retention_days?: number;
+    };
+
+    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (typeof enabled === 'boolean') updates.enabled = enabled;
+    if (schedule_type) updates.scheduleType = schedule_type;
+    if (typeof retention_days === 'number' && retention_days > 0) updates.retentionDays = retention_days;
+
+    const [updated] = await db
+      .update(backupSchedules)
+      .set(updates)
+      .where(eq(backupSchedules.id, id))
+      .returning();
+
+    if (!updated) return NextResponse.json({ error: 'Schedule not found' }, { status: 404 });
+
+    return NextResponse.json({ ok: true, data: updated });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

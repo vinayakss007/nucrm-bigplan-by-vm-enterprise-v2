@@ -5,6 +5,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 /**
  * Superadmin Cross-Tenant Data Search & Explorer
@@ -418,6 +419,15 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Record not found' }, { status: 404 });
     }
 
+    await logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || '',
+      action: 'data.updated',
+      targetType: table,
+      targetId: id,
+      metadata: { field: safeField, value },
+    });
+
     return NextResponse.json({
       message: 'Record updated',
       data: result.rows[0],
@@ -476,6 +486,15 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json({ error: 'Record not found' }, { status: 404 });
       }
     }
+
+    await logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || '',
+      action: 'data.deleted',
+      targetType: table,
+      targetId: id,
+      metadata: { softDelete: !!softDelete },
+    });
 
     return NextResponse.json({ message: 'Record deleted', id });
  
