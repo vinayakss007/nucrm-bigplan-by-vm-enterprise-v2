@@ -18,8 +18,6 @@ export default defineConfig({
         'lib/**/*.spec.ts',
         'lib/**/__tests__/**',
         'lib/db/services/**',
-        'lib/leads/**',
-        'lib/onboarding/**',
         'lib/plugins/**',
         'lib/usage/**',
         'lib/automation/types.ts',
@@ -30,6 +28,9 @@ export default defineConfig({
         'lib/sdk/modules.ts',
         'lib/server-only-shim.ts',
       ],
+      // Coverage target: 70/70/80/70 (lines/functions/branches/statements).
+      // Reached via incremental raises. Next step: reduce remaining exclusions
+      // (lib/db/services, lib/plugins, lib/usage) once they have adequate tests.
       thresholds: {
         lines: 70,
         functions: 70,
