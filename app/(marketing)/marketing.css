@@ -139,8 +139,14 @@
   border-color: var(--mk-line-strong);
   transform: translateY(-3px);
 }
+/* Used for the header bar and the mega-menu panels.
+   The opacity does the work and the blur is decoration, not the other way
+   round: backdrop-filter is skipped whenever compositing is unavailable (no
+   GPU, some headless and embedded browsers, reduced-transparency settings), and
+   at 0.72 alpha with no blur the hero headline read straight through an open
+   navigation menu. */
 .mk-glass {
-  background: rgba(10, 10, 22, 0.72);
+  background: rgba(9, 9, 19, 0.95);
   border: 1px solid var(--mk-line);
   backdrop-filter: blur(20px) saturate(160%);
 }
