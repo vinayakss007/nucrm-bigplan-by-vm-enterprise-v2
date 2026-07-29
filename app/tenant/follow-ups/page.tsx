@@ -1,8 +1,9 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ListChecks, Calendar, AlertCircle, Plus } from 'lucide-react';
+import { ListChecks, Calendar, AlertCircle, Plus, CheckCircle, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 interface FollowUp {
@@ -27,7 +28,7 @@ export default function FollowUpsPage() {
   const [offset, setOffset] = useState(0);
   const [total, setTotal] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
-  const [createForm, setCreateForm] = useState({ title: '', description: '', dueDate: '' });
+  const [createForm, setCreateForm] = useState({ title: '', description: '', dueDate: '', contact_id: '', lead_id: '', deal_id: '' });
   const [saving, setSaving] = useState(false);
   const limit = 20;
 
@@ -67,17 +68,48 @@ export default function FollowUpsPage() {
           title: createForm.title,
           description: createForm.description || undefined,
           due_date: createForm.dueDate || undefined,
+          contact_id: createForm.contact_id || undefined,
+          lead_id: createForm.lead_id || undefined,
+          deal_id: createForm.deal_id || undefined,
         }),
       });
       if (!res.ok) throw new Error('Failed to create');
+      toast.success('Follow-up created');
       setShowCreate(false);
-      setCreateForm({ title: '', description: '', dueDate: '' });
+      setCreateForm({ title: '', description: '', dueDate: '', contact_id: '', lead_id: '', deal_id: '' });
       setOffset(0);
       fetchData();
     } catch {
-      // silent
+      toast.error('Failed to create follow-up');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleComplete(id: string) {
+    try {
+      const res = await fetch(`/api/tenant/follow-ups/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'completed' }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      toast.success('Marked as complete');
+      fetchData();
+    } catch {
+      toast.error('Failed to complete follow-up');
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this follow-up?')) return;
+    try {
+      const res = await fetch(`/api/tenant/follow-ups/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed');
+      toast.success('Follow-up deleted');
+      fetchData();
+    } catch {
+      toast.error('Failed to delete follow-up');
     }
   }
 
@@ -175,6 +207,22 @@ export default function FollowUpsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {fu.status !== 'completed' && (
+                      <button
+                        onClick={() => handleComplete(fu.id)}
+                        className="p-1.5 rounded-lg hover:bg-green-50 dark:hover:bg-green-950/20 text-green-600 transition-colors"
+                        title="Mark complete"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDelete(fu.id)}
+                      className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 text-red-600 transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                     <span className={cn(
                       'px-2.5 py-1 rounded-lg text-xs font-medium capitalize',
                       statusColors[fu.status] ?? 'bg-muted text-muted-foreground'
@@ -252,6 +300,33 @@ export default function FollowUpsPage() {
                 type="date"
                 value={createForm.dueDate}
                 onChange={(e) => setCreateForm(f => ({ ...f, dueDate: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground block mb-1">Contact ID (optional)</label>
+              <input
+                value={createForm.contact_id}
+                onChange={(e) => setCreateForm(f => ({ ...f, contact_id: e.target.value }))}
+                placeholder="Contact UUID"
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground block mb-1">Lead ID (optional)</label>
+              <input
+                value={createForm.lead_id}
+                onChange={(e) => setCreateForm(f => ({ ...f, lead_id: e.target.value }))}
+                placeholder="Lead UUID"
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground block mb-1">Deal ID (optional)</label>
+              <input
+                value={createForm.deal_id}
+                onChange={(e) => setCreateForm(f => ({ ...f, deal_id: e.target.value }))}
+                placeholder="Deal UUID"
                 className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
               />
             </div>
