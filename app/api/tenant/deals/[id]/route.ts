@@ -10,7 +10,7 @@ import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { notifyTenantMembers } from '@/lib/notifications';
 import { logError } from '@/lib/errors-server';
-import { checkConcurrency } from '@/lib/api/optimistic-lock';
+import { checkConcurrency, clientVersion } from '@/lib/api/optimistic-lock';
 import { cache } from '@/lib/cache';
 import { withConcurrencyGuard } from '@/lib/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -125,7 +125,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!prev) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     // Optimistic concurrency check — prevent lost updates from concurrent edits
-    const conflict = checkConcurrency(prev.updatedAt, rawBody?._updated_at);
+    const conflict = checkConcurrency(prev.updatedAt, clientVersion(rawBody));
     if (conflict) return conflict;
 
 
