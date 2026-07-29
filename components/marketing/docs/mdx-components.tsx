@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Icon } from '@/components/marketing/icon';
 
 /**
@@ -126,18 +126,18 @@ function Li({ children, ...props }: React.HTMLAttributes<HTMLLIElement>) {
 /* ─────────────── Code ─────────────── */
 
 function Pre({ children, ...props }: React.HTMLAttributes<HTMLPreElement>) {
+  const preRef = useRef<HTMLPreElement>(null);
+
   return (
     <div className="group relative mb-5">
       <pre
+        ref={preRef}
         className="overflow-x-auto rounded-xl border border-white/[0.08] bg-[#0a0a16] px-5 py-4 text-[13px] leading-[1.7]"
         {...props}
       >
         {children}
       </pre>
-      <CopyButton getText={() => {
-        const el = document.querySelector('.group:hover pre');
-        return el?.textContent ?? '';
-      }} />
+      <CopyButton getTextRef={preRef} />
     </div>
   );
 }
@@ -162,12 +162,12 @@ function Code({ children, className, ...props }: React.HTMLAttributes<HTMLElemen
   );
 }
 
-function CopyButton({ getText }: { getText: () => string }) {
+function CopyButton({ getTextRef }: { getTextRef: React.RefObject<HTMLPreElement | null> }) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
     try {
-      const text = getText();
+      const text = getTextRef.current?.textContent ?? '';
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);

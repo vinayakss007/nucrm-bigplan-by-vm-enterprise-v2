@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { DOC_SECTIONS, type DocSection } from '@/lib/marketing/docs';
+import { getPublishedSections, type DocSection } from '@/lib/marketing/docs';
 import { Icon } from '@/components/marketing/icon';
 
 /* ─────────────────────────── Types ─────────────────────────────────── */
@@ -128,8 +128,8 @@ export function DocsSearch({ className = '' }: { className?: string }) {
 
   const debouncedQuery = useDebounce(query, 150);
 
-  // Build search index once
-  const index = useMemo(() => buildIndex(DOC_SECTIONS), []);
+  // Build search index once (only published sections)
+  const index = useMemo(() => buildIndex(getPublishedSections()), []);
 
   // Compute results from debounced query
   const results = useMemo(() => search(index, debouncedQuery), [index, debouncedQuery]);
@@ -239,8 +239,11 @@ export function DocsSearch({ className = '' }: { className?: string }) {
     [debouncedQuery],
   );
 
-  // Detect platform for shortcut hint
-  const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+  // Detect platform for shortcut hint (deferred to avoid hydration mismatch)
+  const [isMac, setIsMac] = useState(false);
+  useEffect(() => {
+    setIsMac(/Mac|iPod|iPhone|iPad/.test(navigator.platform));
+  }, []);
 
   return (
     <div ref={containerRef} className={`relative ${className}`}>

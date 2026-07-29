@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 export interface TocHeading {
   id: string;
@@ -10,29 +10,34 @@ export interface TocHeading {
 
 /**
  * Right-side sticky table of contents that uses IntersectionObserver
- * to highlight the heading currently in view.
+ * to highlight the heading currently in view. Uses MutationObserver
+ * to re-scan headings when content changes (e.g. after MDX loads).
  */
 export function DocsTableOfContents({ className = '' }: { className?: string }) {
   const [headings, setHeadings] = useState<TocHeading[]>([]);
   const [activeId, setActiveId] = useState<string>('');
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const mutationObserverRef = useRef<MutationObserver | null>(null);
 
-  useEffect(() => {
-    // Collect all h2 and h3 elements from the docs prose area
+  const scanHeadings = useCallback(() => {
+    const container = document.querySelector('.docs-prose');
+    if (!container) return;
+
     const elements = Array.from(
-      document.querySelectorAll('.docs-prose h2[id], .docs-prose h3[id]'),
+      container.querySelectorAll('h2[id], h3[id]'),
     );
     const items: TocHeading[] = elements.map((el) => ({
       id: el.id,
       text: el.textContent ?? '',
       level: el.tagName === 'H2' ? 2 : 3,
     }));
+
     setHeadings(items);
 
-    // Observe heading visibility
+    // Re-set up IntersectionObserver with new elements
+    observerRef.current?.disconnect();
     observerRef.current = new IntersectionObserver(
       (entries) => {
-        // Find the first heading that is intersecting
         const visible = entries.filter((e) => e.isIntersecting);
         if (visible.length > 0 && visible[0]) {
           setActiveId(visible[0].target.id);
@@ -42,11 +47,29 @@ export function DocsTableOfContents({ className = '' }: { className?: string }) 
     );
 
     elements.forEach((el) => observerRef.current?.observe(el));
+  }, []);
+
+  useEffect(() => {
+    // Initial scan
+    scanHeadings();
+
+    // Watch for DOM changes in the docs-prose container (handles async content)
+    const container = document.querySelector('.docs-prose');
+    if (container) {
+      mutationObserverRef.current = new MutationObserver(() => {
+        scanHeadings();
+      });
+      mutationObserverRef.current.observe(container, {
+        childList: true,
+        subtree: true,
+      });
+    }
 
     return () => {
       observerRef.current?.disconnect();
+      mutationObserverRef.current?.disconnect();
     };
-  }, []);
+  }, [scanHeadings]);
 
   if (headings.length === 0) return null;
 

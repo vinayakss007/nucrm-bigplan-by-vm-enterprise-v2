@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { DOC_SECTIONS, getArticleCount } from '@/lib/marketing/docs';
+import { getPublishedSections } from '@/lib/marketing/docs';
 import { Icon } from '@/components/marketing/icon';
 
 export const metadata: Metadata = {
@@ -10,7 +10,8 @@ export const metadata: Metadata = {
 };
 
 export default function DocsPage() {
-  const totalArticles = getArticleCount();
+  const sections = getPublishedSections();
+  const totalArticles = sections.reduce((sum, s) => sum + s.articles.length, 0);
 
   return (
     <div>
@@ -21,13 +22,13 @@ export default function DocsPage() {
         </h1>
         <p className="mt-4 max-w-xl text-[16px] leading-[1.65] text-[#9aa4b8]">
           Everything you need to set up, configure, and get the most out of NuCRM.
-          {' '}{totalArticles} guides across {DOC_SECTIONS.length} sections.
+          {' '}{totalArticles} guides across {sections.length} sections.
         </p>
       </div>
 
       {/* Section cards grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {DOC_SECTIONS.map((section) => (
+        {sections.map((section) => (
           <Link
             key={section.slug}
             href={`/docs/${section.slug}/${section.articles[0]?.slug ?? ''}`}

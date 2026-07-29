@@ -18,6 +18,8 @@ export interface DocSection {
   title: string;
   description: string;
   icon: string;
+  /** Whether the section has published MDX content. Unpublished sections are hidden from sidebar/search. */
+  published: boolean;
   articles: DocArticle[];
 }
 
@@ -39,6 +41,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Getting Started',
     description: 'Set up your workspace, import data, and learn the basics of NuCRM.',
     icon: 'Rocket',
+    published: true,
     articles: [
       { slug: 'introduction', title: 'Introduction to NuCRM' },
       { slug: 'creating-account', title: 'Creating your account' },
@@ -55,6 +58,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Contacts & Companies',
     description: 'Manage contacts, companies, segments, and lifecycle stages.',
     icon: 'Users',
+    published: true,
     articles: [
       { slug: 'managing-contacts', title: 'Managing contacts' },
       { slug: 'contact-details', title: 'Contact detail view' },
@@ -75,6 +79,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Deals & Pipeline',
     description: 'Track deals through your sales pipeline from lead to close.',
     icon: 'TrendingUp',
+    published: true,
     articles: [
       { slug: 'pipeline-overview', title: 'Pipeline overview' },
       { slug: 'creating-deals', title: 'Creating deals' },
@@ -93,6 +98,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Leads',
     description: 'Capture, qualify, assign, and convert leads into deals.',
     icon: 'UserPlus',
+    published: false,
     articles: [
       { slug: 'lead-management', title: 'Lead management' },
       { slug: 'lead-sources', title: 'Lead sources' },
@@ -109,6 +115,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Tasks & Calendar',
     description: 'Manage tasks, meetings, follow-ups, and your team calendar.',
     icon: 'CalendarCheck',
+    published: false,
     articles: [
       { slug: 'task-management', title: 'Task management' },
       { slug: 'task-views', title: 'Task views & kanban' },
@@ -125,6 +132,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Communication',
     description: 'Email, WhatsApp, SMS, live chat, and call logging in one inbox.',
     icon: 'MessageSquare',
+    published: true,
     articles: [
       { slug: 'email-overview', title: 'Email overview' },
       { slug: 'email-sync', title: 'Email sync (Gmail & Outlook)' },
@@ -145,6 +153,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Automation',
     description: 'Build visual workflows, sequences, and automated actions.',
     icon: 'Zap',
+    published: false,
     articles: [
       { slug: 'automation-overview', title: 'Automation overview' },
       { slug: 'workflow-builder', title: 'Visual workflow builder' },
@@ -163,6 +172,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Sales & Billing',
     description: 'Quotes, invoices, subscriptions, contracts, and payment tracking.',
     icon: 'Receipt',
+    published: false,
     articles: [
       { slug: 'quotes-proposals', title: 'Quotes & proposals' },
       { slug: 'invoices', title: 'Invoices' },
@@ -183,6 +193,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Support & Helpdesk',
     description: 'Tickets, SLAs, customer portal, and knowledge base.',
     icon: 'LifeBuoy',
+    published: false,
     articles: [
       { slug: 'tickets-overview', title: 'Tickets overview' },
       { slug: 'creating-tickets', title: 'Creating & managing tickets' },
@@ -201,6 +212,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Analytics & Reports',
     description: 'Dashboards, scheduled reports, funnel analysis, and team metrics.',
     icon: 'BarChart3',
+    published: false,
     articles: [
       { slug: 'report-builder', title: 'Report builder' },
       { slug: 'dashboards', title: 'Dashboards' },
@@ -217,6 +229,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'AI Features',
     description: 'AI-powered email drafting, lead scoring, predictions, and summaries.',
     icon: 'Sparkles',
+    published: false,
     articles: [
       { slug: 'ai-overview', title: 'AI overview' },
       { slug: 'email-drafting', title: 'AI email drafting' },
@@ -233,6 +246,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Security & Access',
     description: 'Authentication, roles, permissions, SSO, and audit logs.',
     icon: 'ShieldCheck',
+    published: false,
     articles: [
       { slug: 'authentication', title: 'Authentication' },
       { slug: 'two-factor-auth', title: 'Two-factor authentication' },
@@ -251,6 +265,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Platform & Settings',
     description: 'Workspace configuration, branding, modules, and system settings.',
     icon: 'Settings',
+    published: false,
     articles: [
       { slug: 'workspace-settings', title: 'Workspace settings' },
       { slug: 'branding', title: 'Branding & white label' },
@@ -271,6 +286,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Integrations',
     description: 'Connect NuCRM to email providers, Slack, Stripe, Zapier, and more.',
     icon: 'Plug',
+    published: false,
     articles: [
       { slug: 'integrations-overview', title: 'Integrations overview' },
       { slug: 'email-providers', title: 'Email providers' },
@@ -289,6 +305,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Industry Guides',
     description: 'Step-by-step guides for using NuCRM in your specific industry.',
     icon: 'Building2',
+    published: false,
     articles: [
       { slug: 'real-estate', title: 'Real estate CRM' },
       { slug: 'saas-software', title: 'SaaS & software' },
@@ -310,6 +327,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'API & Developer',
     description: 'REST API reference, authentication, SDKs, and webhook guides.',
     icon: 'Code2',
+    published: false,
     articles: [
       { slug: 'api-overview', title: 'API overview' },
       { slug: 'authentication-api', title: 'API authentication' },
@@ -326,10 +344,22 @@ export const DOC_SECTIONS: DocSection[] = [
 
 /* ─────────────────────────── Helpers ───────────────────────────────── */
 
-/** Flat list of every article with its section context. */
+/** Published sections only (sections with actual MDX content). */
+export function getPublishedSections(): DocSection[] {
+  return DOC_SECTIONS.filter((s) => s.published);
+}
+
+/** Check if an article belongs to a published section. */
+export function isArticlePublished(sectionSlug: string, _articleSlug: string): boolean {
+  const section = DOC_SECTIONS.find((s) => s.slug === sectionSlug);
+  return section?.published ?? false;
+}
+
+/** Flat list of every published article with its section context. */
 export function getAllDocs(): { slug: string; title: string; sectionSlug: string; sectionTitle: string }[] {
   const result: { slug: string; title: string; sectionSlug: string; sectionTitle: string }[] = [];
   for (const section of DOC_SECTIONS) {
+    if (!section.published) continue;
     for (const article of section.articles) {
       result.push({
         slug: article.slug,

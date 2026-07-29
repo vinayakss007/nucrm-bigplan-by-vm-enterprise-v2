@@ -3,20 +3,21 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
-import { DOC_SECTIONS } from '@/lib/marketing/docs';
+import { getPublishedSections, type DocSection } from '@/lib/marketing/docs';
 import { Icon } from '@/components/marketing/icon';
 
 export function DocsSidebar({ className = '' }: { className?: string }) {
   const pathname = usePathname();
+  const publishedSections = getPublishedSections();
   // Determine which section is currently active
-  const activeSection = DOC_SECTIONS.find((s) =>
+  const activeSection = publishedSections.find((s) =>
     pathname.startsWith(`/docs/${s.slug}`),
   );
 
   return (
     <nav aria-label="Documentation navigation" className={className}>
       <div className="space-y-1">
-        {DOC_SECTIONS.map((section) => (
+        {publishedSections.map((section) => (
           <SidebarSection
             key={section.slug}
             section={section}
@@ -34,7 +35,7 @@ function SidebarSection({
   pathname,
   defaultOpen,
 }: {
-  section: (typeof DOC_SECTIONS)[number];
+  section: DocSection;
   pathname: string;
   defaultOpen: boolean;
 }) {
