@@ -46,7 +46,7 @@ The template body supports full rich text:
 
 Insert dynamic placeholders that fill in automatically:
 
-1. Click the **{ }** icon or type `{{`
+1. Click the **\{ \}** icon or type `{{`
 2. Choose from available variables:
 
 | Variable | Resolves to |
@@ -63,7 +63,7 @@ Insert dynamic placeholders that fill in automatically:
 | `{{meeting_link}}` | Your personal scheduling link |
 
 <Callout variant="tip">
-Always include a fallback for variables that might be empty. For example, use "Hi {{first_name | there}}" so contacts without a first name see "Hi there" instead of "Hi {{first_name}}."
+Always include a fallback for variables that might be empty. For example, use "Hi `{{first_name | there}}`" so contacts without a first name see "Hi there" instead of "Hi `{{first_name}}`."
 </Callout>
 
 ## Using a template

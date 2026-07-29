@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import type { ComponentType } from 'react';
 import { MDXContent } from '@/components/marketing/docs/MDXContent';
 import { DocsBreadcrumb } from '@/components/marketing/docs/DocsBreadcrumb';
 import { DocsPrevNext } from '@/components/marketing/docs/DocsPrevNext';
@@ -53,10 +52,17 @@ export function generateStaticParams() {
 
 /* ─────────────── Server-side MDX loader ─────────────── */
 
-async function loadMDX(sectionSlug: string, articleSlug: string): Promise<ComponentType | null> {
+import fs from 'node:fs';
+import path from 'node:path';
+import { MDXRemote } from 'next-mdx-remote/rsc';
+import remarkGfm from 'remark-gfm';
+import rehypeSlug from 'rehype-slug';
+import { docsComponents as mdxComponents } from '@/components/marketing/docs/mdx-components';
+
+function loadMDXSource(sectionSlug: string, articleSlug: string): string | null {
+  const filePath = path.join(process.cwd(), 'content', 'docs', sectionSlug, `${articleSlug}.mdx`);
   try {
-    const mod = await import(`@/content/docs/${sectionSlug}/${articleSlug}.mdx`);
-    return mod.default as ComponentType;
+    return fs.readFileSync(filePath, 'utf8');
   } catch {
     return null;
   }
@@ -82,8 +88,8 @@ export default async function DocsArticlePage({ params }: PageProps) {
   const breadcrumbs = getBreadcrumbs(sectionSlug, articleSlug);
   const prevNext = getPrevNext(sectionSlug, articleSlug);
 
-  // Import MDX at the server level for static HTML generation
-  const Content = await loadMDX(sectionSlug, articleSlug);
+  // Load raw MDX source and render via MDXRemote (server component)
+  const source = loadMDXSource(sectionSlug, articleSlug);
 
   return (
     <article>
@@ -91,9 +97,18 @@ export default async function DocsArticlePage({ params }: PageProps) {
       <h1 className="mb-6 text-[28px] font-bold leading-[1.2] tracking-[-0.02em] text-white">
         {article.title}
       </h1>
-      {Content ? (
+      {source ? (
         <MDXContent>
-          <Content />
+          <MDXRemote
+            source={source}
+            options={{
+              mdxOptions: {
+                remarkPlugins: [remarkGfm],
+                rehypePlugins: [rehypeSlug],
+              },
+            }}
+            components={mdxComponents}
+          />
         </MDXContent>
       ) : (
         <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-6 py-8 text-center">

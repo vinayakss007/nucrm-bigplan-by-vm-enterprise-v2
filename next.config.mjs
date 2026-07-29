@@ -1,11 +1,6 @@
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import createMDX from '@next/mdx';
-import rehypeSlug from 'rehype-slug';
-
-import remarkGfm from 'remark-gfm';
-import rehypePrettyCode from 'rehype-pretty-code';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // #177: Ensure custom .next directory exists (e.g. tmpfs for faster builds)
@@ -36,7 +31,6 @@ if (externalIp) {
 
 /** @type {import('next').NextConfig} */
 let nextConfig = {
-  pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'mdx'],
   distDir,
   allowedDevOrigins: origins,
   typescript: { ignoreBuildErrors: false },
@@ -91,17 +85,7 @@ let nextConfig = {
   },
 };
 
-// MDX support (innermost wrapper)
-const withMDX = createMDX({
-  options: {
-    remarkPlugins: [remarkGfm],
-    rehypePlugins: [
-      rehypeSlug,
-      [rehypePrettyCode, { theme: 'one-dark-pro' }],
-    ],
-  },
-});
-nextConfig = withMDX(nextConfig);
+// MDX is compiled at build-time in the [...slug] route, not via the loader.
 
 if (process.env.SENTRY_ORG && process.env.SENTRY_PROJECT && process.env.SENTRY_AUTH_TOKEN) {
   try {

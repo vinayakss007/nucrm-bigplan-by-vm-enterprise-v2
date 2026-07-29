@@ -1,8 +1,6 @@
-'use client';
-
 import type { ReactNode } from 'react';
-import { useState, useRef } from 'react';
 import { Icon } from '@/components/marketing/icon';
+import { CodeBlock } from './CopyButton';
 
 /**
  * MDX component overrides for the public documentation.
@@ -125,23 +123,6 @@ function Li({ children, ...props }: React.HTMLAttributes<HTMLLIElement>) {
 
 /* ─────────────── Code ─────────────── */
 
-function Pre({ children, ...props }: React.HTMLAttributes<HTMLPreElement>) {
-  const preRef = useRef<HTMLPreElement>(null);
-
-  return (
-    <div className="group relative mb-5">
-      <pre
-        ref={preRef}
-        className="overflow-x-auto rounded-xl border border-white/[0.08] bg-[#0a0a16] px-5 py-4 text-[13px] leading-[1.7]"
-        {...props}
-      >
-        {children}
-      </pre>
-      <CopyButton getTextRef={preRef} />
-    </div>
-  );
-}
-
 function Code({ children, className, ...props }: React.HTMLAttributes<HTMLElement>) {
   // If inside a pre (has className from rehype-pretty-code), render plain
   if (className) {
@@ -159,32 +140,6 @@ function Code({ children, className, ...props }: React.HTMLAttributes<HTMLElemen
     >
       {children}
     </code>
-  );
-}
-
-function CopyButton({ getTextRef }: { getTextRef: React.RefObject<HTMLPreElement | null> }) {
-  const [copied, setCopied] = useState(false);
-
-  async function handleCopy() {
-    try {
-      const text = getTextRef.current?.textContent ?? '';
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch { /* noop */ }
-  }
-
-  return (
-    <button
-      onClick={handleCopy}
-      className="absolute right-3 top-3 rounded-md border border-white/[0.1] bg-[#0d0d1a] p-1.5 opacity-0 transition-opacity group-hover:opacity-100"
-      aria-label="Copy code"
-    >
-      <Icon
-        name={copied ? 'Check' : 'Copy'}
-        className={`h-3.5 w-3.5 ${copied ? 'text-emerald-400' : 'text-[#6b7488]'}`}
-      />
-    </button>
   );
 }
 
@@ -290,7 +245,7 @@ export const docsComponents = {
   ul: Ul,
   ol: Ol,
   li: Li,
-  pre: Pre,
+  pre: CodeBlock,
   code: Code,
   table: Table,
   th: Th,

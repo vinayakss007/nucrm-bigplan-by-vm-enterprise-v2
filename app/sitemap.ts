@@ -3,6 +3,7 @@ import { PILLARS } from '@/lib/marketing/features';
 import { SOLUTIONS } from '@/lib/marketing/solutions';
 import { COMPARISONS } from '@/lib/marketing/compare';
 import { STUDIO_PRODUCTS } from '@/lib/marketing/abetworks';
+import { getPublishedSections } from '@/lib/marketing/docs';
 
 /**
  * Sitemap for the public marketing site.
@@ -50,6 +51,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...SOLUTIONS.map((s) => entry(`/solutions/${s.slug}`, 0.7)),
     ...COMPARISONS.map((c) => entry(`/compare/${c.slug}`, 0.7)),
     ...STUDIO_PRODUCTS.map((p) => entry(`/abetworks/${p.slug}`, 0.6)),
+
+    // Documentation
+    entry('/docs', 0.7),
+    ...getPublishedSections().flatMap((sec) =>
+      sec.articles.map((a) => entry(`/docs/${sec.slug}/${a.slug}`, 0.5)),
+    ),
 
     entry('/legal/privacy', 0.3, 'yearly'),
     entry('/legal/terms', 0.3, 'yearly'),
