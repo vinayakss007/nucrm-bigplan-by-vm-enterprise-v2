@@ -158,14 +158,28 @@ export default function DealsKanbanPage() {
   const loading = isLoading && deals.length === 0;
 
   const stages: Stage[] = useMemo(() => {
-    const apiStages = stagesRes?.stages ?? stagesRes?.data?.stages ?? stagesRes?.data;
-    if (Array.isArray(apiStages) && apiStages.length > 0) {
-      return apiStages.map((s: { id: string; name: string; color?: string; order?: number }) => ({
-        id: s.id,
-        name: s.name,
-        color: s.color || 'bg-slate-400',
-        order: s.order ?? 0,
-      }));
+    // API returns { data: Pipeline[] } where each pipeline has a stages array
+    const pipelinesData = stagesRes?.data;
+    if (Array.isArray(pipelinesData) && pipelinesData.length > 0) {
+      // Use the default pipeline if one exists, otherwise fall back to the first
+      const pipeline = pipelinesData.find((p: { isDefault?: boolean }) => p.isDefault) || pipelinesData[0];
+      const pipelineStages = pipeline?.stages;
+      if (Array.isArray(pipelineStages) && pipelineStages.length > 0) {
+        const STAGE_COLORS: Record<string, string> = {
+          lead: 'bg-slate-400',
+          qualified: 'bg-blue-400',
+          proposal: 'bg-violet-400',
+          negotiation: 'bg-amber-400',
+          won: 'bg-emerald-400',
+          lost: 'bg-red-400',
+        };
+        return pipelineStages.map((s: { id: string; name: string; color?: string; order?: number }, idx: number) => ({
+          id: s.id,
+          name: s.name,
+          color: s.color || STAGE_COLORS[s.name.toLowerCase()] || 'bg-slate-400',
+          order: s.order ?? idx,
+        }));
+      }
     }
     return DEFAULT_STAGES;
   }, [stagesRes]);
