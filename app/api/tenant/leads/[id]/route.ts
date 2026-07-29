@@ -77,11 +77,13 @@ export async function GET(
     });
     
     return NextResponse.json({
-      ...lead,
-      assigned_name: assignedUser?.fullName,
-      assigned_avatar: assignedUser?.avatarUrl,
-      created_by_name: creator?.fullName,
-      activities,
+      data: {
+        ...lead,
+        assigned_name: assignedUser?.fullName,
+        assigned_avatar: assignedUser?.avatarUrl,
+        created_by_name: creator?.fullName,
+        activities,
+      },
     });
  
  
@@ -208,7 +210,7 @@ export async function PATCH(
 
     fireWebhooks(ctx.tenantId, 'lead.updated', { id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     
-    return NextResponse.json(updatedLead);
+    return NextResponse.json({ data: updatedLead });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
