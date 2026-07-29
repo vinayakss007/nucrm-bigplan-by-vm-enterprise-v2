@@ -14,7 +14,8 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync } from 'fs';
+import { writeFile } from 'fs/promises';
 import path from 'path';
 
 type Category = 'typecheck' | 'lint' | 'unit' | 'integration' | 'build' | 'lighthouse';
@@ -179,7 +180,7 @@ async function main() {
       durationMs: r.durationMs,
     })),
   };
-  writeFileSync(path.join(REPORT_DIR, 'quality-report.json'), JSON.stringify(report, null, 2));
+  await writeFile(path.join(REPORT_DIR, 'quality-report.json'), JSON.stringify(report, null, 2));
   console.log(`Report written to test-reports/quality-report.json`);
 
   // CI enforcement
