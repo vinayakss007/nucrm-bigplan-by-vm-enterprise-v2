@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
         is_super_admin: users.isSuperAdmin,
         email_verified: users.emailVerified,
         created_at: users.createdAt,
+        metadata: users.metadata,
         memberships: sql`COALESCE(
           json_agg(
             json_build_object(
@@ -117,11 +118,87 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH is blocked — no grant/revoke/transfer super admin, no session revocation
-export async function PATCH(_request: NextRequest) {
-  return NextResponse.json({
-    error: 'This operation is disabled. Super admin status can only be set during initial platform setup.'
-  }, { status: 403 });
+/**
+ * PATCH — Edit user details (full_name, role, status).
+ * Super admin status changes remain blocked — use /api/superadmin/transfer-admin instead.
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const ctx = await requireAuth(request);
+    if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    const body = await readJsonBody(request);
+    const { id, full_name, role, status } = body as {
+      id?: string;
+      full_name?: string;
+      role?: string;
+      status?: string;
+    };
+
+    if (!id) return NextResponse.json({ error: 'User id is required' }, { status: 400 });
+
+    // Validate status if provided
+    const allowedStatuses = ['active', 'suspended'];
+    if (status && !allowedStatuses.includes(status)) {
+      return NextResponse.json({ error: `Invalid status. Allowed: ${allowedStatuses.join(', ')}` }, { status: 400 });
+    }
+
+    // Validate role if provided
+    const allowedRoles = ['admin', 'user', 'viewer'];
+    if (role && !allowedRoles.includes(role)) {
+      return NextResponse.json({ error: `Invalid role. Allowed: ${allowedRoles.join(', ')}` }, { status: 400 });
+    }
+
+    // Build update payload
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+
+    if (full_name !== undefined) {
+      updates.fullName = full_name?.trim() || null;
+    }
+
+    // Store role and status in metadata (no schema migration needed)
+    if (role !== undefined || status !== undefined) {
+      // Fetch current metadata first
+      const [existing] = await db
+        .select({ metadata: users.metadata })
+        .from(users)
+        .where(eq(users.id, id))
+        .limit(1);
+
+      if (!existing) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+
+      const currentMeta = (existing.metadata as Record<string, unknown>) || {};
+      const newMeta = { ...currentMeta };
+      if (role !== undefined) newMeta.role = role;
+      if (status !== undefined) newMeta.account_status = status;
+      updates.metadata = newMeta;
+    }
+
+    const [updated] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, id))
+      .returning({
+        id: users.id,
+        email: users.email,
+        full_name: users.fullName,
+        is_super_admin: users.isSuperAdmin,
+      });
+
+    if (!updated) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ data: updated });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (err: any) {
+    console.error('[superadmin/users PATCH]', err);
+    return apiError(err);
+  }
 }
 
 // DELETE is permanently blocked
