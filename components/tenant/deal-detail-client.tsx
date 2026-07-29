@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency, formatRelativeTime } from '@/lib/utils';
 import DocumentsPanel from '@/components/documents/documents-panel';
+import DealRelatedPanel from '@/components/tenant/deal-related-panel';
+import DealTimeline from '@/components/tenant/deal-timeline';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -21,7 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import toast from 'react-hot-toast';
 
-const STAGES = [
+const DEFAULT_STAGES = [
   { id: 'lead', label: 'Lead', color: 'bg-slate-100 text-slate-700', dot: 'bg-slate-400' },
   { id: 'qualified', label: 'Qualified', color: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500' },
   { id: 'proposal', label: 'Proposal', color: 'bg-violet-100 text-violet-700', dot: 'bg-violet-500' },
@@ -59,9 +61,10 @@ interface Props {
 
 export default function DealDetailClient({ deal, tasks, activities, permissions, _tenantId, _userId }: Props) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'activities' | 'documents'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'activities' | 'documents' | 'related' | 'timeline'>('overview');
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [stages, setStages] = useState(DEFAULT_STAGES);
   const [editForm, setEditForm] = useState({
     title: deal.title || '',
     value: deal.value?.toString() || '0',
@@ -72,7 +75,42 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
   });
   const [saving, setSaving] = useState(false);
 
-  const stage = STAGES.find(s => s.id === deal.stage) || STAGES[0]!;
+  // Fetch pipeline stages from API (falls back to defaults)
+  useEffect(() => {
+    async function loadStages() {
+      try {
+        const res = await fetch('/api/tenant/pipelines');
+        if (!res.ok) return;
+        const data = await res.json();
+        const pipelines = data.data ?? data.pipelines ?? data ?? [];
+        if (Array.isArray(pipelines) && pipelines.length > 0) {
+          // Find the first pipeline's stages or flatten all stages
+          const allStages: Array<{ id: string; name: string }> = [];
+          for (const p of pipelines) {
+            const pStages = p.stages ?? p.deal_stages ?? [];
+            for (const s of pStages) {
+              if (s.id && s.name) allStages.push(s);
+            }
+          }
+          if (allStages.length > 0) {
+            const colors = ['bg-slate-100 text-slate-700', 'bg-blue-100 text-blue-700', 'bg-violet-100 text-violet-700', 'bg-amber-100 text-amber-700', 'bg-emerald-100 text-emerald-700', 'bg-red-100 text-red-600'];
+            const dots = ['bg-slate-400', 'bg-blue-500', 'bg-violet-500', 'bg-amber-500', 'bg-emerald-500', 'bg-red-500'];
+            setStages(allStages.map((s, i) => ({
+              id: s.id,
+              label: s.name,
+              color: colors[i % colors.length]!,
+              dot: dots[i % dots.length]!,
+            })));
+          }
+        }
+      } catch {
+        // fallback to defaults
+      }
+    }
+    loadStages();
+  }, []);
+
+  const stage = stages.find(s => s.id === deal.stage) || stages[0]!;
   const stageColor = stage?.color || 'bg-slate-100 text-slate-700';
   const stageDot = stage?.dot || 'bg-slate-400';
   const stageLabel = stage?.label || deal.stage;
@@ -205,7 +243,7 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
-        {(['overview', 'tasks', 'activities', 'documents'] as const).map(tab => (
+        {(['overview', 'tasks', 'activities', 'related', 'timeline', 'documents'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -372,6 +410,28 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
         </div>
       )}
 
+      {activeTab === 'related' && (
+        <div className="admin-card overflow-hidden">
+          <div className="px-5 py-3 border-b border-border">
+            <h2 className="text-sm font-semibold">Related Records</h2>
+          </div>
+          <div className="p-5">
+            <DealRelatedPanel dealId={deal.id} />
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'timeline' && (
+        <div className="admin-card overflow-hidden">
+          <div className="px-5 py-3 border-b border-border">
+            <h2 className="text-sm font-semibold">Communication Timeline</h2>
+          </div>
+          <div className="p-5">
+            <DealTimeline dealId={deal.id} />
+          </div>
+        </div>
+      )}
+
       {activeTab === 'documents' && (
         <div className="admin-card overflow-hidden">
           <div className="px-5 py-3 border-b border-border">
@@ -408,7 +468,7 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
               <div>
                 <label className={lbl}>Stage</label>
                 <select className={inp} value={editForm.stage} onChange={e => setEditForm(f => ({ ...f, stage: e.target.value }))}>
-                  {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  {stages.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                 </select>
               </div>
               <div>
