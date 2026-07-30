@@ -171,7 +171,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       });
     }
 
-    return NextResponse.json({ success: true });
+    // Fetch updated ticket to return in response
+    const [updatedTicket] = await db.select({
+      id: supportTickets.id,
+      subject: supportTickets.subject,
+      body: supportTickets.body,
+      status: supportTickets.status,
+      priority: supportTickets.priority,
+      category: supportTickets.category,
+      assignedTo: supportTickets.assignedTo,
+      createdAt: supportTickets.createdAt,
+    })
+    .from(supportTickets)
+    .where(and(eq(supportTickets.tenantId, ctx.tenantId), eq(supportTickets.id, id)))
+    .limit(1);
+
+    return NextResponse.json({ data: updatedTicket ?? { id } });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -195,7 +210,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const now = new Date();
     await db.update(supportTickets).set({ deletedAt: now, updatedAt: now }).where(and(eq(supportTickets.tenantId, ctx.tenantId), eq(supportTickets.id, id)));
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ data: { id, deleted: true } });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
