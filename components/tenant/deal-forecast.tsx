@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TrendingUp, Calendar, Target, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 
 interface Forecast {
   id: string;
@@ -35,7 +35,7 @@ export default function DealForecast({ dealId }: { dealId: string }) {
       if (f) {
         setForecast(f);
         setForm({
-          expected_close_date: f.expected_close_date ? new Date(f.expected_close_date).toISOString().split('T')[0] : '',
+          expected_close_date: f.expected_close_date ? (new Date(f.expected_close_date).toISOString().split('T')[0] ?? '') : '',
           probability: String(f.probability ?? 50),
           forecast_amount: String(f.forecast_amount ?? ''),
           confidence_level: f.confidence_level || 'medium',

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { ContactTimeline } from '@/components/tenant/contact-timeline';
+import ContactTimeline from '@/components/tenant/contact-timeline';
 
 const now = new Date();
 const mockEvents = [

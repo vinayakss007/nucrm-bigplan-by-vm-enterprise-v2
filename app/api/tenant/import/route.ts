@@ -65,10 +65,10 @@ export async function POST(request: NextRequest) {
               return {
                 tenantId: ctx.tenantId,
                 firstName: r.first_name || r.firstName || '',
-                lastName: r.last_name || r.lastName || null,
-                email: r.email || null,
-                phone: r.phone || null,
-                jobTitle: r.job_title || r.jobTitle || null,
+                lastName: r.last_name || r.lastName || undefined,
+                email: r.email || undefined,
+                phone: r.phone || undefined,
+                jobTitle: r.job_title || r.jobTitle || undefined,
                 leadStatus: 'new' as const,
                 createdBy: ctx.userId,
               };
@@ -90,9 +90,9 @@ export async function POST(request: NextRequest) {
               return {
                 tenantId: ctx.tenantId,
                 name: r.name,
-                website: r.website || null,
-                industry: r.industry || null,
-                phone: r.phone || null,
+                website: r.website || undefined,
+                industry: r.industry || undefined,
+                phone: r.phone || undefined,
                 createdBy: ctx.userId,
               };
             }).filter((v): v is NonNullable<typeof v> => v !== null);
@@ -113,12 +113,12 @@ export async function POST(request: NextRequest) {
               return {
                 tenantId: ctx.tenantId,
                 firstName: r.first_name || r.firstName || '',
-                lastName: r.last_name || r.lastName || null,
-                email: r.email || null,
-                phone: r.phone || null,
-                companyName: r.company || r.company_name || null,
+                lastName: r.last_name || r.lastName || undefined,
+                email: r.email || undefined,
+                phone: r.phone || undefined,
+                companyName: r.company || r.company_name || undefined,
                 leadStatus: 'new' as const,
-                source: r.source || r.lead_source || null,
+                source: r.source || r.lead_source || undefined,
                 createdBy: ctx.userId,
               };
             }).filter((v): v is NonNullable<typeof v> => v !== null);
