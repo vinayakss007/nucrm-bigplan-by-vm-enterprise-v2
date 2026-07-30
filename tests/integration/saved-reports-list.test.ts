@@ -117,7 +117,12 @@ describe('DELETE /api/tenant/reports/[id]', () => {
     vi.clearAllMocks();
     mockRequireAuth.mockResolvedValue({ userId: 'user-1', tenantId: 'tenant-1', email: 'admin@test.com', role: 'admin' });
     mockCan.mockReturnValue(true);
+    // #860 converted this route from db.delete() to a soft delete: it now runs
+    // update().set({ deletedAt }).returning(), which this mock resolves from
+    // _patchResult, not _deleteResult. Both are set so the intent stays clear
+    // if the route ever moves back to a hard delete.
     _deleteResult = [R1];
+    _patchResult = [R1];
   });
 
   it('deletes saved report', async () => {
@@ -130,7 +135,9 @@ describe('DELETE /api/tenant/reports/[id]', () => {
   });
 
   it('returns 404 for nonexistent report', async () => {
+    // The soft delete matches no row, so returning() is empty.
     _deleteResult = [];
+    _patchResult = [];
 
     const { DELETE } = await import('@/app/api/tenant/reports/[id]/route');
     const res = await DELETE(createTestRequest('/api/tenant/reports/missing', { method: 'DELETE' }), { params: Promise.resolve({ id: 'missing' }) });
