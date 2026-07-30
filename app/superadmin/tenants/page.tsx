@@ -23,8 +23,8 @@ const BILLING_TYPE_COLORS: Record<string,string> = {
   lifetime:      'text-purple-400',
   complimentary: 'text-pink-400',
 };
-const PLANS = ['free','starter','pro','enterprise'];
-const STATUSES = ['trialing','active','suspended','cancelled','past_due','trial_expired'];
+const PLANS = ['free','starter','pro','enterprise','lifetime'];
+const STATUSES = ['trialing','active','suspended','cancelled','past_due','trial_expired','churned','deleted'];
 const BILLING_TYPES = ['trial','stripe','manual','lifetime','complimentary'];
 
 const LIMIT_FIELDS: { key: string; label: string; unit?: string }[] = [
@@ -240,6 +240,8 @@ export default function SuperAdminTenantsPage() {
   const [search, setSearch]       = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [page, setPage]           = useState(0);
+  const PAGE_SIZE = 25;
   const [editTenant, setEditTenant] = useState<TenantInfo | null>(null);
   const [modulesTenant, setModulesTenant] = useState<TenantInfo | null>(null);
   const [featuresTenant, setFeaturesTenant] = useState<TenantInfo | null>(null);
@@ -319,12 +321,10 @@ export default function SuperAdminTenantsPage() {
   const impersonate = async (tenantId:string, tenantName:string) => {
     await confirmThen(`Enter "${tenantName}" as superadmin? You will see everything as if you are them.`, async () => {
       setImpersonating(tenantId);
+      // Use server API which sets HTTP-only session cookie server-side
       const res = await fetch('/api/superadmin/impersonate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tenantId})});
       const d = await res.json();
       if(res.ok) {
-        if (d.cookie) {
-          document.cookie = `session=${d.cookie}; Path=/; SameSite=Lax`;
-        }
         sessionStorage.setItem('isImpersonating', 'true');
         sessionStorage.setItem('impersonateSessionId', d.sessionId || '');
         window.location.href = `/tenant/dashboard`;
@@ -439,7 +439,7 @@ export default function SuperAdminTenantsPage() {
           <tbody>
             {loading&&<tr><td colSpan={6} className="text-center py-8 text-muted-foreground text-sm">Loading...</td></tr>}
             {!loading&&!tenants.length&&<tr><td colSpan={6} className="text-center py-12 text-muted-foreground text-sm">No organizations found</td></tr>}
-            {tenants.map(t=>{
+            {tenants.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map(t=>{
               const trialLeft = t.trial_ends_at ? Math.max(0,Math.ceil((new Date(t.trial_ends_at).getTime()-Date.now())/86400000)) : null;
               const isOwnOrg = t.id === meInfo?.ownTenantId;
               return (
@@ -546,6 +546,20 @@ export default function SuperAdminTenantsPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {tenants.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between px-1 py-2">
+          <p className="text-xs text-muted-foreground">
+            Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, tenants.length)} of {tenants.length}
+          </p>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-3 py-1.5 rounded-lg text-sm border border-border bg-background hover:bg-accent disabled:opacity-40 disabled:pointer-events-none">Previous</button>
+            <span className="text-xs text-muted-foreground">Page {page + 1} of {Math.ceil(tenants.length / PAGE_SIZE)}</span>
+            <button onClick={() => setPage(p => p + 1)} disabled={(page + 1) * PAGE_SIZE >= tenants.length} className="px-3 py-1.5 rounded-lg text-sm border border-border bg-background hover:bg-accent disabled:opacity-40 disabled:pointer-events-none">Next</button>
+          </div>
+        </div>
+      )}
 
       {modulesTenant && <ModulesModal tenant={modulesTenant} onClose={()=>setModulesTenant(null)} _onSaved={()=>{setModulesTenant(null);load();}} />}
       {featuresTenant && <TenantFeaturesPanel tenantId={featuresTenant.id} tenantName={featuresTenant.name} plan={featuresTenant.plan_id} onClose={() => setFeaturesTenant(null)} />}

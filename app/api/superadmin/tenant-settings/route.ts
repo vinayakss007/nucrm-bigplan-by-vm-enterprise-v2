@@ -1,13 +1,10 @@
 /**
  * Super-Admin: Per-tenant Settings drill-in
- *   GET  /api/superadmin/tenant-settings?tenant_id=...
+ *   GET   /api/superadmin/tenant-settings?tenant_id=...
+ *   PATCH /api/superadmin/tenant-settings  { tenant_id, settings: { ... } }
  *
- * Read-only summary of every settings sub-tree for a single tenant. Lets
- * platform owners audit org-level configuration without impersonating.
- *
- * The companion PATCH would let super-admins override tenant settings;
- * for safety this initial cut is read-only — overrides should go through
- * impersonation or a dedicated audited workflow.
+ * Read + write summary of every settings sub-tree for a single tenant.
+ * PATCH merges provided keys into the existing settings JSON column.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -74,6 +71,53 @@ export async function GET(req: NextRequest) {
         other_keys: Object.keys(settings).filter(k => !['localization','login_policy','picklists','user_defaults'].includes(k)),
       },
     });
+ 
+ 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (err: any) {
+    return apiError(err);
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const ctx = await requireAuth(req);
+    if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
+
+    const body = await req.json();
+    const { tenant_id, settings: incoming } = body;
+    if (!tenant_id) return NextResponse.json({ error: 'tenant_id required' }, { status: 400 });
+    if (!incoming || typeof incoming !== 'object') return NextResponse.json({ error: 'settings object required' }, { status: 400 });
+
+    const [tenant] = await db
+      .select({ id: tenants.id, settings: tenants.settings })
+      .from(tenants)
+      .where(eq(tenants.id, tenant_id))
+      .limit(1);
+
+    if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+
+    const existing = (tenant.settings as Record<string, unknown>) ?? {};
+    // Merge only the known editable keys
+    const allowedKeys = ['localization', 'login_policy', 'picklists', 'user_defaults'];
+    const merged = { ...existing };
+    for (const key of allowedKeys) {
+      if (key in incoming) {
+        if (incoming[key] === null) {
+          delete merged[key];
+        } else {
+          merged[key] = incoming[key];
+        }
+      }
+    }
+
+    await db
+      .update(tenants)
+      .set({ settings: merged, updatedAt: new Date() })
+      .where(eq(tenants.id, tenant_id));
+
+    return NextResponse.json({ ok: true, message: 'Settings updated' });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
