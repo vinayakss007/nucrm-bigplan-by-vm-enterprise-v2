@@ -108,7 +108,8 @@ export async function DELETE(
     const { tenantId } = ctx;
     const { id } = await params;
 
-    const [service] = await db.delete(services)
+    const [service] = await db.update(services)
+      .set({ deletedAt: new Date() })
       .where(and(eq(services.id, id), eq(services.tenantId, tenantId)))
       .returning();
 
