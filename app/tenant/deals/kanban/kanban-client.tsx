@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import Link from 'next/link';
 
 interface Deal {
   id: string;
