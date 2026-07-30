@@ -113,7 +113,9 @@ export async function POST(request: NextRequest) {
               return {
                 tenantId: ctx.tenantId,
                 firstName: r.first_name || r.firstName || '',
-                lastName: r.last_name || r.lastName || null,
+                // leads.lastName is NOT NULL (default ''), unlike contacts.lastName
+                // which is nullable — so this branch cannot pass null.
+                lastName: r.last_name || r.lastName || '',
                 email: r.email || null,
                 phone: r.phone || null,
                 companyName: r.company || r.company_name || null,
