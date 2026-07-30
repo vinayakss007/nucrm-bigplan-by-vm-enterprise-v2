@@ -1,9 +1,16 @@
 /* eslint-disable */
 /**
- * NuCRM Development Seed Script
+ * NuCRM Development Seed Script (Orchestrator)
  *
  * Populates a local PostgreSQL database with comprehensive test data
  * for development. This script is idempotent and safe to run multiple times.
+ *
+ * Domain-specific seed logic is extracted into scripts/seed/ modules:
+ *   - seed/companies.ts  -- 30 companies across industries
+ *   - seed/contacts.ts   -- 55 contacts with varied profiles
+ *   - seed/deals.ts      -- 35 deals across two pipelines
+ *
+ * This file remains the orchestrator that imports and runs each module.
  *
  * Usage:
  *   npx tsx scripts/seed-dev.ts
@@ -45,6 +52,7 @@ import { sql } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import * as schema from '../drizzle/schema';
+import { seedCompanies, seedContacts, seedDeals } from './seed';
 
 // ============================================================================
 // FIXED UUIDs (for deterministic relationships)
@@ -329,94 +337,23 @@ async function main() {
 
 
     // ========================================================================
-    // COMPANIES (30)
+    // COMPANIES (30) - extracted to scripts/seed/companies.ts
     // ========================================================================
-    logSection('Seeding Companies');
+    await seedCompanies(db);
 
-    const companiesData = [
-      { name: 'TechVision Inc', industry: 'Technology', domain: 'techvision.io', companySize: '51-200', annualRevenue: '5000000', city: 'San Francisco', country: 'US' },
-      { name: 'HealthFirst Corp', industry: 'Healthcare', domain: 'healthfirst.com', companySize: '201-500', annualRevenue: '25000000', city: 'Boston', country: 'US' },
-      { name: 'FinanceFlow Ltd', industry: 'Finance', domain: 'financeflow.co', companySize: '11-50', annualRevenue: '3000000', city: 'New York', country: 'US' },
-      { name: 'BuildRight Manufacturing', industry: 'Manufacturing', domain: 'buildright.com', companySize: '501-1000', annualRevenue: '50000000', city: 'Detroit', country: 'US' },
-      { name: 'RetailHub', industry: 'Retail', domain: 'retailhub.io', companySize: '51-200', annualRevenue: '8000000', city: 'Chicago', country: 'US' },
-      { name: 'EduSmart Solutions', industry: 'Education', domain: 'edusmart.io', companySize: '11-50', annualRevenue: '1500000', city: 'Austin', country: 'US' },
-      { name: 'GreenEnergy Systems', industry: 'Energy', domain: 'greenenergy.co', companySize: '201-500', annualRevenue: '35000000', city: 'Denver', country: 'US' },
-      { name: 'LogiTrans Corp', industry: 'Logistics', domain: 'logitrans.com', companySize: '1001-5000', annualRevenue: '120000000', city: 'Memphis', country: 'US' },
-      { name: 'MediaWave Digital', industry: 'Media', domain: 'mediawave.io', companySize: '11-50', annualRevenue: '2000000', city: 'Los Angeles', country: 'US' },
-      { name: 'AeroSpace Dynamics', industry: 'Aerospace', domain: 'aerodynamics.com', companySize: '5001+', annualRevenue: '500000000', city: 'Seattle', country: 'US' },
-      { name: 'DataStream Analytics', industry: 'Technology', domain: 'datastream.ai', companySize: '51-200', annualRevenue: '12000000', city: 'Portland', country: 'US' },
-      { name: 'CloudNine Hosting', industry: 'Technology', domain: 'cloudnine.io', companySize: '11-50', annualRevenue: '4000000', city: 'Raleigh', country: 'US' },
-      { name: 'BioGen Pharma', industry: 'Healthcare', domain: 'biogenpharma.com', companySize: '201-500', annualRevenue: '45000000', city: 'San Diego', country: 'US' },
-      { name: 'FoodTech Innovations', industry: 'Food & Beverage', domain: 'foodtech.co', companySize: '51-200', annualRevenue: '7000000', city: 'Nashville', country: 'US' },
-      { name: 'AutoDrive Motors', industry: 'Automotive', domain: 'autodrive.com', companySize: '1001-5000', annualRevenue: '200000000', city: 'Detroit', country: 'US' },
-      { name: 'PropTech Realty', industry: 'Real Estate', domain: 'proptech.io', companySize: '11-50', annualRevenue: '6000000', city: 'Miami', country: 'US' },
-      { name: 'CyberShield Security', industry: 'Technology', domain: 'cybershield.io', companySize: '51-200', annualRevenue: '15000000', city: 'Washington DC', country: 'US' },
-      { name: 'AgriGrow Farms', industry: 'Agriculture', domain: 'agrigrow.co', companySize: '201-500', annualRevenue: '20000000', city: 'Des Moines', country: 'US' },
-      { name: 'LegalEase Partners', industry: 'Legal', domain: 'legalease.com', companySize: '11-50', annualRevenue: '5000000', city: 'Philadelphia', country: 'US' },
-      { name: 'SportsFit Corp', industry: 'Sports & Fitness', domain: 'sportsfit.io', companySize: '51-200', annualRevenue: '9000000', city: 'Denver', country: 'US' },
-      { name: 'TravelWise Inc', industry: 'Travel', domain: 'travelwise.com', companySize: '201-500', annualRevenue: '30000000', city: 'Orlando', country: 'US' },
-      { name: 'InsureSafe Group', industry: 'Insurance', domain: 'insuresafe.co', companySize: '501-1000', annualRevenue: '80000000', city: 'Hartford', country: 'US' },
-      { name: 'NanoTech Labs', industry: 'Technology', domain: 'nanotech.io', companySize: '11-50', annualRevenue: '3500000', city: 'Cambridge', country: 'US' },
-      { name: 'Global Consulting Group', industry: 'Consulting', domain: 'globalcg.com', companySize: '201-500', annualRevenue: '40000000', city: 'Chicago', country: 'US' },
-      { name: 'SmartHome Devices', industry: 'Consumer Electronics', domain: 'smarthomed.io', companySize: '51-200', annualRevenue: '11000000', city: 'San Jose', country: 'US' },
-      { name: 'OceanBlue Shipping', industry: 'Logistics', domain: 'oceanblue.com', companySize: '1001-5000', annualRevenue: '150000000', city: 'Houston', country: 'US' },
-      { name: 'Pixel Perfect Design', industry: 'Design', domain: 'pixelperfect.io', companySize: '1-10', annualRevenue: '800000', city: 'Brooklyn', country: 'US' },
-      { name: 'BlockChain Ventures', industry: 'Technology', domain: 'bcventures.io', companySize: '11-50', annualRevenue: '6000000', city: 'Miami', country: 'US' },
-      { name: 'PharmaCore Labs', industry: 'Healthcare', domain: 'pharmacore.com', companySize: '501-1000', annualRevenue: '75000000', city: 'Philadelphia', country: 'US' },
-      { name: 'WindPower Systems', industry: 'Energy', domain: 'windpower.co', companySize: '201-500', annualRevenue: '28000000', city: 'Oklahoma City', country: 'US' },
-    ];
-
-    await db.insert(schema.companies).values(
-      companiesData.map((c, i) => ({
-        id: IDS.companies[i],
-        tenantId: IDS.tenant,
-        name: c.name,
-        industry: c.industry,
-        domain: c.domain,
-        companySize: c.companySize,
-        annualRevenue: c.annualRevenue,
-        city: c.city,
-        country: c.country,
-        website: `https://${c.domain}`,
-        isCustomer: i < 10,
-        tags: i % 3 === 0 ? ['enterprise', 'priority'] : i % 3 === 1 ? ['smb'] : ['prospect'],
-      }))
-    );
-    logDone('companies', companiesData.length);
+    // Import companiesData for use by leads seeding (companyName references)
+    const { companiesData } = await import('./seed/companies');
 
 
     // ========================================================================
-    // CONTACTS (55)
+    // CONTACTS (55) - extracted to scripts/seed/contacts.ts
     // ========================================================================
-    logSection('Seeding Contacts');
+    await seedContacts(db);
 
-    const firstNames = ['James', 'Emma', 'Oliver', 'Sophia', 'Liam', 'Ava', 'Noah', 'Isabella', 'Ethan', 'Mia', 'Lucas', 'Charlotte', 'Mason', 'Amelia', 'Logan', 'Harper', 'Alexander', 'Evelyn', 'Daniel', 'Abigail', 'Henry', 'Emily', 'Sebastian', 'Elizabeth', 'Jack', 'Sofia', 'Benjamin', 'Ella', 'William', 'Grace', 'Owen', 'Chloe', 'Elijah', 'Victoria', 'Aiden', 'Riley', 'Jackson', 'Zoey', 'Matthew', 'Penelope', 'David', 'Lily', 'Joseph', 'Layla', 'Carter', 'Nora', 'Michael', 'Camila', 'Jayden', 'Hannah', 'Wyatt', 'Aria', 'Gabriel', 'Scarlett', 'Julian'];
-    const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin', 'Lee', 'Perez', 'Thompson', 'White', 'Harris', 'Sanchez', 'Clark', 'Ramirez', 'Lewis', 'Robinson', 'Walker', 'Young', 'Allen', 'King', 'Wright', 'Scott', 'Torres', 'Nguyen', 'Hill', 'Flores', 'Green', 'Adams', 'Nelson', 'Baker', 'Hall', 'Rivera', 'Campbell', 'Mitchell', 'Carter', 'Roberts', 'Gomez', 'Phillips', 'Evans', 'Turner', 'Diaz', 'Parker'];
-    const jobTitles = ['CEO', 'CTO', 'VP Sales', 'VP Engineering', 'Director of Marketing', 'Product Manager', 'Sales Manager', 'Account Executive', 'Software Engineer', 'HR Director', 'CFO', 'COO', 'Business Development Manager', 'Marketing Manager', 'Operations Manager'];
-    const leadStatuses = ['new', 'contacted', 'qualified', 'customer'];
-    const lifecycleStages = ['subscriber', 'lead', 'mql', 'sql', 'opportunity', 'customer', 'evangelist'];
+    // Import name arrays for leads seeding (references firstNames/lastNames)
+    const { firstNames, lastNames } = await import('./seed/contacts');
+
     const userIds = Object.values(IDS.users);
-
-    const contactsValues = Array.from({ length: 55 }, (_, i) => ({
-      id: IDS.contacts[i],
-      tenantId: IDS.tenant,
-      companyId: IDS.companies[i % 30],
-      assignedTo: userIds[i % 4],
-      firstName: firstNames[i],
-      lastName: lastNames[i],
-      email: `${firstNames[i].toLowerCase()}.${lastNames[i].toLowerCase()}@${companiesData[i % 30].domain}`,
-      phone: `+1${String(2000000000 + i * 1111111).slice(0, 10)}`,
-      jobTitle: jobTitles[i % jobTitles.length],
-      leadStatus: leadStatuses[i % 4],
-      lifecycleStage: lifecycleStages[i % 7],
-      score: (i * 7 + 10) % 100,
-      tags: i % 4 === 0 ? ['vip', 'decision-maker'] : i % 4 === 1 ? ['technical'] : i % 4 === 2 ? ['nurture'] : ['champion'],
-      city: companiesData[i % 30].city,
-      country: 'US',
-    }));
-
-    await db.insert(schema.contacts).values(contactsValues);
-    logDone('contacts', 55);
 
     // ========================================================================
     // LEADS (25)
@@ -474,50 +411,9 @@ async function main() {
 
 
     // ========================================================================
-    // DEALS (35)
+    // DEALS (35) - extracted to scripts/seed/deals.ts
     // ========================================================================
-    logSection('Seeding Deals');
-
-    const allStages = [
-      IDS.stages.lead, IDS.stages.qualified, IDS.stages.proposal,
-      IDS.stages.negotiation, IDS.stages.closedWon, IDS.stages.closedLost,
-      IDS.stages.discovery, IDS.stages.evaluation, IDS.stages.poc,
-      IDS.stages.contract, IDS.stages.entWon, IDS.stages.entLost,
-    ];
-    const dealTitles = [
-      'CRM License Deal', 'Enterprise Upgrade', 'Annual Subscription', 'Custom Integration',
-      'Platform Migration', 'Support Contract', 'Training Package', 'API Access Deal',
-      'Multi-Seat License', 'Premium Support', 'Data Analytics Add-on', 'White-Label Agreement',
-      'Consulting Engagement', 'Security Audit', 'Performance Optimization', 'Cloud Migration',
-      'Compliance Package', 'AI Module Upsell', 'Channel Partnership', 'Reseller Agreement',
-      'Proof of Concept', 'Pilot Program', 'Volume Discount Deal', 'Strategic Partnership',
-      'Renewal Deal', 'Expansion Deal', 'New Business Win', 'Competitive Displacement',
-      'Referral Deal', 'Inbound Deal', 'Outbound Deal', 'Event Lead Deal',
-      'Executive Sponsorship', 'Technical Evaluation', 'Budget Approval',
-    ];
-
-    const dealsValues = Array.from({ length: 35 }, (_, i) => {
-      const isSalesPipeline = i < 20;
-      const pipelineId = isSalesPipeline ? IDS.pipelines.sales : IDS.pipelines.enterprise;
-      const stageId = isSalesPipeline
-        ? allStages[i % 6]
-        : allStages[6 + (i % 6)];
-      return {
-        id: IDS.deals[i],
-        tenantId: IDS.tenant,
-        contactId: IDS.contacts[i % 55],
-        companyId: IDS.companies[i % 30],
-        pipelineId,
-        stageId,
-        title: dealTitles[i],
-        amount: String(5000 + (i * 14321) % 495000),
-        closeDate: i % 3 === 0 ? pastDate(i * 3) : futureDate(i * 7),
-        assignedTo: userIds[i % 4],
-      };
-    });
-
-    await db.insert(schema.deals).values(dealsValues);
-    logDone('deals', 35);
+    await seedDeals(db);
 
     // ========================================================================
     // TASKS (18)

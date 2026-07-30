@@ -8,6 +8,7 @@ import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { apiError } from '@/lib/api-error';
 
 const createProductSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -67,7 +68,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('[products GET]', error);
-    return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -111,6 +112,6 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
   } catch (error: unknown) {
     console.error('[products POST]', error);
-    return NextResponse.json({ error: 'Failed to create product' }, { status: 500 });
+    return apiError(error);
   }
 }

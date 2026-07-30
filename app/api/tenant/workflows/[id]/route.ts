@@ -181,7 +181,7 @@ export async function DELETE(
     }
     const { id } = await params;
 
-    await db.delete(workflows).where(and(eq(workflows.id, id), eq(workflows.tenantId, ctx.tenantId)));
+    await db.update(workflows).set({ deletedAt: new Date() }).where(and(eq(workflows.id, id), eq(workflows.tenantId, ctx.tenantId)));
 
     return NextResponse.json({
       ok: true,
