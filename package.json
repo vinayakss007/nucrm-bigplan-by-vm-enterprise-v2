@@ -45,7 +45,6 @@
     "smoke": "bash scripts/smoke-test.sh",
     "up": "bash scripts/bootstrap.sh",
     "start-clean": "bash scripts/start-clean.sh",
-    "db:push": "if [ \"$CI\" != \"true\" ]; then echo '⚠️  db:push is dangerous — use db:migrate instead'; exit 1; fi && npx drizzle-kit push --config=./drizzle.config.ts",
     "db:generate": "npx tsx scripts/generate-migration.ts",
     "db:migrate": "npx tsx scripts/migrate.ts",
     "db:rollback": "npx tsx scripts/rollback-migration.ts",

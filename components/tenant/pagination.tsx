@@ -30,8 +30,9 @@ export default function Pagination({ total, offset, limit, onChange }: Props) {
       <p className="text-xs text-muted-foreground" suppressHydrationWarning>{from}–{to} of {total.toLocaleString()}</p>
       <div className="flex items-center gap-1">
         <button onClick={() => go(page - 1)} disabled={page === 1}
+          aria-label="Previous page"
           className="min-h-11 min-w-11 flex items-center justify-center rounded-lg border border-border hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="w-4 h-4" aria-hidden="true" />
         </button>
         {pageNums().map((p, i) => (
           typeof p === 'string'
@@ -43,8 +44,9 @@ export default function Pagination({ total, offset, limit, onChange }: Props) {
               </button>
         ))}
         <button onClick={() => go(page + 1)} disabled={page === pages}
+          aria-label="Next page"
           className="min-h-11 min-w-11 flex items-center justify-center rounded-lg border border-border hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-          <ChevronRight className="w-4 h-4" />
+          <ChevronRight className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
     </div>
