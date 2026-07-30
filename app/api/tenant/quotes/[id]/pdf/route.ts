@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { quotes, quoteLineItems, contacts, companies, tenants } from '@/drizzle/schema';
+import { quotes, contacts, companies, tenants } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 
 /**
@@ -24,8 +24,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         title: quotes.title,
         status: quotes.status,
         totalAmount: quotes.totalAmount,
-        expiresAt: quotes.expiresAt,
+        validUntil: quotes.validUntil,
         notes: quotes.notes,
+        lineItems: quotes.lineItems,
         createdAt: quotes.createdAt,
         contactFirstName: contacts.firstName,
         contactLastName: contacts.lastName,
@@ -41,12 +42,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     if (!quote) return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
 
-    // Fetch line items separately
-    const lineItems = await db
-      .select()
-      .from(quoteLineItems)
-      .where(eq(quoteLineItems.quoteId, id));
-
     // Get tenant info for branding
     const [tenant] = await db
       .select({ name: tenants.name })
@@ -56,7 +51,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // Generate HTML for PDF
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const items = (lineItems as any[]) || [];
+    const items = (quote.lineItems as any[]) || [];
     const html = generateQuoteHtml({
       title: quote.title || `Quote #${id.slice(0, 8)}`,
       tenantName: tenant?.name || 'NuCRM',
@@ -64,7 +59,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       contactEmail: quote.contactEmail || '',
       companyName: quote.companyName || '',
       totalAmount: Number(quote.totalAmount || 0),
-      validUntil: quote.expiresAt ? new Date(quote.expiresAt).toLocaleDateString() : 'N/A',
+      validUntil: quote.validUntil ? new Date(quote.validUntil).toLocaleDateString() : 'N/A',
       notes: quote.notes || '',
       lineItems: items,
       createdAt: new Date(quote.createdAt).toLocaleDateString(),

@@ -32,13 +32,14 @@ export async function notifyDealStageChange(payload: StageChangePayload): Promis
     const isLost = toStage.toLowerCase().includes('lost');
 
     let title: string;
-    let type: 'deal_stage' | 'deal_won' = 'deal_stage';
+    let type: 'info' | 'success' | 'warning' = 'info';
 
     if (isWon) {
       title = `Deal won: "${dealTitle}"`;
-      type = 'deal_won';
+      type = 'success';
     } else if (isLost) {
       title = `Deal lost: "${dealTitle}"`;
+      type = 'warning';
     } else {
       title = `Deal "${dealTitle}" moved to ${toStage}`;
     }

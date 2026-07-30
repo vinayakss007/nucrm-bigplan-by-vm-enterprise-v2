@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch the failed delivery
-    const deliveryResult = await db.execute(sql`
+    const [delivery] = await db.execute(sql`
       SELECT id, webhook_id, payload, url, headers, status, attempts
       FROM webhook_deliveries
       WHERE id = ${delivery_id}
@@ -40,12 +40,12 @@ export async function POST(request: NextRequest) {
       LIMIT 1
     `);
 
-    if (!deliveryResult.rows?.[0]) {
+    if (!delivery.rows?.[0]) {
       return NextResponse.json({ error: 'Delivery not found or not in failed state' }, { status: 404 });
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const row = deliveryResult.rows[0] as any;
+    const row = delivery.rows[0] as any;
 
     // Re-send the webhook
     try {
