@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { withConcurrencyGuard } from '@/lib/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { apiError } from '@/lib/api-error';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     });
   } catch (error) {
     console.error('[products GET by id]', error);
-    return NextResponse.json({ error: 'Failed to fetch product' }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -110,7 +111,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     });
   } catch (error) {
     console.error('[products PATCH]', error);
-    return NextResponse.json({ error: 'Failed to update product' }, { status: 500 });
+    return apiError(error);
   }
 }
 
@@ -142,6 +143,6 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[products DELETE]', error);
-    return NextResponse.json({ error: 'Failed to delete product' }, { status: 500 });
+    return apiError(error);
   }
 }

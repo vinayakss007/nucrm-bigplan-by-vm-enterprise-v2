@@ -13,7 +13,8 @@
 
 import lighthouse from 'lighthouse';
 import chromeLauncher from 'chrome-launcher';
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync } from 'fs';
+import { writeFile } from 'fs/promises';
 import path from 'path';
 
 const BASE_URL = process.env['BASE_URL'] || 'http://localhost:3000';
@@ -65,7 +66,7 @@ async function main() {
     console.log(`  SEO:             ${scores['seo'] ?? 'N/A'}/100`);
 
     if (OUTPUT === 'json' || OUTPUT === 'both') {
-      writeFileSync(jsonPath, JSON.stringify(report, null, 2));
+      await writeFile(jsonPath, JSON.stringify(report, null, 2));
       console.log(`\n  Report: ${jsonPath}`);
     }
 
@@ -76,7 +77,7 @@ async function main() {
         onlyCategories: ['performance', 'accessibility', 'best-practices', 'seo'],
         logLevel: 'error',
       });
-      writeFileSync(htmlPath, htmlResult.report);
+      await writeFile(htmlPath, htmlResult.report);
       console.log(`  HTML:   ${htmlPath}`);
     }
 
