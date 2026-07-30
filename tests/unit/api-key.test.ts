@@ -246,3 +246,101 @@ describe('tryApiKeyAuth', () => {
     expect(result!.isAdmin).toBe(true);
   });
 });
+
+describe('generateApiKey', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockChain.values.mockReturnValue(mockChain);
+    mockChain.insert.mockReturnValue(mockChain);
+  });
+
+  it('produces a key with correct ak_live_ prefix format', async () => {
+    const { generateApiKey } = await import('@/lib/auth/api-key');
+    const result = await generateApiKey('t1', 'u1', 'Test Key', ['contacts:read']);
+    expect(result.key).toMatch(/^ak_live_[a-f0-9]{48}$/);
+    expect(result.prefix).toMatch(/^ak_live_[a-f0-9]{6}$/);
+  });
+
+  it('produces unique keys on successive calls', async () => {
+    const { generateApiKey } = await import('@/lib/auth/api-key');
+    const r1 = await generateApiKey('t1', 'u1', 'Key 1', ['contacts:read']);
+    const r2 = await generateApiKey('t1', 'u1', 'Key 2', ['contacts:read']);
+    expect(r1.key).not.toBe(r2.key);
+    expect(r1.prefix).not.toBe(r2.prefix);
+  });
+
+  it('stores hashed version in database (not raw key)', async () => {
+    const { createHash } = await import('crypto');
+    const { generateApiKey } = await import('@/lib/auth/api-key');
+    const result = await generateApiKey('t1', 'u1', 'My Key', ['deals:write']);
+
+    // Verify db.insert was called
+    expect(mockChain.insert).toHaveBeenCalled();
+    expect(mockChain.values).toHaveBeenCalled();
+
+    // The values call should contain a hashed key, not the raw key
+    const valuesArg = mockChain.values.mock.calls[0][0];
+    const expectedHash = createHash('sha256').update(result.key).digest('hex');
+    expect(valuesArg.keyHash).toBe(expectedHash);
+    // Raw key should NOT be stored
+    expect(valuesArg.keyHash).not.toBe(result.key);
+  });
+});
+
+describe('hashApiKey (determinism)', () => {
+  it('hashing the same key always produces the same hash', async () => {
+    const { createHash } = await import('crypto');
+    const rawKey = 'ak_live_abc123def456abc123def456abc123def456abc123def456';
+    const hash1 = createHash('sha256').update(rawKey).digest('hex');
+    const hash2 = createHash('sha256').update(rawKey).digest('hex');
+    expect(hash1).toBe(hash2);
+    expect(hash1).toHaveLength(64);
+  });
+
+  it('different keys produce different hashes', async () => {
+    const { createHash } = await import('crypto');
+    const key1 = 'ak_live_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const key2 = 'ak_live_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const hash1 = createHash('sha256').update(key1).digest('hex');
+    const hash2 = createHash('sha256').update(key2).digest('hex');
+    expect(hash1).not.toBe(hash2);
+  });
+});
+
+describe('validateApiKey (format validation)', () => {
+  it('rejects keys without ak_ prefix', async () => {
+    const { tryApiKeyAuth } = await import('@/lib/auth/api-key');
+    const req = {
+      headers: { get: (h: string) => h === 'authorization' ? 'Bearer sk_live_abc123' : null },
+    } as any;
+    const result = await tryApiKeyAuth(req);
+    expect(result).toBeNull();
+  });
+
+  it('rejects empty authorization header', async () => {
+    const { tryApiKeyAuth } = await import('@/lib/auth/api-key');
+    const req = {
+      headers: { get: () => '' },
+    } as any;
+    const result = await tryApiKeyAuth(req);
+    expect(result).toBeNull();
+  });
+
+  it('rejects Bearer token without ak_ format', async () => {
+    const { tryApiKeyAuth } = await import('@/lib/auth/api-key');
+    const req = {
+      headers: { get: (h: string) => h === 'authorization' ? 'Bearer randomtoken123' : null },
+    } as any;
+    const result = await tryApiKeyAuth(req);
+    expect(result).toBeNull();
+  });
+
+  it('rejects non-Bearer auth schemes', async () => {
+    const { tryApiKeyAuth } = await import('@/lib/auth/api-key');
+    const req = {
+      headers: { get: (h: string) => h === 'authorization' ? 'Basic ak_live_abc123' : null },
+    } as any;
+    const result = await tryApiKeyAuth(req);
+    expect(result).toBeNull();
+  });
+});

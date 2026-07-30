@@ -1,112 +1,120 @@
 'use client';
+
 import { useState, useEffect } from 'react';
-import { CheckCircle, Circle, X, ChevronDown, ChevronUp } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { CheckCircle, Circle, Users, TrendingUp, Zap, Mail, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const STEPS = [
-  { id:'add_contact',     label:'Add your first contact',          href:'/tenant/contacts',           desc:'Import or create a contact to get started' },
-  { id:'add_deal',        label:'Create your first deal',          href:'/tenant/deals',              desc:'Track your first sales opportunity' },
-  { id:'invite_team',     label:'Invite a team member',            href:'/tenant/settings/team',      desc:'Collaborate with your team' },
-  { id:'setup_workspace', label:'Customise your workspace',        href:'/tenant/settings/general',   desc:'Add your brand colour and company info' },
-  { id:'add_task',        label:'Create a task',                   href:'/tenant/tasks',              desc:'Stay on top of follow-ups' },
+interface Step {
+  id: string;
+  label: string;
+  description: string;
+  href: string;
+  icon: typeof Users;
+  check: () => Promise<boolean>;
+}
+
+const STEPS: Omit<Step, 'check'>[] = [
+  { id: 'contact', label: 'Add your first contact', description: 'Import or create a contact to start', href: '/tenant/contacts', icon: Users },
+  { id: 'deal', label: 'Create a deal', description: 'Track a sales opportunity', href: '/tenant/deals', icon: TrendingUp },
+  { id: 'email', label: 'Connect email', description: 'Set up email integration', href: '/tenant/settings/integrations', icon: Mail },
+  { id: 'automation', label: 'Set up an automation', description: 'Automate repetitive tasks', href: '/tenant/automation', icon: Zap },
+  { id: 'team', label: 'Invite a team member', description: 'Collaborate with your team', href: '/tenant/settings/team', icon: Settings },
 ];
 
+/**
+ * Onboarding checklist widget for the dashboard.
+ * Shows first-use progress for new tenants.
+ * Disappears once all steps are completed.
+ */
 export default function OnboardingChecklist() {
-  const [steps, setSteps] = useState<string[]>([]);
+  const [completed, setCompleted] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(true);
   const [dismissed, setDismissed] = useState(false);
-  const router = useRouter();
 
   useEffect(() => {
-    const abort = new AbortController();
-    fetch('/api/tenant/onboarding', { signal: abort.signal }).then(r => r.json()).then(d => {
-      if (abort.signal.aborted) return;
-      setSteps(d.steps_done ?? []);
-      setDismissed(d.completed ?? false);
+    async function checkProgress() {
+      try {
+        const res = await fetch('/api/tenant/onboarding/progress');
+        if (!res.ok) { setLoading(false); return; }
+        const data = await res.json();
+        const done = new Set<string>(data.completed || []);
+        setCompleted(done);
+        // Auto-dismiss if all done
+        if (done.size >= STEPS.length) setDismissed(true);
+      } catch {
+        // non-critical
+      } finally {
+        setLoading(false);
+      }
+    }
+    // Check if user previously dismissed
+    if (typeof window !== 'undefined' && localStorage.getItem('nucrm_onboarding_dismissed') === '1') {
+      setDismissed(true);
       setLoading(false);
-    }).catch(() => { if (!abort.signal.aborted) setLoading(false); });
-    return () => abort.abort();
+      return;
+    }
+    checkProgress();
   }, []);
 
-  const complete = (stepId: string) => {
-    const newSteps = [...new Set([...steps, stepId])];
-    setSteps(newSteps);
-    fetch('/api/tenant/onboarding', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ step: stepId }),
-    });
-  };
-
-  const dismiss = () => {
+  const handleDismiss = () => {
     setDismissed(true);
-    fetch('/api/tenant/onboarding', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ complete: true }),
-    });
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nucrm_onboarding_dismissed', '1');
+    }
   };
 
   if (loading || dismissed) return null;
 
-  const done = STEPS.filter(s => steps.includes(s.id)).length;
-  const pct = Math.round((done / STEPS.length) * 100);
-  const allDone = done === STEPS.length;
-
-  if (allDone) return (
-    <div className="admin-card p-4 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 mb-6">
-      <div className="flex items-center gap-3">
-        <CheckCircle className="w-6 h-6 text-emerald-600 shrink-0" />
-        <div className="flex-1">
-          <p className="font-semibold text-emerald-700 dark:text-emerald-400">You're all set! 🎉</p>
-          <p className="text-xs text-emerald-600/70">Your workspace is fully configured. Time to close some deals.</p>
-        </div>
-        <button onClick={dismiss} className="text-emerald-600/50 hover:text-emerald-600 transition-colors"><X className="w-4 h-4" /></button>
-      </div>
-    </div>
-  );
+  const progress = Math.round((completed.size / STEPS.length) * 100);
 
   return (
-    <div className="admin-card mb-6 overflow-hidden">
-      <div className="flex items-center gap-3 p-4 cursor-pointer select-none" onClick={() => setOpen(o => !o)}>
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <p className="text-sm font-semibold">Get started with NuCRM</p>
-            <span className="text-xs bg-violet-100 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 px-2 py-0.5 rounded-full font-medium">{done}/{STEPS.length}</span>
-          </div>
-          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-            <div className="h-full rounded-full bg-violet-500 transition-all duration-500" style={{ width: `${pct}%` }} />
-          </div>
+    <div className="admin-card p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-bold">Getting Started</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">{completed.size}/{STEPS.length} steps completed</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={e => { e.stopPropagation(); dismiss(); }} className="w-6 h-6 flex items-center justify-center rounded hover:bg-accent text-muted-foreground transition-colors" title="Dismiss">
-            <X className="w-3.5 h-3.5" />
-          </button>
-          {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-        </div>
+        <button onClick={handleDismiss} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+          Dismiss
+        </button>
       </div>
 
-      {open && (
-        <div className="border-t border-border divide-y divide-border">
-          {STEPS.map(step => {
-            const done = steps.includes(step.id);
-            return (
-              <div key={step.id} className={cn('flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors cursor-pointer', done && 'opacity-60')}
-                onClick={() => { if (!done) complete(step.id); router.push(step.href); }}>
-                {done
-                  ? <CheckCircle className="w-5 h-5 text-violet-600 shrink-0" />
-                  : <Circle className="w-5 h-5 text-muted-foreground shrink-0" />
-                }
-                <div className="flex-1 min-w-0">
-                  <p className={cn('text-sm font-medium', done && 'line-through text-muted-foreground')}>{step.label}</p>
-                  <p className="text-xs text-muted-foreground">{step.desc}</p>
-                </div>
-                {!done && <span className="text-xs text-violet-600 shrink-0 font-medium">Start →</span>}
+      {/* Progress bar */}
+      <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+        <div className="h-full bg-violet-600 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+      </div>
+
+      {/* Steps */}
+      <div className="space-y-2">
+        {STEPS.map(step => {
+          const done = completed.has(step.id);
+          const Icon = step.icon;
+          return (
+            <Link
+              key={step.id}
+              href={step.href}
+              className={cn(
+                'flex items-center gap-3 p-3 rounded-lg border transition-all',
+                done
+                  ? 'border-green-200 dark:border-green-900/30 bg-green-50/50 dark:bg-green-950/10'
+                  : 'border-border hover:border-violet-200 dark:hover:border-violet-800 hover:bg-muted/30'
+              )}
+            >
+              {done ? (
+                <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
+              ) : (
+                <Circle className="w-5 h-5 text-muted-foreground/40 shrink-0" />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className={cn('text-sm font-medium', done && 'line-through text-muted-foreground')}>{step.label}</p>
+                <p className="text-xs text-muted-foreground truncate">{step.description}</p>
               </div>
-            );
-          })}
-        </div>
-      )}
+              <Icon className="w-4 h-4 text-muted-foreground/50 shrink-0" />
+            </Link>
+          );
+        })}
+      </div>
     </div>
   );
 }
