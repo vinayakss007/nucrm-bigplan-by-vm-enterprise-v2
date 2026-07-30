@@ -60,6 +60,14 @@ export const dealQuerySchema = z.object({
   stage: z.string().optional(),
   pipeline_id: z.string().uuid().optional(),
   q: z.string().optional(),
+  /**
+   * Archive visibility. Deals are archived by setting metadata.archived = true
+   * (see the `archive` action in app/api/tenant/deals/bulk/route.ts).
+   *   omitted / 'false' -> only live deals (default)
+   *   'true'            -> only archived deals, so they can be reviewed/unarchived
+   *   'all'             -> both
+   */
+  archived: z.enum(['true', 'false', 'all']).optional(),
 });
 
 // ── Company schemas ──
