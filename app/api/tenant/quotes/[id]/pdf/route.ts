@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { quotes, contacts, companies, tenants } from '@/drizzle/schema';
+import { quotes, contacts, companies, tenants, quoteLineItems } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 
 /**
@@ -24,9 +24,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         title: quotes.title,
         status: quotes.status,
         totalAmount: quotes.totalAmount,
-        validUntil: quotes.validUntil,
+        validUntil: quotes.expiresAt,
         notes: quotes.notes,
-        lineItems: quotes.lineItems,
         createdAt: quotes.createdAt,
         contactFirstName: contacts.firstName,
         contactLastName: contacts.lastName,
@@ -42,6 +41,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     if (!quote) return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
 
+    // Fetch line items separately (they live in quote_line_items, not on the quotes table)
+    const lineItemRows = await db
+      .select()
+      .from(quoteLineItems)
+      .where(eq(quoteLineItems.quoteId, id))
+      .orderBy(quoteLineItems.sortOrder);
+
     // Get tenant info for branding
     const [tenant] = await db
       .select({ name: tenants.name })
@@ -50,8 +56,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .limit(1);
 
     // Generate HTML for PDF
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const items = (quote.lineItems as any[]) || [];
+    const items = lineItemRows;
     const html = generateQuoteHtml({
       title: quote.title || `Quote #${id.slice(0, 8)}`,
       tenantName: tenant?.name || 'NuCRM',
