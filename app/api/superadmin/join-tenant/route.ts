@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, tenantMembers, roles, pipelines, dealStages } from '@/drizzle/schema';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,10 +14,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Super admin only' }, { status: 403 });
     }
 
-    // Find first active tenant
-    const [tenant] = await db.select().from(tenants).where(eq(tenants.status, 'active')).limit(1);
-    if (!tenant) {
-      return NextResponse.json({ error: 'No active tenant found' }, { status: 404 });
+    // Parse optional tenantId from request body
+    let requestedTenantId: string | undefined;
+    try {
+      const body = await request.json();
+      if (body && typeof body.tenantId === 'string' && body.tenantId.trim()) {
+        requestedTenantId = body.tenantId.trim();
+      }
+    } catch {
+      // No body or invalid JSON is fine - fall back to default behavior
+    }
+
+    let tenant;
+    if (requestedTenantId) {
+      // Join a specific tenant by ID
+      const [found] = await db.select().from(tenants).where(
+        and(eq(tenants.id, requestedTenantId), eq(tenants.status, 'active'))
+      ).limit(1);
+      if (!found) {
+        return NextResponse.json({ error: 'Tenant not found or not active' }, { status: 404 });
+      }
+      tenant = found;
+    } else {
+      // Find first active tenant (legacy behavior)
+      const [found] = await db.select().from(tenants).where(eq(tenants.status, 'active')).limit(1);
+      if (!found) {
+        return NextResponse.json({ error: 'No active tenant found' }, { status: 404 });
+      }
+      tenant = found;
     }
 
     // Check if already member

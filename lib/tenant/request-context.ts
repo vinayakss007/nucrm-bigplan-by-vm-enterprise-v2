@@ -148,7 +148,7 @@ export async function getOrFetchContext(
  * Generate a unique request ID for this execution context
  */
 export function generateRequestId(): string {
-  return `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  return crypto.randomUUID();
 }
 
 /**

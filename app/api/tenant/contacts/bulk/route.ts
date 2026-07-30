@@ -280,20 +280,19 @@ export async function POST(req: NextRequest) {
         break;
       }
       case 'archive': {
-        const deny = requirePerm(ctx, 'contacts.delete');
+        const deny = requirePerm(ctx, 'contacts.edit');
         if (deny) return deny;
         const res = await db
           .update(contacts)
           .set({
             isArchived: true,
-            deletedAt: new Date(),
-            deletedBy: ctx.userId,
             updatedAt: new Date(),
           })
           .where(
             and(
               inArray(contacts.id, validIds),
-              eq(contacts.tenantId, ctx.tenantId)
+              eq(contacts.tenantId, ctx.tenantId),
+              sql`${contacts.deletedAt} IS NULL`
             )
           );
         affected = res.rowCount ?? 0;

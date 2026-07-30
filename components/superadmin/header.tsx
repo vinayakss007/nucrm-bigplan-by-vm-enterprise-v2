@@ -37,8 +37,10 @@ export default function SuperAdminHeader({ profile, stats, onToggleSidebar }: { 
       <div className="flex items-center gap-3 sm:gap-4">
         {onToggleSidebar && (
           <button onClick={onToggleSidebar}
+            type="button"
+            aria-label="Toggle navigation sidebar"
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground transition-colors shrink-0">
-            <Menu className="w-4 h-4" />
+            <Menu className="w-4 h-4" aria-hidden="true" />
           </button>
         )}
         <div className="flex items-center gap-2 text-xs font-bold text-amber-600 dark:text-amber-400">
@@ -63,8 +65,8 @@ export default function SuperAdminHeader({ profile, stats, onToggleSidebar }: { 
         </Link>
 
         {(stats?.open_errors ?? 0) > 0 && (
-          <Link href="/superadmin/errors" className="relative flex items-center justify-center w-8 h-8 rounded-lg hover:bg-accent transition-colors">
-            <Bell className="w-4 h-4 text-muted-foreground" />
+          <Link href="/superadmin/errors" aria-label={`Error notifications, ${stats?.open_errors} open`} className="relative flex items-center justify-center w-8 h-8 rounded-lg hover:bg-accent transition-colors">
+            <Bell className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
             <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
               {(stats?.open_errors ?? 0) > 9 ? '9+' : stats?.open_errors}
             </span>
@@ -78,6 +80,9 @@ export default function SuperAdminHeader({ profile, stats, onToggleSidebar }: { 
 
         <div className="relative" ref={profileRef}>
           <button onClick={()=>setShowProfile(s=>!s)}
+            type="button"
+            aria-label="Account menu"
+            aria-expanded={showProfile}
             className="flex items-center gap-2 px-2 py-1 rounded-xl hover:bg-accent transition-colors">
             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
               {getInitials(profile?.full_name||profile?.email||'SA')}

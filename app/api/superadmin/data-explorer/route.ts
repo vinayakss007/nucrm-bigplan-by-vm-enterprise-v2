@@ -380,6 +380,28 @@ const deleteRecordSchema = z.object({
   softDelete: z.boolean().optional(),
 });
 
+// Column allowlist per table for dynamic SQL updates (Issue #683)
+const ALLOWED_COLUMNS: Record<string, string[]> = {
+  tenants: ['name', 'slug', 'subdomain', 'status', 'billing_email', 'plan_id', 'trial_ends_at'],
+  contacts: ['first_name', 'last_name', 'email', 'phone', 'lead_status', 'lead_source', 'company_id', 'notes'],
+  leads: ['first_name', 'last_name', 'email', 'phone', 'lead_status', 'lead_source', 'notes'],
+  deals: ['title', 'amount', 'stage_id', 'close_date', 'contact_id', 'company_id', 'notes', 'probability'],
+  companies: ['name', 'industry', 'website', 'phone', 'address', 'notes'],
+  tasks: ['title', 'description', 'due_date', 'status', 'priority', 'assigned_to'],
+  users: ['full_name', 'email', 'is_super_admin'],
+  roles: ['name', 'description'],
+  webhooks: ['url', 'events', 'active'],
+  api_keys: ['name', 'active'],
+  email_templates: ['name', 'subject', 'body', 'active'],
+  workflows: ['name', 'description', 'active'],
+  automations: ['name', 'description', 'active', 'trigger_type'],
+  forms: ['name', 'description', 'active'],
+  pipelines: ['name', 'description'],
+  deal_stages: ['name', 'position', 'probability'],
+  tags: ['name', 'color'],
+  modules: ['name', 'active'],
+};
+
 export async function PUT(req: NextRequest) {
   const ctx = await requireAuth(req);
   if (!ctx || ctx instanceof NextResponse) {
@@ -397,7 +419,7 @@ export async function PUT(req: NextRequest) {
 
     const allowedTables = [
       'tenants', 'contacts', 'leads', 'deals', 'companies',
-      'tasks', 'users', 'roles', 'webhooks', 'api_keys',
+      'tasks', 'webhooks',
       'email_templates', 'workflows', 'automations', 'forms',
       'pipelines', 'deal_stages', 'tags', 'modules',
     ];
@@ -405,9 +427,17 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: `Table '${table}' is not allowed for editing` }, { status: 400 });
     }
 
+    // Validate column name against per-table allowlist (Issue #683)
     const safeField = field.replace(/[^a-zA-Z0-9_]/g, '');
     if (!safeField) {
       return NextResponse.json({ error: 'Invalid field name' }, { status: 400 });
+    }
+    const tableColumns = ALLOWED_COLUMNS[table];
+    if (!tableColumns || !tableColumns.includes(safeField)) {
+      return NextResponse.json(
+        { error: `Column '${safeField}' is not allowed for editing on table '${table}'` },
+        { status: 400 },
+      );
     }
 
     const result = await db.execute(sql`
