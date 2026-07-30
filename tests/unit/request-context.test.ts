@@ -118,9 +118,9 @@ describe('request-context', () => {
   });
 
   describe('generateRequestId', () => {
-    it('generates string starting with req_', () => {
+    it('generates a valid UUID string', () => {
       const id = generateRequestId();
-      expect(id).toMatch(/^req_\d+_[a-z0-9]+$/);
+      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     });
 
     it('generates unique IDs', () => {

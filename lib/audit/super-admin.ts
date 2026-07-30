@@ -52,6 +52,7 @@ export type SuperAdminAction =
   
   // System
   | 'settings.changed'
+  | 'settings.secrets_updated'
   | 'feature_flag.toggled'
   | 'api_key.created'
   | 'api_key.revoked'

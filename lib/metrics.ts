@@ -42,8 +42,7 @@ class ConsoleMetricsCollector implements MetricsCollector {
   private buffer: MetricPoint[] = [];
   private writeIndex = 0;
   private count = 0;
-  private testMode = process.env['PROMETHEUS_ENABLED'] === 'false' || 
-    (process.env['PROMETHEUS_ENABLED'] === undefined && process.env['NODE_ENV'] !== 'production');
+  private disabled = process.env['METRICS_DISABLED'] === 'true';
 
   private push(point: MetricPoint): void {
     if (this.count < MAX_METRICS) {
@@ -57,8 +56,7 @@ class ConsoleMetricsCollector implements MetricsCollector {
   }
 
   increment(name: string, value: number = 1, labels?: Record<string, string>): void {
-    if (this.testMode) {
-      // In dev/test mode, don't store metrics — just log
+    if (this.disabled) {
       return;
     }
 
@@ -66,7 +64,7 @@ class ConsoleMetricsCollector implements MetricsCollector {
   }
 
   timing(name: string, duration: number, labels?: Record<string, string>): void {
-    if (this.testMode) {
+    if (this.disabled) {
       return;
     }
 
@@ -74,7 +72,7 @@ class ConsoleMetricsCollector implements MetricsCollector {
   }
 
   gauge(name: string, value: number, labels?: Record<string, string>): void {
-    if (this.testMode) {
+    if (this.disabled) {
       return;
     }
 
