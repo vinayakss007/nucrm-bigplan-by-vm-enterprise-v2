@@ -47,6 +47,7 @@ const PUBLIC_PATHS = [
   ...MARKETING_PATHS,
   '/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/reset-password',
   '/auth/verify-email', '/auth/callback', '/auth/invite', '/health', '/docs',
+  '/api/system/ready',
   '/', '/setup', '/lead-capture', '/test-js', '/auth/login-simple',
   '/portal', '/portal/tickets', '/portal/invoices', '/portal/kb',
   '/api/auth/login', '/api/auth/signup', '/api/auth/logout',

@@ -72,7 +72,7 @@ export function getRateLimitHeaders(result: RateLimitCheckResult): Record<string
 
 export const edgeLimiter = new EdgeRateLimiter();
 
-export const BYPASS_PREFIXES = ['/api/webhooks/', '/api/health', '/api/metrics', '/api/keepalive', '/api/cron', '/api/tenant/dashboard/widgets/', '/api/flags', '/api/openapi'];
+export const BYPASS_PREFIXES = ['/api/webhooks/', '/api/health', '/api/metrics', '/api/keepalive', '/api/cron', '/api/tenant/dashboard/widgets/', '/api/flags', '/api/openapi', '/api/system/ready'];
 
 export function shouldBypassRateLimit(pathname: string): boolean {
   return BYPASS_PREFIXES.some(p => pathname.startsWith(p));
