@@ -102,11 +102,12 @@ export default function ContactsDataTable({
   const [selectAllMatching, setSelectAllMatching] = useState(false)
   const router = useRouter()
 
-  const loadData = useCallback(async (page = 0, search = globalFilter) => {
+  const loadData = useCallback(async (page = 0, search = globalFilter, pageSizeOverride?: number) => {
     setLoading(true)
+    const size = pageSizeOverride ?? pagination.pageSize
     const params = new URLSearchParams({
-      limit: String(pagination.pageSize),
-      offset: String(page * pagination.pageSize),
+      limit: String(size),
+      offset: String(page * size),
     })
     if (search) params.set('q', search)
     try {
@@ -117,6 +118,7 @@ export default function ContactsDataTable({
     } catch (error) {
       console.error('Failed to load contacts:', error)
     }
+    setSelectAllMatching(false)
     setLoading(false)
   }, [pagination.pageSize, globalFilter])
 
@@ -132,7 +134,8 @@ export default function ContactsDataTable({
 
   const handlePageSizeChange = useCallback((size: number) => {
     setPagination(prev => ({ ...prev, pageSize: size, pageIndex: 0 }))
-  }, [])
+    loadData(0, globalFilter, size)
+  }, [loadData, globalFilter])
 
   // Skip initial client-side fetch if server data is already available
   useEffect(() => {
