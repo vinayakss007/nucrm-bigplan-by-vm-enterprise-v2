@@ -5,7 +5,7 @@
  * Critical for sales managers tracking pipeline movement.
  */
 
-import { createNotification } from '@/lib/notifications';
+import { createNotification, type NotificationType } from '@/lib/notifications';
 
 interface StageChangePayload {
   dealId: string;
@@ -32,14 +32,14 @@ export async function notifyDealStageChange(payload: StageChangePayload): Promis
     const isLost = toStage.toLowerCase().includes('lost');
 
     let title: string;
-    let type: 'info' | 'success' | 'warning' = 'info';
+    let type: NotificationType = 'deal_stage';
 
     if (isWon) {
       title = `Deal won: "${dealTitle}"`;
-      type = 'success';
+      type = 'deal_won';
     } else if (isLost) {
       title = `Deal lost: "${dealTitle}"`;
-      type = 'warning';
+      type = 'deal_stage';
     } else {
       title = `Deal "${dealTitle}" moved to ${toStage}`;
     }

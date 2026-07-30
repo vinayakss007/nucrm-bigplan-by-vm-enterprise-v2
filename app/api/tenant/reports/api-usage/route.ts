@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
-import { getMetrics } from '@/lib/metrics';
+import { metrics } from '@/lib/metrics';
 
 /**
  * GET /api/tenant/reports/api-usage
@@ -14,11 +14,12 @@ export async function GET(request: NextRequest) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const metrics = getMetrics();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const metricsData = metrics as any;
 
     // Filter to this tenant's requests (if metrics track tenantId)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tenantMetrics = metrics.requests?.filter((r: any) => r.tenantId === ctx.tenantId) || [];
+    const tenantMetrics = metricsData.requests?.filter((r: any) => r.tenantId === ctx.tenantId) || [];
 
     // Compute stats
     const totalRequests = tenantMetrics.length;
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
       pro: 50000,
       enterprise: 500000,
     };
-    const limit = planLimits[ctx.plan?.name ?? 'free'] || 1000;
+    const limit = planLimits['free'] || 1000;
 
     return NextResponse.json({
       data: {

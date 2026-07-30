@@ -31,14 +31,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch the failed delivery
-    const [delivery] = await db.execute(sql`
+    const delivery = (await db.execute(sql`
       SELECT id, webhook_id, payload, url, headers, status, attempts
       FROM webhook_deliveries
       WHERE id = ${delivery_id}
         AND tenant_id = ${ctx.tenantId}
         AND status IN ('failed', 'error')
       LIMIT 1
-    `);
+    `));
 
     if (!delivery.rows?.[0]) {
       return NextResponse.json({ error: 'Delivery not found or not in failed state' }, { status: 404 });

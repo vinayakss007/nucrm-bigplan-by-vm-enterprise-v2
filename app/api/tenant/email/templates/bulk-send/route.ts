@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
         };
 
         const subject = interpolate(template.subject || '', personalVars);
-        const htmlBody = interpolate(template.body || '', personalVars);
+        const htmlBody = interpolate(template.bodyHtml || '', personalVars);
 
         await sendEmail({
           to: contact.email!,
