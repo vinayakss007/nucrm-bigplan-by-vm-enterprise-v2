@@ -154,3 +154,38 @@ describe('isValidEvent', () => {
     expect(isValidEvent('contact')).toBe(false);
   });
 });
+
+describe('coverage of events the app actually emits', () => {
+  // Every event passed to fireWebhooks() somewhere in app/ or lib/. If an emitter
+  // is added without a catalog entry, isValidEvent() rejects it and the event
+  // cannot be subscribed to -- which is how product.* and lead.deleted/task.deleted
+  // were originally left out of this catalog.
+  const EMITTED = [
+      'company.created',
+      'company.deleted',
+      'company.updated',
+      'contact.created',
+      'contact.deleted',
+      'contact.updated',
+      'deal.created',
+      'deal.deleted',
+      'deal.stage_changed',
+      'deal.won',
+      'invoice.paid',
+      'lead.created',
+      'lead.deleted',
+      'lead.updated',
+      'product.created',
+      'product.deleted',
+      'product.updated',
+      'task.completed',
+      'task.created',
+      'task.deleted',
+      'ticket.created',
+  ];
+
+  it.each(EMITTED)('%s is catalogued', (event) => {
+    expect(isValidEvent(event)).toBe(true);
+    expect(getEventInfo(event)).not.toBeNull();
+  });
+});
