@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const tid = ctx.tenantId;
 
     // Overall win/loss stats
-    const stats = (await db.execute(sql`
+    const stats = await db.execute(sql`
       SELECT
         COUNT(*) FILTER (WHERE ds.name ILIKE '%won%') as won,
         COUNT(*) FILTER (WHERE ds.name ILIKE '%lost%') as lost,
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       WHERE d.tenant_id = ${tid}
         AND d.deleted_at IS NULL
         AND ds.name ILIKE ANY(ARRAY['%won%', '%lost%'])
-    `)).rows[0];
+    `);
 
     // Monthly trend (last 6 months)
     const monthlyTrend = await db.execute(sql`
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     `);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const s = stats as any;
+    const s = stats.rows[0] as any;
     const won = Number(s?.won ?? 0);
     const lost = Number(s?.lost ?? 0);
     const totalClosed = won + lost;

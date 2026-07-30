@@ -32,6 +32,9 @@ export async function notifyDealStageChange(payload: StageChangePayload): Promis
     const isLost = toStage.toLowerCase().includes('lost');
 
     let title: string;
+    // Must be a NotificationType (lib/notifications.ts). There is no generic
+    // severity in that union, and no 'deal_lost' member, so a lost deal is
+    // reported as a stage change like any other non-win.
     let type: NotificationType = 'deal_stage';
 
     if (isWon) {

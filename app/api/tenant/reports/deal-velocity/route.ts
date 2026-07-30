@@ -24,23 +24,23 @@ export async function GET(request: NextRequest) {
     const tid = ctx.tenantId;
 
     // Avg days to close (won deals only)
-    const avgClose = (await db.execute(sql`
+    const avgClose = await db.execute(sql`
       SELECT 
         COALESCE(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400), 0)::numeric(10,1) as avg_days
       FROM deals
       WHERE tenant_id = ${tid}
         AND deleted_at IS NULL
         AND stage_id IN (SELECT id FROM deal_stages WHERE LOWER(name) IN ('won', 'closed won'))
-    `)).rows[0];
+    `);
 
     // Conversion rate (won / total created)
-    const counts = (await db.execute(sql`
+    const counts = await db.execute(sql`
       SELECT 
         COUNT(*) FILTER (WHERE stage_id IN (SELECT id FROM deal_stages WHERE LOWER(name) IN ('won', 'closed won'))) as won,
         COUNT(*) as total
       FROM deals
       WHERE tenant_id = ${tid} AND deleted_at IS NULL
-    `)).rows[0];
+    `);
 
     // Stage distribution
     const stageDistribution = await db
@@ -56,34 +56,34 @@ export async function GET(request: NextRequest) {
       .groupBy(deals.stageId, dealStages.name);
 
     // Total pipeline value (active deals)
-    const pipelineValue = (await db.execute(sql`
+    const pipelineValue = await db.execute(sql`
       SELECT COALESCE(SUM(amount::numeric), 0)::numeric(12,2) as total
       FROM deals
       WHERE tenant_id = ${tid}
         AND deleted_at IS NULL
         AND stage_id NOT IN (SELECT id FROM deal_stages WHERE LOWER(name) IN ('won', 'closed won', 'lost', 'closed lost'))
-    `)).rows[0];
+    `);
 
     // Deals created this month
-    const monthlyCreated = (await db.execute(sql`
+    const monthlyCreated = await db.execute(sql`
       SELECT COUNT(*)::int as count
       FROM deals
       WHERE tenant_id = ${tid}
         AND deleted_at IS NULL
         AND created_at >= DATE_TRUNC('month', CURRENT_DATE)
-    `)).rows[0];
+    `);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const countsRow = counts as any;
+    const countsRow = counts.rows[0] as any;
     const wonCount = Number(countsRow?.won ?? 0);
     const totalCount = Number(countsRow?.total ?? 1);
 
     return NextResponse.json({
       data: {
-        avg_days_to_close: Number((avgClose as { avg_days: string })?.avg_days ?? 0),
+        avg_days_to_close: Number((avgClose.rows[0] as { avg_days: string })?.avg_days ?? 0),
         conversion_rate: totalCount > 0 ? Math.round((wonCount / totalCount) * 100) : 0,
-        total_pipeline_value: Number((pipelineValue as { total: string })?.total ?? 0),
-        deals_this_month: Number((monthlyCreated as { count: number })?.count ?? 0),
+        total_pipeline_value: Number((pipelineValue.rows[0] as { total: string })?.total ?? 0),
+        deals_this_month: Number((monthlyCreated.rows[0] as { count: number })?.count ?? 0),
         won_deals: wonCount,
         total_deals: totalCount,
         stage_distribution: stageDistribution.map(s => ({

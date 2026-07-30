@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { quotes, contacts, companies, tenants } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { quotes, quoteLineItems, contacts, companies, tenants } from '@/drizzle/schema';
+import { eq, and, asc, sql } from 'drizzle-orm';
 
 /**
  * GET /api/tenant/quotes/:id/pdf
@@ -24,6 +24,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         title: quotes.title,
         status: quotes.status,
         totalAmount: quotes.totalAmount,
+        // The column is expires_at; there is no quotes.validUntil.
         validUntil: quotes.expiresAt,
         notes: quotes.notes,
         createdAt: quotes.createdAt,
@@ -48,10 +49,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .where(eq(tenants.id, ctx.tenantId))
       .limit(1);
 
+    // Line items live in their own table (quote_line_items); quotes has no
+    // lineItems column. Ordered by sortOrder so the PDF matches the order the
+    // user arranged them in.
+    const items = await db
+      .select({
+        description: quoteLineItems.description,
+        quantity: quoteLineItems.quantity,
+        unitPrice: quoteLineItems.unitPrice,
+        total: quoteLineItems.total,
+      })
+      .from(quoteLineItems)
+      .where(and(eq(quoteLineItems.quoteId, id), eq(quoteLineItems.tenantId, ctx.tenantId)))
+      .orderBy(asc(quoteLineItems.sortOrder));
+
     // Generate HTML for PDF
-    // lineItems are stored in a separate table; for now render with empty items
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const items: any[] = [];
     const html = generateQuoteHtml({
       title: quote.title || `Quote #${id.slice(0, 8)}`,
       tenantName: tenant?.name || 'NuCRM',
@@ -90,20 +102,33 @@ function generateQuoteHtml(data: {
   totalAmount: number;
   validUntil: string;
   notes: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  lineItems: any[];
+  lineItems: Array<{
+    description: string | null;
+    // decimal columns come back as strings from pg.
+    quantity: string | null;
+    unitPrice: string | null;
+    total: string | null;
+  }>;
   createdAt: string;
   status: string;
 }): string {
-  const itemRows = data.lineItems.map((item, i) => `
+  const itemRows = data.lineItems.map((item, i) => {
+    const qty = Number(item.quantity ?? 1);
+    const unitPrice = Number(item.unitPrice ?? 0);
+    // quote_line_items stores the computed total, which already accounts for the
+    // per-line discount and tax. Recomputing qty * unitPrice would silently drop
+    // both, so the stored value wins and the product is only a fallback.
+    const lineTotal = item.total != null ? Number(item.total) : qty * unitPrice;
+    return `
     <tr>
       <td style="padding:8px;border-bottom:1px solid #eee">${i + 1}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee">${item.description || item.name || 'Item'}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:center">${item.quantity || 1}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${Number(item.unit_price || item.price || 0).toLocaleString()}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${(Number(item.quantity || 1) * Number(item.unit_price || item.price || 0)).toLocaleString()}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee">${item.description || 'Item'}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;text-align:center">${qty}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${unitPrice.toLocaleString()}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${lineTotal.toLocaleString()}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 
   return `<!DOCTYPE html>
 <html>

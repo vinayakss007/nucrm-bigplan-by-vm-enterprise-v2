@@ -23,27 +23,27 @@ export async function GET(request: NextRequest) {
     const tid = ctx.tenantId;
 
     // Follow-up SLA: completed before due date
-    const fuStats = (await db.execute(sql`
+    const fuStats = await db.execute(sql`
       SELECT
         COUNT(*) FILTER (WHERE status = 'completed' AND completed_at <= due_date) as on_time,
         COUNT(*) FILTER (WHERE status = 'completed') as total_completed,
         COUNT(*) FILTER (WHERE status != 'completed' AND due_date < NOW()) as overdue
       FROM follow_ups
       WHERE tenant_id = ${tid} AND deleted_at IS NULL
-    `)).rows[0];
+    `);
 
     // Task SLA: completed before due date
-    const taskStats = (await db.execute(sql`
+    const taskStats = await db.execute(sql`
       SELECT
         COUNT(*) FILTER (WHERE status = 'completed' AND completed_at IS NOT NULL AND due_date IS NOT NULL AND completed_at <= due_date) as on_time,
         COUNT(*) FILTER (WHERE status = 'completed') as total_completed,
         COUNT(*) FILTER (WHERE status NOT IN ('completed', 'cancelled') AND due_date IS NOT NULL AND due_date < NOW()) as overdue
       FROM tasks
       WHERE tenant_id = ${tid} AND deleted_at IS NULL
-    `)).rows[0];
+    `);
 
     // Average response time (follow-up creation → completion)
-    const avgResponse = (await db.execute(sql`
+    const avgResponse = await db.execute(sql`
       SELECT
         COALESCE(AVG(EXTRACT(EPOCH FROM (completed_at - created_at)) / 3600), 0)::numeric(10,1) as avg_hours
       FROM follow_ups
@@ -51,12 +51,12 @@ export async function GET(request: NextRequest) {
         AND deleted_at IS NULL
         AND status = 'completed'
         AND completed_at IS NOT NULL
-    `)).rows[0];
+    `);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fu = fuStats as any;
+    const fu = fuStats.rows[0] as any;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ts = taskStats as any;
+    const ts = taskStats.rows[0] as any;
 
     const fuOnTime = Number(fu?.on_time ?? 0);
     const fuTotal = Number(fu?.total_completed ?? 1);
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
         task_completion_pct: taskTotal > 0 ? Math.round((taskOnTime / taskTotal) * 100) : 100,
         overdue_follow_ups: Number(fu?.overdue ?? 0),
         overdue_tasks: Number(ts?.overdue ?? 0),
-        avg_response_time_hours: Number((avgResponse as { avg_hours: string })?.avg_hours ?? 0),
+        avg_response_time_hours: Number((avgResponse.rows[0] as { avg_hours: string })?.avg_hours ?? 0),
         follow_ups_completed: fuTotal,
         tasks_completed: taskTotal,
       },
