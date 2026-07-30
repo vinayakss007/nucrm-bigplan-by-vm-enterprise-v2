@@ -16,8 +16,20 @@
  * import { apiErr, ErrorCode } from '@/lib/api/error-codes';
  *
  * if (!found) return apiErr(ErrorCode.RESOURCE_NOT_FOUND, { resource: 'Contact', id });
- * if (duplicate) return apiErr(ErrorCode.DUPLICATE_RESOURCE, { field: 'email', value: email });
+ * if (duplicate) return apiErr(ErrorCode.RESOURCE_ALREADY_EXISTS, { field: 'email', value: email });
  * ```
+ *
+ * Not to be confused with apiError() in lib/api-error.ts (used by ~328 files).
+ * They do different jobs:
+ * - apiError(err) is for *unexpected* failures in catch blocks. It logs, reports
+ *   5xx to Sentry, and deliberately hides the real message in production.
+ * - apiErr(code) is for *expected*, enumerable outcomes the client should branch
+ *   on. It does not log and does not alert.
+ * Reach for apiError() when something went wrong; apiErr() when the request was
+ * simply refused.
+ *
+ * `details` is echoed to the client verbatim -- do not pass raw exception text,
+ * internal identifiers, or anything else you would not put in a public response.
  */
 
 import { NextResponse } from 'next/server';
@@ -146,15 +158,21 @@ export function apiErr(
   details?: Record<string, unknown>,
   overrideMessage?: string,
 ): NextResponse {
-  const meta = ERROR_METADATA[code];
-  const body: Record<string, unknown> = {
-    error: overrideMessage || meta.message,
-    code,
-  };
+  // Fall back rather than throw on an unregistered code. Callers reach this from
+  // catch blocks, and a TypeError here would turn a handled 404 into an unhandled
+  // 500. Mirrors getErrorStatus()'s ?? 500.
+  const meta = ERROR_METADATA[code] ?? { status: 500, message: 'Internal server error' };
 
+  // details are spread flat onto the body, so they must be applied FIRST: a
+  // caller passing { code: ... } or { error: ... } -- e.g. relaying a field named
+  // "code" from an upstream API -- would otherwise overwrite the machine-readable
+  // code with arbitrary data, defeating the point of the registry.
+  const body: Record<string, unknown> = {};
   if (details && Object.keys(details).length > 0) {
     Object.assign(body, details);
   }
+  body.error = overrideMessage || meta.message;
+  body.code = code;
 
   return NextResponse.json(body, { status: meta.status });
 }
