@@ -82,7 +82,9 @@ export async function POST(request: NextRequest) {
         };
 
         const subject = interpolate(template.subject || '', personalVars);
-        const htmlBody = interpolate(template.body || '', personalVars);
+        // emailTemplates stores bodyHtml / bodyText — there is no `body` column.
+        // Prefer the HTML body, fall back to the plain-text one.
+        const htmlBody = interpolate(template.bodyHtml || template.bodyText || '', personalVars);
 
         await sendEmail({
           to: contact.email!,
