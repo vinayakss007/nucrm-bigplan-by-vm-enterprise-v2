@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch the failed delivery
-    const [delivery] = await db.execute(sql`
+    const delivery = await db.execute(sql`
       SELECT id, webhook_id, payload, url, headers, status, attempts
       FROM webhook_deliveries
       WHERE id = ${delivery_id}
