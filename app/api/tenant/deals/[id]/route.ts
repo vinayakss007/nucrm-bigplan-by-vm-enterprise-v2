@@ -12,6 +12,7 @@ import { notifyTenantMembers } from '@/lib/notifications';
 import { logError } from '@/lib/errors-server';
 import { cache } from '@/lib/cache';
 import { withConcurrencyGuard } from '@/lib/concurrency';
+import { checkConcurrency } from '@/lib/api/optimistic-lock';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -122,7 +123,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .limit(1);
 
     if (!prev) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
+    // Optimistic concurrency check: reject early if the client version is stale
+    const conflict = checkConcurrency(prev.updatedAt!, rawBody?._version ?? rawBody?.updated_at);
+    if (conflict) return conflict;
     
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

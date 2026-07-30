@@ -5,7 +5,7 @@ describe('metrics', () => {
 
   beforeEach(() => {
     vi.resetModules();
-    process.env = { ...OLD_ENV, PROMETHEUS_ENABLED: 'true' };
+    process.env = { ...OLD_ENV };
   });
 
   afterEach(() => {
@@ -93,8 +93,8 @@ describe('metrics', () => {
     expect(points[points.length - 1]!.value).toBe(10000);
   });
 
-  it('does not record when PROMETHEUS_ENABLED is not true (testMode)', async () => {
-    process.env.PROMETHEUS_ENABLED = 'false';
+  it('does not record when METRICS_DISABLED is true', async () => {
+    process.env.METRICS_DISABLED = 'true';
     const { metrics } = await import('@/lib/metrics');
     metrics.reset();
     metrics.increment('should_not_record', 1);
@@ -107,7 +107,7 @@ describe('metrics', () => {
   describe('trackRequest', () => {
     beforeEach(() => {
       vi.resetModules();
-      process.env = { ...OLD_ENV, PROMETHEUS_ENABLED: 'true' };
+      process.env = { ...OLD_ENV };
     });
 
     afterEach(() => {
@@ -148,7 +148,7 @@ describe('metrics', () => {
   describe('trackDatabaseQuery', () => {
     beforeEach(() => {
       vi.resetModules();
-      process.env = { ...OLD_ENV, PROMETHEUS_ENABLED: 'true' };
+      process.env = { ...OLD_ENV };
     });
 
     afterEach(() => {
@@ -170,7 +170,7 @@ describe('metrics', () => {
   describe('trackAuthEvent', () => {
     beforeEach(() => {
       vi.resetModules();
-      process.env = { ...OLD_ENV, PROMETHEUS_ENABLED: 'true' };
+      process.env = { ...OLD_ENV };
     });
 
     afterEach(() => {
@@ -200,7 +200,7 @@ describe('metrics', () => {
   describe('trackBusinessMetric', () => {
     beforeEach(() => {
       vi.resetModules();
-      process.env = { ...OLD_ENV, PROMETHEUS_ENABLED: 'true' };
+      process.env = { ...OLD_ENV };
     });
 
     afterEach(() => {
@@ -238,7 +238,7 @@ describe('metrics', () => {
   describe('exportPrometheusMetrics', () => {
     beforeEach(() => {
       vi.resetModules();
-      process.env = { ...OLD_ENV, PROMETHEUS_ENABLED: 'true' };
+      process.env = { ...OLD_ENV };
     });
 
     afterEach(() => {

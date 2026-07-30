@@ -1,3 +1,17 @@
+/**
+ * Canonical server-side error handling for all API routes.
+ *
+ * This module provides the standard `AppError` class hierarchy and the
+ * `handleError()` catch-all that safely serializes errors into JSON responses
+ * without leaking internal details in production.
+ *
+ * Prefer this module over `lib/api-error.ts` (which is deprecated).
+ *
+ * Quick reference:
+ *   - Throw typed errors: `throw new NotFoundError('Lead')`
+ *   - Catch-all in routes: `catch (err) { return handleError(err); }`
+ *   - Custom codes: see `ErrorCode` enum in `lib/errors-shared.ts`
+ */
 import 'server-only';
 import { NextResponse } from 'next/server';
 import { ErrorCode, type ApiError } from '@/lib/errors-shared';
