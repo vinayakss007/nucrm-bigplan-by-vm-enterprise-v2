@@ -1,76 +1,107 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, companies, deals } from '@/drizzle/schema';
-import { tasks, activities } from '@/drizzle/schema';
-import { users, tenantMembers } from '@/drizzle/schema';
-import { eq, asc } from 'drizzle-orm';
+import { contacts, companies, deals, leads, tasks, activities } from '@/drizzle/schema';
+import { eq, and, isNull } from 'drizzle-orm';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { readJsonBody } from '@/lib/api/validate';
 
-export async function GET(request: NextRequest) {
+/**
+ * POST /api/tenant/export
+ * Exports tenant data as JSON or CSV format.
+ *
+ * Body: { entity: 'contacts'|'companies'|'deals'|'leads'|'tasks'|'activities', format?: 'json'|'csv' }
+ * Returns the data immediately for small datasets.
+ */
+export async function POST(request: NextRequest) {
   try {
+    const limited = await rateLimitMutating(request, 'export', 'post');
+    if (limited) return limited;
+
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
-    const tid = ctx.tenantId;
+    const deny = requirePerm(ctx, 'settings.manage');
+    if (deny) return deny;
 
-    const [contactResults, companyResults, dealResults, taskResults, activityResults, memberResults] = await Promise.all([
-      db.query.contacts.findMany({
-        where: eq(contacts.tenantId, tid),
-        orderBy: [asc(contacts.createdAt)]
-      }),
-      db.query.companies.findMany({
-        where: eq(companies.tenantId, tid),
-        orderBy: [asc(companies.createdAt)]
-      }),
-      db.query.deals.findMany({
-        where: eq(deals.tenantId, tid),
-        orderBy: [asc(deals.createdAt)]
-      }),
-      db.query.tasks.findMany({
-        where: eq(tasks.tenantId, tid),
-        orderBy: [asc(tasks.createdAt)]
-      }),
-      db.query.activities.findMany({
-        where: eq(activities.tenantId, tid),
-        orderBy: [asc(activities.createdAt)]
-      }),
-      db.select({
-        email: users.email,
-        firstName: users.fullName,
-        lastName: users.fullName,
-        roleSlug: tenantMembers.roleSlug,
-        joinedAt: tenantMembers.createdAt
-      })
-      .from(tenantMembers)
-      .innerJoin(users, eq(users.id, tenantMembers.userId))
-      .where(eq(tenantMembers.tenantId, tid))
-    ]);
+    const body = await readJsonBody(request);
+    const { entity, format = 'json' } = body as { entity: string; format?: string };
 
-    const export_data = {
-      exported_at: new Date().toISOString(),
-      tenant_id: ctx.tenantId,
-      contacts: contactResults,
-      companies: companyResults,
-      deals: dealResults,
-      tasks: taskResults,
-      activities: activityResults,
-      members: memberResults,
-    };
+    if (!entity) {
+      return NextResponse.json({ error: 'entity is required' }, { status: 400 });
+    }
 
-    return new NextResponse(JSON.stringify(export_data, null, 2), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Disposition': `attachment; filename="nucrm_export_${new Date().toISOString().split('T')[0]}.json"`,
-      },
+    const validEntities = ['contacts', 'companies', 'deals', 'leads', 'tasks', 'activities'];
+    if (!validEntities.includes(entity)) {
+      return NextResponse.json({ error: `Invalid entity. Must be one of: ${validEntities.join(', ')}` }, { status: 400 });
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let data: any[] = [];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tenantFilter = (table: { tenantId: any; deletedAt?: any }) =>
+      and(eq(table.tenantId, ctx.tenantId), table.deletedAt ? isNull(table.deletedAt) : undefined);
+
+    switch (entity) {
+      case 'contacts':
+        data = await db.select().from(contacts).where(tenantFilter(contacts)).limit(10000);
+        break;
+      case 'companies':
+        data = await db.select().from(companies).where(tenantFilter(companies)).limit(10000);
+        break;
+      case 'deals':
+        data = await db.select().from(deals).where(tenantFilter(deals)).limit(10000);
+        break;
+      case 'leads':
+        data = await db.select().from(leads).where(tenantFilter(leads)).limit(10000);
+        break;
+      case 'tasks':
+        data = await db.select().from(tasks).where(tenantFilter(tasks)).limit(10000);
+        break;
+      case 'activities':
+        data = await db.select().from(activities).where(eq(activities.tenantId, ctx.tenantId)).limit(10000);
+        break;
+    }
+
+    if (format === 'csv') {
+      if (data.length === 0) {
+        return new NextResponse('', {
+          status: 200,
+          headers: { 'Content-Type': 'text/csv', 'Content-Disposition': `attachment; filename="${entity}-export.csv"` },
+        });
+      }
+      // Convert to CSV
+      const headers = Object.keys(data[0]!);
+      const csvRows = [
+        headers.join(','),
+        ...data.map(row =>
+          headers.map(h => {
+            const val = (row as Record<string, unknown>)[h];
+            if (val === null || val === undefined) return '';
+            const str = String(val).replace(/"/g, '""');
+            return `"${str}"`;
+          }).join(',')
+        ),
+      ];
+      const csv = csvRows.join('\n');
+
+      return new NextResponse(csv, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv',
+          'Content-Disposition': `attachment; filename="${entity}-export.csv"`,
+        },
+      });
+    }
+
+    return NextResponse.json({
+      data,
+      meta: { entity, total: data.length, exported_at: new Date().toISOString(), format: 'json' },
     });
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[export GET]', err);
     return apiError(err);
   }
 }

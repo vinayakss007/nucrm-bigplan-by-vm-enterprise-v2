@@ -6,6 +6,31 @@ import { customFieldDefs, pipelines, dealStages, automations } from '@/drizzle/s
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 import { readJsonBody } from '@/lib/api/validate';
 
+// GET /api/tenant/industry-templates - list all available industry templates
+export async function GET(req: NextRequest) {
+  try {
+    const ctx = await requireAuth(req);
+    if (ctx instanceof NextResponse) return ctx;
+
+    const data = Object.values(INDUSTRY_TEMPLATES).map((t) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      icon: t.icon,
+      modules: t.modules,
+      custom_fields: t.custom_fields,
+      pipelines: t.pipelines,
+      automations: t.automations,
+    }));
+
+    return NextResponse.json({ data });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (err: any) {
+    console.error('[IndustryTemplates] GET error:', err);
+    return apiError(err);
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);

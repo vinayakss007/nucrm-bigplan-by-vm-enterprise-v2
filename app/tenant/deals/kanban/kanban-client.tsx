@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import Link from 'next/link';
 
 interface Deal {
   id: string;
@@ -153,20 +152,34 @@ const StageColumn = memo(function StageColumn({ stage, deals, _onDealMove }: { s
 export default function DealsKanbanPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
-  const { data: res, isLoading } = useSWR('/api/tenant/deals');
+  const { data: res, isLoading, mutate } = useSWR('/api/tenant/deals');
   const { data: stagesRes } = useSWR('/api/tenant/pipelines');
   const [deals, setDeals] = useState<Deal[]>([]);
   const loading = isLoading && deals.length === 0;
 
   const stages: Stage[] = useMemo(() => {
-    const apiStages = stagesRes?.stages ?? stagesRes?.data?.stages ?? stagesRes?.data;
-    if (Array.isArray(apiStages) && apiStages.length > 0) {
-      return apiStages.map((s: { id: string; name: string; color?: string; order?: number }) => ({
-        id: s.id,
-        name: s.name,
-        color: s.color || 'bg-slate-400',
-        order: s.order ?? 0,
-      }));
+    // API returns { data: Pipeline[] } where each pipeline has a stages array
+    const pipelinesData = stagesRes?.data;
+    if (Array.isArray(pipelinesData) && pipelinesData.length > 0) {
+      // Use the default pipeline if one exists, otherwise fall back to the first
+      const pipeline = pipelinesData.find((p: { isDefault?: boolean }) => p.isDefault) || pipelinesData[0];
+      const pipelineStages = pipeline?.stages;
+      if (Array.isArray(pipelineStages) && pipelineStages.length > 0) {
+        const STAGE_COLORS: Record<string, string> = {
+          lead: 'bg-slate-400',
+          qualified: 'bg-blue-400',
+          proposal: 'bg-violet-400',
+          negotiation: 'bg-amber-400',
+          won: 'bg-emerald-400',
+          lost: 'bg-red-400',
+        };
+        return pipelineStages.map((s: { id: string; name: string; color?: string; order?: number }, idx: number) => ({
+          id: s.id,
+          name: s.name,
+          color: s.color || STAGE_COLORS[s.name.toLowerCase()] || 'bg-slate-400',
+          order: s.order ?? idx,
+        }));
+      }
     }
     return DEFAULT_STAGES;
   }, [stagesRes]);
@@ -218,6 +231,7 @@ export default function DealsKanbanPage() {
         
         if (res.ok) {
           setDeals(prev => prev.map(d => d.id === activeDeal.id ? { ...d, stageId: newStageId } : d));
+          mutate();
           toast.success(`Deal moved to ${stages.find(s => s.id === newStageId)?.name}`);
         }
       } catch {

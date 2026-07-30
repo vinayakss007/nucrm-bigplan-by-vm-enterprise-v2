@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useCallback } from 'react';
 import Link from 'next/link';
-import { Users, Search, Crown, Plus, ArrowRight, AlertTriangle, Loader2 } from 'lucide-react';
+import { Users, Search, Crown, Plus, ArrowRight, AlertTriangle, Loader2, Edit, UserX, X, Save } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -12,6 +12,7 @@ interface UserData {
   full_name?: string;
   is_super_admin: boolean;
   created_at: string;
+  metadata?: { role?: string; account_status?: string };
   memberships?: Array<{ tenant_name: string; plan: string }>;
 }
 
@@ -30,6 +31,84 @@ interface MeData {
  * There is NO Promote/Demote/Revoke buttons.
  * Transfer is the ONLY way to change super admin ownership.
  */
+
+function EditUserDialog({ user, onSave, onClose }: { user: UserData; onSave: () => void; onClose: () => void }) {
+  const [form, setForm] = useState({
+    full_name: user.full_name || '',
+    role: user.metadata?.role || 'user',
+    status: user.metadata?.account_status || 'active',
+  });
+  const [saving, setSaving] = useState(false);
+  const inp = "w-full px-3 py-2 rounded-lg border border-border bg-muted/30 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500";
+  const lbl = "block text-xs font-medium text-muted-foreground mb-1";
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const res = await fetch('/api/superadmin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: user.id, ...form }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        toast.success('User updated');
+        onSave();
+      } else {
+        toast.error(d.error || 'Failed to update');
+      }
+    } catch {
+      toast.error('Failed to update user');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <p className="text-sm font-bold text-foreground">Edit User</p>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+        </div>
+        <form onSubmit={save} className="p-6 space-y-4">
+          <div>
+            <label className={lbl}>Email</label>
+            <p className="text-sm text-muted-foreground">{user.email}</p>
+          </div>
+          <div>
+            <label className={lbl}>Full Name</label>
+            <input value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} className={inp} placeholder="Full name" />
+          </div>
+          <div>
+            <label className={lbl}>Role</label>
+            <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} className={inp}>
+              <option value="admin">Admin</option>
+              <option value="user">User</option>
+              <option value="viewer">Viewer</option>
+            </select>
+          </div>
+          <div>
+            <label className={lbl}>Status</label>
+            <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className={inp}>
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+            </select>
+          </div>
+          <div className="flex gap-2 justify-end pt-2 border-t border-border">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-border text-xs text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold disabled:opacity-50 transition-colors">
+              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <Save className="w-3.5 h-3.5" />Save
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function SuperAdminUsersPage() {
   const [users, setUsers]   = useState<UserData[]>([]);
   const [me, setMe]         = useState<MeData | null>(null);
@@ -38,6 +117,7 @@ export default function SuperAdminUsersPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferTarget, setTransferTarget] = useState('');
+  const [editUser, setEditUser] = useState<UserData | null>(null);
   const [form, setForm]     = useState({ email:'', full_name:'', password:'' });
   const [saving, setSaving] = useState(false);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-muted/30 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500";
@@ -90,11 +170,31 @@ export default function SuperAdminUsersPage() {
     setSaving(false);
   };
 
+  const deactivateUser = async (userId: string) => {
+    try {
+      const res = await fetch('/api/superadmin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: userId, status: 'suspended' }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        toast.success('User deactivated');
+        load();
+      } else {
+        toast.error(d.error || 'Failed to deactivate');
+      }
+    } catch {
+      toast.error('Failed to deactivate user');
+    }
+  };
+
   const filtered = users.filter(u => !search || u.email?.includes(search) || u.full_name?.toLowerCase()?.includes(search.toLowerCase()));
   const otherAdmins = users.filter(u => u.is_super_admin && u.id !== me?.userId);
 
   return (
     <div className="space-y-5 max-w-6xl">
+      {editUser && <EditUserDialog user={editUser} onSave={() => { setEditUser(null); load(); }} onClose={() => setEditUser(null)} />}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold text-foreground flex items-center gap-2"><Users className="w-5 h-5 text-violet-400"/>All Users</h1>
@@ -174,15 +274,15 @@ export default function SuperAdminUsersPage() {
         </form>
       )}
 
-      {/* Table — READ ONLY, no dangerous action buttons */}
+      {/* Table — with Edit and Deactivate actions */}
       <div className="rounded-xl border border-border bg-card overflow-x-auto">
         <table className="w-full">
           <thead><tr className="border-b border-border">
-            {['User','Workspaces','Joined','Status'].map(h=><th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wide">{h}</th>)}
+            {['User','Workspaces','Joined','Status','Actions'].map(h=><th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wide">{h}</th>)}
           </tr></thead>
           <tbody>
-            {loading&&<tr><td colSpan={4} className="text-center py-8 text-muted-foreground text-sm">Loading...</td></tr>}
-            {!loading&&!filtered.length&&<tr><td colSpan={4} className="text-center py-12 text-muted-foreground text-sm">No users found</td></tr>}
+            {loading&&<tr><td colSpan={5} className="text-center py-8 text-muted-foreground text-sm">Loading...</td></tr>}
+            {!loading&&!filtered.length&&<tr><td colSpan={5} className="text-center py-12 text-muted-foreground text-sm">No users found</td></tr>}
             {filtered.map(u=>(
               <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
                 <td className="px-4 py-3">
@@ -209,9 +309,38 @@ export default function SuperAdminUsersPage() {
                 </td>
                 <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(u.created_at)}</td>
                 <td className="px-4 py-3">
-                  <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full', u.is_super_admin?'bg-amber-500/15 text-amber-600 dark:text-amber-400':'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400')}>
-                    {u.is_super_admin?'Super Admin':'User'}
+                  <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full',
+                    u.metadata?.account_status === 'suspended'
+                      ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+                      : u.is_super_admin
+                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                        : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                  )}>
+                    {u.metadata?.account_status === 'suspended' ? 'Suspended' : u.is_super_admin ? 'Super Admin' : 'Active'}
                   </span>
+                  {u.metadata?.role && u.metadata.role !== 'user' && (
+                    <span className="ml-1.5 text-[10px] text-muted-foreground/60 capitalize">{u.metadata.role}</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setEditUser(u)}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
+                      title="Edit user"
+                    >
+                      <Edit className="w-3 h-3" />Edit
+                    </button>
+                    {u.id !== me?.userId && u.metadata?.account_status !== 'suspended' && !u.is_super_admin && (
+                      <button
+                        onClick={() => deactivateUser(u.id)}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg border border-red-200 dark:border-red-500/20 text-[10px] text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
+                        title="Deactivate user"
+                      >
+                        <UserX className="w-3 h-3" />Deactivate
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

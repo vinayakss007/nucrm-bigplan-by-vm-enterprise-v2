@@ -21,6 +21,10 @@ export async function register() {
       },
     });
 
+    // Initialize metrics collection
+    const { metrics } = await import("./lib/metrics");
+    metrics.gauge('app_startup', 1);
+
     // Auto-register Telegram bot webhook
     const botToken = process.env['TELEGRAM_BOT_TOKEN'];
     const appUrl = process.env['NEXT_PUBLIC_APP_URL'];

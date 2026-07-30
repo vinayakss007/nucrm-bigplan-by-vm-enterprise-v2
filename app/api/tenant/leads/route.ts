@@ -274,6 +274,8 @@ export async function POST(request: NextRequest) {
           createdBy: ctx.userId,
           tags: [],
           internalNotes: null,
+          notes: v.notes || null,
+          value: v.value != null ? String(v.value) : null,
           customFields: v.custom_fields,
           contactId,
           leadOid,

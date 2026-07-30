@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { productTemplates } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
+import { apiError } from '@/lib/api-error';
 
 export async function GET(
   req: NextRequest,
@@ -28,9 +29,8 @@ export async function GET(
 
     return NextResponse.json({ data: template });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
     console.error('[superadmin/templates/[id] GET]', err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -92,9 +92,8 @@ export async function PATCH(
 
     return NextResponse.json({ data: updated });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
     console.error('[superadmin/templates/[id] PATCH]', err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -121,8 +120,7 @@ export async function DELETE(
 
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
     console.error('[superadmin/templates/[id] DELETE]', err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiError(err);
   }
 }
