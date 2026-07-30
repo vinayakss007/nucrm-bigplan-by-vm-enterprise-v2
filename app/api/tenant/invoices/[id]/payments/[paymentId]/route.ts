@@ -55,7 +55,7 @@ export async function DELETE(
     return NextResponse.json({ data: { voided: paymentId, invoice: totals } });
   } catch (err) {
     if (err instanceof PaymentError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return apiError(err, err.message, err.status);
     }
     console.error('[invoices payments DELETE]', err);
     return apiError(err);
