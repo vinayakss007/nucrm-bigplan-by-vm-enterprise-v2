@@ -120,7 +120,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ data: { payment, invoice: totals } }, { status: 201 });
   } catch (err) {
     if (err instanceof PaymentError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return apiError(err, err.message, err.status);
     }
     console.error('[invoices payments POST]', err);
     return apiError(err);

@@ -41,9 +41,9 @@ const REPO_ROOT = path.resolve(import.meta.dirname!, '../..');
 const MIGRATIONS_DIR = path.join(REPO_ROOT, 'drizzle', 'migrations');
 
 /** Migration with a separate `.down.sql` file. */
-const TAG_DOWN_FILE = '0041_add_form_views_count';
+const TAG_DOWN_FILE = '0034_add_form_views_count';
 /** Migration with an inline `-- DOWN` / `-- END DOWN` section. */
-const TAG_INLINE = '0042_backup_records_checksum';
+const TAG_INLINE = '0036_backup_records_checksum';
 /** Migration with no rollback SQL at all. */
 const TAG_NO_ROLLBACK = '0000_init';
 
@@ -186,11 +186,11 @@ describe('verifyRollbackCoverage', () => {
 
     // Every migration that ships rollback SQL today must be reported as covered.
     for (const tag of [
-      '0041_add_form_views_count',
-      '0043_tenant_isolation_hardening',
-      '0044_cross_module_record_linking',
-      '0042_backup_records_checksum',
-      '0045_lead_product_service_request',
+      '0034_add_form_views_count',
+      '0037_tenant_isolation_hardening',
+      '0038_cross_module_record_linking',
+      '0036_backup_records_checksum',
+      '0040_lead_product_service_request',
     ]) {
       expect(coverage.withRollback).toContain(tag);
     }
@@ -207,8 +207,8 @@ describe('verifyRollbackCoverage', () => {
   it('records the source convention for each covered migration', () => {
     const coverage = verifyRollbackCoverage(MIGRATIONS_DIR);
     const byTag = new Map(coverage.entries.map((e) => [e.tag, e]));
-    expect(byTag.get('0041_add_form_views_count')?.source).toBe('down-file');
-    expect(byTag.get('0042_backup_records_checksum')?.source).toBe('inline');
+    expect(byTag.get('0034_add_form_views_count')?.source).toBe('down-file');
+    expect(byTag.get('0036_backup_records_checksum')?.source).toBe('inline');
     expect(byTag.get(TAG_NO_ROLLBACK)?.source).toBeNull();
   });
 });

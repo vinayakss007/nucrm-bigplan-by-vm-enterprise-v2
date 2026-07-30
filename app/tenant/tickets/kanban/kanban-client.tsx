@@ -127,7 +127,7 @@ const TicketColumn = memo(function TicketColumn({ column, tickets }: { column: C
 
 export default function TicketsKanbanPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const { data: res, isLoading } = useSWR('/api/tenant/tickets');
+  const { data: res, isLoading, mutate } = useSWR('/api/tenant/tickets');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const loading = isLoading && tickets.length === 0;
 
@@ -183,6 +183,7 @@ export default function TicketsKanbanPage() {
 
       if (res.ok) {
         toast.success(`Ticket moved to ${COLUMNS.find(c => c.id === newStatus)?.name}`);
+        mutate();
       } else {
         // Revert
         setTickets(prev => prev.map(t => t.id === activeTicket.id ? { ...t, status: activeTicket.status } : t));

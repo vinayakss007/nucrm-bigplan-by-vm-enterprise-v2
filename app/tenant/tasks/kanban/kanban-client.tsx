@@ -139,7 +139,7 @@ const TaskColumn = memo(function TaskColumn({ column, tasks }: { column: Column;
 
 export default function TasksKanbanPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const { data: res, isLoading } = useSWR('/api/tenant/tasks');
+  const { data: res, isLoading, mutate } = useSWR('/api/tenant/tasks');
   const [tasks, setTasks] = useState<Task[]>([]);
   const loading = isLoading && tasks.length === 0;
 
@@ -195,6 +195,7 @@ export default function TasksKanbanPage() {
 
       if (res.ok) {
         toast.success(`Task moved to ${COLUMNS.find(c => c.id === newStatus)?.name}`);
+        mutate();
       } else {
         // Revert
         setTasks(prev => prev.map(t => t.id === activeTask.id ? { ...t, status: activeTask.status } : t));
