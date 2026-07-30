@@ -18,6 +18,7 @@ import {
 import toast from 'react-hot-toast'
 
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo'
+import { InlineContactCreate, InlineCompanyCreate } from '@/components/tenant/inline-create-dialog'
 
 const STAGES = [
   { id: 'lead', label: 'Lead', color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
@@ -53,8 +54,10 @@ interface Props {
   permissions: { canCreate: boolean; canEdit: boolean; canDelete: boolean }
 }
 
-export default function DealsDataTable({ initialDeals, contacts, companies, teamMembers, permissions }: Props) {
+export default function DealsDataTable({ initialDeals, contacts: initialContacts, companies: initialCompanies, teamMembers, permissions }: Props) {
   const [deals, setDeals] = useState(initialDeals)
+  const [contactList, setContactList] = useState(initialContacts)
+  const [companyList, setCompanyList] = useState(initialCompanies)
   const [total, setTotal] = useState(initialDeals.length)
   const [loading, setLoading] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
@@ -74,11 +77,12 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
   const [saving, setSaving] = useState(false)
   const [selectAllMatching, setSelectAllMatching] = useState(false)
 
-  const loadData = useCallback(async (page = 0, filterOverride?: string) => {
+  const loadData = useCallback(async (page = 0, filterOverride?: string, pageSizeOverride?: number) => {
     setLoading(true)
+    const size = pageSizeOverride ?? pagination.pageSize
     const params = new URLSearchParams({
-      limit: String(pagination.pageSize),
-      offset: String(page * pagination.pageSize),
+      limit: String(size),
+      offset: String(page * size),
     })
     const q = filterOverride !== undefined ? filterOverride : globalFilter
     if (q) params.set('q', q)
@@ -90,6 +94,7 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
     } catch (error) {
       console.error('Failed to load deals:', error)
     }
+    setSelectAllMatching(false)
     setLoading(false)
   }, [pagination.pageSize, globalFilter])
 
@@ -102,7 +107,8 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
 
   const handlePageSizeChange = useCallback((size: number) => {
     setPagination(prev => ({ ...prev, pageSize: size, pageIndex: 0 }))
-  }, [])
+    loadData(0, undefined, size)
+  }, [loadData])
 
   const handleGlobalFilterChange = useCallback((filter: string) => {
     setGlobalFilter(filter)
@@ -491,29 +497,45 @@ export default function DealsDataTable({ initialDeals, contacts, companies, team
             </div>
             <div>
               <label className="block text-sm font-bold text-foreground/80 mb-1">Contact</label>
-              <select
-                value={form.contact_id}
-                onChange={(e) => setForm(f => ({ ...f, contact_id: e.target.value }))}
-                className={inp}
-              >
-                <option value="">No contact</option>
-                {(contacts || []).map((c) => (
-                  <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
-                ))}
-              </select>
+              <div className="flex items-center gap-1">
+                <select
+                  value={form.contact_id}
+                  onChange={(e) => setForm(f => ({ ...f, contact_id: e.target.value }))}
+                  className={inp + " flex-1"}
+                >
+                  <option value="">No contact</option>
+                  {(contactList || []).map((c) => (
+                    <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
+                  ))}
+                </select>
+                <InlineContactCreate
+                  onCreated={(newContact) => {
+                    setContactList(prev => [...prev, newContact])
+                    setForm(f => ({ ...f, contact_id: newContact.id }))
+                  }}
+                />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-bold text-foreground/80 mb-1">Company</label>
-              <select
-                value={form.company_id}
-                onChange={(e) => setForm(f => ({ ...f, company_id: e.target.value }))}
-                className={inp}
-              >
-                <option value="">No company</option>
-                {(companies || []).map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <div className="flex items-center gap-1">
+                <select
+                  value={form.company_id}
+                  onChange={(e) => setForm(f => ({ ...f, company_id: e.target.value }))}
+                  className={inp + " flex-1"}
+                >
+                  <option value="">No company</option>
+                  {(companyList || []).map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <InlineCompanyCreate
+                  onCreated={(newCompany) => {
+                    setCompanyList(prev => [...prev, newCompany])
+                    setForm(f => ({ ...f, company_id: newCompany.id }))
+                  }}
+                />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-bold text-foreground/80 mb-1">Assigned To</label>
