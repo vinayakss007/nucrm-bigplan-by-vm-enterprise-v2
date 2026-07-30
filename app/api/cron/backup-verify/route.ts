@@ -131,6 +131,23 @@ export async function POST(request: NextRequest) {
       localFile = await fetchFromS3(backup.storagePath, workDir);
     }
 
+    // ── 1b. Decrypt if encrypted ─────────────────────────────────────────────
+    // PR #866 added AES-256-GCM encryption. Encrypted artefacts have a .enc
+    // extension. We must decrypt before checksumming or restoring.
+    if (localFile.endsWith('.enc')) {
+      const { decryptBackupFile, isEncryptionEnabled } = await import('@/lib/backups/encrypt');
+      if (!isEncryptionEnabled()) {
+        failures.push(
+          'Backup is encrypted (.enc) but BACKUP_ENCRYPTION_KEY is not configured. ' +
+          'Cannot verify — the key is required to decrypt before restore.'
+        );
+        throw new Error('encryption key missing');
+      }
+      const decryptedPath = localFile.replace(/\.enc$/, '');
+      await decryptBackupFile(localFile, decryptedPath);
+      localFile = decryptedPath;
+    }
+
     // ── 2. Integrity ─────────────────────────────────────────────────────────
     const actual = await checksumFile(localFile);
     if (backup.checksum && backup.checksum.toLowerCase() !== actual.toLowerCase()) {
