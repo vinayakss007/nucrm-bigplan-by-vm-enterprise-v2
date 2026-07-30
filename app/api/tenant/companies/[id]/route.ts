@@ -8,6 +8,7 @@ import { companies, contacts } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { logError } from '@/lib/errors-server';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
@@ -88,6 +89,11 @@ export async function PATCH(req: NextRequest, { params }: any) {
     if (body.address !== undefined) updateData.address = body.address;
     if (body.notes !== undefined) updateData.notes = body.notes;
     if (body.custom_fields !== undefined) updateData.customFields = body.custom_fields;
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, companies, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const [row] = await db.update(companies)
       .set(updateData)
