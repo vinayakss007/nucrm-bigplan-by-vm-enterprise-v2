@@ -9,8 +9,8 @@
  *   npm run db:rollback -- --list
  *   npm run db:rollback:coverage
  *   npm run db:rollback -- --dry-run
- *   npm run db:rollback -- 0045_rls_fail_closed_policy --yes
- *   npm run db:rollback -- 0043_tenant_isolation_hardening --force --yes
+ *   npm run db:rollback -- 0039_rls_fail_closed_policy --yes
+ *   npm run db:rollback -- 0037_tenant_isolation_hardening --force --yes
  */
 import { createInterface } from 'readline';
 import {

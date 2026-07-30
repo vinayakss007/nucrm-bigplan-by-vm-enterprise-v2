@@ -47,6 +47,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href:'/tenant/contacts',  label:'Contacts',   icon:Users,           shortcut:'⌘3', keywords:'people customers' },
       { href:'/tenant/companies', label:'Companies',  icon:Building2,       shortcut:'⌘4', keywords:'accounts orgs' },
       { href:'/tenant/deals',     label:'Deals',      icon:TrendingUp,      shortcut:'⌘5', keywords:'opportunities pipeline' },
+      { href:'/tenant/pipelines', label:'Pipelines',  icon:Workflow,        keywords:'stages funnel kanban' },
       { href:'/tenant/tasks',     label:'Tasks',      icon:CheckSquare,     shortcut:'⌘6', keywords:'todo activities' },
       { href:'/tenant/projects',  label:'Projects',   icon:FolderKanban,    keywords:'project milestone tracking', module:'project-management' },
       { href:'/tenant/calendar',  label:'Calendar',   icon:Calendar,        keywords:'meetings events' },

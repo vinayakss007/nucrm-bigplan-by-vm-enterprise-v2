@@ -59,13 +59,15 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
   const [saving, setSaving] = useState(false)
   const [selectAllMatching, setSelectAllMatching] = useState(false)
 
-  const loadData = useCallback(async (page = 0) => {
+  const loadData = useCallback(async (page = 0, filterOverride?: string, pageSizeOverride?: number) => {
     setLoading(true)
+    const size = pageSizeOverride ?? pagination.pageSize
     const params = new URLSearchParams({
-      limit: String(pagination.pageSize),
-      offset: String(page * pagination.pageSize),
+      limit: String(size),
+      offset: String(page * size),
     })
-    if (globalFilter) params.set('q', globalFilter)
+    const q = filterOverride !== undefined ? filterOverride : globalFilter
+    if (q) params.set('q', q)
     try {
       const res = await fetch(`/api/tenant/companies?${params}`)
       const data = await res.json()
@@ -74,6 +76,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
     } catch (error) {
       console.error('Failed to load companies:', error)
     }
+    setSelectAllMatching(false)
     setLoading(false)
   }, [pagination.pageSize, globalFilter])
 
@@ -86,11 +89,12 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
 
   const handlePageSizeChange = useCallback((size: number) => {
     setPagination(prev => ({ ...prev, pageSize: size, pageIndex: 0 }))
-  }, [])
+    loadData(0, undefined, size)
+  }, [loadData])
 
   const handleGlobalFilterChange = useCallback((filter: string) => {
     setGlobalFilter(filter)
-    loadData(0)
+    loadData(0, filter)
   }, [loadData])
 
   const addCompany = async (e: React.FormEvent) => {

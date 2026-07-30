@@ -12,6 +12,7 @@ import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
 import { cache } from '@/lib/cache';
+import { archiveFilter } from '@/lib/api/deals-archive-filter';
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,9 +26,10 @@ export async function GET(request: NextRequest) {
       stage_id: searchParams.get('stage_id') ?? searchParams.get('stage') ?? undefined,
       pipeline_id: searchParams.get('pipeline_id') ?? undefined,
       q: searchParams.get('q') ?? undefined,
+      archived: searchParams.get('archived') ?? undefined,
     });
     if (query instanceof NextResponse) return query;
-    const { offset, limit, stage_id, stage: _stage, pipeline_id, q } = query.data;
+    const { offset, limit, stage_id, stage: _stage, pipeline_id, q, archived } = query.data;
 
     const cacheKey = `tenant:${ctx.tenantId}:deals:${searchParams.toString()}`;
     const cached = await cache.get(cacheKey);
@@ -37,6 +39,11 @@ export async function GET(request: NextRequest) {
       eq(deals.tenantId, ctx.tenantId),
       isNull(deals.deletedAt),
     ];
+
+    // Hide archived deals by default, matching how contacts filter isArchived.
+    // See lib/api/deals-archive-filter.ts for why this is a metadata flag.
+    const archiveWhere = archiveFilter(archived);
+    if (archiveWhere) filters.push(archiveWhere);
 
     if (!can(ctx, 'deals.view_all')) {
       filters.push(or(eq(deals.assignedTo, ctx.userId), eq(deals.createdBy, ctx.userId))!);

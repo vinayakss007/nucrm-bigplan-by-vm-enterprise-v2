@@ -104,7 +104,7 @@ Handles high/medium priority feature work, frontend, and UX issues:
 
 ## Other Context
 
-- **DB**: `postgresql://nucrm:nucrm_prod_db_pass_2026@localhost:5432/nucrm`
+- **DB**: read the connection string from `DATABASE_URL` (see `.env.example`) — never hardcode credentials here
 - **App**: `http://34.70.191.180:3000` — currently running in dev mode
 - **Sign in**: `t@t.com` / `password123`
 - **Build**: `npm run build` succeeds (needs ~5min, large project)

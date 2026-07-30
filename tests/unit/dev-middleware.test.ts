@@ -15,6 +15,10 @@ vi.mock('@/lib/dev-logger', () => ({
   devLogger: mockDevLogger,
 }));
 
+vi.mock('@/lib/metrics', () => ({
+  trackRequest: vi.fn(),
+}));
+
 const mockResponse = {
   headers: { set: vi.fn() },
   status: 200,

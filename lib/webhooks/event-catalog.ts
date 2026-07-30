@@ -1,17 +1,7 @@
 /**
  * Webhook Event Catalog
  *
- * Central registry of the webhook events NuCRM declares.
- *
- * Two caveats, because this catalog and the emitters are maintained separately:
- * - Not every entry has an emitter yet. Roughly half are declared ahead of the
- *   code that would fire them, so a subscription to one of those will simply
- *   never receive traffic. Confirm against fireWebhooks() call sites before
- *   promising an event to a customer.
- * - Conversely, anything added to fireWebhooks() must be added here too. If
- *   isValidEvent() gates subscription creation, an emitted-but-uncatalogued
- *   event becomes unsubscribable.
- *
+ * Central registry of all webhook events the NuCRM system emits.
  * Provides:
  * - Event names and descriptions (for documentation)
  * - Payload type definitions (for SDK generation)
@@ -58,18 +48,11 @@ export const WebhookEvent = {
   LEAD_UPDATED: 'lead.updated',
   LEAD_CONVERTED: 'lead.converted',
   LEAD_ASSIGNED: 'lead.assigned',
-  LEAD_DELETED: 'lead.deleted',
-
-  // ── Products ──
-  PRODUCT_CREATED: 'product.created',
-  PRODUCT_UPDATED: 'product.updated',
-  PRODUCT_DELETED: 'product.deleted',
 
   // ── Tasks ──
   TASK_CREATED: 'task.created',
   TASK_COMPLETED: 'task.completed',
   TASK_OVERDUE: 'task.overdue',
-  TASK_DELETED: 'task.deleted',
 
   // ── Activities ──
   ACTIVITY_LOGGED: 'activity.logged',
@@ -109,7 +92,6 @@ export type EventCategory =
   | 'companies'
   | 'deals'
   | 'leads'
-  | 'products'
   | 'tasks'
   | 'activities'
   | 'tickets'
@@ -158,18 +140,11 @@ const EVENT_DEFINITIONS: EventDefinition[] = [
   { event: WebhookEvent.LEAD_UPDATED, description: 'A lead was updated', category: 'leads', payloadKeys: ['lead', 'changes'], defaultEnabled: false },
   { event: WebhookEvent.LEAD_CONVERTED, description: 'A lead was converted to a contact/deal', category: 'leads', payloadKeys: ['lead', 'contactId', 'dealId'], defaultEnabled: true },
   { event: WebhookEvent.LEAD_ASSIGNED, description: 'A lead was assigned to a user', category: 'leads', payloadKeys: ['lead', 'assignedTo'], defaultEnabled: false },
-  { event: WebhookEvent.LEAD_DELETED, description: 'A lead was deleted', category: 'leads', payloadKeys: ['leadId'], defaultEnabled: false },
-
-  // Products
-  { event: WebhookEvent.PRODUCT_CREATED, description: 'A new product was created', category: 'products', payloadKeys: ['product'], defaultEnabled: true },
-  { event: WebhookEvent.PRODUCT_UPDATED, description: 'A product was updated', category: 'products', payloadKeys: ['product', 'changes'], defaultEnabled: true },
-  { event: WebhookEvent.PRODUCT_DELETED, description: 'A product was deleted', category: 'products', payloadKeys: ['productId'], defaultEnabled: false },
 
   // Tasks
   { event: WebhookEvent.TASK_CREATED, description: 'A new task was created', category: 'tasks', payloadKeys: ['task'], defaultEnabled: false },
   { event: WebhookEvent.TASK_COMPLETED, description: 'A task was completed', category: 'tasks', payloadKeys: ['task', 'completedBy'], defaultEnabled: false },
   { event: WebhookEvent.TASK_OVERDUE, description: 'A task became overdue', category: 'tasks', payloadKeys: ['task', 'overdueBy'], defaultEnabled: false },
-  { event: WebhookEvent.TASK_DELETED, description: 'A task was deleted', category: 'tasks', payloadKeys: ['taskId'], defaultEnabled: false },
 
   // Activities
   { event: WebhookEvent.ACTIVITY_LOGGED, description: 'An activity was logged', category: 'activities', payloadKeys: ['activity'], defaultEnabled: false },

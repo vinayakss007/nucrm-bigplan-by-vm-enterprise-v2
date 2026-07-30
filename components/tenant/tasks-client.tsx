@@ -8,6 +8,7 @@ import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo';
 import { showUndoToast } from '@/lib/undo';
+import { EmptyState } from '@/components/shared/empty-state';
 
 const PRIORITY_CFG = {
   high:   { label:'High',   dot:'bg-red-500',   badge:'text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400' },
@@ -200,12 +201,12 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
       {/* Task list */}
       <div className="admin-card overflow-hidden divide-y divide-border">
         {!filtered.length ? (
-          <div className="py-12 text-center">
-            <CheckSquare className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
-            <p className="text-sm font-medium text-muted-foreground">
-              {filter==='overdue' ? 'No overdue tasks' : filter==='done' ? 'No completed tasks' : filter==='today' ? 'No tasks due today' : 'No tasks'}
-            </p>
-          </div>
+          <EmptyState
+            type="tasks"
+            title={filter==='overdue' ? 'No overdue tasks' : filter==='done' ? 'No completed tasks' : filter==='today' ? 'No tasks due today' : undefined}
+            description={filter==='overdue' ? 'Great job staying on top of things!' : filter==='done' ? 'Completed tasks will show up here.' : filter==='today' ? 'Nothing due today.' : undefined}
+            className="py-12"
+          />
         ) : filtered.map(t => {
           const overdue = !t.completed && t.due_date && t.due_date < today;
           const p = PRIORITY_CFG[t.priority as keyof typeof PRIORITY_CFG] ?? PRIORITY_CFG.medium;
