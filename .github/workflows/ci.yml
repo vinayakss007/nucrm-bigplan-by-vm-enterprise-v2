@@ -10,13 +10,13 @@ on:
 env:
   NODE_ENV: test
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_test
-  JWT_SECRET: ${{ secrets.JWT_SECRET }}
-  SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
-  CRON_SECRET: ${{ secrets.CRON_SECRET }}
-  ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+  JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-jwt-secret-not-weak-at-all-32chars-long-enough' }}
+  SESSION_SECRET: ${{ secrets.SESSION_SECRET || 'ci-session-secret-safe-value-32chars-long-enough' }}
+  CRON_SECRET: ${{ secrets.CRON_SECRET || 'ci-cron-secret-safe-value-that-is-32chars-long' }}
+  ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY || 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2' }}
   NEXT_PUBLIC_APP_URL: http://localhost:3000
-  METRICS_SECRET: ${{ secrets.METRICS_SECRET }}
-  SETUP_KEY: ${{ secrets.SETUP_KEY }}
+  METRICS_SECRET: ${{ secrets.METRICS_SECRET || 'ci-metrics-secret-value-safe-32chars-long-enough' }}
+  SETUP_KEY: ${{ secrets.SETUP_KEY || 'ci-setup-key-safe-value-that-is-32characters-long' }}
   ALLOWED_ORIGINS: http://localhost:3000
   DATABASE_SSL: "false"
 
