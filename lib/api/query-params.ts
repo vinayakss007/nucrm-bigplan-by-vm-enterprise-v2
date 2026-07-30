@@ -6,7 +6,15 @@
  * - filter: `?filter[status]=active&filter[assignedTo]=user-1`
  * - fields: `?fields=id,name,email` (sparse fieldsets)
  * - search: `?q=searchterm`
- * - pagination: `?page=2&limit=50` (offset) or `?cursor=...&limit=50` (cursor)
+ * - pagination: `?page=2&limit=50` (offset-based)
+ *
+ * Field names (sort/filter/fields) are reduced to [A-Za-z0-9_], so they are safe to
+ * interpolate as identifiers. Filter *values* are returned raw and are attacker
+ * controlled -- always bind them as query parameters, never interpolate them.
+ *
+ * Note the whitelists are fail-open: if allowedSorts/allowedFilters/allowedFields is
+ * omitted or empty, ANY column name is accepted. List endpoints should pass explicit
+ * whitelists so that e.g. `?fields=password_hash` cannot reach the query builder.
  *
  * This provides a uniform interface that any list endpoint can use,
  * ensuring consistent API behavior across all resources.
@@ -81,6 +89,7 @@ export interface QueryParamsConfig {
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 const MAX_SORTS = 3;
+const MAX_RAW_SORT_PARTS = 25;
 const MAX_FILTERS = 10;
 
 /**
@@ -92,10 +101,15 @@ function parseSort(raw: string | null, config: QueryParamsConfig): SortField[] {
   }
 
   const maxSorts = config.maxSorts ?? MAX_SORTS;
-  const parts = raw.split(',').slice(0, maxSorts);
+  // Cap the raw split so a pathological ?sort= cannot make us do unbounded work,
+  // but spend the maxSorts budget on *valid* fields only. Slicing to maxSorts up
+  // front let a few unknown names crowd out a legitimate sort, which then fell
+  // through to defaultSort with no indication the request had been ignored.
+  const parts = raw.split(',').slice(0, MAX_RAW_SORT_PARTS);
   const results: SortField[] = [];
 
   for (const part of parts) {
+    if (results.length >= maxSorts) break;
     const [field, dir] = part.trim().split(':');
     if (!field) continue;
 

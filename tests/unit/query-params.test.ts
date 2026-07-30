@@ -52,6 +52,12 @@ describe('parseQueryParams', () => {
       expect(params.sort).toHaveLength(2);
     });
 
+    it('does not let unknown fields crowd out a valid sort', () => {
+      const req = makeRequest('sort=bogus1:asc,bogus2:asc,bogus3:asc,createdAt:desc');
+      const params = parseQueryParams(req, { allowedSorts: ['createdAt'], maxSorts: 3 });
+      expect(params.sort).toEqual([{ field: 'createdAt', direction: 'desc' }]);
+    });
+
     it('sanitizes field names', () => {
       const req = makeRequest('sort=drop table;:desc');
       const params = parseQueryParams(req);
