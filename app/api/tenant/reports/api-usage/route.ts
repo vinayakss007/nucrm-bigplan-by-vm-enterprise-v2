@@ -5,31 +5,45 @@ import { metrics } from '@/lib/metrics';
 
 /**
  * GET /api/tenant/reports/api-usage
- * API usage metrics — current request counts, rate limit status, top endpoints.
  *
- * Pulls from the in-memory metrics collector (lib/metrics.ts).
+ * API request metrics from the in-memory collector in lib/metrics.ts.
+ *
+ * Superadmin only, and deliberately so. The collector is a process-wide ring
+ * buffer (MAX_METRICS = 10_000) and trackRequest() records only
+ * { method, path, status } — there is no tenant label on any HTTP metric. So
+ * these numbers cannot be attributed to a single tenant. Returning them from a
+ * tenant-facing endpoint would both report wrong totals and expose the request
+ * paths of every other tenant on the instance.
+ *
+ * Two further caveats worth knowing before trusting these numbers:
+ *  - the buffer is per-process, so with several `web` replicas each returns only
+ *    its own slice;
+ *  - it is in-memory, so it resets on deploy and is not a billing source.
  */
 export async function GET(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.isSuperAdmin) {
+      return NextResponse.json(
+        { error: 'Super admin required: API metrics are process-wide, not per-tenant.' },
+        { status: 403 }
+      );
+    }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tenantMetrics = (metrics as any).requests?.filter((r: any) => r.tenantId === ctx.tenantId) || [];
+    const points = metrics.getMetrics();
+    const since = Date.now() - 24 * 60 * 60 * 1000;
 
-    // Compute stats
-    const totalRequests = tenantMetrics.length;
-    const last24h = tenantMetrics.filter(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (r: any) => new Date(r.timestamp).getTime() > Date.now() - 24 * 60 * 60 * 1000
-    );
+    const requests = points.filter((p) => p.name === 'http_requests_total');
+    const requests24h = requests.filter((p) => p.timestamp > since);
 
-    // Top endpoints
+    /** Sum `value` rather than counting points: increment() may batch. */
+    const sum = (pts: typeof points) => pts.reduce((n, p) => n + (p.value || 0), 0);
+
     const endpointCounts = new Map<string, number>();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const r of last24h as any[]) {
-      const path = r.path || r.url || 'unknown';
-      endpointCounts.set(path, (endpointCounts.get(path) || 0) + 1);
+    for (const p of requests24h) {
+      const path = p.labels?.['path'] ?? 'unknown';
+      endpointCounts.set(path, (endpointCounts.get(path) ?? 0) + (p.value || 0));
     }
 
     const topEndpoints = [...endpointCounts.entries()]
@@ -37,22 +51,22 @@ export async function GET(request: NextRequest) {
       .slice(0, 10)
       .map(([path, count]) => ({ path, count }));
 
-    // Error rate
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const errors = last24h.filter((r: any) => (r.status ?? 0) >= 400);
+    // Status is a label on http_requests_total; http_errors_total only covers
+    // 5xx, so 4xx would be missed if we used that metric instead.
+    const errors24h = requests24h.filter((p) => Number(p.labels?.['status'] ?? 0) >= 400);
 
-    // Plan limits — default to free tier (plan info not in AuthContext)
-    const limit = 1000;
+    const total24h = sum(requests24h);
+    const errorCount = sum(errors24h);
 
     return NextResponse.json({
       data: {
-        total_requests_24h: last24h.length,
-        total_requests_all_time: totalRequests,
-        error_count_24h: errors.length,
-        error_rate_pct: last24h.length > 0 ? Math.round((errors.length / last24h.length) * 100) : 0,
+        scope: 'process',
+        total_requests_24h: total24h,
+        total_requests_buffered: sum(requests),
+        error_count_24h: errorCount,
+        error_rate_pct: total24h > 0 ? Math.round((errorCount / total24h) * 100) : 0,
         top_endpoints: topEndpoints,
-        plan_limit_daily: limit,
-        usage_pct: limit > 0 ? Math.round((last24h.length / limit) * 100) : 0,
+        buffered_metric_points: points.length,
         timestamp: new Date().toISOString(),
       },
     });
