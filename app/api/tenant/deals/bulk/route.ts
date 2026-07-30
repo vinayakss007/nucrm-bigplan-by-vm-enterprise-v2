@@ -295,14 +295,33 @@ export async function POST(req: NextRequest) {
       }
 
       case 'archive': {
-        const deny = requirePerm(ctx, 'deals.delete');
+        const deny = requirePerm(ctx, 'deals.edit');
         if (deny) return deny;
         const res = await db
           .update(deals)
           .set({
-            deletedAt: new Date(),
-            deletedBy: ctx.userId,
+            metadata: sql`jsonb_set(COALESCE(${deals.metadata}, '{}'::jsonb), '{archived}', 'true'::jsonb)`,
             updatedAt: new Date(),
+            updatedBy: ctx.userId,
+          })
+          .where(
+            and(
+              inArray(deals.id, validIds),
+              eq(deals.tenantId, ctx.tenantId)
+            )
+          );
+        affected = res.rowCount ?? 0;
+        break;
+      }
+      case 'unarchive': {
+        const deny = requirePerm(ctx, 'deals.edit');
+        if (deny) return deny;
+        const res = await db
+          .update(deals)
+          .set({
+            metadata: sql`jsonb_set(COALESCE(${deals.metadata}, '{}'::jsonb), '{archived}', 'false'::jsonb)`,
+            updatedAt: new Date(),
+            updatedBy: ctx.userId,
           })
           .where(
             and(

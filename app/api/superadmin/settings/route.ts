@@ -1,3 +1,4 @@
+// SECURITY NOTE: Secrets should be migrated to environment variables. See issue #757 item 41.
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -16,6 +17,20 @@ const ALLOWED = [
   'default_timezone', 'contact_score_enabled', 'session_duration_days', 'max_sessions_per_user',
   'backup_retention_days', 'backup_bucket', 'ai_features_enabled', 'anthropic_api_key',
 ];
+
+/** Pattern that identifies setting keys containing secrets */
+const SECRET_KEY_PATTERN = /secret|key|pass|token/i;
+
+/** Redact a secret value, showing only the last 4 characters prefixed with "****" */
+function redactSecret(value: string): string {
+  if (!value || value.length <= 4) return '****';
+  return `****${value.slice(-4)}`;
+}
+
+/** Returns true if a setting key name refers to a secret value */
+function isSecretKey(key: string): boolean {
+  return SECRET_KEY_PATTERN.test(key);
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -65,7 +80,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ data: defaults });
+    // Redact secret values before returning to the client
+    const redacted: Record<string, string> = {};
+    for (const [key, value] of Object.entries(defaults)) {
+      redacted[key] = isSecretKey(key) && value ? redactSecret(value) : value;
+    }
+
+    return NextResponse.json({ data: redacted });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -110,6 +131,17 @@ export async function POST(request: NextRequest) {
       action: 'settings.changed',
       metadata: { keys: Object.keys(v) },
     });
+
+    // Audit trail: log separately when secrets are updated
+    const updatedSecretKeys = Object.keys(v).filter(isSecretKey);
+    if (updatedSecretKeys.length > 0) {
+      logSuperAdminAction({
+        adminId: ctx.userId,
+        adminEmail: ctx.user?.email || "",
+        action: 'settings.secrets_updated',
+        metadata: { secretKeys: updatedSecretKeys },
+      });
+    }
 
     return NextResponse.json({ ok: true });
  

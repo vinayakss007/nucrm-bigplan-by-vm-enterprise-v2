@@ -27,7 +27,18 @@ function generateRequestId(): string {
   return id;
 }
 
+// Public marketing site — the route group at app/(marketing). These must be
+// listed here or anonymous visitors get redirected to /auth/login and the
+// website is invisible to everyone who is not already a customer.
+// isPublic() matches a path exactly or as a prefix, so '/features' also covers
+// '/features/ai', '/solutions' covers every industry page, and so on.
+const MARKETING_PATHS = [
+  '/features', '/solutions', '/compare', '/pricing', '/modules',
+  '/integrations', '/security', '/abetworks', '/contact', '/legal',
+];
+
 const PUBLIC_PATHS = [
+  ...MARKETING_PATHS,
   '/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/reset-password',
   '/auth/verify-email', '/auth/callback', '/auth/invite', '/health', '/docs',
   '/', '/setup', '/lead-capture', '/test-js', '/auth/login-simple',
