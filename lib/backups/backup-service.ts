@@ -5,6 +5,7 @@ import { spawn, exec as execCb } from 'child_process';
 import { promisify } from 'util';
 import { checksumFile, CHECKSUM_ALGORITHM } from './integrity';
 import { uploadBackupArtifact } from './offsite';
+import { encryptBackupFile, isEncryptionEnabled } from './encrypt';
 import { isS3Configured, describeS3ConfigGap } from '@/lib/storage/s3-config';
 import { alertSuperAdmin } from '@/lib/email/service';
 
@@ -31,6 +32,8 @@ export interface BackupResult {
   offsite: boolean;
   /** Why the off-site upload did not happen, when it did not. */
   offsiteError?: string;
+  /** Whether the artefact is AES-256-GCM encrypted. */
+  encrypted: boolean;
 }
 
 async function getPgDumpVersion(): Promise<string> {
@@ -107,24 +110,37 @@ export async function createBackup(options: BackupOptions): Promise<BackupResult
 
     await runPgDump(backupType, localPath);
 
-    const sizeBytes = fs.statSync(localPath).size;
+    // Encrypt the dump if BACKUP_ENCRYPTION_KEY is configured. The plaintext
+    // file is deleted and replaced with a .enc file. Encryption is opt-in so
+    // existing deployments without the key continue working unchanged.
+    let finalPath = localPath;
+    let finalFilename = filename;
+    const encrypted = isEncryptionEnabled();
 
-    // Checksum the artefact as written, before anything moves it.
-    const checksum = await checksumFile(localPath);
+    if (encrypted) {
+      finalPath = await encryptBackupFile(localPath);
+      finalFilename = `${filename}.enc`;
+    }
 
-    let storagePath = localPath;
+    const sizeBytes = fs.statSync(finalPath).size;
+
+    // Checksum the final artefact (encrypted if applicable), not the plaintext.
+    // This validates storage integrity of what was actually uploaded.
+    const checksum = await checksumFile(finalPath);
+
+    let storagePath = finalPath;
     let storageType = 'local';
     let offsiteError: string | null = null;
     const offsiteExpected = isS3Configured();
 
     if (offsiteExpected) {
       try {
-        const uploaded = await uploadBackupArtifact({ localPath, filename, checksum });
+        const uploaded = await uploadBackupArtifact({ localPath: finalPath, filename: finalFilename, checksum });
         storagePath = uploaded.storagePath;
         storageType = uploaded.storageType;
 
         // Only drop the local copy once the upload has succeeded.
-        fs.unlinkSync(localPath);
+        fs.unlinkSync(finalPath);
       } catch (uploadErr) {
         offsiteError = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
         console.error('[backup-service] S3 upload failed, keeping local copy:', offsiteError);
@@ -183,8 +199,8 @@ export async function createBackup(options: BackupOptions): Promise<BackupResult
 
     return {
       id: backup.id,
-      filename,
-      localPath,
+      filename: finalFilename,
+      localPath: finalPath,
       sizeBytes,
       durationMs,
       storagePath,
@@ -192,6 +208,7 @@ export async function createBackup(options: BackupOptions): Promise<BackupResult
       checksum,
       checksumAlgorithm: CHECKSUM_ALGORITHM,
       offsite: !offsiteError,
+      encrypted,
       ...(offsiteError ? { offsiteError } : {}),
     };
 

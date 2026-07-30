@@ -48,7 +48,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
     
     const { id } = await params;
-    const result = await db.delete(integrations)
+    const result = await db.update(integrations)
+      .set({ deletedAt: new Date() })
       .where(and(
         eq(integrations.id, id), 
         eq(integrations.tenantId, ctx.tenantId)

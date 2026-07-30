@@ -61,6 +61,167 @@ services:
     network_mode: host
     restart: unless-stopped
 
+  # ── Realtime (socket.io + Redis) ──────────────────────────────────────────
+  # Separate process because `next start` owns its own HTTP server and offers no
+  # hook to attach socket.io. nginx proxies /socket.io/ here. Safe to scale: the
+  # Redis adapter shares room membership across replicas. See issue #644.
+  realtime:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    command: ["node", "--import", "tsx", "realtime.ts"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - JWT_SECRET=${JWT_SECRET:?REQUIRED}
+      - SESSION_SECRET=${SESSION_SECRET:?REQUIRED}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?REQUIRED}
+      - DATABASE_SSL=${DATABASE_SSL:-true}
+      - REALTIME_PORT=4001
+    expose:
+      - "4001"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:4001/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 384M
+          cpus: "0.5"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── PostgreSQL ───────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: nucrm-db
+    command:
+      - "postgres"
+      - "-c"
+      - "log_min_duration_statement=200"
+      - "-c"
+      - "log_statement=none"
+      - "-c"
+      - "log_duration=off"
+      - "-c"
+      - "log_lock_waits=on"
+      - "-c"
+      - "log_temp_files=0"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-nucrm}
+      - POSTGRES_USER=${POSTGRES_USER:-nucrm}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # Restrict to localhost only for security
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nucrm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── PgBouncer (Connection Pooler) ──────────────────────────────────────────
+  # Sits between app and postgres. Transaction mode with pool_size=20.
+  # App should connect to pgbouncer:6432 instead of postgres:5432.
+  pgbouncer:
+    image: edoburu/pgbouncer:1.22.0
+    container_name: nucrm-pgbouncer
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER:-nucrm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nucrm}
+      - POOL_MODE=transaction
+      - DEFAULT_POOL_SIZE=20
+      - MAX_CLIENT_CONN=200
+      - MAX_DB_CONNECTIONS=50
+      - SERVER_RESET_QUERY=DISCARD ALL
+      - IGNORE_STARTUP_PARAMETERS=extra_float_digits
+    ports:
+      - "127.0.0.1:6432:6432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-p", "6432"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── Loki (Log Aggregation) ──────────────────────────────────────────────
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: nucrm-loki
+    volumes:
+      - ./deploy/monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - lokidata:/loki
+    command:
+      - "--config.file=/etc/loki/loki-config.yml"
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── Alertmanager ─────────────────────────────────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: nucrm-alertmanager
+    volumes:
+      - ./deploy/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./deploy/monitoring/alertmanager/templates:/etc/alertmanager/templates:ro
+      - alertmanagerdata:/alertmanager
+    environment:
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - CRITICAL_ERROR_WEBHOOK_URL=${CRITICAL_ERROR_WEBHOOK_URL:-}
+      - PAGERDUTY_ROUTING_KEY=${PAGERDUTY_ROUTING_KEY:-}
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    ports:
+      - "9093:9093"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── Promtail (Log Shipper) ───────────────────────────────────────────────
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: nucrm-promtail
+    volumes:
+      - ./deploy/monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/log:/var/log:ro
+    command:
+      - "--config.file=/etc/promtail/promtail-config.yml"
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
   # ── MinIO (S3-compatible storage) ─────────────────────────────────────────
   minio:
     image: minio/minio:latest
