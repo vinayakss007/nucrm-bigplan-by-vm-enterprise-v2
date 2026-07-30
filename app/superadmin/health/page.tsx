@@ -159,13 +159,14 @@ export default function HealthPage() {
       </div>
 
       {/* Run manual checks */}
+      {/* Cron auth is handled server-side; no x-cron-secret header needed from the client */}
       <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
         <p className="text-sm font-semibold text-white mb-3">Manual Operations</p>
         <div className="flex flex-wrap gap-2">
           {[
-            { label:'Run Cleanup', action:async()=>{ await fetch('/api/cron/cleanup',{method:'POST',headers:{'x-cron-secret':''}}); alert('Cleanup triggered'); } },
-            { label:'Check Backup Health', action:async()=>{ const r=await fetch('/api/cron/backup-health',{method:'POST',headers:{'x-cron-secret':''}}); const d=await r.json(); alert(JSON.stringify(d,null,2)); } },
-            { label:'Take Usage Snapshot', action:async()=>{ await fetch('/api/cron/usage-snapshot',{method:'POST',headers:{'x-cron-secret':''}}); alert('Snapshot taken'); } },
+            { label:'Run Cleanup', action:async()=>{ await fetch('/api/cron/cleanup',{method:'POST'}); alert('Cleanup triggered'); } },
+            { label:'Check Backup Health', action:async()=>{ const r=await fetch('/api/cron/backup-health',{method:'POST'}); const d=await r.json(); alert(JSON.stringify(d,null,2)); } },
+            { label:'Take Usage Snapshot', action:async()=>{ await fetch('/api/cron/usage-snapshot',{method:'POST'}); alert('Snapshot taken'); } },
           ].map(a => (
             <button key={a.label} onClick={a.action}
               className="px-3 py-1.5 rounded-lg border border-white/10 text-xs text-white/40 hover:text-white hover:border-white/20 transition-colors">

@@ -63,7 +63,7 @@ export interface ResolvedRollback {
 
 /** A migration recorded in `drizzle.__drizzle_migrations`. */
 export interface AppliedMigration {
-  /** Journal tag, e.g. `0045_rls_fail_closed_policy`. */
+  /** Journal tag, e.g. `0039_rls_fail_closed_policy`. */
   tag: string;
   /** Journal index, or -1 when the row could not be correlated. */
   idx: number;

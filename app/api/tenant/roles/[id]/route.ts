@@ -68,7 +68,7 @@ export async function DELETE(request: NextRequest, { params }: any) {
       return NextResponse.json({ error: 'Cannot delete system roles' }, { status: 400 });
     }
 
-    await db.delete(roles).where(and(eq(roles.id, id), eq(roles.tenantId, ctx.tenantId)));
+    await db.update(roles).set({ deletedAt: new Date() }).where(and(eq(roles.id, id), eq(roles.tenantId, ctx.tenantId)));
     
     return NextResponse.json({ ok: true });
  

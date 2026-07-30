@@ -18,7 +18,8 @@ import { randomUUID } from 'crypto';
 
 // Skip entire suite if no database is available
 async function isDatabaseAvailable(): Promise<boolean> {
-  const databaseUrl = process.env.DATABASE_URL || 'postgresql://postgres:admin123@localhost:5432/nucrm_test';
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) return false;
   const pool = new Pool({ connectionString: databaseUrl, connectionTimeoutMillis: 3000 });
   try {
     const client = await pool.connect();
@@ -43,7 +44,8 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
   let userBId: string;
 
   beforeAll(async () => {
-    const databaseUrl = process.env.DATABASE_URL || 'postgresql://postgres:admin123@localhost:5432/nucrm_test';
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) throw new Error('DATABASE_URL not set');
     pool = new Pool({ connectionString: databaseUrl });
     db = drizzle(pool, { schema });
 
