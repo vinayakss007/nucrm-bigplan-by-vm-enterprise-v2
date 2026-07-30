@@ -60,6 +60,14 @@ export const dealQuerySchema = z.object({
   stage: z.string().optional(),
   pipeline_id: z.string().uuid().optional(),
   q: z.string().optional(),
+  /**
+   * Archive visibility. Deals are archived by setting metadata.archived = true
+   * (see the `archive` action in app/api/tenant/deals/bulk/route.ts).
+   *   omitted / 'false' -> only live deals (default)
+   *   'true'            -> only archived deals, so they can be reviewed/unarchived
+   *   'all'             -> both
+   */
+  archived: z.enum(['true', 'false', 'all']).optional(),
 });
 
 // ── Company schemas ──
@@ -108,6 +116,7 @@ export const createLeadSchema = z.object({
   status: z.enum(['new', 'contacted', 'qualified', 'converted', 'rejected', 'junk', 'archived', 'unqualified']).optional().default('new'),
   notes: z.string().trim().max(5000).nullable().optional(),
   score: z.coerce.number().int().min(0).max(1000).optional().default(0),
+  value: z.coerce.number().min(0).optional().nullable(),
   assigned_to: uuid,
   // What the lead is a request for, from the tenant's catalogue. Optional.
   requested_product_id: uuid,

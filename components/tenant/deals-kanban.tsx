@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { BottomSheet } from '@/components/ui/bottom-sheet'
+import { InlineContactCreate, InlineCompanyCreate } from '@/components/tenant/inline-create-dialog'
 import toast from 'react-hot-toast'
 
 // Stage color mapping
@@ -73,8 +74,10 @@ interface Props {
   permissions: { canCreate: boolean; canEdit: boolean; canDelete: boolean }
 }
 
-export default function DealsKanban({ initialDeals, stages, contacts, companies, teamMembers, permissions }: Props) {
+export default function DealsKanban({ initialDeals, stages, contacts: initialContacts, companies: initialCompanies, teamMembers, permissions }: Props) {
   const [deals, setDeals] = useState(initialDeals)
+  const [contactList, setContactList] = useState(initialContacts)
+  const [companyList, setCompanyList] = useState(initialCompanies)
   const [showAdd, setShowAdd] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverStage, setDragOverStage] = useState<string | null>(null)
@@ -315,29 +318,45 @@ export default function DealsKanban({ initialDeals, stages, contacts, companies,
             </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">Contact</label>
-              <select
-                value={form.contact_id}
-                onChange={(e) => setForm(f => ({ ...f, contact_id: e.target.value }))}
-                className={inp}
-              >
-                <option value="">No contact</option>
-                {(contacts || []).map((c) => (
-                  <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
-                ))}
-              </select>
+              <div className="flex items-center gap-1">
+                <select
+                  value={form.contact_id}
+                  onChange={(e) => setForm(f => ({ ...f, contact_id: e.target.value }))}
+                  className={inp + " flex-1"}
+                >
+                  <option value="">No contact</option>
+                  {(contactList || []).map((c) => (
+                    <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
+                  ))}
+                </select>
+                <InlineContactCreate
+                  onCreated={(newContact) => {
+                    setContactList(prev => [...prev, newContact])
+                    setForm(f => ({ ...f, contact_id: newContact.id }))
+                  }}
+                />
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">Company</label>
-              <select
-                value={form.company_id}
-                onChange={(e) => setForm(f => ({ ...f, company_id: e.target.value }))}
-                className={inp}
-              >
-                <option value="">No company</option>
-                {(companies || []).map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <div className="flex items-center gap-1">
+                <select
+                  value={form.company_id}
+                  onChange={(e) => setForm(f => ({ ...f, company_id: e.target.value }))}
+                  className={inp + " flex-1"}
+                >
+                  <option value="">No company</option>
+                  {(companyList || []).map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <InlineCompanyCreate
+                  onCreated={(newCompany) => {
+                    setCompanyList(prev => [...prev, newCompany])
+                    setForm(f => ({ ...f, company_id: newCompany.id }))
+                  }}
+                />
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">Assigned To</label>

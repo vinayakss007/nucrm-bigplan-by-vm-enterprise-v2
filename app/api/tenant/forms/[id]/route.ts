@@ -99,7 +99,7 @@ export async function DELETE(req: NextRequest, { params }: any) {
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
     const { id } = await params;
 
-    await db.delete(forms).where(and(eq(forms.id, id), eq(forms.tenantId, ctx.tenantId)));
+    await db.update(forms).set({ deletedAt: new Date() }).where(and(eq(forms.id, id), eq(forms.tenantId, ctx.tenantId)));
     return NextResponse.json({ ok: true });
  
  

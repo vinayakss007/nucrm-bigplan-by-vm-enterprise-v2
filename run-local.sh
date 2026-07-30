@@ -233,7 +233,7 @@ setup_database() {
 # ── Install dependencies ───────────────────────────────────────────────────
 install_deps() {
     log "Installing npm dependencies…"
-    npm install --legacy-peer-deps
+    npm install
     ok "Dependencies installed"
 }
 
