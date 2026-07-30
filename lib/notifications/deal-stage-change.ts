@@ -32,14 +32,11 @@ export async function notifyDealStageChange(payload: StageChangePayload): Promis
     const isLost = toStage.toLowerCase().includes('lost');
 
     let title: string;
-    let type: 'info' | 'success' | 'warning' = 'info';
 
     if (isWon) {
       title = `Deal won: "${dealTitle}"`;
-      type = 'success';
     } else if (isLost) {
       title = `Deal lost: "${dealTitle}"`;
-      type = 'warning';
     } else {
       title = `Deal "${dealTitle}" moved to ${toStage}`;
     }
@@ -47,7 +44,7 @@ export async function notifyDealStageChange(payload: StageChangePayload): Promis
     await createNotification({
       userId: assignedTo,
       tenantId,
-      type,
+      type: isWon ? 'deal_won' : 'deal_stage',
       title,
       body: `Stage changed from "${fromStage}" to "${toStage}"`,
       link: `/tenant/deals/${dealId}`,

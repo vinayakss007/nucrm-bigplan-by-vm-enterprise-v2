@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TrendingUp, Calendar, Target, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 
 interface Forecast {
   id: string;

@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const tid = ctx.tenantId;
 
     // Overall win/loss stats
-    const [stats] = await db.execute(sql`
+    const stats = await db.execute(sql`
       SELECT
         COUNT(*) FILTER (WHERE ds.name ILIKE '%won%') as won,
         COUNT(*) FILTER (WHERE ds.name ILIKE '%lost%') as lost,
