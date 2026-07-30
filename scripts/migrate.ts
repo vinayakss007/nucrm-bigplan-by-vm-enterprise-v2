@@ -91,24 +91,25 @@ async function main() {
   // Acquire advisory lock to prevent concurrent migration execution.
   // Without this, two `npm run db:migrate` processes (e.g. CI + manual)
   // can apply the same migrations simultaneously, corrupting the schema.
-  const MIGRATION_LOCK_KEY = 123456789; // Stable key for all migration scripts
+  //
+  // Scope: this guards `db:migrate` only. `db:sync` (drizzle-kit push, which is what
+  // ci.yml actually runs) and scripts/rollback-migration.ts do not take this lock.
+  const MIGRATION_LOCK_KEY = 123456789; // Stable key shared by all db:migrate runs
   const lockClient = await pool.connect();
   try {
+    // Block rather than fail fast, so an overlapping run queues instead of breaking
+    // the pipeline -- but stay bounded: lock_timeout caps how long we wait.
     await lockClient.query(`SET lock_timeout = '30000ms'`);
-    const { rows } = await lockClient.query<{ acquired: boolean }>(
-      `SELECT pg_try_advisory_lock($1) AS acquired`,
-      [MIGRATION_LOCK_KEY],
-    );
-    if (!rows[0]?.acquired) {
-      console.error('[migrate] ERROR: Another migration is already running (advisory lock held).');
-      console.error('[migrate] Wait for it to finish or check for stuck connections.');
-      await lockClient.release();
-      await pool.end();
-      process.exit(1);
-    }
+    await lockClient.query(`SELECT pg_advisory_lock($1)`, [MIGRATION_LOCK_KEY]);
     console.log('[migrate] Advisory lock acquired — no other migration can run concurrently.');
   } catch (lockErr) {
-    console.error('[migrate] Failed to acquire advisory lock:', lockErr);
+    // 55P03 lock_not_available: someone else held the lock for longer than lock_timeout.
+    if ((lockErr as { code?: string } | null)?.code === '55P03') {
+      console.error('[migrate] ERROR: Another migration is still running after 30s (advisory lock held).');
+      console.error('[migrate] Wait for it to finish or check for stuck connections.');
+    } else {
+      console.error('[migrate] Failed to acquire advisory lock:', lockErr);
+    }
     lockClient.release();
     await pool.end();
     process.exit(1);
