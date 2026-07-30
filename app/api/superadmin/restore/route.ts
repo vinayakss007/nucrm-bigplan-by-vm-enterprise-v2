@@ -101,14 +101,14 @@ const restoreSchema = z.object({
 // POST: restore from a specific backup
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await requireAuth(request);
+    if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
+
     // A restore is the most dangerous operation after a hard-delete: it replaces
     // live data with a backup. Rate-limit to at most 1 per hour per admin.
     const limited = await rateLimitMutating(request, 'restore', 'post');
     if (limited) return limited;
-
-    const ctx = await requireAuth(request);
-    if (ctx instanceof NextResponse) return ctx;
-    if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
 
     const body = await readJsonBody(request);
     const validated = validateBody(restoreSchema, body);
