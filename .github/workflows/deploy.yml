@@ -64,7 +64,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             set -e
-            cd /opt/nucrm
+            cd /home/vinayak_shruti_biz
 
             echo "Pulling new image..."
             docker compose pull app

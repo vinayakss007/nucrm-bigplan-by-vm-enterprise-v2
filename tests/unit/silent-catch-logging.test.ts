@@ -169,6 +169,7 @@ describe('lib/dlp getDlpConfig', () => {
       maxExportRows: 10000,
       allowedExportFormats: ['csv', 'xlsx', 'json'],
       sensitiveFieldOverrides: [],
+      tenantId: 'tenant-9',
     });
     expect(mocks.loggerError).toHaveBeenCalledTimes(1);
     expect(loggedMessages()).toContain('DLP');
