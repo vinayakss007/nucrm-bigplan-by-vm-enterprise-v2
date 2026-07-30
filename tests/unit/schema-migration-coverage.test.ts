@@ -54,7 +54,7 @@ describe('Schema Migration Coverage (Issue #219)', () => {
 
   it('migration 0036 should create all 4 missing tables', () => {
     const sql = readFileSync(
-      join(migrationsDir, '0036_missing_tables.sql'),
+      join(migrationsDir, '0033_missing_tables.sql'),
       'utf8',
     );
 
@@ -76,7 +76,7 @@ describe('Schema Migration Coverage (Issue #219)', () => {
 
   it('migration 0036 should define required indexes', () => {
     const sql = readFileSync(
-      join(migrationsDir, '0036_missing_tables.sql'),
+      join(migrationsDir, '0033_missing_tables.sql'),
       'utf8',
     );
 
@@ -103,7 +103,7 @@ describe('Schema Migration Coverage (Issue #219)', () => {
 
   it('migration 0036 should define FK constraints', () => {
     const sql = readFileSync(
-      join(migrationsDir, '0036_missing_tables.sql'),
+      join(migrationsDir, '0033_missing_tables.sql'),
       'utf8',
     );
 
@@ -122,13 +122,13 @@ describe('Schema Migration Coverage (Issue #219)', () => {
     }
   });
 
-  it('migration journal should include 0036_missing_tables', () => {
+  it('migration journal should include 0033_missing_tables', () => {
     const journal = readFileSync(
       join(migrationsDir, 'meta/_journal.json'),
       'utf8',
     );
     const parsed = JSON.parse(journal);
     const tags = parsed.entries.map((e: { tag: string }) => e.tag);
-    expect(tags).toContain('0036_missing_tables');
+    expect(tags).toContain('0033_missing_tables');
   });
 });
