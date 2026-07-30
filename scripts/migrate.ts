@@ -88,6 +88,32 @@ async function main() {
 
   console.log('[migrate] Connecting to database...');
 
+  // Acquire advisory lock to prevent concurrent migration execution.
+  // Without this, two `npm run db:migrate` processes (e.g. CI + manual)
+  // can apply the same migrations simultaneously, corrupting the schema.
+  const MIGRATION_LOCK_KEY = 123456789; // Stable key for all migration scripts
+  const lockClient = await pool.connect();
+  try {
+    await lockClient.query(`SET lock_timeout = '30000ms'`);
+    const { rows } = await lockClient.query<{ acquired: boolean }>(
+      `SELECT pg_try_advisory_lock($1) AS acquired`,
+      [MIGRATION_LOCK_KEY],
+    );
+    if (!rows[0]?.acquired) {
+      console.error('[migrate] ERROR: Another migration is already running (advisory lock held).');
+      console.error('[migrate] Wait for it to finish or check for stuck connections.');
+      await lockClient.release();
+      await pool.end();
+      process.exit(1);
+    }
+    console.log('[migrate] Advisory lock acquired — no other migration can run concurrently.');
+  } catch (lockErr) {
+    console.error('[migrate] Failed to acquire advisory lock:', lockErr);
+    lockClient.release();
+    await pool.end();
+    process.exit(1);
+  }
+
   // The ledger drizzle's migrate() actually consults is "drizzle"."__drizzle_migrations".
   //
   // This recovery block used to create and seed an UNQUALIFIED
@@ -144,6 +170,15 @@ async function main() {
   await migrate(db, { migrationsFolder: './drizzle/migrations' });
 
   console.log('[migrate] All migrations applied successfully');
+
+  // Release advisory lock
+  try {
+    await lockClient.query(`SELECT pg_advisory_unlock($1)`, [MIGRATION_LOCK_KEY]);
+    console.log('[migrate] Advisory lock released.');
+  } catch {
+    // Lock auto-releases on disconnect anyway
+  }
+  lockClient.release();
   await pool.end();
 }
 
