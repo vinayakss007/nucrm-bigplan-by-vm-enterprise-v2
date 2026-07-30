@@ -17,6 +17,7 @@ import { confirmThen } from '@/components/ui/confirm-dialog';
 import { showUndoToast } from '@/lib/undo';
 import { BulkActionBar } from '@/components/ui/bulk-action-bar';
 import { Swipeable } from '@/components/ui/swipeable';
+import { EmptyState } from '@/components/shared/empty-state';
 
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -551,11 +552,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
       {/* Mobile card view */}
       <div className="space-y-3 md:hidden">
         {!contacts.length&&!loading&&(
-          <div className="text-center py-20 rounded-xl border border-border bg-card">
-            <div className="w-14 h-14 rounded-2xl bg-sky-50 dark:bg-sky-900/20 flex items-center justify-center mx-auto mb-4"><Users className="w-7 h-7 text-sky-400"/></div>
-            <p className="text-sm font-semibold mb-1">No contacts found</p>
-            <p className="text-xs text-muted-foreground">Try adjusting your search or filters</p>
-          </div>
+          <EmptyState type={search||statusFilter!=='all' ? 'search' : 'contacts'} className="py-12" />
         )}
         {contacts.map(c=>{
           const status=STATUS_CONFIG[c['lead_status']]||STATUS_CONFIG['new'];
@@ -610,11 +607,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
       {view==='grid'&&(
         <div className="hidden md:block space-y-4">
           {!contacts.length&&!loading&&(
-            <div className="text-center py-20 rounded-xl border border-border bg-card">
-              <div className="w-14 h-14 rounded-2xl bg-sky-50 dark:bg-sky-900/20 flex items-center justify-center mx-auto mb-4"><Users className="w-7 h-7 text-sky-400"/></div>
-              <p className="text-sm font-semibold mb-1">No contacts found</p>
-              <p className="text-xs text-muted-foreground">Try adjusting your search or filters</p>
-            </div>
+            <EmptyState type={search||statusFilter!=='all' ? 'search' : 'contacts'} className="py-12" />
           )}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {contacts.map(c=>{

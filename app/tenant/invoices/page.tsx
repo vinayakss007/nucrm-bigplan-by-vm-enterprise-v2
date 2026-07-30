@@ -186,8 +186,11 @@ function InvoicesPageInner() {
             <option value="">All Status</option>
             <option value="draft">Draft</option>
             <option value="sent">Sent</option>
+            <option value="viewed">Viewed</option>
+            <option value="partial">Partial</option>
             <option value="paid">Paid</option>
             <option value="overdue">Overdue</option>
+            <option value="cancelled">Cancelled</option>
           </select>
           <select value={contactFilter} onChange={(e) => setContactFilter(e.target.value)}
             className="px-3 py-2 border border-border rounded-lg bg-card text-xs sm:text-sm max-w-[160px]">

@@ -177,9 +177,11 @@ function QuotesPageInner() {
             <option value="">All Status</option>
             <option value="draft">Draft</option>
             <option value="sent">Sent</option>
+            <option value="viewed">Viewed</option>
             <option value="accepted">Accepted</option>
             <option value="declined">Declined</option>
             <option value="expired">Expired</option>
+            <option value="cancelled">Cancelled</option>
           </select>
           <select value={contactFilter} onChange={(e) => setContactFilter(e.target.value)}
             className="px-3 py-2 border border-border rounded-lg bg-card text-xs sm:text-sm max-w-[160px]">
