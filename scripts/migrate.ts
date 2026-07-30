@@ -7,6 +7,7 @@ import * as schema from '../drizzle/schema';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createInterface } from 'readline';
+import { pgSslConfig } from '../lib/db/ssl-config';
 
 const args = process.argv.slice(2);
 const isDryRun = args.includes('--dry-run');
@@ -76,11 +77,9 @@ async function main() {
     }
   }
 
-  const useSsl = process.env.DATABASE_SSL === 'true';
-
   const pool = new Pool({
     connectionString: databaseUrl,
-    ssl: useSsl ? { rejectUnauthorized: false } : false,
+    ssl: pgSslConfig(),
     connectionTimeoutMillis: 10_000,
   });
 

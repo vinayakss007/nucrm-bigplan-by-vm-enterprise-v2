@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { pgSslConfig } from './ssl-config';
 
 declare global { var __pgPool: Pool | undefined; }
 
@@ -31,7 +32,6 @@ export function getPool(): Pool {
       throw e;
     }
 
-    const ssl = process.env.DATABASE_SSL !== 'false';
 
     const poolSize = parseInt(process.env['DATABASE_POOL_SIZE'] ?? '20');
     if (poolSize < 1 || poolSize > 100) {
@@ -45,7 +45,7 @@ export function getPool(): Pool {
 
     global.__pgPool = new Pool({
       connectionString,
-      ssl: ssl ? { rejectUnauthorized: process.env.NODE_ENV === 'production' } : false,
+      ssl: pgSslConfig(),
       max: poolSize,
       idleTimeoutMillis: pgBouncer ? 10_000 : 60_000,
       connectionTimeoutMillis: 30_000,
