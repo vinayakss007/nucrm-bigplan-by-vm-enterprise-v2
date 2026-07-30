@@ -5,6 +5,18 @@ import { sendCriticalErrorAlert } from '@/lib/critical-error-alert';
 import { InvalidJsonBodyError } from '@/lib/api/validate';
 
 /**
+ * @deprecated Use `handleError()` from `@/lib/errors` for new code.
+ * The canonical server-side error handling lives in `lib/errors.ts` with the
+ * `AppError` class hierarchy (`AuthError`, `NotFoundError`, `ValidationError`, etc.).
+ *
+ * This file remains functional and safe to use in existing routes during the
+ * migration period, but all new API routes should prefer:
+ *
+ *   import { handleError } from '@/lib/errors';
+ *   catch (err) { return handleError(err); }
+ *
+ * --- Legacy docs below ---
+ *
  * Centralized API error handler.
  *
  * SECURITY: Never exposes internal error messages in production.

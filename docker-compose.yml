@@ -205,6 +205,34 @@ services:
     networks:
       - nucrm-net
 
+  # ── PgBouncer (Connection Pooler) ──────────────────────────────────────────
+  # Sits between app and postgres. Transaction mode with pool_size=20.
+  # App should connect to pgbouncer:6432 instead of postgres:5432.
+  pgbouncer:
+    image: edoburu/pgbouncer:1.22.0
+    container_name: nucrm-pgbouncer
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER:-nucrm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nucrm}
+      - POOL_MODE=transaction
+      - DEFAULT_POOL_SIZE=20
+      - MAX_CLIENT_CONN=200
+      - MAX_DB_CONNECTIONS=50
+      - SERVER_RESET_QUERY=DISCARD ALL
+      - IGNORE_STARTUP_PARAMETERS=extra_float_digits
+    ports:
+      - "127.0.0.1:6432:6432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-p", "6432"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
   # ── Loki (Log Aggregation) ──────────────────────────────────────────────
   loki:
     image: grafana/loki:3.0.0
@@ -256,37 +284,6 @@ services:
     networks:
       - nucrm-net
 
-  # ── PgBouncer (Connection Pooling) ──────────────────────────────────────
-  pgbouncer:
-    image: pgbouncer/pgbouncer:latest
-    container_name: nucrm-pgbouncer
-    environment:
-      - DB_USER=${POSTGRES_USER:-nucrm}
-      - DB_PASSWORD=${POSTGRES_PASSWORD}
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=${POSTGRES_DB:-nucrm}
-      - POOL_MODE=transaction
-      - DEFAULT_POOL_SIZE=50
-      - MAX_CLIENT_CONN=200
-    ports:
-      - "6432:6432"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - nucrm-net
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -h 127.0.0.1 -p 6432 -U ${POSTGRES_USER:-nucrm}",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
   # ── MinIO (S3-compatible storage) ─────────────────────────────────────────
   # DEV/LOCAL ONLY. MinIO is a single-instance S3-compatible store for
   # development. In production, use a managed object-storage service (AWS S3,

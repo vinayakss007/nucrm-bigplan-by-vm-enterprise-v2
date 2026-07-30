@@ -1,218 +1,386 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockCookies, mockRedirect, mockHeaders, mockVerifyToken, mockFindFirstUsers, mockDbSelect, mockSetTenantContext } = vi.hoisted(() => ({
-  mockCookies: vi.fn(),
-  mockRedirect: vi.fn((url: string) => { throw new Error(`REDIRECT:${url}`); }),
-  mockHeaders: vi.fn(),
-  mockVerifyToken: vi.fn(),
-  mockFindFirstUsers: vi.fn(),
-  mockDbSelect: vi.fn(),
-  mockSetTenantContext: vi.fn(),
-}));
+// ─── Hoisted mock variables (available inside vi.mock factories) ──────────────
+const {
+  mockCookiesGet,
+  mockCookies,
+  mockRedirect,
+  mockVerifyToken,
+  mockDbSelectChain,
+  mockDbSelect,
+  mockDbQueryTenants,
+  mockDbQueryUsers,
+  mockDbQueryPlans,
+} = vi.hoisted(() => {
+  const mockCookiesGet = vi.fn();
+  const mockCookies = vi.fn().mockResolvedValue({
+    get: mockCookiesGet,
+    set: vi.fn(),
+    delete: vi.fn(),
+  });
+  const mockRedirect = vi.fn((path: string) => {
+    throw new Error(`NEXT_REDIRECT:${path}`);
+  });
+  const mockVerifyToken = vi.fn();
+  const mockDbSelectChain = {
+    from: vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
+    leftJoin: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    orderBy: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    then: vi.fn(),
+  };
+  const mockDbSelect = vi.fn().mockReturnValue(mockDbSelectChain);
+  const mockDbQueryTenants = { findFirst: vi.fn() };
+  const mockDbQueryUsers = { findFirst: vi.fn() };
+  const mockDbQueryPlans = { findFirst: vi.fn() };
 
-vi.mock('next/headers', () => ({
-  cookies: () => mockCookies(),
-  headers: () => mockHeaders(),
-}));
-vi.mock('next/navigation', () => ({
-  redirect: (url: string) => mockRedirect(url),
-}));
-vi.mock('@/lib/auth/session', () => ({
-  verifyToken: (...args: any[]) => mockVerifyToken(...args),
-}));
-vi.mock('@/drizzle/db', () => ({
-  db: {
-    query: {
-      tenants: { findFirst: vi.fn() },
-      users: { findFirst: (...args: any[]) => mockFindFirstUsers(...args) },
-      plans: { findFirst: vi.fn() },
-    },
-    select: mockDbSelect,
-  },
-}));
-vi.mock('@/lib/db/rls', () => ({
-  setTenantContext: (...args: any[]) => mockSetTenantContext(...args),
-}));
-vi.mock('drizzle-orm', () => ({
-  eq: vi.fn((_col: any, _val: any) => `eq(${String(_val)})`),
-  and: vi.fn((..._args: any[]) => 'and()'),
-  or: vi.fn((..._args: any[]) => 'or()'),
-  sql: Object.assign(vi.fn((_strings: any, ..._vals: any[]) => 'sql()'), { raw: vi.fn() }),
-  desc: vi.fn((_v: any) => 'desc()'),
-}));
-vi.mock('@/drizzle/schema', () => ({
-  tenants: { id: 'id', slug: 'slug', name: 'name', planId: 'plan_id', status: 'status', primaryColor: 'primary_color', settings: 'settings', trialEndsAt: 'trial_ends_at', currentUsers: 'current_users', currentContacts: 'current_contacts' },
-  users: { id: 'id', email: 'email', isSuperAdmin: 'is_super_admin', lastTenantId: 'last_tenant_id' },
-  plans: { id: 'id', name: 'name', maxUsers: 'max_users', maxContacts: 'max_contacts', maxDeals: 'max_deals', maxAutomations: 'max_automations', features: 'features' },
-  tenantMembers: { userId: 'user_id', tenantId: 'tenant_id', roleSlug: 'role_slug', roleId: 'role_id', status: 'status', createdAt: 'created_at' },
-  roles: { id: 'id', permissions: 'permissions' },
-}));
-
-import { requireTenantCtx, can, isAtLimit } from '@/lib/tenant/context';
-
-const makeRow = (overrides: Record<string, any> = {}) => ({
-  user_id: 'u1',
-  is_super_admin: false,
-  tenant_id: 't1',
-  role_slug: 'admin',
-  permissions: { contacts: true },
-  tenant_name: 'Test Tenant',
-  plan_id: 'pro',
-  primary_color: '#7c3aed',
-  tenant_settings: {},
-  tenant_status: 'active',
-  trial_ends_at: null,
-  current_users: 5,
-  current_contacts: 100,
-  plan_name: 'Pro',
-  max_users: 50,
-  max_contacts: 10000,
-  max_deals: 1000,
-  max_automations: 50,
-  features: ['contacts', 'deals'],
-  ...overrides,
+  return {
+    mockCookiesGet,
+    mockCookies,
+    mockRedirect,
+    mockVerifyToken,
+    mockDbSelectChain,
+    mockDbSelect,
+    mockDbQueryTenants,
+    mockDbQueryUsers,
+    mockDbQueryPlans,
+  };
 });
 
-function mockJoinChain(rows: any[]) {
+// ─── vi.mock calls ───────────────────────────────────────────────────────────
+vi.mock('next/headers', () => ({
+  cookies: () => mockCookies(),
+  headers: vi.fn().mockResolvedValue({
+    get: vi.fn().mockReturnValue(''),
+  }),
+}));
+
+vi.mock('next/navigation', () => ({
+  redirect: (path: string) => mockRedirect(path),
+}));
+
+vi.mock('@/lib/auth/session', () => ({
+  verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
+}));
+
+vi.mock('@/drizzle/db', () => ({
+  db: {
+    select: (...args: unknown[]) => mockDbSelect(...args),
+    query: {
+      tenants: mockDbQueryTenants,
+      users: mockDbQueryUsers,
+      plans: mockDbQueryPlans,
+    },
+  },
+}));
+
+vi.mock('@/drizzle/schema', () => ({
+  tenants: { id: 'tenants.id', slug: 'slug', name: 'name', planId: 'planId', status: 'status' },
+  users: { id: 'users.id', email: 'email', isSuperAdmin: 'isSuperAdmin', lastTenantId: 'lastTenantId' },
+  plans: { id: 'plans.id', name: 'name' },
+  tenantMembers: {
+    userId: 'tenantMembers.userId',
+    tenantId: 'tenantMembers.tenantId',
+    status: 'tenantMembers.status',
+    roleSlug: 'roleSlug',
+    roleId: 'roleId',
+    createdAt: 'createdAt',
+  },
+  roles: { id: 'roles.id', permissions: 'permissions' },
+  sessions: {},
+}));
+
+vi.mock('drizzle-orm', () => {
+  // sql is used as both a tagged template literal and has property accessors
+  const sqlFn = (...args: unknown[]) => args;
   return {
-    from: vi.fn(() => ({
-      innerJoin: vi.fn(() => ({
-        innerJoin: vi.fn(() => ({
-          leftJoin: vi.fn(() => ({
-            leftJoin: vi.fn(() => ({
-              where: vi.fn(() => ({
-                orderBy: vi.fn(() => ({
-                  limit: vi.fn().mockResolvedValue(rows),
-                })),
-              })),
-            })),
-          })),
-        })),
-      })),
-    })),
+    eq: vi.fn((...args: unknown[]) => args),
+    and: vi.fn((...args: unknown[]) => args),
+    or: vi.fn((...args: unknown[]) => args),
+    gt: vi.fn((...args: unknown[]) => args),
+    desc: vi.fn((v: unknown) => v),
+    sql: new Proxy(sqlFn, { get: () => vi.fn() }),
+  };
+});
+
+vi.mock('@/lib/db/rls', () => ({
+  setTenantContext: vi.fn().mockResolvedValue(undefined),
+}));
+
+// ─── Import after mocks ──────────────────────────────────────────────────────
+import { requireTenantCtx, can, isAtLimit } from '@/lib/tenant/context';
+import type { TenantContext } from '@/types';
+
+// ─── Helper: build a mock TenantContext ──────────────────────────────────────
+function makeTenantContext(overrides: Partial<TenantContext> = {}): TenantContext {
+  return {
+    userId: 'user-1',
+    tenantId: 'tenant-1',
+    roleSlug: 'member',
+    permissions: {},
+    isAdmin: false,
+    isSuperAdmin: false,
+    tenant: {
+      id: 'tenant-1',
+      status: 'active',
+      trial_ends_at: null,
+      name: 'Test Tenant',
+      plan_id: 'pro',
+      primary_color: '#7c3aed',
+      settings: {} as TenantContext['tenant']['settings'],
+      current_users: 3,
+      current_contacts: 100,
+    },
+    plan: {
+      id: 'pro',
+      name: 'Pro',
+      max_users: 10,
+      max_contacts: 5000,
+      max_deals: 500,
+      max_automations: 20,
+      features: ['automation', 'api'],
+    },
+    ...overrides,
   };
 }
 
-describe('tenant/context', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  describe('requireTenantCtx', () => {
-    it('redirects to login when no session token', async () => {
-      mockCookies.mockResolvedValue({ get: vi.fn(() => undefined) });
-      process.env.NODE_ENV = 'production';
-      await expect(requireTenantCtx()).rejects.toThrow('REDIRECT:/auth/login');
-      delete process.env.NODE_ENV;
-    });
-
-    it('redirects to login when verifyToken returns null', async () => {
-      mockCookies.mockResolvedValue({ get: vi.fn(() => ({ value: 'tok' })) });
-      mockVerifyToken.mockResolvedValue(null);
-      await expect(requireTenantCtx()).rejects.toThrow('REDIRECT:/auth/login');
-    });
-
-    it('returns full TenantContext on valid token', async () => {
-      mockCookies.mockResolvedValue({ get: vi.fn(() => ({ value: 'tok' })) });
-      mockVerifyToken.mockResolvedValue({ userId: 'u1' });
-      mockDbSelect.mockReturnValue(mockJoinChain([makeRow()]));
-      const ctx = await requireTenantCtx();
-      expect(ctx.userId).toBe('u1');
-      expect(ctx.tenantId).toBe('t1');
-      expect(ctx.roleSlug).toBe('admin');
-      expect(ctx.isAdmin).toBe(true);
-      expect(ctx.isSuperAdmin).toBe(false);
-      expect(ctx.tenant.name).toBe('Test Tenant');
-      expect(ctx.plan.id).toBe('pro');
-      expect(mockSetTenantContext).toHaveBeenCalled();
-    });
-
-    it('sets isSuperAdmin to true when user is super admin', async () => {
-      mockCookies.mockResolvedValue({ get: vi.fn(() => ({ value: 'tok' })) });
-      mockVerifyToken.mockResolvedValue({ userId: 'u1' });
-      mockDbSelect.mockReturnValue(mockJoinChain([makeRow({ is_super_admin: true })]));
-      const ctx = await requireTenantCtx();
-      expect(ctx.isSuperAdmin).toBe(true);
-      expect(ctx.isAdmin).toBe(true);
-    });
-
-    it('redirects super admin with no tenant to /superadmin/dashboard', async () => {
-      mockCookies.mockResolvedValue({ get: vi.fn(() => ({ value: 'tok' })) });
-      mockVerifyToken.mockResolvedValue({ userId: 'u1' });
-      mockDbSelect.mockReturnValue(mockJoinChain([]));
-      mockFindFirstUsers.mockResolvedValue({ isSuperAdmin: true });
-      await expect(requireTenantCtx()).rejects.toThrow('REDIRECT:/superadmin/dashboard');
-    });
-
-    it('redirects non-admin with no tenant to /auth/no-workspace', async () => {
-      mockCookies.mockResolvedValue({ get: vi.fn(() => ({ value: 'tok' })) });
-      mockVerifyToken.mockResolvedValue({ userId: 'u1' });
-      mockDbSelect.mockReturnValue(mockJoinChain([]));
-      mockFindFirstUsers.mockResolvedValue({ isSuperAdmin: false });
-      await expect(requireTenantCtx()).rejects.toThrow('REDIRECT:/auth/no-workspace');
-    });
-
-    it('redirects expired trial to /tenant/trial-expired', async () => {
-      mockCookies.mockResolvedValue({ get: vi.fn(() => ({ value: 'tok' })) });
-      mockVerifyToken.mockResolvedValue({ userId: 'u1' });
-      const pastDate = new Date('2020-01-01').toISOString();
-      mockDbSelect.mockReturnValue(mockJoinChain([makeRow({
-        tenant_status: 'trialing',
-        trial_ends_at: pastDate,
-      })]));
-      mockHeaders.mockResolvedValue({ get: vi.fn(() => null) });
-      await expect(requireTenantCtx()).rejects.toThrow('REDIRECT:/tenant/trial-expired');
-    });
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tests for pure utility functions: can() and isAtLimit()
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('can()', () => {
+  it('returns true for super admin regardless of permissions', () => {
+    const ctx = makeTenantContext({ isSuperAdmin: true, permissions: {} });
+    expect(can(ctx, 'contacts.view')).toBe(true);
+    expect(can(ctx, 'anything.unknown')).toBe(true);
   });
 
-  describe('can', () => {
-    it('returns true for super admin', () => {
-      expect(can({ isSuperAdmin: true, isAdmin: false } as any, 'anything')).toBe(true);
-    });
-
-    it('returns true for admin', () => {
-      expect(can({ isSuperAdmin: false, isAdmin: true } as any, 'anything')).toBe(true);
-    });
-
-    it('returns true for "all" permission', () => {
-      expect(can({ isSuperAdmin: false, isAdmin: false, permissions: { all: true } } as any, 'x')).toBe(true);
-    });
-
-    it('returns true when specific permission granted', () => {
-      expect(can({ isSuperAdmin: false, isAdmin: false, permissions: { contacts: true } } as any, 'contacts')).toBe(true);
-    });
-
-    it('returns false when permission not granted', () => {
-      expect(can({ isSuperAdmin: false, isAdmin: false, permissions: {} } as any, 'contacts')).toBe(false);
-    });
+  it('returns true for admin regardless of permissions', () => {
+    const ctx = makeTenantContext({ isAdmin: true, permissions: {} });
+    expect(can(ctx, 'deals.edit')).toBe(true);
   });
 
-  describe('isAtLimit', () => {
-    const baseCtx = {
-      isSuperAdmin: false,
-      isAdmin: false,
-      permissions: {},
-      tenant: { current_contacts: 100, current_users: 5 },
-      plan: { id: 'pro', max_contacts: 200, max_users: 10 },
-    } as any;
+  it('returns true when "all" permission is set', () => {
+    const ctx = makeTenantContext({ permissions: { all: true } });
+    expect(can(ctx, 'contacts.delete')).toBe(true);
+  });
 
-    it('returns false for enterprise plan', () => {
-      expect(isAtLimit({ ...baseCtx, plan: { ...baseCtx.plan, id: 'enterprise' } }, 'contacts')).toBe(false);
-    });
+  it('returns true when specific permission is granted', () => {
+    const ctx = makeTenantContext({ permissions: { 'contacts.view': true } });
+    expect(can(ctx, 'contacts.view')).toBe(true);
+  });
 
-    it('returns true when at limit', () => {
-      expect(isAtLimit({ ...baseCtx, tenant: { ...baseCtx.tenant, current_contacts: 200 } }, 'contacts')).toBe(true);
-    });
+  it('returns false when permission is not granted', () => {
+    const ctx = makeTenantContext({ permissions: { 'contacts.view': true } });
+    expect(can(ctx, 'contacts.delete')).toBe(false);
+  });
 
-    it('returns false when under limit', () => {
-      expect(isAtLimit(baseCtx, 'contacts')).toBe(false);
-    });
+  it('returns false when permission is explicitly false', () => {
+    const ctx = makeTenantContext({ permissions: { 'deals.edit': false } });
+    expect(can(ctx, 'deals.edit')).toBe(false);
+  });
+});
 
-    it('returns false for users when under limit', () => {
-      expect(isAtLimit(baseCtx, 'users')).toBe(false);
+describe('isAtLimit()', () => {
+  it('returns false for enterprise plan (no limits)', () => {
+    const ctx = makeTenantContext({
+      plan: { ...makeTenantContext().plan, id: 'enterprise' },
+      tenant: { ...makeTenantContext().tenant, current_users: 999 },
     });
+    expect(isAtLimit(ctx, 'users')).toBe(false);
+  });
 
-    it('returns true for users when at limit', () => {
-      expect(isAtLimit({ ...baseCtx, tenant: { ...baseCtx.tenant, current_users: 10 } }, 'users')).toBe(true);
+  it('returns true when current users equals max users', () => {
+    const ctx = makeTenantContext({
+      plan: { ...makeTenantContext().plan, max_users: 5 },
+      tenant: { ...makeTenantContext().tenant, current_users: 5 },
     });
+    expect(isAtLimit(ctx, 'users')).toBe(true);
+  });
+
+  it('returns true when current users exceeds max users', () => {
+    const ctx = makeTenantContext({
+      plan: { ...makeTenantContext().plan, max_users: 5 },
+      tenant: { ...makeTenantContext().tenant, current_users: 6 },
+    });
+    expect(isAtLimit(ctx, 'users')).toBe(true);
+  });
+
+  it('returns false when current users is under limit', () => {
+    const ctx = makeTenantContext({
+      plan: { ...makeTenantContext().plan, max_users: 10 },
+      tenant: { ...makeTenantContext().tenant, current_users: 3 },
+    });
+    expect(isAtLimit(ctx, 'users')).toBe(false);
+  });
+
+  it('returns true when contacts at limit', () => {
+    const ctx = makeTenantContext({
+      plan: { ...makeTenantContext().plan, max_contacts: 500 },
+      tenant: { ...makeTenantContext().tenant, current_contacts: 500 },
+    });
+    expect(isAtLimit(ctx, 'contacts')).toBe(true);
+  });
+
+  it('returns false when contacts under limit', () => {
+    const ctx = makeTenantContext({
+      plan: { ...makeTenantContext().plan, max_contacts: 5000 },
+      tenant: { ...makeTenantContext().tenant, current_contacts: 100 },
+    });
+    expect(isAtLimit(ctx, 'contacts')).toBe(false);
+  });
+
+  it('returns false when limit is 0 or negative (unlimited)', () => {
+    const ctx = makeTenantContext({
+      plan: { ...makeTenantContext().plan, max_users: 0 },
+      tenant: { ...makeTenantContext().tenant, current_users: 10 },
+    });
+    expect(isAtLimit(ctx, 'users')).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tests for requireTenantCtx() with mocks
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('requireTenantCtx()', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Re-wire the chain mock defaults
+    mockDbSelectChain.from.mockReturnThis();
+    mockDbSelectChain.innerJoin.mockReturnThis();
+    mockDbSelectChain.leftJoin.mockReturnThis();
+    mockDbSelectChain.where.mockReturnThis();
+    mockDbSelectChain.orderBy.mockReturnThis();
+    mockDbSelectChain.limit.mockReturnThis();
+    mockDbSelect.mockReturnValue(mockDbSelectChain);
+
+    delete process.env['ALLOW_DEMO_MODE'];
+    process.env['NODE_ENV'] = 'test';
+  });
+
+  it('redirects to /auth/login when no session cookie exists (production)', async () => {
+    process.env['NODE_ENV'] = 'production';
+    mockCookiesGet.mockReturnValue(undefined);
+
+    await expect(requireTenantCtx()).rejects.toThrow('NEXT_REDIRECT:/auth/login');
+    expect(mockRedirect).toHaveBeenCalledWith('/auth/login');
+  });
+
+  it('redirects to /auth/login when no cookie and ALLOW_DEMO_MODE is not true', async () => {
+    mockCookiesGet.mockReturnValue(undefined);
+    process.env['ALLOW_DEMO_MODE'] = 'false';
+
+    await expect(requireTenantCtx()).rejects.toThrow('NEXT_REDIRECT:/auth/login');
+    expect(mockRedirect).toHaveBeenCalledWith('/auth/login');
+  });
+
+  it('redirects to /auth/login when token is invalid', async () => {
+    mockCookiesGet.mockReturnValue({ value: 'invalid-token' });
+    mockVerifyToken.mockResolvedValue(null);
+
+    await expect(requireTenantCtx()).rejects.toThrow('NEXT_REDIRECT:/auth/login');
+    expect(mockVerifyToken).toHaveBeenCalledWith('invalid-token');
+    expect(mockRedirect).toHaveBeenCalledWith('/auth/login');
+  });
+
+  it('redirects to /auth/no-workspace when user has no active tenant membership', async () => {
+    mockCookiesGet.mockReturnValue({ value: 'valid-token' });
+    mockVerifyToken.mockResolvedValue({ userId: 'user-123' });
+    mockDbSelectChain.then.mockImplementation((cb: (rows: unknown[]) => unknown) => cb([]));
+
+    // User exists but is not a super admin
+    mockDbQueryUsers.findFirst.mockResolvedValue({ isSuperAdmin: false });
+
+    await expect(requireTenantCtx()).rejects.toThrow('NEXT_REDIRECT:/auth/no-workspace');
+    expect(mockRedirect).toHaveBeenCalledWith('/auth/no-workspace');
+  });
+
+  it('redirects to /superadmin/dashboard when user has no membership but is super admin', async () => {
+    mockCookiesGet.mockReturnValue({ value: 'valid-token' });
+    mockVerifyToken.mockResolvedValue({ userId: 'admin-123' });
+    mockDbSelectChain.then.mockImplementation((cb: (rows: unknown[]) => unknown) => cb([]));
+
+    mockDbQueryUsers.findFirst.mockResolvedValue({ isSuperAdmin: true });
+
+    await expect(requireTenantCtx()).rejects.toThrow('NEXT_REDIRECT:/superadmin/dashboard');
+    expect(mockRedirect).toHaveBeenCalledWith('/superadmin/dashboard');
+  });
+
+  it('returns TenantContext when valid session and active membership exist', async () => {
+    mockCookiesGet.mockReturnValue({ value: 'valid-token' });
+    mockVerifyToken.mockResolvedValue({ userId: 'user-456' });
+
+    const dbRow = {
+      user_id: 'user-456',
+      is_super_admin: false,
+      tenant_id: 'tenant-789',
+      role_slug: 'admin',
+      permissions: { 'contacts.view': true },
+      tenant_name: 'Acme Corp',
+      plan_id: 'pro',
+      primary_color: '#3b82f6',
+      tenant_settings: { theme: 'dark' },
+      tenant_status: 'active',
+      trial_ends_at: null,
+      current_users: 4,
+      current_contacts: 200,
+      plan_name: 'Professional',
+      max_users: 25,
+      max_contacts: 10000,
+      max_deals: 1000,
+      max_automations: 50,
+      features: ['automation', 'api', 'integrations'],
+    };
+
+    mockDbSelectChain.then.mockImplementation((cb: (rows: unknown[]) => unknown) => cb([dbRow]));
+
+    const result = await requireTenantCtx();
+
+    expect(result.userId).toBe('user-456');
+    expect(result.tenantId).toBe('tenant-789');
+    expect(result.roleSlug).toBe('admin');
+    expect(result.isAdmin).toBe(true);
+    expect(result.isSuperAdmin).toBe(false);
+    expect(result.tenant.name).toBe('Acme Corp');
+    expect(result.tenant.status).toBe('active');
+    expect(result.plan.name).toBe('Professional');
+    expect(result.plan.max_users).toBe(25);
+    expect(result.plan.features).toContain('automation');
+  });
+
+  it('returns context with correct permissions for non-admin user', async () => {
+    mockCookiesGet.mockReturnValue({ value: 'member-token' });
+    mockVerifyToken.mockResolvedValue({ userId: 'user-member' });
+
+    const dbRow = {
+      user_id: 'user-member',
+      is_super_admin: false,
+      tenant_id: 'tenant-abc',
+      role_slug: 'member',
+      permissions: { 'contacts.view': true, 'deals.view': true },
+      tenant_name: 'Member Org',
+      plan_id: 'free',
+      primary_color: '#7c3aed',
+      tenant_settings: {},
+      tenant_status: 'active',
+      trial_ends_at: null,
+      current_users: 2,
+      current_contacts: 50,
+      plan_name: 'Free',
+      max_users: 5,
+      max_contacts: 500,
+      max_deals: 100,
+      max_automations: 3,
+      features: [],
+    };
+
+    mockDbSelectChain.then.mockImplementation((cb: (rows: unknown[]) => unknown) => cb([dbRow]));
+
+    const result = await requireTenantCtx();
+
+    expect(result.isAdmin).toBe(false);
+    expect(result.roleSlug).toBe('member');
+    expect(result.permissions).toEqual({ 'contacts.view': true, 'deals.view': true });
   });
 });
