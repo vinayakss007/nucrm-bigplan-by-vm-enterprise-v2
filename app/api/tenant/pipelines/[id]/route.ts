@@ -226,7 +226,7 @@ export async function DELETE(req: NextRequest, { params }: any) {
       }
     }
 
-    await db.delete(pipelines).where(and(eq(pipelines.id, id), eq(pipelines.tenantId, ctx.tenantId)));
+    await db.update(pipelines).set({ deletedAt: new Date() }).where(and(eq(pipelines.id, id), eq(pipelines.tenantId, ctx.tenantId)));
     
     return NextResponse.json({ ok: true });
  
