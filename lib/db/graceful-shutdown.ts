@@ -1,80 +1,155 @@
 /**
  * Graceful Shutdown Handler
  *
- * Handles SIGTERM/SIGINT to:
- * 1. Stop accepting new connections
- * 2. Wait for active queries to complete (up to timeout)
- * 3. Close the database pool cleanly
- * 4. Exit with code 0
- *
- * Usage: import this module in instrumentation.ts or server startup.
+ * Manages the controlled shutdown of the application:
+ * - Stops accepting new requests
+ * - Waits for in-flight queries to finish (with timeout)
+ * - Drains the connection pool
+ * - Logs the shutdown sequence
  */
 
-import { db } from '@/drizzle/db';
+import { getPool } from '@/lib/db/pool';
 
-const SHUTDOWN_TIMEOUT_MS = 15_000; // 15 seconds max wait
+// -------------------------------------------------------------------
+// Types
+// -------------------------------------------------------------------
 
-let isShuttingDown = false;
+export interface ShutdownOptions {
+  /** Maximum time to wait for in-flight queries (ms). Default: 30000 */
+  drainTimeoutMs?: number;
+  /** Callback invoked when shutdown begins */
+  onShutdownStart?: () => void;
+  /** Callback invoked when shutdown completes */
+  onShutdownComplete?: () => void;
+}
+
+// -------------------------------------------------------------------
+// Module state
+// -------------------------------------------------------------------
+
+let shuttingDown = false;
+let inFlightCount = 0;
+let shutdownPromise: Promise<void> | null = null;
+let handlersRegistered = false;
+
+// -------------------------------------------------------------------
+// Public API
+// -------------------------------------------------------------------
 
 /**
- * Check if the process is shutting down.
- * Use this in request handlers to reject new work during shutdown.
+ * Check whether the server is in shutdown mode.
+ * Middleware should call this and reject new requests with 503.
  */
-export function isProcessShuttingDown(): boolean {
-  return isShuttingDown;
+export function isShuttingDown(): boolean {
+  return shuttingDown;
 }
 
 /**
- * Initialize graceful shutdown handlers.
- * Call once at app startup (e.g., in instrumentation.ts).
+ * Increment the in-flight request counter.
+ * Call at the start of each request/query.
  */
-export function initGracefulShutdown(): void {
-  const shutdown = async (signal: string) => {
-    if (isShuttingDown) return; // Prevent double-shutdown
-    isShuttingDown = true;
+export function trackRequestStart(): void {
+  inFlightCount++;
+}
 
-    console.log(`[shutdown] Received ${signal}. Starting graceful shutdown...`);
+/**
+ * Decrement the in-flight request counter.
+ * Call when a request/query completes.
+ */
+export function trackRequestEnd(): void {
+  inFlightCount--;
+  if (inFlightCount < 0) inFlightCount = 0;
+}
 
-    // Give active requests time to finish
-    const timeout = setTimeout(() => {
-      console.error('[shutdown] Timeout exceeded, forcing exit');
+/**
+ * Get current in-flight count (useful for monitoring).
+ */
+export function getInFlightCount(): number {
+  return inFlightCount;
+}
+
+/**
+ * Register SIGTERM/SIGINT handlers for graceful shutdown.
+ * Idempotent: only registers once.
+ */
+export function registerShutdownHandlers(options: ShutdownOptions = {}): void {
+  if (handlersRegistered) return;
+  handlersRegistered = true;
+
+  const handler = () => {
+    initiateShutdown(options).catch((err) => {
+      console.error('[GracefulShutdown] Shutdown failed:', err);
       process.exit(1);
-    }, SHUTDOWN_TIMEOUT_MS);
-
-    try {
-      // Close database pool
-      // Drizzle with node-postgres: pool.end() waits for active queries
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pool = (db as any)?._.session?.client;
-      if (pool?.end) {
-        console.log('[shutdown] Draining database pool...');
-        await pool.end();
-        console.log('[shutdown] Database pool closed');
-      }
-
-      // Close Redis connections if available
-      try {
-        // Close any global Redis instance
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const globalRedis = (globalThis as any).__redis;
-        if (globalRedis?.quit) {
-          await globalRedis.quit();
-          console.log('[shutdown] Redis connection closed');
-        }
-      } catch {
-        // Redis not available or already closed
-      }
-
-      clearTimeout(timeout);
-      console.log('[shutdown] Graceful shutdown complete');
-      process.exit(0);
-    } catch (err) {
-      console.error('[shutdown] Error during shutdown:', err);
-      clearTimeout(timeout);
-      process.exit(1);
-    }
+    });
   };
 
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', handler);
+  process.on('SIGINT', handler);
+}
+
+/**
+ * Initiate graceful shutdown programmatically.
+ * Returns a promise that resolves when shutdown is complete.
+ */
+export async function initiateShutdown(options: ShutdownOptions = {}): Promise<void> {
+  // Prevent multiple concurrent shutdowns
+  if (shutdownPromise) return shutdownPromise;
+
+  shuttingDown = true;
+  const { drainTimeoutMs = 30_000, onShutdownStart, onShutdownComplete } = options;
+
+  console.log('[GracefulShutdown] Shutdown initiated. Stopping new requests...');
+  onShutdownStart?.();
+
+  shutdownPromise = (async () => {
+    // Wait for in-flight queries/requests to finish
+    const deadline = Date.now() + drainTimeoutMs;
+    console.log(
+      `[GracefulShutdown] Waiting for ${inFlightCount} in-flight request(s) to complete (timeout: ${drainTimeoutMs}ms)...`
+    );
+
+    while (inFlightCount > 0 && Date.now() < deadline) {
+      await sleep(100);
+    }
+
+    if (inFlightCount > 0) {
+      console.warn(
+        `[GracefulShutdown] Timed out waiting for ${inFlightCount} in-flight request(s). Proceeding with pool drain.`
+      );
+    } else {
+      console.log('[GracefulShutdown] All in-flight requests completed.');
+    }
+
+    // Drain the connection pool
+    try {
+      const pool = getPool();
+      await pool.end();
+      console.log('[GracefulShutdown] Connection pool drained.');
+    } catch (err) {
+      console.error('[GracefulShutdown] Error draining pool:', err);
+    }
+
+    console.log('[GracefulShutdown] Shutdown complete.');
+    onShutdownComplete?.();
+  })();
+
+  return shutdownPromise;
+}
+
+/**
+ * Reset shutdown state. Primarily for testing.
+ */
+export function resetShutdownState(): void {
+  shuttingDown = false;
+  inFlightCount = 0;
+  shutdownPromise = null;
+  handlersRegistered = false;
+}
+
+// -------------------------------------------------------------------
+// Internal helpers
+// -------------------------------------------------------------------
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
