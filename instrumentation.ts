@@ -6,6 +6,21 @@ export async function register() {
     const { initEnv } = await import("./lib/env");
     initEnv();
 
+    // Register graceful shutdown handlers so SIGTERM/SIGINT drain in-flight
+    // requests and close the DB pool before exit. Without this, container
+    // orchestrators (K8s, ECS) kill the process mid-request during deploys.
+    const { registerShutdownHandlers } = await import("./lib/db/graceful-shutdown");
+    registerShutdownHandlers({
+      drainTimeoutMs: 25_000, // K8s default terminationGracePeriodSeconds is 30
+      onShutdownStart: () => {
+        console.log('[instrumentation] Graceful shutdown: draining...');
+      },
+      onShutdownComplete: () => {
+        console.log('[instrumentation] Graceful shutdown: complete. Exiting.');
+        process.exit(0);
+      },
+    });
+
     // Initialize metrics collection
     const { metrics } = await import("./lib/metrics");
     metrics.gauge('app_startup', 1);

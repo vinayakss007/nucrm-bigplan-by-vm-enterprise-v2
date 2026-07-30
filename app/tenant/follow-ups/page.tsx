@@ -44,7 +44,9 @@ export default function FollowUpsPage() {
       setData(json.data ?? []);
       setTotal(json.total ?? 0);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load');
+      const message = err instanceof Error ? err.message : 'Failed to load follow-ups';
+      setError(message);
+      toast.error('Failed to load follow-ups');
     } finally {
       setLoading(false);
     }

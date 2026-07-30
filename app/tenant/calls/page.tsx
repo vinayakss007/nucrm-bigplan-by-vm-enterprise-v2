@@ -1,6 +1,6 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { Phone, PhoneIncoming, PhoneOutgoing, Plus, Clock, X, Pencil, Trash2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Phone, PhoneIncoming, PhoneOutgoing, Plus, Clock, X, Pencil, Trash2, Search } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -28,6 +28,25 @@ export default function CallsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingCall, setEditingCall] = useState<CallLog | null>(null);
   const [contacts, setContacts] = useState<{ id: string; firstName?: string; first_name?: string; lastName?: string; last_name?: string }[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [directionFilter, setDirectionFilter] = useState<'all' | 'inbound' | 'outbound'>('all');
+
+  const filteredCalls = useMemo(() => {
+    let result = calls;
+    if (directionFilter !== 'all') {
+      result = result.filter(c => c.direction === directionFilter);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter(c => {
+        const contactName = `${c.firstName || ''} ${c.lastName || ''}`.trim().toLowerCase();
+        const phone = (c.phoneNumber || '').toLowerCase();
+        const notes = (c.notes || '').toLowerCase();
+        return contactName.includes(q) || phone.includes(q) || notes.includes(q);
+      });
+    }
+    return result;
+  }, [calls, searchQuery, directionFilter]);
 
   useEffect(() => {
     fetchCalls();
@@ -82,6 +101,28 @@ export default function CallsPage() {
         </button>
       </div>
 
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search by contact name, phone number, or notes..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+          />
+        </div>
+        <select
+          value={directionFilter}
+          onChange={(e) => setDirectionFilter(e.target.value as 'all' | 'inbound' | 'outbound')}
+          className="px-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+        >
+          <option value="all">All Directions</option>
+          <option value="inbound">Inbound</option>
+          <option value="outbound">Outbound</option>
+        </select>
+      </div>
+
       <div className="admin-card overflow-hidden rounded-xl border border-border">
         <table className="w-full text-sm">
           <thead>
@@ -106,15 +147,15 @@ export default function CallsPage() {
                   <td className="px-4 py-3"><div className="w-16 h-4 rounded bg-muted animate-pulse" /></td>
                 </tr>
               ))
-            ) : calls.length === 0 ? (
+            ) : filteredCalls.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
                   <Phone className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">No calls logged yet</p>
+                  <p className="text-sm">{calls.length === 0 ? 'No calls logged yet' : 'No calls match your search'}</p>
                 </td>
               </tr>
             ) : (
-              calls.map(call => (
+              filteredCalls.map(call => (
                 <tr key={call.id} className="border-b border-border hover:bg-accent/50 transition-colors cursor-pointer group">
                   <td className="px-4 py-3">
                     {call.direction === 'inbound' ? (

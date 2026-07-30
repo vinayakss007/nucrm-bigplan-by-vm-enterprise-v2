@@ -143,9 +143,8 @@ export default function TasksKanbanPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const loading = isLoading && tasks.length === 0;
 
-  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
-    if (res?.data && tasks.length === 0) {
+    if (res?.data) {
       setTasks(res.data as Task[]);
     }
   }, [res]);

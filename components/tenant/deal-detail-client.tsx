@@ -12,6 +12,7 @@ import { cn, formatDate, formatCurrency, formatRelativeTime } from '@/lib/utils'
 import DocumentsPanel from '@/components/documents/documents-panel';
 import DealRelatedPanel from '@/components/tenant/deal-related-panel';
 import DealTimeline from '@/components/tenant/deal-timeline';
+import DealForecast from '@/components/tenant/deal-forecast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -76,7 +77,7 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
       .catch(() => { /* keep defaults */ });
   }, []);
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'activities' | 'documents' | 'related' | 'timeline'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'activities' | 'documents' | 'related' | 'timeline' | 'forecast'>('overview');
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [stages, setStages] = useState(DEFAULT_STAGES);
@@ -329,7 +330,7 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
-        {(['overview', 'tasks', 'activities', 'related', 'timeline', 'documents'] as const).map(tab => (
+        {(['overview', 'tasks', 'activities', 'related', 'timeline', 'forecast', 'documents'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -522,6 +523,17 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
           </div>
           <div className="p-5">
             <DealTimeline dealId={deal.id} />
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'forecast' && (
+        <div className="admin-card overflow-hidden">
+          <div className="px-5 py-3 border-b border-border">
+            <h2 className="text-sm font-semibold">Deal Forecast</h2>
+          </div>
+          <div className="p-5">
+            <DealForecast dealId={deal.id} />
           </div>
         </div>
       )}
