@@ -19,10 +19,10 @@ describe('tenant/request-context', () => {
   });
 
   describe('generateRequestId', () => {
-    it('generates a string starting with req_', async () => {
+    it('generates a valid UUID string', async () => {
       const { generateRequestId } = await import('@/lib/tenant/request-context');
       const id = generateRequestId();
-      expect(id).toMatch(/^req_\d+_/);
+      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     });
   });
 
@@ -110,6 +110,7 @@ describe('tenant/request-context', () => {
 
       const { withRequestContext, setContext, getOrFetchContext } = await import('@/lib/tenant/request-context');
       const result = withRequestContext('req-1', async () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (globalThis as any).__request_ctx = ctx;
         setContext('req-1', ctx);
         return getOrFetchContext('req-1', 'hash', fetchFn);

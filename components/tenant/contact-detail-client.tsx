@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency, formatDateTimeShort, formatDate, formatRelativeTime } from '@/lib/utils';
 import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
-import { ContactTimeline } from '@/components/tenant/contact-timeline';
+import ContactTimeline from '@/components/tenant/contact-timeline';
 import { CallLogger, CallLogList } from '@/components/tenant/call-logger';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
