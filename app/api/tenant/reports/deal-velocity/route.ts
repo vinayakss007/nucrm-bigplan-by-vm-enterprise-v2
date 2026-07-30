@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const tid = ctx.tenantId;
 
     // Avg days to close (won deals only)
-    const [avgClose] = await db.execute(sql`
+    const avgClose = await db.execute(sql`
       SELECT 
         COALESCE(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400), 0)::numeric(10,1) as avg_days
       FROM deals
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     `);
 
     // Conversion rate (won / total created)
-    const [counts] = await db.execute(sql`
+    const counts = await db.execute(sql`
       SELECT 
         COUNT(*) FILTER (WHERE stage_id IN (SELECT id FROM deal_stages WHERE LOWER(name) IN ('won', 'closed won'))) as won,
         COUNT(*) as total
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
       .groupBy(deals.stageId, dealStages.name);
 
     // Total pipeline value (active deals)
-    const [pipelineValue] = await db.execute(sql`
+    const pipelineValue = await db.execute(sql`
       SELECT COALESCE(SUM(amount::numeric), 0)::numeric(12,2) as total
       FROM deals
       WHERE tenant_id = ${tid}
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     `);
 
     // Deals created this month
-    const [monthlyCreated] = await db.execute(sql`
+    const monthlyCreated = await db.execute(sql`
       SELECT COUNT(*)::int as count
       FROM deals
       WHERE tenant_id = ${tid}
