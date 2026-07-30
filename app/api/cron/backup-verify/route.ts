@@ -131,9 +131,27 @@ export async function POST(request: NextRequest) {
       localFile = await fetchFromS3(backup.storagePath, workDir);
     }
 
-    // ── 1b. Decrypt if encrypted ─────────────────────────────────────────────
-    // PR #866 added AES-256-GCM encryption. Encrypted artefacts have a .enc
-    // extension. We must decrypt before checksumming or restoring.
+    // ── 2. Integrity ─────────────────────────────────────────────────────────
+    const actual = await checksumFile(localFile);
+    if (backup.checksum && backup.checksum.toLowerCase() !== actual.toLowerCase()) {
+      failures.push(
+        `Checksum mismatch: recorded ${backup.checksum}, actual ${actual}. ` +
+        'Artefact is corrupt or truncated.'
+      );
+      // Don't throw yet — record the integrity failure and try restoring anyway
+      // so both signals land in the alert.
+    }
+
+    // ── 2b. Decrypt if encrypted ─────────────────────────────────────────────
+    // #866 added AES-256-GCM encryption; encrypted artefacts carry a .enc
+    // extension. pg_restore/psql need plaintext, so decrypt before step 3.
+    //
+    // Ordering matters, and it has to be *after* the checksum above. The
+    // checksum in backup_records is computed over the encrypted artefact —
+    // backup-service.ts encrypts at L121 and checksums the result at L129 —
+    // so hashing the decrypted file would compare a plaintext digest against a
+    // ciphertext digest and report every encrypted backup as corrupt. That would
+    // be a false alarm from the very job meant to detect real corruption.
     if (localFile.endsWith('.enc')) {
       const { decryptBackupFile, isEncryptionEnabled } = await import('@/lib/backups/encrypt');
       if (!isEncryptionEnabled()) {
@@ -146,17 +164,6 @@ export async function POST(request: NextRequest) {
       const decryptedPath = localFile.replace(/\.enc$/, '');
       await decryptBackupFile(localFile, decryptedPath);
       localFile = decryptedPath;
-    }
-
-    // ── 2. Integrity ─────────────────────────────────────────────────────────
-    const actual = await checksumFile(localFile);
-    if (backup.checksum && backup.checksum.toLowerCase() !== actual.toLowerCase()) {
-      failures.push(
-        `Checksum mismatch: recorded ${backup.checksum}, actual ${actual}. ` +
-        'Artefact is corrupt or truncated.'
-      );
-      // Don't throw yet — record the integrity failure and try restoring anyway
-      // so both signals land in the alert.
     }
 
     // ── 3. Restore into scratch database ─────────────────────────────────────
