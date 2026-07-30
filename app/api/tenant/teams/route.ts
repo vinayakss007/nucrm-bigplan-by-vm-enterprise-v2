@@ -59,26 +59,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'A team with this name already exists' }, { status: 409 });
     }
 
-    const [team] = await db.insert(teams).values({
-      tenantId: ctx.tenantId,
-      name,
-      description: typeof body?.description === 'string' ? body.description : null,
-      managerId: body?.managerId || null,
-      isActive: true,
-      createdBy: ctx.userId,
-    }).returning();
-
-    // If a manager was named, enrol them as a manager member so the team is
-    // never created with an empty roster it silently cannot assign to.
-    if (team && body?.managerId) {
-      await db.insert(teamMembers).values({
+    // Wrap team + member creation in a transaction so we never get
+    // a team without its manager member (partial write).
+    const [team] = await db.transaction(async (tx) => {
+      const [newTeam] = await tx.insert(teams).values({
         tenantId: ctx.tenantId,
-        teamId: team.id,
-        userId: body.managerId,
-        role: 'manager',
+        name,
+        description: typeof body?.description === 'string' ? body.description : null,
+        managerId: body?.managerId || null,
+        isActive: true,
         createdBy: ctx.userId,
-      }).onConflictDoNothing();
-    }
+      }).returning();
+
+      // If a manager was named, enrol them as a manager member so the team is
+      // never created with an empty roster it silently cannot assign to.
+      if (newTeam && body?.managerId) {
+        await tx.insert(teamMembers).values({
+          tenantId: ctx.tenantId,
+          teamId: newTeam.id,
+          userId: body.managerId,
+          role: 'manager',
+          createdBy: ctx.userId,
+        }).onConflictDoNothing();
+      }
+
+      return [newTeam];
+    });
 
     return NextResponse.json({ data: team }, { status: 201 });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

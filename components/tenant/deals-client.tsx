@@ -5,6 +5,7 @@ import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 ;
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo';
+import { EmptyState } from '@/components/shared/empty-state';
 
 interface DealRecord {
   id: string;
@@ -253,7 +254,7 @@ export default function TenantDealsClient({ initialDeals, contacts, companies, t
             </tr></thead>
             <tbody>
               {!deals.length ? (
-                <tr><td colSpan={7} className="text-center py-12 text-sm text-muted-foreground">No deals yet</td></tr>
+                <tr><td colSpan={7}><EmptyState type="deals" className="py-12" /></td></tr>
               ) : deals.map(d => {
                 const stage = STAGES.find(s=>s.id===d.stage) ?? STAGES[0];
                 return (

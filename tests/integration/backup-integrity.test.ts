@@ -45,7 +45,8 @@ const CRITICAL_TABLES = [
 
 // Skip entire suite if no database is available
 async function isDatabaseAvailable(): Promise<boolean> {
-  const sourceUrl = process.env.DATABASE_URL || 'postgresql://postgres:admin123@localhost:5432/nucrm';
+  const sourceUrl = process.env.DATABASE_URL;
+  if (!sourceUrl) return false;
   const pool = new Pool({ connectionString: sourceUrl, connectionTimeoutMillis: 3000 });
   try {
     const client = await pool.connect();
@@ -68,8 +69,8 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
   let backupFile: string;
 
   beforeAll(async () => {
-    const sourceUrl = process.env.DATABASE_URL || 'postgresql://postgres:admin123@localhost:5432/nucrm';
-    const restoreUrl = process.env.RESTORE_DATABASE_URL || 'postgresql://postgres:admin123@localhost:5433/nucrm_restore';
+    const sourceUrl = process.env.DATABASE_URL;
+    const restoreUrl = process.env.RESTORE_DATABASE_URL;
 
     sourcePool = new Pool({ connectionString: sourceUrl });
     sourceDb = drizzle(sourcePool, { schema });
@@ -92,7 +93,8 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
   it('should create a backup file', async () => {
     // Create backup using pg_dump
     const { execSync } = await import('child_process');
-    const databaseUrl = process.env.DATABASE_URL || 'postgresql://postgres:admin123@localhost:5432/nucrm';
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) throw new Error('DATABASE_URL not set');
 
     try {
       execSync(

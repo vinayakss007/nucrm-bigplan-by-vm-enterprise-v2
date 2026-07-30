@@ -43,7 +43,7 @@ function CopyButton({ text }: { text: string }) {
     setTimeout(() => setCopied(false), 1500);
   };
   return (
-    <button onClick={copy} className="flex items-center gap-1 text-[10px] text-white/30 hover:text-white/60 transition-colors">
+    <button onClick={copy} className="flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors">
       {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
       {copied ? 'Copied' : 'Copy'}
     </button>
@@ -113,11 +113,11 @@ export default function ErrorsPage() {
     <div className="space-y-5 max-w-6xl">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-lg font-bold text-white flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-red-400"/>Error Logs</h1>
-          <p className="text-xs text-white/30">Application errors, API failures, and exceptions</p>
+          <h1 className="text-lg font-bold text-foreground flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-red-400"/>Error Logs</h1>
+          <p className="text-xs text-muted-foreground">Application errors, API failures, and exceptions</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => load()} className="p-2 rounded-lg border border-white/10 text-white/30 hover:text-white transition-colors"><RefreshCw className="w-3.5 h-3.5"/></button>
+          <button onClick={() => load()} className="p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"><RefreshCw className="w-3.5 h-3.5"/></button>
           {resolved==='false' && (
             <button onClick={() => confirmThen('Mark all unresolved errors as resolved?', () => resolve(undefined, true))}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 text-xs font-medium hover:bg-emerald-600/30 transition-colors">
@@ -133,13 +133,13 @@ export default function ErrorsPage() {
           { label:'Fatal', desc:LEVEL_CFG['fatal']?.desc ?? '', value:s.fatal_unresolved??0, color:'text-red-400', bg:'bg-red-500/10', filter:'fatal' },
           { label:'Error', desc:LEVEL_CFG['error']?.desc ?? '', value:s.error_unresolved??0, color:'text-orange-400', bg:'bg-orange-500/10', filter:'error' },
           { label:'Warn', desc:LEVEL_CFG['warn']?.desc ?? '', value:s.warn_unresolved??0, color:'text-amber-400', bg:'bg-amber-500/10', filter:'warn' },
-          { label:'Last hour', desc:'Errors in the last 60 minutes', value:s.last_hour??0, color:'text-white/60', bg:'bg-white/5', filter:'' },
-          { label:'Last 24h', desc:'Errors in the last 24 hours', value:s.last_day??0, color:'text-white/60', bg:'bg-white/5', filter:'' },
+          { label:'Last hour', desc:'Errors in the last 60 minutes', value:s.last_hour??0, color:'text-muted-foreground', bg:'bg-muted/30', filter:'' },
+          { label:'Last 24h', desc:'Errors in the last 24 hours', value:s.last_day??0, color:'text-muted-foreground', bg:'bg-muted/30', filter:'' },
         ].map(m => (
           <button key={m.label} onClick={()=>m.filter&&setLevel(level===m.filter?'':m.filter)}
-            className={cn('rounded-xl border border-white/10 p-3 text-left transition-all',m.bg,level===m.filter&&'border-white/20')}
+            className={cn('rounded-xl border border-border p-3 text-left transition-all',m.bg,level===m.filter&&'border-primary/30')}
             title={m.desc}>
-            <p className="text-xs text-white/40">{m.label}</p>
+            <p className="text-xs text-muted-foreground">{m.label}</p>
             <p className={cn('text-xl font-bold mt-0.5',m.color)}>{m.value}</p>
           </button>
         ))}
@@ -148,30 +148,30 @@ export default function ErrorsPage() {
       {/* Filters */}
       <div className="flex gap-3 flex-wrap items-center">
         <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30"/>
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50"/>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search errors..."
-            className="w-full pl-9 pr-4 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-violet-500"/>
+            className="w-full pl-9 pr-4 py-2 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500"/>
         </div>
-        <div className="flex rounded-xl border border-white/10 overflow-hidden">
+        <div className="flex rounded-xl border border-border overflow-hidden">
           {[['false','Unresolved'],['true','Resolved'],['','All']].map(([v,l]) => (
             <button key={v} onClick={()=>setResolved(v as string)}
-              className={cn('px-3 py-2 text-xs font-medium transition-colors',resolved===v?'bg-white/10 text-white':'text-white/40 hover:text-white')}>{l}</button>
+              className={cn('px-3 py-2 text-xs font-medium transition-colors',resolved===v?'bg-muted text-foreground':'text-muted-foreground hover:text-foreground')}>{l}</button>
           ))}
         </div>
-        {level && <button onClick={()=>setLevel('')} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/10 text-xs text-white/50 hover:text-white"><X className="w-3 h-3"/>Clear filter</button>}
-        <a href="/superadmin/docs" className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/10 text-xs text-white/40 hover:text-white transition-colors ml-auto">
+        {level && <button onClick={()=>setLevel('')} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-xs text-muted-foreground hover:text-foreground"><X className="w-3 h-3"/>Clear filter</button>}
+        <a href="/superadmin/docs" className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto">
           <Book className="w-3 h-3" /> DB Security Guide
         </a>
       </div>
 
       {/* Errors list */}
-      <div className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
-        {loading ? <p className="text-white/30 text-sm p-6 text-center">Loading...</p>
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        {loading ? <p className="text-muted-foreground text-sm p-6 text-center">Loading...</p>
         : fetchError ? (
           <div className="text-center py-12">
             <AlertTriangle className="w-10 h-10 text-red-500/60 mx-auto mb-3"/>
             <p className="text-red-400/80 text-sm font-medium mb-1">Failed to load errors</p>
-            <p className="text-white/30 text-xs mb-4">{fetchError}</p>
+            <p className="text-muted-foreground text-xs mb-4">{fetchError}</p>
             <button onClick={() => load()} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600/20 border border-violet-500/30 text-violet-400 text-xs font-medium hover:bg-violet-600/30 transition-colors mx-auto">
               <RefreshCw className="w-3 h-3"/>Retry
             </button>
@@ -179,28 +179,28 @@ export default function ErrorsPage() {
         ) : !errors.length ? (
           <div className="text-center py-12">
             <CheckCheck className="w-10 h-10 text-emerald-500/40 mx-auto mb-3"/>
-            <p className="text-white/40 text-sm">{resolved==='true'?'No resolved errors':'No unresolved errors — system is clean ✓'}</p>
+            <p className="text-muted-foreground text-sm">{resolved==='true'?'No resolved errors':'No unresolved errors — system is clean ✓'}</p>
           </div>
         ) : (
-          <div className="divide-y divide-white/5">
+          <div className="divide-y divide-border/50">
             {errors.map((e) => {
               const cfg = LEVEL_CFG[e.level] || LEVEL_CFG['info'];
               if (!cfg) return null;
               const isExpanded = expanded === e.id;
               return (
-                <div key={e.id} className="hover:bg-white/[0.02] transition-colors">
+                <div key={e.id} className="hover:bg-muted/20 transition-colors">
                   <div className="flex items-start gap-3 px-5 py-3.5 cursor-pointer" onClick={()=>setExpanded(isExpanded?null:e.id)}>
                     <div className={cn('w-3 h-3 rounded-full mt-1 shrink-0', cfg.dot)} title={cfg.desc}/>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={cn('text-xs font-bold px-2 py-0.5 rounded-full uppercase tracking-wide', cfg.badge)} title={cfg.desc}>{cfg.label}</span>
-                        {e.code && <span className="text-[10px] font-mono text-white/30">{e.code}</span>}
-                        {e.tenant_name && <span className="text-[10px] text-white/20">{e.tenant_name}</span>}
+                        {e.code && <span className="text-[10px] font-mono text-muted-foreground/50">{e.code}</span>}
+                        {e.tenant_name && <span className="text-[10px] text-muted-foreground/40">{e.tenant_name}</span>}
                         {e.resolved && <span className="text-[10px] bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded-full">Resolved</span>}
                       </div>
-                      <p className="text-xs text-white/40 mt-0.5 font-mono">{cfg.desc}</p>
-                      <p className="text-sm text-white/70 mt-0.5 truncate">{e.message}</p>
-                      <p className="text-xs text-white/25 mt-0.5">{formatRelativeTime(e.created_at)}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 font-mono">{cfg.desc}</p>
+                      <p className="text-sm text-foreground/70 mt-0.5 truncate">{e.message}</p>
+                      <p className="text-xs text-muted-foreground/50 mt-0.5">{formatRelativeTime(e.created_at)}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {!e.resolved && (
@@ -209,7 +209,7 @@ export default function ErrorsPage() {
                           {resolving===e.id?'...':'Resolve'}
                         </button>
                       )}
-                      {isExpanded ? <ChevronDown className="w-4 h-4 text-white/20"/> : <ChevronRight className="w-4 h-4 text-white/20"/>}
+                      {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground/40"/> : <ChevronRight className="w-4 h-4 text-muted-foreground/40"/>}
                     </div>
                   </div>
                   {isExpanded && (
@@ -225,7 +225,7 @@ export default function ErrorsPage() {
                           <div className="flex flex-wrap gap-2">
                             {source && <span className="text-[10px] font-mono text-cyan-400/70 bg-cyan-500/5 rounded-md px-2 py-1">source: {String(source)}</span>}
                             {method && <span className="text-[10px] font-mono text-violet-400/70 bg-violet-500/5 rounded-md px-2 py-1">{String(method)}</span>}
-                            {url && <span className="text-[10px] font-mono text-white/40 bg-white/5 rounded-md px-2 py-1 truncate max-w-[400px]">{String(url)}</span>}
+                            {url && <span className="text-[10px] font-mono text-muted-foreground bg-muted/50 rounded-md px-2 py-1 truncate max-w-[400px]">{String(url)}</span>}
                           </div>
                         );
                       })()}
@@ -233,7 +233,7 @@ export default function ErrorsPage() {
                       {e.stack && (
                         <div>
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] text-white/30 font-semibold uppercase tracking-wide">Stack Trace</p>
+                            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">Stack Trace</p>
                             <CopyButton text={e.stack} />
                           </div>
                           <pre className="text-[10px] font-mono text-red-400/70 bg-red-500/5 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">{e.stack}</pre>
@@ -242,14 +242,14 @@ export default function ErrorsPage() {
                       {e.context && Object.keys(e.context).length > 0 && (
                         <div>
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] text-white/30 font-semibold uppercase tracking-wide">Context</p>
+                            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">Context</p>
                             <CopyButton text={JSON.stringify(e.context, null, 2)} />
                           </div>
-                          <pre className="text-[10px] font-mono text-white/40 bg-white/5 rounded-lg p-3 overflow-x-auto">{JSON.stringify(e.context, null, 2)}</pre>
+                          <pre className="text-[10px] font-mono text-muted-foreground bg-muted/50 rounded-lg p-3 overflow-x-auto">{JSON.stringify(e.context, null, 2)}</pre>
                         </div>
                       )}
                       {!e.stack && (!e.context || Object.keys(e.context).length === 0) && (
-                        <p className="text-[10px] text-white/20 italic">No additional details available for this error.</p>
+                        <p className="text-[10px] text-muted-foreground/40 italic">No additional details available for this error.</p>
                       )}
                     </div>
                   )}

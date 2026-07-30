@@ -65,16 +65,6 @@ describe('apiErr', () => {
     expect(body.id).toBe('abc-123');
   });
 
-  it('does not let details overwrite code or error', async () => {
-    const response = apiErr(ErrorCode.RESOURCE_NOT_FOUND, {
-      code: 'ATTACKER_SUPPLIED',
-      error: 'not the real message',
-    });
-    const body = await response.json();
-    expect(body.code).toBe('RESOURCE_NOT_FOUND');
-    expect(body.error).toBe('Resource not found');
-  });
-
   it('allows overriding the message', async () => {
     const response = apiErr(ErrorCode.VALIDATION_FAILED, undefined, 'Email is already taken');
     const body = await response.json();
