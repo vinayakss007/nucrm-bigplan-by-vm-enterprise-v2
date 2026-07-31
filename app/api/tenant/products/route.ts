@@ -102,14 +102,14 @@ export async function POST(request: NextRequest) {
 
     fireWebhooks(ctx.tenantId, 'product.created', { id: inserted.id }).catch(e => logError({ error: e, context: "async-catch:[context]" }));
 
-    return NextResponse.json({
+    return NextResponse.json({ data: {
       id: inserted.id,
       name: inserted.name,
       description: inserted.description,
       sku: inserted.sku,
       base_price: inserted.basePrice,
       created_at: inserted.createdAt,
-    }, { status: 201 });
+    } }, { status: 201 });
   } catch (error: unknown) {
     console.error('[products POST]', error);
     return apiError(error);

@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     const totalRes = await db.select({ count: sql<number>`count(*)::int` }).from(serviceSubscriptions).where(eq(serviceSubscriptions.tenantId, tenantId));
     const total = totalRes[0]?.count ?? 0;
 
-    return NextResponse.json({ subscriptions: results, total, page, limit, totalPages: Math.ceil(total / limit) });
+    return NextResponse.json({ data: results, total, page, limit, totalPages: Math.ceil(total / limit) });
   } catch (error) {
     console.error('[subscriptions/GET]', error);
     return NextResponse.json({ error: 'Failed to fetch subscriptions' }, { status: 500 });
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
-    return NextResponse.json({ subscription }, { status: 201 });
+    return NextResponse.json({ data: subscription }, { status: 201 });
   } catch (error) {
     console.error('[subscriptions/POST]', error);
     return NextResponse.json({ error: 'Failed to create subscription' }, { status: 500 });

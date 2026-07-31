@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     const total = countResult?.count ?? 0;
 
     return NextResponse.json({ 
-      invoices: results, 
+      data: results, 
       total,
       page,
       limit,
@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ invoice }, { status: 201 });
+    return NextResponse.json({ data: invoice }, { status: 201 });
   } catch (error) {
     console.error('[invoices/POST]', error);
     return NextResponse.json({ error: 'Failed to create invoice' }, { status: 500 });

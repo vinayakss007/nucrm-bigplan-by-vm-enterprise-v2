@@ -354,7 +354,7 @@ export async function POST(request: NextRequest) {
 
     fireWebhooks(ctx.tenantId, 'lead.created', { id: newLead.id, email: v.email }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
-    return NextResponse.json(newLead, { status: 201 });
+    return NextResponse.json({ data: newLead }, { status: 201 });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

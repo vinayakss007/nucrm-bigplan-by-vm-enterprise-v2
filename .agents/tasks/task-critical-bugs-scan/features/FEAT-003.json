@@ -2,7 +2,7 @@
   "id": "FEAT-003",
   "type": "fix",
   "description": "Fix API response format inconsistency across tenant endpoints. Different endpoints return data in incompatible shapes, making it impossible for the frontend to have a single data-fetching layer. Contacts/Deals/Tasks return `{ data: [...], total }`, Invoices return `{ invoices: [...], total, page, totalPages }`, Subscriptions return `{ subscriptions: [...], total, page, totalPages }`, Products POST returns flat object `{ id, name, ... }` without wrapping, Leads POST returns flat object directly. This breaks frontend SWR/fetch abstractions and causes subtle UI bugs where components expect `response.data` but get undefined.",
-  "status": "pending",
+  "status": "in_progress",
   "steps": [
     "In app/api/tenant/invoices/route.ts GET handler: change `{ invoices: results, total, page, limit, totalPages }` to `{ data: results, total, page, limit, totalPages }` to match the standard pattern. Keep `page` and `totalPages` for backwards compat.",
     "In app/api/tenant/invoices/route.ts POST handler: change `{ invoice }` to `{ data: invoice }` to match contacts/deals POST pattern.",

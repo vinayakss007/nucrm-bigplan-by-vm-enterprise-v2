@@ -81,8 +81,8 @@ export default function DealRelatedPanel({ dealId }: { dealId: string }) {
       setFollowUps(Array.isArray(fuRes.data) ? (fuRes.data as FollowUpItem[]) : []);
       setQuotes(Array.isArray(qRes.quotes) ? (qRes.quotes as QuoteItem[]) : []);
       setInvoices(
-        Array.isArray(iRes.invoices)
-          ? (iRes.invoices as InvoiceItem[]).filter((inv) => inv.dealId === dealId)
+        Array.isArray(iRes.data)
+          ? (iRes.data as InvoiceItem[]).filter((inv) => inv.dealId === dealId)
           : []
       );
       setLoading(false);
