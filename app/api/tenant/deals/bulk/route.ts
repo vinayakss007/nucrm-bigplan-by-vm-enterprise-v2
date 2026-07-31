@@ -245,7 +245,7 @@ export async function POST(req: NextRequest) {
                 (
                   SELECT COALESCE(jsonb_agg(DISTINCT elem), '[]'::jsonb)
                   FROM jsonb_array_elements(
-                    COALESCE(${deals.metadata}->'tags', '[]'::jsonb) || ${tagJson}::jsonb
+                    COALESCE(${deals.metadata}->'tags', '[]'::jsonb) || jsonb_build_array(${tagJson}::jsonb)
                   ) AS elem
                 )
               )
