@@ -7,7 +7,8 @@ import { logger } from '@/lib/logger';
 
 /**
  * Get retry delay using exponential backoff.
- * attempt 1 = 5 min, attempt 2 = 30 min, attempt 3 = 2 hr, attempt 4 = 12 hr, attempt 5 = dead letter
+ * attempt 1 = 5 min, attempt 2 = 30 min, attempt 3 = 2 hr, attempt 4 = 12 hr, attempt 5 = 24 hr
+ * Returns -1 if attempt exceeds MAX_RETRIES (dead letter).
  */
 export function getRetryDelay(attempt: number): number {
   const delays = [
@@ -15,6 +16,7 @@ export function getRetryDelay(attempt: number): number {
     30 * 60 * 1000,      // 30 minutes
     2 * 60 * 60 * 1000,  // 2 hours
     12 * 60 * 60 * 1000, // 12 hours
+    24 * 60 * 60 * 1000, // 24 hours
   ];
 
   if (attempt <= 0) return delays[0]!;
@@ -22,7 +24,7 @@ export function getRetryDelay(attempt: number): number {
   return delays[attempt - 1]!;
 }
 
-const MAX_RETRIES = 5;
+export const MAX_RETRIES = 5;
 
 export type WebhookEvent =
   | 'contact.created' | 'contact.updated' | 'contact.deleted' | 'contact.restored'
@@ -125,6 +127,7 @@ export async function fireWebhooks(
                 status: 'failed',
                 responseStatus: res.status,
                 responseBody: responseBody.slice(0, 1000),
+                attempt: 1,
                 nextRetryAt: new Date(Date.now() + retryDelay),
               })
               .where(eq(webhookQueue.id, delivery.id));
@@ -150,6 +153,9 @@ export async function fireWebhooks(
   }
 }
 
+/** Maximum number of concurrent webhook retry requests */
+export const MAX_CONCURRENCY = 5;
+
 /** Retry failed webhook deliveries from the webhook_deliveries table */
 export async function retryFailedWebhooks(): Promise<number> {
   try {
@@ -165,61 +171,83 @@ export async function retryFailedWebhooks(): Promise<number> {
       
     if (!failed.length) return 0;
 
+    // Warn if backlog exceeds batch size (indicates cron is falling behind)
+    if (failed.length >= 50) {
+      logger.warn('[webhooks] Retry backlog exceeds batch size (50+). Cron may be falling behind.');
+    }
+
     let retried = 0;
-    for (const item of failed) {
-      try {
-        const headers = (item.headers as Record<string, string>) || {};
-        const res = await fetch(item.url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...headers },
-          body: JSON.stringify(item.payload),
-          signal: AbortSignal.timeout(10_000),
-        });
-        
-        if (res.ok) {
-          await db.update(webhookQueue)
-            .set({
-              status: 'success',
-              responseStatus: res.status,
-              deliveredAt: new Date(),
-            })
-            .where(eq(webhookQueue.id, item.id));
+
+    // Process in batches of MAX_CONCURRENCY to prevent thundering herd
+    for (let i = 0; i < failed.length; i += MAX_CONCURRENCY) {
+      const batch = failed.slice(i, i + MAX_CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map(item => retryWebhookItem(item))
+      );
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value) {
           retried++;
-        } else {
-          const nextAttempt = item.attempt + 1;
-          const retryDelay = getRetryDelay(nextAttempt);
-          const isDeadLetter = retryDelay < 0 || nextAttempt >= MAX_RETRIES;
-
-          await db.update(webhookQueue)
-            .set({
-              attempt: nextAttempt,
-              responseStatus: res.status,
-              status: isDeadLetter ? 'dead_letter' : 'failed',
-              nextRetryAt: isDeadLetter ? null : new Date(Date.now() + retryDelay),
-            })
-            .where(eq(webhookQueue.id, item.id));
         }
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
-        const nextAttempt = item.attempt + 1;
-        const retryDelay = getRetryDelay(nextAttempt);
-        const isDeadLetter = retryDelay < 0 || nextAttempt >= MAX_RETRIES;
-
-        await db.update(webhookQueue)
-          .set({
-            attempt: nextAttempt,
-            errorMessage: err.message,
-            status: isDeadLetter ? 'dead_letter' : 'failed',
-            nextRetryAt: isDeadLetter ? null : new Date(Date.now() + retryDelay),
-          })
-          .where(eq(webhookQueue.id, item.id));
       }
     }
+
     return retried;
   } catch (err: unknown) {
     logger.error('[webhooks] Retry failed', { error: err instanceof Error ? err.message : String(err) });
     return 0;
+  }
+}
+
+/** Process a single webhook retry item. Returns true if delivery succeeded. */
+async function retryWebhookItem(item: typeof webhookQueue.$inferSelect): Promise<boolean> {
+  try {
+    const headers = (item.headers as Record<string, string>) || {};
+    const res = await fetch(item.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(item.payload),
+      signal: AbortSignal.timeout(10_000),
+    });
+    
+    if (res.ok) {
+      await db.update(webhookQueue)
+        .set({
+          status: 'success',
+          responseStatus: res.status,
+          deliveredAt: new Date(),
+        })
+        .where(eq(webhookQueue.id, item.id));
+      return true;
+    } else {
+      const nextAttempt = item.attempt + 1;
+      const retryDelay = getRetryDelay(nextAttempt);
+      const isDeadLetter = retryDelay < 0 || nextAttempt > MAX_RETRIES;
+
+      await db.update(webhookQueue)
+        .set({
+          attempt: nextAttempt,
+          responseStatus: res.status,
+          status: isDeadLetter ? 'dead_letter' : 'failed',
+          nextRetryAt: isDeadLetter ? null : new Date(Date.now() + retryDelay),
+        })
+        .where(eq(webhookQueue.id, item.id));
+      return false;
+    }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (err: any) {
+    const nextAttempt = item.attempt + 1;
+    const retryDelay = getRetryDelay(nextAttempt);
+    const isDeadLetter = retryDelay < 0 || nextAttempt > MAX_RETRIES;
+
+    await db.update(webhookQueue)
+      .set({
+        attempt: nextAttempt,
+        errorMessage: err.message,
+        status: isDeadLetter ? 'dead_letter' : 'failed',
+        nextRetryAt: isDeadLetter ? null : new Date(Date.now() + retryDelay),
+      })
+      .where(eq(webhookQueue.id, item.id));
+    return false;
   }
 }
