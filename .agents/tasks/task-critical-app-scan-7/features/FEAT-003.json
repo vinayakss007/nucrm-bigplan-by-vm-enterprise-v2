@@ -1,0 +1,44 @@
+{
+  "id": "FEAT-003",
+  "type": "fix",
+  "description": "Fix connection pool exhaustion, Redis failure mode, form builder XSS/field validation, lead scoring race conditions, contract lifecycle gaps, cursor pagination stability, batch job recovery, and drag-to-reorder consistency",
+  "status": "in_progress",
+  "steps": [
+    "1. CONNECTION POOL - In lib/db/pool.ts: The pool has connectionTimeoutMillis=30000 (30s) but no queue limit. When pool is full, requests queue indefinitely. Add a maxWaitingClients option or implement a wrapper that rejects with a clear error after N requests are waiting (e.g., 50). Also add pool exhaustion detection: if waitingCount > totalCount * 2, log a critical warning.",
+    "2. CONNECTION POOL - In lib/db/safe-connection.ts safeTransaction(): The client.release() in the finally block does not pass the error to release(err), meaning if the query failed with a broken connection, the bad connection goes back to the pool. Fix: pass the error to client.release(err instanceof Error ? err : undefined) so pg can destroy the broken connection instead of returning it.",
+    "3. REDIS FAILURE - In lib/cache/index.ts getRedisClient(): When Redis URL is set but Redis is unreachable, the function creates a Redis client that will emit errors but the code returns it. Later functions check redis.status === 'ready' which will be false, falling through to memory cache. BUT the getOrSet/acquireLock functions call getRedisClient() on every invocation, potentially creating multiple failed Redis instances. Fix: add a circuit breaker pattern - after 3 consecutive Redis failures, stop attempting Redis for 60 seconds and use memory fallback directly.",
+    "4. REDIS FAILURE - In lib/cache/index.ts: The retryStrategy returns null after 3 attempts, which disconnects Redis permanently. But there is no reconnection logic. If Redis comes back up, the app stays on memory cache forever. Fix: add a reconnect interval that periodically checks if Redis is available again (every 30s), and switch back when it is.",
+    "5. FORM BUILDER XSS - In app/api/forms/submit/route.ts: Form submission data (formData) is stored directly in the database without sanitization. When displayed back in the UI, field values could contain XSS payloads. Add sanitization for all string values in formData using a simple HTML entity encoder before storage.",
+    "6. FORM BUILDER FIELD VALIDATION - In lib/api/schemas.ts createFormSchema: The fields array validates id, label, type but does NOT check for duplicate field IDs. Two fields with the same 'id' would overwrite each other in the submission data. Add a .refine() that ensures all field IDs are unique within the form.",
+    "7. LEAD SCORING RACE CONDITIONS - In lib/lead-scoring/auto-recalculate.ts adjustLeadScore(): Uses a raw SQL UPDATE with GREATEST/LEAST which is atomic for a single concurrent write, but if multiple events fire simultaneously (e.g., email_opened + form_submitted), the final score depends on execution order because each reads the current value. This is actually safe due to SQL atomicity. BUT in lib/ai/scoring.ts scoreLead(): The transaction reads the contact, calls AI, then writes. If two scoreLead calls run concurrently for the same contact, the second one overwrites the first. Add SELECT FOR UPDATE on the contact row at the start of the transaction to serialize concurrent scoring.",
+    "8. CONTRACT LIFECYCLE - In app/api/cron/contract-renewal-check/route.ts: The query to find expiring contracts has a bug: eq(contracts.tenantId, contracts.tenantId) which is always true - it compares the column to itself instead of filtering by a specific tenant. This means ALL active contracts are returned regardless of tenant, causing cross-tenant data leakage in notifications. Fix by removing this redundant (and incorrect) filter since the query already has other valid filters.",
+    "9. CONTRACT LIFECYCLE - In app/api/tenant/contracts/[id]/route.ts PUT handler: Status transitions are not validated. A contract can go from 'expired' back to 'active' or from 'terminated' to 'draft'. Add status transition validation: only allow valid transitions (draft->active, active->suspended, active->terminated, active->expired, suspended->active, draft->cancelled).",
+    "10. CURSOR PAGINATION - In lib/api/cursor-pagination.ts: The cursor uses base64url encoding of {v, id}. If a record is deleted between pages, the cursor still works (it uses > comparison). But if many records with the SAME sort value are inserted, and the cursor's sort value matches, items can be skipped because the tie-breaking is on 'id' (UUID) which is not sequential. Document this limitation and add a warning in the function JSDoc. Also add validation: if decodeCursor returns a cursor but the 'id' field is empty string, treat it as invalid.",
+    "11. BATCH JOB RECOVERY - In app/api/tenant/email/bulk/route.ts: If the bulk email loop crashes halfway (e.g., server restart), there is no tracking of which emails were already sent. The job will be retried from scratch, causing duplicate sends. Fix: before the send loop, insert a batch job record with total/completed counts. After each successful send, increment the completed count. On retry, skip already-processed contacts by checking the batch record.",
+    "12. BATCH JOB RECOVERY - In app/api/cron/process-sequences/route.ts: The limit(100) fetch means if there are thousands of due enrollments, only 100 are processed per cron run. If the cron runs every minute but processing takes longer, the same enrollments could be picked up by a concurrent cron run (no lock). Add a distributed lock using the cache.acquireLock pattern before processing sequences.",
+    "13. DRAG-TO-REORDER - In app/api/tenant/pipelines/[id]/route.ts PATCH handler: When reordering stages, the code uses the array index as the order value (s.order ?? idx). But if two concurrent PATCH requests reorder stages simultaneously, there is no locking between them (the concurrency guard is on the pipeline row, but stages are updated individually). If both read the same state and write different orders, the result is non-deterministic. Fix: wrap the stage updates in a serializable transaction isolation level or use the optimistic concurrency guard on each stage row.",
+    "14. Add comprehensive unit tests in tests/unit/scan7-system-resilience.test.ts covering: pool exhaustion detection, Redis reconnection logic, form field duplicate ID validation, contract status transitions, batch job idempotency tracking, and sequence processor locking."
+  ],
+  "acceptance_criteria": [
+    "Pool wrapper logs critical warnings on pool exhaustion and rejects after queue limit",
+    "Broken connections are properly released with error flag",
+    "Redis cache has circuit breaker that falls back to memory after consecutive failures",
+    "Redis reconnection is attempted periodically after disconnection",
+    "Form submissions have string values sanitized against XSS",
+    "Form schema rejects duplicate field IDs",
+    "Lead scoring uses SELECT FOR UPDATE to prevent concurrent overwrites",
+    "Contract renewal cron does not have the self-referencing tenant filter bug",
+    "Contract status transitions are validated",
+    "Cursor pagination handles empty-string cursor IDs gracefully",
+    "Bulk email tracks progress for crash recovery",
+    "Sequence processor acquires distributed lock before processing",
+    "Pipeline stage reorder uses appropriate isolation",
+    "All new unit tests pass"
+  ],
+  "verification": [
+    "npx tsc --noEmit --pretty",
+    "npx vitest run tests/unit/scan7-system-resilience.test.ts"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

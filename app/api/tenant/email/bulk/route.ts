@@ -45,20 +45,27 @@ export async function POST(req: NextRequest) {
     let sent = 0, failed = 0;
     const errors: string[] = [];
 
-    for (const ent of ents) {
-      if (!ent.email) { failed++; errors.push(`No email for ${ent.id}`); continue; }
+    try {
+      for (const ent of ents) {
+        if (!ent.email) { failed++; errors.push(`No email for ${ent.id}`); continue; }
 
-      const vars: Record<string, string> = {
-        first_name: ent.firstName || '',
-        last_name: ent.lastName || '',
-        email: ent.email,
-      };
+        const vars: Record<string, string> = {
+          first_name: ent.firstName || '',
+          last_name: ent.lastName || '',
+          email: ent.email,
+        };
 
-      const subject = renderTemplate(template.subject, vars);
-      const html = renderTemplate(template.bodyHtml, vars);
+        const subject = renderTemplate(template.subject, vars);
+        const html = renderTemplate(template.bodyHtml, vars);
 
-      const result = await sendEmail({ to: ent.email, subject, html });
-      if (result.success) sent++; else { failed++; errors.push(`${ent.email}: ${result.error}`); }
+        const result = await sendEmail({ to: ent.email, subject, html });
+        if (result.success) sent++; else { failed++; errors.push(`${ent.email}: ${result.error}`); }
+      }
+    } catch (loopErr) {
+      // Unexpected error mid-loop (e.g., server issue). We still return
+      // partial results so the caller knows what was sent.
+      console.error('[email bulk] Error during send loop:', loopErr);
+      errors.push(`Batch interrupted: ${loopErr instanceof Error ? loopErr.message : 'Unknown error'}`);
     }
 
     await logAudit({

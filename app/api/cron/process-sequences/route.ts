@@ -8,10 +8,20 @@ import { sanitizeHTMLServer } from '@/lib/sanitize';
 import { sequenceEnrollments, sequenceSteps, tasks, sequenceStepLogs } from '@/drizzle/schema';
 import { eq, and, lte, sql } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
+import { acquireLock, releaseLock } from '@/lib/cache';
+
+const SEQUENCE_LOCK_KEY = 'cron:process-sequences';
+const SEQUENCE_LOCK_TTL = 120; // 2 minutes
 
 export async function POST(req: NextRequest) {
   if (!verifySecret(req.headers.get('x-cron-secret'), process.env.CRON_SECRET))
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // Acquire distributed lock to prevent concurrent cron runs
+  const lock = await acquireLock(SEQUENCE_LOCK_KEY, SEQUENCE_LOCK_TTL);
+  if (!lock.acquired) {
+    return NextResponse.json({ ok: true, skipped: true, reason: 'Another instance running' });
+  }
 
   try {
     // 1. Fetch enrollments that are due
@@ -232,5 +242,7 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error('[Sequence Processor] Fatal error:', err.message);
     return apiError(err);
+  } finally {
+    await releaseLock(SEQUENCE_LOCK_KEY, lock.value);
   }
 }
