@@ -39,9 +39,12 @@ export async function POST(req: NextRequest) {
       case 'email.bounced':
       case 'email.complained': {
         if (email) {
-          await db.transaction(async (tx) => {
+          // Steps 1 and 2 stay atomic with each other: a contact flagged
+          // do-not-contact whose enrollments were left active would carry on
+          // sending, so the flag and the cancellation must land together.
+          const affectedContacts = await db.transaction(async (tx) => {
             // 1. Find and update contacts
-            const affectedContacts = await tx
+            const updatedContacts = await tx
               .update(contacts)
               .set({ 
                 doNotContact: true, 
@@ -58,8 +61,8 @@ export async function POST(req: NextRequest) {
                 firstName: contacts.firstName 
               });
 
-            if (affectedContacts.length > 0) {
-              const contactIds = affectedContacts.map(c => c.id);
+            if (updatedContacts.length > 0) {
+              const contactIds = updatedContacts.map(c => c.id);
 
               // 2. Cancel active sequence enrollments
               await tx
@@ -72,25 +75,41 @@ export async function POST(req: NextRequest) {
                   inArray(sequenceEnrollments.contactId, contactIds),
                   eq(sequenceEnrollments.status, 'active')
                 ));
-
-              // 3. Log activities
-              const activityInserts = affectedContacts.map(contact => ({
-                tenantId: contact.tenantId,
-                contactId: contact.id,
-                type: 'note',
-                description: event.type === 'email.bounced'
-                  ? `Email bounced — do not contact flag set automatically`
-                  : `Email complaint received — do not contact flag set automatically`,
-                entityType: 'contact',
-                entityId: contact.id,
-                action: event.type
-              }));
-
-              await tx.insert(activities).values(activityInserts as unknown as typeof activities.$inferInsert[]);
-              
-              console.log(`[resend-webhook] ${event.type}: ${affectedContacts.length} contact(s) marked DNC for ${email}`);
             }
+
+            return updatedContacts;
           });
+
+          if (affectedContacts.length > 0) {
+            console.log(`[resend-webhook] ${event.type}: ${affectedContacts.length} contact(s) marked DNC for ${email}`);
+
+            // 3. Log activities — deliberately AFTER the commit above and
+            // non-fatal. This insert used to run inside the transaction with a
+            // `type: 'note'` key; `activities` has no `type` column, so Drizzle
+            // dropped it and the NOT NULL `event_type` was never supplied. The
+            // resulting constraint violation aborted the transaction, undoing
+            // the do-not-contact flag and the enrollment cancellation on every
+            // single bounce and complaint. Suppressing a bounce is the
+            // compliance-critical part; the activity row is bookkeeping, so a
+            // future failure here is logged and nothing is rolled back.
+            const activityInserts = affectedContacts.map(contact => ({
+              tenantId: contact.tenantId,
+              contactId: contact.id,
+              eventType: 'note',
+              description: event.type === 'email.bounced'
+                ? `Email bounced — do not contact flag set automatically`
+                : `Email complaint received — do not contact flag set automatically`,
+              entityType: 'contact',
+              entityId: contact.id,
+              action: event.type
+            }));
+
+            try {
+              await db.insert(activities).values(activityInserts);
+            } catch (activityErr) {
+              await logError({ error: activityErr, context: 'resend-webhook:activity-log' });
+            }
+          }
         }
         break;
       }
