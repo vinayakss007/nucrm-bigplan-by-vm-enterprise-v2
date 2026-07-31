@@ -24,6 +24,7 @@ vi.mock('@/drizzle/db', () => ({
         where: vi.fn(),
       })),
     })),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     transaction: vi.fn((cb: (tx: any) => Promise<any>) => cb({
       update: mockTxUpdate,
       insert: vi.fn(() => ({
@@ -226,7 +227,7 @@ describe('webhooks', () => {
       vi.unstubAllGlobals();
     });
 
-    it('updates delivery to success on 2xx response', async () => {
+    it('updates delivery to delivered on 2xx response', async () => {
       const whereFn = vi.fn().mockResolvedValue([
         { id: 'hook-1', name: 'OK Hook', config: { url: 'https://example.com/ok', events: [] }, isActive: true, type: 'webhook', tenantId: 'tenant-1', lastUsedAt: null },
       ]);
@@ -252,7 +253,7 @@ describe('webhooks', () => {
       await fireWebhooks('tenant-1', 'contact.created', {});
 
       expect(txSetFn).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'success', responseStatus: 200 }),
+        expect.objectContaining({ status: 'delivered', responseStatus: 200 }),
       );
 
       vi.unstubAllGlobals();
@@ -375,7 +376,7 @@ describe('webhooks', () => {
       expect(result).toBe(0);
     });
 
-    it('retries failed webhook and marks success', async () => {
+    it('retries failed webhook and marks delivered', async () => {
       const limitFn = vi.fn().mockResolvedValue([
         {
           id: 'delivery-1',
@@ -414,7 +415,7 @@ describe('webhooks', () => {
 
       expect(result).toBe(1);
       expect(setFn).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'success', responseStatus: 200 }),
+        expect.objectContaining({ status: 'delivered', responseStatus: 200 }),
       );
 
       vi.unstubAllGlobals();
