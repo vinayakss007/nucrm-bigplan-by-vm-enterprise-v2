@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "fix",
   "description": "Fix CSV formula injection in exports, SSE stream resource leaks, workflow executor infinite loop on cyclic graphs, deals import invalid date crash, automation condition operator defaulting to match-all, and import modal missing file size validation",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "1. CSV Formula Injection in exports: In lib/export/index.ts, the escapeCSV() function does not strip leading formula characters (=, +, -, @, \\t, \\r). A contact with firstName '=CMD(\"calc\")' would be exported as a dangerous formula. Also fix the duplicate escapeCSV in app/api/tenant/deals/export/route.ts. Prefix any cell value starting with =, +, -, @, \\t, or \\r with a single quote to neutralize formula injection.",
     "2. SSE Notification Stream resource leak: In app/api/tenant/notifications/stream/route.ts, when the client disconnects (abort signal fires), clearInterval is called but controller.close() is never called. This means the ReadableStream stays open server-side. Add controller.close() in the abort handler after clearing intervals. Also, the sendUnread function catches errors but does not close the controller on persistent DB failures - add a fail counter that closes the stream after 3 consecutive DB errors.",
@@ -31,5 +31,5 @@
     "npx vitest run tests/unit/workflows.test.ts --reporter=verbose"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 8 bugs fixed and verified. TypeCheck passes clean. All 4213 unit tests pass across 250 test files. The escapeCSV formula injection fix properly handles the interaction with CSV quoting (single-quote prefix is applied before the CSV quoting step). The default:false change in engine.ts did not break any existing automation-engine tests because the existing tests only use valid operators."
 }
