@@ -184,8 +184,8 @@ describe('needsCsrfValidation', () => {
     expect(needsCsrfValidation('POST', '/api/auth/signup')).toBe(false);
   });
 
-  it('returns false for forgot-password', () => {
-    expect(needsCsrfValidation('POST', '/api/auth/forgot-password')).toBe(false);
+  it('returns true for forgot-password (requires CSRF to prevent cross-site reset spam)', () => {
+    expect(needsCsrfValidation('POST', '/api/auth/forgot-password')).toBe(true);
   });
 
   it('returns false for resend-verification', () => {
