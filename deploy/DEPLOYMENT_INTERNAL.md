@@ -163,12 +163,37 @@ bash deploy/scripts/health-check.sh
 
 ## Monitoring Dashboard URLs
 
-| Dashboard | URL | Credentials |
-|-----------|-----|-------------|
-| Grafana | http://SERVER_IP:3001 | admin / `GRAFANA_ADMIN_PASSWORD` |
-| Prometheus | http://SERVER_IP:9090 | none (localhost only) |
-| MinIO Console | http://SERVER_IP:9001 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` |
+**None of the monitoring services are reachable at `SERVER_IP`.** Every one of them
+is published to `127.0.0.1` in `docker-compose.production.yml`, and UFW allows only
+22, 80 and 443 inbound. Open an SSH tunnel first, then use the localhost URL.
+
+```bash
+# One tunnel for everything (leave it running in its own terminal)
+ssh -N \
+  -L 3001:127.0.0.1:3001 \
+  -L 9090:127.0.0.1:9090 \
+  -L 9093:127.0.0.1:9093 \
+  -L 3100:127.0.0.1:3100 \
+  -L 9001:127.0.0.1:9001 \
+  DEPLOY_USER@SERVER_IP
+```
+
+| Dashboard | URL (with the tunnel up) | Credentials |
+|-----------|--------------------------|-------------|
+| Grafana | http://localhost:3001 | `GRAFANA_ADMIN_USER` (default `admin`) / `GRAFANA_ADMIN_PASSWORD` |
+| Prometheus | http://localhost:9090 | none — the tunnel *is* the access control |
+| Alertmanager | http://localhost:9093 | none |
+| Loki | http://localhost:3100 | none — queried through Grafana, rarely direct |
+| MinIO Console | http://localhost:9001 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` |
 | Sentry | https://sentry.io/organizations/YOUR_ORG/ | Your Sentry account |
+
+Prometheus, Alertmanager and Loki have **no authentication of their own**. They are
+safe only because they are not listening on a public interface. Do not publish them
+by changing the port bindings or by adding UFW rules; anyone who reaches Prometheus
+can read every metric, and anyone who reaches Alertmanager can silence alerts.
+
+If the team outgrows tunnels, put the services behind an authenticating proxy
+(Cloudflare Access, Tailscale, or nginx with OIDC) rather than opening the ports.
 
 ### Key Grafana Metrics to Watch
 

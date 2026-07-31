@@ -8,6 +8,10 @@ vi.mock('@/lib/errors', () => ({
   logError: vi.fn(),
 }));
 
+vi.mock('@/lib/critical-error-alert', () => ({
+  sendCriticalErrorAlert: vi.fn().mockResolvedValue(undefined),
+}));
+
 describe('apiError', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -169,5 +173,66 @@ describe('forbidden', () => {
     const response = forbidden('Not allowed');
     const json = await response.json();
     expect(json.error).toBe('Not allowed');
+  });
+});
+
+describe('apiError — ConcurrencyError', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.NODE_ENV = 'test';
+  });
+
+  it('answers 409, not the 500 default', async () => {
+    const { apiError } = await import('@/lib/api-error');
+    const { ConcurrencyError } = await import('@/lib/concurrency');
+
+    const response = apiError(new ConcurrencyError('Task'));
+
+    expect(response.status).toBe(409);
+  });
+
+  it('keeps the actionable message instead of hiding it as an internal error', async () => {
+    const { apiError } = await import('@/lib/api-error');
+    const { ConcurrencyError } = await import('@/lib/concurrency');
+
+    const response = apiError(new ConcurrencyError('Contact'));
+    const json = await response.json();
+
+    expect(json.error).toContain('Contact');
+    expect(json.error).toContain('refresh');
+    expect(json.error).not.toBe('Internal server error');
+  });
+
+  it('does not report a save conflict to Sentry or page anyone', async () => {
+    // The whole point: two users saving the same record is normal, and used to
+    // fire both of these on every conflict.
+    const Sentry = await import('@sentry/nextjs');
+    const { sendCriticalErrorAlert } = await import('@/lib/critical-error-alert');
+    const { apiError } = await import('@/lib/api-error');
+    const { ConcurrencyError } = await import('@/lib/concurrency');
+
+    apiError(new ConcurrencyError('Deal'));
+
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+    expect(sendCriticalErrorAlert).not.toHaveBeenCalled();
+  });
+
+  it('still reports a genuine fault to Sentry', async () => {
+    const Sentry = await import('@sentry/nextjs');
+    const { apiError } = await import('@/lib/api-error');
+
+    apiError(new Error('database is on fire'));
+
+    expect(Sentry.captureException).toHaveBeenCalled();
+  });
+
+  it('ignores the caller\'s hardcoded 500 the way the InvalidJsonBody branch does', async () => {
+    const { apiError } = await import('@/lib/api-error');
+    const { ConcurrencyError } = await import('@/lib/concurrency');
+
+    // Routes call apiError(err) from a catch block, which defaults status to 500.
+    const response = apiError(new ConcurrencyError('Lead'), 'Internal server error', 500);
+
+    expect(response.status).toBe(409);
   });
 });

@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 export async function GET(
   request: NextRequest,
@@ -55,6 +56,11 @@ export async function PATCH(
       taxRate, taxable, currency, durationMinutes, durationHours, 
       imageUrl, tags, isActive, contactId, companyId 
     } = body;
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, services, id, tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const [service] = await db.update(services)
       .set({
