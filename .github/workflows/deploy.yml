@@ -40,7 +40,7 @@ jobs:
 
     steps:
       # github.sha is not the commit CI tested, so pin everything to head_sha.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
