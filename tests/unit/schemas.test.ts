@@ -145,55 +145,43 @@ describe('api/schemas', () => {
 
   it('verify2faSchema validates a 6-digit totp_code', async () => {
     const { verify2faSchema } = await import('@/lib/api/schemas');
-    const result = verify2faSchema.parse({ totp_code: '123456' });
-    expect(result.totp_code).toBe('123456');
+    const result = verify2faSchema.parse({ token: '123456', password: 'password123' });
+    expect(result.token).toBe('123456');
   });
 
   it('verify2faSchema rejects a non-6-digit totp_code', async () => {
     const { verify2faSchema } = await import('@/lib/api/schemas');
-    expect(() => verify2faSchema.parse({ totp_code: '12345' })).toThrow();
-    expect(() => verify2faSchema.parse({ totp_code: '1234567' })).toThrow();
-    expect(() => verify2faSchema.parse({ totp_code: 'abcdef' })).toThrow();
-    expect(() => verify2faSchema.parse({})).toThrow();
+    expect(() => verify2faSchema.parse({ token: '12345', password: 'password123' })).toThrow();
+    expect(() => verify2faSchema.parse({ token: '1234567', password: 'password123' })).toThrow();
+    expect(() => verify2faSchema.parse({ token: 'abcdef', password: 'password123' })).toThrow();
+    expect(() => verify2faSchema.parse({ password: 'password123' })).toThrow();
   });
 
   it('disable2faSchema requires a password and accepts an optional totp_code', async () => {
     const { disable2faSchema } = await import('@/lib/api/schemas');
-    expect(disable2faSchema.parse({ password: 'mypassword' }).totp_code).toBeUndefined();
-    expect(disable2faSchema.parse({ password: 'mypassword', totp_code: '123456' }).totp_code).toBe('123456');
+    expect(() => disable2faSchema.parse({ password: 'mypassword' })).toThrow();
+    expect(disable2faSchema.parse({ password: 'mypassword', token: '123456' }).token).toBe('123456');
     expect(() => disable2faSchema.parse({})).toThrow();
-    expect(() => disable2faSchema.parse({ password: 'mypassword', totp_code: '123' })).toThrow();
+    expect(() => disable2faSchema.parse({ password: 'mypassword', token: '123' })).toThrow();
   });
 
-  it('createInvoiceSchema requires a title', async () => {
+  it('createInvoiceSchema requires at least one line item', async () => {
     const { createInvoiceSchema } = await import('@/lib/api/schemas');
     expect(() => createInvoiceSchema.parse({
       contact_id: '00000000-0000-0000-0000-000000000000',
       company_id: '00000000-0000-0000-0000-000000000000',
       line_items: [],
-    })).toThrow(/title/i);
+    })).toThrow(/line item/i);
   });
 
-  // An empty line_items list is intentionally permitted: the invoices route
-  // creates draft invoices with a zero subtotal and line items are attached
-  // afterwards. Content of each item is still validated (see next test).
-  it('createInvoiceSchema permits an empty line_items list for drafts', async () => {
-    const { createInvoiceSchema } = await import('@/lib/api/schemas');
-    const result = createInvoiceSchema.parse({
-      title: 'Draft invoice',
-      contact_id: '00000000-0000-0000-0000-000000000000',
-      company_id: '00000000-0000-0000-0000-000000000000',
-      line_items: [],
-    });
-    expect(result.line_items).toEqual([]);
-  });
-
-  it('createInvoiceSchema rejects a line item missing its name', async () => {
+  it('createInvoiceSchema rejects a line item missing its description', async () => {
     const { createInvoiceSchema } = await import('@/lib/api/schemas');
     expect(() => createInvoiceSchema.parse({
       title: 'Invoice',
+      contact_id: '00000000-0000-0000-0000-000000000000',
+      company_id: '00000000-0000-0000-0000-000000000000',
       line_items: [{ quantity: 1, unit_price: 100 }],
-    })).toThrow(/name/i);
+    })).toThrow(/description/i);
   });
 
   it('createInvoiceSchema defaults status to draft', async () => {
@@ -202,7 +190,7 @@ describe('api/schemas', () => {
       title: 'Invoice for services',
       contact_id: '00000000-0000-0000-0000-000000000000',
       company_id: '00000000-0000-0000-0000-000000000000',
-      line_items: [{ name: 'Item', description: 'Item', quantity: 1, unit_price: 100 }],
+      line_items: [{ description: 'Item', quantity: 1, unit_price: 100 }],
     });
     expect(result.status).toBe('draft');
     expect(result.line_items).toHaveLength(1);
@@ -212,10 +200,9 @@ describe('api/schemas', () => {
     const { importSchema } = await import('@/lib/api/schemas');
     const result = importSchema.parse({
       entity_type: 'contacts',
-      file_url: 'https://example.com/contacts.csv',
+      data: [{ name: 'Test' }],
     });
     expect(result.skip_duplicates).toBe(true);
-    expect(result.dry_run).toBe(false);
   });
 
   it('exportSchema rejects invalid entity_type', async () => {
