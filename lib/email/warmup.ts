@@ -10,6 +10,15 @@ import { sendEmail } from '@/lib/email/service';
 
 // ─── Warm-Up Email Templates ──────────────────────────────────────────────
 
+/** Bounce rate threshold: pause warmup if bounce rate exceeds 5% */
+export const WARMUP_BOUNCE_RATE_THRESHOLD = 0.05;
+
+/** Calculate bounce rate as a decimal (0.0 - 1.0) */
+export function calculateBounceRate(bounced: number, totalSent: number): number {
+  if (totalSent <= 0) return 0;
+  return bounced / totalSent;
+}
+
 const WARM_UP_SUBJECTS = [
   'Quick check-in',
   'Following up on our connection',
@@ -50,7 +59,11 @@ export async function processWarmUp(): Promise<WarmUpResult> {
                  WHERE l.config_id = ${emailWarmupConfigs.id}
                    AND l.direction = 'outbound'
                    AND l.created_at >= CURRENT_DATE
-                   AND l.status = 'sent')`
+                   AND l.status = 'sent')`,
+      totalBounced: sql<number>`(SELECT count(*)::int FROM ${emailWarmupLogs} l
+                 WHERE l.config_id = ${emailWarmupConfigs.id}
+                   AND l.direction = 'outbound'
+                   AND l.status = 'failed')`
     })
     .from(emailWarmupConfigs)
     .innerJoin(tenants, eq(tenants.id, emailWarmupConfigs.tenantId))
@@ -59,8 +72,21 @@ export async function processWarmUp(): Promise<WarmUpResult> {
       eq(tenants.status, 'active')
     ));
 
-    for (const { config, sentToday } of configsWithSentToday) {
+    for (const { config, sentToday, totalBounced } of configsWithSentToday) {
       try {
+        // Defense-in-depth: check bounce rate before processing even if isActive is true
+        const bounceRate = calculateBounceRate(totalBounced, config.totalSent || 0);
+        if (bounceRate > WARMUP_BOUNCE_RATE_THRESHOLD) {
+          console.warn(
+            `[email-warmup] CRITICAL: Bounce rate ${(bounceRate * 100).toFixed(1)}% exceeds ${WARMUP_BOUNCE_RATE_THRESHOLD * 100}% threshold for config ${config.id}. Pausing warmup.`
+          );
+          await db.update(emailWarmupConfigs)
+            .set({ isActive: false })
+            .where(eq(emailWarmupConfigs.id, config.id));
+          result.errors.push(`Config ${config.id} paused: bounce rate ${(bounceRate * 100).toFixed(1)}% exceeds threshold`);
+          continue;
+        }
+
         // Check if daily limit reached
         if (sentToday >= (config.dailyLimitCurrent || 0)) {
           continue;

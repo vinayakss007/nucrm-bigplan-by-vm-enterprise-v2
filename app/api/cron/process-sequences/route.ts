@@ -104,6 +104,22 @@ export async function POST(req: NextRequest) {
               success = false;
               errorMessage = err.message;
             }
+          } else if (step.stepType === 'email' && enrollment.contact?.doNotContact) {
+            // Contact has doNotContact flag - skip this email step and log it
+            console.log(`[Sequence Processor] Skipping email step for enrollment ${enrollment.id}: contact ${enrollment.contactId} has doNotContact=true`);
+            await tx.update(sequenceStepLogs)
+              .set({
+                status: 'skipped',
+                executedAt: new Date(),
+                errorMessage: 'Contact has doNotContact flag set - email step skipped',
+                updatedAt: new Date()
+              })
+              .where(and(
+                eq(sequenceStepLogs.enrollmentId, enrollment.id),
+                eq(sequenceStepLogs.stepId, step.id),
+                eq(sequenceStepLogs.status, 'pending')
+              ));
+            // Do not mark as failed - continue to advance to next step
           } else if (step.stepType === 'task') {
             try {
               await tx.insert(tasks).values({

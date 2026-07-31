@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-002",
+  "type": "fix",
+  "description": "Fix email deliverability: missing List-Unsubscribe header (RFC 8058), no hard vs soft bounce differentiation, warmup pool not tracking sender reputation metrics, bulk email not checking doNotContact flag",
+  "status": "in_progress",
+  "steps": [
+    "1. In lib/email/service.ts sendViaResend(): Add RFC 8058 compliant List-Unsubscribe and List-Unsubscribe-Post headers to all outbound emails. The unsubscribe URL should be {APP_URL}/api/unsubscribe?contact={contactId}&token={hmac}. Create a helper function buildUnsubscribeHeaders(contactId: string) that generates these headers.",
+    "2. In app/api/webhooks/resend/route.ts: Differentiate between hard bounces (email.bounced) and soft bounces. Hard bounces should set doNotContact=true immediately. Soft bounces (temporary failures) should increment a bounce counter and only set doNotContact after 3 soft bounces within 7 days. Add a bounceCount and lastBounceAt to contact metadata tracking.",
+    "3. In lib/email/warmup.ts processWarmUp(): Track sender reputation metrics - calculate and store reply rate, bounce rate, and open rate in the warmup config. If bounce rate exceeds 5%, automatically pause the warmup and log a critical warning. Currently it only tracks totalSent and totalReplied but not bounces.",
+    "4. In app/api/tenant/email/bulk/route.ts POST handler: The loop sends to all contacts but does NOT check the doNotContact flag before sending. Add a filter: isNull(contacts.doNotContact) or eq(contacts.doNotContact, false) to the query that fetches contacts. Same fix needed in app/api/tenant/email/templates/bulk-send/route.ts.",
+    "5. In app/api/cron/process-sequences/route.ts: The code checks enrollment.contact?.doNotContact before sending, which is correct. But it does NOT log when it skips a contact due to DNC. Add logging and mark the step as 'skipped' in the step log rather than silently continuing.",
+    "6. Add unit tests in tests/unit/email-deliverability-fixes.test.ts testing: unsubscribe header generation, bounce differentiation logic, DNC filtering in bulk send, and warmup pause on high bounce rate."
+  ],
+  "acceptance_criteria": [
+    "All outbound emails include List-Unsubscribe and List-Unsubscribe-Post headers per RFC 8058",
+    "Hard bounces immediately mark contact as doNotContact",
+    "Soft bounces are tracked and only escalate to doNotContact after 3 within 7 days",
+    "Email warmup pauses automatically when bounce rate exceeds 5%",
+    "Bulk email endpoints filter out doNotContact contacts before sending",
+    "Sequence processor logs skipped DNC contacts",
+    "All new unit tests pass"
+  ],
+  "verification": [
+    "npx tsc --noEmit --pretty",
+    "npx vitest run tests/unit/email-deliverability-fixes.test.ts"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
