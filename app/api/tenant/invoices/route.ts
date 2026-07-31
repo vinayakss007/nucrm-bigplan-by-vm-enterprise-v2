@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
     const results = await db.select().from(invoices).where(and(...whereConditions)).orderBy(desc(invoices.createdAt)).limit(limit).offset(offset);
 
-    const [countResult] = await db.select({ count: count() }).from(invoices).where(eq(invoices.tenantId, tenantId));
+    const [countResult] = await db.select({ count: count() }).from(invoices).where(and(...whereConditions));
     const total = countResult?.count ?? 0;
 
     return NextResponse.json({ 

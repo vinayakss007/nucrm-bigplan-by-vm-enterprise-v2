@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { sanitizeHTMLServer } from '@/lib/sanitize';
 import { sequenceEnrollments, sequenceSteps, tasks, sequenceStepLogs } from '@/drizzle/schema';
-import { eq, and, lte, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 
 export async function POST(req: NextRequest) {
@@ -14,17 +14,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    // 1. Fetch enrollments that are due
-    const dueEnrollments = await db.query.sequenceEnrollments.findMany({
-      where: and(
-        eq(sequenceEnrollments.status, 'active'),
-        lte(sequenceEnrollments.nextStepAt, new Date())
-      ),
-      with: {
-        contact: true,
-      },
-      limit: 100,
-    });
+    // 1. Fetch enrollments that are due (with FOR UPDATE SKIP LOCKED for idempotency)
+    const dueEnrollmentRows = await db.execute(sql`
+      SELECT id, tenant_id, sequence_id, contact_id, current_step, next_step_at, status
+      FROM sequence_enrollments
+      WHERE status = 'active'
+        AND next_step_at <= NOW()
+      ORDER BY next_step_at ASC
+      LIMIT 100
+      FOR UPDATE SKIP LOCKED
+    `);
+
+    // Also fetch associated contacts for email sending
+    const dueEnrollments: Array<{
+      id: string;
+      tenantId: string;
+      sequenceId: string;
+      contactId: string;
+      currentStep: number;
+      nextStepAt: Date;
+      status: string;
+      contact: { email: string | null; doNotContact: boolean } | null;
+    }> = [];
+
+    for (const row of dueEnrollmentRows.rows) {
+      const r = row as Record<string, unknown>;
+      // Fetch contact info for email steps
+      const contactRow = await db.execute(sql`
+        SELECT email, do_not_contact FROM contacts WHERE id = ${r.contact_id as string} LIMIT 1
+      `);
+      const contact = contactRow.rows[0]
+        ? { email: (contactRow.rows[0] as Record<string, unknown>).email as string | null, doNotContact: (contactRow.rows[0] as Record<string, unknown>).do_not_contact as boolean }
+        : null;
+
+      dueEnrollments.push({
+        id: r.id as string,
+        tenantId: r.tenant_id as string,
+        sequenceId: r.sequence_id as string,
+        contactId: r.contact_id as string,
+        currentStep: r.current_step as number,
+        nextStepAt: r.next_step_at as Date,
+        status: r.status as string,
+        contact,
+      });
+    }
 
     if (dueEnrollments.length === 0) {
       return NextResponse.json({ ok: true, processed: 0 });

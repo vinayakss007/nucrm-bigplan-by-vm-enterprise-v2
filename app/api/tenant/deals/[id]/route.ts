@@ -10,6 +10,7 @@ import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { notifyTenantMembers } from '@/lib/notifications';
 import { logError } from '@/lib/errors-server';
+import { runStageChangeHooks } from '@/lib/automation/stage-change-hooks';
 import { cache } from '@/lib/cache';
 import { withConcurrencyGuard } from '@/lib/concurrency';
 import { checkConcurrency } from '@/lib/api/optimistic-lock';
@@ -224,6 +225,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         console.error('[deals PATCH] automation import failed:', e);
       }
 
+      // Run stage-change hooks (auto-create tasks, notify assignee, etc.)
+      runStageChangeHooks({
+        dealId,
+        dealTitle: row!.title,
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        assignedTo: row!.assignedTo ?? null,
+        contactId: row!.contactId ?? null,
+        fromStage: prev.stageId!,
+        toStage: updateData.stageId,
+        amount: row!.amount ?? null,
+      }).catch(err => console.error('[deals PATCH] stage-change hooks failed:', err));
+
       // Check if 'won' stage - get stage name to compare
       if (updateData.stageId) {
         const [stageInfo] = await db
@@ -278,6 +292,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       .returning({ id: deals.id });
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // Decrement tenant's currentDeals counter
+    await db.update(tenants).set({
+      currentDeals: sql`GREATEST(${tenants.currentDeals} - 1, 0)`,
+    }).where(eq(tenants.id, ctx.tenantId));
 
     await logAudit({
       tenantId: ctx.tenantId,

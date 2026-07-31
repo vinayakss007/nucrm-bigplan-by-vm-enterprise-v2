@@ -1,0 +1,34 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Fix critical system-level bugs affecting user journeys: broken cron tenant isolation, missing stage-change hooks, dead follow-up notifications, quote conversion status drift, invoice pagination count mismatch, and usage counter drift on deletion/merge",
+  "status": "in_progress",
+  "steps": [
+    "1. Fix tenant isolation in contract-renewal-check cron (app/api/cron/contract-renewal-check/route.ts line 47): Replace `eq(contracts.tenantId, contracts.tenantId)` (comparing column to itself, always true) with proper removal of this no-op filter. The cron already iterates per-contract and uses contract.tenantId for downstream operations, so just remove the broken self-referencing condition entirely.",
+    "2. Fix tenant filtering in cron jobs that process suspended/expired tenants (app/api/cron/process-at-risk/route.ts and app/api/cron/ai-auto-followup/route.ts): Both use only `isNull(tenants.deletedAt)` but do not filter on tenant status, causing them to process suspended, trial_expired, and cancelled tenants. Add status filter: `sql`${tenants.status} IN ('active', 'trialing')`` in process-at-risk, and in ai-auto-followup add the same status check alongside the existing deletedAt filter.",
+    "3. Wire stage-change hooks into deals PATCH handler (app/api/tenant/deals/[id]/route.ts): Import and call `runStageChangeHooks` from lib/automation/stage-change-hooks.ts after the stage change block (around line 220, after the evaluateAutomations call). Pass the required StageChangeContext with dealId, dealTitle (row.title), tenantId, userId, assignedTo, contactId, fromStage (prev.stageId), toStage (updateData.stageId), amount (row.amount). The hooks auto-create tasks when deals enter proposal/negotiation/won stages.",
+    "4. Add notifications to detect-missed-followups cron (app/api/cron/detect-missed-followups/route.ts): After marking follow-ups as missed, notify the assignee. Query the missed follow-ups with their assignedTo field. For each unique assignee, call createNotification() with type 'task_overdue', title indicating missed follow-ups count, and link to the relevant entity (lead/contact/deal).",
+    "5. Fix quote status not updating on conversion (app/api/tenant/quotes/[id]/convert-to-invoice/route.ts): After creating the invoice successfully (inside the transaction), update the quote's status to 'accepted' and set acceptedAt to now(). Add `await tx.update(quotes).set({ status: 'accepted', acceptedAt: new Date(), updatedAt: new Date() }).where(eq(quotes.id, id));` inside the transaction.",
+    "6. Fix invoice GET pagination total count (app/api/tenant/invoices/route.ts line 40): The count query only applies `eq(invoices.tenantId, tenantId)` but the results query applies additional status and contactId filters. Apply the same whereConditions array to the count query so total reflects the filtered set.",
+    "7. Fix usage counter drift - deal deletion should decrement currentDeals (app/api/tenant/deals/[id]/route.ts DELETE handler): After soft-deleting the deal, add `await db.update(tenants).set({ currentDeals: sql`GREATEST(${tenants.currentDeals} - 1, 0)` }).where(eq(tenants.id, ctx.tenantId));` to decrement the counter.",
+    "8. Fix usage counter drift - contact merge should decrement currentContacts (app/api/tenant/contacts/merge/route.ts): Inside the transaction, after soft-deleting the duplicate contact, add decrement of tenants.currentContacts: `await tx.update(tenants).set({ currentContacts: sql`GREATEST(${tenants.currentContacts} - 1, 0)` }).where(eq(tenants.id, ctx.tenantId));`",
+    "9. Add idempotency guard to process-sequences cron (app/api/cron/process-sequences/route.ts): The cron has no protection against concurrent execution. Add a SELECT ... FOR UPDATE SKIP LOCKED on the enrollment rows being processed. Change the initial query from `db.query.sequenceEnrollments.findMany(...)` to a raw select with `FOR UPDATE SKIP LOCKED` so that if two cron instances run simultaneously, the second one skips already-locked rows instead of double-processing them."
+  ],
+  "acceptance_criteria": [
+    "contract-renewal-check no longer has a self-referencing equality (contracts.tenantId compared to itself)",
+    "process-at-risk and ai-auto-followup cron jobs filter tenants by active/trialing status",
+    "Deal PATCH handler calls runStageChangeHooks when stage changes",
+    "detect-missed-followups cron creates notifications for assignees of missed follow-ups",
+    "Quote-to-invoice conversion updates quote status to 'accepted'",
+    "Invoice GET count query uses the same filters as the results query",
+    "Deal deletion decrements tenants.currentDeals",
+    "Contact merge decrements tenants.currentContacts",
+    "process-sequences uses FOR UPDATE SKIP LOCKED for idempotency",
+    "TypeScript compilation passes (npx tsc --noEmit)"
+  ],
+  "verification": [
+    "Run `npx tsc --noEmit` to verify all changes compile without type errors"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

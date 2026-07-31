@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, deals, activities, leads, tasks } from '@/drizzle/schema';
+import { contacts, deals, activities, leads, tasks, tenants } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
@@ -84,6 +84,11 @@ export async function POST(request: NextRequest) {
           metadata: sql`jsonb_set(COALESCE(${contacts.metadata}, '{}'), '{merged_into}', ${JSON.stringify(primary_id)}::jsonb)`,
         })
         .where(eq(contacts.id, duplicate_id));
+
+      // Decrement tenant's currentContacts counter
+      await tx.update(tenants).set({
+        currentContacts: sql`GREATEST(${tenants.currentContacts} - 1, 0)`,
+      }).where(eq(tenants.id, ctx.tenantId));
 
       // Log the merge as an activity
       await tx.insert(activities).values({
