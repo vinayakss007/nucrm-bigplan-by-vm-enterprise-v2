@@ -426,6 +426,7 @@ describe('webhooks', () => {
     });
 
     it('moves to dead_letter after max retries', async () => {
+      // With MAX_RETRIES=5, dead-lettering occurs when nextAttempt > 5 (i.e., current attempt=5)
       const limitFn = vi.fn().mockResolvedValue([
         {
           id: 'delivery-5',
@@ -433,7 +434,7 @@ describe('webhooks', () => {
           url: 'https://example.com/retry',
           headers: {},
           payload: { event: 'deal.created', data: {} },
-          attempt: 4,
+          attempt: 5,
           status: 'failed',
           createdAt: new Date(),
         },
