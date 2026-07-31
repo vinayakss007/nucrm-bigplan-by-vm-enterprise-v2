@@ -54,10 +54,26 @@ export async function POST(req: NextRequest) {
 
     // Per-contact completion tracking to prevent duplicate sends on crash/retry.
     // We store the set of already-sent contact IDs in cache keyed by batch identity.
+    //
+    // LIMITATION: This tracking relies on the cache layer (Redis or in-memory fallback).
+    // When Redis is unavailable, the fallback is an in-memory Map which does NOT survive
+    // process restarts. This means if the process crashes mid-batch while Redis is down,
+    // a retry will re-send to all contacts (potential duplicates). For production
+    // deployments requiring crash-safe deduplication, ensure Redis is available or
+    // implement database-backed batch progress tracking (see FEAT-003 spec).
     const batchKey = makeBatchKey(ctx.tenantId, template_id, entity_ids);
     const alreadySent: Set<string> = new Set(
       (await cache.get<string[]>(batchKey)) || []
     );
+
+    // Warn if Redis is not backing the cache - batch dedup is not durable
+    if (!process.env['REDIS_URL']) {
+      console.warn(
+        '[email bulk] CRITICAL: Redis is not configured. Batch deduplication relies on ' +
+        'in-memory cache which does not survive process restarts. Duplicate sends are ' +
+        'possible if the process crashes mid-batch.'
+      );
+    }
 
     let sent = 0, failed = 0;
     const errors: string[] = [];
@@ -88,7 +104,8 @@ export async function POST(req: NextRequest) {
           newlySentIds.push(ent.id);
           // Persist progress after each successful send so a crash mid-loop
           // allows the next retry to skip already-sent contacts.
-          await cache.set(batchKey, [...Array.from(alreadySent), ...newlySentIds], 3600);
+          // TTL of 24 hours to cover delayed retries (background jobs may retry after hours)
+          await cache.set(batchKey, [...Array.from(alreadySent), ...newlySentIds], 86400);
         } else {
           failed++;
           errors.push(`${ent.email}: ${result.error}`);

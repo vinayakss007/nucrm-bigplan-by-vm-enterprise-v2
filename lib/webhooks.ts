@@ -221,7 +221,7 @@ async function retryWebhookItem(item: typeof webhookQueue.$inferSelect): Promise
     } else {
       const nextAttempt = item.attempt + 1;
       const retryDelay = getRetryDelay(nextAttempt);
-      const isDeadLetter = retryDelay < 0 || nextAttempt >= MAX_RETRIES;
+      const isDeadLetter = retryDelay < 0 || nextAttempt > MAX_RETRIES;
 
       await db.update(webhookQueue)
         .set({
@@ -238,7 +238,7 @@ async function retryWebhookItem(item: typeof webhookQueue.$inferSelect): Promise
   } catch (err: any) {
     const nextAttempt = item.attempt + 1;
     const retryDelay = getRetryDelay(nextAttempt);
-    const isDeadLetter = retryDelay < 0 || nextAttempt >= MAX_RETRIES;
+    const isDeadLetter = retryDelay < 0 || nextAttempt > MAX_RETRIES;
 
     await db.update(webhookQueue)
       .set({
