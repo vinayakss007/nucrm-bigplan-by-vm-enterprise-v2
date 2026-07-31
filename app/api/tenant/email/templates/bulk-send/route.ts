@@ -7,6 +7,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { sendEmail } from '@/lib/email/service';
+import { escapeHtml } from '@/lib/email/escape-html';
 
 /**
  * POST /api/tenant/email/templates/bulk-send
@@ -113,15 +114,6 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function interpolate(template: string, vars: Record<string, string>): string {
