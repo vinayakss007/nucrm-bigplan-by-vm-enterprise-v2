@@ -7,6 +7,7 @@ import { generateApiKey } from '@/lib/auth/api-key';
 import { db } from '@/drizzle/db';
 import { apiKeys } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 /**
  * GET /api/tenant/api-keys
@@ -56,6 +57,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const limited = await rateLimitMutating(request, 'apiKeys', 'post');
+    if (limited) return limited;
+
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!can(ctx, 'settings.manage')) {

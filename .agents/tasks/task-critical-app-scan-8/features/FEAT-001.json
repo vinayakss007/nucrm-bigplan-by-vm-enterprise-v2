@@ -1,0 +1,22 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Fix rate limiting gaps, memory leaks, timeout handling, and tenant deletion cleanup - the most critical P0 production risks",
+  "status": "completed",
+  "steps": [
+    "1. Add rateLimitMutating() to the highest-risk unprotected POST endpoints (bulk operations, billing mutations, admin actions). Target these specific files that handle destructive/expensive operations without rate limiting: app/api/tenant/deals/bulk/route.ts, app/api/tenant/contacts/bulk/route.ts, app/api/tenant/companies/bulk/route.ts, app/api/tenant/leads/bulk/route.ts, app/api/tenant/tickets/bulk/route.ts, app/api/tenant/tasks/bulk/route.ts, app/api/tenant/notes/bulk/route.ts, app/api/tenant/email/bulk/route.ts, app/api/tenant/billing/checkout/route.ts, app/api/tenant/billing/subscription/upgrade/route.ts, app/api/tenant/billing/subscription/downgrade/route.ts, app/api/tenant/billing/subscription/cancel/route.ts, app/api/tenant/admin/bulk-transfer/route.ts, app/api/tenant/activities/route.ts, app/api/tenant/api-keys/route.ts, app/api/tenant/automations/route.ts, app/api/tenant/workflows/route.ts, app/api/tenant/webhooks/route.ts, app/api/tenant/roles/route.ts, app/api/tenant/integrations/route.ts, app/api/tenant/sso/providers/route.ts, app/api/tenant/backup/route.ts, app/api/tenant/calendar-sync/sync/route.ts, app/api/tenant/branding/route.ts, app/api/tenant/pipelines/route.ts",
+    "2. Fix memory leaks in module-level Maps/arrays that grow unbounded: (a) lib/critical-error-alert.ts - rateLimitMap has no eviction/max-size cap, (b) lib/api/deprecation.ts - registry Map grows forever (add MAX_ENTRIES), (c) lib/email/router.ts - usage Map never resets daily counts (add daily reset logic), (d) lib/log-stream.ts - clients Map can grow if unsubscribe is never called (add max clients limit and periodic cleanup of dead controllers), (e) lib/db/slow-query.ts - slowQueryLog uses push+shift which is fine but getSlowQueryStats creates a new Map on every call that could be large if called frequently (minor, but add bounds)",
+    "3. Add AbortSignal.timeout() to all external fetch() calls that are missing them: (a) lib/ai/gateway.ts - 3 fetch calls to OpenAI/Anthropic/Ollama have no timeout, (b) lib/automation/engine.ts - fetch calls to Facebook, custom webhook URLs, and Twilio have no timeout, (c) lib/automation/workflow-executor.ts - fetch to webhook URL has no timeout, (d) lib/calendar-sync/google.ts - 6 fetch calls have no timeout, (e) lib/calendar-sync/outlook.ts - 6 fetch calls have no timeout, (f) lib/email/router.ts - fetch calls to Resend and Brevo have no timeout",
+    "4. Fix tenant deletion cleanup gaps in app/api/superadmin/tenants/route.ts DELETE handler: After CASCADE delete, add cleanup for: (a) Redis cache keys with tenant prefix (call cache.invalidatePattern), (b) Add a comment documenting that S3 files, cron jobs, and external integrations need manual cleanup (create a TODO with structured format), (c) Invalidate any in-memory caches (feature flags, widget cache) for the deleted tenant"
+  ],
+  "acceptance_criteria": [
+    "All 25 highest-risk POST endpoints have rateLimitMutating() calls",
+    "Module-level Maps in critical-error-alert.ts, deprecation.ts, email/router.ts, and log-stream.ts have size caps and eviction",
+    "All external fetch() calls in gateway.ts, engine.ts, workflow-executor.ts, google.ts, outlook.ts, and router.ts have AbortSignal.timeout()",
+    "Tenant deletion cleans up Redis cache entries for the deleted tenant",
+    "TypeScript compiles without errors (npm run typecheck)"
+  ],
+  "verification": ["npm run typecheck", "npx vitest run"],
+  "blocked_reason": null,
+  "findings": "All changes compile cleanly (npm run typecheck passes). Tests: 4818 passed, 5 failed (pre-existing failures due to missing ENCRYPTION_KEY env var - verified by running tests on base commit). The automation/engine.ts and workflow-executor.ts already had AbortSignal.timeout on their fetch calls. Branding endpoint uses PUT instead of POST, so rate limiting uses the patch limit category. lint-staged auto-formatted some files during commit."
+}

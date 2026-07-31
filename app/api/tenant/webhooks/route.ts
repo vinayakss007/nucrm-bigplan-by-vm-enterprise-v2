@@ -8,6 +8,7 @@ import { integrations } from '@/drizzle/schema';
 import { webhookQueue } from '@/drizzle/schema/support';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(req: NextRequest) {
   try {
@@ -65,6 +66,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const limited = await rateLimitMutating(req, 'webhooks', 'post');
+    if (limited) return limited;
+
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });

@@ -8,6 +8,7 @@ import { tenants, users, tenantMembers, plans } from '@/drizzle/schema';
 import { eq, and, sql, ilike, desc, or } from 'drizzle-orm';
 import { hashPassword } from '@/lib/auth/session';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { invalidateTenantCache } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -334,6 +335,24 @@ export async function DELETE(request: NextRequest) {
         await tx.execute(sql`SET LOCAL app.allow_audit_purge = 'on'`);
         await tx.delete(tenants).where(eq(tenants.id, id));
       });
+
+      // Post-deletion cleanup: purge cached data for the deleted tenant.
+      // Redis keys prefixed with the tenant ID (feature flags, widget cache,
+      // session data, rate limit counters, etc.) are now orphaned.
+      try {
+        await invalidateTenantCache(id);
+      } catch {
+        // Best-effort: if Redis is down the keys will expire via TTL
+      }
+
+      // TODO(P1): Tenant hard-deletion leaves orphaned resources that need
+      // async cleanup via a background job or admin queue:
+      //   - S3 objects (uploaded files, avatars, document attachments)
+      //   - External cron/scheduler registrations (e.g. cron-job.org entries)
+      //   - Stripe subscriptions & customer objects (cancel via Stripe API)
+      //   - Third-party integrations (WhatsApp, Twilio, SendGrid contacts)
+      //   - Calendar sync OAuth tokens (Google, Outlook)
+      //   - Queued webhook deliveries that reference this tenant
     } else {
       await db
         .update(tenants)
