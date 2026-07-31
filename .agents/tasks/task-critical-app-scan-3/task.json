@@ -1,0 +1,6 @@
+{
+  "task_id": "task-critical-app-scan-3",
+  "task_description": "Third bug scan of NuCRM Enterprise v2 - finding and fixing bugs in CSV exports, SSE streams, workflow automation, imports, and form validation that were not covered in PRs #957 and #961",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001"]
+}

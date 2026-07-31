@@ -139,7 +139,7 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
       }
 
       // Execute starting from trigger
-      await executeNode(tx, triggerNode.id, nodes, children, execution.id, tenantId, userId, ctx);
+      await executeNode(tx, triggerNode.id, nodes, children, execution.id, tenantId, userId, ctx, new Set());
 
       await updateExecution(tx, execution.id, 'completed', ctx);
     });
@@ -164,8 +164,13 @@ async function executeNode(
   executionId: string,
   tenantId: string,
   userId: string | undefined,
-  ctx: Record<string, unknown>
+  ctx: Record<string, unknown>,
+  visited: Set<string>
 ): Promise<void> {
+  // Cycle detection: skip nodes already visited in this execution path
+  if (visited.has(nodeId)) return;
+  visited.add(nodeId);
+
   const node = nodes.find(n => n.id === nodeId);
   if (!node) return;
 
@@ -223,7 +228,7 @@ async function executeNode(
   // Proceed to children
   const childEdges = children.get(nodeId) || [];
   for (const edge of childEdges) {
-    await executeNode(dbOrTx, edge.target, nodes, children, executionId, tenantId, userId, ctx);
+    await executeNode(dbOrTx, edge.target, nodes, children, executionId, tenantId, userId, ctx, visited);
   }
 }
 
@@ -424,7 +429,7 @@ function evaluateCondition(fieldValue: unknown, operator: string, value: unknown
     case 'less_than': return Number(fieldValue) < Number(value);
     case 'is_empty': return fieldValue == null || fieldValue === '';
     case 'is_not_empty': return fieldValue != null && fieldValue !== '';
-    default: return true;
+    default: return false;
   }
 }
 

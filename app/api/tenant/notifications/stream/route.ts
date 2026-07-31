@@ -16,6 +16,8 @@ export async function GET(request: NextRequest) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
+        let consecutiveErrors = 0;
+
         const sendUnread = async () => {
           try {
             const [row] = await db.select({
@@ -31,8 +33,15 @@ export async function GET(request: NextRequest) {
 
             const data = JSON.stringify({ type: 'unread', count: row?.count ?? 0 });
             controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+            consecutiveErrors = 0;
           } catch {
+            consecutiveErrors++;
             console.error('[notifications-stream] Failed to send unread count');
+            if (consecutiveErrors >= 3) {
+              clearInterval(interval);
+              clearInterval(keepalive);
+              controller.close();
+            }
           }
         };
 
@@ -50,6 +59,7 @@ export async function GET(request: NextRequest) {
         request.signal.addEventListener('abort', () => {
           clearInterval(interval);
           clearInterval(keepalive);
+          controller.close();
         });
       },
     });

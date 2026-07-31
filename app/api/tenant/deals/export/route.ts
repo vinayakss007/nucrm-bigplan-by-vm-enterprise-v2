@@ -3,14 +3,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines, contacts, companies } from '@/drizzle/schema';
 import { eq, asc } from 'drizzle-orm';
-
-function escapeCSV(val: unknown): string {
-  const s = String(val ?? '');
-  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
-}
+import { escapeCSV } from '@/lib/export';
 
 export async function GET(request: NextRequest) {
   try {

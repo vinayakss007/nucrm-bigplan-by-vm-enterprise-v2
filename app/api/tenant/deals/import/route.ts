@@ -223,12 +223,23 @@ export async function POST(request: NextRequest) {
 
           const tags = mapped.tags ? mapped.tags.split(/[;|]/).map((t: string) => t.trim()).filter(Boolean) : [];
 
+          // Validate closeDate - skip invalid dates with a warning instead of crashing
+          let closeDate: Date | null = null;
+          if (mapped.closeDate) {
+            const parsedDate = new Date(mapped.closeDate);
+            if (isNaN(parsedDate.getTime())) {
+              results.errors.push(`Row ${index + 2}: invalid close_date "${mapped.closeDate}" — field skipped`);
+            } else {
+              closeDate = parsedDate;
+            }
+          }
+
           insertBuffer.push({
             tenantId: ctx.tenantId,
             createdBy: ctx.userId,
             title: mapped.title.trim(),
             amount: mapped.amount || '0',
-            closeDate: mapped.closeDate ? new Date(mapped.closeDate) : null,
+            closeDate,
             pipelineId,
             stageId: resolvedStageId,
             stageEnteredAt: new Date(),
