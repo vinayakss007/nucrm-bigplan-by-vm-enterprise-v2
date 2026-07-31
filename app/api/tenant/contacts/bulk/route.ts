@@ -16,6 +16,7 @@ import { eq, and, sql, inArray, isNull, or, ilike } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
+import { escapeLike } from '@/lib/api/sanitize-like';
 
 const MAX_BULK = 500;
 
@@ -52,10 +53,10 @@ export async function POST(req: NextRequest) {
       }
       if (filters?.q) {
         whereConditions.push(or(
-          ilike(contacts.firstName, `%${filters.q}%`),
-          ilike(contacts.lastName, `%${filters.q}%`),
-          ilike(contacts.email, `%${filters.q}%`),
-          ilike(contacts.phone, `%${filters.q}%`),
+          ilike(contacts.firstName, `%${escapeLike(filters.q)}%`),
+          ilike(contacts.lastName, `%${escapeLike(filters.q)}%`),
+          ilike(contacts.email, `%${escapeLike(filters.q)}%`),
+          ilike(contacts.phone, `%${escapeLike(filters.q)}%`),
         )!);
       }
 

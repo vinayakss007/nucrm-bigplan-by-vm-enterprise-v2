@@ -13,6 +13,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 import { cache } from '@/lib/cache';
+import { escapeLike } from '@/lib/api/sanitize-like';
 
  
  
@@ -52,12 +53,13 @@ export async function GET(request: NextRequest) {
     if (company_id) filters.push(eq(contacts.companyId, company_id));
 
     if (q) {
+      const safeQ = escapeLike(q);
       filters.push(or(
-        ilike(contacts.firstName, `%${q}%`),
-        ilike(contacts.lastName, `%${q}%`),
-        ilike(contacts.email, `%${q}%`),
-        ilike(contacts.phone, `%${q}%`),
-        ilike(companies.name, `%${q}%`)
+        ilike(contacts.firstName, `%${safeQ}%`),
+        ilike(contacts.lastName, `%${safeQ}%`),
+        ilike(contacts.email, `%${safeQ}%`),
+        ilike(contacts.phone, `%${safeQ}%`),
+        ilike(companies.name, `%${safeQ}%`)
       )!);
     }
 

@@ -14,6 +14,7 @@ import { eq, and, inArray, or, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { escapeLike } from '@/lib/api/sanitize-like';
 
 const MAX_BULK = 500;
 
@@ -51,8 +52,8 @@ export async function POST(req: NextRequest) {
       }
       if (filters?.q) {
         whereConditions.push(or(
-          ilike(supportTickets.subject, `%${filters.q}%`),
-          ilike(supportTickets.body, `%${filters.q}%`),
+          ilike(supportTickets.subject, `%${escapeLike(filters.q)}%`),
+          ilike(supportTickets.body, `%${escapeLike(filters.q)}%`),
         )!);
       }
       const matched = await db

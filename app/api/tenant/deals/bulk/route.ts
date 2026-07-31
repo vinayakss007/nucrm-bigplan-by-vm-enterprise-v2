@@ -14,6 +14,7 @@ import { eq, and, inArray, sql, or, ilike } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
+import { escapeLike } from '@/lib/api/sanitize-like';
 
 const MAX_BULK = 500;
 
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
       if (filters?.assigned_to) whereConditions.push(eq(deals.assignedTo, filters.assigned_to));
       if (filters?.q) {
         whereConditions.push(or(
-          ilike(deals.title, `%${filters.q}%`),
+          ilike(deals.title, `%${escapeLike(filters.q)}%`),
         )!);
       }
       const matched = await db.select({ id: deals.id }).from(deals).where(and(...whereConditions));

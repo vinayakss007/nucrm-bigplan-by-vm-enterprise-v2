@@ -40,91 +40,112 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const dueDate = body.due_date ? body.due_date : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-    // Generate invoice number
-    const [countRow] = await db.select({ count: sql<number>`count(*)::int` }).from(invoices).where(eq(invoices.tenantId, ctx.tenantId));
-    const seq = ((countRow?.count as number) ?? 0) + 1;
-    const invoiceNumber = `INV-${String(seq).padStart(5, '0')}`;
-
     // Copy line items before transaction (read-only)
     const items = await db.select().from(quoteLineItems).where(eq(quoteLineItems.quoteId, id));
 
-    // Create invoice + line items + activity in a single transaction
-    const invoice = await db.transaction(async (tx) => {
-      const invoiceValues = {
-        tenantId: ctx.tenantId,
-        createdBy: ctx.userId,
-        contactId: quote.contactId ?? undefined,
-        companyId: undefined,
-        invoiceNumber,
-        title: quote.title,
-        status: 'draft',
-        issueDate: new Date().toISOString().slice(0, 10),
-        dueDate,
-        subtotal: quote.subtotal ?? '0',
-        discountType: 'fixed',
-        discountValue: quote.discount ?? '0',
-        discountAmount: quote.discount ?? '0',
-        taxRate: '0',
-        taxAmount: quote.tax ?? '0',
-        totalAmount: quote.totalAmount ?? '0',
-        amountPaid: '0',
-        balanceDue: quote.totalAmount ?? '0',
-        quoteId: id,
-        notes: quote.notes ?? undefined,
-        terms: quote.terms ?? undefined,
-      };
-      const [inv] = await tx.insert(invoices).values([invoiceValues]).returning();
+    // Generate invoice number (race-condition safe: derive MAX inside the
+    // transaction while holding a row lock on the tenant)
+    const MAX_RETRIES = 3;
+    let invoice: Awaited<ReturnType<typeof db.query.invoices.findFirst>> | undefined;
 
-      if (!inv) {
-        throw new Error('Failed to create invoice');
-      }
-
-      // Copy line items
-      if (items.length > 0) {
-        await tx.insert(invoiceLineItems).values(
-          items.map((item, idx) => ({
-            // Was missing entirely: invoice line items had no tenant_id, so
-            // converted lines were unattributable and could not be RLS-scoped.
-            tenantId: ctx.tenantId,
-            invoiceId: inv.id,
-            productId: item.productId ?? undefined,
-            serviceId: item.serviceId ?? undefined,
-            description: item.description ?? '',
-            // Previously hardcoded to 'product', which mislabelled every service
-            // line on conversion. Carry the quote line's own type instead.
-            itemType: item.itemType ?? (item.serviceId ? 'service' : 'product'),
-            quantity: item.quantity ?? '1',
-            unitPrice: item.unitPrice ?? '0',
-            discountType: 'percentage' as const,
-            discountValue: item.discountPercent ?? '0',
-            discountAmount: '0',
-            taxRate: item.taxPercent ?? '0',
-            taxAmount: '0',
-            total: item.total ?? '0',
-            sortOrder: idx,
-          }))
-        );
-      }
-
-      // Activity
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
-        await tx.insert(activities).values({
-          tenantId: ctx.tenantId,
-          userId: ctx.userId,
-          entityType: 'quote',
-          entityId: id,
-          contactId: quote.contactId,
-          dealId: quote.dealId ?? null,
-          eventType: 'quote_converted',
-          description: `Quote "${quote.title}" converted to invoice ${invoiceNumber}`,
-          metadata: { quote_id: id, invoice_id: inv.id, invoice_number: invoiceNumber },
-        });
-      } catch (err) {
-        console.warn('[convert-to-invoice] activity insert failed:', (err as Error).message);
-      }
+        // Create invoice + line items + activity in a single transaction
+        invoice = await db.transaction(async (tx) => {
+          // Lock the tenant row to serialize invoice number generation
+          await tx.execute(
+            sql`SELECT id FROM tenants WHERE id = ${ctx.tenantId} FOR UPDATE`
+          );
 
-      return inv;
-    });
+          const [maxRow] = await tx.select({
+            maxNum: sql<number>`COALESCE(MAX(
+              CASE WHEN ${invoices.invoiceNumber} ~ '^INV-[0-9]+$'
+              THEN CAST(SUBSTRING(${invoices.invoiceNumber} FROM 5) AS integer)
+              ELSE 0 END
+            ), 0)`
+          }).from(invoices).where(eq(invoices.tenantId, ctx.tenantId));
+
+          const seq = ((maxRow?.maxNum as number) ?? 0) + 1;
+          const invoiceNumber = `INV-${String(seq).padStart(5, '0')}`;
+
+          const invoiceValues = {
+            tenantId: ctx.tenantId,
+            createdBy: ctx.userId,
+            contactId: quote.contactId ?? undefined,
+            companyId: undefined,
+            invoiceNumber,
+            title: quote.title,
+            status: 'draft',
+            issueDate: new Date().toISOString().slice(0, 10),
+            dueDate,
+            subtotal: quote.subtotal ?? '0',
+            discountType: 'fixed',
+            discountValue: quote.discount ?? '0',
+            discountAmount: quote.discount ?? '0',
+            taxRate: '0',
+            taxAmount: quote.tax ?? '0',
+            totalAmount: quote.totalAmount ?? '0',
+            amountPaid: '0',
+            balanceDue: quote.totalAmount ?? '0',
+            quoteId: id,
+            notes: quote.notes ?? undefined,
+            terms: quote.terms ?? undefined,
+          };
+          const [inv] = await tx.insert(invoices).values([invoiceValues]).returning();
+
+          if (!inv) {
+            throw new Error('Failed to create invoice');
+          }
+
+          // Copy line items
+          if (items.length > 0) {
+            await tx.insert(invoiceLineItems).values(
+              items.map((item, idx) => ({
+                tenantId: ctx.tenantId,
+                invoiceId: inv.id,
+                productId: item.productId ?? undefined,
+                serviceId: item.serviceId ?? undefined,
+                description: item.description ?? '',
+                itemType: item.itemType ?? (item.serviceId ? 'service' : 'product'),
+                quantity: item.quantity ?? '1',
+                unitPrice: item.unitPrice ?? '0',
+                discountType: 'percentage' as const,
+                discountValue: item.discountPercent ?? '0',
+                discountAmount: '0',
+                taxRate: item.taxPercent ?? '0',
+                taxAmount: '0',
+                total: item.total ?? '0',
+                sortOrder: idx,
+              }))
+            );
+          }
+
+          // Activity
+          try {
+            await tx.insert(activities).values({
+              tenantId: ctx.tenantId,
+              userId: ctx.userId,
+              entityType: 'quote',
+              entityId: id,
+              contactId: quote.contactId,
+              dealId: quote.dealId ?? null,
+              eventType: 'quote_converted',
+              description: `Quote "${quote.title}" converted to invoice ${invoiceNumber}`,
+              metadata: { quote_id: id, invoice_id: inv.id, invoice_number: invoiceNumber },
+            });
+          } catch (err) {
+            console.warn('[convert-to-invoice] activity insert failed:', (err as Error).message);
+          }
+
+          return inv;
+        });
+        break; // success
+      } catch (err: unknown) {
+        const isUniqueViolation = err instanceof Error && err.message.includes('unique');
+        if (isUniqueViolation && attempt < MAX_RETRIES - 1) continue;
+        throw err;
+      }
+    }
 
     if (!invoice) {
       return NextResponse.json({ error: 'Failed to create invoice' }, { status: 500 });
@@ -136,13 +157,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       action: 'quote_converted_to_invoice',
       entityType: 'quote',
       entityId: id,
-      newData: { invoice_id: invoice.id, invoice_number: invoiceNumber },
+      newData: { invoice_id: invoice.id, invoice_number: (invoice as { invoiceNumber?: string }).invoiceNumber },
     });
 
     return NextResponse.json({
       ok: true,
       invoiceId: invoice.id,
-      invoiceNumber,
+      invoiceNumber: (invoice as { invoiceNumber?: string }).invoiceNumber,
       totalAmount: invoice.totalAmount,
     });
   } catch (err) {

@@ -1,0 +1,7 @@
+{
+  "task_id": "task-critical-bugs-scan",
+  "task_description": "Critical scan of the entire NuCRM app to find and fix real bugs across consistency, reliability, usability, feature integration, and flow of work. Prioritized action plan addressing: authentication cookie bug (P0), SQL pattern injection + race conditions (P1), API response inconsistency (P1), broken onboarding flow creating duplicate pipelines (P2), and miscellaneous reliability issues (P2).",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004", "FEAT-005"],
+  "blocked_reason": null
+}

@@ -14,6 +14,7 @@ import { resolveAssignee } from '@/lib/assignment-resolver';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
+import { escapeLike } from '@/lib/api/sanitize-like';
 
 // Whitelist for sort columns to prevent SQL injection
  
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (q) {
-      const searchWildcard = `%${q}%`;
+      const searchWildcard = `%${escapeLike(q)}%`;
       filters.push(or(
         ilike(leads.firstName, searchWildcard),
         ilike(leads.lastName, searchWildcard),

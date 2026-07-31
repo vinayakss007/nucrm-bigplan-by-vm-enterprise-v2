@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-003",
+  "type": "fix",
+  "description": "Fix API response format inconsistency across tenant endpoints. Different endpoints return data in incompatible shapes, making it impossible for the frontend to have a single data-fetching layer. Contacts/Deals/Tasks return `{ data: [...], total }`, Invoices return `{ invoices: [...], total, page, totalPages }`, Subscriptions return `{ subscriptions: [...], total, page, totalPages }`, Products POST returns flat object `{ id, name, ... }` without wrapping, Leads POST returns flat object directly. This breaks frontend SWR/fetch abstractions and causes subtle UI bugs where components expect `response.data` but get undefined.",
+  "status": "pending",
+  "steps": [
+    "In app/api/tenant/invoices/route.ts GET handler: change `{ invoices: results, total, page, limit, totalPages }` to `{ data: results, total, page, limit, totalPages }` to match the standard pattern. Keep `page` and `totalPages` for backwards compat.",
+    "In app/api/tenant/invoices/route.ts POST handler: change `{ invoice }` to `{ data: invoice }` to match contacts/deals POST pattern.",
+    "In app/api/tenant/subscriptions/route.ts GET handler: change `{ subscriptions: results, total, page, limit, totalPages }` to `{ data: results, total, page, limit, totalPages }`.",
+    "In app/api/tenant/subscriptions/route.ts POST handler: change `{ subscription }` to `{ data: subscription }`.",
+    "In app/api/tenant/products/route.ts POST handler: wrap the flat response in `{ data: { id, name, ... } }` to match the standard pattern.",
+    "In app/api/tenant/leads/route.ts POST handler: change `return NextResponse.json(newLead, { status: 201 })` to `return NextResponse.json({ data: newLead }, { status: 201 })` to match contacts/deals POST.",
+    "In app/api/tenant/invoices/[id]/route.ts DELETE handler: change `{ data: { id: row.id, deleted: true } }` to `{ ok: true, message: 'Moved to trash...' }` to match deals/contacts DELETE pattern (or vice versa, but be consistent).",
+    "Search for any frontend components that use the old response keys (invoices, subscription) and update them to use `data` - check components/invoices/ and components/subscriptions/ directories."
+  ],
+  "acceptance_criteria": [
+    "All tenant LIST endpoints return { data: [...], total, ... }",
+    "All tenant CREATE endpoints return { data: <entity> } with status 201",
+    "All tenant DELETE endpoints return { ok: true, message: '...' }",
+    "Frontend components referencing old keys are updated",
+    "TypeScript compiles without errors",
+    "Existing tests pass"
+  ],
+  "verification": ["npm run typecheck", "npm run test:unit"],
+  "blocked_reason": null,
+  "findings": ""
+}
