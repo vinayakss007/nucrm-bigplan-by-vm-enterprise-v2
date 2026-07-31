@@ -43,7 +43,7 @@ describe('db/client', () => {
     });
 
     it('creates pool with valid DATABASE_URL', async () => {
-      process.env.DATABASE_URL = 'postgresql://localhost/test';
+      process.env.DATABASE_URL = 'postgresql://nucrm@localhost/test';
       const { getPool } = await import('@/lib/db/client');
       
       // Pool creation should not throw
@@ -56,7 +56,7 @@ describe('db/client', () => {
     });
 
     it('uses correct pool size from env', async () => {
-      process.env.DATABASE_URL = 'postgresql://localhost/test';
+      process.env.DATABASE_URL = 'postgresql://nucrm@localhost/test';
       process.env.DATABASE_POOL_SIZE = '15';
       const { getPool } = await import('@/lib/db/client');
       
@@ -70,7 +70,7 @@ describe('db/client', () => {
     });
 
     it('disables SSL when DATABASE_SSL is false', async () => {
-      process.env.DATABASE_URL = 'postgresql://localhost/test';
+      process.env.DATABASE_URL = 'postgresql://nucrm@localhost/test';
       process.env.DATABASE_SSL = 'false';
       const { getPool } = await import('@/lib/db/client');
       
@@ -83,7 +83,7 @@ describe('db/client', () => {
     });
 
     it('throws on invalid pool size', async () => {
-      process.env.DATABASE_URL = 'postgresql://localhost/test';
+      process.env.DATABASE_URL = 'postgresql://nucrm@localhost/test';
       process.env.DATABASE_POOL_SIZE = '0';
       const { getPool } = await import('@/lib/db/client');
       expect(() => getPool()).toThrow('must be between 1 and 100');

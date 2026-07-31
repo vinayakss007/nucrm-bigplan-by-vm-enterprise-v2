@@ -23,6 +23,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from '@/drizzle/schema';
 import { db as primaryDb } from '@/drizzle/db';
+import { pgSslConfig } from './ssl-config';
 
 declare global {
   var __pgReadPool: Pool | undefined;
@@ -36,12 +37,11 @@ function getReadPool(): Pool {
       throw new Error('NO_REPLICA');
     }
 
-    const ssl = process.env.DATABASE_SSL !== 'false';
     const poolSize = parseInt(process.env.DATABASE_READ_POOL_SIZE ?? '10');
 
     global.__pgReadPool = new Pool({
       connectionString: replicaUrl,
-      ssl: ssl ? { rejectUnauthorized: process.env.NODE_ENV === 'production' } : false,
+      ssl: pgSslConfig(),
       max: poolSize,
       idleTimeoutMillis: 60_000,
       connectionTimeoutMillis: 10_000,

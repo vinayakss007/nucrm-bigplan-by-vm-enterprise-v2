@@ -10,6 +10,7 @@ import { Pool } from 'pg';
 import * as schema from '../drizzle/schema';
 import { sql } from 'drizzle-orm';
 import * as fs from 'fs';
+import { pgSslConfig } from '../lib/db/ssl-config';
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -21,7 +22,7 @@ async function main() {
 
   const pool = new Pool({
     connectionString: databaseUrl,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    ssl: pgSslConfig(),
     connectionTimeoutMillis: 10_000,
   });
 

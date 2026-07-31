@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { pgSslConfig } from './ssl-config';
 
 declare global { var __pgPool: Pool | undefined; }
 
@@ -14,7 +15,23 @@ export function getPool(): Pool {
     const pgBouncer = isPgBouncerEnabled();
     const cs = process.env.DATABASE_URL;
     if (!cs) throw new Error('DATABASE_URL is required');
-    const ssl = process.env.DATABASE_SSL !== 'false';
+
+    // Validate URL has explicit username (prevents pg library fallback to OS user "root")
+    try {
+      const parsed = new URL(cs);
+      if (!parsed.username || parsed.username === 'root') {
+        throw new Error(
+          `DATABASE_URL must contain an explicit username (got "${parsed.username}"). ` +
+          'The pg library falls back to process.env.USER which may be "root" in CI.',
+        );
+      }
+    } catch (e) {
+      if (e instanceof TypeError) {
+        throw new Error('DATABASE_URL is not a valid connection string');
+      }
+      throw e;
+    }
+
 
     const poolSize = parseInt(process.env['DATABASE_POOL_SIZE'] ?? '20');
     if (poolSize < 1 || poolSize > 100) {
@@ -28,7 +45,7 @@ export function getPool(): Pool {
 
     global.__pgPool = new Pool({
       connectionString,
-      ssl: ssl ? { rejectUnauthorized: process.env.NODE_ENV === 'production' } : false,
+      ssl: pgSslConfig(),
       max: poolSize,
       idleTimeoutMillis: pgBouncer ? 10_000 : 60_000,
       connectionTimeoutMillis: 30_000,

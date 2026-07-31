@@ -105,6 +105,18 @@ function opsOn(table: unknown) {
   return h.ops.filter((o) => o.table === table);
 }
 
+/**
+ * Removing a pipeline is a *soft* delete: #860 converted it from
+ * db.delete(pipelines) to an update that stamps deletedAt. Asserting on the
+ * stamp rather than on a DELETE statement keeps these tests pinned to the
+ * behaviour (the row stops being visible) instead of to the mechanism.
+ */
+function softDeletesOn(table: unknown) {
+  return opsOn(table).filter(
+    (o) => o.op === 'update' && (o.payload as Record<string, unknown> | undefined)?.['deletedAt'] != null
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   h.selectQueue = [];
@@ -357,6 +369,7 @@ describe('DELETE /api/tenant/pipelines/[id]', () => {
     const res = await DELETE(delReq(), params);
     expect(res.status).toBe(400);
     expect(opsOn(pipelines).filter((o) => o.op === 'delete')).toHaveLength(0);
+    expect(softDeletesOn(pipelines)).toHaveLength(0);
   });
 
   it('refuses with 409 when the pipeline still has deals', async () => {
@@ -370,8 +383,9 @@ describe('DELETE /api/tenant/pipelines/[id]', () => {
     const json = await res.json();
     expect(json.dealCount).toBe(4);
     expect(json.error).toContain('4 deals');
-    // Must not have attempted the cascade that would raise the FK violation.
+    // Must not have removed the pipeline at all, by either mechanism.
     expect(opsOn(pipelines).filter((o) => o.op === 'delete')).toHaveLength(0);
+    expect(softDeletesOn(pipelines)).toHaveLength(0);
   });
 
   it('uses singular wording for a single blocking deal', async () => {
@@ -392,7 +406,9 @@ describe('DELETE /api/tenant/pipelines/[id]', () => {
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ ok: true });
-    expect(opsOn(pipelines).filter((o) => o.op === 'delete')).toHaveLength(1);
+    expect(softDeletesOn(pipelines)).toHaveLength(1);
+    // Must not fall back to a hard DELETE, which is what #860 removed.
+    expect(opsOn(pipelines).filter((o) => o.op === 'delete')).toHaveLength(0);
   });
 
   it('deletes a stageless pipeline without running the deal count', async () => {
@@ -403,7 +419,7 @@ describe('DELETE /api/tenant/pipelines/[id]', () => {
 
     expect(res.status).toBe(200);
     expect(h.selectQueue).toHaveLength(0);
-    expect(opsOn(pipelines).filter((o) => o.op === 'delete')).toHaveLength(1);
+    expect(softDeletesOn(pipelines)).toHaveLength(1);
   });
 
   it('does not touch the deals table when refusing', async () => {

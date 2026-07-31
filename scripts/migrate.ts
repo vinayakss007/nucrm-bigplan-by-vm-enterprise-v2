@@ -7,6 +7,7 @@ import * as schema from '../drizzle/schema';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createInterface } from 'readline';
+import { pgSslConfig } from '../lib/db/ssl-config';
 
 const args = process.argv.slice(2);
 const isDryRun = args.includes('--dry-run');
@@ -76,17 +77,42 @@ async function main() {
     }
   }
 
-  const useSsl = process.env.DATABASE_SSL === 'true';
-
   const pool = new Pool({
     connectionString: databaseUrl,
-    ssl: useSsl ? { rejectUnauthorized: false } : false,
+    ssl: pgSslConfig(),
     connectionTimeoutMillis: 10_000,
   });
 
   const db = drizzle(pool, { schema });
 
   console.log('[migrate] Connecting to database...');
+
+  // Acquire advisory lock to prevent concurrent migration execution.
+  // Without this, two `npm run db:migrate` processes (e.g. CI + manual)
+  // can apply the same migrations simultaneously, corrupting the schema.
+  //
+  // Scope: this guards `db:migrate` only. `db:sync` (drizzle-kit push, which is what
+  // ci.yml actually runs) and scripts/rollback-migration.ts do not take this lock.
+  const MIGRATION_LOCK_KEY = 123456789; // Stable key shared by all db:migrate runs
+  const lockClient = await pool.connect();
+  try {
+    // Block rather than fail fast, so an overlapping run queues instead of breaking
+    // the pipeline -- but stay bounded: lock_timeout caps how long we wait.
+    await lockClient.query(`SET lock_timeout = '30000ms'`);
+    await lockClient.query(`SELECT pg_advisory_lock($1)`, [MIGRATION_LOCK_KEY]);
+    console.log('[migrate] Advisory lock acquired — no other migration can run concurrently.');
+  } catch (lockErr) {
+    // 55P03 lock_not_available: someone else held the lock for longer than lock_timeout.
+    if ((lockErr as { code?: string } | null)?.code === '55P03') {
+      console.error('[migrate] ERROR: Another migration is still running after 30s (advisory lock held).');
+      console.error('[migrate] Wait for it to finish or check for stuck connections.');
+    } else {
+      console.error('[migrate] Failed to acquire advisory lock:', lockErr);
+    }
+    lockClient.release();
+    await pool.end();
+    process.exit(1);
+  }
 
   // The ledger drizzle's migrate() actually consults is "drizzle"."__drizzle_migrations".
   //
@@ -144,6 +170,15 @@ async function main() {
   await migrate(db, { migrationsFolder: './drizzle/migrations' });
 
   console.log('[migrate] All migrations applied successfully');
+
+  // Release advisory lock
+  try {
+    await lockClient.query(`SELECT pg_advisory_unlock($1)`, [MIGRATION_LOCK_KEY]);
+    console.log('[migrate] Advisory lock released.');
+  } catch {
+    // Lock auto-releases on disconnect anyway
+  }
+  lockClient.release();
   await pool.end();
 }
 
