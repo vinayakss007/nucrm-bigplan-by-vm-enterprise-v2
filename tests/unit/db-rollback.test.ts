@@ -45,7 +45,7 @@ const TAG_DOWN_FILE = '0034_add_form_views_count';
 /** Migration with an inline `-- DOWN` / `-- END DOWN` section. */
 const TAG_INLINE = '0036_backup_records_checksum';
 /** Migration with no rollback SQL at all. */
-const TAG_NO_ROLLBACK = '0002_flat_sir_ram';
+const TAG_NO_ROLLBACK = '0017_missing_ai_tables_legacy';
 
 const tempDirs: string[] = [];
 
