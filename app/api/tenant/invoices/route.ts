@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
 
     if (discountType === 'percentage' && rawDiscount > 0) {
       resolvedDiscountType = 'percentage';
-      discountAmount = Math.round(subtotal * rawDiscount / 100 * 100) / 100;
+      discountAmount = Math.round((subtotal * rawDiscount / 100) * 100) / 100;
     } else {
       resolvedDiscountType = rawDiscount > 0 ? 'fixed' : 'percentage';
       discountAmount = rawDiscount;

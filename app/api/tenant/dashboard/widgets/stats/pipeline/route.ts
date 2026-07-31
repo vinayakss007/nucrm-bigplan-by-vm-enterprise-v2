@@ -11,11 +11,14 @@ export async function GET(request: NextRequest) {
   const tid = ctx.tenantId;
 
   return withCache(tid, 'stats-pipeline', 300, async () => {
-    // Subquery to get terminal stage IDs (won/lost)
+    // Subquery to get terminal stage IDs (won/lost) scoped to this tenant
     const terminalStageIds = db
       .select({ id: dealStages.id })
       .from(dealStages)
-      .where(sql`LOWER(${dealStages.name}) IN ('won', 'closed won', 'lost', 'closed lost')`);
+      .where(and(
+        eq(dealStages.tenantId, tid),
+        sql`LOWER(${dealStages.name}) IN ('won', 'closed won', 'lost', 'closed lost')`
+      ));
 
     const [result] = await db
       .select({

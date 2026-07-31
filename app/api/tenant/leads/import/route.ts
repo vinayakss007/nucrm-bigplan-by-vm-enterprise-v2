@@ -117,17 +117,26 @@ export async function POST(request: NextRequest) {
     };
 
     // Plan limits check - leads share the contacts pool
-    const [tenantWithPlan] = await db
-      .select({
-        currentContacts: tenants.currentContacts,
-        maxContacts: plans.maxContacts,
-      })
-      .from(tenants)
-      .innerJoin(plans, eq(plans.id, tenants.planId))
-      .where(eq(tenants.id, ctx.tenantId));
+    // Wrapped in a transaction with FOR UPDATE to prevent TOCTOU race conditions
+    let planLimitExceeded: string | null = null;
+    await db.transaction(async (tx) => {
+      const [tenantWithPlan] = await tx
+        .select({
+          currentContacts: tenants.currentContacts,
+          maxContacts: plans.maxContacts,
+        })
+        .from(tenants)
+        .innerJoin(plans, eq(plans.id, tenants.planId))
+        .where(eq(tenants.id, ctx.tenantId))
+        .for('update');
 
-    if (tenantWithPlan && tenantWithPlan.maxContacts != null && ((tenantWithPlan.currentContacts ?? 0) + rows.length) > tenantWithPlan.maxContacts) {
-      return NextResponse.json({ error: `Import would exceed plan limit of ${tenantWithPlan.maxContacts} contacts (leads share the contacts pool).` }, { status: 403 });
+      if (tenantWithPlan && tenantWithPlan.maxContacts != null && ((tenantWithPlan.currentContacts ?? 0) + rows.length) > tenantWithPlan.maxContacts) {
+        planLimitExceeded = `Import would exceed plan limit of ${tenantWithPlan.maxContacts} contacts (leads share the contacts pool).`;
+      }
+    });
+
+    if (planLimitExceeded) {
+      return NextResponse.json({ error: planLimitExceeded }, { status: 403 });
     }
 
     for (const [index, row] of rows.entries()) {

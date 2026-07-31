@@ -47,8 +47,8 @@ export async function GET(request: NextRequest) {
       db.select({ value: count() }).from(users).then(r => r[0]!.value),
       db.select({ value: count() }).from(tasks).where(eq(tasks.status, 'completed')).then(r => r[0]!.value),
       db.select({ value: count() }).from(contacts).where(and(gte(contacts.createdAt, yesterday), isNull(contacts.deletedAt))).then(r => r[0]!.value),
-      db.select({ value: count() }).from(leads).where(gte(leads.createdAt, yesterday)).then(r => r[0]!.value),
-      db.select({ value: count() }).from(deals).where(gte(deals.createdAt, yesterday)).then(r => r[0]!.value),
+      db.select({ value: count() }).from(leads).where(and(gte(leads.createdAt, yesterday), isNull(leads.deletedAt))).then(r => r[0]!.value),
+      db.select({ value: count() }).from(deals).where(and(gte(deals.createdAt, yesterday), isNull(deals.deletedAt))).then(r => r[0]!.value),
     ]);
 
     push(metrics, 'nucrm_contacts_total', 'Total contacts in CRM', 'gauge', Number(contactsCount));

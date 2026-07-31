@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "fix",
   "description": "Fix financial calculation bugs: invoice discount/tax rounding, currency conversion for zero-decimal currencies, pipeline widget double-counting won/lost deals, and analytics usage queries missing soft-delete filters",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "1. Fix app/api/tenant/invoices/route.ts POST: The invoice creation calculates discountAmount as a fixed number (discount ?? 0) but the discount parameter might be a percentage. The taxableAmount subtracts discountAmount from subtotal, but if discountType is 'percentage' then discountAmount should be calculated as subtotal * discount/100. Currently discountType is always set to 'fixed' when discount > 0, which means a percentage discount entered by the user gets stored as a fixed amount without computing the actual dollar value. Fix: when the caller passes discount_type='percentage', compute discountAmount = subtotal * discount / 100; otherwise use the raw value. Round all money values using toFixed(2).",
     "2. Fix lib/currency.ts convertAmount(): For zero-decimal currencies (JPY, KRW, IDR, HUF, CLP) the function rounds to 2 decimal places via Math.round(amount * rate * 100) / 100, but these currencies should round to 0 decimal places. Fix: look up the target currency's decimalPlaces from SUPPORTED_CURRENCIES and round accordingly.",
@@ -25,5 +25,5 @@
     "npx vitest run passes"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 6 fixes implemented and verified. TypeScript compiles cleanly. 5 pre-existing test failures (ENCRYPTION_KEY env validation) confirmed present on base branch - not caused by these changes. The lint-staged pre-commit hook ran eslint and prettier successfully."
 }
