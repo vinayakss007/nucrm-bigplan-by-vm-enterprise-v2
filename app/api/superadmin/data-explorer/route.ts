@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { sql } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
