@@ -183,12 +183,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
 
     if (updateData.stageId && prev.stageId !== updateData.stageId) {
+      // Resolve human-readable stage names for both old and new stages.
+      // The hooks and notifications need names (e.g. 'Proposal', 'Won'),
+      // not UUIDs, to match against known stage labels.
+      const [fromStageInfo, toStageInfo] = await Promise.all([
+        db.select({ name: dealStages.name }).from(dealStages).where(eq(dealStages.id, prev.stageId!)).limit(1),
+        db.select({ name: dealStages.name }).from(dealStages).where(eq(dealStages.id, updateData.stageId)).limit(1),
+      ]);
+      const fromStageName = fromStageInfo[0]?.name ?? prev.stageId!;
+      const toStageName = toStageInfo[0]?.name ?? updateData.stageId;
+
       // Logic for stage change
       await notifyTenantMembers({
         tenantId: ctx.tenantId,
         excludeUserId: ctx.userId,
         type: 'deal_stage',
-        title: `Deal moved to ${updateData.stageId}: ${row!.title}`.trim(),
+        title: `Deal moved to ${toStageName}: ${row!.title}`.trim(),
         entity_type: 'deal',
         entity_id: dealId,
         link: `/tenant/deals/${dealId}`
@@ -200,16 +210,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         action: 'deal_stage_change',
         entityType: 'deal',
         entityId: dealId,
-        oldData: { stage: prev.stageId },
-        newData: { stage: updateData.stageId }
+        oldData: { stage: fromStageName },
+        newData: { stage: toStageName }
       });
 
       // Fire deal.stage_changed automation + webhooks
       fireWebhooks(ctx.tenantId, 'deal.stage_changed', {
         id: dealId,
         title: row!.title,
-        stage_from: prev.stageId,
-        stage_to: updateData.stageId,
+        stage_from: fromStageName,
+        stage_to: toStageName,
         contact_id: row!.contactId,
       }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
@@ -219,13 +229,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           tenantId: ctx.tenantId,
           userId: ctx.userId,
           event: 'deal.stage_changed',
-          data: { ...row, id: dealId, stage_from: prev.stageId, stage_to: updateData.stageId },
+          data: { ...row, id: dealId, stage_from: fromStageName, stage_to: toStageName },
         }).catch(err => console.error('[deals PATCH] deal.stage_changed automation failed:', err));
       } catch (e) {
         console.error('[deals PATCH] automation import failed:', e);
       }
 
       // Run stage-change hooks (auto-create tasks, notify assignee, etc.)
+      // Pass resolved stage names so downstream hooks can match against
+      // human-readable labels like 'proposal', 'negotiation', 'won'.
       runStageChangeHooks({
         dealId,
         dealTitle: row!.title,
@@ -233,22 +245,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         userId: ctx.userId,
         assignedTo: row!.assignedTo ?? null,
         contactId: row!.contactId ?? null,
-        fromStage: prev.stageId!,
-        toStage: updateData.stageId,
+        fromStage: fromStageName,
+        toStage: toStageName,
         amount: row!.amount ?? null,
       }).catch(err => console.error('[deals PATCH] stage-change hooks failed:', err));
 
-      // Check if 'won' stage - get stage name to compare
-      if (updateData.stageId) {
-        const [stageInfo] = await db
-          .select({ name: dealStages.name })
-          .from(dealStages)
-          .where(eq(dealStages.id, updateData.stageId))
-          .limit(1);
-        
-        if (stageInfo?.name?.toLowerCase() === 'won') {
-          await handleDealWon(ctx, dealId, row);
-        }
+      // Check if 'won' stage using already-resolved name
+      if (toStageName.toLowerCase() === 'won' || toStageName.toLowerCase() === 'closed won') {
+        await handleDealWon(ctx, dealId, row);
       }
     }
 

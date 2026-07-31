@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
 import { db } from '@/drizzle/db';
-import { followUps } from '@/drizzle/schema';
+import { followUps, tenants } from '@/drizzle/schema';
 import { eq, and, lte, isNull, sql } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
 
@@ -23,6 +23,9 @@ export async function POST(req: NextRequest) {
         eq(followUps.status, 'pending'),
         lte(followUps.dueDate, now),
         isNull(followUps.deletedAt),
+        // Only process follow-ups for active/trialing tenants - skip suspended,
+        // cancelled, or trial_expired tenants whose users cannot act on alerts.
+        sql`${followUps.tenantId} IN (SELECT ${tenants.id} FROM ${tenants} WHERE ${tenants.status} IN ('active', 'trialing') AND ${tenants.deletedAt} IS NULL)`,
       ))
       .returning({ id: followUps.id, missedDays: followUps.missedDays, assignedTo: followUps.assignedTo, tenantId: followUps.tenantId, title: followUps.title, entityType: sql<string>`CASE WHEN ${followUps.dealId} IS NOT NULL THEN 'deal' WHEN ${followUps.contactId} IS NOT NULL THEN 'contact' WHEN ${followUps.leadId} IS NOT NULL THEN 'lead' ELSE 'task' END`, entityId: sql<string>`COALESCE(${followUps.dealId}, ${followUps.contactId}, ${followUps.leadId}, ${followUps.id})` });
 

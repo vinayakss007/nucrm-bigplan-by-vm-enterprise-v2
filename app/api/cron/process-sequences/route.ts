@@ -14,11 +14,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    // Wrap the entire fetch + processing in a single transaction so that
-    // FOR UPDATE SKIP LOCKED actually holds locks until processing completes.
-    // This prevents concurrent cron invocations from double-processing the same rows.
-    const processed = await db.transaction(async (tx) => {
-      // 1. Fetch enrollments that are due (with FOR UPDATE SKIP LOCKED for idempotency)
+    // Phase 1: Acquire locks and collect enrollment data in a short transaction.
+    // This releases the row locks quickly, then we process each enrollment
+    // in its own independent transaction so that a single failure does not
+    // poison the entire batch.
+    const { dueEnrollments, stepMap } = await db.transaction(async (tx) => {
+      // Fetch enrollments that are due (with FOR UPDATE SKIP LOCKED for idempotency)
       const dueEnrollmentRows = await tx.execute(sql`
         SELECT id, tenant_id, sequence_id, contact_id, current_step, next_step_at, status
         FROM sequence_enrollments
@@ -30,7 +31,11 @@ export async function POST(req: NextRequest) {
       `);
 
       if (dueEnrollmentRows.rows.length === 0) {
-        return 0;
+        return { dueEnrollments: [] as Array<{
+          id: string; tenantId: string; sequenceId: string; contactId: string;
+          currentStep: number; nextStepAt: Date; status: string;
+          contact: { email: string | null; doNotContact: boolean } | null;
+        }>, stepMap: new Map<string, never>() };
       }
 
       // Batch-fetch all associated contacts in a single IN query (fixes N+1)
@@ -40,16 +45,16 @@ export async function POST(req: NextRequest) {
       const contactRows = await tx.execute(sql`
         SELECT id, email, do_not_contact FROM contacts WHERE id IN (${sql.join(contactIds.map(id => sql`${id}::uuid`), sql`, `)})
       `);
-      const contactMap = new Map<string, { email: string | null; doNotContact: boolean }>();
+      const cMap = new Map<string, { email: string | null; doNotContact: boolean }>();
       for (const cr of contactRows.rows) {
         const c = cr as Record<string, unknown>;
-        contactMap.set(c.id as string, {
+        cMap.set(c.id as string, {
           email: c.email as string | null,
           doNotContact: c.do_not_contact as boolean,
         });
       }
 
-      const dueEnrollments: Array<{
+      const enrollments: Array<{
         id: string;
         tenantId: string;
         sequenceId: string;
@@ -62,7 +67,7 @@ export async function POST(req: NextRequest) {
 
       for (const row of dueEnrollmentRows.rows) {
         const r = row as Record<string, unknown>;
-        dueEnrollments.push({
+        enrollments.push({
           id: r.id as string,
           tenantId: r.tenant_id as string,
           sequenceId: r.sequence_id as string,
@@ -70,12 +75,12 @@ export async function POST(req: NextRequest) {
           currentStep: r.current_step as number,
           nextStepAt: r.next_step_at as Date,
           status: r.status as string,
-          contact: contactMap.get(r.contact_id as string) ?? null,
+          contact: cMap.get(r.contact_id as string) ?? null,
         });
       }
 
       // Batch-fetch all steps upfront to avoid N+1 queries
-      const uniqueSequenceIds = [...new Set(dueEnrollments.map(e => e.sequenceId))];
+      const uniqueSequenceIds = [...new Set(enrollments.map(e => e.sequenceId))];
       const allSteps = await tx.query.sequenceSteps.findMany({
         where: and(
           sql`${sequenceSteps.sequenceId} IN (${sql.join(uniqueSequenceIds.map(id => sql`${id}::uuid`), sql`, `)})`,
@@ -83,16 +88,37 @@ export async function POST(req: NextRequest) {
         ),
       });
       // Build lookup map: sequenceId:stepNumber -> step
-      const stepMap = new Map<string, typeof allSteps[number]>();
+      const sMap = new Map<string, typeof allSteps[number]>();
       for (const step of allSteps) {
-        stepMap.set(`${step.sequenceId}:${step.stepNumber}`, step);
+        sMap.set(`${step.sequenceId}:${step.stepNumber}`, step);
       }
 
-      let count = 0;
+      return { dueEnrollments: enrollments, stepMap: sMap };
+    });
 
-      for (const enrollment of dueEnrollments) {
-        try {
-          // 2. Lookup the current step from pre-fetched map (O(1) instead of N queries)
+    if (dueEnrollments.length === 0) {
+      return NextResponse.json({ ok: true, processed: 0 });
+    }
+
+    // Phase 2: Process each enrollment in its own transaction.
+    // A failure in one enrollment does not affect the others.
+    let processed = 0;
+
+    for (const enrollment of dueEnrollments) {
+      try {
+        await db.transaction(async (tx) => {
+          // Re-confirm the enrollment is still active (guards against race after lock release)
+          const [current] = await tx.execute(sql`
+            SELECT id, status, current_step
+            FROM sequence_enrollments
+            WHERE id = ${enrollment.id}::uuid
+              AND status = 'active'
+            FOR UPDATE
+          `).then(r => r.rows as Array<Record<string, unknown>>);
+
+          if (!current) return; // Already processed or paused by another instance
+
+          // Lookup the current step from pre-fetched map
           const step = stepMap.get(`${enrollment.sequenceId}:${enrollment.currentStep}`);
 
           if (!step) {
@@ -104,10 +130,10 @@ export async function POST(req: NextRequest) {
                 updatedAt: new Date()
               })
               .where(eq(sequenceEnrollments.id, enrollment.id));
-            continue;
+            return;
           }
 
-          // 3. Execute the step
+          // Execute the step
           let success = true;
           let errorMessage: string | null = null;
 
@@ -159,7 +185,7 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          // 4. Log the step execution
+          // Log the step execution
           await tx.update(sequenceStepLogs)
             .set({
               status: success ? 'sent' : 'failed',
@@ -181,10 +207,10 @@ export async function POST(req: NextRequest) {
                 updatedAt: new Date()
               })
               .where(eq(sequenceEnrollments.id, enrollment.id));
-            continue;
+            return;
           }
 
-          // 5. Calculate next step
+          // Calculate next step
           const nextStepNumber = enrollment.currentStep + 1;
           const nextStepResult = await tx.execute(sql`
             SELECT public.calculate_sequence_step_date(now(), ${enrollment.sequenceId}::uuid, ${nextStepNumber}) as next_date
@@ -230,21 +256,19 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          count++;
+          processed++;
+        });
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (err: any) {
-          console.error(`[Sequence Processor] Error processing enrollment ${enrollment.id}:`, err.message);
-          // Reschedule for 1 hour later within the transaction
-          await tx.update(sequenceEnrollments)
-            .set({ nextStepAt: new Date(Date.now() + 3600000) })
-            .where(eq(sequenceEnrollments.id, enrollment.id))
-            .catch((e) => logError({ error: e, context: "async-catch:[context]" }));
-        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } catch (err: any) {
+        console.error(`[Sequence Processor] Error processing enrollment ${enrollment.id}:`, err.message);
+        // Reschedule for 1 hour later in a separate statement (outside the failed tx)
+        await db.update(sequenceEnrollments)
+          .set({ nextStepAt: new Date(Date.now() + 3600000), updatedAt: new Date() })
+          .where(and(eq(sequenceEnrollments.id, enrollment.id), eq(sequenceEnrollments.status, 'active')))
+          .catch((e) => logError({ error: e, context: "async-catch:[context]" }));
       }
-
-      return count;
-    });
+    }
 
     return NextResponse.json({ ok: true, processed });
 
