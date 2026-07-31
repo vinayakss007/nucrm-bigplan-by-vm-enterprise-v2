@@ -166,7 +166,7 @@ async function sendBreachNotification(
       type: 'sla_breach',
       title: `SLA breach: ${breachLabel} overdue by ${minutesOverdue}min`,
       body: `Ticket "${ticket.subject}" (${ticket.priority}) has exceeded its ${breachLabel} SLA.`,
-      entity_type: 'contact',
+      entity_type: 'ticket',
       entity_id: ticket.id,
       metadata: { breach_type: breachType, minutes_overdue: minutesOverdue, escalation_level: escalationLevel },
     }).catch((err) => logError({ error: err, context: 'async-catch:sla-notify' }));
@@ -220,7 +220,7 @@ async function sendEscalationNotification(
       type: 'sla_escalation',
       title: `SLA escalation (L${escalationLevel}): ${ticket.subject}`,
       body: `${breachLabel} overdue by ${minutesOverdue}min — ticket requires immediate attention.`,
-      entity_type: 'contact',
+      entity_type: 'ticket',
       entity_id: ticket.id,
       metadata: { breach_type: breachType, minutes_overdue: minutesOverdue, escalation_level: escalationLevel },
     }).catch((err) => logError({ error: err, context: 'async-catch:sla-escalation-notify' }));

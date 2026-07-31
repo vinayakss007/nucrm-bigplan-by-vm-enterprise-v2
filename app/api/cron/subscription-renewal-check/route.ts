@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
             title: `Subscription "${sub.name}" renews in ${days} days`,
             body: `${sub.planName || 'Plan'} renews on ${dateStr}. Amount: $${Number(sub.amount || 0).toFixed(2)}/${sub.autoRenew ? 'auto-renews' : 'manual renewal'}`,
             link: `/tenant/subscriptions/${sub.id}`,
-            entity_type: 'contact',
+            entity_type: 'subscription',
             entity_id: sub.id,
             metadata: { subscription_id: sub.id, reminder_days: days, end_date: sub.currentPeriodEnd },
           }).catch((err) => logError({ error: err, context: 'subscription-renewal-notification' }));
