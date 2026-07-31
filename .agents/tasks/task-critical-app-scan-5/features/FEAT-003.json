@@ -2,7 +2,7 @@
   "id": "FEAT-003",
   "type": "fix",
   "description": "Fix RBAC bypass on individual record endpoints. The list endpoints (GET /api/tenant/deals, GET /api/tenant/tasks, GET /api/tenant/contacts) properly filter by assignedTo/createdBy when the user lacks view_all permission. But the individual GET endpoints (/api/tenant/deals/[id], /api/tenant/contacts/[id]) only check that the user has the basic 'view' permission and then return ANY record in the tenant. A regular user without deals.view_all can access any deal by guessing/knowing the UUID.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "In app/api/tenant/deals/[id]/route.ts GET handler (line ~17-67): After fetching the deal row, add an ownership check. If the user does NOT have 'deals.view_all' permission (check with can(ctx, 'deals.view_all')), verify that either deals.assignedTo === ctx.userId OR deals.createdBy === ctx.userId. If neither matches, return 404 (not 403 to avoid information disclosure). Import 'can' from '@/lib/auth/middleware'.",
     "In app/api/tenant/contacts/[id]/route.ts GET handler (around line 17-73): Same pattern. After fetching the contact row, if the user does NOT have 'contacts.view_all' permission, verify contacts.assignedTo === ctx.userId OR contacts.createdBy is the user. Return 404 if not authorized. Need to import 'can' from middleware. Note: contacts table has createdBy column. The select should include createdBy if not already.",
@@ -17,5 +17,5 @@
     "Run: npx tsc --noEmit app/api/tenant/deals/[id]/route.ts app/api/tenant/contacts/[id]/route.ts app/api/tenant/tasks/[id]/route.ts 2>&1 | head -30"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All three files modified successfully. TypeScript compilation passes (no errors in modified files; 19 pre-existing errors in unrelated files). Pre-commit hooks (eslint + prettier) passed. The deals and contacts schemas both have createdBy from utils.audit(). tasks schema also uses utils.audit() providing createdBy."
 }
