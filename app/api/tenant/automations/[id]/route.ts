@@ -6,6 +6,7 @@ import { automations, automationRuns, users } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateAutomationSchema } from '@/lib/api/schemas';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 /**
@@ -104,6 +105,11 @@ export async function PATCH(
     const validated = validateBody(updateAutomationSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const body = validated.data;
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = rawBody.expectedUpdatedAt ? new Date(rawBody.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, automations, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const updateData: Record<string, unknown> = {
       updatedAt: new Date(),

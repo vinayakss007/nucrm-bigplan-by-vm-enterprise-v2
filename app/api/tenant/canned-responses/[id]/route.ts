@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { cannedResponses } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 
@@ -31,6 +32,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!validated.success) {
       return NextResponse.json({ error: validated.error.flatten().fieldErrors }, { status: 400 });
     }
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = (body as Record<string, unknown>).expectedUpdatedAt ? new Date((body as Record<string, unknown>).expectedUpdatedAt as string) : null;
+    const guard = await concurrencyGuard(db, cannedResponses, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const [row] = await db.update(cannedResponses)
       .set({ ...validated.data, updatedAt: new Date() })
