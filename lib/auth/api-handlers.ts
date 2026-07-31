@@ -298,14 +298,14 @@ export async function POST_signup(request: NextRequest) {
 
       if (!pipeline) throw new Error('Failed to create pipeline');
 
-      // 2. Create Default Stages
+      // 2. Create Default Stages (0-based ordering)
       const defaultStages = [
-        { name: 'Lead', order: 1 },
-        { name: 'Qualified', order: 2 },
-        { name: 'Proposal', order: 3 },
-        { name: 'Negotiation', order: 4 },
-        { name: 'Won', order: 5 },
-        { name: 'Lost', order: 6 },
+        { name: 'Lead', order: 0 },
+        { name: 'Qualified', order: 1 },
+        { name: 'Proposal', order: 2 },
+        { name: 'Negotiation', order: 3 },
+        { name: 'Won', order: 4 },
+        { name: 'Lost', order: 5 },
       ];
 
       for (const s of defaultStages) {

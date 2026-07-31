@@ -63,6 +63,18 @@ export async function POST(request: NextRequest) {
     ];
 
     const [newPipeline] = await db.transaction(async (tx) => {
+      // Remove existing default pipelines and their stages to avoid duplicates
+      const existingDefaults = await tx.select({ id: pipelines.id })
+        .from(pipelines)
+        .where(and(eq(pipelines.tenantId, ctx.tenantId), eq(pipelines.isDefault, true)));
+
+      for (const old of existingDefaults) {
+        await tx.delete(dealStages).where(
+          and(eq(dealStages.tenantId, ctx.tenantId), eq(dealStages.pipelineId, old.id))
+        );
+        await tx.delete(pipelines).where(eq(pipelines.id, old.id));
+      }
+
       const [p] = await tx.insert(pipelines).values({
         tenantId: ctx.tenantId,
         name: v.pipelineName.trim(),
