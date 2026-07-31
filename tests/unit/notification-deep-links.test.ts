@@ -24,14 +24,22 @@ let lastInsertValues: Record<string, unknown> | null = null;
 let allInsertValues: Record<string, unknown>[] = [];
 /** Rows returned for the tenantMembers lookup in notifyTenantMembers. */
 let memberRows: { userId: string }[] = [];
+/** How many upcoming `.values()` calls should reject, to exercise the retry path. */
+let insertFailuresRemaining = 0;
 
 const insertSpy = vi.fn((table: unknown) => {
   lastInsertTable = table;
   return {
     values: vi.fn(async (v: Record<string, unknown> | Record<string, unknown>[]) => {
       const rows = Array.isArray(v) ? v : [v];
+      // Record the attempt before deciding to fail, so a test can inspect what
+      // the first (failed) attempt tried to write as well as the retry.
       for (const row of rows) allInsertValues.push(row);
       lastInsertValues = rows[0] ?? null;
+      if (insertFailuresRemaining > 0) {
+        insertFailuresRemaining--;
+        throw new Error('deadlock detected');
+      }
       return undefined;
     }),
   };
@@ -109,6 +117,7 @@ describe('notification deep links', () => {
     lastInsertValues = null;
     allInsertValues = [];
     memberRows = [{ userId: USER }];
+    insertFailuresRemaining = 0;
   });
 
   describe('every entity type in the union resolves to a real page route', () => {
@@ -248,6 +257,21 @@ describe('notification deep links', () => {
       expect(lastInsertTable).toBe(notifications);
     });
 
+    it('does not mutate the caller-supplied metadata object', async () => {
+      // The entity reference used to be assigned straight into opts.metadata,
+      // mutating an object the caller still owns.
+      const callerMetadata: Record<string, unknown> = { reminder_days: 30 };
+      await notifyWith({
+        entity_type: 'contract',
+        entity_id: ENTITY,
+        metadata: callerMetadata,
+      });
+
+      expect(callerMetadata).toEqual({ reminder_days: 30 });
+      expect(callerMetadata).not.toHaveProperty('entity_type');
+      expect(callerMetadata).not.toHaveProperty('entity_id');
+    });
+
     it('every key in the insert payload is a real notifications column', async () => {
       const values = await notifyWith({
         entity_type: 'subscription',
@@ -260,6 +284,71 @@ describe('notification deep links', () => {
       expect(realColumns).toContain('metadata');
       const ghostKeys = Object.keys(values).filter((k) => !realColumns.includes(k));
       expect(ghostKeys).toEqual([]);
+    });
+  });
+
+  describe('the retry path writes the same row as the first attempt', () => {
+    // createNotification retries once if the first insert fails. That retry used
+    // to rebuild the payload from `opts.link ?? null` / `opts.metadata ?? {}`,
+    // deriving neither the deep link nor the entity reference — so a
+    // notification that only landed on retry silently lost its link.
+    it('preserves the derived deep link on retry', async () => {
+      insertFailuresRemaining = 1;
+
+      const { createNotification } = await import('@/lib/notifications');
+      await createNotification({
+        userId: USER,
+        tenantId: TENANT,
+        type: 'sla_breach',
+        title: 'SLA breach',
+        entity_type: 'ticket',
+        entity_id: ENTITY,
+      });
+
+      expect(allInsertValues).toHaveLength(2);
+      const retryRow = allInsertValues[1]!;
+      expect(retryRow['link']).toBe(`/tenant/tickets/${ENTITY}`);
+      expect(retryRow['link']).not.toBeNull();
+    });
+
+    it('preserves the entity reference in metadata on retry', async () => {
+      insertFailuresRemaining = 1;
+
+      const { createNotification } = await import('@/lib/notifications');
+      await createNotification({
+        userId: USER,
+        tenantId: TENANT,
+        type: 'contract_renewal',
+        title: 'Contract renewal',
+        entity_type: 'contract',
+        entity_id: ENTITY,
+        metadata: { reminder_days: 30 },
+      });
+
+      expect(allInsertValues).toHaveLength(2);
+      expect(allInsertValues[1]!['metadata']).toMatchObject({
+        reminder_days: 30,
+        entity_type: 'contract',
+        entity_id: ENTITY,
+      });
+    });
+
+    it('writes an identical payload on both attempts', async () => {
+      insertFailuresRemaining = 1;
+
+      const { createNotification } = await import('@/lib/notifications');
+      await createNotification({
+        userId: USER,
+        tenantId: TENANT,
+        type: 'subscription_renewal',
+        title: 'Subscription renewal',
+        body: 'Renews soon',
+        entity_type: 'subscription',
+        entity_id: ENTITY,
+      });
+
+      expect(allInsertValues).toHaveLength(2);
+      expect(allInsertValues[1]).toEqual(allInsertValues[0]);
     });
   });
 });

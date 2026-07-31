@@ -110,21 +110,26 @@ export async function createNotification(opts: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata?: Record<string, any>;
 }) {
-  try {
-    // Build enriched metadata that includes entity reference for deep links
+  // Enriched metadata and the derived link are computed ONCE, outside the try,
+  // so the retry path below writes the same row as the first attempt. It used to
+  // recompute neither, silently dropping the deep link and the entity reference
+  // from any notification that only succeeded on retry.
+  //
+  // Spread rather than reuse: assigning into `opts.metadata` directly would
+  // mutate the caller's own object as a side effect.
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const meta: Record<string, any> = opts.metadata ?? {};
-    if (opts.entity_type) meta['entity_type'] = opts.entity_type;
-    if (opts.entity_id)   meta['entity_id']   = opts.entity_id;
+  const meta: Record<string, any> = { ...(opts.metadata ?? {}) };
+  if (opts.entity_type) meta['entity_type'] = opts.entity_type;
+  if (opts.entity_id)   meta['entity_id']   = opts.entity_id;
 
-    // Auto-derive link from entity if not explicitly provided
-    let link = opts.link ?? null;
-    if (!link && opts.entity_type && opts.entity_id) {
-      link = deriveEntityLink(opts.entity_type, opts.entity_id);
-    }
+  let link = opts.link ?? null;
+  if (!link && opts.entity_type && opts.entity_id) {
+    link = deriveEntityLink(opts.entity_type, opts.entity_id);
+  }
 
+  try {
     await withTenantContext(opts.tenantId, opts.userId, async (tx) => {
       await tx.insert(notifications).values({
         userId: opts.userId,
@@ -157,8 +162,8 @@ export async function createNotification(opts: {
           type: opts.type,
           title: opts.title.slice(0, 200),
           body: opts.body?.slice(0, 500) ?? '',
-          link: opts.link ?? null,
-          metadata: opts.metadata ?? {},
+          link,
+          metadata: meta,
         });
       });
       return;
