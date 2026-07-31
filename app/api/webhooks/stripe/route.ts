@@ -122,8 +122,11 @@ async function handleCheckoutCompleted(session: any) {
   const customerId = session.customer;
   const subscriptionId = session.subscription;
 
-  // Determine plan from price
-  const planId = determinePlanFromSession(session);
+  // Determine plan using the most reliable method available:
+  // 1. Try subscription object (price ID mapping)
+  // 2. Try line_items price ID
+  // 3. Fall back to amount heuristic (last resort)
+  const planId = determinePlanFromCheckoutSession(session);
 
   await db.update(tenants)
     .set({
@@ -265,15 +268,51 @@ async function handlePaymentFailed(invoice: any) {
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function determinePlanFromSession(session: any): string | null {
-  // Try to extract from line items metadata or price lookup
+function determinePlanFromCheckoutSession(session: any): string | null {
+  // Strategy 1: If the subscription is expanded (object with items), use price ID mapping
+  const subscription = session.subscription;
+  if (subscription && typeof subscription === 'object') {
+    const plan = determinePlanFromSubscription(subscription);
+    if (plan) return plan;
+  }
+
+  // Strategy 2: Extract price ID from session line_items (if expanded on the session)
+  const lineItems = session.line_items?.data;
+  if (Array.isArray(lineItems) && lineItems.length > 0) {
+    const priceId = lineItems[0]?.price?.id;
+    if (priceId) {
+      const plan = determinePlanFromPriceId(priceId);
+      if (plan) return plan;
+    }
+  }
+
+  // Strategy 3 (last-resort fallback): Amount-based heuristic.
+  // WARNING: This is fragile and will break if prices change. It exists only as a
+  // safety net when Stripe does not expand subscription or line_items on the session.
   const amountTotal = session.amount_total; // in cents
   if (!amountTotal) return null;
 
-  // Simple heuristic based on amount (configure properly with price IDs)
   if (amountTotal <= 2900) return 'starter';
   if (amountTotal <= 7900) return 'pro';
   return 'enterprise';
+}
+
+/**
+ * Map a Stripe price ID to a NuCRM plan using environment variable configuration.
+ */
+function determinePlanFromPriceId(priceId: string): string | null {
+  const starterMonthly = process.env['STRIPE_PRICE_STARTER_MONTHLY'];
+  const starterYearly = process.env['STRIPE_PRICE_STARTER_YEARLY'];
+  const proMonthly = process.env['STRIPE_PRICE_PRO_MONTHLY'];
+  const proYearly = process.env['STRIPE_PRICE_PRO_YEARLY'];
+  const enterpriseMonthly = process.env['STRIPE_PRICE_ENTERPRISE_MONTHLY'];
+  const enterpriseYearly = process.env['STRIPE_PRICE_ENTERPRISE_YEARLY'];
+
+  if (priceId === starterMonthly || priceId === starterYearly) return 'starter';
+  if (priceId === proMonthly || priceId === proYearly) return 'pro';
+  if (priceId === enterpriseMonthly || priceId === enterpriseYearly) return 'enterprise';
+
+  return null;
 }
 
  
