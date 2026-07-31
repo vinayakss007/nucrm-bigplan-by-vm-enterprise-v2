@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { leadScoringRules } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
@@ -29,6 +30,11 @@ export async function PATCH(
     let body;
     try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const { factor, weight, condition, active } = body;
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = body.expectedUpdatedAt ?? body._updated_at;
+    const guard = await concurrencyGuard(db, leadScoringRules, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const [row] = await db
       .update(leadScoringRules)
