@@ -79,6 +79,14 @@ export async function PATCH(
     const { id } = await params;
 
     const body = await readJsonBody(request);
+
+    // Optimistic concurrency: reject stale writes
+    const expectedUpdatedAt = body?.expectedUpdatedAt ?? body?._updated_at;
+    if (expectedUpdatedAt) {
+      const guard = await concurrencyGuard(db, workflows, id, ctx.tenantId, expectedUpdatedAt);
+      if (guard) return guard;
+    }
+
     const {
       name,
       description,
@@ -181,13 +189,6 @@ export async function DELETE(
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
     const { id } = await params;
-
-    // Optimistic concurrency: reject stale writes
-    const expectedUpdatedAt = body?.expectedUpdatedAt ?? body?._updated_at;
-    if (expectedUpdatedAt) {
-      const guard = await concurrencyGuard(db, workflows, id, ctx.tenantId, expectedUpdatedAt);
-      if (guard) return guard;
-    }
 
     await db.update(workflows).set({ deletedAt: new Date() }).where(and(eq(workflows.id, id), eq(workflows.tenantId, ctx.tenantId)));
 

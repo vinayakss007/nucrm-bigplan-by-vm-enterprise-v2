@@ -56,7 +56,7 @@ export async function PATCH(
   if (config instanceof NextResponse) return config;
 
   // Optimistic concurrency: reject if another update happened since client read
-  const expectedUpdatedAt = (v as unknown as Record<string,unknown>)?.expectedUpdatedAt ?? (v as unknown as Record<string,unknown>)?._updated_at;
+  const expectedUpdatedAt = ((body as unknown) as Record<string, unknown> | null)?.expectedUpdatedAt as string | undefined;
   const guard = await concurrencyGuard(db, ssoProviders, id, ctx.tenantId, expectedUpdatedAt);
   if (guard) return guard;
 
