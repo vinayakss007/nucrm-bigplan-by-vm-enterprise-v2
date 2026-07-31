@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { db } from '@/drizzle/db';
 import { users, tenants } from '@/drizzle/schema';
 import { eq, sql, desc } from 'drizzle-orm';
@@ -25,6 +26,20 @@ function sendReply(chatId: number, text: string) {
 export async function POST(req: NextRequest) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return NextResponse.json({ ok: false });
+
+  // Verify X-Telegram-Bot-Api-Secret-Token header if TELEGRAM_WEBHOOK_SECRET is configured
+  const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const providedToken = req.headers.get('x-telegram-bot-api-secret-token') ?? '';
+    const expectedBuf = Buffer.from(webhookSecret, 'utf8');
+    const providedBuf = Buffer.from(providedToken, 'utf8');
+
+    if (expectedBuf.length !== providedBuf.length || !timingSafeEqual(expectedBuf, providedBuf)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  } else {
+    console.warn('[telegram bot] TELEGRAM_WEBHOOK_SECRET is not set. Webhook requests are not verified.');
+  }
 
   const body: TelegramMessage = await readJsonBody(req);
   const chatId = body.message?.chat?.id;

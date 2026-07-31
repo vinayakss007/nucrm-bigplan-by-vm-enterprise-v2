@@ -5,6 +5,7 @@ import { apiError } from '@/lib/api-error';
  * On bounce/complaint: sets doNotContact=true on the contact.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { db } from '@/drizzle/db';
 import { contacts, sequenceEnrollments, activities } from '@/drizzle/schema';
 import { eq, and, isNull, inArray } from 'drizzle-orm';
@@ -17,8 +18,11 @@ export async function POST(req: NextRequest) {
     // Optional: Verify webhook secret if configured
     const urlSecret = process.env.RESEND_WEBHOOK_SECRET;
     if (urlSecret) {
-      const providedSecret = req.headers.get('x-webhook-secret');
-      if (!providedSecret || providedSecret !== urlSecret) {
+      const providedSecret = req.headers.get('x-webhook-secret') ?? '';
+      const expectedBuf = Buffer.from(urlSecret, 'utf8');
+      const providedBuf = Buffer.from(providedSecret, 'utf8');
+
+      if (expectedBuf.length !== providedBuf.length || !timingSafeEqual(expectedBuf, providedBuf)) {
         return NextResponse.json({ error: 'Invalid webhook secret' }, { status: 401 });
       }
     }

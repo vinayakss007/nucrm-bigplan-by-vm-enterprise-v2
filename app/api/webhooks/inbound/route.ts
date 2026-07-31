@@ -21,12 +21,21 @@ const inboundLimiter = new RateLimiter({ max: 100, window: 60 });
 // ── In-memory request tracking (last 100 per API key prefix) ──────────
 const requestLog = new Map<string, Array<{ ts: number; status: number; path: string }>>();
 const MAX_LOG_PER_KEY = 100;
+const MAX_LOG_KEYS = 1000;
 
 function logRequest(keyPrefix: string, status: number, path: string) {
   const entries = requestLog.get(keyPrefix) ?? [];
   entries.push({ ts: Date.now(), status, path });
   if (entries.length > MAX_LOG_PER_KEY) entries.splice(0, entries.length - MAX_LOG_PER_KEY);
   requestLog.set(keyPrefix, entries);
+
+  // Cap the map at MAX_LOG_KEYS to prevent unbounded memory growth
+  if (requestLog.size > MAX_LOG_KEYS) {
+    const oldestKey = requestLog.keys().next().value;
+    if (oldestKey !== undefined) {
+      requestLog.delete(oldestKey);
+    }
+  }
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
