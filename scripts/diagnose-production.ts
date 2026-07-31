@@ -20,6 +20,7 @@
  *   npm run db:diagnose
  */
 import { Pool } from 'pg';
+import { pgSslConfig } from '../lib/db/ssl-config';
 
 interface Row { [key: string]: unknown }
 
@@ -41,7 +42,7 @@ async function main(): Promise<void> {
 
   const pool = new Pool({
     connectionString: url,
-    ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
+    ssl: pgSslConfig(),
     max: 1,
   });
   const client = await pool.connect();
