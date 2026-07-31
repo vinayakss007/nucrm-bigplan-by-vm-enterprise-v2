@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateDealSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
@@ -35,6 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         closeDate: deals.closeDate,
         contactId: deals.contactId,
         assignedTo: deals.assignedTo,
+        createdBy: deals.createdBy,
         metadata: deals.metadata,
         createdAt: deals.createdAt,
         updatedAt: deals.updatedAt,
@@ -51,6 +52,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .limit(1);
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // RBAC: if user lacks view_all, only allow access to own records
+    if (!can(ctx, 'deals.view_all')) {
+      if (row.assignedTo !== ctx.userId && row.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
 
     // Mapping for legacy compatibility if needed
     const legacyRow = {
