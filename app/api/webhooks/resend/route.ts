@@ -10,9 +10,23 @@ import { db } from '@/drizzle/db';
 import { contacts, sequenceEnrollments, activities } from '@/drizzle/schema';
 import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
+import { checkRateLimit } from '@/lib/rate-limit';
+
+const VALID_RESEND_EVENT_TYPES = [
+  'email.bounced',
+  'email.complained',
+  'email.delivered',
+  'email.sent',
+  'email.opened',
+  'email.clicked',
+];
 
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit: 60 requests per minute per IP
+    const limited = await checkRateLimit(req, { action: 'resend_webhook', max: 60, windowMinutes: 1 });
+    if (limited) return limited;
+
     const body = await req.text();
     
     // Optional: Verify webhook secret if configured
@@ -36,6 +50,12 @@ export async function POST(req: NextRequest) {
         created_at: string;
       } 
     };
+
+    // Validate event type before processing
+    if (!VALID_RESEND_EVENT_TYPES.includes(event.type)) {
+      console.log(`[resend-webhook] Ignoring unrecognized event type: ${event.type}`);
+      return NextResponse.json({ received: true });
+    }
     
     const email = event.data?.to?.[0]?.toLowerCase() ?? null;
 
