@@ -3,7 +3,7 @@ import { validateBody, validateQuery, readJsonBody } from '@/lib/api/validate';
 import { createInvoiceSchema, invoiceQuerySchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { invoices, invoiceLineItems } from '@/drizzle/schema';
-import { eq, and, desc, sql, count } from 'drizzle-orm';
+import { eq, and, desc, sql, count, isNull } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 
 export async function GET(request: NextRequest) {
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const page = Math.floor(q.offset / q.limit) + 1;
     const limit = q.limit;
 
-    const whereConditions = [eq(invoices.tenantId, tenantId)];
+    const whereConditions = [eq(invoices.tenantId, tenantId), isNull(invoices.deletedAt)];
 
     if (status) {
       whereConditions.push(eq(invoices.status, status));
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
     const results = await db.select().from(invoices).where(and(...whereConditions)).orderBy(desc(invoices.createdAt)).limit(limit).offset(offset);
 
-    const [countResult] = await db.select({ count: count() }).from(invoices).where(eq(invoices.tenantId, tenantId));
+    const [countResult] = await db.select({ count: count() }).from(invoices).where(and(eq(invoices.tenantId, tenantId), isNull(invoices.deletedAt)));
     const total = countResult?.count ?? 0;
 
     return NextResponse.json({ 
@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
     const v = validated.data;
     const { issue_date: issueDate, due_date: dueDate, line_items: items, notes, terms, discount, tax_rate: taxRate, contact_id: contactId, company_id: companyId, status } = v;
     const title = rawBody.title as string | undefined;
+    const discountType = (rawBody.discount_type as string) || (v as Record<string, unknown>).discount_type as string | undefined;
 
     if (!issueDate) {
       return NextResponse.json({ error: 'Issue date is required' }, { status: 400 });
@@ -84,7 +85,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const discountAmount = discount ?? 0;
+    const rawDiscount = discount ?? 0;
+    let discountAmount: number;
+    let resolvedDiscountType: string;
+
+    if (discountType === 'percentage' && rawDiscount > 0) {
+      resolvedDiscountType = 'percentage';
+      discountAmount = Math.round(subtotal * rawDiscount / 100 * 100) / 100;
+    } else {
+      resolvedDiscountType = rawDiscount > 0 ? 'fixed' : 'percentage';
+      discountAmount = rawDiscount;
+    }
+
     const taxableAmount = subtotal - discountAmount;
     const taxAmount = (taxRate ?? 0) / 100 * taxableAmount;
     const totalAmount = taxableAmount + taxAmount;
@@ -100,8 +112,8 @@ export async function POST(request: NextRequest) {
         issueDate: new Date(issueDate).toISOString().split('T')[0],
         dueDate: dueDate ? new Date(dueDate).toISOString().split('T')[0] : null,
         subtotal: String(subtotal.toFixed(2)),
-        discountType: (discount ?? 0) > 0 ? 'fixed' : 'percentage',
-        discountValue: String(discount ?? 0),
+        discountType: resolvedDiscountType,
+        discountValue: String(rawDiscount),
         discountAmount: String(discountAmount.toFixed(2)),
         taxRate: String(taxRate),
         taxAmount: String(taxAmount.toFixed(2)),
