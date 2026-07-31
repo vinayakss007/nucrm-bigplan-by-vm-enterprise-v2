@@ -350,13 +350,19 @@ async function handleDeal(
     }
   }
 
+  // No blanket `as unknown as typeof deals.$inferInsert` here: `stageId` is a
+  // `notNull()` uuid column typed as `string`, so the placeholder satisfies it
+  // directly. `dealData` also still carries `value`/`stage`/`probability`/`notes`,
+  // which have no matching `deals` column and are dropped by Drizzle exactly as
+  // they were before — mapping those is deliberately out of scope here, but they
+  // are no longer hidden behind a cast.
   const [newDeal] = await tx.insert(deals).values({
     ...dealData,
     tenantId,
     stageId: '', // placeholder - will be resolved
     createdBy: userId,
     createdAt: new Date(),
-  } as unknown as typeof deals.$inferInsert).returning();
+  }).returning();
 
   return { id: newDeal?.id ?? null, action: 'created' };
 }
@@ -437,6 +443,7 @@ async function handleTask(
     dealId: (d['dealId'] as string) || null,
     assignedTo: (d['assignedTo'] as string) || userId,
     completed: typeof d['completed'] === 'boolean' ? d['completed'] : false,
+    customFields: typeof d['customFields'] === 'object' ? d['customFields'] : {},
     updatedAt: new Date(),
   };
 
