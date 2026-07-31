@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       lastName: contacts.lastName,
     })
       .from(contacts)
-      .where(and(inArray(contacts.id, entity_ids), eq(contacts.tenantId, ctx.tenantId), isNull(contacts.deletedAt)));
+      .where(and(inArray(contacts.id, entity_ids), eq(contacts.tenantId, ctx.tenantId), isNull(contacts.deletedAt), eq(contacts.doNotContact, false)));
 
     let sent = 0, failed = 0;
     const errors: string[] = [];

@@ -61,7 +61,8 @@ export async function POST(request: NextRequest) {
         eq(contacts.tenantId, ctx.tenantId),
         sql`${contacts.id} = ANY(${contact_ids})`,
         sql`${contacts.deletedAt} IS NULL`,
-        sql`${contacts.email} IS NOT NULL AND ${contacts.email} != ''`
+        sql`${contacts.email} IS NOT NULL AND ${contacts.email} != ''`,
+        eq(contacts.doNotContact, false)
       ));
 
     if (recipientContacts.length === 0) {
