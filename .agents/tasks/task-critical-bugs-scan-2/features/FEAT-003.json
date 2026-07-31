@@ -2,7 +2,7 @@
   "id": "FEAT-003",
   "type": "fix",
   "description": "Fix automation engine SSRF vulnerability (fire_webhook action allows requests to internal networks), fix Stripe webhook plan detection fallback that uses amount-based heuristic instead of price metadata, and fix CSRF bypass on password reset endpoint",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "In lib/automation/engine.ts, in the 'fire_webhook' case of executeAction, add URL validation before calling fetch. Parse the URL, reject: (1) non-http/https protocols, (2) hostnames that resolve to private/internal IPs (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, ::1, fd00::/8), (3) common internal hostnames (localhost, *.internal, metadata services like 169.254.169.254). Create a helper function isAllowedWebhookUrl(url: string): boolean. If the URL is not allowed, log a warning and return without making the request.",
     "In app/api/webhooks/stripe/route.ts, fix the handleCheckoutCompleted function. Currently determinePlanFromSession uses a naive amount-based heuristic ($29=starter, $79=pro, else enterprise). This breaks whenever prices change. Instead: (1) First try to get the price ID from session.line_items or the subscription metadata. (2) If price ID is found, use the same determinePlanFromSubscription logic (env var mapping). (3) Only fall back to the amount heuristic if no price ID can be determined. Also, when fetching the session, if subscription is available, call determinePlanFromSubscription on it directly.",
@@ -19,5 +19,5 @@
     "Run npx next build to confirm TypeScript compilation passes"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "Build passes with exit code 0. Pre-existing Turbopack errors (missing sonner module, ContactTimeline export, getMetrics export) are unrelated to this change and exist on base state. ESLint and prettier pass via lint-staged pre-commit hook."
 }
