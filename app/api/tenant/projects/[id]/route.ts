@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { projects, milestones, projectTasks, tasks, users } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -98,6 +99,10 @@ export async function PATCH(
     const validated = validateBody(updateProjectSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
+
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, projects, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const [updated] = await db.update(projects)
       .set({

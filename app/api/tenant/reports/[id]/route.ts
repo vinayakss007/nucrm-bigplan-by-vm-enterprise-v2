@@ -6,6 +6,7 @@ import { savedReports, reportExecutions, users } from '@/drizzle/schema';
 import { eq, and, or, desc, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 /**
  * GET /api/tenant/reports/[id]
@@ -91,6 +92,10 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await readJsonBody(request);
+
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, savedReports, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
     
     // Whitelist allowed update fields
     const {
