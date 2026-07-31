@@ -3,7 +3,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { importSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { deals, contacts, companies, pipelines, dealStages, activities } from '@/drizzle/schema';
+import { deals, contacts, companies, pipelines, dealStages, activities, tenants } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { apiError } from '@/lib/api-error';
@@ -266,6 +266,10 @@ export async function POST(request: NextRequest) {
           entityId: sql`gen_random_uuid()`,
           action: 'import_completed',
         });
+        // Update deal counter
+        await tx.update(tenants)
+          .set({ currentDeals: sql`${tenants.currentDeals} + ${results.imported}` })
+          .where(eq(tenants.id, ctx.tenantId));
       }
     });
 
