@@ -4,6 +4,7 @@
 
 export function getStageProbability(stageName: string): number {
   const lower = (stageName || '').toLowerCase();
+  if (lower.includes('lost')) return 0.0;
   if (lower.includes('closed') || lower.includes('won')) return 1.0;
   if (lower.includes('negotiation')) return 0.75;
   if (lower.includes('proposal')) return 0.5;

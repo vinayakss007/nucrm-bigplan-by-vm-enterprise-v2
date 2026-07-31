@@ -37,7 +37,7 @@ export async function GET(_request: NextRequest) {
         createdAt: tasks.createdAt,
       })
         .from(tasks)
-        .where(eq(tasks.tenantId, ctx.tenantId))
+        .where(and(eq(tasks.tenantId, ctx.tenantId), sql`${tasks.deletedAt} IS NULL`))
         .limit(500),
 
       db.select({
