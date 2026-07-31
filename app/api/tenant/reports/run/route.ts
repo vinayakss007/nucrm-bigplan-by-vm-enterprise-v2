@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     const conditions = [eq(reportConfig.table.tenantId, ctx.tenantId)];
 
-    if (reportConfig.table !== deals && 'deletedAt' in reportConfig.table) {
+    if ('deletedAt' in reportConfig.table) {
       conditions.push(sql`${reportConfig.table.deletedAt} IS NULL`);
     }
 

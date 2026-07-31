@@ -49,63 +49,71 @@ export async function PUT(request: NextRequest) {
 
     const data = validated.data;
 
-    const tenantUpdate: Record<string, unknown> = {};
-    if (data.logoUrl !== undefined) tenantUpdate['logoUrl'] = data.logoUrl;
-    if (data.faviconUrl !== undefined) tenantUpdate['faviconUrl'] = data.faviconUrl;
-    if (data.primaryColor !== undefined) tenantUpdate['primaryColor'] = data.primaryColor;
-    if (data.customDomain !== undefined) tenantUpdate['customDomain'] = data.customDomain;
+    // Wrap both updates in a transaction — if the second update fails,
+    // the first is rolled back (prevents partial branding state).
+    await db.transaction(async (tx) => {
+      const tenantUpdate: Record<string, unknown> = {};
+      if (data.logoUrl !== undefined) tenantUpdate['logoUrl'] = data.logoUrl;
+      if (data.faviconUrl !== undefined) tenantUpdate['faviconUrl'] = data.faviconUrl;
+      if (data.primaryColor !== undefined) tenantUpdate['primaryColor'] = data.primaryColor;
+      if (data.customDomain !== undefined) tenantUpdate['customDomain'] = data.customDomain;
 
-    if (Object.keys(tenantUpdate).length > 0) {
-      const [existing1] = await db
-        .select({ updatedAt: tenants.updatedAt })
-        .from(tenants)
-        .where(eq(tenants.id, ctx.tenantId))
-        .limit(1);
-      if (!existing1) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      if (Object.keys(tenantUpdate).length > 0) {
+        const [existing1] = await tx
+          .select({ updatedAt: tenants.updatedAt })
+          .from(tenants)
+          .where(eq(tenants.id, ctx.tenantId))
+          .limit(1);
+        if (!existing1) throw new Error('NOT_FOUND');
 
-      const [updated1] = await db.update(tenants)
-        .set({ ...tenantUpdate, updatedAt: new Date() })
-        .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing1.updatedAt!)))
-        .returning({ id: tenants.id });
+        const [updated1] = await tx.update(tenants)
+          .set({ ...tenantUpdate, updatedAt: new Date() })
+          .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing1.updatedAt!)))
+          .returning({ id: tenants.id });
 
-      if (!updated1) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });
-    }
+        if (!updated1) throw new Error('CONFLICT');
+      }
 
-    const extendedBranding: Partial<BrandingConfig> = {};
-    if (data.secondaryColor !== undefined) extendedBranding.secondaryColor = data.secondaryColor;
-    if (data.accentColor !== undefined) extendedBranding.accentColor = data.accentColor;
-    if (data.companyName !== undefined) extendedBranding.companyName = data.companyName;
-    if (data.hidePoweredBy !== undefined) extendedBranding.hidePoweredBy = data.hidePoweredBy;
-    if (data.customCss !== undefined) extendedBranding.customCss = data.customCss;
-    if (data.headerLayout !== undefined) extendedBranding.headerLayout = data.headerLayout;
+      const extendedBranding: Partial<BrandingConfig> = {};
+      if (data.secondaryColor !== undefined) extendedBranding.secondaryColor = data.secondaryColor;
+      if (data.accentColor !== undefined) extendedBranding.accentColor = data.accentColor;
+      if (data.companyName !== undefined) extendedBranding.companyName = data.companyName;
+      if (data.hidePoweredBy !== undefined) extendedBranding.hidePoweredBy = data.hidePoweredBy;
+      if (data.customCss !== undefined) extendedBranding.customCss = data.customCss;
+      if (data.headerLayout !== undefined) extendedBranding.headerLayout = data.headerLayout;
 
-    if (Object.keys(extendedBranding).length > 0) {
-      const [existing2] = await db.select({ settings: tenants.settings, updatedAt: tenants.updatedAt })
-        .from(tenants)
-        .where(eq(tenants.id, ctx.tenantId))
-        .limit(1);
-      if (!existing2) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      if (Object.keys(extendedBranding).length > 0) {
+        const [existing2] = await tx.select({ settings: tenants.settings, updatedAt: tenants.updatedAt })
+          .from(tenants)
+          .where(eq(tenants.id, ctx.tenantId))
+          .limit(1);
+        if (!existing2) throw new Error('NOT_FOUND');
 
-      const currentSettings = (existing2.settings as Record<string, unknown>) ?? {};
-      const currentBranding = (currentSettings['branding'] as Record<string, unknown>) ?? {};
+        const currentSettings = (existing2.settings as Record<string, unknown>) ?? {};
+        const currentBranding = (currentSettings['branding'] as Record<string, unknown>) ?? {};
 
-      const [updated2] = await db.update(tenants)
-        .set({
-          settings: {
-            ...currentSettings,
-            branding: { ...currentBranding, ...extendedBranding },
-          },
-          updatedAt: new Date(),
-        })
-        .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing2.updatedAt!)))
-        .returning({ id: tenants.id });
+        const [updated2] = await tx.update(tenants)
+          .set({
+            settings: {
+              ...currentSettings,
+              branding: { ...currentBranding, ...extendedBranding },
+            },
+            updatedAt: new Date(),
+          })
+          .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing2.updatedAt!)))
+          .returning({ id: tenants.id });
 
-      if (!updated2) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });
-    }
+        if (!updated2) throw new Error('CONFLICT');
+      }
+    });
 
     const updatedBranding = await getBrandingForTenant(ctx.tenantId);
     return NextResponse.json({ data: updatedBranding });
   } catch (error: unknown) {
+    if (error instanceof Error) {
+      if (error.message === 'NOT_FOUND') return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      if (error.message === 'CONFLICT') return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });
+    }
     const message = error instanceof Error ? error.message : 'Internal server error';
     console.error('[Branding] PUT error:', error);
     return NextResponse.json({ error: message }, { status: 500 });

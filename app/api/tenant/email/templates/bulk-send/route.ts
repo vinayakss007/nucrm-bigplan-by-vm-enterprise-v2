@@ -7,6 +7,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { sendEmail } from '@/lib/email/service';
+import { escapeHtml } from '@/lib/email/escape-html';
 
 /**
  * POST /api/tenant/email/templates/bulk-send
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     if (!template) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
 
-    // Fetch contacts
+    // Fetch contacts - filter out doNotContact contacts
     const recipientContacts = await db
       .select({
         id: contacts.id,
@@ -61,7 +62,8 @@ export async function POST(request: NextRequest) {
         eq(contacts.tenantId, ctx.tenantId),
         sql`${contacts.id} = ANY(${contact_ids})`,
         sql`${contacts.deletedAt} IS NULL`,
-        sql`${contacts.email} IS NOT NULL AND ${contacts.email} != ''`
+        sql`${contacts.email} IS NOT NULL AND ${contacts.email} != ''`,
+        eq(contacts.doNotContact, false)
       ));
 
     if (recipientContacts.length === 0) {
@@ -81,7 +83,7 @@ export async function POST(request: NextRequest) {
           email: contact.email || '',
         };
 
-        const subject = interpolate(template.subject || '', personalVars);
+        const subject = interpolateRaw(template.subject || '', personalVars);
         // emailTemplates stores bodyHtml / bodyText — there is no `body` column.
         // Prefer the HTML body, fall back to the plain-text one.
         const htmlBody = interpolate(template.bodyHtml || template.bodyText || '', personalVars);
@@ -116,5 +118,10 @@ export async function POST(request: NextRequest) {
 }
 
 function interpolate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => escapeHtml(vars[key] ?? ''));
+}
+
+/** Interpolate without HTML escaping — for plain-text contexts like email subjects */
+function interpolateRaw(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '');
 }

@@ -1,17 +1,46 @@
-interface EmailPayload {
+import crypto from 'crypto';
+
+export interface EmailPayload {
   to: string | string[];
   subject: string;
   html: string;
   text?: string;
   from?: string;
   replyTo?: string;
+  /** When set, RFC 8058 List-Unsubscribe headers are added to the message */
+  contactId?: string;
 }
 
-interface SendResult {
+export interface SendResult {
   success: boolean;
   provider?: string;
   messageId?: string;
   error?: string;
+}
+
+/**
+ * Build RFC 8058 compliant List-Unsubscribe and List-Unsubscribe-Post headers.
+ * The unsubscribe URL uses an HMAC token so contacts cannot forge unsub requests.
+ */
+export function buildUnsubscribeHeaders(contactId: string): {
+  'List-Unsubscribe': string;
+  'List-Unsubscribe-Post': string;
+} {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.nucrm.io';
+  const secret = process.env.UNSUBSCRIBE_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    console.error(
+      '[email] CRITICAL: No UNSUBSCRIBE_SECRET or NEXTAUTH_SECRET configured. ' +
+      'Unsubscribe tokens cannot be securely generated. Set one of these environment variables.'
+    );
+    throw new Error('Unsubscribe secret not configured. Set UNSUBSCRIBE_SECRET or NEXTAUTH_SECRET.');
+  }
+  const token = crypto.createHmac('sha256', secret).update(contactId).digest('hex');
+  const unsubUrl = `${appUrl}/api/unsubscribe?contact=${encodeURIComponent(contactId)}&token=${token}`;
+  return {
+    'List-Unsubscribe': `<${unsubUrl}>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+  };
 }
 
 function getFromAddress(): string {
@@ -25,6 +54,13 @@ async function sendViaResend(payload: EmailPayload): Promise<SendResult> {
   if (!key) return { success: false, error: 'RESEND_API_KEY not set' };
 
   try {
+    // Build RFC 8058 List-Unsubscribe headers when contactId is present
+    const headers: Record<string, string> = {};
+    if (payload.contactId) {
+      const unsubHeaders = buildUnsubscribeHeaders(payload.contactId);
+      Object.assign(headers, unsubHeaders);
+    }
+
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -38,6 +74,7 @@ async function sendViaResend(payload: EmailPayload): Promise<SendResult> {
         html: payload.html,
         text: payload.text,
         reply_to: payload.replyTo,
+        headers: Object.keys(headers).length > 0 ? headers : undefined,
       }),
     });
 
@@ -87,6 +124,14 @@ async function sendViaSMTP(payload: EmailPayload): Promise<SendResult> {
     }
 
     const toAddr = Array.isArray(payload.to) ? payload.to.join(', ') : payload.to;
+
+    // Build RFC 8058 List-Unsubscribe headers when contactId is present
+    const smtpHeaders: Record<string, string> = {};
+    if (payload.contactId) {
+      const unsubHeaders = buildUnsubscribeHeaders(payload.contactId);
+      Object.assign(smtpHeaders, unsubHeaders);
+    }
+
     const info = await smtpTransporter.sendMail({
       from: payload.from ?? getFromAddress(),
       to: toAddr,
@@ -94,6 +139,7 @@ async function sendViaSMTP(payload: EmailPayload): Promise<SendResult> {
       html: payload.html,
       text: payload.text,
       replyTo: payload.replyTo,
+      headers: Object.keys(smtpHeaders).length > 0 ? smtpHeaders : undefined,
     });
 
     return { success: true, provider: 'smtp', messageId: info.messageId };

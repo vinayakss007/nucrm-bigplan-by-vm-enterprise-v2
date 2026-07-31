@@ -1,0 +1,11 @@
+{
+  "id": "FEAT-001",
+  "title": "Fix all 16 CodeRabbit review findings plus pricing entitlement conflict",
+  "status": "completed",
+  "steps": [],
+  "findings": [
+    "Pre-commit hook requires nvm to be sourced for npx to be available",
+    "React 19 natively supports the inert boolean attribute",
+    "Tailwind 3.4 arbitrary variants [ul_&] and [ol_&] work for parent-based styling"
+  ]
+}

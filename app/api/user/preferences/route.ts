@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { users, tenants } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
@@ -214,6 +215,13 @@ export async function PATCH(req: NextRequest) {
 
     if (Object.keys(update).length <= 1) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+    }
+
+    // Optimistic concurrency: reject stale writes
+    const expectedUpdatedAt = body?.expectedUpdatedAt ?? body?._updated_at;
+    if (expectedUpdatedAt) {
+      const guard = await concurrencyGuard(db, users, ctx.userId, null, expectedUpdatedAt);
+      if (guard) return guard;
     }
 
     await db.update(users).set(update).where(eq(users.id, ctx.userId));

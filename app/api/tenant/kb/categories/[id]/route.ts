@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { kbCategories } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 
@@ -15,6 +16,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;
     const body = await readJsonBody(request);
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, kbCategories, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

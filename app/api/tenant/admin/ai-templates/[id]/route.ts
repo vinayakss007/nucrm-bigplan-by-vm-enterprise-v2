@@ -10,6 +10,7 @@ import { aiDraftTemplates } from '@/drizzle/schema/ai';
 import { eq, and, isNull } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 
@@ -48,6 +49,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     let body;
     try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, aiDraftTemplates, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const patch: Record<string, unknown> = { updatedAt: new Date(), updatedBy: ctx.userId };
     if (typeof body.name === 'string' && body.name.trim()) patch['name'] = body.name.trim().slice(0, 120);

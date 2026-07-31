@@ -142,6 +142,30 @@ export async function POST(request: NextRequest) {
       // so both signals land in the alert.
     }
 
+    // ── 2b. Decrypt if encrypted ─────────────────────────────────────────────
+    // #866 added AES-256-GCM encryption; encrypted artefacts carry a .enc
+    // extension. pg_restore/psql need plaintext, so decrypt before step 3.
+    //
+    // Ordering matters, and it has to be *after* the checksum above. The
+    // checksum in backup_records is computed over the encrypted artefact —
+    // backup-service.ts encrypts at L121 and checksums the result at L129 —
+    // so hashing the decrypted file would compare a plaintext digest against a
+    // ciphertext digest and report every encrypted backup as corrupt. That would
+    // be a false alarm from the very job meant to detect real corruption.
+    if (localFile.endsWith('.enc')) {
+      const { decryptBackupFile, isEncryptionEnabled } = await import('@/lib/backups/encrypt');
+      if (!isEncryptionEnabled()) {
+        failures.push(
+          'Backup is encrypted (.enc) but BACKUP_ENCRYPTION_KEY is not configured. ' +
+          'Cannot verify — the key is required to decrypt before restore.'
+        );
+        throw new Error('encryption key missing');
+      }
+      const decryptedPath = localFile.replace(/\.enc$/, '');
+      await decryptBackupFile(localFile, decryptedPath);
+      localFile = decryptedPath;
+    }
+
     // ── 3. Restore into scratch database ─────────────────────────────────────
     scratchDb = `nucrm_verify_${Date.now()}`;
     if (!/^[a-z0-9_]+$/.test(scratchDb)) {

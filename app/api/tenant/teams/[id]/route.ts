@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { teams, teamMembers, users } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 // GET /api/tenant/teams/:id — team detail with its members.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -54,6 +55,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const id = (await params).id;
 
     const body = await req.json();
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = body?.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, teams, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
+
     const updates: Record<string, unknown> = { updatedAt: new Date(), updatedBy: ctx.userId };
     if (typeof body?.name === 'string' && body.name.trim()) updates['name'] = body.name.trim();
     if (body?.description !== undefined) updates['description'] = body.description;

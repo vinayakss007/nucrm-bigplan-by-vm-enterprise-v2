@@ -7,6 +7,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const createDealProductSchema = z.object({
   product_name: z.string().trim().min(1, 'Product name is required').max(200),
@@ -101,6 +102,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const validated = validateBody(updateDealProductSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = body?.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, dealProducts, itemId, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (v.product_name !== undefined) updates['productName'] = v.product_name;

@@ -10,6 +10,7 @@ import { requireAiFeature } from '@/lib/ai/plan-gate';
 import { db } from '@/drizzle/db';
 import { leadWarmingCampaigns, leadWarmingMessages, leadWarmingReplies } from '@/drizzle/schema/lead-warming';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 
@@ -93,6 +94,11 @@ export async function PATCH(req: NextRequest, { params }: any) {
 
     const { id } = await params;
     const body = await readJsonBody(req);
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, leadWarmingCampaigns, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
  
  
