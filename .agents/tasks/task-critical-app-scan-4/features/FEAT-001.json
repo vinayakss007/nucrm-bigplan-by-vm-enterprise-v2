@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "fix",
   "description": "Fix critical system-level bugs affecting user journeys: broken cron tenant isolation, missing stage-change hooks, dead follow-up notifications, quote conversion status drift, invoice pagination count mismatch, and usage counter drift on deletion/merge",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "1. Fix tenant isolation in contract-renewal-check cron (app/api/cron/contract-renewal-check/route.ts line 47): Replace `eq(contracts.tenantId, contracts.tenantId)` (comparing column to itself, always true) with proper removal of this no-op filter. The cron already iterates per-contract and uses contract.tenantId for downstream operations, so just remove the broken self-referencing condition entirely.",
     "2. Fix tenant filtering in cron jobs that process suspended/expired tenants (app/api/cron/process-at-risk/route.ts and app/api/cron/ai-auto-followup/route.ts): Both use only `isNull(tenants.deletedAt)` but do not filter on tenant status, causing them to process suspended, trial_expired, and cancelled tenants. Add status filter: `sql`${tenants.status} IN ('active', 'trialing')`` in process-at-risk, and in ai-auto-followup add the same status check alongside the existing deletedAt filter.",
@@ -30,5 +30,5 @@
     "Run `npx tsc --noEmit` to verify all changes compile without type errors"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 9 fixes implemented and verified with tsc --noEmit. Pre-commit hooks (eslint, prettier) passed. The process-sequences idempotency fix uses raw SQL with FOR UPDATE SKIP LOCKED instead of the Drizzle query builder since Drizzle does not support row-level locking natively."
 }
