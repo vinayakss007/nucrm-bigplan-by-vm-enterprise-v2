@@ -2,7 +2,7 @@
   "id": "FEAT-003",
   "type": "fix",
   "description": "Add tests for the new fixes - rate limiting, memory leak eviction, timeout handling, cron health, and response envelope",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "1. Create tests/unit/rate-limit-mutating-coverage.test.ts that verifies the rate limit utility works correctly for the entities added (bulk operations entity keys). Test that rateLimitMutating returns null when under limit and returns a 429 Response when over limit.",
     "2. Create tests/unit/memory-leak-fixes.test.ts that verifies: (a) critical-error-alert rateLimitMap respects max size, (b) deprecation registry respects max entries, (c) log-stream clients Map respects max clients and cleans up dead connections, (d) email router resets daily counts",
@@ -19,5 +19,5 @@
     "npx vitest run tests/unit/rate-limit-mutating-coverage.test.ts tests/unit/memory-leak-fixes.test.ts tests/unit/cron-health.test.ts tests/unit/response-envelope.test.ts"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 38 tests pass. Node.js needed to be installed via mise (node@20). The critical-error-alert test required advancing fake timers past the 1s internal await. Pre-existing TS errors exist in unrelated files but do not affect our test files. mise.toml was created as a side-effect of installing node."
 }

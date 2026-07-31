@@ -2,7 +2,7 @@
   "id": "FEAT-002",
   "type": "fix",
   "description": "Add missing error.tsx boundaries for critical pages, fix concurrent writes on array/jsonb fields, and add API contract stability improvements",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "1. Create error.tsx files for the 20 most critical missing paths. Each should be a 'use client' component that catches errors and shows a user-friendly message (not raw stack traces). Use the existing pattern from app/tenant/error.tsx as a template. Create for: app/tenant/deals/[id]/error.tsx, app/tenant/deals/kanban/error.tsx, app/tenant/contacts/[id]/error.tsx, app/tenant/companies/[id]/error.tsx, app/tenant/leads/[id]/error.tsx, app/tenant/invoices/[id]/error.tsx, app/tenant/follow-ups/error.tsx, app/tenant/data-explorer/error.tsx, app/tenant/approvals/error.tsx, app/tenant/products/error.tsx, app/tenant/offers/error.tsx, app/tenant/projects/[id]/error.tsx, app/tenant/workflows/error.tsx, app/tenant/settings/api-keys/error.tsx, app/tenant/settings/webhooks/error.tsx, app/tenant/settings/backup/error.tsx, app/tenant/settings/billing/subscription/error.tsx, app/tenant/settings/admin/error.tsx, app/tenant/kb/[id]/error.tsx, app/tenant/tickets/[id]/error.tsx",
     "2. Fix concurrent array/jsonb field writes in app/api/tenant/deals/bulk/route.ts 'tag' action. The current jsonb_set pattern (COALESCE + || append) is susceptible to lost updates when two users tag the same deal concurrently. Fix by using jsonb array append with deduplication in a single atomic SQL expression. Also fix the 'update_field' action which has the same issue.",
@@ -19,5 +19,5 @@
   ],
   "verification": ["npm run typecheck", "npx vitest run"],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 20 error.tsx boundaries created using ErrorFallback component. Concurrent write fix uses jsonb_agg(DISTINCT) for tags and || merge for update_field. TypeScript passes cleanly. 5 pre-existing test failures (ENCRYPTION_KEY env var missing) are unrelated to this change."
 }

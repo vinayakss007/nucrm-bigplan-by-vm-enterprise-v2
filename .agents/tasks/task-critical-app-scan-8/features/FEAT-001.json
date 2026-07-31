@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "fix",
   "description": "Fix rate limiting gaps, memory leaks, timeout handling, and tenant deletion cleanup - the most critical P0 production risks",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "1. Add rateLimitMutating() to the highest-risk unprotected POST endpoints (bulk operations, billing mutations, admin actions). Target these specific files that handle destructive/expensive operations without rate limiting: app/api/tenant/deals/bulk/route.ts, app/api/tenant/contacts/bulk/route.ts, app/api/tenant/companies/bulk/route.ts, app/api/tenant/leads/bulk/route.ts, app/api/tenant/tickets/bulk/route.ts, app/api/tenant/tasks/bulk/route.ts, app/api/tenant/notes/bulk/route.ts, app/api/tenant/email/bulk/route.ts, app/api/tenant/billing/checkout/route.ts, app/api/tenant/billing/subscription/upgrade/route.ts, app/api/tenant/billing/subscription/downgrade/route.ts, app/api/tenant/billing/subscription/cancel/route.ts, app/api/tenant/admin/bulk-transfer/route.ts, app/api/tenant/activities/route.ts, app/api/tenant/api-keys/route.ts, app/api/tenant/automations/route.ts, app/api/tenant/workflows/route.ts, app/api/tenant/webhooks/route.ts, app/api/tenant/roles/route.ts, app/api/tenant/integrations/route.ts, app/api/tenant/sso/providers/route.ts, app/api/tenant/backup/route.ts, app/api/tenant/calendar-sync/sync/route.ts, app/api/tenant/branding/route.ts, app/api/tenant/pipelines/route.ts",
     "2. Fix memory leaks in module-level Maps/arrays that grow unbounded: (a) lib/critical-error-alert.ts - rateLimitMap has no eviction/max-size cap, (b) lib/api/deprecation.ts - registry Map grows forever (add MAX_ENTRIES), (c) lib/email/router.ts - usage Map never resets daily counts (add daily reset logic), (d) lib/log-stream.ts - clients Map can grow if unsubscribe is never called (add max clients limit and periodic cleanup of dead controllers), (e) lib/db/slow-query.ts - slowQueryLog uses push+shift which is fine but getSlowQueryStats creates a new Map on every call that could be large if called frequently (minor, but add bounds)",
@@ -18,5 +18,5 @@
   ],
   "verification": ["npm run typecheck", "npx vitest run"],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All changes compile cleanly (npm run typecheck passes). Tests: 4818 passed, 5 failed (pre-existing failures due to missing ENCRYPTION_KEY env var - verified by running tests on base commit). The automation/engine.ts and workflow-executor.ts already had AbortSignal.timeout on their fetch calls. Branding endpoint uses PUT instead of POST, so rate limiting uses the patch limit category. lint-staged auto-formatted some files during commit."
 }
