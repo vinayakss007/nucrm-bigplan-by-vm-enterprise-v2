@@ -4,11 +4,12 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { importSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { leads, leadActivities, activities } from '@/drizzle/schema';
+import { leads, leadActivities, activities, tenants, plans } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveOrCreateContactForLead } from '@/lib/contacts/resolve';
 import { generateLeadOid } from '@/lib/leads/oid';
+import { logAudit } from '@/lib/audit';
 
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -114,6 +115,20 @@ export async function POST(request: NextRequest) {
       mergedContacts: 0,
       errors: [] as string[],
     };
+
+    // Plan limits check - leads share the contacts pool
+    const [tenantWithPlan] = await db
+      .select({
+        currentContacts: tenants.currentContacts,
+        maxContacts: plans.maxContacts,
+      })
+      .from(tenants)
+      .innerJoin(plans, eq(plans.id, tenants.planId))
+      .where(eq(tenants.id, ctx.tenantId));
+
+    if (tenantWithPlan && tenantWithPlan.maxContacts != null && ((tenantWithPlan.currentContacts ?? 0) + rows.length) > tenantWithPlan.maxContacts) {
+      return NextResponse.json({ error: `Import would exceed plan limit of ${tenantWithPlan.maxContacts} contacts (leads share the contacts pool).` }, { status: 403 });
+    }
 
     for (const [index, row] of rows.entries()) {
       try {
@@ -318,6 +333,16 @@ export async function POST(request: NextRequest) {
       entityId: sql`gen_random_uuid()`,
       action: 'import_completed',
     });
+
+    // Audit log
+    await logAudit({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: 'leads.imported',
+      entityType: 'lead',
+      newData: { imported: results.imported, updated: results.updated, skipped: results.skipped, errors: results.errors.length },
+    });
+
     return NextResponse.json({ ok: true, results });
  
  

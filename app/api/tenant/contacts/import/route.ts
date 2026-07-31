@@ -7,6 +7,7 @@ import { contacts, companies, tenants, plans, activities } from '@/drizzle/schem
 import { eq, and, sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { apiError } from '@/lib/api-error';
+import { logAudit } from '@/lib/audit';
 
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -283,6 +284,15 @@ export async function POST(request: NextRequest) {
         entityId: sql`gen_random_uuid()`,
         action: 'import_completed',
       });
+    });
+
+    // Audit log
+    await logAudit({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: 'contacts.imported',
+      entityType: 'contact',
+      newData: { imported: results.imported, updated: results.updated, skipped: results.skipped, errors: results.errors.length },
     });
 
     return NextResponse.json({ ok:true, results });
