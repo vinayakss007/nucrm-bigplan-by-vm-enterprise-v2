@@ -12,7 +12,6 @@ import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
-import { cache } from '@/lib/cache';
 import { escapeLike } from '@/lib/api/sanitize-like';
 
  
@@ -98,8 +97,6 @@ export async function GET(request: NextRequest) {
     .offset(offset);
 
     const response = { data, total: countResult?.count ?? 0, offset, limit };
-    const cacheKey = `tenant:${ctx.tenantId}:contacts:${searchParams.toString()}`;
-    cache.set(cacheKey, response, 30);
     return NextResponse.json(response);
   
 

@@ -15,9 +15,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const qParams = Object.fromEntries(searchParams.entries());
     const qValidated = validateQuery(invoiceQuerySchema, qParams);
-    const q = qValidated instanceof NextResponse
-      ? { offset: 0, limit: 50 }
-      : qValidated.data;
+    if (qValidated instanceof NextResponse) return qValidated;
+    const q = qValidated.data;
     const status = searchParams.get('status');
     const contactId = searchParams.get('contactId');
     const _search = searchParams.get('search');
@@ -37,7 +36,7 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
     const results = await db.select().from(invoices).where(and(...whereConditions)).orderBy(desc(invoices.createdAt)).limit(limit).offset(offset);
 
-    const [countResult] = await db.select({ count: count() }).from(invoices).where(eq(invoices.tenantId, tenantId));
+    const [countResult] = await db.select({ count: count() }).from(invoices).where(and(...whereConditions));
     const total = countResult?.count ?? 0;
 
     return NextResponse.json({ 
