@@ -29,9 +29,38 @@ const h = vi.hoisted(() => ({
   apiKeyRow: null as unknown,
   findFirst: {} as Record<string, unknown>,
   returningQueue: [] as unknown[][],
+  stageId: '55555555-5555-4555-8555-555555555555',
+  pipelineId: '66666666-6666-4666-8666-666666666666',
 }));
 
-vi.mock('@/drizzle/db', () => {
+vi.mock('@/drizzle/db', async () => {
+  // handleDeal resolves a real `deals.stage_id` before writing (see
+  // tests/unit/inbound-deal-mapping.test.ts), so the route now issues selects
+  // against `pipelines` and `deal_stages`. These table-aware defaults just make
+  // that resolution succeed; the custom-fields assertions below are unchanged.
+  const { dealStages, pipelines } = await import('@/drizzle/schema');
+
+  const reader = () => {
+    let table: unknown = null;
+    const self: any = {
+      from: (t: unknown) => {
+        table = t;
+        return self;
+      },
+      then: (res: any, rej?: any) => {
+        const rows =
+          table === pipelines ? [{ id: h.pipelineId }]
+          : table === dealStages ? [{ id: h.stageId, pipelineId: h.pipelineId }]
+          : [];
+        return Promise.resolve(rows).then(res, rej);
+      },
+    };
+    for (const m of ['where', 'innerJoin', 'leftJoin', 'groupBy', 'orderBy', 'limit', 'offset']) {
+      self[m] = () => self;
+    }
+    return self;
+  };
+
   const record = (op: string, table: unknown) => {
     const rec: any = { op, table };
     h.ops.push(rec);
@@ -52,6 +81,7 @@ vi.mock('@/drizzle/db', () => {
   };
 
   const db: any = {
+    select: () => reader(),
     insert: (table: unknown) => record('insert', table),
     update: (table: unknown) => record('update', table),
     delete: (table: unknown) => record('delete', table),
