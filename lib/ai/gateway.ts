@@ -195,6 +195,7 @@ async function callOpenAILike(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -233,6 +234,7 @@ async function callAnthropic(
       ...(system ? { system } : {}),
       messages: messages.map(m => ({ role: m.role, content: m.content })),
     }),
+    signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -269,6 +271,7 @@ async function callOllama(
         ...messages,
       ],
     }),
+    signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) {
     const _text = await res.text().catch(() => '');

@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { syncCalendarEvents } from '@/lib/calendar-sync/service';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await rateLimitMutating(request, 'calendarSync', 'post');
+    if (limited) return limited;
+
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

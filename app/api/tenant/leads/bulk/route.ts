@@ -13,10 +13,14 @@ import { eq, and, inArray, sql, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const MAX_BULK = 500;
 
 export async function POST(req: NextRequest) {
+  const limited = await rateLimitMutating(req, 'bulk', 'post');
+  if (limited) return limited;
+
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;

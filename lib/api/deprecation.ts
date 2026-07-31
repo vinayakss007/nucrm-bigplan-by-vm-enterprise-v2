@@ -59,7 +59,9 @@ export interface DeprecationInfo {
 
 /**
  * Registry of deprecated endpoints (for monitoring/alerting).
+ * Capped at MAX_REGISTRY_ENTRIES to prevent unbounded memory growth.
  */
+const MAX_REGISTRY_ENTRIES = 200;
 const registry = new Map<string, DeprecationInfo>();
 
 /**
@@ -105,6 +107,13 @@ export function withDeprecation(
  */
 export function registerDeprecation(info: DeprecationInfo): void {
   const key = `${info.method}:${info.path}`;
+
+  // Prevent unbounded growth: if at capacity, remove oldest entry before adding
+  if (!registry.has(key) && registry.size >= MAX_REGISTRY_ENTRIES) {
+    const firstKey = registry.keys().next().value;
+    if (firstKey) registry.delete(firstKey);
+  }
+
   registry.set(key, info);
 }
 
