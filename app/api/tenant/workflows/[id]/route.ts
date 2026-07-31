@@ -2,6 +2,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { workflows, workflowActions, workflowExecutions } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -180,6 +181,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
     const { id } = await params;
+
+    // Optimistic concurrency: reject stale writes
+    const expectedUpdatedAt = body?.expectedUpdatedAt ?? body?._updated_at;
+    if (expectedUpdatedAt) {
+      const guard = await concurrencyGuard(db, workflows, id, ctx.tenantId, expectedUpdatedAt);
+      if (guard) return guard;
+    }
 
     await db.update(workflows).set({ deletedAt: new Date() }).where(and(eq(workflows.id, id), eq(workflows.tenantId, ctx.tenantId)));
 
