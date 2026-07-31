@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { modules, tenantModules } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
@@ -72,6 +73,13 @@ export async function PATCH(req: NextRequest) {
     const v = validated.data;
 
     if (v.pricing) {
+    // Optimistic concurrency guard (superadmin)
+    const _eu = body?.expectedUpdatedAt ?? body?._updated_at;
+    if (_eu) {
+      const _cg = await concurrencyGuard(db, modules, body?.id ?? null, null, _eu);
+      if (_cg) return _cg;
+    }
+
       await db.update(modules)
         .set({
           manifest: sql`jsonb_set(COALESCE(manifest, '{}'::jsonb), '{pricing}', ${JSON.stringify(v.pricing)}::jsonb)`,
