@@ -9,7 +9,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { deals, dealStages, pipelines, tenantMembers, segments, segmentMembers } from '@/drizzle/schema';
+import { deals, dealStages, pipelines, tenantMembers, segments, segmentMembers, tenants } from '@/drizzle/schema';
 import { eq, and, inArray, sql, or, ilike } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
@@ -220,6 +220,13 @@ export async function POST(req: NextRequest) {
             )
           );
         affected = res.rowCount ?? 0;
+
+        // Decrement the tenant's currentDeals counter by the number of affected deals
+        if (affected > 0) {
+          await db.update(tenants)
+            .set({ currentDeals: sql`greatest(0, ${tenants.currentDeals} - ${affected})` })
+            .where(eq(tenants.id, ctx.tenantId));
+        }
         break;
       }
 
