@@ -24,7 +24,7 @@ vi.mock('@/drizzle/db', () => ({
         where: vi.fn(),
       })),
     })),
-    transaction: vi.fn((cb: (tx: any) => Promise<any>) => cb({
+    transaction: vi.fn((cb: (tx: unknown) => Promise<unknown>) => cb({
       update: mockTxUpdate,
       insert: vi.fn(() => ({
         values: vi.fn(() => ({
@@ -115,9 +115,14 @@ describe('webhooks', () => {
       expect(getRetryDelay(4)).toBe(43200000);
     });
 
-    it('returns -1 (dead letter) for attempt 5+', async () => {
+    it('returns 24 hours for attempt 5', async () => {
       const { getRetryDelay } = await import('@/lib/webhooks');
-      expect(getRetryDelay(5)).toBe(-1);
+      expect(getRetryDelay(5)).toBe(24 * 60 * 60 * 1000);
+    });
+
+    it('returns -1 (dead letter) for attempt 6+', async () => {
+      const { getRetryDelay } = await import('@/lib/webhooks');
+      expect(getRetryDelay(6)).toBe(-1);
       expect(getRetryDelay(10)).toBe(-1);
     });
 
