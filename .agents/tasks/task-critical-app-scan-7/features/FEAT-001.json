@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "fix",
   "description": "Fix webhook retry/DLQ system: concurrency flooding, missing retry cap in cron, DLQ cleanup, and exponential backoff arithmetic errors",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "1. In lib/webhooks.ts retryFailedWebhooks(): Add a concurrency limiter - currently processes all 50 failed webhooks in parallel with no rate control. Add a semaphore/batch pattern (process max 5 concurrently) to prevent thundering herd on the target servers when many webhooks fail at once.",
     "2. In lib/webhooks.ts retryFailedWebhooks(): The retry loop fetches items where attempt < MAX_RETRIES (5) but the getRetryDelay() array only has 4 entries. When attempt=4, getRetryDelay(5) returns -1 (dead letter), meaning the 5th attempt never actually fires - it immediately dead-letters. Fix the off-by-one: either reduce MAX_RETRIES to 4 or add a 5th delay entry.",
@@ -26,5 +26,5 @@
     "npx vitest run tests/unit/webhook-retry-fixes.test.ts"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "Fixed off-by-one that required updating existing tests in webhooks.test.ts and webhooks-enhanced.test.ts (they asserted the old broken behavior where attempt 5 returned -1). Also fixed a pre-existing eslint warning in webhooks.test.ts (any type) that lint-staged caught. Integration tests (critical-coverage, vulnerability-security) have 5 pre-existing failures due to missing ENCRYPTION_KEY env var - unrelated to this change."
 }
