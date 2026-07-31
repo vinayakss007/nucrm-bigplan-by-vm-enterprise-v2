@@ -4,7 +4,7 @@ import { users, sessions, tenants, roles, tenantMembers, emailVerifications, pip
 import { onboardingProgress } from '@/drizzle/schema';
 import { isNull } from 'drizzle-orm';
 import { eq, and } from 'drizzle-orm';
-import { hashPassword, verifyPassword, createToken, hashToken, setSessionCookie, makeSessionCookieString, clearSessionCookie, validatePassword } from '@/lib/auth/session';
+import { hashPassword, verifyPassword, createToken, hashToken, makeSessionCookieString, clearSessionCookie, validatePassword } from '@/lib/auth/session';
 import { generateCsrfToken, setCsrfCookie } from '@/lib/auth/csrf';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendEmail, sendWebhookNotification, sendTelegram } from '@/lib/email/service';
@@ -171,7 +171,6 @@ export async function POST_login(request: NextRequest) {
     });
 
     const sessionCookieStr = makeSessionCookieString(token, sessionDays);
-    await setSessionCookie(token, sessionDays);
     const csrfToken = generateCsrfToken();
     if (isForm) {
       const dest = new URL('/tenant/dashboard', request.url);
@@ -184,6 +183,7 @@ export async function POST_login(request: NextRequest) {
       ok:true,
       user:{ id:user.id, email:user.email, full_name:user.fullName, is_super_admin:user.isSuperAdmin } 
     });
+    response.headers.append('Set-Cookie', sessionCookieStr);
     response.headers.append('Set-Cookie', setCsrfCookie(csrfToken, process.env.COOKIE_SECURE !== 'false' && process.env.NODE_ENV === 'production'));
     return response;
   
@@ -390,9 +390,9 @@ export async function POST_signup(request: NextRequest) {
       }
     });
 
-    await setSessionCookie(token);
     const signupCsrfToken = generateCsrfToken();
     const signupResponse = NextResponse.json({ ok:true, user:{ id:user.id, email:user.email, full_name:user.fullName }, tenant:{ id:tenant.id, name:tenant.name, slug:tenant.slug } }, { status:201 });
+    signupResponse.headers.append('Set-Cookie', makeSessionCookieString(token));
     signupResponse.headers.append('Set-Cookie', setCsrfCookie(signupCsrfToken, process.env.COOKIE_SECURE !== 'false' && process.env.NODE_ENV === 'production'));
 
     // Send Discord/Slack webhook notification (fire-and-forget)
