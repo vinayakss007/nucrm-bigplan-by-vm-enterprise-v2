@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateDealSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
@@ -10,7 +10,6 @@ import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { notifyTenantMembers } from '@/lib/notifications';
 import { logError } from '@/lib/errors-server';
-import { runStageChangeHooks } from '@/lib/automation/stage-change-hooks';
 import { cache } from '@/lib/cache';
 import { withConcurrencyGuard } from '@/lib/concurrency';
 import { checkConcurrency } from '@/lib/api/optimistic-lock';
@@ -36,6 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         closeDate: deals.closeDate,
         contactId: deals.contactId,
         assignedTo: deals.assignedTo,
+        createdBy: deals.createdBy,
         metadata: deals.metadata,
         createdAt: deals.createdAt,
         updatedAt: deals.updatedAt,
@@ -52,6 +52,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .limit(1);
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // RBAC: if user lacks view_all, only allow access to own records
+    if (!can(ctx, 'deals.view_all')) {
+      if (row.assignedTo !== ctx.userId && row.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
 
     // Mapping for legacy compatibility if needed
     const legacyRow = {
@@ -118,12 +125,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const [prev] = await db
-      .select({ stageId: deals.stageId, title: deals.title, contactId: deals.contactId, amount: deals.amount, updatedAt: deals.updatedAt })
+      .select({ stageId: deals.stageId, title: deals.title, contactId: deals.contactId, amount: deals.amount, updatedAt: deals.updatedAt, assignedTo: deals.assignedTo, createdBy: deals.createdBy })
       .from(deals)
       .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId), sql`${deals.deletedAt} IS NULL`))
       .limit(1);
 
     if (!prev) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // RBAC: if user lacks view_all, only allow editing own records
+    if (!can(ctx, 'deals.view_all')) {
+      if (prev.assignedTo !== ctx.userId && prev.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
+
     // Optimistic concurrency check: reject early if the client version is stale
     const conflict = checkConcurrency(prev.updatedAt!, rawBody?._version ?? rawBody?.updated_at);
     if (conflict) return conflict;
@@ -183,22 +198,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
 
     if (updateData.stageId && prev.stageId !== updateData.stageId) {
-      // Resolve human-readable stage names for both old and new stages.
-      // The hooks and notifications need names (e.g. 'Proposal', 'Won'),
-      // not UUIDs, to match against known stage labels.
-      const [fromStageInfo, toStageInfo] = await Promise.all([
-        db.select({ name: dealStages.name }).from(dealStages).where(eq(dealStages.id, prev.stageId!)).limit(1),
-        db.select({ name: dealStages.name }).from(dealStages).where(eq(dealStages.id, updateData.stageId)).limit(1),
-      ]);
-      const fromStageName = fromStageInfo[0]?.name ?? prev.stageId!;
-      const toStageName = toStageInfo[0]?.name ?? updateData.stageId;
-
       // Logic for stage change
       await notifyTenantMembers({
         tenantId: ctx.tenantId,
         excludeUserId: ctx.userId,
         type: 'deal_stage',
-        title: `Deal moved to ${toStageName}: ${row!.title}`.trim(),
+        title: `Deal moved to ${updateData.stageId}: ${row!.title}`.trim(),
         entity_type: 'deal',
         entity_id: dealId,
         link: `/tenant/deals/${dealId}`
@@ -210,16 +215,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         action: 'deal_stage_change',
         entityType: 'deal',
         entityId: dealId,
-        oldData: { stage: fromStageName },
-        newData: { stage: toStageName }
+        oldData: { stage: prev.stageId },
+        newData: { stage: updateData.stageId }
       });
 
       // Fire deal.stage_changed automation + webhooks
       fireWebhooks(ctx.tenantId, 'deal.stage_changed', {
         id: dealId,
         title: row!.title,
-        stage_from: fromStageName,
-        stage_to: toStageName,
+        stage_from: prev.stageId,
+        stage_to: updateData.stageId,
         contact_id: row!.contactId,
       }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
@@ -229,30 +234,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           tenantId: ctx.tenantId,
           userId: ctx.userId,
           event: 'deal.stage_changed',
-          data: { ...row, id: dealId, stage_from: fromStageName, stage_to: toStageName },
+          data: { ...row, id: dealId, stage_from: prev.stageId, stage_to: updateData.stageId },
         }).catch(err => console.error('[deals PATCH] deal.stage_changed automation failed:', err));
       } catch (e) {
         console.error('[deals PATCH] automation import failed:', e);
       }
 
-      // Run stage-change hooks (auto-create tasks, notify assignee, etc.)
-      // Pass resolved stage names so downstream hooks can match against
-      // human-readable labels like 'proposal', 'negotiation', 'won'.
-      runStageChangeHooks({
-        dealId,
-        dealTitle: row!.title,
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        assignedTo: row!.assignedTo ?? null,
-        contactId: row!.contactId ?? null,
-        fromStage: fromStageName,
-        toStage: toStageName,
-        amount: row!.amount ?? null,
-      }).catch(err => console.error('[deals PATCH] stage-change hooks failed:', err));
-
-      // Check if 'won' stage using already-resolved name
-      if (toStageName.toLowerCase() === 'won' || toStageName.toLowerCase() === 'closed won') {
-        await handleDealWon(ctx, dealId, row);
+      // Check if 'won' stage - get stage name to compare
+      if (updateData.stageId) {
+        const [stageInfo] = await db
+          .select({ name: dealStages.name })
+          .from(dealStages)
+          .where(eq(dealStages.id, updateData.stageId))
+          .limit(1);
+        
+        if (stageInfo?.name?.toLowerCase() === 'won') {
+          await handleDealWon(ctx, dealId, row);
+        }
       }
     }
 
@@ -279,35 +277,42 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     const dealId = (await params).id;
 
-    // Wrap soft-delete and counter decrement in a single transaction for atomicity
-    const [row] = await db.transaction(async (tx) => {
-      const [deleted] = await tx
-        .update(deals)
-        .set({
-          deletedAt: new Date(),
-          deletedBy: ctx.userId,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(deals.id, dealId),
-            eq(deals.tenantId, ctx.tenantId),
-            sql`${deals.deletedAt} IS NULL`
-          )
+    // RBAC: if user lacks view_all, only allow deleting own records
+    if (!can(ctx, 'deals.view_all')) {
+      const [existing] = await db
+        .select({ assignedTo: deals.assignedTo, createdBy: deals.createdBy })
+        .from(deals)
+        .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId), sql`${deals.deletedAt} IS NULL`))
+        .limit(1);
+
+      if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      if (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
+
+    const [row] = await db
+      .update(deals)
+      .set({
+        deletedAt: new Date(),
+        deletedBy: ctx.userId,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(deals.id, dealId),
+          eq(deals.tenantId, ctx.tenantId),
+          sql`${deals.deletedAt} IS NULL`
         )
-        .returning({ id: deals.id });
-
-      if (!deleted) return [undefined];
-
-      // Decrement tenant's currentDeals counter atomically with the soft-delete
-      await tx.update(tenants).set({
-        currentDeals: sql`GREATEST(${tenants.currentDeals} - 1, 0)`,
-      }).where(eq(tenants.id, ctx.tenantId));
-
-      return [deleted];
-    });
+      )
+      .returning({ id: deals.id });
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // Decrement the tenant's currentDeals counter
+    await db.update(tenants)
+      .set({ currentDeals: sql`greatest(0, ${tenants.currentDeals} - 1)` })
+      .where(eq(tenants.id, ctx.tenantId));
 
     await logAudit({
       tenantId: ctx.tenantId,

@@ -12,8 +12,8 @@ import { db, type DbClient } from '@/drizzle/db';
 import { supportTickets } from '@/drizzle/schema';
 import { eq, and, inArray, or, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
-import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const MAX_BULK = 500;
 
@@ -21,7 +21,7 @@ const VALID_STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
 const VALID_PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 
 export async function POST(req: NextRequest) {
-  const limited = await checkRateLimit(req, { action: 'bulk', max: 10, windowMinutes: 60 });
+  const limited = await rateLimitMutating(req, 'bulk', 'post');
   if (limited) return limited;
 
   

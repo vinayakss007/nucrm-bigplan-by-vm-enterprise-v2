@@ -5,7 +5,7 @@ import { createNoteSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { activities, users, contacts } from '@/drizzle/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, isNull } from 'drizzle-orm';
 import { processMentions } from '@/lib/notifications';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
@@ -125,12 +125,14 @@ export async function DELETE(
       return NextResponse.json({ error: 'noteId required' }, { status: 400 });
     }
 
-    await db.delete(activities)
+    await db.update(activities)
+      .set({ deletedAt: new Date() })
       .where(and(
         eq(activities.id, noteId),
         eq(activities.userId, ctx.userId),
         eq(activities.contactId, id),
-        eq(activities.tenantId, ctx.tenantId)
+        eq(activities.tenantId, ctx.tenantId),
+        isNull(activities.deletedAt)
       ));
 
     return NextResponse.json({ ok: true });

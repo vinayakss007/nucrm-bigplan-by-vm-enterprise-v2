@@ -1,0 +1,17 @@
+'use client';
+
+import { ErrorFallback } from '@/components/shared/error-fallback';
+
+export default function CompanyDetailError(props: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  return (
+    <ErrorFallback
+      {...props}
+      context="company detail"
+      title="Unable to load company"
+      description="We couldn't load this company's details. Please try again."
+    />
+  );
+}

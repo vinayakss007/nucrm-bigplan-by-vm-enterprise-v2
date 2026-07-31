@@ -287,6 +287,12 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
       roleSlug: userWithMember.roleSlug || '', permissions: perms,
       isAdmin: userWithMember.roleSlug === 'admin' || userWithMember.isSuperAdmin === true,
       isSuperAdmin: userWithMember.isSuperAdmin || false,
+      user: {
+        id: userWithMember.id,
+        email: userWithMember.email,
+        full_name: userWithMember.fullName,
+        is_super_admin: false,
+      },
     };
 
     await requestContext.cache(tokenHash, { ...ctx, cachedAt: Date.now() });

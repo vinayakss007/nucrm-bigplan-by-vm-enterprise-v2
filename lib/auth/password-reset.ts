@@ -236,6 +236,9 @@ export async function resetPassword(
       .where(eq(sessions.userId, tokenCheck.userId))
       .catch((e) => { console.error('[password-reset] Failed to invalidate sessions', e); });
 
+    // Consume the reset token to prevent reuse within the expiry window
+    await clearResetToken(tokenCheck.userId);
+
     logger.info('Password reset successful', { userId: tokenCheck.userId });
 
     return {

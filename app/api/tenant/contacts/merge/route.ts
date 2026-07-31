@@ -85,10 +85,10 @@ export async function POST(request: NextRequest) {
         })
         .where(eq(contacts.id, duplicate_id));
 
-      // Decrement tenant's currentContacts counter
-      await tx.update(tenants).set({
-        currentContacts: sql`GREATEST(${tenants.currentContacts} - 1, 0)`,
-      }).where(eq(tenants.id, ctx.tenantId));
+      // Decrement contact counter (duplicate is effectively removed)
+      await tx.update(tenants)
+        .set({ currentContacts: sql`greatest(0, ${tenants.currentContacts} - 1)` })
+        .where(eq(tenants.id, ctx.tenantId));
 
       // Log the merge as an activity
       await tx.insert(activities).values({

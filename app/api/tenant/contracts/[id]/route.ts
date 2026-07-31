@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { contracts } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
@@ -90,6 +91,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       .limit(1);
 
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = body.expectedUpdatedAt ?? body._updated_at;
+    const guard = await concurrencyGuard(db, contracts, contractId, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
+
 
     // Validate status transition if status is being changed
     if (allowedFields.status && allowedFields.status !== existing.status) {

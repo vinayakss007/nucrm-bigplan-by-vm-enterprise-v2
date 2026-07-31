@@ -7,6 +7,7 @@ import { eq, and, inArray, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 const MAX_BULK = 500;
 const VALID_ENTITY_TYPES = ['contact', 'deal', 'lead', 'company', 'task'] as const;
 
@@ -20,6 +21,8 @@ const entityTables: Record<string, { table: any; idField: any; tenantField: any 
 };
 
 export async function POST(req: NextRequest) {
+  const limited = await rateLimitMutating(req, 'bulk', 'post');
+  if (limited) return limited;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let ctx: any;
   try {

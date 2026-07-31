@@ -13,6 +13,65 @@
  *   invoice.created | invoice.paid
  */
 
+// ── SSRF Protection ──────────────────────────────────────────────────────────
+
+/**
+ * Validates that a webhook URL is safe to fetch (prevents SSRF attacks).
+ * Rejects:
+ *  - Non-http/https protocols
+ *  - Hostnames resolving to private/internal networks
+ *  - Common internal/metadata hostnames
+ */
+function isAllowedWebhookUrl(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+
+  // Only allow http and https protocols
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return false;
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+
+  // Reject well-known internal hostnames
+  const blockedHostnames = ['localhost', '127.0.0.1', '0.0.0.0', '::1', '169.254.169.254'];
+  if (blockedHostnames.includes(hostname)) {
+    return false;
+  }
+
+  // Reject hostnames ending with .local or .internal
+  if (hostname.endsWith('.local') || hostname.endsWith('.internal')) {
+    return false;
+  }
+
+  // Reject private/reserved IPv4 ranges
+  // Matches: 10.x.x.x, 172.16-31.x.x, 192.168.x.x, 169.254.x.x
+  const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4Match) {
+    const [, a, b] = ipv4Match.map(Number);
+    if (a === 10) return false;                            // 10.0.0.0/8
+    if (a === 172 && b! >= 16 && b! <= 31) return false;   // 172.16.0.0/12
+    if (a === 192 && b === 168) return false;              // 192.168.0.0/16
+    if (a === 169 && b === 254) return false;              // 169.254.0.0/16 (link-local/metadata)
+    if (a === 127) return false;                           // 127.0.0.0/8
+    if (a === 0) return false;                             // 0.0.0.0/8
+  }
+
+  // Reject IPv6 loopback and private ranges in bracket notation
+  if (hostname.startsWith('[')) {
+    const ipv6 = hostname.slice(1, -1).toLowerCase();
+    if (ipv6 === '::1' || ipv6.startsWith('fc') || ipv6.startsWith('fd') || ipv6.startsWith('fe80')) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 import { db } from '@/drizzle/db';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { 
@@ -307,6 +366,13 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: any, pa
 
     case 'fire_webhook': {
       if (!config.url) return;
+
+      // Validate URL to prevent SSRF attacks (user-controlled destination)
+      if (!isAllowedWebhookUrl(config.url)) {
+        console.warn(`[automation] Blocked webhook to disallowed URL: ${config.url}`);
+        return;
+      }
+
       try {
         await fetch(config.url, {
           method: 'POST',
