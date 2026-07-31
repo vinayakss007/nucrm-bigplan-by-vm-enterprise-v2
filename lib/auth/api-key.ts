@@ -39,6 +39,11 @@ export async function tryApiKeyAuth(request: NextRequest): Promise<AuthContext |
     return null;
   }
 
+  // Deny authentication if the key has an expiration date that has passed
+  if (row.apiKey.expiresAt && new Date(row.apiKey.expiresAt) < new Date()) {
+    return null;
+  }
+
   const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] ?? null;
 
   // Update last used + log usage atomically

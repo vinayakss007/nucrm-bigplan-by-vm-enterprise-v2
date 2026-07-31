@@ -47,7 +47,7 @@ describe.each([
   });
 
   it('getAuthUrl returns correct URL', async () => {
-    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}`);
+    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}.ts`);
     const provider = createProvider();
     const url = provider.getAuthUrl('state-123');
     expect(url).toContain(authUrl);
@@ -58,7 +58,7 @@ describe.each([
 
   it('exchangeCode returns tokens on success', async () => {
     mockFetchOnce(200, { access_token: 'at-1', refresh_token: 'rt-1', expires_in: 3600, scope: 'read' });
-    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}`);
+    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}.ts`);
     const provider = createProvider();
     const tokens = await provider.exchangeCode('code-123', 'http://redirect');
     expect(tokens.accessToken).toBe('at-1');
@@ -68,14 +68,14 @@ describe.each([
 
   it('exchangeCode throws on failure', async () => {
     mockFetchError('Bad request');
-    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}`);
+    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}.ts`);
     const provider = createProvider();
     await expect(provider.exchangeCode('bad', 'http://x')).rejects.toThrow();
   });
 
   it('refreshToken returns new tokens', async () => {
     mockFetchOnce(200, { access_token: 'at-2', expires_in: 7200 });
-    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}`);
+    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}.ts`);
     const provider = createProvider();
     const tokens = await provider.refreshToken('rt-old');
     expect(tokens.accessToken).toBe('at-2');
@@ -84,7 +84,7 @@ describe.each([
 
   it('refreshToken throws on failure', async () => {
     mockFetchError('Invalid refresh');
-    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}`);
+    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}.ts`);
     const provider = createProvider();
     await expect(provider.refreshToken('bad')).rejects.toThrow();
   });
@@ -94,7 +94,7 @@ describe.each([
       ? { items: [{ id: 'ev-1', summary: 'Meeting', start: { dateTime: '2026-01-01T10:00:00Z' }, end: { dateTime: '2026-01-01T11:00:00Z' } }] }
       : { value: [{ id: 'ev-1', subject: 'Meeting', start: { dateTime: '2026-01-01T10:00:00Z' }, end: { dateTime: '2026-01-01T11:00:00Z' } }] };
     mockFetchOnce(200, items);
-    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}`);
+    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}.ts`);
     const provider = createProvider();
     const events = await provider.listEvents('token', new Date('2026-01-01'), new Date('2026-01-02'));
     expect(events).toHaveLength(1);
@@ -104,14 +104,14 @@ describe.each([
 
   it('listEvents throws on failure', async () => {
     mockFetchError('API error');
-    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}`);
+    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}.ts`);
     const provider = createProvider();
     await expect(provider.listEvents('t', new Date(), new Date())).rejects.toThrow();
   });
 
   it('createEvent returns event ID', async () => {
     mockFetchOnce(200, { id: 'ev-new' });
-    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}`);
+    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}.ts`);
     const provider = createProvider();
     const id = await provider.createEvent('token', {
       title: 'New Event', startTime: new Date(), timezone: 'UTC',
@@ -121,42 +121,42 @@ describe.each([
 
   it('createEvent throws on failure', async () => {
     mockFetchError('Create failed');
-    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}`);
+    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}.ts`);
     const provider = createProvider();
     await expect(provider.createEvent('t', { title: 'X', startTime: new Date() })).rejects.toThrow();
   });
 
   it('updateEvent succeeds', async () => {
     mockFetchOnce(200, {});
-    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}`);
+    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}.ts`);
     const provider = createProvider();
     await expect(provider.updateEvent('token', 'ev-1', { title: 'Updated', startTime: new Date() })).resolves.not.toThrow();
   });
 
   it('updateEvent throws on failure', async () => {
     mockFetchError('Update failed');
-    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}`);
+    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}.ts`);
     const provider = createProvider();
     await expect(provider.updateEvent('t', 'ev-1', { title: 'X', startTime: new Date() })).rejects.toThrow();
   });
 
   it('deleteEvent succeeds', async () => {
     mockFetchOnce(204, {});
-    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}`);
+    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}.ts`);
     const provider = createProvider();
     await expect(provider.deleteEvent('token', 'ev-1')).resolves.not.toThrow();
   });
 
   it('deleteEvent throws on failure', async () => {
     mockFetchError('Delete failed');
-    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}`);
+    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}.ts`);
     const provider = createProvider();
     await expect(provider.deleteEvent('t', 'ev-1')).rejects.toThrow();
   });
 
   it('uses default redirect URI when env var not set', async () => {
     delete process.env[`${envPrefix}_REDIRECT_URI`];
-    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}`);
+    const { [factory]: createProvider } = await import(`@/lib/calendar-sync/${mod}.ts`);
     const provider = createProvider();
     const url = provider.getAuthUrl('x');
     expect(url).toContain(encodeURIComponent('http://test.app'));

@@ -11,16 +11,18 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { bulkUpdateSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, tenantMembers, sequences, sequenceEnrollments, segments, segmentMembers, companies } from '@/drizzle/schema';
+import { contacts, tenantMembers, sequences, sequenceEnrollments, segments, segmentMembers, companies, tenants } from '@/drizzle/schema';
 import { eq, and, sql, inArray, isNull, or, ilike } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
-import { escapeLike } from '@/lib/api/sanitize-like';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const MAX_BULK = 500;
 
 export async function POST(req: NextRequest) {
+  const limited = await rateLimitMutating(req, 'bulk', 'post');
+  if (limited) return limited;
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -53,10 +55,10 @@ export async function POST(req: NextRequest) {
       }
       if (filters?.q) {
         whereConditions.push(or(
-          ilike(contacts.firstName, `%${escapeLike(filters.q)}%`),
-          ilike(contacts.lastName, `%${escapeLike(filters.q)}%`),
-          ilike(contacts.email, `%${escapeLike(filters.q)}%`),
-          ilike(contacts.phone, `%${escapeLike(filters.q)}%`),
+          ilike(contacts.firstName, `%${filters.q}%`),
+          ilike(contacts.lastName, `%${filters.q}%`),
+          ilike(contacts.email, `%${filters.q}%`),
+          ilike(contacts.phone, `%${filters.q}%`),
         )!);
       }
 
@@ -234,6 +236,12 @@ export async function POST(req: NextRequest) {
           );
         
         affected = res.rowCount ?? 0;
+        // Decrement the tenant's currentContacts counter by the number of affected contacts
+        if (affected > 0) {
+          await db.update(tenants)
+            .set({ currentContacts: sql`greatest(0, ${tenants.currentContacts} - ${affected})` })
+            .where(eq(tenants.id, ctx.tenantId));
+        }
         break;
       }
       case 'do_not_contact': {

@@ -7,6 +7,7 @@ import { sendEmail, renderTemplate } from '@/lib/email/service';
 import { logAudit } from '@/lib/audit';
 import { readJsonBody } from '@/lib/api/validate';
 import { cache } from '@/lib/cache';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const MAX_EMAILS = 50;
 
@@ -20,6 +21,9 @@ function makeBatchKey(tenantId: string, templateId: string, entityIds: string[])
 }
 
 export async function POST(req: NextRequest) {
+  const limited = await rateLimitMutating(req, 'bulk', 'post');
+  if (limited) return limited;
+
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;

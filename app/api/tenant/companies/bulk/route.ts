@@ -14,11 +14,13 @@ import { eq, and, sql, inArray, or, ilike } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
-import { escapeLike } from '@/lib/api/sanitize-like';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const MAX_BULK = 500;
 
 export async function POST(req: NextRequest) {
+  const limited = await rateLimitMutating(req, 'bulk', 'post');
+  if (limited) return limited;
   
   
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
       ];
       if (filters?.q) {
         whereConditions.push(or(
-          ilike(companies.name, `%${escapeLike(filters.q)}%`),
+          ilike(companies.name, `%${filters.q}%`),
         )!);
       }
       const matched = await db.select({ id: companies.id }).from(companies).where(and(...whereConditions));

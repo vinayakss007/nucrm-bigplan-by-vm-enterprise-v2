@@ -7,10 +7,21 @@ import { apiError } from '@/lib/api-error';
  * Complaints: sets doNotContact=true immediately.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { db } from '@/drizzle/db';
 import { contacts, sequenceEnrollments, activities } from '@/drizzle/schema';
 import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
+import { checkRateLimit } from '@/lib/rate-limit';
+
+const VALID_RESEND_EVENT_TYPES = [
+  'email.bounced',
+  'email.complained',
+  'email.delivered',
+  'email.sent',
+  'email.opened',
+  'email.clicked',
+];
 
 /** Soft bounce threshold: DNC after this many soft bounces within the window */
 const SOFT_BOUNCE_THRESHOLD = 3;
@@ -19,13 +30,20 @@ const SOFT_BOUNCE_WINDOW_DAYS = 7;
 
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit: 60 requests per minute per IP
+    const limited = await checkRateLimit(req, { action: 'resend_webhook', max: 60, windowMinutes: 1 });
+    if (limited) return limited;
+
     const body = await req.text();
     
     // Optional: Verify webhook secret if configured
     const urlSecret = process.env.RESEND_WEBHOOK_SECRET;
     if (urlSecret) {
-      const providedSecret = req.headers.get('x-webhook-secret');
-      if (!providedSecret || providedSecret !== urlSecret) {
+      const providedSecret = req.headers.get('x-webhook-secret') ?? '';
+      const expectedBuf = Buffer.from(urlSecret, 'utf8');
+      const providedBuf = Buffer.from(providedSecret, 'utf8');
+
+      if (expectedBuf.length !== providedBuf.length || !timingSafeEqual(expectedBuf, providedBuf)) {
         return NextResponse.json({ error: 'Invalid webhook secret' }, { status: 401 });
       }
     }
@@ -40,6 +58,12 @@ export async function POST(req: NextRequest) {
         bounce_type?: string; // 'hard' | 'soft' - if available from Resend
       } 
     };
+
+    // Validate event type before processing
+    if (!VALID_RESEND_EVENT_TYPES.includes(event.type)) {
+      console.log(`[resend-webhook] Ignoring unrecognized event type: ${event.type}`);
+      return NextResponse.json({ received: true });
+    }
     
     const email = event.data?.to?.[0]?.toLowerCase() ?? null;
 

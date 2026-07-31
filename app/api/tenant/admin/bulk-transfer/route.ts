@@ -22,6 +22,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const RESOURCES = ['leads', 'contacts', 'deals', 'tasks', 'tickets'] as const;
 type Resource = typeof RESOURCES[number];
@@ -104,6 +105,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const limited = await rateLimitMutating(req, 'bulkTransfer', 'post');
+  if (limited) return limited;
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
