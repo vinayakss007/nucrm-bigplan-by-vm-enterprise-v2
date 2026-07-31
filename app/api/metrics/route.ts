@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
       db.select({ value: count() }).from(activities).then(r => r[0]!.value),
       db.select({ value: count() }).from(tenants).where(eq(tenants.status, 'active')).then(r => r[0]!.value),
       db.select({ value: count() }).from(users).then(r => r[0]!.value),
-      db.select({ value: count() }).from(tasks).where(eq(tasks.status, 'completed')).then(r => r[0]!.value),
+      db.select({ value: count() }).from(tasks).where(and(eq(tasks.status, 'completed'), isNull(tasks.deletedAt))).then(r => r[0]!.value),
       db.select({ value: count() }).from(contacts).where(and(gte(contacts.createdAt, yesterday), isNull(contacts.deletedAt))).then(r => r[0]!.value),
       db.select({ value: count() }).from(leads).where(and(gte(leads.createdAt, yesterday), isNull(leads.deletedAt))).then(r => r[0]!.value),
       db.select({ value: count() }).from(deals).where(and(gte(deals.createdAt, yesterday), isNull(deals.deletedAt))).then(r => r[0]!.value),

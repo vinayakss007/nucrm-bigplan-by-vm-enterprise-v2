@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
       .from(dealStages)
       .where(and(
         eq(dealStages.tenantId, tid),
-        sql`LOWER(${dealStages.name}) IN ('won', 'closed won', 'lost', 'closed lost')`
+        sql`(LOWER(${dealStages.name}) LIKE '%won%' OR LOWER(${dealStages.name}) LIKE '%lost%')`
       ));
 
     const [result] = await db
