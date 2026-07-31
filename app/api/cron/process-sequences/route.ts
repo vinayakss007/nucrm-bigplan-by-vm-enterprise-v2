@@ -8,10 +8,20 @@ import { sanitizeHTMLServer } from '@/lib/sanitize';
 import { sequenceEnrollments, sequenceSteps, tasks, sequenceStepLogs } from '@/drizzle/schema';
 import { eq, and, lte, sql } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
+import { acquireLock, releaseLock } from '@/lib/cache';
+
+const SEQUENCE_LOCK_KEY = 'cron:process-sequences';
+const SEQUENCE_LOCK_TTL = 120; // 2 minutes
 
 export async function POST(req: NextRequest) {
   if (!verifySecret(req.headers.get('x-cron-secret'), process.env.CRON_SECRET))
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // Acquire distributed lock to prevent concurrent cron runs
+  const lock = await acquireLock(SEQUENCE_LOCK_KEY, SEQUENCE_LOCK_TTL);
+  if (!lock.acquired) {
+    return NextResponse.json({ ok: true, skipped: true, reason: 'Another instance running' });
+  }
 
   try {
     // 1. Fetch enrollments that are due
@@ -104,6 +114,22 @@ export async function POST(req: NextRequest) {
               success = false;
               errorMessage = err.message;
             }
+          } else if (step.stepType === 'email' && enrollment.contact?.doNotContact) {
+            // Contact has doNotContact flag - skip this email step and log it
+            console.log(`[Sequence Processor] Skipping email step for enrollment ${enrollment.id}: contact ${enrollment.contactId} has doNotContact=true`);
+            await tx.update(sequenceStepLogs)
+              .set({
+                status: 'skipped',
+                executedAt: new Date(),
+                errorMessage: 'Contact has doNotContact flag set - email step skipped',
+                updatedAt: new Date()
+              })
+              .where(and(
+                eq(sequenceStepLogs.enrollmentId, enrollment.id),
+                eq(sequenceStepLogs.stepId, step.id),
+                eq(sequenceStepLogs.status, 'pending')
+              ));
+            // Do not mark as failed - continue to advance to next step
           } else if (step.stepType === 'task') {
             try {
               await tx.insert(tasks).values({
@@ -216,5 +242,7 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error('[Sequence Processor] Fatal error:', err.message);
     return apiError(err);
+  } finally {
+    await releaseLock(SEQUENCE_LOCK_KEY, lock.value);
   }
 }

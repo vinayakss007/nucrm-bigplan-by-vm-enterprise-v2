@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { sequences, sequenceSteps } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 /**
  * GET /api/tenant/sequences/[id]
@@ -84,6 +85,11 @@ export async function PATCH(
     const v = validated.data;
     const { name, description, status } = v;
     const { steps } = body;
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, sequences, sequenceId, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     // Update sequence
     await db.transaction(async (tx) => {

@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { emailWarmupConfigs, emailWarmupPool } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
 import { getWarmUpStats } from '@/lib/email/warmup';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 /**
@@ -139,6 +140,15 @@ export async function PATCH(request: NextRequest) {
     const validateToggle = validateBody(emailWarmupConfigSchema, rawBody);
     if (validateToggle instanceof NextResponse) return validateToggle;
     const { is_active } = rawBody;
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const [currentConfig] = await db.select({ id: emailWarmupConfigs.id })
+      .from(emailWarmupConfigs)
+      .where(eq(emailWarmupConfigs.tenantId, ctx.tenantId))
+      .limit(1);
+    const expectedUpdatedAt = rawBody.expectedUpdatedAt ? new Date(rawBody.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, emailWarmupConfigs, currentConfig?.id ?? null, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     await db.update(emailWarmupConfigs)
       .set({ isActive: is_active, updatedAt: new Date() })

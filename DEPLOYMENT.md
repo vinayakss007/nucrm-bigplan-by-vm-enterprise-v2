@@ -179,3 +179,21 @@ bash deploy/scripts/deploy.sh --migrate
 - [ ] Firewall: only 80 and 443 open to public
 - [ ] Emergency recovery key stored in a safe separate from `.env`
 - [ ] Regular backups running (check `/api/cron/auto-backup` logs)
+
+## Port Reference
+
+| Port | Service | Type | Bind |
+|------|---------|------|------|
+| 80 | Nginx (reverse proxy → App) | System service | 0.0.0.0 (public) |
+| 3000 | App (Next.js dev/start) | Host process | 127.0.0.1 |
+| 3001 | Grafana dashboards | Docker | 127.0.0.1 |
+| 5432 | PostgreSQL | Host system | 127.0.0.1 |
+| 6379 | Redis | Docker | 127.0.0.1 |
+| 9000 | MinIO S3 API | Docker | 127.0.0.1 |
+| 9001 | MinIO Console | Docker | 127.0.0.1 |
+| 9090 | Prometheus | Docker | 127.0.0.1 |
+| 9093 | Alertmanager | Docker | 127.0.0.1 |
+| 9100 | Node Exporter (host metrics) | Docker | 127.0.0.1 |
+| 9121 | Redis Exporter | Docker | 127.0.0.1 |
+| 9187 | PostgreSQL Exporter | Docker | 127.0.0.1 |
+| 3100 | Loki (log aggregation) | Docker | 127.0.0.1 |

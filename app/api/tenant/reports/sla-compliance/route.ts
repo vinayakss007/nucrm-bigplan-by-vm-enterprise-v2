@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const tid = ctx.tenantId;
 
     // Follow-up SLA: completed before due date
-    const [fuStats] = await db.execute(sql`
+    const fuStats = await db.execute(sql`
       SELECT
         COUNT(*) FILTER (WHERE status = 'completed' AND completed_at <= due_date) as on_time,
         COUNT(*) FILTER (WHERE status = 'completed') as total_completed,
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     `);
 
     // Task SLA: completed before due date
-    const [taskStats] = await db.execute(sql`
+    const taskStats = await db.execute(sql`
       SELECT
         COUNT(*) FILTER (WHERE status = 'completed' AND completed_at IS NOT NULL AND due_date IS NOT NULL AND completed_at <= due_date) as on_time,
         COUNT(*) FILTER (WHERE status = 'completed') as total_completed,
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     `);
 
     // Average response time (follow-up creation → completion)
-    const [avgResponse] = await db.execute(sql`
+    const avgResponse = await db.execute(sql`
       SELECT
         COALESCE(AVG(EXTRACT(EPOCH FROM (completed_at - created_at)) / 3600), 0)::numeric(10,1) as avg_hours
       FROM follow_ups

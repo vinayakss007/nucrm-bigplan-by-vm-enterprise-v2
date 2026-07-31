@@ -752,7 +752,7 @@ type Mutation {
 
 ```env
 # Required
-DATABASE_URL=postgresql://nucrm:nucrm_secure_password@localhost:5432/nucrm
+DATABASE_URL=postgresql://nucrm:your-db-password@localhost:5432/nucrm
 REDIS_URL=redis://localhost:6379
 
 # Auth

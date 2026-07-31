@@ -9,7 +9,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { deals, dealStages, pipelines, tenantMembers, segments, segmentMembers, tenants } from '@/drizzle/schema';
+import { deals, dealStages, pipelines, tenantMembers, segments, segmentMembers, tenants, plans } from '@/drizzle/schema';
 import { eq, and, inArray, sql, or, ilike } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
@@ -220,13 +220,6 @@ export async function POST(req: NextRequest) {
             )
           );
         affected = res.rowCount ?? 0;
-
-        // Decrement the tenant's currentDeals counter by the number of affected deals
-        if (affected > 0) {
-          await db.update(tenants)
-            .set({ currentDeals: sql`greatest(0, ${tenants.currentDeals} - ${affected})` })
-            .where(eq(tenants.id, ctx.tenantId));
-        }
         break;
       }
 
@@ -342,6 +335,21 @@ export async function POST(req: NextRequest) {
       case 'restore': {
         const deny = requirePerm(ctx, 'deals.edit');
         if (deny) return deny;
+
+        // Plan limit check: restoring deals could push count over limit
+        const [tenantWithPlan] = await db
+          .select({
+            currentDeals: tenants.currentDeals,
+            maxDeals: plans.maxDeals,
+          })
+          .from(tenants)
+          .innerJoin(plans, eq(plans.id, tenants.planId))
+          .where(eq(tenants.id, ctx.tenantId));
+
+        if (tenantWithPlan && tenantWithPlan.maxDeals != null && ((tenantWithPlan.currentDeals ?? 0) + validIds.length) > tenantWithPlan.maxDeals) {
+          return NextResponse.json({ error: `Restore would exceed plan limit of ${tenantWithPlan.maxDeals} deals.` }, { status: 403 });
+        }
+
         const res = await db
           .update(deals)
           .set({

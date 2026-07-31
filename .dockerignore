@@ -48,6 +48,16 @@ deploy/nginx
 tmp
 .tmp
 
+# Other projects / copies (not needed in runtime)
+nucrm-bigplan
+nucrm-bigplan2
+nucrm-enterprise
+nucrm-full-version
+nucrm-opencode
+nucrm-other-virsions-backup
+nucrm-vercel
+nu2-byopen-510
+
 # Documentation / plans (not needed in runtime)
 *.md
 PLAN*

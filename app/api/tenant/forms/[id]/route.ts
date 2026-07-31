@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { forms, formSubmissions, contacts } from '@/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
  
@@ -62,6 +63,11 @@ export async function PATCH(req: NextRequest, { params }: any) {
     const validated = validateBody(updateFormSchema, raw);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = raw.expectedUpdatedAt ? new Date(raw.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, forms, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
     
  
  

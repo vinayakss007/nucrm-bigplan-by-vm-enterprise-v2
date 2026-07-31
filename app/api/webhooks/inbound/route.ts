@@ -15,6 +15,58 @@ const MAX_BATCH_SIZE = 100;
 const VALID_ACTIONS = new Set(['create', 'update', 'upsert']);
 const VALID_ENTITIES = new Set(['contact', 'lead', 'deal', 'company', 'task']);
 
+/** Max serialized size of the raw body we persist into webhook_inbound_logs.payload. */
+const MAX_STORED_PAYLOAD_BYTES = 64 * 1024; // 64 KB
+
+/** Header names whose values must never be written to the audit log. */
+const SENSITIVE_HEADERS = new Set([
+  'authorization',
+  'x-api-key',
+  'x-webhook-secret',
+  'cookie',
+  'set-cookie',
+  'proxy-authorization',
+]);
+
+const REDACTED = '[REDACTED]';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Keys each entity handler actually reads off the (camelCased) payload.
+ * Derived by inspection of the handlers below — keep in sync when a handler
+ * starts or stops consuming a field.
+ */
+const ENTITY_RECOGNISED_KEYS: Record<string, readonly string[]> = {
+  contact: [
+    'email', 'firstName', 'lastName', 'phone', 'companyId', 'assignedTo',
+    'leadStatus', 'leadSource', 'notes', 'tags', 'score', 'city', 'country',
+    'website', 'linkedinUrl', 'twitterUrl',
+  ],
+  lead: [
+    'email', 'firstName', 'lastName', 'phone', 'mobile', 'title', 'companyName',
+    'leadSource', 'leadStatus', 'lifecycleStage', 'assignedTo', 'tags', 'notes',
+    'ownerId',
+  ],
+  deal: [
+    'title', 'value', 'probability', 'stage', 'closeDate', 'contactId',
+    'companyId', 'assignedTo', 'notes',
+  ],
+  company: [
+    'name', 'industry', 'size', 'website', 'phone', 'address', 'notes',
+  ],
+  task: [
+    'title', 'description', 'dueDate', 'priority', 'contactId', 'dealId',
+    'assignedTo', 'completed',
+  ],
+};
+
+/** Recognised for every entity: the record identifier and the explicit escape hatch. */
+const COMMON_RECOGNISED_KEYS: readonly string[] = ['id', 'customFields'];
+
+/** Envelope fields consumed by the route itself rather than by an entity handler. */
+const ENVELOPE_KEYS: readonly string[] = ['action', 'entity', 'data', 'batch'];
+
 // Rate limiter: 100 requests per API key per minute
 const inboundLimiter = new RateLimiter({ max: 100, window: 60 });
 
@@ -79,17 +131,120 @@ function sanitizeString(val: string | null | undefined, maxLen = 200): string | 
 function normalizeFields(data: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(data)) {
-    // Convert snake_case to camelCase
-    const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-    out[camel] = val;
+    out[toCamelKey(key)] = val;
+  }
+  return out;
+}
+
+/** Convert a single snake_case key to camelCase (same rule as normalizeFields). */
+function toCamelKey(key: string): string {
+  return key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+}
+
+/**
+ * Return `value` only when it is a well-formed uuid, otherwise null.
+ * `record_id` is a uuid column — anything else must not reach it.
+ */
+export function toUuidOrNull(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return UUID_REGEX.test(trimmed) ? trimmed : null;
+}
+
+type HeaderLike = Headers | Record<string, string | string[] | undefined>;
+
+/** Normalise either a `Headers` instance or a plain object into name/value pairs. */
+function headerEntries(headers: HeaderLike): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  const maybeIterable = headers as { forEach?: unknown };
+  if (typeof maybeIterable.forEach === 'function') {
+    (headers as Headers).forEach((value, key) => {
+      out.push([key, String(value)]);
+    });
+    return out;
+  }
+  for (const [key, value] of Object.entries(headers as Record<string, string | string[] | undefined>)) {
+    if (value === undefined) continue;
+    out.push([key, Array.isArray(value) ? value.join(', ') : String(value)]);
   }
   return out;
 }
 
 /**
- * Log a webhook delivery attempt.
+ * Copy request headers for storage, replacing the value of any sensitive header
+ * with `[REDACTED]`. Header-name matching is case-insensitive.
  */
-async function logWebhookDelivery(input: {
+export function redactHeaders(headers: HeaderLike | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!headers) return out;
+  for (const [key, value] of headerEntries(headers)) {
+    out[key] = SENSITIVE_HEADERS.has(key.toLowerCase()) ? REDACTED : value;
+  }
+  return out;
+}
+
+/**
+ * Top-level keys of `data` that the handler for `entity` does not consume.
+ * Purely informational — unmapped values are never written to the record.
+ */
+export function collectIgnoredKeys(entity: string, data: Record<string, unknown>): string[] {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return [];
+  const entityKeys = ENTITY_RECOGNISED_KEYS[entity];
+  if (!entityKeys) return [];
+
+  const recognised = new Set<string>([
+    ...entityKeys,
+    ...COMMON_RECOGNISED_KEYS,
+    ...ENVELOPE_KEYS,
+  ]);
+
+  const ignored: string[] = [];
+  for (const key of Object.keys(data)) {
+    if (!recognised.has(toCamelKey(key))) ignored.push(key);
+  }
+  return ignored;
+}
+
+/**
+ * Build the `payload` jsonb value: the raw body as received, plus `_ignoredKeys`
+ * when fields were dropped. Bodies larger than 64 KB are replaced by a stub so a
+ * single request cannot bloat the audit table.
+ */
+export function buildStoredPayload(
+  body: unknown,
+  ignoredKeys: string[] = []
+): Record<string, unknown> | null {
+  if (body === undefined) {
+    return ignoredKeys.length > 0 ? { _ignoredKeys: ignoredKeys } : null;
+  }
+
+  let serialized: string | null;
+  try {
+    serialized = JSON.stringify(body) ?? null;
+  } catch {
+    serialized = null;
+  }
+
+  const size = serialized === null ? 0 : Buffer.byteLength(serialized, 'utf8');
+
+  let payload: Record<string, unknown>;
+  if (serialized === null || size > MAX_STORED_PAYLOAD_BYTES) {
+    payload = { _truncated: true, _originalSize: size };
+  } else if (body !== null && typeof body === 'object' && !Array.isArray(body)) {
+    payload = { ...(body as Record<string, unknown>) };
+  } else {
+    payload = { _body: body };
+  }
+
+  if (ignoredKeys.length > 0) payload._ignoredKeys = ignoredKeys;
+  return payload;
+}
+
+/**
+ * Log a webhook delivery attempt, including the raw body and (redacted) headers
+ * so an unexpected payload shape stays recoverable and replayable.
+ */
+export async function logWebhookDelivery(input: {
   tenantId: string;
   apiKeyId: string | null;
   action: string;
@@ -99,8 +254,14 @@ async function logWebhookDelivery(input: {
   errorMessage: string | null;
   recordId: string | null;
   payloadSize: number;
+  body?: unknown;
+  headers?: HeaderLike | null;
+  data?: Record<string, unknown>;
 }) {
   try {
+    const succeeded = input.status === 'success';
+    const ignoredKeys = input.data ? collectIgnoredKeys(input.entity, input.data) : [];
+
     await db.insert(webhookInboundLogs).values({
       tenantId: input.tenantId,
       apiKeyId: input.apiKeyId,
@@ -109,10 +270,14 @@ async function logWebhookDelivery(input: {
       status: input.status,
       statusCode: input.statusCode,
       errorMessage: input.errorMessage?.slice(0, 1000) ?? null,
-      recordId: input.recordId ? Number(input.recordId) : null,
+      recordId: toUuidOrNull(input.recordId),
       payloadSize: input.payloadSize,
+      payload: buildStoredPayload(input.body, ignoredKeys),
+      headers: redactHeaders(input.headers),
+      processed: succeeded,
+      processedAt: succeeded ? new Date() : null,
       createdAt: new Date(),
-    } as unknown as typeof webhookInboundLogs.$inferInsert);
+    });
   } catch (err) {
     console.error('[webhook] Failed to log delivery:', err);
   }
@@ -497,6 +662,11 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
   let apiKeyRow: Awaited<ReturnType<typeof resolveApiKey>> = null;
   let keyPrefix = 'unknown';
+  // Hoisted so the outer catch can still persist whatever body it received.
+ 
+ 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let body: any;
 
   try {
     // 1. Extract API key
@@ -542,10 +712,6 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Parse JSON
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let body: any;
     try {
       const text = await request.text();
       if (text.length > MAX_PAYLOAD_SIZE) {
@@ -613,6 +779,9 @@ export async function POST(request: NextRequest) {
             errorMessage: null,
             recordId: r.id,
             payloadSize: contentLength || 0,
+            body,
+            headers: request.headers,
+            data: item.data,
           });
 
           return r;
@@ -653,6 +822,9 @@ export async function POST(request: NextRequest) {
           errorMessage: err.message,
           recordId: null,
           payloadSize: contentLength || 0,
+          body,
+          headers: request.headers,
+          data: item.data,
         });
       }
     }
@@ -706,6 +878,8 @@ export async function POST(request: NextRequest) {
         errorMessage: err.message,
         recordId: null,
         payloadSize: 0,
+        body,
+        headers: request.headers,
       });
       logRequest(keyPrefix, 500, request.nextUrl.pathname);
     }
