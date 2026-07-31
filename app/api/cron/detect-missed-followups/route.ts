@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
         type: 'task_overdue',
         title: `You have ${info.count} missed follow-up${info.count > 1 ? 's' : ''}`,
         body: `${info.count} follow-up${info.count > 1 ? 's' : ''} passed their due date and ${info.count > 1 ? 'were' : 'was'} marked as missed.`,
-        entity_type: info.entityType as 'deal' | 'contact' | 'lead',
+        entity_type: info.entityType as 'deal' | 'contact' | 'lead' | 'task',
         entity_id: info.entityId,
       }).catch(err => console.error(`[detect-missed-followups] notification failed for user ${userId}:`, err));
     }

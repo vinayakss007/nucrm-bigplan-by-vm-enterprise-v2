@@ -275,28 +275,35 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     const dealId = (await params).id;
 
-    const [row] = await db
-      .update(deals)
-      .set({
-        deletedAt: new Date(),
-        deletedBy: ctx.userId,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(deals.id, dealId),
-          eq(deals.tenantId, ctx.tenantId),
-          sql`${deals.deletedAt} IS NULL`
+    // Wrap soft-delete and counter decrement in a single transaction for atomicity
+    const [row] = await db.transaction(async (tx) => {
+      const [deleted] = await tx
+        .update(deals)
+        .set({
+          deletedAt: new Date(),
+          deletedBy: ctx.userId,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(deals.id, dealId),
+            eq(deals.tenantId, ctx.tenantId),
+            sql`${deals.deletedAt} IS NULL`
+          )
         )
-      )
-      .returning({ id: deals.id });
+        .returning({ id: deals.id });
+
+      if (!deleted) return [undefined];
+
+      // Decrement tenant's currentDeals counter atomically with the soft-delete
+      await tx.update(tenants).set({
+        currentDeals: sql`GREATEST(${tenants.currentDeals} - 1, 0)`,
+      }).where(eq(tenants.id, ctx.tenantId));
+
+      return [deleted];
+    });
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-    // Decrement tenant's currentDeals counter
-    await db.update(tenants).set({
-      currentDeals: sql`GREATEST(${tenants.currentDeals} - 1, 0)`,
-    }).where(eq(tenants.id, ctx.tenantId));
 
     await logAudit({
       tenantId: ctx.tenantId,
