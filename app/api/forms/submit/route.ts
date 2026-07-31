@@ -159,6 +159,10 @@ export async function POST(req: NextRequest) {
               action: 'form_submission',
               description: `Captured via form "${form.name}"`
             });
+            // Increment contact counter for newly created contact
+            await tx.update(tenants)
+              .set({ currentContacts: sql`${tenants.currentContacts} + 1` })
+              .where(eq(tenants.id, form.tenantId));
           }
         }
       }

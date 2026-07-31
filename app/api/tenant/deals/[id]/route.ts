@@ -309,6 +309,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+    // Decrement the tenant's currentDeals counter
+    await db.update(tenants)
+      .set({ currentDeals: sql`greatest(0, ${tenants.currentDeals} - 1)` })
+      .where(eq(tenants.id, ctx.tenantId));
+
     await logAudit({
       tenantId: ctx.tenantId,
       userId: ctx.userId,
