@@ -16,6 +16,10 @@ vi.mock('@/drizzle/db', () => {
   return { db };
 });
 
+import { getTableColumns } from 'drizzle-orm';
+import { contacts, companies, leads, deals } from '@/drizzle/schema/crm';
+import { tasks } from '@/drizzle/schema/tasks';
+
 import {
   NATIVE_TARGETS,
   ENTITIES_WITH_CUSTOM_FIELDS,
@@ -33,6 +37,19 @@ import {
 
 const TENANT = '11111111-1111-1111-1111-111111111111';
 const API_KEY = '22222222-2222-2222-2222-222222222222';
+
+/**
+ * Entity name -> Drizzle table, mirroring ENTITY_TABLES inside the engine. Used
+ * to derive custom-field expectations from the schema instead of hardcoding
+ * entity names that a later migration would invalidate.
+ */
+const ENTITY_TABLES: Record<string, Parameters<typeof getTableColumns>[0]> = {
+  contact: contacts,
+  lead: leads,
+  deal: deals,
+  company: companies,
+  task: tasks,
+};
 
 /** Columns no mapping may ever write, whatever a tenant admin configures. */
 const FORBIDDEN_TARGETS = [
@@ -100,11 +117,33 @@ describe('NATIVE_TARGETS security boundary', () => {
   });
 
   it('reflects which entities actually have a custom_fields column', () => {
-    // Derived from the Drizzle schema: deals and tasks carry `metadata` instead,
-    // so a custom-field mapping for either has nowhere to land.
-    expect([...ENTITIES_WITH_CUSTOM_FIELDS].sort()).toEqual(['company', 'contact', 'lead']);
-    expect(ENTITIES_WITH_CUSTOM_FIELDS.has('task')).toBe(false);
-    expect(ENTITIES_WITH_CUSTOM_FIELDS.has('deal')).toBe(false);
+    // Derived from the Drizzle schema at module load, so this expectation is
+    // derived the same way rather than pinning entity names. Hardcoding the list
+    // would make this test fail every time an entity gains or loses the column,
+    // which is a schema decision this test has no business constraining.
+    const expected = Object.entries(ENTITY_TABLES)
+      .filter(([, table]) => 'customFields' in getTableColumns(table))
+      .map(([entity]) => entity)
+      .sort();
+
+    expect([...ENTITIES_WITH_CUSTOM_FIELDS].sort()).toEqual(expected);
+  });
+
+  it('excludes an entity whose table has no customFields column', () => {
+    // The real assertion behind the derivation: a table without the column must
+    // not appear. Catches a mis-derivation such as probing for the snake_case
+    // 'custom_fields' key, which would silently match nothing and yield an empty
+    // set that the derived test above would happily agree with.
+    for (const [entity, table] of Object.entries(ENTITY_TABLES)) {
+      const hasColumn = 'customFields' in getTableColumns(table);
+      expect(ENTITIES_WITH_CUSTOM_FIELDS.has(entity), entity).toBe(hasColumn);
+    }
+  });
+
+  it('resolves to a non-empty set, so custom-field mapping is reachable', () => {
+    // Guards the failure mode where the derivation breaks entirely and every
+    // custom-field mapping starts getting rejected.
+    expect(ENTITIES_WITH_CUSTOM_FIELDS.size).toBeGreaterThan(0);
   });
 });
 
