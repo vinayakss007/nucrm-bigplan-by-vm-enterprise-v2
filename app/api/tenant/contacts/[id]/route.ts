@@ -165,6 +165,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         notes: contacts.notes,
         companyId: contacts.companyId,
         assignedTo: contacts.assignedTo,
+        createdBy: contacts.createdBy,
         updatedAt: contacts.updatedAt,
       })
       .from(contacts)
@@ -172,6 +173,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .limit(1);
 
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // RBAC: if user lacks view_all, only allow editing own records
+    if (!can(ctx, 'contacts.view_all')) {
+      if (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
 
     const [row] = await db.transaction(async (tx) => {
       const [r] = await withConcurrencyGuard(
@@ -272,6 +280,20 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (deny) return deny;
 
     const contactId = (await params).id;
+
+    // RBAC: if user lacks view_all, only allow deleting own records
+    if (!can(ctx, 'contacts.view_all')) {
+      const [existing] = await db
+        .select({ assignedTo: contacts.assignedTo, createdBy: contacts.createdBy })
+        .from(contacts)
+        .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId), sql`${contacts.deletedAt} IS NULL`))
+        .limit(1);
+
+      if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      if (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
 
     // SOFT DELETE
     const [row] = await db.transaction(async (tx) => {

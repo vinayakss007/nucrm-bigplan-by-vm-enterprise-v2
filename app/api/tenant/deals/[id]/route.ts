@@ -125,12 +125,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const [prev] = await db
-      .select({ stageId: deals.stageId, title: deals.title, contactId: deals.contactId, amount: deals.amount, updatedAt: deals.updatedAt })
+      .select({ stageId: deals.stageId, title: deals.title, contactId: deals.contactId, amount: deals.amount, updatedAt: deals.updatedAt, assignedTo: deals.assignedTo, createdBy: deals.createdBy })
       .from(deals)
       .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId), sql`${deals.deletedAt} IS NULL`))
       .limit(1);
 
     if (!prev) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // RBAC: if user lacks view_all, only allow editing own records
+    if (!can(ctx, 'deals.view_all')) {
+      if (prev.assignedTo !== ctx.userId && prev.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
+
     // Optimistic concurrency check: reject early if the client version is stale
     const conflict = checkConcurrency(prev.updatedAt!, rawBody?._version ?? rawBody?.updated_at);
     if (conflict) return conflict;
@@ -268,6 +276,20 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (deny) return deny;
 
     const dealId = (await params).id;
+
+    // RBAC: if user lacks view_all, only allow deleting own records
+    if (!can(ctx, 'deals.view_all')) {
+      const [existing] = await db
+        .select({ assignedTo: deals.assignedTo, createdBy: deals.createdBy })
+        .from(deals)
+        .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId), sql`${deals.deletedAt} IS NULL`))
+        .limit(1);
+
+      if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      if (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
 
     const [row] = await db
       .update(deals)

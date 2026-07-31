@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
       token,
     });
     
-    await setSessionCookie(token);
+    await setSessionCookie(token, 1);
 
     logSuperAdminAction({
       adminId: ctx.userId,
