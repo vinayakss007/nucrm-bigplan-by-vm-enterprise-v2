@@ -32,10 +32,6 @@ export async function GET(request: NextRequest) {
     if (query instanceof NextResponse) return query;
     const { offset, limit, stage_id, stage: _stage, pipeline_id, q, archived } = query.data;
 
-    const cacheKey = `tenant:${ctx.tenantId}:deals:${searchParams.toString()}`;
-    const cached = await cache.get(cacheKey);
-    if (cached) return NextResponse.json(cached);
-
     const filters = [
       eq(deals.tenantId, ctx.tenantId),
       isNull(deals.deletedAt),
@@ -87,7 +83,6 @@ export async function GET(request: NextRequest) {
     .offset(offset);
 
     const response = { data, total: countResult?.count ?? 0 };
-    cache.set(cacheKey, response, 30);
     return NextResponse.json(response);
   
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
