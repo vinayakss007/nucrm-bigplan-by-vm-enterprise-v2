@@ -67,6 +67,11 @@ export function encodeCursor(data: CursorData): string {
 /**
  * Decode an opaque cursor string back to cursor data.
  * Returns null if the cursor is invalid (client tampered with it).
+ *
+ * Note on cursor stability: If many records share the same sort value and
+ * records are inserted between pages, items may be skipped because
+ * tie-breaking uses the record ID (UUID) which is not sequential. This is
+ * an inherent trade-off of cursor-based pagination with non-sequential IDs.
  */
 export function decodeCursor(cursor: string): CursorData | null {
   try {
@@ -75,6 +80,8 @@ export function decodeCursor(cursor: string): CursorData | null {
     if (!parsed || typeof parsed !== 'object') return null;
     if (!('v' in parsed) || !('id' in parsed)) return null;
     if (typeof parsed['id'] !== 'string') return null;
+    // Reject empty string IDs as invalid cursors
+    if (parsed['id'] === '') return null;
     const v = parsed['v'];
     if (typeof v !== 'string' && typeof v !== 'number') return null;
     return { v: v as string | number, id: parsed['id'] as string };

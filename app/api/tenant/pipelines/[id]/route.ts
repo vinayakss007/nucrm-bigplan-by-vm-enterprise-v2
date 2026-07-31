@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { pipelines, dealStages, deals } from '@/drizzle/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 /**
@@ -35,8 +36,20 @@ export async function PATCH(req: NextRequest, { params }: any) {
     const validated = validateBody(updatePipelineSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, pipelines, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
     
     const result = await db.transaction(async (tx) => {
+      // Acquire row-level lock on the pipeline to prevent concurrent stage reorders
+      try {
+        await tx.execute(sql`SELECT 1 FROM pipelines WHERE id = ${id} FOR UPDATE`);
+      } catch {
+        // Lock acquisition failed (e.g., row doesn't exist yet) - proceed with optimistic concurrency
+      }
+
       // 1. Update pipeline basic info
  
  

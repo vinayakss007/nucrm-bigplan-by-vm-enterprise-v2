@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { contacts, activities } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const STATUSES = ['new', 'contacted', 'qualified', 'unqualified', 'converted', 'lost'];
 
@@ -36,6 +37,11 @@ export async function PATCH(
         error: `lead_status must be: ${STATUSES.join(', ')}` 
       }, { status: 400 });
     }
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = rawBody.expectedUpdatedAt ? new Date(rawBody.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, contacts, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const prev = await db.query.contacts.findFirst({
       columns: { leadStatus: true },

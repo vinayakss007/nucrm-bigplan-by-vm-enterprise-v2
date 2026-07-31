@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       tasksCompleted,
       contactsCreated, leadsCreated, dealsCreated
     ] = await Promise.all([
-      db.select({ value: count() }).from(contacts).then(r => r[0]!.value),
+      db.select({ value: count() }).from(contacts).where(isNull(contacts.deletedAt)).then(r => r[0]!.value),
       db.select({ value: count() }).from(leads).where(isNull(leads.deletedAt)).then(r => r[0]!.value),
       db.select({ value: count() }).from(deals).where(isNull(deals.deletedAt)).then(r => r[0]!.value),
       db.select({ value: count() }).from(companies).where(isNull(companies.deletedAt)).then(r => r[0]!.value),
@@ -45,10 +45,10 @@ export async function GET(request: NextRequest) {
       db.select({ value: count() }).from(activities).then(r => r[0]!.value),
       db.select({ value: count() }).from(tenants).where(eq(tenants.status, 'active')).then(r => r[0]!.value),
       db.select({ value: count() }).from(users).then(r => r[0]!.value),
-      db.select({ value: count() }).from(tasks).where(eq(tasks.status, 'completed')).then(r => r[0]!.value),
-      db.select({ value: count() }).from(contacts).where(gte(contacts.createdAt, yesterday)).then(r => r[0]!.value),
-      db.select({ value: count() }).from(leads).where(gte(leads.createdAt, yesterday)).then(r => r[0]!.value),
-      db.select({ value: count() }).from(deals).where(gte(deals.createdAt, yesterday)).then(r => r[0]!.value),
+      db.select({ value: count() }).from(tasks).where(and(eq(tasks.status, 'completed'), isNull(tasks.deletedAt))).then(r => r[0]!.value),
+      db.select({ value: count() }).from(contacts).where(and(gte(contacts.createdAt, yesterday), isNull(contacts.deletedAt))).then(r => r[0]!.value),
+      db.select({ value: count() }).from(leads).where(and(gte(leads.createdAt, yesterday), isNull(leads.deletedAt))).then(r => r[0]!.value),
+      db.select({ value: count() }).from(deals).where(and(gte(deals.createdAt, yesterday), isNull(deals.deletedAt))).then(r => r[0]!.value),
     ]);
 
     push(metrics, 'nucrm_contacts_total', 'Total contacts in CRM', 'gauge', Number(contactsCount));

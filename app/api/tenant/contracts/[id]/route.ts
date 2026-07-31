@@ -78,7 +78,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const [existing] = await db
-      .select({ id: contracts.id })
+      .select({ id: contracts.id, status: contracts.status })
       .from(contracts)
       .where(
         and(
@@ -90,6 +90,28 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       .limit(1);
 
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // Validate status transition if status is being changed
+    if (allowedFields.status && allowedFields.status !== existing.status) {
+      const VALID_TRANSITIONS: Record<string, string[]> = {
+        draft: ['active', 'cancelled'],
+        active: ['suspended', 'terminated', 'expired', 'renewed'],
+        suspended: ['active', 'terminated'],
+        renewed: ['active'],
+        // Terminal states: no transitions allowed out of these statuses
+        expired: [],
+        terminated: [],
+        cancelled: [],
+      };
+
+      const allowed = VALID_TRANSITIONS[existing.status as string];
+      if (allowed && !allowed.includes(allowedFields.status)) {
+        return NextResponse.json(
+          { error: `Invalid status transition: cannot change from '${existing.status}' to '${allowedFields.status}'` },
+          { status: 400 },
+        );
+      }
+    }
 
     const [updated] = await db
       .update(contracts)

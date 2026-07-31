@@ -8,6 +8,7 @@ import { milestones, projects } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -139,6 +140,11 @@ export async function PATCH(
     const validated = validateBody(updateMilestoneSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, milestones, v.milestone_id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const [updated] = await db.update(milestones)
       .set({

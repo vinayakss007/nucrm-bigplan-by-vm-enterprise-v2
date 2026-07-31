@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/nextjs';
 import { logError } from '@/lib/errors';
 import { sendCriticalErrorAlert } from '@/lib/critical-error-alert';
 import { InvalidJsonBodyError } from '@/lib/api/validate';
+import { ConcurrencyError } from '@/lib/concurrency';
 
 /**
  * @deprecated Use `handleError()` from `@/lib/errors` for new code.
@@ -38,6 +39,17 @@ export function apiError(err: unknown, message = 'Internal server error', status
   // pass a hardcoded 500 from their catch block.
   if (err instanceof InvalidJsonBodyError) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  // A lost-update conflict is an expected outcome of two people saving the same
+  // record, not a fault. withConcurrencyGuard() throws this when the compare-and-swap
+  // on updatedAt matched no rows. Without this branch it fell through to the 500
+  // default: the client got "Internal server error" with no way to tell "refresh and
+  // retry" from "the server is broken", Sentry recorded an exception, and
+  // sendCriticalErrorAlert paged someone -- every time a user double-clicked Save.
+  // The error already carries statusCode 409; nothing was reading it.
+  if (err instanceof ConcurrencyError) {
+    return NextResponse.json({ error: err.message }, { status: err.statusCode });
   }
 
   // Use centralized logError (coordinates with errors.ts)

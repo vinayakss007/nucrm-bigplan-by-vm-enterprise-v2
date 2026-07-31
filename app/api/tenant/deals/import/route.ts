@@ -3,10 +3,11 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { importSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { deals, contacts, companies, pipelines, dealStages, activities } from '@/drizzle/schema';
+import { deals, contacts, companies, pipelines, dealStages, activities, tenants, plans } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { apiError } from '@/lib/api-error';
+import { logAudit } from '@/lib/audit';
 
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -68,6 +69,21 @@ export async function POST(request: NextRequest) {
     const BATCH_SIZE = 500;
 
     await db.transaction(async (tx) => {
+      // Plan limits check
+      const [tenantWithPlan] = await tx
+        .select({
+          currentDeals: tenants.currentDeals,
+          maxDeals: plans.maxDeals,
+        })
+        .from(tenants)
+        .innerJoin(plans, eq(plans.id, tenants.planId))
+        .where(eq(tenants.id, ctx.tenantId))
+        .for('update');
+
+      if (tenantWithPlan && tenantWithPlan.maxDeals != null && ((tenantWithPlan.currentDeals ?? 0) + rows.length) > tenantWithPlan.maxDeals) {
+        throw new Error(`Import would exceed plan limit of ${tenantWithPlan.maxDeals} deals.`);
+      }
+
       // Cache pipeline + stage lookups
       const pipelineCache: Record<string, string> = {};
       const stageCache: Record<string, string> = {};
@@ -266,7 +282,25 @@ export async function POST(request: NextRequest) {
           entityId: sql`gen_random_uuid()`,
           action: 'import_completed',
         });
+
+        // Update deal counter
+        await tx
+          .update(tenants)
+          .set({
+            currentDeals: sql`${tenants.currentDeals} + ${results.imported}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(tenants.id, ctx.tenantId));
       }
+    });
+
+    // Audit log
+    await logAudit({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: 'deals.imported',
+      entityType: 'deal',
+      newData: { imported: results.imported, skipped: results.skipped, errors: results.errors.length },
     });
 
     return NextResponse.json({ ok: true, results });

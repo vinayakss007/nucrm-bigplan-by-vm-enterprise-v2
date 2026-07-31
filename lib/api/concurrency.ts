@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
-import { eq, and, SQL } from 'drizzle-orm';
+import { eq, and, isNull, SQL } from 'drizzle-orm';
 import { PgTableWithColumns } from 'drizzle-orm/pg-core';
 
 /**
@@ -10,7 +10,15 @@ import { PgTableWithColumns } from 'drizzle-orm/pg-core';
  *    Returns a SQL fragment for use in .where(), or null if no expectedUpdatedAt.
  *
  * 2. concurrencyGuard(db, table, id, tenantId, expectedUpdatedAt)
- *    Reads the DB row, compares timestamps, returns NextResponse 409/404 on conflict or null.
+ *    Reads the DB row and compares timestamps. Returns null to proceed, or a
+ *    NextResponse: 409 if the row moved on, 404 if it is gone, 400 if
+ *    expectedUpdatedAt could not be parsed.
+ *
+ * Both overloads pass (return null) when expectedUpdatedAt is absent -- sending it
+ * is what opts a request into the check.
+ *
+ * Neither overload can guard a table that has no updatedAt column; they return null
+ * and the update proceeds. Check the table before relying on this for a new route.
  */
 
 // Overload 1: SQL fragment (no db)
@@ -71,7 +79,16 @@ async function concurrencyGuardAsync(
   if (!expectedUpdatedAt || !id) return null;
 
   const timestamp = new Date(expectedUpdatedAt);
-  if (isNaN(timestamp.getTime())) return null;
+  if (isNaN(timestamp.getTime())) {
+    // Do not fall through to an unguarded update. A caller that sent
+    // expectedUpdatedAt asked for the check, and silently skipping it on a value
+    // we could not parse is how a client bypasses concurrency control by
+    // accident -- or on purpose.
+    return NextResponse.json(
+      { error: 'Invalid expectedUpdatedAt — must be an ISO 8601 timestamp.' },
+      { status: 400 },
+    );
+  }
 
   const idCol = table.id;
   const tenantCol = table.tenantId ?? table.parentTenantId;
@@ -85,7 +102,10 @@ async function concurrencyGuardAsync(
     conditions.push(eq(tenantCol, tenantId));
   }
   if (deletedCol) {
-    conditions.push(eq(deletedCol, null));
+    // isNull, not eq(col, null). eq() binds null as a parameter and emits
+    // `deleted_at = $n`, and in SQL `x = NULL` is never true -- so this predicate
+    // matched no rows at all and every guarded update answered 404.
+    conditions.push(isNull(deletedCol));
   }
 
   const [row] = await db

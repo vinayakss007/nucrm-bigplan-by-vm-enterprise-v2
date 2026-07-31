@@ -44,8 +44,12 @@ const MIGRATIONS_DIR = path.join(REPO_ROOT, 'drizzle', 'migrations');
 const TAG_DOWN_FILE = '0034_add_form_views_count';
 /** Migration with an inline `-- DOWN` / `-- END DOWN` section. */
 const TAG_INLINE = '0036_backup_records_checksum';
-/** Migration with no rollback SQL at all. */
-const TAG_NO_ROLLBACK = '0001_perpetual_the_stranger';
+/**
+ * Migration with no rollback SQL at all — a fixture (the real migrations
+ * directory now has 100% rollback coverage, so the no-rollback path is
+ * exercised against a synthetic directory instead).
+ */
+const TAG_NO_ROLLBACK = '9998_no_rollback_fixture';
 
 const tempDirs: string[] = [];
 
@@ -186,7 +190,9 @@ describe('verifyRollbackCoverage', () => {
 
     // Every migration that ships rollback SQL today must be reported as covered.
     for (const tag of [
+      '0002_flat_sir_ram',
       '0034_add_form_views_count',
+      '0035_add_tenant_short_code',
       '0037_tenant_isolation_hardening',
       '0038_cross_module_record_linking',
       '0036_backup_records_checksum',
@@ -195,9 +201,8 @@ describe('verifyRollbackCoverage', () => {
       expect(coverage.withRollback).toContain(tag);
     }
 
-    // And the gap is real: most migrations still have none.
-    expect(coverage.withoutRollback).toContain(TAG_NO_ROLLBACK);
-    expect(coverage.missing).toBeGreaterThan(0);
+    // Every migration in the journal ships rollback SQL (issue #964 fix).
+    expect(coverage.missing).toBe(0);
     expect(coverage.coveragePercent).toBeCloseTo(
       Math.round((coverage.covered / coverage.total) * 1000) / 10,
       5,
@@ -209,21 +214,20 @@ describe('verifyRollbackCoverage', () => {
     const byTag = new Map(coverage.entries.map((e) => [e.tag, e]));
     expect(byTag.get('0034_add_form_views_count')?.source).toBe('down-file');
     expect(byTag.get('0036_backup_records_checksum')?.source).toBe('inline');
-    expect(byTag.get(TAG_NO_ROLLBACK)?.source).toBeNull();
   });
 });
 
 describe('listAppliedMigrations', () => {
   it('returns applied migrations newest-first with rollback availability', async () => {
     mockQuery.mockResolvedValue({
-      rows: stateRowsFromJournal([TAG_NO_ROLLBACK, TAG_DOWN_FILE, TAG_INLINE]),
+      rows: stateRowsFromJournal([TAG_DOWN_FILE, TAG_INLINE]),
     });
 
     const applied = await listAppliedMigrations(MIGRATIONS_DIR);
 
-    expect(applied.map((m) => m.tag)).toEqual([TAG_INLINE, TAG_DOWN_FILE, TAG_NO_ROLLBACK]);
+    expect(applied.map((m) => m.tag)).toEqual([TAG_INLINE, TAG_DOWN_FILE]);
     expect(applied[0]!.hasRollback).toBe(true);
-    expect(applied[2]!.hasRollback).toBe(false);
+    expect(applied[1]!.hasRollback).toBe(true);
     expect(applied[0]!.appliedAt).toBeInstanceOf(Date);
     expect(applied[0]!.idx).toBeGreaterThanOrEqual(0);
     expect(mockQuery).toHaveBeenCalledTimes(1);
@@ -327,9 +331,21 @@ describe('rollbackMigration', () => {
   });
 
   it('throws when the migration has no rollback SQL', async () => {
-    mockQuery.mockResolvedValue({ rows: stateRowsFromJournal([TAG_NO_ROLLBACK]) });
+    const fixtureDir = makeFixtureDir();
+    const tag = '9998_no_rollback_fixture';
+    fs.writeFileSync(path.join(fixtureDir, `${tag}.sql`), 'CREATE TABLE t (id int);');
+    fs.writeFileSync(
+      path.join(fixtureDir, 'meta', '_journal.json'),
+      JSON.stringify({
+        version: '7',
+        dialect: 'postgresql',
+        entries: [{ idx: 0, version: '7', when: 1700000000000, tag, hash: 'deadbeef' }],
+      }),
+    );
+
+    mockQuery.mockResolvedValue({ rows: stateRowsFromJournal([tag]) });
     await expect(
-      rollbackMigration(TAG_NO_ROLLBACK, { migrationsDir: MIGRATIONS_DIR }),
+      rollbackMigration(tag, { migrationsDir: fixtureDir }),
     ).rejects.toThrow(/No rollback SQL found/i);
   });
 

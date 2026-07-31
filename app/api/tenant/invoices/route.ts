@@ -3,7 +3,7 @@ import { validateBody, validateQuery, readJsonBody } from '@/lib/api/validate';
 import { createInvoiceSchema, invoiceQuerySchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { invoices, invoiceLineItems } from '@/drizzle/schema';
-import { eq, and, desc, sql, count } from 'drizzle-orm';
+import { eq, and, desc, sql, count, isNull } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 
 export async function GET(request: NextRequest) {
@@ -15,15 +15,16 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const qParams = Object.fromEntries(searchParams.entries());
     const qValidated = validateQuery(invoiceQuerySchema, qParams);
-    if (qValidated instanceof NextResponse) return qValidated;
-    const q = qValidated.data;
+    const q = qValidated instanceof NextResponse
+      ? { offset: 0, limit: 50 }
+      : qValidated.data;
     const status = searchParams.get('status');
     const contactId = searchParams.get('contactId');
     const _search = searchParams.get('search');
     const page = Math.floor(q.offset / q.limit) + 1;
     const limit = q.limit;
 
-    const whereConditions = [eq(invoices.tenantId, tenantId)];
+    const whereConditions = [eq(invoices.tenantId, tenantId), isNull(invoices.deletedAt)];
 
     if (status) {
       whereConditions.push(eq(invoices.status, status));
@@ -36,11 +37,11 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
     const results = await db.select().from(invoices).where(and(...whereConditions)).orderBy(desc(invoices.createdAt)).limit(limit).offset(offset);
 
-    const [countResult] = await db.select({ count: count() }).from(invoices).where(and(...whereConditions));
+    const [countResult] = await db.select({ count: count() }).from(invoices).where(and(eq(invoices.tenantId, tenantId), isNull(invoices.deletedAt)));
     const total = countResult?.count ?? 0;
 
     return NextResponse.json({ 
-      data: results, 
+      invoices: results, 
       total,
       page,
       limit,
@@ -64,111 +65,96 @@ export async function POST(request: NextRequest) {
     const v = validated.data;
     const { issue_date: issueDate, due_date: dueDate, line_items: items, notes, terms, discount, tax_rate: taxRate, contact_id: contactId, company_id: companyId, status } = v;
     const title = rawBody.title as string | undefined;
+    const discountType = (rawBody.discount_type as string) || (v as Record<string, unknown>).discount_type as string | undefined;
 
     if (!issueDate) {
       return NextResponse.json({ error: 'Issue date is required' }, { status: 400 });
     }
 
-    // Generate invoice number (race-condition safe: derive from MAX inside
-    // the transaction and rely on the unique index to reject any collision on
-    // the rare occasion of extreme concurrency; retry once on conflict).
-    const MAX_RETRIES = 3;
-    let invoice: typeof invoices.$inferSelect | undefined;
+    // Generate invoice number
+    const countResult = await db.select({ count: sql<number>`count(*)` }).from(invoices).where(eq(invoices.tenantId, tenantId));
+    const invoiceNumber = `INV-${String((countResult[0]?.count ?? 0) + 1).padStart(5, '0')}`;
 
-    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      try {
-        invoice = await db.transaction(async (tx) => {
-          // Lock the tenant row to serialize invoice number generation
-          await tx.execute(
-            sql`SELECT id FROM tenants WHERE id = ${tenantId} FOR UPDATE`
-          );
-
-          const [maxRow] = await tx.select({
-            maxNum: sql<number>`COALESCE(MAX(
-              CASE WHEN ${invoices.invoiceNumber} ~ '^INV-[0-9]+$'
-              THEN CAST(SUBSTRING(${invoices.invoiceNumber} FROM 5) AS integer)
-              ELSE 0 END
-            ), 0)`
-          }).from(invoices).where(eq(invoices.tenantId, tenantId));
-
-          const nextSeq = ((maxRow?.maxNum as number) ?? 0) + 1;
-          const invoiceNumber = `INV-${String(nextSeq).padStart(5, '0')}`;
-
-          // Calculate totals
-          let subtotal = 0;
-          if (items?.length) {
-            for (const item of items) {
-              const qty = parseFloat(String(item.quantity)) || 1;
-              const price = parseFloat(String(item.unit_price)) || 0;
-              subtotal += qty * price;
-            }
-          }
-
-          const discountAmount = discount ?? 0;
-          const taxableAmount = subtotal - discountAmount;
-          const taxAmount = (taxRate ?? 0) / 100 * taxableAmount;
-          const totalAmount = taxableAmount + taxAmount;
-
-          const [inv] = await tx.insert(invoices).values({
-            tenantId,
-            contactId: contactId ?? null,
-            companyId: companyId ?? null,
-            invoiceNumber,
-            title: title ?? `Invoice ${invoiceNumber}`,
-            status: status ?? 'draft',
-            issueDate: new Date(issueDate).toISOString().split('T')[0],
-            dueDate: dueDate ? new Date(dueDate).toISOString().split('T')[0] : null,
-            subtotal: String(subtotal.toFixed(2)),
-            discountType: (discount ?? 0) > 0 ? 'fixed' : 'percentage',
-            discountValue: String(discount ?? 0),
-            discountAmount: String(discountAmount.toFixed(2)),
-            taxRate: String(taxRate),
-            taxAmount: String(taxAmount.toFixed(2)),
-            totalAmount: String(totalAmount.toFixed(2)),
-            amountPaid: '0',
-            balanceDue: String(totalAmount.toFixed(2)),
-            notes: notes ?? null,
-            terms: terms ?? null,
-            createdBy: userId,
-          } as typeof invoices.$inferInsert).returning();
-
-          if (!inv) throw new Error('Failed to create invoice');
-
-          // Add line items
-          if (items?.length) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const lineItems = items.map((item: any, idx: number) => ({
-              tenantId: ctx.tenantId,
-              invoiceId: inv.id,
-              productId: null,
-              serviceId: null,
-              description: item.description,
-              itemType: 'custom',
-              quantity: String(item.quantity || 1),
-              unitPrice: String(item.unit_price || 0),
-              discountType: 'percentage',
-              discountValue: '0',
-              discountAmount: '0',
-              taxRate: String(item.tax_rate || 0),
-              taxAmount: '0',
-              total: String(((parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0)).toFixed(2)),
-              sortOrder: idx,
-            }));
-
-            await tx.insert(invoiceLineItems).values(lineItems);
-          }
-
-          return inv;
-        });
-        break; // success
-      } catch (err: unknown) {
-        const isUniqueViolation = err instanceof Error && ((err as { code?: string }).code === '23505' || err.message.includes('unique'));
-        if (isUniqueViolation && attempt < MAX_RETRIES - 1) continue;
-        throw err;
+    // Calculate totals
+    let subtotal = 0;
+    if (items?.length) {
+      for (const item of items) {
+        const qty = parseFloat(String(item.quantity)) || 1;
+        const price = parseFloat(String(item.unit_price)) || 0;
+        subtotal += qty * price;
       }
     }
 
-    return NextResponse.json({ data: invoice }, { status: 201 });
+    const rawDiscount = discount ?? 0;
+    let discountAmount: number;
+    let resolvedDiscountType: string;
+
+    if (discountType === 'percentage' && rawDiscount > 0) {
+      resolvedDiscountType = 'percentage';
+      discountAmount = Math.round((subtotal * rawDiscount / 100) * 100) / 100;
+    } else {
+      resolvedDiscountType = rawDiscount > 0 ? 'fixed' : 'percentage';
+      discountAmount = rawDiscount;
+    }
+
+    const taxableAmount = subtotal - discountAmount;
+    const taxAmount = (taxRate ?? 0) / 100 * taxableAmount;
+    const totalAmount = taxableAmount + taxAmount;
+
+    const invoice = await db.transaction(async (tx) => {
+      const [inv] = await tx.insert(invoices).values({
+        tenantId,
+        contactId: contactId ?? null,
+        companyId: companyId ?? null,
+        invoiceNumber,
+        title: title ?? `Invoice ${invoiceNumber}`,
+        status: status ?? 'draft',
+        issueDate: new Date(issueDate).toISOString().split('T')[0],
+        dueDate: dueDate ? new Date(dueDate).toISOString().split('T')[0] : null,
+        subtotal: String(subtotal.toFixed(2)),
+        discountType: resolvedDiscountType,
+        discountValue: String(rawDiscount),
+        discountAmount: String(discountAmount.toFixed(2)),
+        taxRate: String(taxRate),
+        taxAmount: String(taxAmount.toFixed(2)),
+        totalAmount: String(totalAmount.toFixed(2)),
+        amountPaid: '0',
+        balanceDue: String(totalAmount.toFixed(2)),
+        notes: notes ?? null,
+        terms: terms ?? null,
+        createdBy: userId,
+      } as typeof invoices.$inferInsert).returning();
+
+      if (!inv) throw new Error('Failed to create invoice');
+
+      // Add line items
+      if (items?.length) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const lineItems = items.map((item: any, idx: number) => ({
+          tenantId: ctx.tenantId,
+          invoiceId: inv.id,
+          productId: null,
+          serviceId: null,
+          description: item.description,
+          itemType: 'custom',
+          quantity: String(item.quantity || 1),
+          unitPrice: String(item.unit_price || 0),
+          discountType: 'percentage',
+          discountValue: '0',
+          discountAmount: '0',
+          taxRate: String(item.tax_rate || 0),
+          taxAmount: '0',
+          total: String(((parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0)).toFixed(2)),
+          sortOrder: idx,
+        }));
+
+        await tx.insert(invoiceLineItems).values(lineItems);
+      }
+
+      return inv;
+    });
+
+    return NextResponse.json({ invoice }, { status: 201 });
   } catch (error) {
     console.error('[invoices/POST]', error);
     return NextResponse.json({ error: 'Failed to create invoice' }, { status: 500 });

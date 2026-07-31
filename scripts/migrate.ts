@@ -7,6 +7,7 @@ import * as schema from '../drizzle/schema';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createInterface } from 'readline';
+import { pgSslConfig } from '../lib/db/ssl-config';
 
 const args = process.argv.slice(2);
 const isDryRun = args.includes('--dry-run');
@@ -76,11 +77,9 @@ async function main() {
     }
   }
 
-  const useSsl = process.env.DATABASE_SSL === 'true';
-
   const pool = new Pool({
     connectionString: databaseUrl,
-    ssl: useSsl ? { rejectUnauthorized: false } : false,
+    ssl: pgSslConfig(),
     connectionTimeoutMillis: 10_000,
   });
 
@@ -150,7 +149,23 @@ async function main() {
       sql.raw(`SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'api_key_usage')`),
     );
 
-    if (schemaExists.rows[0].exists) {
+    // Marker for the LAST migration in the journal (0044_backup_verification
+    // adds last_verified_at to backup_records). Checking only an early marker
+    // (api_key_usage is created by 0016/0017) let a DB that was pushed at
+    // ~0038 get stamped as fully migrated, permanently cementing schema drift
+    // (verified on the prod VM: contacts.team_id from 0041 was missing and
+    // contact creation failed with "column team_id does not exist").
+    const lastEntry = journal.entries[journal.entries.length - 1]!;
+    const lastMigrationApplied = await db.execute<{ exists: boolean }>(
+      sql.raw(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.columns
+          WHERE table_name = 'backup_records' AND column_name = 'last_verified_at'
+        )
+      `),
+    );
+
+    if (schemaExists.rows[0].exists && lastMigrationApplied.rows[0].exists) {
       console.log('[migrate] Recovery: schema already exists but the migration ledger is empty.');
       console.log('[migrate] This database was provisioned with db:push/db:sync or restored');
       console.log('[migrate] from a dump. Stamping the journal as applied rather than replaying');
@@ -162,6 +177,18 @@ async function main() {
         );
       }
       console.log('[migrate] Recovery complete — no migration SQL was executed.');
+    } else if (schemaExists.rows[0].exists && !lastMigrationApplied.rows[0].exists) {
+      // Partial schema: the ledger is empty but the schema is NOT at the last
+      // migration's state. Stamping everything would permanently hide the
+      // drift; replaying from 0000_init would replay the entire history over
+      // live tables. Either way risks data loss — refuse and ask for action.
+      console.error('[migrate] ERROR: Database has schema but it is NOT at the latest migration state.');
+      console.error(`[migrate] Ledger is empty but marker for the last migration (${lastEntry.tag}) is missing.`);
+      console.error('[migrate] This is usually a partial push/restore. Options:');
+      console.error('[migrate]   1. Run the remaining migrations manually and re-run db:migrate.');
+      console.error('[migrate]   2. Restore from a full backup.');
+      console.error('[migrate]   3. If the schema really is current, contact the maintainers.');
+      process.exit(1);
     } else {
       console.log('[migrate] Fresh database detected. Running all migrations...');
     }

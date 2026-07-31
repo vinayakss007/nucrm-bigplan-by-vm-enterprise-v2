@@ -2,6 +2,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { modules } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
@@ -87,6 +88,13 @@ export async function PUT(
           price: item.price ?? builtin.pricing?.[planId as keyof typeof builtin.pricing]?.price ?? 0,
         },
       };
+
+    // Optimistic concurrency guard (superadmin)
+    const _eu = body?.expectedUpdatedAt ?? body?._updated_at;
+    if (_eu) {
+      const _cg = await concurrencyGuard(db, modules, body?.id ?? null, null, _eu);
+      if (_cg) return _cg;
+    }
 
       await db.update(modules)
         .set({

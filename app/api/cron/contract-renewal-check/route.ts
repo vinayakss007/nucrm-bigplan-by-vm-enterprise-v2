@@ -44,7 +44,6 @@ export async function POST(request: NextRequest) {
       })
       .from(contracts)
       .where(and(
-        eq(contracts.tenantId, contracts.tenantId),
         eq(contracts.status, 'active'),
         isNull(contracts.deletedAt),
         sql`(${contracts.endDate})::date = ${targetStr}::date`,

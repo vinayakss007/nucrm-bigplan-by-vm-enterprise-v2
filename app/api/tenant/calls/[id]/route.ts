@@ -7,6 +7,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const updateCallSchema = z.object({
   direction: z.enum(['inbound', 'outbound']).optional(),
@@ -30,6 +31,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const raw = await readJsonBody(req);
     const parsed = validateBody(updateCallSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
+
+    const expectedUpdatedAt = raw.expectedUpdatedAt ? new Date(raw.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, callLogs, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const [existing] = await db.select({ id: callLogs.id })
       .from(callLogs)

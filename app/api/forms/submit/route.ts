@@ -15,6 +15,45 @@ const formSubmitSchema = z.object({
   values: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
+/**
+ * Escape HTML entities in a string to prevent XSS when values are rendered.
+ */
+function escapeHtmlEntities(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
+/**
+ * Recursively sanitize all string values in an object to prevent stored XSS.
+ * Handles nested objects and arrays at any depth.
+ */
+function sanitizeFormData(data: Record<string, unknown>): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (typeof value === 'string') {
+      sanitized[key] = escapeHtmlEntities(value);
+    } else if (Array.isArray(value)) {
+      sanitized[key] = value.map(item => {
+        if (typeof item === 'string') return escapeHtmlEntities(item);
+        if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
+          return sanitizeFormData(item as Record<string, unknown>);
+        }
+        return item;
+      });
+    } else if (value !== null && typeof value === 'object') {
+      // Recurse into nested objects to sanitize deeply nested string values
+      sanitized[key] = sanitizeFormData(value as Record<string, unknown>);
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
 export async function POST(req: NextRequest) {
   try {
     // 1. Rate Limiting (IP-based)
@@ -26,7 +65,8 @@ export async function POST(req: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
     const { form_id, data: d1, values: d2 } = v;
-    const formData = Object.keys(d1).length > 0 ? d1 : d2;
+    const rawFormData = Object.keys(d1).length > 0 ? d1 : d2;
+    const formData = sanitizeFormData(rawFormData as Record<string, unknown>);
 
     // 2. Fetch form and tenant context
     const formResult = await db.select({

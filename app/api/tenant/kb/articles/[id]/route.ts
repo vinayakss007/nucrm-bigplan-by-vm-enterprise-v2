@@ -6,6 +6,7 @@ import { kbArticles, kbCategories } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -49,6 +50,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;
     const body = await readJsonBody(request);
+
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, kbArticles, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
