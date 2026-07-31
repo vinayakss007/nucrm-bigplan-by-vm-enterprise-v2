@@ -98,6 +98,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         active: ['suspended', 'terminated', 'expired', 'renewed'],
         suspended: ['active', 'terminated'],
         renewed: ['active'],
+        // Terminal states: no transitions allowed out of these statuses
+        expired: [],
+        terminated: [],
+        cancelled: [],
       };
 
       const allowed = VALID_TRANSITIONS[existing.status as string];

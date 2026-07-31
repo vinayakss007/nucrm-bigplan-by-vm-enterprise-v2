@@ -123,6 +123,11 @@ function getRedisClient(): Redis | null {
       console.log('[Cache] Redis connected');
       redisPermanentlyDisconnected = false;
       recordRedisSuccess();
+      // Clear the reconnect timer since we successfully connected
+      if (reconnectTimer) {
+        clearInterval(reconnectTimer);
+        reconnectTimer = null;
+      }
     });
   }
 
@@ -294,6 +299,12 @@ const LOCK_SCRIPT = `
 
 export async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<{ acquired: boolean; value: string }> {
   const redis = getRedisClient();
+  // DESIGN NOTE: Fail-open when Redis is unavailable. This means distributed locks
+  // provide NO protection in memory-only deployments or during Redis outages.
+  // For safety-critical locks (e.g., sequence deduplication, pipeline reorder),
+  // consider a database advisory lock fallback if Redis availability cannot be
+  // guaranteed. Acceptable for current scope since these operations are idempotent
+  // or have other concurrency guards (SELECT FOR UPDATE, unique constraints).
   if (!redis || redis.status !== 'ready') return { acquired: true, value: '' };
   const value = makeLockValue();
   try {

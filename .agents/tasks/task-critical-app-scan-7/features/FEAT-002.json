@@ -2,7 +2,7 @@
   "id": "FEAT-002",
   "type": "fix",
   "description": "Fix email deliverability: missing List-Unsubscribe header (RFC 8058), no hard vs soft bounce differentiation, warmup pool not tracking sender reputation metrics, bulk email not checking doNotContact flag",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "1. In lib/email/service.ts sendViaResend(): Add RFC 8058 compliant List-Unsubscribe and List-Unsubscribe-Post headers to all outbound emails. The unsubscribe URL should be {APP_URL}/api/unsubscribe?contact={contactId}&token={hmac}. Create a helper function buildUnsubscribeHeaders(contactId: string) that generates these headers.",
     "2. In app/api/webhooks/resend/route.ts: Differentiate between hard bounces (email.bounced) and soft bounces. Hard bounces should set doNotContact=true immediately. Soft bounces (temporary failures) should increment a bounce counter and only set doNotContact after 3 soft bounces within 7 days. Add a bounceCount and lastBounceAt to contact metadata tracking.",
@@ -25,5 +25,5 @@
     "npx vitest run tests/unit/email-deliverability-fixes.test.ts"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 21 unit tests pass. Pre-existing failures in integration tests (5 tests in critical-coverage and vulnerability-security) are due to missing ENCRYPTION_KEY env var - confirmed by running them on base state. The lint-staged pre-commit hook ran eslint --fix on all files and they passed."
 }

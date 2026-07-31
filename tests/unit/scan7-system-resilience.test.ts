@@ -118,6 +118,10 @@ describe('Contract Status Transitions', () => {
     active: ['suspended', 'terminated', 'expired', 'renewed'],
     suspended: ['active', 'terminated'],
     renewed: ['active'],
+    // Terminal states: no transitions allowed
+    expired: [],
+    terminated: [],
+    cancelled: [],
   };
 
   it('draft can transition to active or cancelled', () => {
@@ -145,12 +149,31 @@ describe('Contract Status Transitions', () => {
     expect(VALID_TRANSITIONS['renewed']).toEqual(['active']);
   });
 
-  it('expired has no valid transitions (terminal state)', () => {
-    expect(VALID_TRANSITIONS['expired']).toBeUndefined();
+  it('expired is a terminal state with no valid transitions', () => {
+    expect(VALID_TRANSITIONS['expired']).toEqual([]);
   });
 
-  it('terminated has no valid transitions (terminal state)', () => {
-    expect(VALID_TRANSITIONS['terminated']).toBeUndefined();
+  it('terminated is a terminal state with no valid transitions', () => {
+    expect(VALID_TRANSITIONS['terminated']).toEqual([]);
+  });
+
+  it('cancelled is a terminal state with no valid transitions', () => {
+    expect(VALID_TRANSITIONS['cancelled']).toEqual([]);
+  });
+
+  it('terminal states block all transitions (guard not skipped)', () => {
+    // Previously, missing keys in VALID_TRANSITIONS caused `allowed` to be
+    // undefined, which skipped the guard entirely. With explicit empty arrays,
+    // the guard fires and rejects any transition from terminal states.
+    for (const terminal of ['expired', 'terminated', 'cancelled']) {
+      const allowed = VALID_TRANSITIONS[terminal];
+      expect(allowed).toBeDefined();
+      expect(allowed!.length).toBe(0);
+      // Simulate the guard logic from the route handler
+      const targetStatus = 'active';
+      const wouldBlock = allowed !== undefined && !allowed.includes(targetStatus);
+      expect(wouldBlock).toBe(true);
+    }
   });
 });
 
@@ -238,6 +261,55 @@ describe('Form Submission XSS Sanitization', () => {
 
     expect(escapeHtmlEntities('A & B')).toBe('A &amp; B');
     expect(escapeHtmlEntities("it's")).toBe('it&#x27;s');
+  });
+
+  it('recurses into nested objects to sanitize deeply nested strings', () => {
+    // Replicate the sanitizeFormData logic to test recursion
+    function escapeHtmlEntities(str: string): string {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+    }
+
+    function sanitizeFormData(data: Record<string, unknown>): Record<string, unknown> {
+      const sanitized: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(data)) {
+        if (typeof value === 'string') {
+          sanitized[key] = escapeHtmlEntities(value);
+        } else if (Array.isArray(value)) {
+          sanitized[key] = value.map(item => {
+            if (typeof item === 'string') return escapeHtmlEntities(item);
+            if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
+              return sanitizeFormData(item as Record<string, unknown>);
+            }
+            return item;
+          });
+        } else if (value !== null && typeof value === 'object') {
+          sanitized[key] = sanitizeFormData(value as Record<string, unknown>);
+        } else {
+          sanitized[key] = value;
+        }
+      }
+      return sanitized;
+    }
+
+    // Nested object with XSS payload should be sanitized
+    const input = {
+      name: 'John',
+      nested: { html: '<script>alert(1)</script>', safe: 'hello' },
+      deep: { level1: { level2: '<img onerror="xss">' } },
+      arr: [{ val: '<b>bold</b>' }, 'plain <tag>'],
+    };
+
+    const result = sanitizeFormData(input);
+    expect((result.nested as Record<string, unknown>).html).toBe('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect((result.nested as Record<string, unknown>).safe).toBe('hello');
+    expect(((result.deep as Record<string, unknown>).level1 as Record<string, unknown>).level2).toBe('&lt;img onerror=&quot;xss&quot;&gt;');
+    expect((result.arr as Array<unknown>)[0]).toEqual({ val: '&lt;b&gt;bold&lt;/b&gt;' });
+    expect((result.arr as Array<unknown>)[1]).toBe('plain &lt;tag&gt;');
   });
 });
 

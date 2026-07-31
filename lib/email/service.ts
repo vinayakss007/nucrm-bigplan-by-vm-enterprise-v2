@@ -27,7 +27,14 @@ export function buildUnsubscribeHeaders(contactId: string): {
   'List-Unsubscribe-Post': string;
 } {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.nucrm.io';
-  const secret = process.env.UNSUBSCRIBE_SECRET || process.env.NEXTAUTH_SECRET || 'nucrm-unsub-default';
+  const secret = process.env.UNSUBSCRIBE_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    console.error(
+      '[email] CRITICAL: No UNSUBSCRIBE_SECRET or NEXTAUTH_SECRET configured. ' +
+      'Unsubscribe tokens cannot be securely generated. Set one of these environment variables.'
+    );
+    throw new Error('Unsubscribe secret not configured. Set UNSUBSCRIBE_SECRET or NEXTAUTH_SECRET.');
+  }
   const token = crypto.createHmac('sha256', secret).update(contactId).digest('hex');
   const unsubUrl = `${appUrl}/api/unsubscribe?contact=${encodeURIComponent(contactId)}&token=${token}`;
   return {

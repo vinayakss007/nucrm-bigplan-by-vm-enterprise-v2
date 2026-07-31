@@ -29,6 +29,7 @@ function escapeHtmlEntities(str: string): string {
 
 /**
  * Recursively sanitize all string values in an object to prevent stored XSS.
+ * Handles nested objects and arrays at any depth.
  */
 function sanitizeFormData(data: Record<string, unknown>): Record<string, unknown> {
   const sanitized: Record<string, unknown> = {};
@@ -36,9 +37,16 @@ function sanitizeFormData(data: Record<string, unknown>): Record<string, unknown
     if (typeof value === 'string') {
       sanitized[key] = escapeHtmlEntities(value);
     } else if (Array.isArray(value)) {
-      sanitized[key] = value.map(item =>
-        typeof item === 'string' ? escapeHtmlEntities(item) : item
-      );
+      sanitized[key] = value.map(item => {
+        if (typeof item === 'string') return escapeHtmlEntities(item);
+        if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
+          return sanitizeFormData(item as Record<string, unknown>);
+        }
+        return item;
+      });
+    } else if (value !== null && typeof value === 'object') {
+      // Recurse into nested objects to sanitize deeply nested string values
+      sanitized[key] = sanitizeFormData(value as Record<string, unknown>);
     } else {
       sanitized[key] = value;
     }

@@ -90,6 +90,31 @@ describe('Email Deliverability Fixes', () => {
 
       expect(headers['List-Unsubscribe']).toContain('contact%26evil%3Dtrue');
     });
+
+    it('should throw when no UNSUBSCRIBE_SECRET or NEXTAUTH_SECRET is configured', async () => {
+      delete process.env.UNSUBSCRIBE_SECRET;
+      delete process.env.NEXTAUTH_SECRET;
+      process.env.NEXT_PUBLIC_APP_URL = 'https://app.example.com';
+
+      const { buildUnsubscribeHeaders } = await import('@/lib/email/service');
+
+      expect(() => buildUnsubscribeHeaders('contact-123')).toThrow(
+        'Unsubscribe secret not configured'
+      );
+    });
+
+    it('should use NEXTAUTH_SECRET as fallback when UNSUBSCRIBE_SECRET is missing', async () => {
+      delete process.env.UNSUBSCRIBE_SECRET;
+      process.env.NEXTAUTH_SECRET = 'nextauth-fallback-secret';
+      process.env.NEXT_PUBLIC_APP_URL = 'https://app.example.com';
+
+      const { buildUnsubscribeHeaders } = await import('@/lib/email/service');
+
+      // Should not throw when NEXTAUTH_SECRET is available
+      const headers = buildUnsubscribeHeaders('contact-123');
+      expect(headers).toHaveProperty('List-Unsubscribe');
+      expect(headers).toHaveProperty('List-Unsubscribe-Post');
+    });
   });
 
   describe('Warmup bounce rate calculation and threshold', () => {

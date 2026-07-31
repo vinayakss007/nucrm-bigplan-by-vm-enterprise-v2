@@ -75,6 +75,11 @@ export async function processWarmUp(): Promise<WarmUpResult> {
     for (const { config, sentToday, totalBounced } of configsWithSentToday) {
       try {
         // Defense-in-depth: check bounce rate before processing even if isActive is true
+        // TODO: This uses all-time totalBounced / totalSent counters. A config with early
+        // deliverability issues will carry that bounce rate forever, even if recent sends
+        // are clean. Consider switching to a rolling window (e.g., bounces in last 7 days /
+        // sends in last 7 days) to match the soft-bounce escalation window and allow
+        // recovery after transient reputation problems.
         const bounceRate = calculateBounceRate(totalBounced, config.totalSent || 0);
         if (bounceRate > WARMUP_BOUNCE_RATE_THRESHOLD) {
           console.warn(
