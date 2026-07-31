@@ -167,7 +167,14 @@ async function executeNode(
   ctx: Record<string, unknown>,
   visited: Set<string>
 ): Promise<void> {
-  // Cycle detection: skip nodes already visited in this execution path
+  // Cycle detection: skip nodes already visited in this execution path.
+  // NOTE: The visited Set serves as both cycle prevention AND deduplication.
+  // In DAG workflows with fan-in (multiple branches converging on the same node),
+  // a shared node will only execute once per workflow run -- whichever branch
+  // reaches it first. This is intentional: each workflow execution produces
+  // exactly one invocation per node, avoiding duplicate side-effects (e.g.,
+  // sending the same email twice). If per-path execution is needed in the future,
+  // use a recursion-stack approach instead of a global visited set.
   if (visited.has(nodeId)) return;
   visited.add(nodeId);
 

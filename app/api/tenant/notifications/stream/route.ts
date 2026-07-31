@@ -17,6 +17,13 @@ export async function GET(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         let consecutiveErrors = 0;
+        let closed = false;
+
+        const closeStream = () => {
+          if (closed) return;
+          closed = true;
+          try { controller.close(); } catch { /* already closed */ }
+        };
 
         const sendUnread = async () => {
           try {
@@ -40,7 +47,7 @@ export async function GET(request: NextRequest) {
             if (consecutiveErrors >= 3) {
               clearInterval(interval);
               clearInterval(keepalive);
-              controller.close();
+              closeStream();
             }
           }
         };
@@ -59,7 +66,7 @@ export async function GET(request: NextRequest) {
         request.signal.addEventListener('abort', () => {
           clearInterval(interval);
           clearInterval(keepalive);
-          controller.close();
+          closeStream();
         });
       },
     });

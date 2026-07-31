@@ -37,6 +37,8 @@ const FORMULA_PREFIXES = ['=', '+', '-', '@', '\t', '\r'];
 /**
  * Escapes a value for CSV, neutralizing formula injection attacks.
  * Cells starting with formula-triggering characters are prefixed with a single quote.
+ * Values that are valid numbers (e.g. -500, +1.5) are exempted from the prefix
+ * since they are legitimate numeric data, not formula payloads.
  */
  
  
@@ -45,9 +47,14 @@ export function escapeCSV(val: any): string {
   if (val === null || val === undefined) return '';
   let str = String(val);
 
-  // Neutralize formula injection by prefixing dangerous characters with a single quote
+  // Neutralize formula injection by prefixing dangerous characters with a single quote.
+  // Skip the prefix if the value is a valid number (e.g. -500, +1.5, -0.3) to avoid
+  // mangling legitimate negative amounts, phone numbers like +1-555..., etc.
   if (str.length > 0 && FORMULA_PREFIXES.includes(str[0]!)) {
-    str = "'" + str;
+    const trimmed = str.trim();
+    if (!/^[+-]?\d/.test(trimmed)) {
+      str = "'" + str;
+    }
   }
 
   if (str.includes(',') || str.includes('"') || str.includes('\n')) {
@@ -60,7 +67,7 @@ export function escapeCSV(val: any): string {
  * Escapes SQL wildcard characters (% and _) in user-supplied search terms
  * to prevent them from being interpreted as pattern wildcards in ILIKE queries.
  */
-function escapeIlikeWildcards(input: string): string {
+export function escapeIlikeWildcards(input: string): string {
   return input.replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 

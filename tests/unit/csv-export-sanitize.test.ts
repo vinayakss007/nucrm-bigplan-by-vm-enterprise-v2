@@ -42,9 +42,13 @@ describe('CSV Export - Formula Injection Prevention', () => {
 
   it('prefixes cells starting with - to neutralize formula injection', async () => {
     const { escapeCSV } = await import('@/lib/export');
+    // -1+1 starts with - followed by a digit, so it looks numeric and should NOT be prefixed
     const result = escapeCSV('-1+1');
-    expect(result).toMatch(/^'/);
-    expect(result).not.toMatch(/^-/);
+    expect(result).toBe('-1+1');
+    // But a non-numeric value like -CMD() should still be prefixed
+    const dangerous = escapeCSV('-CMD()');
+    expect(dangerous).toMatch(/^'/);
+    expect(dangerous).not.toMatch(/^-/);
   });
 
   it('prefixes cells starting with @ to neutralize formula injection', async () => {
@@ -71,6 +75,21 @@ describe('CSV Export - Formula Injection Prevention', () => {
     expect(escapeCSV('John')).toBe('John');
     expect(escapeCSV('hello world')).toBe('hello world');
     expect(escapeCSV('123')).toBe('123');
+  });
+
+  it('does not prefix valid negative numbers', async () => {
+    const { escapeCSV } = await import('@/lib/export');
+    expect(escapeCSV('-500')).toBe('-500');
+    expect(escapeCSV('-0.75')).toBe('-0.75');
+    expect(escapeCSV('-123.45')).toBe('-123.45');
+  });
+
+  it('does not prefix values starting with + followed by a digit', async () => {
+    const { escapeCSV } = await import('@/lib/export');
+    expect(escapeCSV('+1.5')).toBe('+1.5');
+    expect(escapeCSV('+100')).toBe('+100');
+    // Phone-number-like values starting with +digit
+    expect(escapeCSV('+1-555-0101')).toBe('+1-555-0101');
   });
 
   it('handles null and undefined values', async () => {
@@ -122,6 +141,30 @@ describe('CSV Export - Workflow Executor Cycle Detection', () => {
     // Testing the exported evaluateCondition behavior via workflow-executor module
     const mod = await import('@/lib/automation/workflow-executor');
     expect(mod.executeWorkflow).toBeDefined();
+  });
+});
+
+describe('escapeIlikeWildcards - SQL wildcard escaping', () => {
+  it('escapes % characters in search terms', async () => {
+    const { escapeIlikeWildcards } = await import('@/lib/export');
+    expect(escapeIlikeWildcards('100%')).toBe('100\\%');
+    expect(escapeIlikeWildcards('%match%')).toBe('\\%match\\%');
+  });
+
+  it('escapes _ characters in search terms', async () => {
+    const { escapeIlikeWildcards } = await import('@/lib/export');
+    expect(escapeIlikeWildcards('test_value')).toBe('test\\_value');
+  });
+
+  it('leaves normal strings unchanged', async () => {
+    const { escapeIlikeWildcards } = await import('@/lib/export');
+    expect(escapeIlikeWildcards('hello world')).toBe('hello world');
+    expect(escapeIlikeWildcards('John Smith')).toBe('John Smith');
+  });
+
+  it('escapes both % and _ in the same string', async () => {
+    const { escapeIlikeWildcards } = await import('@/lib/export');
+    expect(escapeIlikeWildcards('%test_')).toBe('\\%test\\_');
   });
 });
 
