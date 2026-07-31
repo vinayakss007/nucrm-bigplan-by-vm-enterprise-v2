@@ -4,7 +4,6 @@ import { validateBody } from '@/lib/api/validate';
 import { createTenantSchema, updateTenantSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { concurrencyGuard } from '@/lib/api/concurrency';
 import { tenants, users, tenantMembers, plans } from '@/drizzle/schema';
 import { eq, and, sql, ilike, desc, or } from 'drizzle-orm';
 import { hashPassword } from '@/lib/auth/session';

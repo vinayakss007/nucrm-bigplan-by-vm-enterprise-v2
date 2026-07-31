@@ -9,7 +9,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { concurrencyGuard } from '@/lib/api/concurrency';
 import { tenants, tenantMembers } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';

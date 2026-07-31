@@ -2,7 +2,6 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { concurrencyGuard } from '@/lib/api/concurrency';
 import { backupRecords, backupSchedules, criticalDataBackups, tenants, users } from '@/drizzle/schema';
 import { eq, sql, desc } from 'drizzle-orm';
 import { createBackup } from '@/lib/backups/backup-service';

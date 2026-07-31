@@ -4,7 +4,6 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createPlanSchema, updatePlanSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { concurrencyGuard } from '@/lib/api/concurrency';
 import { plans, tenants } from '@/drizzle/schema';
 import { eq, sql, asc } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
