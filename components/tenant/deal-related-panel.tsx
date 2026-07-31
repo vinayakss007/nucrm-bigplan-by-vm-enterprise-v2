@@ -6,10 +6,10 @@ import { FileText, ListChecks, Receipt } from 'lucide-react';
 
 /**
  * Field names below are the camelCase Drizzle row shapes actually returned by
- * the three APIs — verified against:
+ * the three APIs - verified against:
  *   GET /api/tenant/follow-ups?deal_id=  -> { data: [...] }
  *   GET /api/tenant/quotes?dealId=       -> { quotes: [...] }
- *   GET /api/tenant/invoices             -> { invoices: [...] }  (no deal filter)
+ *   GET /api/tenant/invoices             -> { data: [...] }  (no deal filter)
  */
 interface FollowUpItem {
   id: string;

@@ -9,6 +9,7 @@ import { logError } from '@/lib/errors-server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
+import { escapeLike } from '@/lib/api/sanitize-like';
 
 const createProductSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
     ];
 
     if (q) {
-      const w = `%${q}%`;
+      const w = `%${escapeLike(q)}%`;
       filters.push(sql`(${ilike(products.name, w)} OR ${ilike(products.sku, w)} OR ${ilike(products.description, w)})`);
     }
 

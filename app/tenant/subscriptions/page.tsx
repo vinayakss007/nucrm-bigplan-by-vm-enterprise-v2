@@ -41,7 +41,7 @@ export default function SubscriptionsPage() {
     try {
       const res = await fetch('/api/tenant/subscriptions');
       const data = await res.json();
-      setSubscriptions(data.subscriptions || []);
+      setSubscriptions(data.data || []);
     } catch (error) { console.error('Failed to fetch subscriptions', error); toast.error('Failed to load subscriptions'); }
     finally { setLoading(false); }
   };

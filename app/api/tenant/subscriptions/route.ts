@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     const offset = (page - 1) * limit;
     const results = await db.select().from(serviceSubscriptions).where(and(...conditions)).orderBy(desc(serviceSubscriptions.startDate)).limit(limit).offset(offset);
-    const totalRes = await db.select({ count: sql<number>`count(*)::int` }).from(serviceSubscriptions).where(eq(serviceSubscriptions.tenantId, tenantId));
+    const totalRes = await db.select({ count: sql<number>`count(*)::int` }).from(serviceSubscriptions).where(and(...conditions));
     const total = totalRes[0]?.count ?? 0;
 
     return NextResponse.json({ data: results, total, page, limit, totalPages: Math.ceil(total / limit) });

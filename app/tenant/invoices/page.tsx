@@ -70,7 +70,7 @@ function InvoicesPageInner() {
     try {
       const res = await fetch('/api/tenant/invoices');
       const data = await res.json();
-      setInvoices(data.invoices || []);
+      setInvoices(data.data || []);
     } catch (error) {
       console.error('Failed to fetch invoices', error);
       toast.error('Failed to load invoices');

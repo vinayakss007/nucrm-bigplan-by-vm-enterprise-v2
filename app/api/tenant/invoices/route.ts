@@ -162,7 +162,7 @@ export async function POST(request: NextRequest) {
         });
         break; // success
       } catch (err: unknown) {
-        const isUniqueViolation = err instanceof Error && err.message.includes('unique');
+        const isUniqueViolation = err instanceof Error && ((err as { code?: string }).code === '23505' || err.message.includes('unique'));
         if (isUniqueViolation && attempt < MAX_RETRIES - 1) continue;
         throw err;
       }
