@@ -73,6 +73,7 @@ export const dealQuerySchema = z.object({
   stage: z.string().optional(),
   pipeline_id: z.string().uuid().optional(),
   q: z.string().optional(),
+  archived: z.enum(['true', 'false', 'all']).optional(),
 });
 
 // ── Company schemas ──
