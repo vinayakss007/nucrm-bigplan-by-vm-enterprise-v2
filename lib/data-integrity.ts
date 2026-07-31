@@ -8,6 +8,7 @@
  */
 
 import { getPool } from '@/lib/db/pool';
+import { logger } from '@/lib/logger';
 import type { Pool } from 'pg';
 
 // -------------------------------------------------------------------
@@ -151,6 +152,7 @@ export async function verifyReferentialIntegrity(
     } catch (err) {
       // A relationship we could not check is NOT a relationship that is clean.
       // Record it so the caller can tell "nothing wrong" from "nothing looked at".
+      logger.error('Referential integrity check failed for relationship', { error: err instanceof Error ? err.message : String(err), context: 'verifyReferentialIntegrity' });
       errors.push(
         `${rel.sourceTable}.${rel.sourceColumn} -> ${rel.targetTable}.${rel.targetColumn}: ` +
           (err instanceof Error ? err.message : String(err))
@@ -243,6 +245,7 @@ export async function verifyTenantBoundaries(
         });
       }
     } catch (err) {
+      logger.error('Tenant boundary check failed', { error: err instanceof Error ? err.message : String(err), context: 'verifyTenantBoundaries' });
       errors.push(
         `${check.table}.${check.foreignColumn} -> ${check.foreignTable}: ` +
           (err instanceof Error ? err.message : String(err))

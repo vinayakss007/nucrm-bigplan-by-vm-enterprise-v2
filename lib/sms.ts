@@ -10,6 +10,7 @@ import { smsMessages, smsTemplates } from '@/drizzle/schema/sms';
 import { contacts } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 // ── Types ──────────────────────────────────────────────
 export interface SendSMSOptions {
@@ -151,6 +152,7 @@ export async function sendSMS(options: SendSMSOptions) {
 
     return { success: true, messageId: message!.id, twilioSid: result.sid };
   } catch (err) {
+    logger.error('Failed to send SMS via Twilio', { error: err instanceof Error ? err.message : String(err), context: 'sendSMS' });
     await db.update(smsMessages)
       .set({ status: 'failed', errorCode: 'NETWORK_ERROR' })
       .where(eq(smsMessages.id, message!.id));
@@ -214,6 +216,7 @@ export async function sendTemplateSMS(options: SendTemplateSMSOptions) {
 
     return { success: true, messageId: message!.id, twilioSid: result.sid, interpolatedBody: body };
   } catch (err) {
+    logger.error('Failed to send template SMS via Twilio', { error: err instanceof Error ? err.message : String(err), context: 'sendTemplateSMS' });
     await db.update(smsMessages)
       .set({ status: 'failed', errorCode: 'NETWORK_ERROR' })
       .where(eq(smsMessages.id, message!.id));
