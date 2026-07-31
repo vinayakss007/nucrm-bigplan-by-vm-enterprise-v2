@@ -366,7 +366,15 @@ describe('applyFieldMappings', () => {
   });
 
   it('rejects a custom-field mapping for an entity without the column', () => {
-    const result = applyFieldMappings('task', { call_duration: 95 }, [mapping()]);
+    // Pick the subject from the schema rather than naming an entity. Hardcoding
+    // 'task' here meant this test asserted the opposite of the truth as soon as
+    // `tasks` gained a custom_fields column. When every real entity supports
+    // custom fields, a name outside the set still exercises the same guard.
+    const unsupported =
+      Object.keys(ENTITY_TABLES).find((entity) => !ENTITIES_WITH_CUSTOM_FIELDS.has(entity))
+      ?? 'entity_without_custom_fields';
+
+    const result = applyFieldMappings(unsupported, { call_duration: 95 }, [mapping()]);
 
     expect(result.data.customFields).toBeUndefined();
     expect(result.rejected).toEqual([
@@ -375,7 +383,10 @@ describe('applyFieldMappings', () => {
     expect(REJECT_NO_CUSTOM_FIELDS).toBe('entity does not support custom fields');
   });
 
-  it('still maps a native target for an entity without custom fields', () => {
+  it('maps a native target regardless of custom-field support', () => {
+    // Native mapping does not depend on a custom_fields column, so this holds
+    // whether or not `task` has one. The previous title claimed `task` lacked
+    // custom fields, which stopped being true.
     const result = applyFieldMappings('task', { subject: 'Call back' }, [
       mapping({ sourceKey: 'subject', targetType: 'native', targetKey: 'title' }),
     ]);
