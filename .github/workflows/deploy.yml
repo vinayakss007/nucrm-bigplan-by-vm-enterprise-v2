@@ -65,7 +65,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           # npm ci + next build on the 2-CPU VM exceeds the 10m default.
-          timeout: 30m
+          command_timeout: 30m
           script: |
             set -e
             cd /home/vinayak_shruti_biz
