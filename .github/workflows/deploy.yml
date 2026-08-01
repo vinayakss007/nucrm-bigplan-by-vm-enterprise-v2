@@ -64,8 +64,9 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          # npm ci + next build on the 2-CPU VM exceeds the 10m default.
-          command_timeout: 30m
+          # npm ci + next build (with typecheck) on the 2-CPU VM takes
+          # ~25-30 min; the 10m default and even 30m were too short.
+          command_timeout: 60m
           script: |
             set -e
             cd /home/vinayak_shruti_biz
