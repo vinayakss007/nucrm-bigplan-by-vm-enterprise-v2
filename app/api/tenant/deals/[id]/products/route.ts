@@ -3,10 +3,11 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, dealProducts } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const createDealProductSchema = z.object({
   product_name: z.string().trim().min(1, 'Product name is required').max(200),
@@ -102,6 +103,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = body?.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, dealProducts, itemId, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
+
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (v.product_name !== undefined) updates['productName'] = v.product_name;
     if (v.description !== undefined) updates['description'] = v.description;
@@ -136,11 +142,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const itemId = new URL(req.url).searchParams.get('item_id');
     if (!itemId) return NextResponse.json({ error: 'item_id query parameter is required' }, { status: 400 });
 
-    const [deleted] = await db.delete(dealProducts)
+    const [deleted] = await db.update(dealProducts)
+      .set({ deletedAt: new Date() })
       .where(and(
         eq(dealProducts.id, itemId),
         eq(dealProducts.dealId, dealId),
         eq(dealProducts.tenantId, ctx.tenantId),
+        isNull(dealProducts.deletedAt),
       ))
       .returning();
 

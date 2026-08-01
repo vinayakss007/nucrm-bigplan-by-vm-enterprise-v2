@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { contracts } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
@@ -78,7 +79,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const [existing] = await db
-      .select({ id: contracts.id })
+      .select({ id: contracts.id, status: contracts.status })
       .from(contracts)
       .where(
         and(
@@ -90,6 +91,33 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       .limit(1);
 
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = body.expectedUpdatedAt ?? body._updated_at;
+    const guard = await concurrencyGuard(db, contracts, contractId, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
+
+
+    // Validate status transition if status is being changed
+    if (allowedFields.status && allowedFields.status !== existing.status) {
+      const VALID_TRANSITIONS: Record<string, string[]> = {
+        draft: ['active', 'cancelled'],
+        active: ['suspended', 'terminated', 'expired', 'renewed'],
+        suspended: ['active', 'terminated'],
+        renewed: ['active'],
+        // Terminal states: no transitions allowed out of these statuses
+        expired: [],
+        terminated: [],
+        cancelled: [],
+      };
+
+      const allowed = VALID_TRANSITIONS[existing.status as string];
+      if (allowed && !allowed.includes(allowedFields.status)) {
+        return NextResponse.json(
+          { error: `Invalid status transition: cannot change from '${existing.status}' to '${allowedFields.status}'` },
+          { status: 400 },
+        );
+      }
+    }
 
     const [updated] = await db
       .update(contracts)

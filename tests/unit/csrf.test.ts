@@ -133,7 +133,8 @@ describe('auth/csrf', () => {
     const { needsCsrfValidation } = await import('@/lib/auth/csrf');
     expect(needsCsrfValidation('POST', '/api/auth/login')).toBe(false);
     expect(needsCsrfValidation('POST', '/api/auth/signup')).toBe(false);
-    expect(needsCsrfValidation('POST', '/api/auth/forgot-password')).toBe(false);
+    // forgot-password now requires CSRF to prevent cross-site reset spam
+    expect(needsCsrfValidation('POST', '/api/auth/forgot-password')).toBe(true);
     expect(needsCsrfValidation('POST', '/api/auth/resend-verification')).toBe(false);
     expect(needsCsrfValidation('POST', '/api/auth/verify-email')).toBe(false);
   });

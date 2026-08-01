@@ -8,15 +8,19 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { leads, tenantMembers, sequences, sequenceEnrollments, segments, segmentMembers } from '@/drizzle/schema';
+import { leads, tenantMembers, sequences, sequenceEnrollments, segments, segmentMembers, tenants, plans } from '@/drizzle/schema';
 import { eq, and, inArray, sql, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const MAX_BULK = 500;
 
 export async function POST(req: NextRequest) {
+  const limited = await rateLimitMutating(req, 'bulk', 'post');
+  if (limited) return limited;
+
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -213,6 +217,21 @@ export async function POST(req: NextRequest) {
       case 'restore': {
         const deny = requirePerm(ctx, 'leads.edit');
         if (deny) return deny;
+
+        // Plan limit check: restoring leads could push count over limit (leads share contacts pool)
+        const [tenantWithPlan] = await db
+          .select({
+            currentContacts: tenants.currentContacts,
+            maxContacts: plans.maxContacts,
+          })
+          .from(tenants)
+          .innerJoin(plans, eq(plans.id, tenants.planId))
+          .where(eq(tenants.id, ctx.tenantId));
+
+        if (tenantWithPlan && tenantWithPlan.maxContacts != null && ((tenantWithPlan.currentContacts ?? 0) + validIds.length) > tenantWithPlan.maxContacts) {
+          return NextResponse.json({ error: `Restore would exceed plan limit of ${tenantWithPlan.maxContacts} contacts (leads share the contacts pool).` }, { status: 403 });
+        }
+
         const res = await db
           .update(leads)
           .set({

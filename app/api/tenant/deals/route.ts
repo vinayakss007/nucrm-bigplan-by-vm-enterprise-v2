@@ -13,6 +13,7 @@ import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
 import { cache } from '@/lib/cache';
 import { archiveFilter } from '@/lib/api/deals-archive-filter';
+import { escapeIlikeWildcards } from '@/lib/export';
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
 
     if (stage_id) filters.push(eq(deals.stageId, stage_id));
     if (pipeline_id) filters.push(eq(deals.pipelineId, pipeline_id));
-    if (q) filters.push(ilike(deals.title, `%${q}%`));
+    if (q) filters.push(ilike(deals.title, `%${escapeIlikeWildcards(q)}%`));
 
     const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
       .from(deals)

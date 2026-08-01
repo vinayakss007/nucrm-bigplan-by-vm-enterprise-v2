@@ -5,7 +5,7 @@ import { db } from '@/drizzle/db';
 import { aiInsights } from '@/drizzle/schema';
 import { contacts, deals } from '@/drizzle/schema';
 import { activities } from '@/drizzle/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, isNull } from 'drizzle-orm';
 import { can } from '@/lib/auth/middleware';
 import { readJsonBody } from '@/lib/api/validate';
 
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
         recentActivityCount: sql<number>`(SELECT count(*)::int FROM ${activities} WHERE ${activities.entityType} = 'contact' AND ${activities.entityId} = ${contacts.id} AND ${activities.createdAt} > now() - interval '30 days')`
       })
       .from(contacts)
-      .where(and(eq(contacts.id, entity_id), eq(contacts.tenantId, ctx.tenantId)));
+      .where(and(eq(contacts.id, entity_id), eq(contacts.tenantId, ctx.tenantId), isNull(contacts.deletedAt)));
       
       entityData = contactResults[0];
     } else if (entity_type === 'deal') {
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
         activityCount: sql<number>`(SELECT count(*)::int FROM ${activities} WHERE ${activities.entityType} = 'deal' AND ${activities.entityId} = ${deals.id})`
       })
       .from(deals)
-      .where(and(eq(deals.id, entity_id), eq(deals.tenantId, ctx.tenantId)));
+      .where(and(eq(deals.id, entity_id), eq(deals.tenantId, ctx.tenantId), isNull(deals.deletedAt)));
       
       entityData = dealResults[0];
     } else {

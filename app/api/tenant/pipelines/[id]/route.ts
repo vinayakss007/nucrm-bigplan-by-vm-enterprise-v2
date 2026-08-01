@@ -43,6 +43,13 @@ export async function PATCH(req: NextRequest, { params }: any) {
     if (guard) return guard;
     
     const result = await db.transaction(async (tx) => {
+      // Acquire row-level lock on the pipeline to prevent concurrent stage reorders
+      try {
+        await tx.execute(sql`SELECT 1 FROM pipelines WHERE id = ${id} FOR UPDATE`);
+      } catch {
+        // Lock acquisition failed (e.g., row doesn't exist yet) - proceed with optimistic concurrency
+      }
+
       // 1. Update pipeline basic info
  
  

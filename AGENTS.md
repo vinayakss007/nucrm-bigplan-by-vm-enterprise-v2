@@ -112,6 +112,16 @@ Handles high/medium priority feature work, frontend, and UX issues:
 - **Seed**: `npm run seed:dev` or `npm run start-clean` (auto-seeds)
 - **Migrations**: `npm run db:migrate` (proper Drizzle migrations, not `drizzle-kit push`)
 
+### Deploy (IMPORTANT — read before touching deploy)
+
+- **App runs via pm2** (`nucrm-prod`, `next start -p 3099` behind nginx on 80/3000), **NOT Docker**. Docker hosts only monitoring (prometheus/grafana/promtail/alertmanager). pm2 auto-start on boot is enabled.
+- **The deploy host IS this dev machine** (`/home/vinayak_shruti_biz`). The Deploy workflow (`.github/workflows/deploy.yml`) SSHes in, checks out the CI-tested commit, `npm ci` + `npm run build`, `pm2 restart nucrm-prod`, gates on `127.0.0.1:3099/api/health`, rolls back on failure, then returns repo to `main`.
+- **VM external IP is EPHEMERAL** — changes on every reboot. Current: `34.57.42.29` (ssh: user `vinayak_shruti_biz`, key `~/.ssh/deploy_key`, matches `~/.ssh/authorized_keys`). When the deploy fails with `dial tcp ...:22: connection refused/timeout`, run `curl -s ifconfig.me`, then `gh secret set DEPLOY_HOST --body "<new-ip>"`.
+- Deploy history: 200+ runs, 0 successes before 2026-08-01. Fixed: compose file invalid (duplicate `loki` service from bad merge 64085d44 + missing `pgdata` volume), deploy script targeted a nonexistent `app` Docker service (it's pm2, service name `web` in compose), stale `DEPLOY_HOST`, wrong SSH action input (`command_timeout`, not `timeout`).
+- **The deploy's `git checkout --force <sha>` can leave this repo in detached HEAD** — run `git checkout main && git pull` after a deploy finishes if you see `## HEAD (no branch)`. The fixed script now returns to main automatically.
+- A reboot killed the app before pm2 auto-start was configured (2026-08-01); after any reboot, verify `curl -s 127.0.0.1:3099/api/health` and restart `pm2 start /usr/bin/bash --name nucrm-prod --cwd /home/vinayak_shruti_biz --node-args "--max-old-space-size=2048" -- -c "npx next start -p 3099"` if down.
+- Never run two `npm run build`s concurrently — they corrupt `.next` (module-not-found `.external` errors); always `rm -rf .next` before a clean rebuild.
+
 ## Workflow Per Fix
 
 ```
