@@ -35,6 +35,7 @@ export function createOutlookCalendarProvider(): CalendarProvider {
           redirect_uri: redirectUri || getRedirectUri(),
           grant_type: 'authorization_code',
         }),
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (!res.ok) throw new Error('Microsoft token exchange failed');
@@ -58,6 +59,7 @@ export function createOutlookCalendarProvider(): CalendarProvider {
           grant_type: 'refresh_token',
           scope: MS_SCOPES,
         }),
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (!res.ok) throw new Error('Microsoft token refresh failed');
@@ -82,6 +84,7 @@ export function createOutlookCalendarProvider(): CalendarProvider {
           Authorization: `Bearer ${accessToken}`,
           Prefer: 'outlook.body-type="html"',
         },
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (!res.ok) throw new Error('Failed to list Outlook events');
@@ -127,6 +130,7 @@ export function createOutlookCalendarProvider(): CalendarProvider {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (!res.ok) throw new Error('Failed to create Outlook event');
@@ -157,6 +161,7 @@ export function createOutlookCalendarProvider(): CalendarProvider {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (!res.ok) throw new Error('Failed to update Outlook event');
@@ -166,6 +171,7 @@ export function createOutlookCalendarProvider(): CalendarProvider {
       const res = await fetch(`${MS_GRAPH_API}/me/events/${externalId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (!res.ok) throw new Error('Failed to delete Outlook event');

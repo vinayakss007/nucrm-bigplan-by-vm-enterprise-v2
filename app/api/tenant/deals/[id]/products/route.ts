@@ -3,7 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, dealProducts } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -142,11 +142,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const itemId = new URL(req.url).searchParams.get('item_id');
     if (!itemId) return NextResponse.json({ error: 'item_id query parameter is required' }, { status: 400 });
 
-    const [deleted] = await db.delete(dealProducts)
+    const [deleted] = await db.update(dealProducts)
+      .set({ deletedAt: new Date() })
       .where(and(
         eq(dealProducts.id, itemId),
         eq(dealProducts.dealId, dealId),
         eq(dealProducts.tenantId, ctx.tenantId),
+        isNull(dealProducts.deletedAt),
       ))
       .returning();
 

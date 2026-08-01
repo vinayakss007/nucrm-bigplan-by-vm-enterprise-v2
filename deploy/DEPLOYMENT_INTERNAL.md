@@ -306,3 +306,57 @@ deploy/
 │   └── health-check.sh          # Service health verification
 └── DEPLOYMENT_INTERNAL.md       # THIS FILE (super-admin only)
 ```
+
+---
+
+## Runbook: Migration Ledger Drift Recovery (Incident 2026-07-31)
+
+### Symptoms
+- `npm run db:migrate` fails with `ERROR: Database has schema but it is NOT at the latest migration state`
+- App API writes fail with `column "..." does not exist` (e.g. `team_id` on contacts)
+- `drizzle.__drizzle_migrations` is empty (or shorter than the journal) while tables exist
+
+### Root Cause
+A database provisioned with `db:push`/`db:sync` or restored from an older dump has
+schema but no migration ledger, or a ledger shorter than the current schema state.
+The recovery check in `scripts/migrate.ts` now verifies the LAST journal
+migration's marker (`backup_records.last_verified_at` from 0044) before stamping —
+a drifted DB is refused instead of being silently stamped as fully migrated.
+
+### Recovery Steps
+1. **Back up first** (non-negotiable):
+   ```bash
+   pg_dump "$DATABASE_URL" > /tmp/pre-recovery-$(date +%F).sql
+   ```
+2. **Determine which migrations are actually applied** — check markers from the
+   last few migrations against the schema:
+   ```bash
+   psql "$DATABASE_URL" -c "
+   SELECT EXISTS(SELECT FROM information_schema.tables WHERE table_name='teams')          AS m0041_teams,
+          EXISTS(SELECT FROM information_schema.columns WHERE table_name='backup_records'
+                AND column_name='last_verified_at')                                        AS m0044_backup_verif,
+          EXISTS(SELECT FROM information_schema.tables WHERE table_name='backup_verifications') AS m0044_table;
+   "
+   ```
+   Missing markers = migrations that were never applied.
+3. **Apply only the missing migration SQL** (they are idempotent — `IF NOT EXISTS`,
+   `ADD COLUMN IF NOT EXISTS`, no destructive ops):
+   ```bash
+   for m in 0040_lead_product_service_request 0041_teams 0042_audit_log_immutability \
+            0043_audit_logs_retain_actor 0044_backup_verification; do
+     psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f drizzle/migrations/$m.sql
+   done
+   ```
+4. **Re-run db:migrate** — the last-marker check now passes and the ledger is
+   stamped from the journal. Verify:
+   ```bash
+   npm run db:migrate -- --yes
+   psql "$DATABASE_URL" -c "SELECT count(*) FROM drizzle.__drizzle_migrations;"
+   ```
+   (Count must equal `jq '.entries | length' drizzle/migrations/meta/_journal.json`.)
+5. **Smoke test the app** — create a contact and a deal; both must return 2xx.
+
+### Prevention
+- Never provision with `db:sync`/`db:push` on production — always `db:migrate`.
+- If a dump restore is required, restore the `drizzle` schema too (it holds the ledger).
+- After any restore, run the marker check in step 2 BEFORE pointing traffic at the DB.

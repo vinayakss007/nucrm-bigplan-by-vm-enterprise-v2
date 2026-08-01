@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { cancelSubscription, isStripeConfigured } from '@/lib/stripe';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const cancelSchema = z.object({
   reason: z.string().optional(),
@@ -22,6 +23,9 @@ const cancelSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
+    const limited = await rateLimitMutating(request, 'billing', 'post');
+    if (limited) return limited;
+
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });

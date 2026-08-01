@@ -144,8 +144,9 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
 
     if (attempt < maxRetries) {
       // Exponential backoff with jitter to prevent thundering herd
-      const baseDelay = Math.pow(2, attempt) * 60;
-      const jitter = Math.random() * baseDelay * 0.3; // ±30% jitter
+      const MAX_BACKOFF_SECONDS = 3600; // Cap at 1 hour
+      const baseDelay = Math.min(Math.pow(2, attempt) * 60, MAX_BACKOFF_SECONDS);
+      const jitter = Math.random() * baseDelay * 0.3; // +30% jitter
       const delay = baseDelay + jitter;
       const nextRetry = new Date(Date.now() + delay * 1000);
 

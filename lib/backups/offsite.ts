@@ -9,6 +9,7 @@
 
 import type { StorageClass } from '@aws-sdk/client-s3';
 import { getS3Config, describeS3ConfigGap } from '@/lib/storage/s3-config';
+import { applyRetentionPolicy, readRetentionConfig, type BackupEntry } from './retention-policy';
 
 export interface UploadResult {
   /** Key of the object in the bucket. */
@@ -171,4 +172,83 @@ export async function purgeExpiredBackups(retentionDays: number): Promise<{
   } while (continuationToken);
 
   return { deleted, bucket };
+}
+
+/**
+ * Tiered backup retention (GFS: Grandfather-Father-Son).
+ *
+ * Instead of a flat retention window, this applies a tiered policy:
+ *   30 daily | 12 weekly | 6 monthly | 2 yearly
+ *
+ * Use this in preference to purgeExpiredBackups() when the full policy is
+ * desired. purgeExpiredBackups() is preserved for backward compatibility and
+ * for environments that prefer the simpler "delete after N days" model.
+ */
+export async function purgeWithTieredRetention(): Promise<{
+  kept: number;
+  deleted: number;
+  bucket: string;
+}> {
+  const cfg = getS3Config();
+  if (!cfg.configured || !cfg.backupBucket) {
+    throw new OffsiteUploadError(
+      describeS3ConfigGap() ?? 'S3 backup bucket not configured'
+    );
+  }
+
+  const { S3Client, ListObjectsV2Command, DeleteObjectsCommand } = await import(
+    '@aws-sdk/client-s3'
+  );
+
+  const s3Client = new S3Client({
+    region: cfg.region,
+    endpoint: cfg.endpoint,
+    credentials: cfg.credentials,
+  });
+
+  const bucket = cfg.backupBucket;
+  const entries: BackupEntry[] = [];
+  let continuationToken: string | undefined;
+
+  // Collect all backup objects
+  do {
+    const listed = await s3Client.send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: 'backups/',
+        ContinuationToken: continuationToken,
+      })
+    );
+
+    for (const obj of listed.Contents ?? []) {
+      if (obj.Key && obj.LastModified) {
+        entries.push({ key: obj.Key, createdAt: obj.LastModified });
+      }
+    }
+
+    continuationToken = listed.IsTruncated
+      ? listed.NextContinuationToken
+      : undefined;
+  } while (continuationToken);
+
+  // Apply the GFS policy
+  const retentionConfig = readRetentionConfig();
+  const decision = applyRetentionPolicy(entries, retentionConfig);
+
+  // Delete the expired objects in batches of 1000 (S3 limit)
+  let deleted = 0;
+  const toDelete = decision.delete.map((d) => ({ Key: d.entry.key }));
+
+  for (let i = 0; i < toDelete.length; i += 1000) {
+    const batch = toDelete.slice(i, i + 1000);
+    await s3Client.send(
+      new DeleteObjectsCommand({
+        Bucket: bucket,
+        Delete: { Objects: batch },
+      })
+    );
+    deleted += batch.length;
+  }
+
+  return { kept: decision.keep.length, deleted, bucket };
 }

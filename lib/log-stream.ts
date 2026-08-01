@@ -20,12 +20,23 @@ type SSEClient = {
 };
 
 let clientId = 0;
+const MAX_CLIENTS = 100;
 const clients = new Map<string, SSEClient>();
 
 const encoder = new TextEncoder();
 
 export const logStream = {
   subscribe(controller: ReadableStreamDefaultController): string {
+    // Enforce max clients limit to prevent unbounded memory growth
+    if (clients.size >= MAX_CLIENTS) {
+      // Evict the oldest client (first entry in Map)
+      const oldestId = clients.keys().next().value;
+      if (oldestId) {
+        try { clients.get(oldestId)?.controller.close(); } catch { /* already closed */ }
+        clients.delete(oldestId);
+      }
+    }
+
     const id = String(++clientId);
     clients.set(id, { id, controller, encoder });
     controller.enqueue(encoder.encode(`event: connected\ndata: ${JSON.stringify({ clientId: id })}\n\n`));

@@ -14,11 +14,14 @@ import { eq, and, inArray, sql, or, ilike } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const MAX_BULK = 500;
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 
 export async function POST(req: NextRequest) {
+  const limited = await rateLimitMutating(req, 'bulk', 'post');
+  if (limited) return limited;
   
   
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

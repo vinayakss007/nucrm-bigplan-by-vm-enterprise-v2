@@ -135,14 +135,17 @@ describe('getCurrentUser', () => {
 });
 
 describe('JWT_SECRET guard', () => {
-  it('refuses to load the module when JWT_SECRET is unset', async () => {
+  it('throws on first use — not at import — when JWT_SECRET is unset', async () => {
+    // The check is lazy so that Next.js can import the module at build time
+    // without requiring secrets in the build environment. But the first call
+    // that touches the key MUST throw rather than silently use an empty key.
     const original = process.env['JWT_SECRET'];
     delete process.env['JWT_SECRET'];
     vi.resetModules();
     try {
-      // Failing closed at import time is deliberate: a missing secret would
-      // otherwise mean tokens signed with an empty key.
-      await expect(import('@/lib/auth/session?nosecret')).rejects.toThrow(/JWT_SECRET/);
+      const mod = await import('@/lib/auth/session?nosecret');
+      // Import succeeds (lazy) — but calling createToken throws
+      await expect(mod.createToken('user-1')).rejects.toThrow(/JWT_SECRET/);
     } finally {
       process.env['JWT_SECRET'] = original;
       vi.resetModules();

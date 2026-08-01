@@ -1,0 +1,336 @@
+/**
+ * SCIM 2.0 Single User Endpoint
+ *
+ * GET    /api/scim/v2/Users/:id  - Get user by ID
+ * PATCH  /api/scim/v2/Users/:id  - Update user attributes
+ * DELETE /api/scim/v2/Users/:id  - Deactivate user (soft-delete, revoke sessions)
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc7644#section-3.5
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/drizzle/db';
+import { users, tenantMembers, sessions } from '@/drizzle/schema';
+import { eq, and } from 'drizzle-orm';
+import {
+  toSCIMUser,
+  fromSCIMUser,
+  generateSCIMError,
+  verifySCIMToken,
+  type SCIMUser,
+} from '@/lib/scim';
+
+// ── Auth Helper ──────────────────────────────────────────────────────────────
+
+async function authenticateSCIM(
+  request: NextRequest
+): Promise<{ tenantId: string } | NextResponse> {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return NextResponse.json(
+      generateSCIMError('Bearer token required', 401),
+      { status: 401, headers: { 'Content-Type': 'application/scim+json' } }
+    );
+  }
+
+  const token = authHeader.slice(7);
+  const tenantId = request.headers.get('x-tenant-id') ?? '';
+
+  if (!tenantId) {
+    return NextResponse.json(
+      generateSCIMError('x-tenant-id header is required', 400),
+      { status: 400, headers: { 'Content-Type': 'application/scim+json' } }
+    );
+  }
+
+  const valid = await verifySCIMToken(token, tenantId);
+  if (!valid) {
+    return NextResponse.json(
+      generateSCIMError('Invalid or expired SCIM token', 401),
+      { status: 401, headers: { 'Content-Type': 'application/scim+json' } }
+    );
+  }
+
+  return { tenantId };
+}
+
+// ── GET: Retrieve User ───────────────────────────────────────────────────────
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authResult = await authenticateSCIM(request);
+  if (authResult instanceof NextResponse) return authResult;
+  const { tenantId } = authResult;
+  const { id } = await params;
+
+  try {
+    const [user] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        fullName: users.fullName,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        memberStatus: tenantMembers.status,
+      })
+      .from(users)
+      .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+      .where(and(eq(users.id, id), eq(tenantMembers.tenantId, tenantId)))
+      .limit(1);
+
+    if (!user) {
+      return NextResponse.json(
+        generateSCIMError('User not found', 404),
+        { status: 404, headers: { 'Content-Type': 'application/scim+json' } }
+      );
+    }
+
+    const url = new URL(request.url);
+    const baseUrl = `${url.protocol}//${url.host}/api`;
+    const scimUser = toSCIMUser(
+      {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        active: user.memberStatus === 'active',
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
+      baseUrl
+    );
+
+    return NextResponse.json(scimUser, {
+      status: 200,
+      headers: { 'Content-Type': 'application/scim+json' },
+    });
+  } catch (error) {
+    console.error('[SCIM] GET /Users/:id error:', error);
+    return NextResponse.json(
+      generateSCIMError('Internal server error', 500),
+      { status: 500, headers: { 'Content-Type': 'application/scim+json' } }
+    );
+  }
+}
+
+// ── PATCH: Update User Attributes ────────────────────────────────────────────
+
+interface SCIMPatchOperation {
+  op: 'add' | 'replace' | 'remove';
+  path?: string;
+  value?: unknown;
+}
+
+interface SCIMPatchRequest {
+  schemas: string[];
+  Operations: SCIMPatchOperation[];
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authResult = await authenticateSCIM(request);
+  if (authResult instanceof NextResponse) return authResult;
+  const { tenantId } = authResult;
+  const { id } = await params;
+
+  try {
+    // Verify user exists and belongs to tenant
+    const [existingUser] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        fullName: users.fullName,
+        memberId: tenantMembers.id,
+        memberStatus: tenantMembers.status,
+      })
+      .from(users)
+      .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+      .where(and(eq(users.id, id), eq(tenantMembers.tenantId, tenantId)))
+      .limit(1);
+
+    if (!existingUser) {
+      return NextResponse.json(
+        generateSCIMError('User not found', 404),
+        { status: 404, headers: { 'Content-Type': 'application/scim+json' } }
+      );
+    }
+
+    const body = (await request.json()) as SCIMPatchRequest;
+
+    if (!body.schemas?.includes('urn:ietf:params:scim:api:messages:2.0:PatchOp')) {
+      return NextResponse.json(
+        generateSCIMError('Invalid schema. Expected urn:ietf:params:scim:api:messages:2.0:PatchOp', 400),
+        { status: 400, headers: { 'Content-Type': 'application/scim+json' } }
+      );
+    }
+
+    const userUpdates: Record<string, unknown> = {};
+    let deactivate = false;
+    let activate = false;
+
+    for (const op of body.Operations ?? []) {
+      const path = op.path?.toLowerCase();
+
+      if (op.op === 'replace' || op.op === 'add') {
+        if (path === 'active') {
+          const active = op.value === true || op.value === 'true';
+          if (!active) {
+            deactivate = true;
+          } else {
+            activate = true;
+          }
+        } else if (path === 'name.givenname' || path === 'name.firstname') {
+          // Will reconstruct full name below
+          userUpdates['givenName'] = String(op.value ?? '');
+        } else if (path === 'name.familyname' || path === 'name.lastname') {
+          userUpdates['familyName'] = String(op.value ?? '');
+        } else if (path === 'displayname' || path === 'name.formatted') {
+          userUpdates['fullName'] = String(op.value ?? '');
+        } else if (path === 'username' || path === 'emails[type eq "work"].value') {
+          userUpdates['email'] = String(op.value ?? '');
+        } else if (!path && typeof op.value === 'object' && op.value !== null) {
+          // Bulk replace without path - treat value as partial SCIM user
+          const partial = fromSCIMUser(op.value as SCIMUser);
+          if (partial.fullName) userUpdates['fullName'] = partial.fullName;
+          if (partial.email) userUpdates['email'] = partial.email;
+          if (partial.active === false) deactivate = true;
+          if (partial.active === true) activate = true;
+        }
+      } else if (op.op === 'remove') {
+        if (path === 'active') {
+          deactivate = true;
+        }
+      }
+    }
+
+    // Build full name from parts if individual name components were updated
+    if (userUpdates['givenName'] || userUpdates['familyName']) {
+      const given = (userUpdates['givenName'] as string) ?? '';
+      const family = (userUpdates['familyName'] as string) ?? '';
+      userUpdates['fullName'] = [given, family].filter(Boolean).join(' ');
+      delete userUpdates['givenName'];
+      delete userUpdates['familyName'];
+    }
+
+    // Apply user record updates
+    const dbUpdates: Record<string, unknown> = { updatedAt: new Date() };
+    if (userUpdates['fullName']) dbUpdates['fullName'] = userUpdates['fullName'];
+    if (userUpdates['email']) dbUpdates['email'] = userUpdates['email'];
+
+    if (Object.keys(dbUpdates).length > 1) {
+      await db.update(users).set(dbUpdates).where(eq(users.id, id));
+    }
+
+    // Handle activation/deactivation
+    if (deactivate) {
+      await db.update(tenantMembers)
+        .set({ status: 'inactive', updatedAt: new Date() })
+        .where(eq(tenantMembers.id, existingUser.memberId));
+
+      // Revoke all active sessions for this user
+      await db.delete(sessions).where(eq(sessions.userId, id));
+    } else if (activate) {
+      await db.update(tenantMembers)
+        .set({ status: 'active', updatedAt: new Date() })
+        .where(eq(tenantMembers.id, existingUser.memberId));
+    }
+
+    // Fetch updated user
+    const [updatedUser] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        fullName: users.fullName,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        memberStatus: tenantMembers.status,
+      })
+      .from(users)
+      .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+      .where(and(eq(users.id, id), eq(tenantMembers.tenantId, tenantId)))
+      .limit(1);
+
+    if (!updatedUser) {
+      return NextResponse.json(
+        generateSCIMError('User not found after update', 500),
+        { status: 500, headers: { 'Content-Type': 'application/scim+json' } }
+      );
+    }
+
+    const url = new URL(request.url);
+    const baseUrl = `${url.protocol}//${url.host}/api`;
+    const scimUser = toSCIMUser(
+      {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        fullName: updatedUser.fullName,
+        active: updatedUser.memberStatus === 'active',
+        createdAt: updatedUser.createdAt,
+        updatedAt: updatedUser.updatedAt,
+      },
+      baseUrl
+    );
+
+    return NextResponse.json(scimUser, {
+      status: 200,
+      headers: { 'Content-Type': 'application/scim+json' },
+    });
+  } catch (error) {
+    console.error('[SCIM] PATCH /Users/:id error:', error);
+    return NextResponse.json(
+      generateSCIMError('Internal server error', 500),
+      { status: 500, headers: { 'Content-Type': 'application/scim+json' } }
+    );
+  }
+}
+
+// ── DELETE: Deactivate User (Soft Delete) ────────────────────────────────────
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authResult = await authenticateSCIM(request);
+  if (authResult instanceof NextResponse) return authResult;
+  const { tenantId } = authResult;
+  const { id } = await params;
+
+  try {
+    // Verify user exists and belongs to tenant
+    const [existingUser] = await db
+      .select({
+        id: users.id,
+        memberId: tenantMembers.id,
+      })
+      .from(users)
+      .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+      .where(and(eq(users.id, id), eq(tenantMembers.tenantId, tenantId)))
+      .limit(1);
+
+    if (!existingUser) {
+      return NextResponse.json(
+        generateSCIMError('User not found', 404),
+        { status: 404, headers: { 'Content-Type': 'application/scim+json' } }
+      );
+    }
+
+    // Soft-delete: set membership to inactive
+    await db.update(tenantMembers)
+      .set({ status: 'inactive', updatedAt: new Date() })
+      .where(eq(tenantMembers.id, existingUser.memberId));
+
+    // Revoke all active sessions for this user
+    await db.delete(sessions).where(eq(sessions.userId, id));
+
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    console.error('[SCIM] DELETE /Users/:id error:', error);
+    return NextResponse.json(
+      generateSCIMError('Internal server error', 500),
+      { status: 500, headers: { 'Content-Type': 'application/scim+json' } }
+    );
+  }
+}

@@ -9,15 +9,18 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { deals, dealStages, pipelines, tenantMembers, segments, segmentMembers } from '@/drizzle/schema';
+import { deals, dealStages, pipelines, tenantMembers, segments, segmentMembers, tenants, plans } from '@/drizzle/schema';
 import { eq, and, inArray, sql, or, ilike } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const MAX_BULK = 500;
 
 export async function POST(req: NextRequest) {
+  const limited = await rateLimitMutating(req, 'bulk', 'post');
+  if (limited) return limited;
   
   
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -225,24 +228,26 @@ export async function POST(req: NextRequest) {
 
       case 'tag': {
         // Deals don't have a tags column; store under metadata.tags[]
+        // Uses atomic dedup: aggregates all existing tags + new tag via DISTINCT
+        // so concurrent appends never lose each other's writes.
         const deny = requirePerm(ctx, 'deals.edit');
         if (deny) return deny;
         const tag = (payload.tag as string | undefined)?.trim();
         if (!tag) return NextResponse.json({ error: 'tag required' }, { status: 400 });
 
+        const tagJson = JSON.stringify(tag);
         const res = await db
           .update(deals)
           .set({
             metadata: sql`
-              jsonb_set(
-                COALESCE(${deals.metadata}, '{}'::jsonb),
-                '{tags}',
-                COALESCE(${deals.metadata}->'tags', '[]'::jsonb) ||
-                CASE
-                  WHEN COALESCE(${deals.metadata}->'tags', '[]'::jsonb) @> ${JSON.stringify([tag])}::jsonb
-                  THEN '[]'::jsonb
-                  ELSE ${JSON.stringify([tag])}::jsonb
-                END
+              COALESCE(${deals.metadata}, '{}'::jsonb) || jsonb_build_object(
+                'tags',
+                (
+                  SELECT COALESCE(jsonb_agg(DISTINCT elem), '[]'::jsonb)
+                  FROM jsonb_array_elements(
+                    COALESCE(${deals.metadata}->'tags', '[]'::jsonb) || jsonb_build_array(${tagJson}::jsonb)
+                  ) AS elem
+                )
               )
             `,
             updatedAt: new Date(),
@@ -259,6 +264,9 @@ export async function POST(req: NextRequest) {
       }
 
       case 'update_field': {
+        // Uses jsonb || merge so concurrent updates to DIFFERENT metadata fields
+        // don't overwrite each other (jsonb_set replaces the whole object path,
+        // whereas || merges at the top level of the targeted key).
         const deny = requirePerm(ctx, 'deals.edit');
         if (deny) return deny;
         const fieldKey = payload['field_key'] as string | undefined;
@@ -276,10 +284,11 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: `field_key '${fieldKey}' is not allowed` }, { status: 400 });
         }
 
+        const patch = JSON.stringify({ [fieldKey]: fieldValue });
         const res = await db
           .update(deals)
           .set({
-            metadata: sql`jsonb_set(COALESCE(${deals.metadata}, '{}'::jsonb), ${'{"' + fieldKey + '"}'}::text[], ${JSON.stringify(fieldValue)}::jsonb, true)`,
+            metadata: sql`COALESCE(${deals.metadata}, '{}'::jsonb) || ${patch}::jsonb`,
             updatedAt: new Date(),
             updatedBy: ctx.userId,
           })
@@ -335,6 +344,21 @@ export async function POST(req: NextRequest) {
       case 'restore': {
         const deny = requirePerm(ctx, 'deals.edit');
         if (deny) return deny;
+
+        // Plan limit check: restoring deals could push count over limit
+        const [tenantWithPlan] = await db
+          .select({
+            currentDeals: tenants.currentDeals,
+            maxDeals: plans.maxDeals,
+          })
+          .from(tenants)
+          .innerJoin(plans, eq(plans.id, tenants.planId))
+          .where(eq(tenants.id, ctx.tenantId));
+
+        if (tenantWithPlan && tenantWithPlan.maxDeals != null && ((tenantWithPlan.currentDeals ?? 0) + validIds.length) > tenantWithPlan.maxDeals) {
+          return NextResponse.json({ error: `Restore would exceed plan limit of ${tenantWithPlan.maxDeals} deals.` }, { status: 403 });
+        }
+
         const res = await db
           .update(deals)
           .set({
