@@ -3,6 +3,7 @@ import { sendWebhookNotification } from '@/lib/email/service';
 import { sendAdminTelegram } from '@/lib/telegram-admin';
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
+const MAX_RATE_LIMIT_ENTRIES = 500;
 const rateLimitMap = new Map<string, number>();
 
 function isRateLimited(errorMessage: string): boolean {
@@ -11,6 +12,24 @@ function isRateLimited(errorMessage: string): boolean {
   const lastSent = rateLimitMap.get(key);
   if (lastSent && now - lastSent < RATE_LIMIT_WINDOW_MS) return true;
   rateLimitMap.set(key, now);
+
+  // Evict expired entries if map exceeds max size
+  if (rateLimitMap.size > MAX_RATE_LIMIT_ENTRIES) {
+    for (const [k, ts] of rateLimitMap) {
+      if (now - ts >= RATE_LIMIT_WINDOW_MS) {
+        rateLimitMap.delete(k);
+      }
+    }
+    // If still over limit after expiry sweep, remove oldest entries
+    if (rateLimitMap.size > MAX_RATE_LIMIT_ENTRIES) {
+      const entries = [...rateLimitMap.entries()].sort((a, b) => a[1] - b[1]);
+      const toRemove = entries.slice(0, entries.length - MAX_RATE_LIMIT_ENTRIES);
+      for (const [k] of toRemove) {
+        rateLimitMap.delete(k);
+      }
+    }
+  }
+
   return false;
 }
 

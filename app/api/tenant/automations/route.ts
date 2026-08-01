@@ -7,6 +7,7 @@ import { createAutomationSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { automations, automationRuns, users } from '@/drizzle/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(req: NextRequest) {
   try {
@@ -61,6 +62,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const limited = await rateLimitMutating(req, 'automations', 'post');
+    if (limited) return limited;
+
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

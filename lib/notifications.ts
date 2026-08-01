@@ -17,6 +17,67 @@ export type NotificationType =
   | 'system';
 
 /**
+ * Every entity a notification can point at. Declared as a runtime tuple rather
+ * than a bare type union so tests (and any future UI) can enumerate the members
+ * instead of restating them — a new member added here without a matching entry
+ * in ENTITY_LINK_BUILDERS is a compile error, not a silent 404.
+ */
+export const NOTIFICATION_ENTITY_TYPES = [
+  'contact',
+  'deal',
+  'task',
+  'company',
+  'lead',
+  'sequence',
+  'ticket',
+  'contract',
+  'subscription',
+] as const;
+
+export type NotificationEntityType = typeof NOTIFICATION_ENTITY_TYPES[number];
+
+/**
+ * Single source of truth for notification deep links. This used to be three
+ * identical inline literals (createNotification, notifyTenantMembers, and
+ * notifyTenantMembers' retry path), which is exactly how `sequence` came to
+ * point at a detail page that does not exist.
+ *
+ * Every route below is backed by a real page file:
+ *   contact      -> app/tenant/contacts/[id]/page.tsx
+ *   deal         -> app/tenant/deals/[id]/page.tsx
+ *   task         -> app/tenant/tasks/page.tsx       (list route, see note)
+ *   company      -> app/tenant/companies/[id]/page.tsx
+ *   lead         -> app/tenant/leads/[id]/page.tsx
+ *   sequence     -> app/tenant/sequences/page.tsx   (list route, see note)
+ *   ticket       -> app/tenant/tickets/[id]/page.tsx
+ *   contract     -> app/tenant/contracts/[id]/page.tsx
+ *   subscription -> app/tenant/subscriptions/[id]/page.tsx
+ *
+ * `task` and `sequence` deliberately drop the id: neither has a per-record page
+ * reachable from a notification, so linking to the list beats a 404.
+ */
+const ENTITY_LINK_BUILDERS: Record<NotificationEntityType, (entityId: string) => string> = {
+  contact:      (entityId) => `/tenant/contacts/${entityId}`,
+  deal:         (entityId) => `/tenant/deals/${entityId}`,
+  task:         () => `/tenant/tasks`,
+  company:      (entityId) => `/tenant/companies/${entityId}`,
+  lead:         (entityId) => `/tenant/leads/${entityId}`,
+  sequence:     () => `/tenant/sequences`,
+  ticket:       (entityId) => `/tenant/tickets/${entityId}`,
+  contract:     (entityId) => `/tenant/contracts/${entityId}`,
+  subscription: (entityId) => `/tenant/subscriptions/${entityId}`,
+};
+
+/**
+ * Derive the in-app deep link for an entity reference, or null when the entity
+ * type is not one we know how to route to.
+ */
+export function deriveEntityLink(entityType: string, entityId: string): string | null {
+  const build = ENTITY_LINK_BUILDERS[entityType as NotificationEntityType];
+  return build ? build(entityId) : null;
+}
+
+/**
  * Best-effort realtime push for a just-committed notification. Isolated in its
  * own try/catch so a realtime problem can never surface as a notification
  * failure, and imported lazily so client bundles never pull ioredis in.
@@ -42,36 +103,33 @@ export async function createNotification(opts: {
   body?: string;
   link?: string;
   /** Structured entity reference — enables deep-linking from notification list */
-  entity_type?: 'contact' | 'deal' | 'task' | 'company' | 'lead' | 'sequence';
+  entity_type?: NotificationEntityType;
   entity_id?: string;
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata?: Record<string, any>;
 }) {
-  try {
-    // Build enriched metadata that includes entity reference for deep links
+  // Enriched metadata and the derived link are computed ONCE, outside the try,
+  // so the retry path below writes the same row as the first attempt. It used to
+  // recompute neither, silently dropping the deep link and the entity reference
+  // from any notification that only succeeded on retry.
+  //
+  // Spread rather than reuse: assigning into `opts.metadata` directly would
+  // mutate the caller's own object as a side effect.
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const meta: Record<string, any> = opts.metadata ?? {};
-    if (opts.entity_type) meta['entity_type'] = opts.entity_type;
-    if (opts.entity_id)   meta['entity_id']   = opts.entity_id;
+  const meta: Record<string, any> = { ...(opts.metadata ?? {}) };
+  if (opts.entity_type) meta['entity_type'] = opts.entity_type;
+  if (opts.entity_id)   meta['entity_id']   = opts.entity_id;
 
-    // Auto-derive link from entity if not explicitly provided
-    let link = opts.link ?? null;
-    if (!link && opts.entity_type && opts.entity_id) {
-      const linkMap: Record<string, string> = {
-        contact:  `/tenant/contacts/${opts.entity_id}`,
-        deal:     `/tenant/deals/${opts.entity_id}`,
-        task:     `/tenant/tasks`,
-        company:  `/tenant/companies/${opts.entity_id}`,
-        lead:     `/tenant/leads/${opts.entity_id}`,
-        sequence: `/tenant/sequences/${opts.entity_id}`,
-      };
-      link = linkMap[opts.entity_type] ?? null;
-    }
+  let link = opts.link ?? null;
+  if (!link && opts.entity_type && opts.entity_id) {
+    link = deriveEntityLink(opts.entity_type, opts.entity_id);
+  }
 
+  try {
     await withTenantContext(opts.tenantId, opts.userId, async (tx) => {
       await tx.insert(notifications).values({
         userId: opts.userId,
@@ -104,8 +162,8 @@ export async function createNotification(opts: {
           type: opts.type,
           title: opts.title.slice(0, 200),
           body: opts.body?.slice(0, 500) ?? '',
-          link: opts.link ?? null,
-          metadata: opts.metadata ?? {},
+          link,
+          metadata: meta,
         });
       });
       return;
@@ -129,7 +187,7 @@ export async function notifyTenantMembers(opts: {
   title: string;
   body?: string;
   link?: string;
-  entity_type?: 'contact' | 'deal' | 'task' | 'company' | 'lead' | 'sequence';
+  entity_type?: NotificationEntityType;
   entity_id?: string;
 }) {
   try {
@@ -158,15 +216,7 @@ export async function notifyTenantMembers(opts: {
     // Auto-derive link from entity if not explicitly provided
     let resolvedLink = opts.link ?? null;
     if (!resolvedLink && opts.entity_type && opts.entity_id) {
-      const linkMap: Record<string, string> = {
-        contact: `/tenant/contacts/${opts.entity_id}`,
-        deal:    `/tenant/deals/${opts.entity_id}`,
-        task:    `/tenant/tasks`,
-        company: `/tenant/companies/${opts.entity_id}`,
-        lead:    `/tenant/leads/${opts.entity_id}`,
-        sequence:`/tenant/sequences/${opts.entity_id}`,
-      };
-      resolvedLink = linkMap[opts.entity_type] ?? null;
+      resolvedLink = deriveEntityLink(opts.entity_type, opts.entity_id);
     }
 
     const metaJson = meta;
@@ -200,15 +250,7 @@ export async function notifyTenantMembers(opts: {
         if (opts.entity_id)   retryMeta['entity_id']   = opts.entity_id;
         let resolvedLink = opts.link ?? null;
         if (!resolvedLink && opts.entity_type && opts.entity_id) {
-          const linkMap: Record<string, string> = {
-            contact: `/tenant/contacts/${opts.entity_id}`,
-            deal:    `/tenant/deals/${opts.entity_id}`,
-            task:    `/tenant/tasks`,
-            company: `/tenant/companies/${opts.entity_id}`,
-            lead:    `/tenant/leads/${opts.entity_id}`,
-            sequence:`/tenant/sequences/${opts.entity_id}`,
-          };
-          resolvedLink = linkMap[opts.entity_type] ?? null;
+          resolvedLink = deriveEntityLink(opts.entity_type, opts.entity_id);
         }
         const retryValues = retryMembers.map(m => ({
           userId: m.userId,

@@ -5,15 +5,25 @@ import { db } from '@/drizzle/db';
 import { users, sessions } from '@/drizzle/schema';
 import { eq, and, gt } from 'drizzle-orm';
 
-// ✅ FIXED: JWT_SECRET must be set - throw error if missing
-const JWT_SECRET_ENV = process.env['JWT_SECRET'];
-if (!JWT_SECRET_ENV) {
-  throw new Error(
-    'JWT_SECRET environment variable is required. ' +
-    'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
-  );
+// Lazy-initialise so that importing this module at build time (Next.js static
+// analysis) does not throw. The check is deferred to the first call that
+// actually needs the key — at runtime there is always exactly one call to
+// getJwtSecret() before any cryptographic operation.
+let _jwtSecret: Uint8Array | null = null;
+
+function getJwtSecret(): Uint8Array {
+  if (!_jwtSecret) {
+    const raw = process.env['JWT_SECRET'];
+    if (!raw) {
+      throw new Error(
+        'JWT_SECRET environment variable is required. ' +
+        "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+      );
+    }
+    _jwtSecret = new TextEncoder().encode(raw);
+  }
+  return _jwtSecret;
 }
-const JWT_SECRET = new TextEncoder().encode(JWT_SECRET_ENV);
 const SESSION_COOKIE = 'nucrm_session';
 const SESSION_EXPIRES_DAYS = 30;
 
@@ -48,12 +58,12 @@ export async function createToken(userId: string, expiresInDays?: number): Promi
     .setProtectedHeader({ alg: 'HS256' })
     .setExpirationTime(`${expiry}d`)
     .setIssuedAt()
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function verifyToken(token: string): Promise<{ userId: string } | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     return { userId: payload.sub as string };
   } catch (e) {
     console.error('[Session] Token verification failed', e);

@@ -163,8 +163,12 @@ export async function processAutoFollowups(
           title: `AI drafted follow-up: ${fu.title}`,
           body: aiResult.text.slice(0, 500),
           link: `/tenant/follow-ups`,
-          entity_type: 'deal',
-          entity_id: fu.dealId ?? fu.id,
+          // Only label the reference as a deal when there genuinely is a deal.
+          // This used to fall back to `fu.id` (a follow-up id) while still
+          // claiming entity_type 'deal', which mislabels the metadata and would
+          // resolve to /tenant/deals/<follow-up-id> if the explicit link above
+          // were ever dropped. There is no follow-up detail page to point at.
+          ...(fu.dealId ? { entity_type: 'deal' as const, entity_id: fu.dealId } : {}),
         });
       }
 

@@ -44,7 +44,6 @@ export async function POST(request: NextRequest) {
       })
       .from(contracts)
       .where(and(
-        eq(contracts.tenantId, contracts.tenantId),
         eq(contracts.status, 'active'),
         isNull(contracts.deletedAt),
         sql`(${contracts.endDate})::date = ${targetStr}::date`,
@@ -91,7 +90,7 @@ export async function POST(request: NextRequest) {
             title: `Contract "${contract.title}" expires in ${days} days`,
             body: `${contract.contractNumber || 'Contract'} expires on ${dateStr}. Total value: $${Number(contract.totalValue || 0).toFixed(2)}`,
             link: `/tenant/contracts/${contract.id}`,
-            entity_type: 'contact',
+            entity_type: 'contract',
             entity_id: contract.id,
             metadata: { contract_id: contract.id, reminder_days: days, end_date: contract.endDate },
           }).catch((err) => logError({ error: err, context: 'contract-renewal-notification' }));

@@ -52,7 +52,8 @@ export async function PATCH(req: NextRequest) {
     if (v['notify_on_ticket_created'] !== undefined) safe['notify_on_ticket_created'] = v['notify_on_ticket_created'];
     if (v['notify_on_task_due'] !== undefined) safe['notify_on_task_due'] = v['notify_on_task_due'];
 
-    const concurrencyWhere = concurrencyGuard(tenantMembers, v.expectedUpdatedAt);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const concurrencyWhere = concurrencyGuard(tenantMembers, (rawBody as any).expectedUpdatedAt);
     const whereConditions = [
       eq(tenantMembers.userId, ctx.userId),
       eq(tenantMembers.tenantId, ctx.tenantId),

@@ -1,0 +1,23 @@
+{
+  "id": "FEAT-002",
+  "type": "fix",
+  "description": "Fix bulk email endpoints ignoring doNotContact flag (sends emails to unsubscribed contacts) and fix open redirect vulnerability in email click tracking endpoint",
+  "status": "in_progress",
+  "steps": [
+    "In app/api/tenant/email/bulk/route.ts, update the query that fetches contacts (the db.select().from(contacts).where(...) call) to add a filter: eq(contacts.doNotContact, false). Import doNotContact from schema if needed - the contacts schema should have this boolean field. The current query only checks: inArray(contacts.id, entity_ids), eq(contacts.tenantId, ctx.tenantId), isNull(contacts.deletedAt). Add the doNotContact filter.",
+    "In app/api/tenant/email/templates/bulk-send/route.ts, update the query that fetches recipientContacts to add a doNotContact filter. The current SQL-style where clause uses raw sql conditions. Add: sql`${contacts.doNotContact} = false` or eq(contacts.doNotContact, false) to the existing and(...) conditions. Import eq from drizzle-orm if not already.",
+    "In app/api/tenant/email/track/route.ts, in the click tracking handler (the type === 'click' branch), validate the linkUrl parameter before redirecting. Add URL validation: parse the URL, ensure the protocol is http: or https: (reject javascript:, data:, file: etc.), and optionally reject internal/localhost URLs. If validation fails, return a 400 error instead of redirecting. This prevents the endpoint from being used as an open redirect for phishing."
+  ],
+  "acceptance_criteria": [
+    "Bulk email endpoint /api/tenant/email/bulk will not send to contacts with doNotContact=true",
+    "Template bulk-send endpoint will not send to contacts with doNotContact=true",
+    "Email click tracking rejects redirect to non-http/https URLs",
+    "Email click tracking rejects redirect to javascript: protocol URLs",
+    "TypeScript compiles without errors"
+  ],
+  "verification": [
+    "Run npx next build to confirm TypeScript compilation passes"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

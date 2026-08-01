@@ -15,7 +15,7 @@ scrape_configs:
     metrics_path: '/api/health'
     scrape_interval: 30s
     static_configs:
-      - targets: ['app:3000']
+      - targets: ['localhost:3000']
         labels:
           service: 'nucrm-app'
 

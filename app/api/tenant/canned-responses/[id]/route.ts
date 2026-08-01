@@ -3,7 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { cannedResponses } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -63,8 +63,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     const { id } = await params;
 
-    await db.delete(cannedResponses)
-      .where(and(eq(cannedResponses.id, id), eq(cannedResponses.tenantId, ctx.tenantId)));
+    await db.update(cannedResponses)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(cannedResponses.id, id), eq(cannedResponses.tenantId, ctx.tenantId), isNull(cannedResponses.deletedAt)));
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {

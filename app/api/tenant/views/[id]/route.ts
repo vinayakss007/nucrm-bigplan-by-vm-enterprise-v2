@@ -6,6 +6,7 @@ import { savedViews } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -61,6 +62,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
 
     const body = await readJsonBody(req);
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, savedViews, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
+
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (body.name !== undefined) updates['name'] = body.name;
     if (body.filters !== undefined) updates['filters'] = body.filters;

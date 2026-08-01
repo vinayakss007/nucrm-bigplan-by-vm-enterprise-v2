@@ -1,0 +1,30 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Fix webhook retry/DLQ system: concurrency flooding, missing retry cap in cron, DLQ cleanup, and exponential backoff arithmetic errors",
+  "status": "completed",
+  "steps": [
+    "1. In lib/webhooks.ts retryFailedWebhooks(): Add a concurrency limiter - currently processes all 50 failed webhooks in parallel with no rate control. Add a semaphore/batch pattern (process max 5 concurrently) to prevent thundering herd on the target servers when many webhooks fail at once.",
+    "2. In lib/webhooks.ts retryFailedWebhooks(): The retry loop fetches items where attempt < MAX_RETRIES (5) but the getRetryDelay() array only has 4 entries. When attempt=4, getRetryDelay(5) returns -1 (dead letter), meaning the 5th attempt never actually fires - it immediately dead-letters. Fix the off-by-one: either reduce MAX_RETRIES to 4 or add a 5th delay entry.",
+    "3. In lib/webhooks.ts fireWebhooks(): When the initial delivery fails (non-2xx), it sets status='failed' and nextRetryAt but does NOT increment the attempt counter from 0 to 1. This means retryFailedWebhooks picks it up and computes getRetryDelay(1)=5min, but the first retry was supposed to be the '0 to 1' transition. Fix by setting attempt=1 on initial failure.",
+    "4. In lib/webhooks/delivery.ts processWebhookDelivery(): The exponential backoff calculation uses Math.pow(2, attempt) * 60 seconds which grows too aggressively (attempt 3 = 480 seconds = 8 min for the 3rd retry). Add a cap of maxDelay (e.g., 3600 seconds = 1 hour) to prevent unreasonably long retry delays.",
+    "5. In lib/webhooks/dlq.ts purgeOldDLQEntries(): This function exists but is never called by any cron job. Create a scheduled cleanup in app/api/cron/retry-webhooks/route.ts that purges DLQ entries older than 30 days after the retry pass.",
+    "6. In lib/webhooks.ts retryFailedWebhooks(): The function queries items where nextRetryAt <= now(), but if the cron doesn't run for hours (e.g., server restart), ALL queued retries become eligible at once, causing a retry storm. Add a limit to process at most 50 per run (already exists) but also add a check: if there are more than 50 eligible, log a warning about backlog accumulation.",
+    "7. Add unit tests in tests/unit/webhook-retry-fixes.test.ts testing: concurrency limiting behavior, off-by-one fix in retry count, DLQ purge integration, and backoff cap."
+  ],
+  "acceptance_criteria": [
+    "Webhook retries process with concurrency control (max 5 parallel)",
+    "getRetryDelay is consistent with MAX_RETRIES (no off-by-one causing immediate dead-letter)",
+    "Initial webhook failure correctly sets attempt=1",
+    "Exponential backoff is capped at a reasonable maximum",
+    "DLQ entries older than 30 days are purged during cron runs",
+    "Backlog warning logged when retry queue exceeds batch size",
+    "All new unit tests pass with npx vitest run"
+  ],
+  "verification": [
+    "npx tsc --noEmit --pretty",
+    "npx vitest run tests/unit/webhook-retry-fixes.test.ts"
+  ],
+  "blocked_reason": null,
+  "findings": "Fixed off-by-one that required updating existing tests in webhooks.test.ts and webhooks-enhanced.test.ts (they asserted the old broken behavior where attempt 5 returned -1). Also fixed a pre-existing eslint warning in webhooks.test.ts (any type) that lint-staged caught. Integration tests (critical-coverage, vulnerability-security) have 5 pre-existing failures due to missing ENCRYPTION_KEY env var - unrelated to this change."
+}

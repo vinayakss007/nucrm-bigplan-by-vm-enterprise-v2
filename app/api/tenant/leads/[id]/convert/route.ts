@@ -10,7 +10,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { convertLeadSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { leads, contacts, companies, deals, pipelines, leadActivities, activities, dealStages } from '@/drizzle/schema';
+import { leads, contacts, companies, deals, pipelines, leadActivities, activities, dealStages, tenants } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
@@ -307,6 +307,17 @@ export async function POST(
         }
       }
 
+      // Update tenant counters for newly created records
+      if (isNewContact) {
+        await tx.update(tenants)
+          .set({ currentContacts: sql`${tenants.currentContacts} + 1` })
+          .where(eq(tenants.id, ctx.tenantId));
+      }
+      if (dealId) {
+        await tx.update(tenants)
+          .set({ currentDeals: sql`${tenants.currentDeals} + 1` })
+          .where(eq(tenants.id, ctx.tenantId));
+      }
       return { contactId: contactId!, dealId, isNewContact };
     });
 

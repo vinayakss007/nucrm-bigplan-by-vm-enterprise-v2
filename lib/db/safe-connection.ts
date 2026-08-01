@@ -202,18 +202,23 @@ export async function safeTransaction<T>(
       const result = await circuitBreaker.execute(async () => {
         const pool: Pool = getPool();
         const client = await pool.connect();
+        let txError: unknown = null;
         try {
           await client.query('BEGIN');
           const value = await work(client);
           await client.query('COMMIT');
           return value;
         } catch (txErr) {
+          txError = txErr;
           await client.query('ROLLBACK').catch(() => {
             /* ignore rollback errors */
           });
           throw txErr;
         } finally {
-          client.release();
+          // Pass true to release() when the transaction threw an error.
+          // This tells pg to destroy the client instead of returning it to
+          // the pool, preventing a potentially broken connection from being reused.
+          client.release(txError ? true : undefined);
         }
       });
       return result;
