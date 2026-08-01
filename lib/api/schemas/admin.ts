@@ -175,6 +175,32 @@ export const createLeadScoringRuleSchema = z.object({
 
 export const updateLeadScoringRuleSchema = createLeadScoringRuleSchema.partial();
 
+// ── Inbound webhook field mapping schemas ──
+// The five entities the inbound webhook endpoint dispatches to.
+const webhookMappingEntities = ['contact', 'lead', 'deal', 'company', 'task'] as const;
+const webhookMappingTransforms = ['string', 'number', 'boolean', 'date', 'trim', 'lowercase'] as const;
+
+export const createWebhookFieldMappingSchema = z.object({
+  // apiKeyId omitted or null = the mapping applies to every key in the tenant.
+  apiKeyId: z.string().uuid().nullable().optional(),
+  entityType: z.enum(webhookMappingEntities),
+  // Stored exactly as the sender writes it, so no case normalisation here.
+  sourceKey: requiredString.max(200, 'sourceKey must be at most 200 characters'),
+  targetType: z.enum(['custom_field', 'native']).optional().default('custom_field'),
+  targetKey: requiredString.max(200),
+  transform: z.enum(webhookMappingTransforms).nullable().optional(),
+  isActive: z.boolean().optional().default(true),
+});
+
+export const updateWebhookFieldMappingSchema = z.object({
+  id: z.string().uuid(),
+  sourceKey: z.string().trim().min(1).max(200, 'sourceKey must be at most 200 characters').optional(),
+  targetType: z.enum(['custom_field', 'native']).optional(),
+  targetKey: z.string().trim().min(1).max(200).optional(),
+  transform: z.enum(webhookMappingTransforms).nullable().optional(),
+  isActive: z.boolean().optional(),
+});
+
 // ── Type exports ──
 export type CreateCustomFieldInput = z.infer<typeof createCustomFieldSchema>;
 export type UpdateCustomFieldInput = z.infer<typeof updateCustomFieldSchema>;
@@ -186,3 +212,5 @@ export type UpdateTenantSettingsInput = z.infer<typeof updateTenantSettingsSchem
 export type IpWhitelistInput = z.infer<typeof ipWhitelistSchema>;
 export type EmailWarmupConfigInput = z.infer<typeof emailWarmupConfigSchema>;
 export type TestEmailInput = z.infer<typeof testEmailSchema>;
+export type CreateWebhookFieldMappingInput = z.infer<typeof createWebhookFieldMappingSchema>;
+export type UpdateWebhookFieldMappingInput = z.infer<typeof updateWebhookFieldMappingSchema>;

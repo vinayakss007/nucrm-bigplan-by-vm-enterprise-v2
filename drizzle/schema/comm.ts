@@ -323,3 +323,41 @@ export const whatsappTemplates = pgTable('whatsapp_templates', {
     uniqueNameLang: uniqueIndex('idx_whatsapp_templates_unique').on(table.tenantId, table.name, table.language),
   };
 });
+
+
+// ── 9. INBOUND WEBHOOK FIELD MAPPINGS ─────────────────
+/**
+ * Routes an otherwise-unrecognised inbound webhook payload key into either a
+ * native entity field or a custom field, without a code change or migration.
+ *
+ * The inbound endpoint reads a fixed allowlist of keys per entity, so anything a
+ * third party sends beyond that list (a telephony provider's `call_duration`,
+ * `transcript`, `recording_url`) is silently dropped. A row here tells the
+ * endpoint where such a key belongs.
+ *
+ * `apiKeyId` NULL means the mapping applies to every API key in the tenant; a
+ * row naming a specific key takes precedence over the tenant-wide row for the
+ * same `sourceKey`.
+ */
+export const webhookFieldMappings = pgTable('webhook_field_mappings', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  // NULL = applies to every API key in the tenant.
+  apiKeyId: uuid('api_key_id').references(() => apiKeys.id, { onDelete: 'cascade' }),
+  entityType: text('entity_type').notNull(), // 'contact' | 'lead' | 'deal' | 'company' | 'task'
+  // The incoming JSON key exactly as the sender writes it (e.g. 'call_duration').
+  sourceKey: text('source_key').notNull(),
+  targetType: text('target_type').notNull().default('custom_field'), // 'custom_field' | 'native'
+  // A custom_field_defs.field_key, or a native field name from NATIVE_TARGETS.
+  targetKey: text('target_key').notNull(),
+  // 'string' | 'number' | 'boolean' | 'date' | 'trim' | 'lowercase'
+  transform: text('transform'),
+  isActive: boolean('is_active').default(true),
+  ...utils.lifecycle(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    lookupIdx: index('idx_webhook_field_mappings_lookup').on(table.tenantId, table.entityType, table.apiKeyId),
+    uniqueSourceKey: uniqueIndex('idx_webhook_field_mappings_unique').on(table.tenantId, table.apiKeyId, table.entityType, table.sourceKey),
+  };
+});

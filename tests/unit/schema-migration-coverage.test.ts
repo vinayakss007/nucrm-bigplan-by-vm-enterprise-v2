@@ -47,9 +47,10 @@ describe('Schema Migration Coverage (Issue #219)', () => {
   //
   // 219 -> 220: record_links (0044_cross_module_record_linking).
   // 220 -> 222: teams + team_members (0046_teams).
-  it('should have exactly 222 tables defined in schema', () => {
+  // 222 -> 223: webhook_field_mappings (0047_webhook_field_mappings).
+  it('should have exactly 223 tables defined in schema', () => {
     const schemaTables = extractPgTables(schemaDir);
-    expect(schemaTables.size).toBe(222);
+    expect(schemaTables.size).toBe(223);
   });
 
   it('migration 0036 should create all 4 missing tables', () => {

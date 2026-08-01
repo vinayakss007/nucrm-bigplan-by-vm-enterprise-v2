@@ -56,6 +56,7 @@ const MUTATING_LIMITS: Record<string, { post: number; patch: number; delete: num
   modules: { post: 3, patch: 5, delete: 3 },
   hierarchy: { post: 5, patch: 10, delete: 5 },
   customFields: { post: 10, patch: 10, delete: 5 },
+  webhookFieldMappings: { post: 10, patch: 10, delete: 5 },
   notifications: { post: 5, patch: 10, delete: 5 },
   // Bulk operations — strict limits (expensive, high-impact)
   bulk: { post: 5, patch: 5, delete: 5 },

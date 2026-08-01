@@ -8,6 +8,13 @@ import { fireWebhooks, type WebhookEvent } from '@/lib/webhooks';
 import { logAudit } from '@/lib/audit';
 import { devLogger } from '@/lib/dev-logger';
 import { logError } from '@/lib/errors-server';
+import {
+  applyFieldMappings,
+  loadFieldMappings,
+  NATIVE_TARGETS,
+  type AppliedMapping,
+  type RejectedMapping,
+} from '@/lib/webhooks/field-mapping';
 
 // ── Constants ──────────────────────────────────────────────────────────
 const MAX_PAYLOAD_SIZE = 1_000_000; // 1 MB
@@ -134,6 +141,11 @@ function sanitizeString(val: string | null | undefined, maxLen = 200): string | 
   return s.length > maxLen ? s.slice(0, maxLen) : s || null;
 }
 
+/** Convert a single snake_case key to camelCase. */
+function toCamelKey(key: string): string {
+  return key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+}
+
 /**
  * Convert snake_case keys to camelCase for database insertion.
  * Handles both camelCase and snake_case input transparently.
@@ -178,6 +190,88 @@ function headerEntries(headers: HeaderLike): Array<[string, string]> {
     out.push([key, Array.isArray(value) ? value.join(', ') : String(value)]);
   }
   return out;
+}
+
+/**
+ * Keys each entity handler actually reads off the payload.
+ *
+ * NATIVE_TARGETS is the subset a field mapping is *allowed* to write; the extras
+ * here are consumed by the handler but deliberately not mapping targets (`id`
+ * selects the row to update, `customFields` has its own target type, `ownerId` is
+ * ownership assignment). Anything outside this set is dropped on the floor, which
+ * is what _ignoredKeys reports back to the sender.
+ */
+const HANDLER_KEYS: Record<string, readonly string[]> = {
+  contact: [...(NATIVE_TARGETS['contact'] ?? []), 'id', 'customFields'],
+  lead: [...(NATIVE_TARGETS['lead'] ?? []), 'id', 'customFields', 'ownerId'],
+  deal: [...(NATIVE_TARGETS['deal'] ?? []), 'id', 'customFields'],
+  company: [...(NATIVE_TARGETS['company'] ?? []), 'id', 'customFields'],
+  task: [...(NATIVE_TARGETS['task'] ?? []), 'id'],
+};
+
+/**
+ * Report the payload keys that nothing will read, so a sender can see that its
+ * `recording_url` went nowhere instead of trusting a bare 200.
+ *
+ * A key routed by a field mapping counts as recognised — that is the whole point
+ * of configuring the mapping — so `mappedSourceKeys` are excluded.
+ */
+function collectIgnoredKeys(
+  entity: string,
+  data: Record<string, unknown>,
+  mappedSourceKeys: readonly string[] = []
+): string[] {
+  const recognized = new Set(HANDLER_KEYS[entity] ?? []);
+  if (recognized.size === 0) return [];
+
+  const mapped = new Set<string>();
+  for (const key of mappedSourceKeys) {
+    mapped.add(key);
+    mapped.add(toCamelKey(key));
+  }
+
+  const ignored: string[] = [];
+  for (const key of Object.keys(data ?? {})) {
+    const camel = toCamelKey(key);
+    if (recognized.has(camel)) continue;
+    if (mapped.has(key) || mapped.has(camel)) continue;
+    ignored.push(key);
+  }
+  return ignored;
+}
+
+interface ItemMapping {
+  data: Record<string, unknown>;
+  applied: AppliedMapping[];
+  rejected: RejectedMapping[];
+}
+
+/**
+ * Route this item's unrecognised keys to their configured destinations.
+ *
+ * A broken or unreachable mapping table must never cost the sender an otherwise
+ * valid webhook, so any failure here is logged and the raw payload is processed
+ * unchanged.
+ */
+async function resolveItemMapping(
+  item: { entity: string; data: Record<string, unknown> },
+  tenantId: string,
+  apiKeyId: string | null
+): Promise<ItemMapping> {
+  const untouched: ItemMapping = { data: item.data, applied: [], rejected: [] };
+
+  if (!VALID_ENTITIES.has(item.entity)) return untouched;
+  if (!item.data || typeof item.data !== 'object' || Array.isArray(item.data)) return untouched;
+
+  try {
+    const mappings = await loadFieldMappings(tenantId, apiKeyId, item.entity);
+    if (mappings.length === 0) return untouched;
+    return applyFieldMappings(item.entity, item.data, mappings);
+  } catch (err) {
+    console.error('[webhook] Failed to load field mappings:', err);
+    logError({ error: err, context: 'webhook-inbound:load-field-mappings' }).catch(() => undefined);
+    return untouched;
+  }
 }
 
 /**
@@ -930,7 +1024,16 @@ export async function POST(request: NextRequest) {
     }
 
     // 7. Process each item
-    const results: Array<{ entity: string; action: string; id: string | null; status: string; error?: string }> = [];
+    const results: Array<{
+      entity: string;
+      action: string;
+      id: string | null;
+      status: string;
+      error?: string;
+      mapped: number;
+      rejected_mappings: RejectedMapping[];
+      _ignoredKeys: string[];
+    }> = [];
     let hasError = false;
 
     if (!apiKeyRow) {
@@ -940,9 +1043,19 @@ export async function POST(request: NextRequest) {
     const currentKey = apiKeyRow;
 
     for (const item of items) {
+      // Route configured keys before the handler sees the payload, so a mapped
+      // key reaches the record instead of being silently discarded.
+      const mapping = await resolveItemMapping(item, currentKey.tenantId, currentKey.id);
+      const mappedItem = { ...item, data: mapping.data };
+      const ignoredKeys = collectIgnoredKeys(
+        item.entity,
+        item.data,
+        mapping.applied.map((a) => a.sourceKey)
+      );
+
       try {
         const result = await db.transaction(async (tx) => {
-          const r = await processItem(item, currentKey.tenantId, currentKey.userId!, tx);
+          const r = await processItem(mappedItem, currentKey.tenantId, currentKey.userId!, tx);
 
           // Log delivery inside the same transaction
           await logWebhookDelivery({
@@ -963,7 +1076,15 @@ export async function POST(request: NextRequest) {
           return r;
         });
 
-        results.push({ entity: item.entity, action: result.action, id: result.id, status: 'ok' });
+        results.push({
+          entity: item.entity,
+          action: result.action,
+          id: result.id,
+          status: 'ok',
+          mapped: mapping.applied.length,
+          rejected_mappings: mapping.rejected,
+          _ignoredKeys: ignoredKeys,
+        });
 
         // Fire outgoing webhooks for created records (outside transaction — uses own db)
         if (result.action === 'created') {
@@ -986,7 +1107,16 @@ export async function POST(request: NextRequest) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         hasError = true;
-        results.push({ entity: item.entity, action: item.action, id: null, status: 'error', error: "Internal server error" });
+        results.push({
+          entity: item.entity,
+          action: item.action,
+          id: null,
+          status: 'error',
+          error: "Internal server error",
+          mapped: mapping.applied.length,
+          rejected_mappings: mapping.rejected,
+          _ignoredKeys: ignoredKeys,
+        });
 
         logWebhookDelivery({
           tenantId: currentKey.tenantId,
