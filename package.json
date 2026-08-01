@@ -62,6 +62,7 @@
     "db:verify-integrity": "npx tsx scripts/verify-data-integrity.ts",
     "db:diagnose": "npx tsx scripts/diagnose-production.ts",
     "db:verify-chain": "npx tsx scripts/verify-migration-chain.ts",
+    "db:drift-check": "npx tsx scripts/drift-check.ts",
     "backup:verify": "npx tsx scripts/verify-backup.ts",
     "db:reset": "npx tsx scripts/drop-all.ts && npm run db:migrate",
     "setup": "cp -n .env.example .env.local && npm run db:migrate && echo '\n✅ Run: npm run dev\n'",
