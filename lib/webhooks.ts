@@ -4,6 +4,7 @@ import { integrations } from '@/drizzle/schema';
 import { webhookQueue } from '@/drizzle/schema/support';
 import { eq, and, lte, lt, asc } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
+import { safeFetch, SsrfBlockedError } from '@/lib/security/ssrf';
 
 /**
  * Get retry delay using exponential backoff.
@@ -118,12 +119,32 @@ export async function fireWebhooks(
           continue;
         }
 
-        const res = await fetch(url, { 
-          method: 'POST', 
-          headers, 
-          body: payload, 
-          signal: AbortSignal.timeout(10_000) 
-        });
+        // The webhook URL is tenant-supplied: safeFetch refuses private and
+        // reserved targets and re-validates redirect hops (SSRF protection).
+        let res: Response;
+        try {
+          res = await safeFetch(url, {
+            method: 'POST',
+            headers,
+            body: payload,
+            signal: AbortSignal.timeout(10_000)
+          });
+        } catch (err: unknown) {
+          if (err instanceof SsrfBlockedError) {
+            // Never retryable — the target will stay blocked.
+            await db.update(webhookQueue)
+              .set({
+                status: 'dead_letter',
+                errorMessage: `Blocked by SSRF protection: ${err.reason}`,
+                nextRetryAt: null,
+              })
+              .where(eq(webhookQueue.id, delivery.id))
+              .catch((e) => console.warn('[Webhook] Failed to record blocked delivery', e));
+            logger.warn(`[webhook] ${hook.name} delivery error: blocked by SSRF protection: ${err.reason}`);
+            continue;
+          }
+          throw err;
+        }
 
         // Update delivery status + integration lastUsedAt atomically
         await db.transaction(async (tx) => {
@@ -219,7 +240,8 @@ export async function retryFailedWebhooks(): Promise<number> {
 async function retryWebhookItem(item: typeof webhookQueue.$inferSelect): Promise<boolean> {
   try {
     const headers = (item.headers as Record<string, string>) || {};
-    const res = await fetch(item.url, {
+    // item.url originates from tenant-supplied config: guard against SSRF.
+    const res = await safeFetch(item.url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify(item.payload),
@@ -255,12 +277,14 @@ async function retryWebhookItem(item: typeof webhookQueue.$inferSelect): Promise
   } catch (err: any) {
     const nextAttempt = item.attempt + 1;
     const retryDelay = getRetryDelay(nextAttempt);
-    const isDeadLetter = retryDelay < 0 || nextAttempt > MAX_RETRIES;
+    const blocked = err instanceof SsrfBlockedError;
+    // A blocked target will never become deliverable — dead letter it now.
+    const isDeadLetter = blocked || retryDelay < 0 || nextAttempt > MAX_RETRIES;
 
     await db.update(webhookQueue)
       .set({
         attempt: nextAttempt,
-        errorMessage: err.message,
+        errorMessage: blocked ? `Blocked by SSRF protection: ${err.reason}` : err.message,
         status: isDeadLetter ? 'dead_letter' : 'failed',
         nextRetryAt: isDeadLetter ? null : new Date(Date.now() + retryDelay),
       })

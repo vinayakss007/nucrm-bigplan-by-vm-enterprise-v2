@@ -14,6 +14,7 @@
  * This means ANY service with a REST API can be used.
  */
 
+import { safeFetch, SsrfBlockedError } from '@/lib/security/ssrf';
 import type { IntegrationInstance, ActionResult } from './types';
 
 export async function aiConnector(
@@ -33,7 +34,8 @@ export async function aiConnector(
 
   for (const pattern of patterns) {
     try {
-      const res = await fetch(pattern.url, {
+      // pattern.url is derived from tenant-supplied config: guard against SSRF.
+      const res = await safeFetch(pattern.url, {
         method: pattern.method,
         headers: {
           'Content-Type': 'application/json',
@@ -63,7 +65,15 @@ export async function aiConnector(
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (_err: any) {
+    } catch (err: any) {
+      // A blocked target is a hard failure — do not walk the remaining patterns
+      // against the same (internal) host, which would leak timing information.
+      if (err instanceof SsrfBlockedError) {
+        return {
+          success: false,
+          error: `Blocked request to ${providerName} by SSRF protection: ${err.reason}`,
+        };
+      }
       continue; // Try next pattern
     }
   }

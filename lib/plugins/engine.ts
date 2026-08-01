@@ -17,6 +17,7 @@ import { db } from '@/drizzle/db';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { pluginExecutionLogs, customPlugins } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { safeFetch, SsrfBlockedError } from '@/lib/security/ssrf';
 import type {
   PluginDefinition,
   PluginAction,
@@ -97,7 +98,8 @@ async function fetchOAuth2Token(
       body.set('scope', config.scope);
     }
 
-    const res = await fetch(config.tokenUrl, {
+    // tokenUrl is tenant-supplied — guard against SSRF before fetching.
+    const res = await safeFetch(config.tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
@@ -108,6 +110,10 @@ async function fetchOAuth2Token(
     const data = await res.json() as Record<string, unknown>;
     return (data['access_token'] as string) || null;
   } catch (e) {
+    if (e instanceof SsrfBlockedError) {
+      console.error(`[PluginEngine] OAuth2 token URL blocked by SSRF protection: ${e.reason}`);
+      return null;
+    }
     console.error('[PluginEngine] OAuth2 token fetch failed', e);
     return null;
   }
@@ -174,7 +180,11 @@ export async function executePluginAction(
       fetchOptions.body = typeof requestBody === 'string' ? requestBody : JSON.stringify(requestBody);
     }
 
-    const response = await fetch(resolvedUrl.toString(), fetchOptions);
+    // plugin.baseUrl is tenant-supplied: safeFetch refuses private/reserved
+    // targets and re-validates redirects (SSRF protection).
+    const response = await safeFetch(resolvedUrl.toString(), fetchOptions, {
+      timeoutMs: DEFAULT_TIMEOUT_MS,
+    });
     responseStatus = response.status;
     responseBody = await response.text();
 
@@ -219,7 +229,9 @@ export async function executePluginAction(
     return { success, data, responseStatus, durationMs };
   } catch (err: unknown) {
     const durationMs = Date.now() - startTime;
-    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    const errorMessage = err instanceof SsrfBlockedError
+      ? `Blocked by SSRF protection: ${err.reason}`
+      : err instanceof Error ? err.message : 'Unknown error';
 
     await db.transaction(async (tx) => {
       await logExecution(tx, plugin, action, {
@@ -258,11 +270,12 @@ export async function testPluginConnection(plugin: PluginDefinition): Promise<Pl
       headers[key] = value;
     }
 
-    const response = await fetch(authResult.url.toString(), {
+    // plugin.baseUrl is tenant-supplied: guard against SSRF.
+    const response = await safeFetch(authResult.url.toString(), {
       method: 'GET',
       headers,
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
-    });
+    }, { timeoutMs: DEFAULT_TIMEOUT_MS });
 
     const latencyMs = Date.now() - startTime;
 
@@ -277,7 +290,9 @@ export async function testPluginConnection(plugin: PluginDefinition): Promise<Pl
     return { success: false, responseStatus: response.status, latencyMs, message: `Server returned ${response.status}` };
   } catch (err: unknown) {
     const latencyMs = Date.now() - startTime;
-    const message = err instanceof Error ? err.message : 'Connection failed';
+    const message = err instanceof SsrfBlockedError
+      ? `Blocked by SSRF protection: ${err.reason}`
+      : err instanceof Error ? err.message : 'Connection failed';
     console.error('[PluginEngine] Connection test failed', err);
     return { success: false, latencyMs, message };
   }
