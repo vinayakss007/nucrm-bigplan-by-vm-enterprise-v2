@@ -89,18 +89,34 @@ export async function fireWebhooks(
           headers['X-NuCRM-Signature'] = 'sha256=' + createHmac('sha256', secret).update(payload).digest('hex');
         }
 
-        // Create delivery record
-        const [delivery] = await db.insert(webhookQueue).values({
-          webhookId: hook.id,
-          url,
-          method: 'POST',
-          headers,
-          payload: payloadObj,
-          status: 'pending',
-          attempt: 0,
-        }).returning();
+        // Create delivery record. A failure here means the row never lands in
+        // the queue, so the delivery is invisible — log it loudly instead of
+        // swallowing it, but keep going so one bad hook cannot abort the rest.
+        let delivery: { id: string } | undefined;
+        try {
+          [delivery] = await db.insert(webhookQueue).values({
+            tenantId,
+            webhookId: hook.id,
+            url,
+            method: 'POST',
+            headers,
+            payload: payloadObj,
+            status: 'pending',
+            attempt: 0,
+          }).returning();
+        } catch (insertErr: unknown) {
+          logger.error('[webhooks] failed to enqueue delivery', {
+            hookId: hook.id,
+            event,
+            error: insertErr instanceof Error ? insertErr.message : String(insertErr),
+          });
+          continue;
+        }
 
-        if (!delivery) continue;
+        if (!delivery) {
+          logger.error('[webhooks] enqueue returned no row', { hookId: hook.id, event });
+          continue;
+        }
 
         const res = await fetch(url, { 
           method: 'POST', 
@@ -114,7 +130,7 @@ export async function fireWebhooks(
           if (res.ok) {
             await tx.update(webhookQueue)
               .set({
-                status: 'success',
+                status: 'delivered',
                 responseStatus: res.status,
                 deliveredAt: new Date(),
               })
@@ -127,7 +143,8 @@ export async function fireWebhooks(
                 status: 'failed',
                 responseStatus: res.status,
                 responseBody: responseBody.slice(0, 1000),
-                attempt: 1,
+                 attempt: 1,
+                 failedAt: new Date(),
                 nextRetryAt: new Date(Date.now() + retryDelay),
               })
               .where(eq(webhookQueue.id, delivery.id));

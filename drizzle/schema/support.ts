@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import * as utils from './utils';
 import { tenants, users } from './core';
 import { contacts, companies, deals, leads } from './crm';
-import { webhooks } from './automation';
+import { integrations } from './comm';
 
 // ── 1. ERROR LOGS ─────────────────────────────────────
 // Centralized error tracking across all services
@@ -34,9 +34,13 @@ export const errorLogs = pgTable('error_logs', {
 // Renamed: Was conflicting with automation.webhookDeliveries
 // Uses different table name to avoid database conflicts
 // This tracks queued webhooks with retry logic for the main webhook system
+// webhook_id points at integrations(id) (rows WHERE type = 'webhook') because
+// all webhook CRUD in the app goes through the integrations table; the separate
+// `webhooks` table is unused. See migration 0046_fix_webhook_queue.sql.
 export const webhookQueue = pgTable('webhook_queue', {
   id: utils.pk(),
-  webhookId: uuid('webhook_id').notNull().references(() => webhooks.id, { onDelete: 'cascade' }),
+  tenantId: utils.tenantId(),
+  webhookId: uuid('webhook_id').notNull().references(() => integrations.id, { onDelete: 'cascade' }),
   url: text('url').notNull(),
   method: text('method').notNull().default('POST'),
   headers: jsonb('headers').default({}),
@@ -54,6 +58,7 @@ export const webhookQueue = pgTable('webhook_queue', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => {
   return {
+    tenantIdx: utils.tenantIdx(table),
     webhookIdx: index('idx_webhook_deliveries_webhook_id').on(table.webhookId),
     statusIdx: index('idx_webhook_deliveries_status').on(table.status),
     nextRetryIdx: index('idx_webhook_deliveries_next_retry').on(table.nextRetryAt).where(sql`status = 'pending'`),
