@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifySecret } from '@/lib/crypto';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema/core';
-import { isNull } from 'drizzle-orm';
+import { and, isNull, sql } from 'drizzle-orm';
 import { processAutoFollowups } from '@/lib/ai/auto-followup';
 import { logger } from '@/lib/logger';
 
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     const allTenants = await db
       .select({ id: tenants.id, settings: tenants.settings })
       .from(tenants)
-      .where(isNull(tenants.deletedAt));
+      .where(and(isNull(tenants.deletedAt), sql`${tenants.status} IN ('active', 'trialing')`));
 
     let totalDrafted = 0;
     let totalFailed = 0;

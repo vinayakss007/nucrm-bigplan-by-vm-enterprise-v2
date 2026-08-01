@@ -49,6 +49,10 @@ export default function ImportModal({ onDone, onClose }: Props) {
       toast.error('Please upload a .csv file');
       return;
     }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File is too large. Maximum file size is 10MB.');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = e => parsePreview(e.target?.result as string);
     reader.readAsText(file);

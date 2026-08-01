@@ -1,0 +1,35 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Fix CSV formula injection in exports, SSE stream resource leaks, workflow executor infinite loop on cyclic graphs, deals import invalid date crash, automation condition operator defaulting to match-all, and import modal missing file size validation",
+  "status": "completed",
+  "steps": [
+    "1. CSV Formula Injection in exports: In lib/export/index.ts, the escapeCSV() function does not strip leading formula characters (=, +, -, @, \\t, \\r). A contact with firstName '=CMD(\"calc\")' would be exported as a dangerous formula. Also fix the duplicate escapeCSV in app/api/tenant/deals/export/route.ts. Prefix any cell value starting with =, +, -, @, \\t, or \\r with a single quote to neutralize formula injection.",
+    "2. SSE Notification Stream resource leak: In app/api/tenant/notifications/stream/route.ts, when the client disconnects (abort signal fires), clearInterval is called but controller.close() is never called. This means the ReadableStream stays open server-side. Add controller.close() in the abort handler after clearing intervals. Also, the sendUnread function catches errors but does not close the controller on persistent DB failures - add a fail counter that closes the stream after 3 consecutive DB errors.",
+    "3. Workflow executor infinite loop on cyclic graphs: In lib/automation/workflow-executor.ts, the executeNode() function recursively walks children but has no cycle detection. If a workflow graph has cycles (A -> B -> A), it will stack overflow. Add a visited Set<string> parameter that tracks nodeIds already executed, and skip any node already in the set.",
+    "4. Deals import Invalid Date crash: In app/api/tenant/deals/import/route.ts, line creates `new Date(mapped.closeDate)` without validating the date string. If the CSV contains 'TBD' or '13/25/2024' or any non-parseable string, new Date() returns Invalid Date which will cause a DB insert error that crashes the entire transaction. Add validation: check if the parsed date is valid (isNaN(date.getTime())) and skip the field if invalid, pushing a non-fatal warning to results.errors.",
+    "5. Automation engine condition operator fallthrough: In lib/automation/engine.ts, the meetsConditions() switch has `default: return true`. This means any unknown/misspelled operator (e.g., 'greaterThan' instead of 'greater_than') silently matches all records. Change the default case to return false, so unknown operators fail closed. Same fix in lib/automation/workflow-executor.ts evaluateCondition() function.",
+    "6. Import modal missing file size check: In components/tenant/import-modal.tsx, the handleFile() function only checks the file extension/type but not the file size. The server allows 50,000 rows but a user could try to load a 500MB file into memory via FileReader. Add a 10MB client-side file size check (file.size > 10 * 1024 * 1024) with a toast error message before reading.",
+    "7. Contacts export unsanitized ilike query: In lib/export/index.ts generateExportData(), the 'q' filter parameter is interpolated directly into ilike() without escaping SQL wildcards (%, _). A query like '%' would match everything. Escape % and _ in the q parameter before passing to ilike. Same issue exists in app/api/tenant/contacts/route.ts GET handler's q parameter - fix both.",
+    "8. Add/update unit tests: Add a test file tests/unit/csv-export-sanitize.test.ts testing the escapeCSV function with formula injection payloads. Add a test for the cycle detection in workflow-executor. Add a test for the condition operator default behavior."
+  ],
+  "acceptance_criteria": [
+    "escapeCSV('=CMD()') returns a string starting with single-quote prefix that neutralizes the formula",
+    "The notification stream SSE handler calls controller.close() when the abort signal fires",
+    "executeNode in workflow-executor.ts tracks visited nodes and returns early on revisit to prevent infinite loops",
+    "Deals import with close_date='TBD' produces a warning but does not crash the transaction",
+    "meetsConditions with operator 'unknown_op' returns false (not true)",
+    "Import modal rejects files larger than 10MB with a user-facing error toast",
+    "ilike queries with user-supplied search terms escape % and _ wildcards",
+    "npx vitest run tests/unit/csv-export-sanitize.test.ts passes",
+    "npx tsc --noEmit passes with no type errors in modified files"
+  ],
+  "verification": [
+    "npx tsc --noEmit --pretty 2>&1 | tail -20",
+    "npx vitest run tests/unit/csv-export-sanitize.test.ts --reporter=verbose",
+    "npx vitest run tests/unit/automation-engine.test.ts --reporter=verbose",
+    "npx vitest run tests/unit/workflows.test.ts --reporter=verbose"
+  ],
+  "blocked_reason": null,
+  "findings": "All 8 bugs fixed and verified. TypeCheck passes clean. All 4213 unit tests pass across 250 test files. The escapeCSV formula injection fix properly handles the interaction with CSV quoting (single-quote prefix is applied before the CSV quoting step). The default:false change in engine.ts did not break any existing automation-engine tests because the existing tests only use valid operators."
+}

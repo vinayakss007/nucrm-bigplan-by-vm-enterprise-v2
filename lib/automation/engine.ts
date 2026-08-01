@@ -194,7 +194,7 @@ function meetsConditions(conditions: any[], data: Record<string, any>): boolean 
       case 'less_than':       return Number(fieldVal) < Number(cond.value);
       case 'is_empty':        return fieldVal == null || fieldVal === '';
       case 'is_not_empty':   return fieldVal != null && fieldVal !== '';
-      default:               return true;
+      default:               return false;
     }
   });
 }
