@@ -130,11 +130,14 @@ export function needsCsrfValidation(method: string, path: string, authMethod?: s
 
   // Pre-auth auth routes — user has no CSRF cookie when making these requests
   // login/signup: session cookie not yet set
-  // forgot-password, resend-verification, verify-email: unauthenticated, no session
+  // NOTE: /api/auth/forgot-password is intentionally NOT exempted here. While the
+  // user may not have a session, if they DO have a CSRF cookie (e.g., already logged
+  // in on another tab), removing the exemption prevents attackers from triggering
+  // password reset spam via cross-site POST. The forgot-password form page must
+  // ensure a CSRF cookie is set before POSTing (standard behavior for app forms).
   if (
     path === '/api/auth/login' ||
     path === '/api/auth/signup' ||
-    path === '/api/auth/forgot-password' ||
     path === '/api/auth/resend-verification' ||
     path === '/api/auth/verify-email'
   ) {

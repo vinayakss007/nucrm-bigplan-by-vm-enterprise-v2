@@ -6,6 +6,7 @@ import { createRoleSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { roles } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,6 +37,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await rateLimitMutating(request, 'roles', 'post');
+    if (limited) return limited;
+
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     

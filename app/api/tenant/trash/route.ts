@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, deals, tasks, companies, leads, projects } from '@/drizzle/schema';
+import { contacts, deals, tasks, companies, leads, projects, tenants } from '@/drizzle/schema';
 import { eq, and, isNotNull, sql, desc } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -173,6 +173,16 @@ export async function PATCH(req: NextRequest) {
       .returning({ id: table.id });
 
     if (!row) return NextResponse.json({ error: 'Not found in trash' }, { status: 404 });
+    // Re-increment the tenant counter for the restored resource
+    if (resource_type === 'contact') {
+      await db.update(tenants)
+        .set({ currentContacts: sql`${tenants.currentContacts} + 1` })
+        .where(eq(tenants.id, ctx.tenantId));
+    } else if (resource_type === 'deal') {
+      await db.update(tenants)
+        .set({ currentDeals: sql`${tenants.currentDeals} + 1` })
+        .where(eq(tenants.id, ctx.tenantId));
+    }
 
     await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action:`restore`, entityType: resource_type, entityId: id });
     return NextResponse.json({ ok: true, message: `${resource_type} restored successfully` });

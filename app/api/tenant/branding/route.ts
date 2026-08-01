@@ -6,6 +6,7 @@ import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const brandingUpdateSchema = z.object({
   logoUrl: z.string().trim().max(500).nullable().optional(),
@@ -36,6 +37,9 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    const limited = await rateLimitMutating(request, 'branding', 'patch');
+    if (limited) return limited;
+
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

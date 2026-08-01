@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateContactSchema } from '@/lib/api/schemas';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, users, activities, tenants } from '@/drizzle/schema';
 import { eq, and, sql, ne } from 'drizzle-orm';
@@ -31,6 +31,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         tenantId: contacts.tenantId,
         companyId: contacts.companyId,
         assignedTo: contacts.assignedTo,
+        createdBy: contacts.createdBy,
         firstName: contacts.firstName,
         lastName: contacts.lastName,
         email: contacts.email,
@@ -63,6 +64,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .limit(1);
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // RBAC: if user lacks view_all, only allow access to own records
+    if (!can(ctx, 'contacts.view_all')) {
+      if (row.assignedTo !== ctx.userId && row.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
 
     // Map fields to match legacy expectations if necessary (e.g., snake_case in JSON response)
     // The select object already uses camelCase keys which Next.js will preserve.
@@ -157,6 +165,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         notes: contacts.notes,
         companyId: contacts.companyId,
         assignedTo: contacts.assignedTo,
+        createdBy: contacts.createdBy,
         updatedAt: contacts.updatedAt,
       })
       .from(contacts)
@@ -164,6 +173,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .limit(1);
 
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // RBAC: if user lacks view_all, only allow editing own records
+    if (!can(ctx, 'contacts.view_all')) {
+      if (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
 
     const [row] = await db.transaction(async (tx) => {
       const [r] = await withConcurrencyGuard(
@@ -264,6 +280,20 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (deny) return deny;
 
     const contactId = (await params).id;
+
+    // RBAC: if user lacks view_all, only allow deleting own records
+    if (!can(ctx, 'contacts.view_all')) {
+      const [existing] = await db
+        .select({ assignedTo: contacts.assignedTo, createdBy: contacts.createdBy })
+        .from(contacts)
+        .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId), sql`${contacts.deletedAt} IS NULL`))
+        .limit(1);
+
+      if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      if (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
 
     // SOFT DELETE
     const [row] = await db.transaction(async (tx) => {

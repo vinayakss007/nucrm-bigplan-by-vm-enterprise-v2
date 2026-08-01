@@ -73,6 +73,9 @@ const PROVIDERS = {
 // Track usage (in production, use database/Redis)
 const usage = new Map<string, ProviderStats>();
 
+/** Timestamp of the last daily reset (used to auto-reset stale counters) */
+let lastDailyReset = Date.now();
+
 function initializeUsage() {
   Object.entries(PROVIDERS).forEach(([key, config]) => {
     usage.set(key, {
@@ -84,15 +87,35 @@ function initializeUsage() {
       healthy: true,
     });
   });
+  lastDailyReset = Date.now();
 }
 
 // Initialize on first load
 initializeUsage();
 
 /**
+ * Auto-reset daily counters if a new day has started since the last reset.
+ * Prevents stale counters from accumulating if resetDailyCounters() is
+ * never called externally (e.g., missing cron).
+ */
+function ensureDailyReset(): void {
+  const now = Date.now();
+  const ONE_DAY_MS = 86_400_000;
+  if (now - lastDailyReset >= ONE_DAY_MS) {
+    usage.forEach((stats) => {
+      stats.sentToday = 0;
+    });
+    lastDailyReset = now;
+  }
+}
+
+/**
  * Get best provider for email type
  */
 function getBestProvider(emailType: string): string | null {
+  // Auto-reset daily counters if a new calendar day has elapsed
+  ensureDailyReset();
+
   const providers = Object.entries(PROVIDERS)
     .filter(([_, config]) => config.apiKey) // Only enabled providers
     .sort((a, b) => a[1].priority - b[1].priority);
@@ -144,6 +167,7 @@ async function sendViaResend(options: EmailOptions) {
       html: options.html,
       text: options.text,
     }),
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!res.ok) {
@@ -172,6 +196,7 @@ async function sendViaBrevo(options: EmailOptions) {
       htmlContent: options.html,
       textContent: options.text,
     }),
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!res.ok) {
@@ -198,6 +223,7 @@ async function sendViaSendGrid(options: EmailOptions) {
       subject: options.subject,
       content: [{ type: 'text/html', value: options.html }],
     }),
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!res.ok && res.status !== 202) {

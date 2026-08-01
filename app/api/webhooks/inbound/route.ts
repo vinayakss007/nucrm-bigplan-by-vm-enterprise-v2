@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'crypto';
 import { db } from '@/drizzle/db';
-import { apiKeys, webhookInboundLogs, contacts, leads, deals, companies, tasks } from '@/drizzle/schema';
-import { eq, and, or, isNull, gt, sql } from 'drizzle-orm';
+import { apiKeys, webhookInboundLogs, contacts, leads, deals, companies, tasks, dealStages, pipelines } from '@/drizzle/schema';
+import { eq, and, or, isNull, gt, sql, ilike, asc, desc } from 'drizzle-orm';
 import { RateLimiter, getRateLimitHeaders } from '@/lib/rate-limit';
 import { fireWebhooks, type WebhookEvent } from '@/lib/webhooks';
 import { logAudit } from '@/lib/audit';
@@ -14,6 +14,59 @@ const MAX_PAYLOAD_SIZE = 1_000_000; // 1 MB
 const MAX_BATCH_SIZE = 100;
 const VALID_ACTIONS = new Set(['create', 'update', 'upsert']);
 const VALID_ENTITIES = new Set(['contact', 'lead', 'deal', 'company', 'task']);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Max serialized size of the raw body we persist into webhook_inbound_logs.payload. */
+const MAX_STORED_PAYLOAD_BYTES = 64 * 1024; // 64 KB
+
+/** Header names whose values must never be written to the audit log. */
+const SENSITIVE_HEADERS = new Set([
+  'authorization',
+  'x-api-key',
+  'x-webhook-secret',
+  'cookie',
+  'set-cookie',
+  'proxy-authorization',
+]);
+
+const REDACTED = '[REDACTED]';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Keys each entity handler actually reads off the (camelCased) payload.
+ * Derived by inspection of the handlers below — keep in sync when a handler
+ * starts or stops consuming a field.
+ */
+const ENTITY_RECOGNISED_KEYS: Record<string, readonly string[]> = {
+  contact: [
+    'email', 'firstName', 'lastName', 'phone', 'companyId', 'assignedTo',
+    'leadStatus', 'leadSource', 'notes', 'tags', 'score', 'city', 'country',
+    'website', 'linkedinUrl', 'twitterUrl',
+  ],
+  lead: [
+    'email', 'firstName', 'lastName', 'phone', 'mobile', 'title', 'companyName',
+    'leadSource', 'leadStatus', 'lifecycleStage', 'assignedTo', 'tags', 'notes',
+    'ownerId',
+  ],
+  deal: [
+    'title', 'value', 'probability', 'stage', 'closeDate', 'contactId',
+    'companyId', 'assignedTo', 'notes',
+  ],
+  company: [
+    'name', 'industry', 'size', 'website', 'phone', 'address', 'notes',
+  ],
+  task: [
+    'title', 'description', 'dueDate', 'priority', 'contactId', 'dealId',
+    'assignedTo', 'completed',
+  ],
+};
+
+/** Recognised for every entity: the record identifier and the explicit escape hatch. */
+const COMMON_RECOGNISED_KEYS: readonly string[] = ['id', 'customFields'];
+
+/** Envelope fields consumed by the route itself rather than by an entity handler. */
+const ENVELOPE_KEYS: readonly string[] = ['action', 'entity', 'data', 'batch'];
 
 // Rate limiter: 100 requests per API key per minute
 const inboundLimiter = new RateLimiter({ max: 100, window: 60 });
@@ -21,12 +74,21 @@ const inboundLimiter = new RateLimiter({ max: 100, window: 60 });
 // ── In-memory request tracking (last 100 per API key prefix) ──────────
 const requestLog = new Map<string, Array<{ ts: number; status: number; path: string }>>();
 const MAX_LOG_PER_KEY = 100;
+const MAX_LOG_KEYS = 1000;
 
 function logRequest(keyPrefix: string, status: number, path: string) {
   const entries = requestLog.get(keyPrefix) ?? [];
   entries.push({ ts: Date.now(), status, path });
   if (entries.length > MAX_LOG_PER_KEY) entries.splice(0, entries.length - MAX_LOG_PER_KEY);
   requestLog.set(keyPrefix, entries);
+
+  // Cap the map at MAX_LOG_KEYS to prevent unbounded memory growth
+  if (requestLog.size > MAX_LOG_KEYS) {
+    const oldestKey = requestLog.keys().next().value;
+    if (oldestKey !== undefined) {
+      requestLog.delete(oldestKey);
+    }
+  }
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -79,17 +141,150 @@ function sanitizeString(val: string | null | undefined, maxLen = 200): string | 
 function normalizeFields(data: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(data)) {
-    // Convert snake_case to camelCase
-    const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-    out[camel] = val;
+    out[toCamelKey(key)] = val;
+  }
+  return out;
+}
+
+/** Convert a single snake_case key to camelCase (same rule as normalizeFields). */
+function toCamelKey(key: string): string {
+  return key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+}
+
+/**
+ * Return `value` only when it is a well-formed uuid, otherwise null.
+ * `record_id` is a uuid column — anything else must not reach it.
+ */
+export function toUuidOrNull(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return UUID_REGEX.test(trimmed) ? trimmed : null;
+}
+
+type HeaderLike = Headers | Record<string, string | string[] | undefined>;
+
+/** Normalise either a `Headers` instance or a plain object into name/value pairs. */
+function headerEntries(headers: HeaderLike): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  const maybeIterable = headers as { forEach?: unknown };
+  if (typeof maybeIterable.forEach === 'function') {
+    (headers as Headers).forEach((value, key) => {
+      out.push([key, String(value)]);
+    });
+    return out;
+  }
+  for (const [key, value] of Object.entries(headers as Record<string, string | string[] | undefined>)) {
+    if (value === undefined) continue;
+    out.push([key, Array.isArray(value) ? value.join(', ') : String(value)]);
   }
   return out;
 }
 
 /**
- * Log a webhook delivery attempt.
+ * Coerce a caller-supplied money value into the string form Drizzle wants for a
+ * `decimal` column (`deals.amount` is `decimal(15, 2)`), mirroring
+ * `app/api/tenant/deals/route.ts` which writes `amount.toString()`.
+ *
+ * Numbers and numeric strings are accepted; a numeric string is passed through
+ * verbatim so '2500.50' keeps its scale instead of collapsing to '2500.5'.
+ * Anything non-numeric becomes '0' — never the string 'NaN', which Postgres
+ * would reject and which would otherwise turn a bad field into a 500.
  */
-async function logWebhookDelivery(input: {
+function toDecimalString(raw: unknown): string {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? String(raw) : '0';
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    if (!s) return '0';
+    return Number.isFinite(Number(s)) ? s : '0';
+  }
+  return '0';
+}
+
+/**
+ * A plain object, or `{}` for anything else. `typeof null === 'object'` and
+ * arrays are objects too, so both are rejected here — a jsonb column that is
+ * meant to hold a bag of keys should never receive `null` or `[]`.
+ */
+function asPlainObject(raw: unknown): Record<string, unknown> {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
+  return raw as Record<string, unknown>;
+}
+
+/**
+ * Copy request headers for storage, replacing the value of any sensitive header
+ * with `[REDACTED]`. Header-name matching is case-insensitive.
+ */
+export function redactHeaders(headers: HeaderLike | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!headers) return out;
+  for (const [key, value] of headerEntries(headers)) {
+    out[key] = SENSITIVE_HEADERS.has(key.toLowerCase()) ? REDACTED : value;
+  }
+  return out;
+}
+
+/**
+ * Top-level keys of `data` that the handler for `entity` does not consume.
+ * Purely informational — unmapped values are never written to the record.
+ */
+export function collectIgnoredKeys(entity: string, data: Record<string, unknown>): string[] {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return [];
+  const entityKeys = ENTITY_RECOGNISED_KEYS[entity];
+  if (!entityKeys) return [];
+
+  const recognised = new Set<string>([
+    ...entityKeys,
+    ...COMMON_RECOGNISED_KEYS,
+    ...ENVELOPE_KEYS,
+  ]);
+
+  const ignored: string[] = [];
+  for (const key of Object.keys(data)) {
+    if (!recognised.has(toCamelKey(key))) ignored.push(key);
+  }
+  return ignored;
+}
+
+/**
+ * Build the `payload` jsonb value: the raw body as received, plus `_ignoredKeys`
+ * when fields were dropped. Bodies larger than 64 KB are replaced by a stub so a
+ * single request cannot bloat the audit table.
+ */
+export function buildStoredPayload(
+  body: unknown,
+  ignoredKeys: string[] = []
+): Record<string, unknown> | null {
+  if (body === undefined) {
+    return ignoredKeys.length > 0 ? { _ignoredKeys: ignoredKeys } : null;
+  }
+
+  let serialized: string | null;
+  try {
+    serialized = JSON.stringify(body) ?? null;
+  } catch {
+    serialized = null;
+  }
+
+  const size = serialized === null ? 0 : Buffer.byteLength(serialized, 'utf8');
+
+  let payload: Record<string, unknown>;
+  if (serialized === null || size > MAX_STORED_PAYLOAD_BYTES) {
+    payload = { _truncated: true, _originalSize: size };
+  } else if (body !== null && typeof body === 'object' && !Array.isArray(body)) {
+    payload = { ...(body as Record<string, unknown>) };
+  } else {
+    payload = { _body: body };
+  }
+
+  if (ignoredKeys.length > 0) payload._ignoredKeys = ignoredKeys;
+  return payload;
+}
+
+/**
+ * Log a webhook delivery attempt, including the raw body and (redacted) headers
+ * so an unexpected payload shape stays recoverable and replayable.
+ */
+export async function logWebhookDelivery(input: {
   tenantId: string;
   apiKeyId: string | null;
   action: string;
@@ -99,8 +294,14 @@ async function logWebhookDelivery(input: {
   errorMessage: string | null;
   recordId: string | null;
   payloadSize: number;
+  body?: unknown;
+  headers?: HeaderLike | null;
+  data?: Record<string, unknown>;
 }) {
   try {
+    const succeeded = input.status === 'success';
+    const ignoredKeys = input.data ? collectIgnoredKeys(input.entity, input.data) : [];
+
     await db.insert(webhookInboundLogs).values({
       tenantId: input.tenantId,
       apiKeyId: input.apiKeyId,
@@ -109,10 +310,14 @@ async function logWebhookDelivery(input: {
       status: input.status,
       statusCode: input.statusCode,
       errorMessage: input.errorMessage?.slice(0, 1000) ?? null,
-      recordId: input.recordId ? Number(input.recordId) : null,
+      recordId: toUuidOrNull(input.recordId),
       payloadSize: input.payloadSize,
+      payload: buildStoredPayload(input.body, ignoredKeys),
+      headers: redactHeaders(input.headers),
+      processed: succeeded,
+      processedAt: succeeded ? new Date() : null,
       createdAt: new Date(),
-    } as unknown as typeof webhookInboundLogs.$inferInsert);
+    });
   } catch (err) {
     console.error('[webhook] Failed to log delivery:', err);
   }
@@ -301,6 +506,101 @@ async function handleLead(
   return { id: newLead?.id ?? null, action: 'created' };
 }
 
+interface ResolvedStage {
+  stageId: string;
+  pipelineId: string;
+}
+
+/**
+ * Resolve the stage the caller asked for, tenant-scoped.
+ *
+ * Mirrors `app/api/tenant/deals/route.ts`: a stage id wins over a stage name,
+ * and a name is matched case-insensitively against `deal_stages` joined to
+ * `pipelines` so the tenant filter lives on the pipeline row.
+ *
+ * A caller-supplied id is *never* trusted as-is: it has to come back from the
+ * tenant-scoped query, otherwise a webhook key for tenant A could park a deal on
+ * tenant B's stage. Returns null when the caller asked for nothing, or asked by
+ * a name that matches nothing (the caller's spelling is not authoritative — the
+ * create path then falls back to the default pipeline).
+ */
+async function resolveRequestedStage(
+  suppliedStageId: string | null,
+  stageName: string | null,
+  tenantId: string
+): Promise<ResolvedStage | null> {
+  if (suppliedStageId) {
+    if (!UUID_RE.test(suppliedStageId)) {
+      throw new Error(`stage_id must be a uuid (got "${suppliedStageId}"); use "stage" to reference a stage by name`);
+    }
+
+    const [row] = await db
+      .select({ id: dealStages.id, pipelineId: dealStages.pipelineId })
+      .from(dealStages)
+      .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
+      .where(and(
+        eq(dealStages.id, suppliedStageId),
+        eq(pipelines.tenantId, tenantId)
+      ))
+      .limit(1);
+
+    if (!row) {
+      throw new Error(`stage_id ${suppliedStageId} does not belong to this tenant`);
+    }
+    return { stageId: row.id, pipelineId: row.pipelineId };
+  }
+
+  if (stageName) {
+    const [row] = await db
+      .select({ id: dealStages.id, pipelineId: dealStages.pipelineId })
+      .from(dealStages)
+      .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
+      .where(and(
+        ilike(dealStages.name, stageName),
+        eq(pipelines.tenantId, tenantId)
+      ))
+      .limit(1);
+
+    if (row) return { stageId: row.id, pipelineId: row.pipelineId };
+  }
+
+  return null;
+}
+
+/**
+ * Fallback for a create with no usable stage input: the first stage of the
+ * tenant's default pipeline. `isDefault DESC` puts the flagged pipeline first
+ * and still yields a pipeline when none is flagged; `order ASC` then picks the
+ * left-most stage. Returns null when the tenant has no pipelines or no stages.
+ */
+async function resolveDefaultStage(tenantId: string): Promise<ResolvedStage | null> {
+  const [pipeline] = await db
+    .select({ id: pipelines.id })
+    .from(pipelines)
+    .where(and(
+      eq(pipelines.tenantId, tenantId),
+      isNull(pipelines.deletedAt)
+    ))
+    .orderBy(desc(pipelines.isDefault), asc(pipelines.createdAt))
+    .limit(1);
+
+  if (!pipeline) return null;
+
+  const [stage] = await db
+    .select({ id: dealStages.id, pipelineId: dealStages.pipelineId })
+    .from(dealStages)
+    .where(and(
+      eq(dealStages.tenantId, tenantId),
+      eq(dealStages.pipelineId, pipeline.id),
+      isNull(dealStages.deletedAt)
+    ))
+    .orderBy(asc(dealStages.order))
+    .limit(1);
+
+  if (!stage) return null;
+  return { stageId: stage.id, pipelineId: stage.pipelineId };
+}
+
 /**
  * Create or update a deal.
  */
@@ -315,21 +615,46 @@ async function handleDeal(
   const title = sanitizeString(d['title'] as string, 200);
   if (!title) throw new Error('title is required for deal');
 
-  const value = typeof d['value'] === 'number' ? d['value'] : (d['value'] ? parseFloat(String(d['value'])) || 0 : 0);
-  const probability = typeof d['probability'] === 'number' ? d['probability'] : (d['probability'] ? parseInt(String(d['probability'])) : 10);
+  // `deals` has no `value`, `stage`, `probability` or `notes` column. Every one of
+  // those keys used to be handed to Drizzle anyway, which emits only columns it
+  // knows about, so they were silently dropped on update while the caller got a
+  // 200. They are now mapped onto columns that exist: `value`/`amount` → `amount`,
+  // `stage`/`stage_id` → `stageId` (+ `pipelineId`), and `probability`/`notes` →
+  // keys inside the `customFields` jsonb, so nothing the caller sends is lost.
+  const amount = toDecimalString(d['amount'] ?? d['value']);
+
+  const customFields: Record<string, unknown> = { ...asPlainObject(d['customFields']) };
+  const probabilityRaw = d['probability'];
+  if (probabilityRaw !== undefined && probabilityRaw !== null) {
+    const n = typeof probabilityRaw === 'number' ? probabilityRaw : Number(String(probabilityRaw).trim());
+    // Keep a usable number when we can, otherwise keep the caller's own text
+    // rather than storing NaN.
+    customFields['probability'] = Number.isFinite(n) ? n : sanitizeString(String(probabilityRaw), 50);
+  }
+  const notes = sanitizeString(d['notes'] as string, 5000);
+  if (notes) customFields['notes'] = notes;
+
+  // normalizeFields() has already folded `stage_id` into `stageId`.
+  const suppliedStageId = sanitizeString(d['stageId'] as string, 64);
+  const stageName = sanitizeString(d['stage'] as string, 100);
+  // Only touch the stage columns when the caller actually said something about
+  // the stage — an update that omits it must leave the existing stage alone.
+  const requestedStage = (suppliedStageId || stageName)
+    ? await resolveRequestedStage(suppliedStageId, stageName, tenantId)
+    : null;
 
   const dealData = {
     title,
-    value: String(value), // Decimal in Drizzle
-    stage: sanitizeString(d['stage'] as string, 50) ?? 'lead',
-    probability,
+    amount,
     closeDate: d['closeDate'] ? new Date(d['closeDate'] as string) : null,
     contactId: (d['contactId'] as string) || null,
     companyId: (d['companyId'] as string) || null,
     assignedTo: (d['assignedTo'] as string) || userId,
-    notes: sanitizeString(d['notes'] as string, 5000),
-    customFields: typeof d['customFields'] === 'object' ? d['customFields'] : {},
+    customFields,
     updatedAt: new Date(),
+    ...(requestedStage
+      ? { stageId: requestedStage.stageId, pipelineId: requestedStage.pipelineId }
+      : {}),
   };
 
   if (action === 'update' || action === 'upsert') {
@@ -350,13 +675,28 @@ async function handleDeal(
     }
   }
 
+  // `stageId` is a `notNull()` uuid, so the old `stageId: ''` placeholder made
+  // every create fail with `invalid input syntax for type uuid: ""`. Resolve a
+  // real stage instead: what the caller asked for, else the default pipeline's
+  // first stage. No `as unknown as typeof deals.$inferInsert` cast is needed —
+  // every key below is now a genuine `deals` column, so the compiler checks the
+  // payload instead of a cast hiding the mismatch.
+  const stage = requestedStage ?? await resolveDefaultStage(tenantId);
+  if (!stage) {
+    throw new Error(
+      'Cannot determine a stage for this deal: send "stage_id" (a uuid belonging to this tenant) or "stage" (an existing stage name), or create a pipeline with at least one stage for this tenant first'
+    );
+  }
+
   const [newDeal] = await tx.insert(deals).values({
     ...dealData,
     tenantId,
-    stageId: '', // placeholder - will be resolved
+    stageId: stage.stageId,
+    pipelineId: stage.pipelineId,
+    stageEnteredAt: new Date(),
     createdBy: userId,
     createdAt: new Date(),
-  } as unknown as typeof deals.$inferInsert).returning();
+  }).returning();
 
   return { id: newDeal?.id ?? null, action: 'created' };
 }
@@ -437,6 +777,7 @@ async function handleTask(
     dealId: (d['dealId'] as string) || null,
     assignedTo: (d['assignedTo'] as string) || userId,
     completed: typeof d['completed'] === 'boolean' ? d['completed'] : false,
+    customFields: typeof d['customFields'] === 'object' ? d['customFields'] : {},
     updatedAt: new Date(),
   };
 
@@ -497,6 +838,11 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
   let apiKeyRow: Awaited<ReturnType<typeof resolveApiKey>> = null;
   let keyPrefix = 'unknown';
+  // Hoisted so the outer catch can still persist whatever body it received.
+ 
+ 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let body: any;
 
   try {
     // 1. Extract API key
@@ -542,10 +888,6 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Parse JSON
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let body: any;
     try {
       const text = await request.text();
       if (text.length > MAX_PAYLOAD_SIZE) {
@@ -613,6 +955,9 @@ export async function POST(request: NextRequest) {
             errorMessage: null,
             recordId: r.id,
             payloadSize: contentLength || 0,
+            body,
+            headers: request.headers,
+            data: item.data,
           });
 
           return r;
@@ -653,6 +998,9 @@ export async function POST(request: NextRequest) {
           errorMessage: err.message,
           recordId: null,
           payloadSize: contentLength || 0,
+          body,
+          headers: request.headers,
+          data: item.data,
         });
       }
     }
@@ -706,6 +1054,8 @@ export async function POST(request: NextRequest) {
         errorMessage: err.message,
         recordId: null,
         payloadSize: 0,
+        body,
+        headers: request.headers,
       });
       logRequest(keyPrefix, 500, request.nextUrl.pathname);
     }

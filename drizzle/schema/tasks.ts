@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, boolean, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, boolean, index, jsonb } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from './core';
 import { contacts, deals, companies, leads } from './crm';
@@ -29,6 +29,7 @@ export const tasks = pgTable('tasks', {
   ticketId: uuid('ticket_id').references(() => supportTickets.id, { onDelete: 'set null' }),
   assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }),
 
+  customFields: jsonb('custom_fields').default({}),
   metadata: utils.metadata(),
 
   ...utils.audit(),

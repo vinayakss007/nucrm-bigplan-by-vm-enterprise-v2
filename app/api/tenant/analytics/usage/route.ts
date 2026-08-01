@@ -3,7 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, deals, tasks, supportTickets, companies, activities, emailLog } from '@/drizzle/schema';
-import { eq, and, sql, gte } from 'drizzle-orm';
+import { eq, and, sql, gte, isNull } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,15 +17,15 @@ export async function GET(request: NextRequest) {
 
     // Current month counts
     const [thisMonthContacts] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(contacts).where(and(eq(contacts.tenantId, ctx.tenantId), gte(contacts.createdAt, thisMonthStart)));
+      .from(contacts).where(and(eq(contacts.tenantId, ctx.tenantId), gte(contacts.createdAt, thisMonthStart), isNull(contacts.deletedAt)));
     const [thisMonthDeals] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(deals).where(and(eq(deals.tenantId, ctx.tenantId), gte(deals.createdAt, thisMonthStart)));
+      .from(deals).where(and(eq(deals.tenantId, ctx.tenantId), gte(deals.createdAt, thisMonthStart), isNull(deals.deletedAt)));
     const [thisMonthTasks] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(tasks).where(and(eq(tasks.tenantId, ctx.tenantId), gte(tasks.createdAt, thisMonthStart)));
+      .from(tasks).where(and(eq(tasks.tenantId, ctx.tenantId), gte(tasks.createdAt, thisMonthStart), isNull(tasks.deletedAt)));
     const [thisMonthTickets] = await db.select({ count: sql<number>`count(*)::int` })
       .from(supportTickets).where(and(eq(supportTickets.tenantId, ctx.tenantId), gte(supportTickets.createdAt, thisMonthStart)));
     const [thisMonthCompanies] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(companies).where(and(eq(companies.tenantId, ctx.tenantId), gte(companies.createdAt, thisMonthStart)));
+      .from(companies).where(and(eq(companies.tenantId, ctx.tenantId), gte(companies.createdAt, thisMonthStart), isNull(companies.deletedAt)));
     const [thisMonthEmails] = await db.select({ count: sql<number>`count(*)::int` })
       .from(emailLog).where(and(eq(emailLog.tenantId, ctx.tenantId), gte(emailLog.createdAt, thisMonthStart)));
 
@@ -38,17 +38,17 @@ export async function GET(request: NextRequest) {
       .from(tasks).where(and(eq(tasks.tenantId, ctx.tenantId), gte(tasks.createdAt, lastMonthStart), sql`${tasks.createdAt} < ${lastMonthEnd}`));
 
     // Total counts
-    const [totalContacts] = await db.select({ count: sql<number>`count(*)::int` }).from(contacts).where(eq(contacts.tenantId, ctx.tenantId));
-    const [totalDeals] = await db.select({ count: sql<number>`count(*)::int` }).from(deals).where(eq(deals.tenantId, ctx.tenantId));
-    const [totalTasks] = await db.select({ count: sql<number>`count(*)::int` }).from(tasks).where(eq(tasks.tenantId, ctx.tenantId));
+    const [totalContacts] = await db.select({ count: sql<number>`count(*)::int` }).from(contacts).where(and(eq(contacts.tenantId, ctx.tenantId), isNull(contacts.deletedAt)));
+    const [totalDeals] = await db.select({ count: sql<number>`count(*)::int` }).from(deals).where(and(eq(deals.tenantId, ctx.tenantId), isNull(deals.deletedAt)));
+    const [totalTasks] = await db.select({ count: sql<number>`count(*)::int` }).from(tasks).where(and(eq(tasks.tenantId, ctx.tenantId), isNull(tasks.deletedAt)));
     const [totalTickets] = await db.select({ count: sql<number>`count(*)::int` }).from(supportTickets).where(eq(supportTickets.tenantId, ctx.tenantId));
-    const [totalCompanies] = await db.select({ count: sql<number>`count(*)::int` }).from(companies).where(eq(companies.tenantId, ctx.tenantId));
+    const [totalCompanies] = await db.select({ count: sql<number>`count(*)::int` }).from(companies).where(and(eq(companies.tenantId, ctx.tenantId), isNull(companies.deletedAt)));
 
     // Deal value
     const [thisMonthDealValue] = await db.select({ total: sql<string>`coalesce(sum(${deals.amount})::numeric, 0)` })
-      .from(deals).where(and(eq(deals.tenantId, ctx.tenantId), gte(deals.createdAt, thisMonthStart)));
+      .from(deals).where(and(eq(deals.tenantId, ctx.tenantId), gte(deals.createdAt, thisMonthStart), isNull(deals.deletedAt)));
     const [totalDealValue] = await db.select({ total: sql<string>`coalesce(sum(${deals.amount})::numeric, 0)` })
-      .from(deals).where(eq(deals.tenantId, ctx.tenantId));
+      .from(deals).where(and(eq(deals.tenantId, ctx.tenantId), isNull(deals.deletedAt)));
 
     // Recent activity
     const recentActivity = await db.select({

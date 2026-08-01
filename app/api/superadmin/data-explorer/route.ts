@@ -378,6 +378,7 @@ const deleteRecordSchema = z.object({
   table: z.string().min(1),
   id: z.string().min(1),
   softDelete: z.boolean().optional(),
+  confirm: z.boolean().optional(),
 });
 
 // Column allowlist per table for dynamic SQL updates (Issue #683)
@@ -493,12 +494,16 @@ export async function DELETE(req: NextRequest) {
 
     const allowedTables = [
       'contacts', 'leads', 'deals', 'companies',
-      'tasks', 'webhooks', 'api_keys',
+      'tasks', 'webhooks',
       'email_templates', 'workflows', 'automations', 'forms',
       'tags', 'notes',
     ];
     if (!allowedTables.includes(table)) {
       return NextResponse.json({ error: `Table '${table}' is not allowed for deletion` }, { status: 400 });
+    }
+
+    if (!softDelete && !validated.data.confirm) {
+      return NextResponse.json({ error: 'Hard delete requires confirm: true in request body' }, { status: 400 });
     }
 
     if (softDelete) {

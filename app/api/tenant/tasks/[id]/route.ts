@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateTaskSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
@@ -33,12 +33,19 @@ export async function PATCH(req: NextRequest, { params }: any) {
     const v = validated.data;
 
     const [existing] = await db
-      .select({ id: tasks.id, updatedAt: tasks.updatedAt })
+      .select({ id: tasks.id, assignedTo: tasks.assignedTo, createdBy: tasks.createdBy, updatedAt: tasks.updatedAt })
       .from(tasks)
       .where(and(eq(tasks.id, id), eq(tasks.tenantId, ctx.tenantId), isNull(tasks.deletedAt)))
       .limit(1);
 
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // RBAC: if user lacks view_all, only allow editing own tasks
+    if (!can(ctx, 'tasks.view_all')) {
+      if (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
 
  
  
@@ -127,6 +134,20 @@ export async function DELETE(req: NextRequest, { params }: any) {
     if (deny) return deny;
 
     const id = (await params).id;
+
+    // RBAC: if user lacks view_all, only allow deleting own tasks
+    if (!can(ctx, 'tasks.view_all')) {
+      const [existing] = await db
+        .select({ assignedTo: tasks.assignedTo, createdBy: tasks.createdBy })
+        .from(tasks)
+        .where(and(eq(tasks.id, id), eq(tasks.tenantId, ctx.tenantId), isNull(tasks.deletedAt)))
+        .limit(1);
+
+      if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      if (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
 
     const [row] = await db.update(tasks)
       .set({ 

@@ -7,6 +7,7 @@ import { eq, and } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateRoleSchema } from '@/lib/api/schemas';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
  
  
@@ -23,6 +24,11 @@ export async function PATCH(request: NextRequest, { params }: any) {
     const validated = validateBody(updateRoleSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const { name, description, permissions } = validated.data;
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = rawBody.expectedUpdatedAt ? new Date(rawBody.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, roles, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const [row] = await db.update(roles)
       .set({

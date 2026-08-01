@@ -1,0 +1,32 @@
+{
+  "project_type": "Next.js 14 TypeScript multi-tenant SaaS CRM with Drizzle ORM + PostgreSQL",
+  "language": "TypeScript",
+  "build_system": "npm/pnpm with Next.js build, vitest for testing",
+  "test_framework": "vitest with tests/unit/ directory, vitest.setup.ts, path aliases via @/",
+  "build_command": "npx tsc --noEmit --pretty",
+  "test_command": "npx vitest run tests/unit/ --reporter=verbose",
+  "verification_instructions": "Run typecheck, then run unit tests. Both must pass.",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "Node 22+, pnpm install (node_modules already present)",
+  "environment_constraints": "OPEN_INTERNET network mode. No running database available - validation via typecheck and unit tests only.",
+  "contribution_requirements": "Branch fix/critical-app-scan-3 from main. Commit with descriptive messages.",
+  "key_patterns": "API routes in app/api/tenant/, lib/ for business logic, components/tenant/ for UI, Zod schemas in lib/api/schemas/, requireAuth + requirePerm for auth, vitest mocking patterns in tests/unit/",
+  "relevant_files": [
+    "lib/export/index.ts",
+    "app/api/tenant/deals/export/route.ts",
+    "app/api/tenant/contacts/export/route.ts",
+    "app/api/tenant/notifications/stream/route.ts",
+    "lib/automation/workflow-executor.ts",
+    "lib/automation/engine.ts",
+    "app/api/tenant/deals/import/route.ts",
+    "app/api/tenant/contacts/import/route.ts",
+    "app/api/tenant/companies/import/route.ts",
+    "app/api/tenant/leads/import/route.ts",
+    "components/tenant/import-modal.tsx",
+    "app/api/tenant/admin/picklists/route.ts",
+    "tests/unit/export.test.ts",
+    "tests/unit/automation-engine.test.ts",
+    "tests/unit/workflows.test.ts"
+  ],
+  "directory_structure": "app/api/tenant/ - API routes, lib/ - business logic, components/ - React components, tests/unit/ - unit tests, drizzle/ - DB schema"
+}

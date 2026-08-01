@@ -2,17 +2,15 @@ name: Deploy
 
 # Runs only after the CI workflow has gone green for a commit on main.
 #
-# This used to trigger directly on `push: [main]` and re-run its own truncated
-# copy of CI before deploying: `npm test`, then lint, then build. `npm test` is
-# `vitest run`, i.e. every suite including tests/integration -- but this job has
-# no postgres service, no redis service and none of the env CI sets, so those
-# suites could not pass here. The result was 387 runs and zero successes: the
-# workflow never reached the Docker build, and nothing was ever deployed.
+# The app on the production VM runs via pm2 (`nucrm-prod`, `next start` on
+# port 3099 behind nginx), not Docker. Docker hosts only the monitoring stack
+# (prometheus/grafana/promtail/alertmanager). A Docker-image-based rolling
+# update therefore can never deploy the app, and the compose file has no
+# `app` service at all.
 #
-# CI already runs lint, typecheck, unit tests, integration tests, secret scan,
-# SAST and build on every push to main, with the services those need. So rather
-# than reproduce a subset of it badly, wait for it and deploy the commit it
-# passed on.
+# The deploy is a git-based update on the VM: fetch the exact commit CI
+# tested, install deps, build, restart pm2, gate on the health endpoint,
+# and roll back to the previous commit if the new build is unhealthy.
 on:
   workflow_run:
     workflows: ["CI"]
@@ -40,7 +38,7 @@ jobs:
 
     steps:
       # github.sha is not the commit CI tested, so pin everything to head_sha.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
@@ -66,50 +64,61 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # npm ci + next build (with typecheck) on the 2-CPU VM takes
+          # ~25-30 min; the 10m default and even 30m were too short.
+          command_timeout: 60m
           script: |
             set -e
-            cd /opt/nucrm
+            cd /home/vinayak_shruti_biz
 
-            echo "Pulling new image..."
-            docker compose pull app
+            # Non-interactive SSH does not source .bashrc, so the nvm
+            # toolchain (node/npm/pm2) is not on PATH. Load it explicitly.
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-            echo "Starting rolling update..."
-            docker compose up -d --no-deps --scale app=2 --no-recreate app
+            echo "Fetching latest code..."
+            git fetch origin main
+            git checkout --force ${{ github.event.workflow_run.head_sha }}
+            echo "Checked out ${{ github.event.workflow_run.head_sha }}"
 
-            echo "Waiting for new container health check..."
-            NEW_CONTAINER=""
+            echo "Installing dependencies..."
+            npm ci --no-audit --no-fund
+
+            echo "Building..."
+            npm run build
+
+            echo "Restarting app (pm2)..."
+            pm2 restart nucrm-prod --update-env
+            pm2 save
+
+            echo "Waiting for app health check..."
             HEALTHY=""
             for i in $(seq 1 ${{ env.HEALTH_CHECK_RETRIES }}); do
-              NEW_CONTAINER=$(docker compose ps -q app | tail -1)
-              if [ -n "$NEW_CONTAINER" ]; then
-                STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$NEW_CONTAINER" 2>/dev/null || echo "starting")
-                if [ "$STATUS" = "healthy" ]; then
-                  HEALTHY="yes"
-                  echo "New container healthy after ${i}x${{ env.HEALTH_CHECK_INTERVAL }}s"
-                  break
-                fi
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://127.0.0.1:3099/api/health || echo "000")
+              if [ "$STATUS" = "200" ]; then
+                HEALTHY="yes"
+                echo "App healthy after ${i}x${{ env.HEALTH_CHECK_INTERVAL }}s"
+                break
               fi
+              echo "Attempt $i: health endpoint returned $STATUS"
               sleep ${{ env.HEALTH_CHECK_INTERVAL }}
             done
 
-            # Gate on health, not on existence. This used to test -z "$NEW_CONTAINER",
-            # which is empty only if `docker compose ps -q` returned nothing at all --
-            # so a container that started and stayed unhealthy, or never passed its
-            # healthcheck within the timeout, counted as a successful deploy and the
-            # old healthy container was then stopped underneath it.
+            # Gate on the health endpoint, not on process existence. pm2 can
+            # report "online" while the app fails to serve.
             if [ -z "$HEALTHY" ]; then
-              echo "ERROR: new container did not become healthy. Rolling back."
-              docker compose up -d --no-deps --scale app=1 app
+              echo "ERROR: app did not become healthy. Rolling back to previous commit."
+              git checkout --force ${{ github.event.workflow_run.head_sha }}^
+              npm run build
+              pm2 restart nucrm-prod --update-env
+              pm2 save
+              git checkout main
               exit 1
             fi
 
-            echo "Stopping old container..."
-            OLD_CONTAINER=$(docker compose ps -q app | head -1)
-            docker stop "$OLD_CONTAINER" 2>/dev/null || true
-            docker compose up -d --no-deps --scale app=1 app
-
-            echo "Cleaning up..."
-            docker container prune -f
-            docker image prune -f
+            # The deploy host is also the dev host; leave the repo on main
+            # instead of a detached HEAD. The running app keeps serving the
+            # built artifacts from the deployed commit.
+            git checkout main
 
             echo "Deploy complete: ${{ github.event.workflow_run.head_sha }}"

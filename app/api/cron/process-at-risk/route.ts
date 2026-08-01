@@ -2,7 +2,7 @@ import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
-import { isNull } from 'drizzle-orm';
+import { and, isNull, sql } from 'drizzle-orm';
 import { getAtRiskDeals, AtRiskResult } from '@/lib/ai/at-risk';
 import { sendEmail } from '@/lib/email/service';
 import { formatCurrency } from '@/lib/utils';
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     // 1. Fetch all active tenants
     const activeTenants = await db.select({ id: tenants.id })
       .from(tenants)
-      .where(isNull(tenants.deletedAt));
+      .where(and(isNull(tenants.deletedAt), sql`${tenants.status} IN ('active', 'trialing')`));
 
     let totalDealsFlagged = 0;
     let totalEmailsSent = 0;
