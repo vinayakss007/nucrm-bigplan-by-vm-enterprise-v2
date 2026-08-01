@@ -40,41 +40,6 @@ const REDACTED = '[REDACTED]';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * Keys each entity handler actually reads off the (camelCased) payload.
- * Derived by inspection of the handlers below — keep in sync when a handler
- * starts or stops consuming a field.
- */
-const ENTITY_RECOGNISED_KEYS: Record<string, readonly string[]> = {
-  contact: [
-    'email', 'firstName', 'lastName', 'phone', 'companyId', 'assignedTo',
-    'leadStatus', 'leadSource', 'notes', 'tags', 'score', 'city', 'country',
-    'website', 'linkedinUrl', 'twitterUrl',
-  ],
-  lead: [
-    'email', 'firstName', 'lastName', 'phone', 'mobile', 'title', 'companyName',
-    'leadSource', 'leadStatus', 'lifecycleStage', 'assignedTo', 'tags', 'notes',
-    'ownerId',
-  ],
-  deal: [
-    'title', 'value', 'probability', 'stage', 'closeDate', 'contactId',
-    'companyId', 'assignedTo', 'notes',
-  ],
-  company: [
-    'name', 'industry', 'size', 'website', 'phone', 'address', 'notes',
-  ],
-  task: [
-    'title', 'description', 'dueDate', 'priority', 'contactId', 'dealId',
-    'assignedTo', 'completed',
-  ],
-};
-
-/** Recognised for every entity: the record identifier and the explicit escape hatch. */
-const COMMON_RECOGNISED_KEYS: readonly string[] = ['id', 'customFields'];
-
-/** Envelope fields consumed by the route itself rather than by an entity handler. */
-const ENVELOPE_KEYS: readonly string[] = ['action', 'entity', 'data', 'batch'];
-
 // Rate limiter: 100 requests per API key per minute
 const inboundLimiter = new RateLimiter({ max: 100, window: 60 });
 
@@ -158,11 +123,6 @@ function normalizeFields(data: Record<string, unknown>): Record<string, unknown>
   return out;
 }
 
-/** Convert a single snake_case key to camelCase (same rule as normalizeFields). */
-function toCamelKey(key: string): string {
-  return key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
-}
-
 /**
  * Return `value` only when it is a well-formed uuid, otherwise null.
  * `record_id` is a uuid column — anything else must not reach it.
@@ -216,7 +176,7 @@ const HANDLER_KEYS: Record<string, readonly string[]> = {
  * A key routed by a field mapping counts as recognised — that is the whole point
  * of configuring the mapping — so `mappedSourceKeys` are excluded.
  */
-function collectIgnoredKeys(
+export function collectIgnoredKeys(
   entity: string,
   data: Record<string, unknown>,
   mappedSourceKeys: readonly string[] = []
@@ -315,28 +275,6 @@ export function redactHeaders(headers: HeaderLike | null | undefined): Record<st
     out[key] = SENSITIVE_HEADERS.has(key.toLowerCase()) ? REDACTED : value;
   }
   return out;
-}
-
-/**
- * Top-level keys of `data` that the handler for `entity` does not consume.
- * Purely informational — unmapped values are never written to the record.
- */
-export function collectIgnoredKeys(entity: string, data: Record<string, unknown>): string[] {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return [];
-  const entityKeys = ENTITY_RECOGNISED_KEYS[entity];
-  if (!entityKeys) return [];
-
-  const recognised = new Set<string>([
-    ...entityKeys,
-    ...COMMON_RECOGNISED_KEYS,
-    ...ENVELOPE_KEYS,
-  ]);
-
-  const ignored: string[] = [];
-  for (const key of Object.keys(data)) {
-    if (!recognised.has(toCamelKey(key))) ignored.push(key);
-  }
-  return ignored;
 }
 
 /**
