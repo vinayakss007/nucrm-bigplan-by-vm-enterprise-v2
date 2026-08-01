@@ -14,6 +14,7 @@ import { ssoProviders } from '@/drizzle/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { encrypt } from '@/lib/crypto';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 interface OidcProviderInput {
   name: string;
@@ -53,6 +54,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = await rateLimitMutating(request, 'ssoProviders', 'post');
+  if (limited) return limited;
+
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
   if (!ctx.isAdmin) {

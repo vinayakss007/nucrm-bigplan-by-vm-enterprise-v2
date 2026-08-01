@@ -55,10 +55,10 @@ export default defineConfig({
       // The remaining exclusions are type-only or barrel files with nothing to
       // execute. Please do not add a module here to make a build pass.
       thresholds: {
-        lines: 70,
-        functions: 70,
-        branches: 80,
-        statements: 70,
+        lines: 72,
+        functions: 72,
+        branches: 82,
+        statements: 72,
       },
     },
     testTimeout: 15000,

@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Fix financial calculation bugs: invoice discount/tax rounding, currency conversion for zero-decimal currencies, pipeline widget double-counting won/lost deals, and analytics usage queries missing soft-delete filters",
+  "status": "completed",
+  "steps": [
+    "1. Fix app/api/tenant/invoices/route.ts POST: The invoice creation calculates discountAmount as a fixed number (discount ?? 0) but the discount parameter might be a percentage. The taxableAmount subtracts discountAmount from subtotal, but if discountType is 'percentage' then discountAmount should be calculated as subtotal * discount/100. Currently discountType is always set to 'fixed' when discount > 0, which means a percentage discount entered by the user gets stored as a fixed amount without computing the actual dollar value. Fix: when the caller passes discount_type='percentage', compute discountAmount = subtotal * discount / 100; otherwise use the raw value. Round all money values using toFixed(2).",
+    "2. Fix lib/currency.ts convertAmount(): For zero-decimal currencies (JPY, KRW, IDR, HUF, CLP) the function rounds to 2 decimal places via Math.round(amount * rate * 100) / 100, but these currencies should round to 0 decimal places. Fix: look up the target currency's decimalPlaces from SUPPORTED_CURRENCIES and round accordingly.",
+    "3. Fix app/api/tenant/dashboard/widgets/stats/pipeline/route.ts: The pipeline total widget sums ALL non-deleted deals (including won and lost). A pipeline value widget should only show OPEN deals (excluding terminal stages like won/lost). Fix: add a subquery to exclude deals whose stage name is 'won' or 'lost' (same pattern used in deal-velocity/route.ts).",
+    "4. Fix app/api/tenant/analytics/usage/route.ts: Multiple queries (thisMonthContacts, thisMonthDeals, thisMonthTasks, totalContacts, totalDeals, totalTasks, totalCompanies, thisMonthDealValue, totalDealValue) are missing the deleted_at IS NULL filter. This inflates counts with soft-deleted records. Fix: add isNull(table.deletedAt) or sql`deleted_at IS NULL` to each WHERE clause that is missing it.",
+    "5. Fix app/api/metrics/route.ts: The contacts count query (line 40) has no deletedAt filter: db.select({ value: count() }).from(contacts) counts all contacts including deleted ones. Fix: add .where(isNull(contacts.deletedAt)) to the contacts total count and the contactsCreated query.",
+    "6. Fix app/api/tenant/invoices/route.ts GET: The count query uses eq(invoices.tenantId, tenantId) without filtering for deleted invoices, inflating pagination total. Fix: add sql`${invoices.deletedAt} IS NULL` to both the list WHERE conditions and the count query."
+  ],
+  "acceptance_criteria": [
+    "Currency conversion for JPY amounts rounds to 0 decimal places",
+    "Pipeline widget excludes won/lost deals from total",
+    "Analytics usage endpoint excludes soft-deleted records from all counts",
+    "Metrics endpoint contacts count excludes soft-deleted contacts",
+    "Invoice list endpoint excludes soft-deleted invoices from count",
+    "Invoice creation handles percentage discounts correctly",
+    "All existing vitest tests still pass"
+  ],
+  "verification": [
+    "npx tsc --noEmit completes without errors",
+    "npx vitest run passes"
+  ],
+  "blocked_reason": null,
+  "findings": "All 6 fixes implemented and verified. TypeScript compiles cleanly. 5 pre-existing test failures (ENCRYPTION_KEY env validation) confirmed present on base branch - not caused by these changes. The lint-staged pre-commit hook ran eslint and prettier successfully."
+}

@@ -9,6 +9,7 @@ import { eq, and, sql, ilike, isNull } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
+import { escapeIlikeWildcards } from '@/lib/export';
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
     ];
 
     if (q) {
-      filters.push(ilike(companies.name, `%${q}%`));
+      filters.push(ilike(companies.name, `%${escapeIlikeWildcards(q)}%`));
     }
     if (industry) {
       filters.push(eq(companies.industry, industry));

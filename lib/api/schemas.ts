@@ -426,7 +426,10 @@ export const createFormSchema = z.object({
     type: z.string(),
     required: z.boolean().optional().default(false),
     options: z.array(z.string()).optional(),
-  })).min(1, 'At least one field required'),
+  })).min(1, 'At least one field required').refine(
+    (fields) => new Set(fields.map(f => f.id)).size === fields.length,
+    { message: 'Duplicate field IDs are not allowed' }
+  ),
   is_active: z.boolean().optional().default(true),
   redirect_url: urlField,
   success_message: z.string().trim().max(500).nullable().optional(),

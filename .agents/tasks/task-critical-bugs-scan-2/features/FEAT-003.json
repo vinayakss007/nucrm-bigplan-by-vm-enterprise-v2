@@ -1,0 +1,23 @@
+{
+  "id": "FEAT-003",
+  "type": "fix",
+  "description": "Fix automation engine SSRF vulnerability (fire_webhook action allows requests to internal networks), fix Stripe webhook plan detection fallback that uses amount-based heuristic instead of price metadata, and fix CSRF bypass on password reset endpoint",
+  "status": "completed",
+  "steps": [
+    "In lib/automation/engine.ts, in the 'fire_webhook' case of executeAction, add URL validation before calling fetch. Parse the URL, reject: (1) non-http/https protocols, (2) hostnames that resolve to private/internal IPs (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, ::1, fd00::/8), (3) common internal hostnames (localhost, *.internal, metadata services like 169.254.169.254). Create a helper function isAllowedWebhookUrl(url: string): boolean. If the URL is not allowed, log a warning and return without making the request.",
+    "In app/api/webhooks/stripe/route.ts, fix the handleCheckoutCompleted function. Currently determinePlanFromSession uses a naive amount-based heuristic ($29=starter, $79=pro, else enterprise). This breaks whenever prices change. Instead: (1) First try to get the price ID from session.line_items or the subscription metadata. (2) If price ID is found, use the same determinePlanFromSubscription logic (env var mapping). (3) Only fall back to the amount heuristic if no price ID can be determined. Also, when fetching the session, if subscription is available, call determinePlanFromSubscription on it directly.",
+    "In lib/auth/csrf.ts, in the needsCsrfValidation function, the /api/auth/forgot-password endpoint is CSRF-exempt. This is incorrect - an attacker can trigger password reset emails for any user by forging a POST from their site. Remove the forgot-password exemption. The only truly pre-auth routes that need exemption are login and signup (where no session cookie exists yet to double-submit). forgot-password, while technically callable without auth, should still validate CSRF if the user has a session cookie, or at minimum be rate-limited. Since removing it from the exempt list means users without a CSRF cookie cannot use it, add a comment noting this is intentional - the forgot-password form page should set a CSRF cookie before the POST."
+  ],
+  "acceptance_criteria": [
+    "fire_webhook action rejects URLs targeting private/internal networks",
+    "fire_webhook action rejects non-http/https protocols",
+    "Stripe webhook plan detection uses price ID mapping before falling back to amount heuristic",
+    "CSRF validation is required for /api/auth/forgot-password",
+    "TypeScript compiles without errors"
+  ],
+  "verification": [
+    "Run npx next build to confirm TypeScript compilation passes"
+  ],
+  "blocked_reason": null,
+  "findings": "Build passes with exit code 0. Pre-existing Turbopack errors (missing sonner module, ContactTimeline export, getMetrics export) are unrelated to this change and exist on base state. ESLint and prettier pass via lint-staged pre-commit hook."
+}

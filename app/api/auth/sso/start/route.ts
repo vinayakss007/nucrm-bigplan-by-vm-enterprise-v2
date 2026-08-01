@@ -72,7 +72,8 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Provider config could not be decrypted';
     console.error('[sso/start] decrypt failed', msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    // Never expose the internal error — it may contain cipher details or the encrypted blob.
+    return NextResponse.json({ error: 'SSO provider configuration error. Contact your administrator.' }, { status: 500 });
   }
   // Defence in depth: domain match should already be true via the SQL filter,
   // but reject if the JSON shape was tampered with at write time.
@@ -110,7 +111,8 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Could not build authorize URL';
     console.error('[sso/start] discovery/authorize failed', msg);
-    return NextResponse.json({ error: msg }, { status: 502 });
+    // Never expose the identity provider's error details to the client.
+    return NextResponse.json({ error: 'SSO login could not be initiated. Please try again or contact support.' }, { status: 502 });
   }
 
   return NextResponse.redirect(authorizeUrl, 302);

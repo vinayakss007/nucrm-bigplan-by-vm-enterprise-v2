@@ -52,12 +52,13 @@ export async function GET(request: NextRequest) {
     if (company_id) filters.push(eq(contacts.companyId, company_id));
 
     if (q) {
+      const escapedQ = q.replace(/%/g, '\\%').replace(/_/g, '\\_');
       filters.push(or(
-        ilike(contacts.firstName, `%${q}%`),
-        ilike(contacts.lastName, `%${q}%`),
-        ilike(contacts.email, `%${q}%`),
-        ilike(contacts.phone, `%${q}%`),
-        ilike(companies.name, `%${q}%`)
+        ilike(contacts.firstName, `%${escapedQ}%`),
+        ilike(contacts.lastName, `%${escapedQ}%`),
+        ilike(contacts.email, `%${escapedQ}%`),
+        ilike(contacts.phone, `%${escapedQ}%`),
+        ilike(companies.name, `%${escapedQ}%`)
       )!);
     }
 

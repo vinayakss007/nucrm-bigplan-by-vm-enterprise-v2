@@ -103,8 +103,8 @@ export async function POST(request: NextRequest) {
 
     const sessionId = (res.rows[0] as Record<string, unknown>)?.session_id as string | undefined;
 
-    // Create session token for impersonated user
-    const token = await createToken(targetUserId);
+    // Create session token for impersonated user (1-day expiry to limit blast radius)
+    const token = await createToken(targetUserId, 1);
     const response = NextResponse.json({
       ok: true,
       sessionId,
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
       token,
     });
     
-    await setSessionCookie(token);
+    await setSessionCookie(token, 1);
 
     logSuperAdminAction({
       adminId: ctx.userId,

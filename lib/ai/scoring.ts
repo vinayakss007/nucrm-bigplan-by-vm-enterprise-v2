@@ -100,6 +100,25 @@ Format: {"score": number, "reason": "brief explanation", "factors": {"factor_nam
 
   // 6. Persist to DB + sync to contacts atomically
   await db.transaction(async (tx) => {
+    // Acquire row-level lock to prevent concurrent scoring from overwriting each other
+    try {
+      await tx.execute(
+        sql`SELECT 1 FROM contact_scores WHERE contact_id = ${contactId} FOR UPDATE`
+      );
+    } catch {
+      // Row may not exist yet (first scoring) - that's fine, INSERT will serialize via unique constraint
+    }
+
+    // Also lock the contacts row to prevent concurrent writes to contacts.score
+    // from other transactions (e.g., manual score overrides, bulk updates)
+    try {
+      await tx.execute(
+        sql`SELECT 1 FROM contacts WHERE id = ${contactId} FOR UPDATE`
+      );
+    } catch {
+      // Defensive: if contacts row doesn't exist, the update below will be a no-op
+    }
+
     await tx.insert(contactScores)
       .values({
         tenantId,

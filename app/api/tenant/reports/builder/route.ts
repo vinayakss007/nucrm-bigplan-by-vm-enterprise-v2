@@ -184,7 +184,7 @@ async function executeReport(params: ReportParams): Promise<ReportResult> {
     conditions.push(sql`${sql.identifier(tableName)}.created_at <= ${new Date(dateRange.to)}`);
   }
 
-  if (['contacts', 'deals'].includes(entity)) {
+  if (['contacts', 'deals', 'tasks', 'companies', 'activities'].includes(entity)) {
     conditions.push(sql`${sql.identifier(tableName)}.deleted_at IS NULL`);
   }
 
