@@ -276,6 +276,7 @@ export const deals = pgTable('deals', {
   closeDate: timestamp('close_date', { withTimezone: true }),
   assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }),
   
+  customFields: jsonb('custom_fields').default({}),
   metadata: utils.metadata(),
   
   ...utils.audit(),

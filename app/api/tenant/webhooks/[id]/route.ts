@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { integrations } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -29,6 +30,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
     
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // Optimistic concurrency guard
+    const expectedUpdatedAt = rawBody?.expectedUpdatedAt ?? rawBody?._updated_at;
+    if (expectedUpdatedAt) {
+      const guard = await concurrencyGuard(db, integrations, id, ctx.tenantId, expectedUpdatedAt);
+      if (guard) return guard;
+    }
     
     const currentConfig = (existing.config ?? {}) as Record<string, unknown>;
     const newConfig = {

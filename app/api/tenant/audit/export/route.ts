@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { auditLogs, users } from '@/drizzle/schema';
 import { eq, and, gte, lte, desc } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { escapeCSV } from '@/lib/export';
 
 /**
  * GET /api/tenant/audit/export
@@ -65,15 +66,15 @@ export async function GET(request: NextRequest) {
       const csvRows = [
         headers.join(','),
         ...entries.map(e => [
-          e.id,
-          e.action,
-          e.entityType,
-          e.entityId || '',
-          e.userId || '',
-          e.userEmail || '',
-          `"${(e.userName || '').replace(/"/g, '""')}"`,
-          e.ipAddress || '',
-          e.createdAt ? new Date(e.createdAt).toISOString() : '',
+          escapeCSV(e.id),
+          escapeCSV(e.action),
+          escapeCSV(e.entityType),
+          escapeCSV(e.entityId),
+          escapeCSV(e.userId),
+          escapeCSV(e.userEmail),
+          escapeCSV(e.userName),
+          escapeCSV(e.ipAddress),
+          escapeCSV(e.createdAt ? new Date(e.createdAt).toISOString() : ''),
         ].join(',')),
       ];
 

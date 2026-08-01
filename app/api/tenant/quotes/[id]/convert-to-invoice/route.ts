@@ -137,6 +137,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             console.warn('[convert-to-invoice] activity insert failed:', (err as Error).message);
           }
 
+          // Update the quote status to 'accepted'
+          await tx.update(quotes).set({
+            status: 'accepted',
+            acceptedAt: new Date(),
+            updatedAt: new Date(),
+            updatedBy: ctx.userId,
+          }).where(eq(quotes.id, id));
+
           return inv;
         });
         break; // success

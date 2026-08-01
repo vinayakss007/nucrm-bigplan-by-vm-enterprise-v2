@@ -64,8 +64,9 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          # npm ci + next build on the 2-CPU VM exceeds the 10m default.
-          command_timeout: 30m
+          # npm ci + next build (with typecheck) on the 2-CPU VM takes
+          # ~25-30 min; the 10m default and even 30m were too short.
+          command_timeout: 60m
           script: |
             set -e
             cd /home/vinayak_shruti_biz
@@ -110,7 +111,14 @@ jobs:
               git checkout --force ${{ github.event.workflow_run.head_sha }}^
               npm run build
               pm2 restart nucrm-prod --update-env
+              pm2 save
+              git checkout main
               exit 1
             fi
+
+            # The deploy host is also the dev host; leave the repo on main
+            # instead of a detached HEAD. The running app keeps serving the
+            # built artifacts from the deployed commit.
+            git checkout main
 
             echo "Deploy complete: ${{ github.event.workflow_run.head_sha }}"

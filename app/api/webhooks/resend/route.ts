@@ -113,63 +113,70 @@ export async function POST(req: NextRequest) {
  * and cancel active sequence enrollments.
  */
 async function handleHardBounce(email: string, eventType: string): Promise<void> {
-  await db.transaction(async (tx) => {
-    // 1. Find and update contacts
-    const affectedContacts = await tx
+  // DNC flag + enrollment cancellation must be atomic: a contact flagged
+  // do-not-contact whose enrollments were left active would keep sending.
+  const affectedContacts = await db.transaction(async (tx) => {
+    const updatedContacts = await tx
       .update(contacts)
-      .set({ 
+      .set({
         doNotContact: true,
         metadata: sql`jsonb_set(
           COALESCE(${contacts.metadata}, '{}'::jsonb),
           '{bounceType}',
           '"hard"'
         ) || jsonb_build_object('lastBounceAt', ${new Date().toISOString()})`,
-        updatedAt: new Date() 
+        updatedAt: new Date()
       })
       .where(and(
         eq(contacts.email, email),
         eq(contacts.doNotContact, false),
         isNull(contacts.deletedAt)
       ))
-      .returning({ 
-        id: contacts.id, 
-        tenantId: contacts.tenantId, 
-        firstName: contacts.firstName 
+      .returning({
+        id: contacts.id,
+        tenantId: contacts.tenantId,
+        firstName: contacts.firstName
       });
 
-    if (affectedContacts.length > 0) {
-      const contactIds = affectedContacts.map(c => c.id);
-
-      // 2. Cancel active sequence enrollments
+    if (updatedContacts.length > 0) {
+      const contactIds = updatedContacts.map(c => c.id);
       await tx
         .update(sequenceEnrollments)
-        .set({ 
-          status: 'cancelled',
-          updatedAt: new Date()
-        })
+        .set({ status: 'cancelled', updatedAt: new Date() })
         .where(and(
           inArray(sequenceEnrollments.contactId, contactIds),
           eq(sequenceEnrollments.status, 'active')
         ));
-
-      // 3. Log activities
-      const activityInserts = affectedContacts.map(contact => ({
-        tenantId: contact.tenantId,
-        contactId: contact.id,
-        type: 'note',
-        description: eventType === 'email.bounced'
-          ? `Hard bounce detected - do not contact flag set automatically`
-          : `Email complaint received - do not contact flag set automatically`,
-        entityType: 'contact',
-        entityId: contact.id,
-        action: eventType
-      }));
-
-      await tx.insert(activities).values(activityInserts as unknown as typeof activities.$inferInsert[]);
-      
-      console.log(`[resend-webhook] ${eventType} (hard): ${affectedContacts.length} contact(s) marked DNC for ${email}`);
     }
+
+    return updatedContacts;
   });
+
+  if (affectedContacts.length > 0) {
+    console.log(`[resend-webhook] ${eventType} (hard): ${affectedContacts.length} contact(s) marked DNC for ${email}`);
+
+    // Activity logging is deliberately AFTER the commit and non-fatal.
+    // The activities table requires event_type (NOT NULL); using the wrong
+    // column name here used to cause a constraint violation that rolled
+    // back the entire transaction, undoing the compliance-critical DNC flag.
+    const activityInserts = affectedContacts.map(contact => ({
+      tenantId: contact.tenantId,
+      contactId: contact.id,
+      eventType: 'note',
+      description: eventType === 'email.bounced'
+        ? `Hard bounce detected - do not contact flag set automatically`
+        : `Email complaint received - do not contact flag set automatically`,
+      entityType: 'contact',
+      entityId: contact.id,
+      action: eventType
+    }));
+
+    try {
+      await db.insert(activities).values(activityInserts);
+    } catch (activityErr) {
+      await logError({ error: activityErr, context: 'resend-webhook:activity-log' });
+    }
+  }
 }
 
 /**
@@ -205,7 +212,7 @@ async function handleSoftBounce(email: string): Promise<void> {
     const shouldDnc = newCount >= SOFT_BOUNCE_THRESHOLD;
 
     if (shouldDnc) {
-      // Escalate to DNC
+      // Escalate to DNC — atomic flag + enrollment cancellation
       await db.transaction(async (tx) => {
         await tx
           .update(contacts)
@@ -230,19 +237,24 @@ async function handleSoftBounce(email: string): Promise<void> {
             eq(sequenceEnrollments.contactId, contact.id),
             eq(sequenceEnrollments.status, 'active')
           ));
+      });
 
-        await tx.insert(activities).values({
+      console.log(`[resend-webhook] Soft bounce escalated to DNC for contact ${contact.id} (${newCount} bounces)`);
+
+      // Activity logging is deliberately AFTER the commit and non-fatal.
+      try {
+        await db.insert(activities).values({
           tenantId: contact.tenantId,
           contactId: contact.id,
-          type: 'note',
+          eventType: 'note',
           description: `Soft bounce threshold reached (${newCount} within ${SOFT_BOUNCE_WINDOW_DAYS} days) - do not contact flag set automatically`,
           entityType: 'contact',
           entityId: contact.id,
           action: 'email.soft_bounce_escalated'
-        } as unknown as typeof activities.$inferInsert);
-      });
-
-      console.log(`[resend-webhook] Soft bounce escalated to DNC for contact ${contact.id} (${newCount} bounces)`);
+        });
+      } catch (activityErr) {
+        await logError({ error: activityErr, context: 'resend-webhook:activity-log' });
+      }
     } else {
       // Just track the soft bounce
       await db
