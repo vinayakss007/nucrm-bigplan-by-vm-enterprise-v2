@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'crypto';
 import { db } from '@/drizzle/db';
-import { apiKeys, webhookInboundLogs, contacts, leads, deals, companies, tasks } from '@/drizzle/schema';
-import { eq, and, or, isNull, gt, sql } from 'drizzle-orm';
+import { apiKeys, webhookInboundLogs, contacts, leads, deals, companies, tasks, dealStages, pipelines } from '@/drizzle/schema';
+import { eq, and, or, isNull, gt, sql, ilike, asc, desc } from 'drizzle-orm';
 import { RateLimiter, getRateLimitHeaders } from '@/lib/rate-limit';
 import { fireWebhooks, type WebhookEvent } from '@/lib/webhooks';
 import { logAudit } from '@/lib/audit';
@@ -21,6 +21,7 @@ const MAX_PAYLOAD_SIZE = 1_000_000; // 1 MB
 const MAX_BATCH_SIZE = 100;
 const VALID_ACTIONS = new Set(['create', 'update', 'upsert']);
 const VALID_ENTITIES = new Set(['contact', 'lead', 'deal', 'company', 'task']);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Max serialized size of the raw body we persist into webhook_inbound_logs.payload. */
 const MAX_STORED_PAYLOAD_BYTES = 64 * 1024; // 64 KB
@@ -271,6 +272,36 @@ async function resolveItemMapping(
     logError({ error: err, context: 'webhook-inbound:load-field-mappings' }).catch(() => undefined);
     return untouched;
   }
+}
+
+/**
+ * Coerce a caller-supplied money value into the string form Drizzle wants for a
+ * `decimal` column (`deals.amount` is `decimal(15, 2)`), mirroring
+ * `app/api/tenant/deals/route.ts` which writes `amount.toString()`.
+ *
+ * Numbers and numeric strings are accepted; a numeric string is passed through
+ * verbatim so '2500.50' keeps its scale instead of collapsing to '2500.5'.
+ * Anything non-numeric becomes '0' — never the string 'NaN', which Postgres
+ * would reject and which would otherwise turn a bad field into a 500.
+ */
+function toDecimalString(raw: unknown): string {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? String(raw) : '0';
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    if (!s) return '0';
+    return Number.isFinite(Number(s)) ? s : '0';
+  }
+  return '0';
+}
+
+/**
+ * A plain object, or `{}` for anything else. `typeof null === 'object'` and
+ * arrays are objects too, so both are rejected here — a jsonb column that is
+ * meant to hold a bag of keys should never receive `null` or `[]`.
+ */
+function asPlainObject(raw: unknown): Record<string, unknown> {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
+  return raw as Record<string, unknown>;
 }
 
 /**
@@ -569,6 +600,101 @@ async function handleLead(
   return { id: newLead?.id ?? null, action: 'created' };
 }
 
+interface ResolvedStage {
+  stageId: string;
+  pipelineId: string;
+}
+
+/**
+ * Resolve the stage the caller asked for, tenant-scoped.
+ *
+ * Mirrors `app/api/tenant/deals/route.ts`: a stage id wins over a stage name,
+ * and a name is matched case-insensitively against `deal_stages` joined to
+ * `pipelines` so the tenant filter lives on the pipeline row.
+ *
+ * A caller-supplied id is *never* trusted as-is: it has to come back from the
+ * tenant-scoped query, otherwise a webhook key for tenant A could park a deal on
+ * tenant B's stage. Returns null when the caller asked for nothing, or asked by
+ * a name that matches nothing (the caller's spelling is not authoritative — the
+ * create path then falls back to the default pipeline).
+ */
+async function resolveRequestedStage(
+  suppliedStageId: string | null,
+  stageName: string | null,
+  tenantId: string
+): Promise<ResolvedStage | null> {
+  if (suppliedStageId) {
+    if (!UUID_RE.test(suppliedStageId)) {
+      throw new Error(`stage_id must be a uuid (got "${suppliedStageId}"); use "stage" to reference a stage by name`);
+    }
+
+    const [row] = await db
+      .select({ id: dealStages.id, pipelineId: dealStages.pipelineId })
+      .from(dealStages)
+      .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
+      .where(and(
+        eq(dealStages.id, suppliedStageId),
+        eq(pipelines.tenantId, tenantId)
+      ))
+      .limit(1);
+
+    if (!row) {
+      throw new Error(`stage_id ${suppliedStageId} does not belong to this tenant`);
+    }
+    return { stageId: row.id, pipelineId: row.pipelineId };
+  }
+
+  if (stageName) {
+    const [row] = await db
+      .select({ id: dealStages.id, pipelineId: dealStages.pipelineId })
+      .from(dealStages)
+      .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
+      .where(and(
+        ilike(dealStages.name, stageName),
+        eq(pipelines.tenantId, tenantId)
+      ))
+      .limit(1);
+
+    if (row) return { stageId: row.id, pipelineId: row.pipelineId };
+  }
+
+  return null;
+}
+
+/**
+ * Fallback for a create with no usable stage input: the first stage of the
+ * tenant's default pipeline. `isDefault DESC` puts the flagged pipeline first
+ * and still yields a pipeline when none is flagged; `order ASC` then picks the
+ * left-most stage. Returns null when the tenant has no pipelines or no stages.
+ */
+async function resolveDefaultStage(tenantId: string): Promise<ResolvedStage | null> {
+  const [pipeline] = await db
+    .select({ id: pipelines.id })
+    .from(pipelines)
+    .where(and(
+      eq(pipelines.tenantId, tenantId),
+      isNull(pipelines.deletedAt)
+    ))
+    .orderBy(desc(pipelines.isDefault), asc(pipelines.createdAt))
+    .limit(1);
+
+  if (!pipeline) return null;
+
+  const [stage] = await db
+    .select({ id: dealStages.id, pipelineId: dealStages.pipelineId })
+    .from(dealStages)
+    .where(and(
+      eq(dealStages.tenantId, tenantId),
+      eq(dealStages.pipelineId, pipeline.id),
+      isNull(dealStages.deletedAt)
+    ))
+    .orderBy(asc(dealStages.order))
+    .limit(1);
+
+  if (!stage) return null;
+  return { stageId: stage.id, pipelineId: stage.pipelineId };
+}
+
 /**
  * Create or update a deal.
  */
@@ -583,21 +709,46 @@ async function handleDeal(
   const title = sanitizeString(d['title'] as string, 200);
   if (!title) throw new Error('title is required for deal');
 
-  const value = typeof d['value'] === 'number' ? d['value'] : (d['value'] ? parseFloat(String(d['value'])) || 0 : 0);
-  const probability = typeof d['probability'] === 'number' ? d['probability'] : (d['probability'] ? parseInt(String(d['probability'])) : 10);
+  // `deals` has no `value`, `stage`, `probability` or `notes` column. Every one of
+  // those keys used to be handed to Drizzle anyway, which emits only columns it
+  // knows about, so they were silently dropped on update while the caller got a
+  // 200. They are now mapped onto columns that exist: `value`/`amount` → `amount`,
+  // `stage`/`stage_id` → `stageId` (+ `pipelineId`), and `probability`/`notes` →
+  // keys inside the `customFields` jsonb, so nothing the caller sends is lost.
+  const amount = toDecimalString(d['amount'] ?? d['value']);
+
+  const customFields: Record<string, unknown> = { ...asPlainObject(d['customFields']) };
+  const probabilityRaw = d['probability'];
+  if (probabilityRaw !== undefined && probabilityRaw !== null) {
+    const n = typeof probabilityRaw === 'number' ? probabilityRaw : Number(String(probabilityRaw).trim());
+    // Keep a usable number when we can, otherwise keep the caller's own text
+    // rather than storing NaN.
+    customFields['probability'] = Number.isFinite(n) ? n : sanitizeString(String(probabilityRaw), 50);
+  }
+  const notes = sanitizeString(d['notes'] as string, 5000);
+  if (notes) customFields['notes'] = notes;
+
+  // normalizeFields() has already folded `stage_id` into `stageId`.
+  const suppliedStageId = sanitizeString(d['stageId'] as string, 64);
+  const stageName = sanitizeString(d['stage'] as string, 100);
+  // Only touch the stage columns when the caller actually said something about
+  // the stage — an update that omits it must leave the existing stage alone.
+  const requestedStage = (suppliedStageId || stageName)
+    ? await resolveRequestedStage(suppliedStageId, stageName, tenantId)
+    : null;
 
   const dealData = {
     title,
-    value: String(value), // Decimal in Drizzle
-    stage: sanitizeString(d['stage'] as string, 50) ?? 'lead',
-    probability,
+    amount,
     closeDate: d['closeDate'] ? new Date(d['closeDate'] as string) : null,
     contactId: (d['contactId'] as string) || null,
     companyId: (d['companyId'] as string) || null,
     assignedTo: (d['assignedTo'] as string) || userId,
-    notes: sanitizeString(d['notes'] as string, 5000),
-    customFields: typeof d['customFields'] === 'object' ? d['customFields'] : {},
+    customFields,
     updatedAt: new Date(),
+    ...(requestedStage
+      ? { stageId: requestedStage.stageId, pipelineId: requestedStage.pipelineId }
+      : {}),
   };
 
   if (action === 'update' || action === 'upsert') {
@@ -618,13 +769,28 @@ async function handleDeal(
     }
   }
 
+  // `stageId` is a `notNull()` uuid, so the old `stageId: ''` placeholder made
+  // every create fail with `invalid input syntax for type uuid: ""`. Resolve a
+  // real stage instead: what the caller asked for, else the default pipeline's
+  // first stage. No `as unknown as typeof deals.$inferInsert` cast is needed —
+  // every key below is now a genuine `deals` column, so the compiler checks the
+  // payload instead of a cast hiding the mismatch.
+  const stage = requestedStage ?? await resolveDefaultStage(tenantId);
+  if (!stage) {
+    throw new Error(
+      'Cannot determine a stage for this deal: send "stage_id" (a uuid belonging to this tenant) or "stage" (an existing stage name), or create a pipeline with at least one stage for this tenant first'
+    );
+  }
+
   const [newDeal] = await tx.insert(deals).values({
     ...dealData,
     tenantId,
-    stageId: '', // placeholder - will be resolved
+    stageId: stage.stageId,
+    pipelineId: stage.pipelineId,
+    stageEnteredAt: new Date(),
     createdBy: userId,
     createdAt: new Date(),
-  } as unknown as typeof deals.$inferInsert).returning();
+  }).returning();
 
   return { id: newDeal?.id ?? null, action: 'created' };
 }
@@ -705,6 +871,7 @@ async function handleTask(
     dealId: (d['dealId'] as string) || null,
     assignedTo: (d['assignedTo'] as string) || userId,
     completed: typeof d['completed'] === 'boolean' ? d['completed'] : false,
+    customFields: typeof d['customFields'] === 'object' ? d['customFields'] : {},
     updatedAt: new Date(),
   };
 
