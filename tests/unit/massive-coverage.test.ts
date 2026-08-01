@@ -5,6 +5,11 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Mock fetch to prevent real HTTP calls (Slack/Discord webhook tests were timing out)
+const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+vi.stubGlobal('fetch', mockFetch);
+
+
 describe('notifications - comprehensive', () => {
   beforeEach(() => {
     vi.resetModules();

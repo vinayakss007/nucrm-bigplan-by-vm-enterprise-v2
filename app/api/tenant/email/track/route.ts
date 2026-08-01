@@ -59,6 +59,26 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'url parameter required' }, { status: 400 });
       }
 
+      // Validate URL to prevent open redirect attacks
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(linkUrl);
+      } catch {
+        return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
+      }
+
+      // Only allow http and https protocols
+      if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+        return NextResponse.json({ error: 'Invalid URL protocol' }, { status: 400 });
+      }
+
+      // Reject localhost and internal network addresses
+      const hostname = parsedUrl.hostname.toLowerCase();
+      const blockedHosts = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]', '169.254.169.254'];
+      if (blockedHosts.includes(hostname) || hostname.endsWith('.local') || hostname.endsWith('.internal')) {
+        return NextResponse.json({ error: 'Invalid redirect target' }, { status: 400 });
+      }
+
       // Log click
       await db.insert(emailClicks).values({
         tenantId,

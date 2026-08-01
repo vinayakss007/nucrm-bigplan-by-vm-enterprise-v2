@@ -146,7 +146,12 @@ export async function convertAmount(
   }
 
   const rate = await getExchangeRate(fromCurrency, toCurrency);
-  const convertedAmount = Math.round(amount * rate * 100) / 100;
+
+  // Look up the target currency's decimal places for correct rounding
+  const targetCurrency = SUPPORTED_CURRENCIES.find(c => c.code === toCurrency);
+  const decimalPlaces = targetCurrency?.decimalPlaces ?? 2;
+  const factor = Math.pow(10, decimalPlaces);
+  const convertedAmount = Math.round(amount * rate * factor) / factor;
 
   return { convertedAmount, rate };
 }

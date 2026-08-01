@@ -184,9 +184,9 @@ export default function DealsKanbanPage() {
     return DEFAULT_STAGES;
   }, [stagesRes]);
 
-  /* eslint-disable react-hooks/exhaustive-deps */
+   
   useEffect(() => {
-    if (res?.deals && deals.length === 0) {
+    if (res?.deals) {
       setDeals(res.deals as Deal[]);
     }
   }, [res]);
@@ -221,22 +221,33 @@ export default function DealsKanbanPage() {
       }
     }
 
-    if (activeDeal.stageId !== newStageId) {
-      try {
-        const res = await fetch(`/api/tenant/deals/${activeDeal.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stageId: newStageId }),
-        });
-        
-        if (res.ok) {
-          setDeals(prev => prev.map(d => d.id === activeDeal.id ? { ...d, stageId: newStageId } : d));
-          mutate();
-          toast.success(`Deal moved to ${stages.find(s => s.id === newStageId)?.name}`);
-        }
-      } catch {
+    if (activeDeal.stageId === newStageId) return;
+
+    // Save previous state for rollback
+    const prevDeals = [...deals];
+
+    // Optimistic update
+    setDeals(prev => prev.map(d => d.id === activeDeal.id ? { ...d, stageId: newStageId } : d));
+
+    try {
+      const res = await fetch(`/api/tenant/deals/${activeDeal.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stageId: newStageId }),
+      });
+      
+      if (res.ok) {
+        toast.success(`Deal moved to ${stages.find(s => s.id === newStageId)?.name}`);
+        mutate();
+      } else {
+        // Revert on failure
+        setDeals(prevDeals);
         toast.error('Failed to move deal');
       }
+    } catch {
+      // Revert on error
+      setDeals(prevDeals);
+      toast.error('Failed to move deal');
     }
   };
 

@@ -96,10 +96,15 @@ describe('Webhooks Enhanced', () => {
       expect(getRetryDelay(4)).toBe(12 * 60 * 60 * 1000);
     });
 
-    it('returns -1 (dead letter) for attempt 5+', async () => {
+    it('returns 24 hours for attempt 5', async () => {
       const { getRetryDelay } = await import('@/lib/webhooks');
-      expect(getRetryDelay(5)).toBe(-1);
+      expect(getRetryDelay(5)).toBe(24 * 60 * 60 * 1000);
+    });
+
+    it('returns -1 (dead letter) for attempt 6+', async () => {
+      const { getRetryDelay } = await import('@/lib/webhooks');
       expect(getRetryDelay(6)).toBe(-1);
+      expect(getRetryDelay(7)).toBe(-1);
     });
 
     it('returns first delay for attempt 0 or negative', async () => {

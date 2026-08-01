@@ -42,6 +42,23 @@
     "node_modules",
     "tests/**",
     "scripts/**",
-    "**/*.stories.*"
+    "**/*.stories.*",
+    ".next",
+    ".cache",
+    ".config",
+    ".local",
+    "backups",
+    "tmp",
+    "leadgenious",
+    "nu2-byopen-510",
+    "nucrm-bigplan",
+    "nucrm-bigplan2",
+    "nucrm-enterprise",
+    "nucrm-full-version",
+    "nucrm-opencode",
+    "nucrm-other-virsions-backup",
+    "nucrm-vercel",
+    "nucrmplus-bigplan",
+    "vinayak-portfolio"
   ]
 }

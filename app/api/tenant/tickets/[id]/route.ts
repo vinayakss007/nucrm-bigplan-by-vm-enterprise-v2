@@ -10,6 +10,7 @@ import { sendEmail } from '@/lib/email/service';
 import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -77,6 +78,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const validated = validateBody(updateTicketSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
+
+    // Optimistic concurrency: reject if another update happened since client read
+    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, supportTickets, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
  
  

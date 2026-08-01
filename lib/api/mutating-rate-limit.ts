@@ -57,6 +57,17 @@ const MUTATING_LIMITS: Record<string, { post: number; patch: number; delete: num
   hierarchy: { post: 5, patch: 10, delete: 5 },
   customFields: { post: 10, patch: 10, delete: 5 },
   notifications: { post: 5, patch: 10, delete: 5 },
+  // Bulk operations — strict limits (expensive, high-impact)
+  bulk: { post: 5, patch: 5, delete: 5 },
+  // Billing & admin — strict limits (financial, irreversible)
+  billing: { post: 5, patch: 5, delete: 5 },
+  backup: { post: 3, patch: 3, delete: 3 },
+  calendarSync: { post: 10, patch: 10, delete: 5 },
+  branding: { post: 10, patch: 10, delete: 5 },
+  pipelines: { post: 10, patch: 10, delete: 5 },
+  activities: { post: 30, patch: 30, delete: 10 },
+  apiKeys: { post: 5, patch: 5, delete: 5 },
+  bulkTransfer: { post: 3, patch: 3, delete: 3 },
 };
 
 const DEFAULT_LIMITS = { post: 15, patch: 30, delete: 10 };

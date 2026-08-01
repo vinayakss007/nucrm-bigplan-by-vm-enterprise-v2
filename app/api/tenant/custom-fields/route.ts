@@ -7,7 +7,7 @@ import { db } from '@/drizzle/db';
 import { customFieldDefs, contacts, companies, deals, leads } from '@/drizzle/schema';
 import { users, tenants, featureRegistry } from '@/drizzle/schema';
 import { tasks } from '@/drizzle/schema';
-import { eq, and, asc, desc, sql } from 'drizzle-orm';
+import { eq, and, asc, desc, sql, isNull } from 'drizzle-orm';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
@@ -412,18 +412,22 @@ export async function DELETE(req: NextRequest) {
 
   let results;
   if (fieldId) {
-    results = await db.delete(customFieldDefs)
+    results = await db.update(customFieldDefs)
+      .set({ deletedAt: new Date() })
       .where(and(
         eq(customFieldDefs.id, fieldId),
-        eq(customFieldDefs.tenantId, ctx.tenantId)
+        eq(customFieldDefs.tenantId, ctx.tenantId),
+        isNull(customFieldDefs.deletedAt)
       ))
       .returning();
   } else {
-    results = await db.delete(customFieldDefs)
+    results = await db.update(customFieldDefs)
+      .set({ deletedAt: new Date() })
       .where(and(
         eq(customFieldDefs.tenantId, ctx.tenantId!),
         eq(customFieldDefs.entityType, entityType!),
-        eq(customFieldDefs.fieldKey, fieldKey!)
+        eq(customFieldDefs.fieldKey, fieldKey!),
+        isNull(customFieldDefs.deletedAt)
       ))
       .returning();
   }

@@ -37,6 +37,7 @@ export function createGoogleCalendarProvider(): CalendarProvider {
           redirect_uri: redirectUri || getRedirectUri(),
           grant_type: 'authorization_code',
         }),
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (!res.ok) {
@@ -63,6 +64,7 @@ export function createGoogleCalendarProvider(): CalendarProvider {
           refresh_token: refreshToken,
           grant_type: 'refresh_token',
         }),
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (!res.ok) throw new Error('Google token refresh failed');
@@ -85,6 +87,7 @@ export function createGoogleCalendarProvider(): CalendarProvider {
 
       const res = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events?${params}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (!res.ok) throw new Error('Failed to list Google Calendar events');
@@ -128,6 +131,7 @@ export function createGoogleCalendarProvider(): CalendarProvider {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (!res.ok) throw new Error('Failed to create Google Calendar event');
@@ -158,6 +162,7 @@ export function createGoogleCalendarProvider(): CalendarProvider {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (!res.ok) throw new Error('Failed to update Google Calendar event');
@@ -167,6 +172,7 @@ export function createGoogleCalendarProvider(): CalendarProvider {
       const res = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events/${externalId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (!res.ok) throw new Error('Failed to delete Google Calendar event');

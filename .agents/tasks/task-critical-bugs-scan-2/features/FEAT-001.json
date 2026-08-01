@@ -1,0 +1,24 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Fix API key authentication bypass (expired keys still work), deal counter drift (currentDeals never decremented on delete), and AuthContext.user never populated for normal users (edit history loses actor identity)",
+  "status": "in_progress",
+  "steps": [
+    "In lib/auth/api-key.ts, in the tryApiKeyAuth function, after finding the key in the database, add a check: if apiKey.expiresAt is set and is in the past, return null (deny auth). The current code only checks isActive but ignores the expiresAt column entirely.",
+    "In app/api/tenant/deals/[id]/route.ts, in the DELETE handler, after the soft-delete update succeeds (row is returned), decrement the tenant's currentDeals counter. Use: await db.update(tenants).set({ currentDeals: sql`greatest(0, ${tenants.currentDeals} - 1)` }).where(eq(tenants.id, ctx.tenantId)). Follow the pattern used in contacts DELETE which does the same for currentContacts. Import tenants and sql if not already imported.",
+    "In app/api/tenant/deals/bulk/route.ts, in the 'delete' case, after the bulk soft-delete, decrement currentDeals by the affected count. Use: await db.update(tenants).set({ currentDeals: sql`greatest(0, ${tenants.currentDeals} - ${affected})` }).where(eq(tenants.id, ctx.tenantId)). Import tenants if not already.",
+    "In lib/auth/middleware.ts, in the requireAuth function, after the user+membership query returns (the 'results' variable at around line 198), populate the AuthContext's user field with the user data. Add: user: { id: userWithMember.id, email: userWithMember.email, full_name: userWithMember.fullName, is_super_admin: false } to the ctx object being built. This requires adding email and fullName to the select statement for the non-superadmin path. The select already uses 'users' table so add: email: users.email, fullName: users.fullName to the select fields. Then add these to the ctx construction."
+  ],
+  "acceptance_criteria": [
+    "tryApiKeyAuth returns null for keys where expiresAt < now()",
+    "Deleting a single deal decrements tenants.currentDeals",
+    "Bulk deleting N deals decrements tenants.currentDeals by N",
+    "ctx.user is populated with email/fullName for normal authenticated users",
+    "TypeScript compiles without errors (npx next build)"
+  ],
+  "verification": [
+    "Run npx next build to confirm TypeScript compilation passes"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

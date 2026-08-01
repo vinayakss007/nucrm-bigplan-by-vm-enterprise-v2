@@ -30,18 +30,45 @@ export class ImportLimitError extends Error {
 }
 
 /**
- * Escapes a value for CSV
+ * Characters that can trigger formula execution in spreadsheet applications.
+ */
+const FORMULA_PREFIXES = ['=', '+', '-', '@', '\t', '\r'];
+
+/**
+ * Escapes a value for CSV, neutralizing formula injection attacks.
+ * Cells starting with formula-triggering characters are prefixed with a single quote.
+ * Values that are valid numbers (e.g. -500, +1.5) are exempted from the prefix
+ * since they are legitimate numeric data, not formula payloads.
  */
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function escapeCSV(val: any): string {
   if (val === null || val === undefined) return '';
-  const str = String(val);
+  let str = String(val);
+
+  // Neutralize formula injection by prefixing dangerous characters with a single quote.
+  // Skip the prefix if the value is a valid number (e.g. -500, +1.5, -0.3) to avoid
+  // mangling legitimate negative amounts, phone numbers like +1-555..., etc.
+  if (str.length > 0 && FORMULA_PREFIXES.includes(str[0]!)) {
+    const trimmed = str.trim();
+    if (!/^[+-]?\d/.test(trimmed)) {
+      str = "'" + str;
+    }
+  }
+
   if (str.includes(',') || str.includes('"') || str.includes('\n')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
+}
+
+/**
+ * Escapes SQL wildcard characters (% and _) in user-supplied search terms
+ * to prevent them from being interpreted as pattern wildcards in ILIKE queries.
+ */
+export function escapeIlikeWildcards(input: string): string {
+  return input.replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
 /**
@@ -58,6 +85,7 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
   switch (entityType) {
     case 'contacts': {
       const q = filters['q'];
+      const escapedQ = q ? escapeIlikeWildcards(q) : undefined;
       data = await db.select({
         first_name: contacts.firstName,
         last_name: contacts.lastName,
@@ -81,10 +109,10 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       .where(and(
         eq(contacts.tenantId, tenantId),
         isNull(contacts.deletedAt),
-        q ? or(
-          ilike(contacts.firstName, `%${q}%`),
-          ilike(contacts.lastName, `%${q}%`),
-          ilike(contacts.email, `%${q}%`)
+        escapedQ ? or(
+          ilike(contacts.firstName, `%${escapedQ}%`),
+          ilike(contacts.lastName, `%${escapedQ}%`),
+          ilike(contacts.email, `%${escapedQ}%`)
         ) : undefined
       ));
       break;

@@ -20,23 +20,97 @@
 
 import { Redis } from 'ioredis';
 
+// -------------------------------------------------------------------
+// Redis Circuit Breaker
+// -------------------------------------------------------------------
+
+/** Number of consecutive Redis failures before opening the circuit */
+const CIRCUIT_BREAKER_THRESHOLD = 3;
+/** Time in ms to keep the circuit open before attempting half-open state */
+const CIRCUIT_BREAKER_COOLDOWN_MS = 60_000;
+/** Interval in ms to attempt periodic Redis reconnection after permanent disconnect */
+const RECONNECT_INTERVAL_MS = 30_000;
+
+let consecutiveRedisFailures = 0;
+let redisCircuitOpen = false;
+let redisCircuitOpenedAt = 0;
+let reconnectTimer: ReturnType<typeof setInterval> | null = null;
+
+function recordRedisSuccess(): void {
+  consecutiveRedisFailures = 0;
+  if (redisCircuitOpen) {
+    redisCircuitOpen = false;
+    redisCircuitOpenedAt = 0;
+    console.log('[Cache] Redis circuit breaker closed - Redis is healthy again');
+  }
+}
+
+function recordRedisFailure(): void {
+  consecutiveRedisFailures++;
+  if (consecutiveRedisFailures >= CIRCUIT_BREAKER_THRESHOLD && !redisCircuitOpen) {
+    redisCircuitOpen = true;
+    redisCircuitOpenedAt = Date.now();
+    console.error(
+      `[Cache] Redis circuit breaker OPEN after ${consecutiveRedisFailures} consecutive failures. ` +
+      `Falling back to memory cache for ${CIRCUIT_BREAKER_COOLDOWN_MS / 1000}s.`,
+    );
+  }
+}
+
+function isCircuitOpen(): boolean {
+  if (!redisCircuitOpen) return false;
+  // Check if cooldown has elapsed (half-open state)
+  if (Date.now() - redisCircuitOpenedAt >= CIRCUIT_BREAKER_COOLDOWN_MS) {
+    // Allow a single attempt through (half-open)
+    return false;
+  }
+  return true;
+}
+
+/** Exported for testing */
+export function _resetCircuitBreaker(): void {
+  consecutiveRedisFailures = 0;
+  redisCircuitOpen = false;
+  redisCircuitOpenedAt = 0;
+}
+
+/** Exported for testing */
+export function _getCircuitState(): { open: boolean; failures: number; openedAt: number } {
+  return { open: redisCircuitOpen, failures: consecutiveRedisFailures, openedAt: redisCircuitOpenedAt };
+}
+
 // Redis client singleton
 let redis: Redis | null = null;
+let redisPermanentlyDisconnected = false;
 
-function getRedisClient(): Redis {
+function getRedisClient(): Redis | null {
+  // If circuit is open, skip Redis entirely
+  if (isCircuitOpen()) {
+    return null;
+  }
+
+  if (redisPermanentlyDisconnected) {
+    return null;
+  }
+
   if (!redis) {
     const redisUrl = process.env['REDIS_URL'];
 
     if (!redisUrl) {
       // Fallback to in-memory cache if Redis not available
       console.warn('[Cache] Redis not configured, using in-memory cache');
-      return null as unknown as Redis;
+      return null;
     }
 
     redis = new Redis(redisUrl, {
       maxRetriesPerRequest: 3,
       retryStrategy: (times) => {
-        if (times > 3) return null; // Stop retrying
+        if (times > 3) {
+          // Mark as permanently disconnected, start reconnect timer
+          redisPermanentlyDisconnected = true;
+          startReconnectTimer();
+          return null; // Stop retrying
+        }
         return Math.min(times * 100, 3000);
       },
     });
@@ -47,10 +121,45 @@ function getRedisClient(): Redis {
 
     redis.on('connect', () => {
       console.log('[Cache] Redis connected');
+      redisPermanentlyDisconnected = false;
+      recordRedisSuccess();
+      // Clear the reconnect timer since we successfully connected
+      if (reconnectTimer) {
+        clearInterval(reconnectTimer);
+        reconnectTimer = null;
+      }
     });
   }
 
   return redis;
+}
+
+function startReconnectTimer(): void {
+  if (reconnectTimer) return;
+  reconnectTimer = setInterval(() => {
+    if (!redisPermanentlyDisconnected) {
+      // Already reconnected
+      if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
+      return;
+    }
+
+    const redisUrl = process.env['REDIS_URL'];
+    if (!redisUrl) return;
+
+    console.log('[Cache] Attempting Redis reconnection...');
+    // Destroy old client and create a new one
+    if (redis) {
+      redis.disconnect();
+      redis = null;
+    }
+    redisPermanentlyDisconnected = false;
+    // Next getRedisClient() call will create a fresh client
+  }, RECONNECT_INTERVAL_MS);
+
+  // Allow process to exit even if timer is running
+  if (reconnectTimer && typeof reconnectTimer === 'object' && 'unref' in reconnectTimer) {
+    reconnectTimer.unref();
+  }
 }
 
 // In-memory fallback cache (for development)
@@ -103,8 +212,17 @@ export async function set(
   if (redis && redis.status === 'ready') {
     try {
       await redis.setex(`nucrm:${key}`, ttlSeconds, JSON.stringify(value));
+      recordRedisSuccess();
     } catch (error) {
       console.error('[Cache] Set error:', error);
+      recordRedisFailure();
+      // Fall through to memory cache
+      evictIfNecessary();
+      memoryCache.set(`nucrm:${key}`, {
+        value,
+        expires: Date.now() + (ttlSeconds * 1000),
+        lastAccessed: Date.now(),
+      });
     }
   } else {
     // Fallback to memory cache
@@ -129,10 +247,20 @@ export async function get<T = any>(key: string): Promise<T | null> {
   if (redis && redis.status === 'ready') {
     try {
       const value = await redis.get(`nucrm:${key}`);
+      recordRedisSuccess();
       return value ? JSON.parse(value) : null;
     } catch (error) {
       console.error('[Cache] Get error:', error);
-      return null;
+      recordRedisFailure();
+      // Fall through to memory cache
+      const item = memoryCache.get(`nucrm:${key}`);
+      if (!item) return null;
+      if (Date.now() > item.expires) {
+        memoryCache.delete(`nucrm:${key}`);
+        return null;
+      }
+      item.lastAccessed = Date.now();
+      return item.value as T;
     }
   } else {
     // Fallback to memory cache
@@ -171,20 +299,28 @@ const LOCK_SCRIPT = `
 
 export async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<{ acquired: boolean; value: string }> {
   const redis = getRedisClient();
-  if (!redis) return { acquired: true, value: '' };
+  // DESIGN NOTE: Fail-open when Redis is unavailable. This means distributed locks
+  // provide NO protection in memory-only deployments or during Redis outages.
+  // For safety-critical locks (e.g., sequence deduplication, pipeline reorder),
+  // consider a database advisory lock fallback if Redis availability cannot be
+  // guaranteed. Acceptable for current scope since these operations are idempotent
+  // or have other concurrency guards (SELECT FOR UPDATE, unique constraints).
+  if (!redis || redis.status !== 'ready') return { acquired: true, value: '' };
   const value = makeLockValue();
   try {
     const result = await redis.call('SET', `nucrm:lock:${key}`, value, 'EX', ttlSeconds, 'NX');
+    recordRedisSuccess();
     return { acquired: result === 'OK', value };
   } catch (e) {
     console.error('[Cache] acquireLock failed', e);
+    recordRedisFailure();
     return { acquired: false, value: '' };
   }
 }
 
 export async function releaseLock(key: string, value: string): Promise<void> {
   const redis = getRedisClient();
-  if (!redis || !value) return;
+  if (!redis || redis.status !== 'ready' || !value) return;
   try {
     await redis.eval(LOCK_SCRIPT, 1, `nucrm:lock:${key}`, value);
   } catch { /* safe */ }
@@ -192,7 +328,7 @@ export async function releaseLock(key: string, value: string): Promise<void> {
 
 export async function refreshLock(key: string, value: string, ttlSeconds: number): Promise<void> {
   const redis = getRedisClient();
-  if (!redis || !value) return;
+  if (!redis || redis.status !== 'ready' || !value) return;
   try {
     await redis.expire(`nucrm:lock:${key}`, ttlSeconds);
   } catch { /* safe */ }

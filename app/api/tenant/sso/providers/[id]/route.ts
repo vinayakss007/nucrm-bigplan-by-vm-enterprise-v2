@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { ssoProviders } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import {
@@ -53,6 +54,11 @@ export async function PATCH(
   const existingCfg = (existing.config ?? {}) as { client_secret_enc?: string };
   const config = buildEncryptedConfig(v, existingCfg.client_secret_enc);
   if (config instanceof NextResponse) return config;
+
+  // Optimistic concurrency: reject if another update happened since client read
+  const expectedUpdatedAt = ((body as unknown) as Record<string, unknown> | null)?.expectedUpdatedAt as string | undefined;
+  const guard = await concurrencyGuard(db, ssoProviders, id, ctx.tenantId, expectedUpdatedAt);
+  if (guard) return guard;
 
   const [updated] = await db
     .update(ssoProviders)
