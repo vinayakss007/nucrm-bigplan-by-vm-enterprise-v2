@@ -419,7 +419,7 @@ describe('webhooks', () => {
 
       expect(result).toBe(1);
       expect(setFn).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'delivered', responseStatus: 200 }),
+        expect.objectContaining({ status: 'success', responseStatus: 200 }),
       );
 
       vi.unstubAllGlobals();
