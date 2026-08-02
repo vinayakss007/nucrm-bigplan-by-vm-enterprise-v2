@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     const total = countResult?.count ?? 0;
 
     return NextResponse.json({ 
-      invoices: results, 
+      data: results, 
       total,
       page,
       limit,

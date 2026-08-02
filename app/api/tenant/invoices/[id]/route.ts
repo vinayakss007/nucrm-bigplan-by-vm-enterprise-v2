@@ -199,7 +199,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       entityId: invoiceId,
     });
 
-    return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
+    return NextResponse.json({ data: { deleted: true }, message: 'Moved to trash. Restore within 30 days.' });
 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
