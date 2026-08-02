@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, planLimits } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { readJsonBody } from '@/lib/api/validate';
 
@@ -69,7 +69,7 @@ export async function PATCH(
 
     const tenant = await db.query.tenants.findFirst({
       where: eq(tenants.id, id),
-      columns: { settings: true },
+      columns: { settings: true, updatedAt: true },
     });
 
     if (!tenant) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -96,10 +96,13 @@ export async function PATCH(
 
     const newSettings = { ...currentSettings, limitOverrides: newOverrides };
 
-    await db
+    const [updated] = await db
       .update(tenants)
       .set({ settings: newSettings, updatedAt: new Date() })
-      .where(eq(tenants.id, id));
+      .where(and(eq(tenants.id, id), eq(tenants.updatedAt, tenant.updatedAt!)))
+      .returning();
+
+    if (!updated) return NextResponse.json({ error: 'Tenant was modified by another user — please refresh' }, { status: 409 });
 
     logSuperAdminAction({
       adminId: ctx.userId,

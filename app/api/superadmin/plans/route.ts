@@ -5,7 +5,7 @@ import { createPlanSchema, updatePlanSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { plans, tenants } from '@/drizzle/schema';
-import { eq, sql, asc } from 'drizzle-orm';
+import { eq, and, sql, asc } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 export async function GET(request: NextRequest) {
@@ -130,13 +130,20 @@ export async function PATCH(request: NextRequest) {
     if (rawBody.is_active !== undefined) updateData.isActive = rawBody.is_active;
     if (v.description !== undefined) updateData.description = v.description;
 
+    const [existing] = await db
+      .select({ updatedAt: plans.updatedAt })
+      .from(plans)
+      .where(eq(plans.id, id))
+      .limit(1);
+    if (!existing) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
+
     const [row] = await db
       .update(plans)
       .set(updateData)
-      .where(eq(plans.id, id))
+      .where(and(eq(plans.id, id), eq(plans.updatedAt, existing.updatedAt!)))
       .returning();
 
-    if (!row) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
+    if (!row) return NextResponse.json({ error: 'Plan was modified by another user — please refresh' }, { status: 409 });
 
     logSuperAdminAction({
       adminId: ctx.userId,

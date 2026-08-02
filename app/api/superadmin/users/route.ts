@@ -161,7 +161,7 @@ export async function PATCH(request: NextRequest) {
     if (role !== undefined || status !== undefined) {
       // Fetch current metadata first
       const [existing] = await db
-        .select({ metadata: users.metadata })
+        .select({ metadata: users.metadata, updatedAt: users.updatedAt })
         .from(users)
         .where(eq(users.id, id))
         .limit(1);
@@ -175,12 +175,42 @@ export async function PATCH(request: NextRequest) {
       if (role !== undefined) newMeta.role = role;
       if (status !== undefined) newMeta.account_status = status;
       updates.metadata = newMeta;
+
+      // Read-existing concurrency guard
+      const [freshExisting] = await db
+        .select({ updatedAt: users.updatedAt })
+        .from(users)
+        .where(eq(users.id, id))
+        .limit(1);
+      if (!freshExisting) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
+      const [updated] = await db
+        .update(users)
+        .set(updates)
+        .where(and(eq(users.id, id), eq(users.updatedAt, freshExisting.updatedAt!)))
+        .returning({
+          id: users.id,
+          email: users.email,
+          full_name: users.fullName,
+          is_super_admin: users.isSuperAdmin,
+        });
+
+      if (!updated) return NextResponse.json({ error: 'User was modified by another user — please refresh' }, { status: 409 });
+      return NextResponse.json({ data: updated });
     }
+
+    // No metadata changes — plain update with concurrency guard
+    const [existingPlain] = await db
+      .select({ updatedAt: users.updatedAt })
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
+    if (!existingPlain) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     const [updated] = await db
       .update(users)
       .set(updates)
-      .where(eq(users.id, id))
+      .where(and(eq(users.id, id), eq(users.updatedAt, existingPlain.updatedAt!)))
       .returning({
         id: users.id,
         email: users.email,
@@ -189,7 +219,7 @@ export async function PATCH(request: NextRequest) {
       });
 
     if (!updated) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ error: 'User was modified by another user — please refresh' }, { status: 409 });
     }
 
     return NextResponse.json({ data: updated });

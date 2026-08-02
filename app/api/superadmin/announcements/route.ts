@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { announcements } from '@/drizzle/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createAnnouncementSchema, updateAnnouncementSchema, deleteAnnouncementSchema } from '@/lib/api/schemas';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
@@ -98,13 +98,20 @@ export async function PATCH(request: NextRequest) {
     const result = validateBody(updateAnnouncementSchema, b);
     if (result instanceof NextResponse) return result;
 
+    const [existing] = await db
+      .select({ updatedAt: announcements.updatedAt })
+      .from(announcements)
+      .where(eq(announcements.id, result.data.id))
+      .limit(1);
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
     const [row] = await db
       .update(announcements)
       .set({ isActive: result.data.is_active, updatedAt: new Date() })
-      .where(eq(announcements.id, result.data.id))
+      .where(and(eq(announcements.id, result.data.id), eq(announcements.updatedAt, existing.updatedAt!)))
       .returning();
 
-    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!row) return NextResponse.json({ error: 'Announcement was modified by another user — please refresh' }, { status: 409 });
 
     logSuperAdminAction({
       adminId: ctx.userId,

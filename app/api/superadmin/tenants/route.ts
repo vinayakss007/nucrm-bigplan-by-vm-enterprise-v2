@@ -238,13 +238,20 @@ export async function PATCH(request: NextRequest) {
 
     if (!Object.keys(mappedUpdates).length) return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
 
+    const [existing] = await db
+      .select({ updatedAt: tenants.updatedAt })
+      .from(tenants)
+      .where(eq(tenants.id, id))
+      .limit(1);
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
     const [row] = await db
       .update(tenants)
       .set({ ...mappedUpdates, updatedAt: new Date() })
-      .where(eq(tenants.id, id))
+      .where(and(eq(tenants.id, id), eq(tenants.updatedAt, existing.updatedAt!)))
       .returning();
 
-    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!row) return NextResponse.json({ error: 'Tenant was modified by another user — please refresh' }, { status: 409 });
 
     logSuperAdminAction({
       adminId: ctx.userId,
