@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Bell, BellOff, CheckCheck, Trash2, CheckCircle, TrendingUp,
   AtSign, AlertTriangle, Zap, Clock, Users } from 'lucide-react';
 import { cn, formatRelativeTime, toSnakeCase } from '@/lib/utils';
@@ -33,15 +33,15 @@ export default function NotificationsPage() {
   const limit = 20;
   const router = useRouter();
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const res = await fetch(`/api/tenant/notifications?limit=${limit}&offset=${offset}`);
     const d = await res.json();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     setNotifications((d.data ?? []).map((n: any) => toSnakeCase(n)));
     setTotal(d.total ?? 0);
     setLoading(false);
-  };
-  useEffect(() => { load(); }, [offset]);
+  }, [offset]);
+  useEffect(() => { load(); }, [load]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const isUnread = (n: any) => !n.read_at && !n.is_read;

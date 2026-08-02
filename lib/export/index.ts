@@ -86,7 +86,6 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
   switch (entityType) {
     case 'contacts': {
       const q = filters['q'];
-      const escapedQ = q ? escapeIlikeWildcards(q) : undefined;
       data = await db.select({
         first_name: contacts.firstName,
         last_name: contacts.lastName,

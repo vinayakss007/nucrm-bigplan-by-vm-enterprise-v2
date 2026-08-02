@@ -11,7 +11,6 @@ import { logError } from '@/lib/errors-server';
 import {
   applyFieldMappings,
   loadFieldMappings,
-  NATIVE_TARGETS,
   type AppliedMapping,
   type RejectedMapping,
 } from '@/lib/webhooks/field-mapping';

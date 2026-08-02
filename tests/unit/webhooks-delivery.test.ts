@@ -145,7 +145,7 @@ describe('Webhook Delivery', () => {
       await mod.processWebhookDelivery('d-1');
 
       expect(mockDbUpdateChain.set).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'success' })
+        expect.objectContaining({ status: 'delivered' })
       );
     });
 

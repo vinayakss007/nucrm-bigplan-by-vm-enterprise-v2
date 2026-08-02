@@ -3,7 +3,7 @@ import { chromium } from 'playwright';
 
 const BASE = 'http://localhost:3000';
 
-async function crawlPage(url: string, visited: Set<string>, errors: any[]) {
+async function crawlPage(url: string, visited: Set<string>, errors: { url: string; type: string; text?: string; status?: number; endpoint?: string }[]) {
   if (visited.has(url)) return;
   visited.add(url);
 
@@ -31,8 +31,9 @@ async function crawlPage(url: string, visited: Set<string>, errors: any[]) {
         await crawlPage(link, visited, errors);
       }
     }
-  } catch (e: any) {
-    errors.push({ url, type: 'crawl_fail', text: e.message });
+  } catch (e: unknown) {
+    const err = e as Error;
+    errors.push({ url, type: 'crawl_fail', text: err.message });
   }
 
   await browser.close();

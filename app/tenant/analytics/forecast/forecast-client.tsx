@@ -26,7 +26,7 @@ interface MonthlyForecast {
 
 export default function ForecastPage() {
   const { data: dealsRes, error: dealsErr } = useSWR('/api/tenant/deals?limit=500');
-  const deals = (dealsRes?.data || []) as Deal[];
+  const deals = useMemo(() => (dealsRes?.data || []) as Deal[], [dealsRes]);
   const loading = !dealsRes && !dealsErr;
 
   const next6Months = useMemo(() => {
