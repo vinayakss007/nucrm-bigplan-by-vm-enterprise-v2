@@ -251,7 +251,7 @@ async function retryWebhookItem(item: typeof webhookQueue.$inferSelect): Promise
     if (res.ok) {
       await db.update(webhookQueue)
         .set({
-          status: 'success',
+          status: 'delivered',
           responseStatus: res.status,
           deliveredAt: new Date(),
         })

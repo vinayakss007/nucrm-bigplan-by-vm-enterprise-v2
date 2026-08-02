@@ -23,10 +23,10 @@ export default function TenantAnalyticsPage() {
 
   const { data: overviewRes, error: overviewErr } = useSWR('/api/tenant/analytics/overview');
 
-  const deals = ((overviewRes?.data?.deals || []) as { created_at?: string; stageId?: string; amount?: string; value?: string }[]).map(d => ({ ...d, value: d.value || d.amount || 0 }));
-  const contacts = (overviewRes?.data?.contacts || []) as { created_at?: string; lead_source?: string; lead_status?: string }[];
-  const tasks = (overviewRes?.data?.tasks || []) as { created_at?: string; completed?: boolean; due_date?: string }[];
-  const stages = ((overviewRes?.data?.pipelines || []).flatMap((pl: { stages?: { id: string; name: string }[] }) => (pl.stages || [])) as { id: string; name: string }[]);
+  const deals = useMemo(() => ((overviewRes?.data?.deals || []) as { created_at?: string; stageId?: string; amount?: string; value?: string }[]).map(d => ({ ...d, value: d.value || d.amount || 0 })), [overviewRes]);
+  const contacts = useMemo(() => (overviewRes?.data?.contacts || []) as { created_at?: string; lead_source?: string; lead_status?: string }[], [overviewRes]);
+  const tasks = useMemo(() => (overviewRes?.data?.tasks || []) as { created_at?: string; completed?: boolean; due_date?: string }[], [overviewRes]);
+  const stages = useMemo(() => ((overviewRes?.data?.pipelines || []).flatMap((pl: { stages?: { id: string; name: string }[] }) => (pl.stages || [])) as { id: string; name: string }[]), [overviewRes]);
 
   const loading = !overviewRes && !overviewErr;
 

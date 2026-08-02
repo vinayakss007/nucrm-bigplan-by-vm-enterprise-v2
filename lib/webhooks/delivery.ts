@@ -125,7 +125,7 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
     if (response.ok) {
       await db.update(webhookDeliveries)
         .set({
-          status: 'success',
+          status: 'delivered',
           responseStatus: response.status,
           responseBody: responseBody,
           durationMs: durationMs,

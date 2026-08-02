@@ -67,6 +67,13 @@ vi.mock('@/drizzle/db', () => {
       };
       return chain;
     },
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          then: (res: any, rej?: any) => Promise.resolve([]).then(res, rej),
+        }),
+      }),
+    }),
     query: {
       apiKeys: { findFirst: async () => h.apiKeyRow },
       contacts: { findFirst: async () => h.contactRow },

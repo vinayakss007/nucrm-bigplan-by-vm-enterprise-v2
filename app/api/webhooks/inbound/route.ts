@@ -152,54 +152,6 @@ function headerEntries(headers: HeaderLike): Array<[string, string]> {
   return out;
 }
 
-/**
- * Keys each entity handler actually reads off the payload.
- *
- * NATIVE_TARGETS is the subset a field mapping is *allowed* to write; the extras
- * here are consumed by the handler but deliberately not mapping targets (`id`
- * selects the row to update, `customFields` has its own target type, `ownerId` is
- * ownership assignment). Anything outside this set is dropped on the floor, which
- * is what _ignoredKeys reports back to the sender.
- */
-const HANDLER_KEYS: Record<string, readonly string[]> = {
-  contact: [...(NATIVE_TARGETS['contact'] ?? []), 'id', 'customFields'],
-  lead: [...(NATIVE_TARGETS['lead'] ?? []), 'id', 'customFields', 'ownerId'],
-  deal: [...(NATIVE_TARGETS['deal'] ?? []), 'id', 'customFields'],
-  company: [...(NATIVE_TARGETS['company'] ?? []), 'id', 'customFields'],
-  task: [...(NATIVE_TARGETS['task'] ?? []), 'id'],
-};
-
-/**
- * Report the payload keys that nothing will read, so a sender can see that its
- * `recording_url` went nowhere instead of trusting a bare 200.
- *
- * A key routed by a field mapping counts as recognised — that is the whole point
- * of configuring the mapping — so `mappedSourceKeys` are excluded.
- */
-export function collectIgnoredKeys(
-  entity: string,
-  data: Record<string, unknown>,
-  mappedSourceKeys: readonly string[] = []
-): string[] {
-  const recognized = new Set(HANDLER_KEYS[entity] ?? []);
-  if (recognized.size === 0) return [];
-
-  const mapped = new Set<string>();
-  for (const key of mappedSourceKeys) {
-    mapped.add(key);
-    mapped.add(toCamelKey(key));
-  }
-
-  const ignored: string[] = [];
-  for (const key of Object.keys(data ?? {})) {
-    const camel = toCamelKey(key);
-    if (recognized.has(camel)) continue;
-    if (mapped.has(key) || mapped.has(camel)) continue;
-    ignored.push(key);
-  }
-  return ignored;
-}
-
 interface ItemMapping {
   data: Record<string, unknown>;
   applied: AppliedMapping[];
@@ -275,6 +227,44 @@ export function redactHeaders(headers: HeaderLike | null | undefined): Record<st
     out[key] = SENSITIVE_HEADERS.has(key.toLowerCase()) ? REDACTED : value;
   }
   return out;
+}
+
+/**
+ * Top-level keys of `data` that the handler for `entity` does not consume.
+ * Purely informational — unmapped values are never written to the record.
+ *
+ * A key routed by a field mapping counts as recognised — that is the whole
+ * point of configuring the mapping — so `mappedSourceKeys` are excluded.
+ */
+export function collectIgnoredKeys(
+  entity: string,
+  data: Record<string, unknown>,
+  mappedSourceKeys: readonly string[] = []
+): string[] {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return [];
+  const entityKeys = ENTITY_RECOGNISED_KEYS[entity];
+  if (!entityKeys) return [];
+
+  const recognised = new Set<string>([
+    ...entityKeys,
+    ...COMMON_RECOGNISED_KEYS,
+    ...ENVELOPE_KEYS,
+  ]);
+
+  const mapped = new Set<string>();
+  for (const key of mappedSourceKeys) {
+    mapped.add(key);
+    mapped.add(toCamelKey(key));
+  }
+
+  const ignored: string[] = [];
+  for (const key of Object.keys(data)) {
+    const camel = toCamelKey(key);
+    if (recognised.has(camel)) continue;
+    if (mapped.has(key) || mapped.has(camel)) continue;
+    ignored.push(key);
+  }
+  return ignored;
 }
 
 /**

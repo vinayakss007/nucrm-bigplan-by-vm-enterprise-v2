@@ -134,17 +134,18 @@ describe('webhook delivery fix', () => {
   });
 
   describe('getRetryDelay', () => {
-    it('returns 5min / 30min / 2hr / 12hr for attempts 1-4', async () => {
+    it('returns 5min / 30min / 2hr / 12hr / 24hr for attempts 1-5', async () => {
       const { getRetryDelay } = await import('@/lib/webhooks');
       expect(getRetryDelay(1)).toBe(5 * 60 * 1000);
       expect(getRetryDelay(2)).toBe(30 * 60 * 1000);
       expect(getRetryDelay(3)).toBe(2 * 60 * 60 * 1000);
       expect(getRetryDelay(4)).toBe(12 * 60 * 60 * 1000);
+      expect(getRetryDelay(5)).toBe(24 * 60 * 60 * 1000);
     });
 
-    it('returns -1 (dead letter) for attempt 5 and beyond', async () => {
+    it('returns -1 (dead letter) for attempt 6 and beyond', async () => {
       const { getRetryDelay } = await import('@/lib/webhooks');
-      expect(getRetryDelay(5)).toBe(-1);
+      expect(getRetryDelay(6)).toBe(-1);
       expect(getRetryDelay(99)).toBe(-1);
     });
 

@@ -26,7 +26,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { eq } from 'drizzle-orm';
-import { deals, dealStages, pipelines, webhookInboundLogs } from '@/drizzle/schema';
+import { deals, dealStages, pipelines, webhookInboundLogs, webhookFieldMappings } from '@/drizzle/schema';
 
 const h = vi.hoisted(() => ({
   ops: [] as Array<{ op: string; table?: unknown; payload?: unknown; where?: unknown }>,
@@ -49,7 +49,14 @@ vi.mock('@/drizzle/db', () => {
         rec.where = c;
         return self;
       },
-      then: (res: any, rej?: any) => Promise.resolve(h.selectQueue.shift() ?? []).then(res, rej),
+      then: (res: any, rej?: any) => {
+        // Field-mapping lookups are incidental to this suite — they must not
+        // consume a queued stage/pipeline row.
+        if (rec.table === webhookFieldMappings) {
+          return Promise.resolve([]).then(res, rej);
+        }
+        return Promise.resolve(h.selectQueue.shift() ?? []).then(res, rej);
+      },
     };
     for (const m of ['innerJoin', 'leftJoin', 'groupBy', 'orderBy', 'limit', 'offset']) {
       self[m] = () => self;
