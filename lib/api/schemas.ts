@@ -1097,6 +1097,26 @@ export const preferencesPatchSchema = z.object({
   hidden_nav_items: z.array(z.string().max(200)).max(200).optional(),
 });
 
+// ── Webhook field-mapping schemas ──
+export const createWebhookFieldMappingSchema = z.object({
+  apiKeyId: uuid,
+  entityType: z.enum(['contact', 'lead', 'deal', 'company', 'task']),
+  sourceKey: requiredString.max(200),
+  targetType: z.enum(['custom_field', 'native']).default('custom_field'),
+  targetKey: requiredString.max(200),
+  transform: z.enum(['string', 'number', 'boolean', 'date', 'trim', 'lowercase']).nullable().optional(),
+  isActive: z.boolean().default(true),
+});
+
+export const updateWebhookFieldMappingSchema = z.object({
+  id: z.string().uuid(),
+  sourceKey: requiredString.max(200).optional(),
+  targetType: z.enum(['custom_field', 'native']).optional(),
+  targetKey: requiredString.max(200).optional(),
+  transform: z.enum(['string', 'number', 'boolean', 'date', 'trim', 'lowercase']).nullable().optional(),
+  isActive: z.boolean().optional(),
+});
+
 // ── Re-exports from sub-modules ──
 export {
   updateAiProvidersSchema,
