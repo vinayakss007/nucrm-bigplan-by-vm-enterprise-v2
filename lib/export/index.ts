@@ -155,6 +155,25 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
         isNull(tasks.deletedAt)
       ));
       break;
+
+    case 'companies':
+      data = await db.select({
+        name: companies.name,
+        domain: companies.domain,
+        industry: companies.industry,
+        company_size: companies.companySize,
+        annual_revenue: companies.annualRevenue,
+        city: companies.city,
+        country: companies.country,
+        website: companies.website,
+        created_at: companies.createdAt
+      })
+      .from(companies)
+      .where(and(
+        eq(companies.tenantId, tenantId),
+        isNull(companies.deletedAt)
+      ));
+      break;
       
     default:
       throw new Error(`Unsupported export entity type: ${entityType}`);
@@ -164,6 +183,7 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
     if (entityType === 'contacts') return 'first_name,last_name,email,phone,company,lead_status,lead_source,city,country,website,linkedin_url,twitter_url,score,tags,notes,created_date';
     if (entityType === 'deals') return 'title,amount,stage_id,contact_name,company_name,close_date,created_at';
     if (entityType === 'tasks') return 'title,description,due_date,priority,status,related_contact,created_at';
+    if (entityType === 'companies') return 'name,domain,industry,company_size,annual_revenue,city,country,website,created_at';
     return '';
   }
   
