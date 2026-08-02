@@ -38,6 +38,41 @@ const SENSITIVE_HEADERS = new Set([
 
 const REDACTED = '[REDACTED]';
 
+/**
+ * Keys each entity handler actually reads off the (camelCased) payload.
+ * Derived by inspection of the handlers below — keep in sync when a handler
+ * starts or stops consuming a field.
+ */
+const ENTITY_RECOGNISED_KEYS: Record<string, readonly string[]> = {
+  contact: [
+    'email', 'firstName', 'lastName', 'phone', 'companyId', 'assignedTo',
+    'leadStatus', 'leadSource', 'notes', 'tags', 'score', 'city', 'country',
+    'website', 'linkedinUrl', 'twitterUrl',
+  ],
+  lead: [
+    'email', 'firstName', 'lastName', 'phone', 'mobile', 'title', 'companyName',
+    'leadSource', 'leadStatus', 'lifecycleStage', 'assignedTo', 'tags', 'notes',
+    'ownerId',
+  ],
+  deal: [
+    'title', 'value', 'probability', 'stage', 'closeDate', 'contactId',
+    'companyId', 'assignedTo', 'notes',
+  ],
+  company: [
+    'name', 'industry', 'size', 'website', 'phone', 'address', 'notes',
+  ],
+  task: [
+    'title', 'description', 'dueDate', 'priority', 'contactId', 'dealId',
+    'assignedTo', 'completed',
+  ],
+};
+
+/** Recognised for every entity: the record identifier and the explicit escape hatch. */
+const COMMON_RECOGNISED_KEYS: readonly string[] = ['id', 'customFields'];
+
+/** Envelope fields consumed by the route itself rather than by an entity handler. */
+const ENVELOPE_KEYS: readonly string[] = ['action', 'entity', 'data', 'batch'];
+
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Rate limiter: 100 requests per API key per minute
