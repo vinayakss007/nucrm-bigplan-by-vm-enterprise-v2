@@ -50,7 +50,7 @@ describe('Billing routes', () => {
       const res = await route(createTestRequest('/api/tenant/invoices'));
       expect(res.status).toBe(200);
       const data = await res.json();
-      expect(data.data).toEqual([]);
+      expect(data.invoices).toEqual([]);
       expect(data.total).toBe(0);
     });
   });

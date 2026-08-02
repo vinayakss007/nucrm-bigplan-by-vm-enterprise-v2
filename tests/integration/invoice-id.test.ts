@@ -178,7 +178,7 @@ describe('Invoice [id] API routes', () => {
       );
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body.data.deleted).toBe(true);
+      expect(body.ok).toBe(true);
     });
 
     it('returns 404 when invoice not found', async () => {
