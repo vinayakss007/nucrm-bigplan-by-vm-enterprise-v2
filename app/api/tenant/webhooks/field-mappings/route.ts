@@ -217,12 +217,13 @@ export async function PATCH(req: NextRequest) {
       .set(setValues)
       .where(and(
         eq(webhookFieldMappings.id, id),
-        eq(webhookFieldMappings.tenantId, ctx.tenantId)
+        eq(webhookFieldMappings.tenantId, ctx.tenantId),
+        eq(webhookFieldMappings.updatedAt, current.updatedAt!)
       ))
       .returning();
 
     if (results.length === 0) {
-      return NextResponse.json({ error: 'Mapping not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Mapping was modified by another user — please refresh' }, { status: 409 });
     }
 
     return NextResponse.json({ message: 'Mapping updated', mapping: results[0]! });

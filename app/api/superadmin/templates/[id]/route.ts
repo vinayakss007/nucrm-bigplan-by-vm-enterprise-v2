@@ -80,15 +80,20 @@ export async function PATCH(
 
     updates['updatedAt'] = new Date();
 
+    const [existing] = await db
+      .select({ updatedAt: productTemplates.updatedAt })
+      .from(productTemplates)
+      .where(and(eq(productTemplates.id, id), sql`${productTemplates.deletedAt} IS NULL`))
+      .limit(1);
+    if (!existing) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+
     const [updated] = await db
       .update(productTemplates)
       .set(updates)
-      .where(and(eq(productTemplates.id, id), sql`${productTemplates.deletedAt} IS NULL`))
+      .where(and(eq(productTemplates.id, id), sql`${productTemplates.deletedAt} IS NULL`, eq(productTemplates.updatedAt, existing.updatedAt!)))
       .returning();
 
-    if (!updated) {
-      return NextResponse.json({ error: 'Template not found' }, { status: 404 });
-    }
+    if (!updated) return NextResponse.json({ error: 'Template was modified by another user — please refresh' }, { status: 409 });
 
     return NextResponse.json({ data: updated });
   } catch (err: unknown) {

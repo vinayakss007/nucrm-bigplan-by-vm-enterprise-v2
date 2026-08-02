@@ -91,7 +91,7 @@ export async function PATCH(req: NextRequest) {
     if (!incoming || typeof incoming !== 'object') return NextResponse.json({ error: 'settings object required' }, { status: 400 });
 
     const [tenant] = await db
-      .select({ id: tenants.id, settings: tenants.settings })
+      .select({ id: tenants.id, settings: tenants.settings, updatedAt: tenants.updatedAt })
       .from(tenants)
       .where(eq(tenants.id, tenant_id))
       .limit(1);
@@ -112,10 +112,13 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    await db
+    const [updated] = await db
       .update(tenants)
       .set({ settings: merged, updatedAt: new Date() })
-      .where(eq(tenants.id, tenant_id));
+      .where(and(eq(tenants.id, tenant_id), eq(tenants.updatedAt, tenant.updatedAt!)))
+      .returning();
+
+    if (!updated) return NextResponse.json({ error: 'Settings were modified by another user — please refresh' }, { status: 409 });
 
     return NextResponse.json({ ok: true, message: 'Settings updated' });
  

@@ -144,13 +144,20 @@ export async function PATCH(request: NextRequest) {
       updateData.updatedBy = ctx.userId;
     }
 
+    const [existing] = await db
+      .select({ updatedAt: supportTickets.updatedAt })
+      .from(supportTickets)
+      .where(eq(supportTickets.id, id))
+      .limit(1);
+    if (!existing) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+
     const [row] = await db
       .update(supportTickets)
       .set(updateData)
-      .where(eq(supportTickets.id, id))
+      .where(and(eq(supportTickets.id, id), eq(supportTickets.updatedAt, existing.updatedAt!)))
       .returning();
 
-    if (!row) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+    if (!row) return NextResponse.json({ error: 'Ticket was modified by another user — please refresh' }, { status: 409 });
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {
     console.error('[superadmin/tickets PATCH]', err);

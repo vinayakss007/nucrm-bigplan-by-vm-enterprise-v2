@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { backupRecords, backupSchedules, criticalDataBackups, tenants, users } from '@/drizzle/schema';
-import { eq, sql, desc } from 'drizzle-orm';
+import { eq, and, sql, desc } from 'drizzle-orm';
 import { createBackup } from '@/lib/backups/backup-service';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createBackupSchema } from '@/lib/api/schemas';
@@ -195,13 +195,20 @@ export async function PATCH(request: NextRequest) {
     if (schedule_type) updates.scheduleType = schedule_type;
     if (typeof retention_days === 'number' && retention_days > 0) updates.retentionDays = retention_days;
 
+    const [existing] = await db
+      .select({ updatedAt: backupSchedules.updatedAt })
+      .from(backupSchedules)
+      .where(eq(backupSchedules.id, id))
+      .limit(1);
+    if (!existing) return NextResponse.json({ error: 'Schedule not found' }, { status: 404 });
+
     const [updated] = await db
       .update(backupSchedules)
       .set(updates)
-      .where(eq(backupSchedules.id, id))
+      .where(and(eq(backupSchedules.id, id), eq(backupSchedules.updatedAt, existing.updatedAt!)))
       .returning();
 
-    if (!updated) return NextResponse.json({ error: 'Schedule not found' }, { status: 404 });
+    if (!updated) return NextResponse.json({ error: 'Schedule was modified by another user — please refresh' }, { status: 409 });
 
     return NextResponse.json({ ok: true, data: updated });
  
