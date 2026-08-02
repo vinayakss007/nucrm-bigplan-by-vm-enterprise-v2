@@ -21,6 +21,7 @@ const VALID_RESEND_EVENT_TYPES = [
   'email.sent',
   'email.opened',
   'email.clicked',
+  'email.replied',
 ];
 
 /** Soft bounce threshold: DNC after this many soft bounces within the window */
@@ -93,6 +94,11 @@ export async function POST(req: NextRequest) {
       }
       case 'email.delivered':
         // Optional: track delivery in email_log if needed
+        break;
+      case 'email.replied':
+        if (email) {
+          await handleReply(email);
+        }
         break;
       default:
         console.log(`[resend-webhook] Unhandled event: ${event.type}`);
@@ -176,6 +182,52 @@ async function handleHardBounce(email: string, eventType: string): Promise<void>
     } catch (activityErr) {
       await logError({ error: activityErr, context: 'resend-webhook:activity-log' });
     }
+  }
+}
+
+/**
+ * Handle a reply: cancel active sequence enrollments for the replying
+ * contact so no further follow-ups are sent to someone who already engaged.
+ * Unlike bounces/complaints, a reply must not set doNotContact.
+ */
+async function handleReply(email: string): Promise<void> {
+  const [contact] = await db
+    .select({ id: contacts.id, tenantId: contacts.tenantId })
+    .from(contacts)
+    .where(and(
+      eq(contacts.email, email),
+      isNull(contacts.deletedAt)
+    ))
+    .limit(1);
+
+  if (!contact) return;
+
+  const cancelled = await db
+    .update(sequenceEnrollments)
+    .set({ status: 'completed', completedAt: new Date(), updatedAt: new Date() })
+    .where(and(
+      eq(sequenceEnrollments.contactId, contact.id),
+      eq(sequenceEnrollments.status, 'active')
+    ))
+    .returning({ id: sequenceEnrollments.id });
+
+  if (cancelled.length > 0) {
+    console.log(`[resend-webhook] email.replied: cancelled ${cancelled.length} active sequence enrollment(s) for ${email}`);
+  }
+
+  // Activity logging is deliberately AFTER the update and non-fatal.
+  try {
+    await db.insert(activities).values({
+      tenantId: contact.tenantId,
+      contactId: contact.id,
+      eventType: 'note',
+      description: `Contact replied to an email - active sequence follow-ups stopped`,
+      entityType: 'contact',
+      entityId: contact.id,
+      action: 'email.replied'
+    });
+  } catch (activityErr) {
+    await logError({ error: activityErr, context: 'resend-webhook:activity-log' });
   }
 }
 
