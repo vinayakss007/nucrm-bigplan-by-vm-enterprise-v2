@@ -12,6 +12,7 @@ name: Deploy
 # tested, install deps, build, restart pm2, gate on the health endpoint,
 # and roll back to the previous commit if the new build is unhealthy.
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
