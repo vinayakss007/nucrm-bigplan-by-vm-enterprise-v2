@@ -92,7 +92,15 @@ vi.mock('@/lib/rate-limit', () => ({
 vi.mock('@/lib/webhooks', () => ({ fireWebhooks: vi.fn(async () => undefined) }));
 vi.mock('@/lib/audit', () => ({ logAudit: vi.fn(async () => undefined) }));
 vi.mock('@/lib/dev-logger', () => ({ devLogger: { request: vi.fn(), error: vi.fn(), info: vi.fn() } }));
-vi.mock('@/lib/errors-server', () => ({ logError: vi.fn() }));
+vi.mock('@/lib/errors-server', () => ({ logError: vi.fn(async () => {}) }));
+vi.mock('@/lib/webhooks/field-mapping', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/webhooks/field-mapping')>();
+  return {
+    ...actual,
+    loadFieldMappings: vi.fn(async () => []),
+    applyFieldMappings: vi.fn(() => ({ data: {}, applied: [], rejected: [] })),
+  };
+});
 
 const RECORD_UUID = '550e8400-e29b-41d4-a716-446655440000';
 const TENANT_ID = '11111111-1111-4111-8111-111111111111';

@@ -166,7 +166,7 @@ const HANDLER_KEYS: Record<string, readonly string[]> = {
   lead: [...(NATIVE_TARGETS['lead'] ?? []), 'id', 'customFields', 'ownerId'],
   deal: [...(NATIVE_TARGETS['deal'] ?? []), 'id', 'customFields'],
   company: [...(NATIVE_TARGETS['company'] ?? []), 'id', 'customFields'],
-  task: [...(NATIVE_TARGETS['task'] ?? []), 'id'],
+  task: [...(NATIVE_TARGETS['task'] ?? []), 'id', 'customFields'],
 };
 
 /**

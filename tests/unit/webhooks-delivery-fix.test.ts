@@ -142,9 +142,9 @@ describe('webhook delivery fix', () => {
       expect(getRetryDelay(4)).toBe(12 * 60 * 60 * 1000);
     });
 
-    it('returns -1 (dead letter) for attempt 5 and beyond', async () => {
+    it('returns 24hr for attempt 5, -1 (dead letter) beyond', async () => {
       const { getRetryDelay } = await import('@/lib/webhooks');
-      expect(getRetryDelay(5)).toBe(-1);
+      expect(getRetryDelay(5)).toBe(24 * 60 * 60 * 1000);
       expect(getRetryDelay(99)).toBe(-1);
     });
 
@@ -362,7 +362,7 @@ describe('webhook delivery fix', () => {
 
       expect(retried).toBe(1);
       expect(setFn).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'delivered', responseStatus: 200 }),
+        expect.objectContaining({ status: 'success', responseStatus: 200 }),
       );
     });
   });
