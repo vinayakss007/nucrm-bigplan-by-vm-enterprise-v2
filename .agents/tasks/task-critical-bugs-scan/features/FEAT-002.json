@@ -1,0 +1,25 @@
+{
+  "id": "FEAT-002",
+  "type": "fix",
+  "description": "Fix SQL injection vulnerability via ILIKE pattern injection. Throughout the codebase, user-supplied search strings (query parameter `q`) are interpolated directly into ILIKE patterns using template literals like `ilike(contacts.firstName, `%${q}%`)`. While Drizzle ORM parameterizes the value, the LIKE special characters `%` and `_` are NOT escaped, allowing users to craft searches that match unintended rows (e.g., `q=_%` matches all records with at least 1 character). This is a pattern injection, not full SQL injection, but it degrades search reliability and can be used to enumerate data. Also fix the race condition in invoice number generation where concurrent requests can generate the same INV-XXXXX number.",
+  "status": "in_progress",
+  "steps": [
+    "Create a utility function in lib/api/query-params.ts (or a new file lib/api/sanitize-like.ts): `export function escapeLike(str: string): string { return str.replace(/%/g, '\\\\%').replace(/_/g, '\\\\_'); }` This escapes LIKE wildcards in user input.",
+    "Update app/api/tenant/contacts/route.ts GET handler: wrap `q` with escapeLike() before using in ilike() calls. Change `ilike(contacts.firstName, `%${q}%`)` to `ilike(contacts.firstName, `%${escapeLike(q)}%`)`.",
+    "Update app/api/tenant/deals/route.ts GET handler: same pattern for the `q` parameter in ilike(deals.title, ...).",
+    "Update app/api/tenant/companies/route.ts GET handler: same for ilike(companies.name, ...).",
+    "Update app/api/tenant/leads/route.ts GET handler: same for all ilike() calls with user-supplied `q`.",
+    "Update app/api/tenant/contacts/bulk/route.ts, app/api/tenant/deals/bulk/route.ts, app/api/tenant/companies/bulk/route.ts, app/api/tenant/tickets/bulk/route.ts, app/api/tenant/tasks/bulk/route.ts: same escapeLike() treatment.",
+    "Update lib/export/index.ts: same treatment for the `q` parameter.",
+    "Fix race condition in invoice number generation in app/api/tenant/invoices/route.ts POST: the current approach does `SELECT count(*) FROM invoices WHERE tenant_id = ?` then uses count+1 as the sequence. Two concurrent POSTs get the same count and generate duplicate INV-00001. Replace with a safe pattern: use a subquery with `FOR UPDATE` or use `INSERT ... RETURNING` with a tenant-level sequence counter, OR use a unique constraint on (tenantId, invoiceNumber) with retry logic."
+  ],
+  "acceptance_criteria": [
+    "A new escapeLike utility exists and is used in all ILIKE search patterns involving user input",
+    "Invoice number generation cannot produce duplicates under concurrent requests",
+    "TypeScript compiles without errors",
+    "Existing unit tests pass"
+  ],
+  "verification": ["npm run typecheck", "npm run test:unit"],
+  "blocked_reason": null,
+  "findings": ""
+}

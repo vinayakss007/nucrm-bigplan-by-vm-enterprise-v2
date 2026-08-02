@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const _contactId = searchParams.get('contactId');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50') || 50));
 
  
  
@@ -26,10 +26,10 @@ export async function GET(request: NextRequest) {
 
     const offset = (page - 1) * limit;
     const results = await db.select().from(serviceSubscriptions).where(and(...conditions)).orderBy(desc(serviceSubscriptions.startDate)).limit(limit).offset(offset);
-    const totalRes = await db.select({ count: sql<number>`count(*)::int` }).from(serviceSubscriptions).where(eq(serviceSubscriptions.tenantId, tenantId));
+    const totalRes = await db.select({ count: sql<number>`count(*)::int` }).from(serviceSubscriptions).where(and(...conditions));
     const total = totalRes[0]?.count ?? 0;
 
-    return NextResponse.json({ subscriptions: results, total, page, limit, totalPages: Math.ceil(total / limit) });
+    return NextResponse.json({ data: results, total, page, limit, totalPages: Math.ceil(total / limit) });
   } catch (error) {
     console.error('[subscriptions/GET]', error);
     return NextResponse.json({ error: 'Failed to fetch subscriptions' }, { status: 500 });
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
-    return NextResponse.json({ subscription }, { status: 201 });
+    return NextResponse.json({ data: subscription }, { status: 201 });
   } catch (error) {
     console.error('[subscriptions/POST]', error);
     return NextResponse.json({ error: 'Failed to create subscription' }, { status: 500 });

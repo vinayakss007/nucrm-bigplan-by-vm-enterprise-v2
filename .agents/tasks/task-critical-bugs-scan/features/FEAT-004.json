@@ -1,0 +1,22 @@
+{
+  "id": "FEAT-004",
+  "type": "fix",
+  "description": "Fix broken signup-to-first-deal user flow: duplicate pipeline creation during onboarding. The signup handler in lib/auth/api-handlers.ts already creates a 'Sales Pipeline' with 6 stages (Lead, Qualified, Proposal, Negotiation, Won, Lost). Then, when the user goes through the onboarding wizard (app/api/tenant/onboarding/route.ts POST), it creates ANOTHER pipeline with stages from the industry template. This results in duplicate default pipelines, confusing the user. Also fix: the onboarding pipeline sets stages with 0-based order while signup uses 1-based order, causing inconsistent stage ordering. Additionally, the onboarding POST marks its new pipeline as isDefault=true but does NOT unset the previous default, leaving two pipelines marked as default.",
+  "status": "in_progress",
+  "steps": [
+    "In app/api/tenant/onboarding/route.ts POST handler, before creating a new pipeline, check if a default pipeline already exists for the tenant. If it does, either (a) update its name and replace its stages, or (b) unset its isDefault flag before creating the new one.",
+    "Add a step to unset isDefault on any existing pipelines before marking the new one as default: `await tx.update(pipelines).set({ isDefault: false }).where(and(eq(pipelines.tenantId, ctx.tenantId), eq(pipelines.isDefault, true)));` before the pipeline insert.",
+    "Normalize stage ordering to be consistently 0-based across both signup and onboarding. In lib/auth/api-handlers.ts, change the default stages from order: 1-6 to order: 0-5 to match what onboarding uses.",
+    "In the onboarding pipeline creation, if deleting the old pipeline (option b), also clean up its deal stages to avoid orphaned rows. Use a transaction that deletes the old stages first."
+  ],
+  "acceptance_criteria": [
+    "After signup + onboarding, only ONE pipeline is marked as isDefault=true",
+    "Stage ordering is consistent (0-based) across all pipeline creation paths",
+    "No orphaned deal stages exist from replaced pipelines",
+    "TypeScript compiles without errors",
+    "Existing tests pass"
+  ],
+  "verification": ["npm run typecheck", "npm run test:unit"],
+  "blocked_reason": null,
+  "findings": ""
+}

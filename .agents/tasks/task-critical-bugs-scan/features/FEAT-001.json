@@ -1,0 +1,20 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Fix critical authentication bug: JSON login response does not set session cookie via Set-Cookie header. The form-based login path correctly sets `Set-Cookie: nucrm_session=...` on the redirect response, but the JSON API login path only calls `setSessionCookie(token, sessionDays)` which uses Next.js `cookies()` API. In API route handlers that return a custom NextResponse, the `cookies()` API writes are silently ignored because the response object is already constructed. The session cookie is never delivered to the client on JSON login.",
+  "status": "completed",
+  "steps": [
+    "In lib/auth/api-handlers.ts, in the POST_login function, after the `if (isForm)` block that correctly sets Set-Cookie on the redirect response, find the JSON response path (around line 183-188) that creates `const response = NextResponse.json(...)`. Add `response.headers.append('Set-Cookie', sessionCookieStr)` before `return response` - the same pattern used for the form path.",
+    "Similarly, in the POST_signup function (around line 393-396), the signup JSON response (`signupResponse`) already sets CSRF cookie via headers but does NOT set the session cookie. Add `signupResponse.headers.append('Set-Cookie', makeSessionCookieString(token))` before returning.",
+    "Remove the orphaned `await setSessionCookie(token, sessionDays)` and `await setSessionCookie(token)` calls from both functions since they have no effect in the API route handler context (cookies() writes are only honored when Next.js controls the response object)."
+  ],
+  "acceptance_criteria": [
+    "JSON login response includes Set-Cookie header with nucrm_session value",
+    "JSON signup response includes Set-Cookie header with nucrm_session value",
+    "TypeScript compiles without errors (npm run typecheck)",
+    "Existing unit tests pass"
+  ],
+  "verification": ["npm run typecheck", "npm run test:unit"],
+  "blocked_reason": null,
+  "findings": "Fix applied cleanly. Removed unused setSessionCookie import. Typecheck passes (tsc --noEmit). All 275 test files / 4491 unit tests pass. Node v22.23.1 available at /opt/toolchains/.nvm/versions/node/v22.23.1/bin - must be added to PATH for npm/npx commands and git hooks."
+}

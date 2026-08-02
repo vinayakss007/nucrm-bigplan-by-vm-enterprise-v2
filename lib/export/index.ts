@@ -2,6 +2,7 @@ import { db } from '@/drizzle/db';
 import { contacts, companies, deals, tasks } from '@/drizzle/schema';
 import { eq, and, isNull, ilike, or, sql } from 'drizzle-orm';
 import { addJob } from '@/lib/queue';
+import { escapeLike } from '@/lib/api/sanitize-like';
 
 export type ExportEntityType = 'contacts' | 'deals' | 'tasks' | 'companies';
 
@@ -109,10 +110,10 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       .where(and(
         eq(contacts.tenantId, tenantId),
         isNull(contacts.deletedAt),
-        escapedQ ? or(
-          ilike(contacts.firstName, `%${escapedQ}%`),
-          ilike(contacts.lastName, `%${escapedQ}%`),
-          ilike(contacts.email, `%${escapedQ}%`)
+        q ? or(
+          ilike(contacts.firstName, `%${escapeLike(q)}%`),
+          ilike(contacts.lastName, `%${escapeLike(q)}%`),
+          ilike(contacts.email, `%${escapeLike(q)}%`)
         ) : undefined
       ));
       break;

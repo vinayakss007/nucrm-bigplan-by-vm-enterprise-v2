@@ -5,8 +5,8 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { onboardingStepSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { onboardingProgress, pipelines, dealStages } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { onboardingProgress, pipelines, dealStages, deals } from '@/drizzle/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import { installTemplateModules } from '@/lib/modules/auto-install';
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -63,17 +63,116 @@ export async function POST(request: NextRequest) {
     ];
 
     const [newPipeline] = await db.transaction(async (tx) => {
-      const [p] = await tx.insert(pipelines).values({
-        tenantId: ctx.tenantId,
-        name: v.pipelineName.trim(),
-        isDefault: true,
-      }).returning();
+      // Find existing default pipelines for this tenant
+      const existingDefaults = await tx.select({ id: pipelines.id })
+        .from(pipelines)
+        .where(and(eq(pipelines.tenantId, ctx.tenantId), eq(pipelines.isDefault, true)));
 
-      if (p) {
+      let pipelineId: string;
+
+      if (existingDefaults.length > 0) {
+        // Update the first existing default pipeline in place to avoid FK violations
+        // on deals.stageId which references dealStages.id without ON DELETE CASCADE
+        const primaryPipeline = existingDefaults[0]!;
+        pipelineId = primaryPipeline.id;
+
+        // Update pipeline name
+        await tx.update(pipelines)
+          .set({ name: v.pipelineName.trim() })
+          .where(eq(pipelines.id, pipelineId));
+
+        // Get old stage IDs for this pipeline
+        const oldStages = await tx.select({ id: dealStages.id })
+          .from(dealStages)
+          .where(and(eq(dealStages.tenantId, ctx.tenantId), eq(dealStages.pipelineId, pipelineId)));
+
+        if (oldStages.length > 0) {
+          const oldStageIds = oldStages.map(s => s.id);
+
+          // Insert new stages first so we have a valid target for deal reassignment
+          const insertedStages = await tx.insert(dealStages).values(
+            pipelineStages.map((stage, idx) => ({
+              tenantId: ctx.tenantId,
+              pipelineId,
+              name: stage,
+              order: idx,
+            }))
+          ).returning();
+
+          // Reassign any deals that reference old stages to the first new stage
+          const firstNewStageId = insertedStages[0]?.id;
+          if (firstNewStageId) {
+            await tx.update(deals)
+              .set({ stageId: firstNewStageId })
+              .where(and(
+                eq(deals.tenantId, ctx.tenantId),
+                inArray(deals.stageId, oldStageIds)
+              ));
+          }
+
+          // Now safe to delete old stages (no FK references remain)
+          await tx.delete(dealStages).where(
+            and(eq(dealStages.tenantId, ctx.tenantId), inArray(dealStages.id, oldStageIds))
+          );
+        } else {
+          // No existing stages, just insert new ones
+          await tx.insert(dealStages).values(
+            pipelineStages.map((stage, idx) => ({
+              tenantId: ctx.tenantId,
+              pipelineId,
+              name: stage,
+              order: idx,
+            }))
+          );
+        }
+
+        // Remove any additional duplicate default pipelines (keep only the primary)
+        if (existingDefaults.length > 1) {
+          for (const extra of existingDefaults.slice(1)) {
+            const extraStages = await tx.select({ id: dealStages.id })
+              .from(dealStages)
+              .where(and(eq(dealStages.tenantId, ctx.tenantId), eq(dealStages.pipelineId, extra.id)));
+
+            if (extraStages.length > 0) {
+              const extraStageIds = extraStages.map(s => s.id);
+              // Reassign deals from extra pipeline stages to the first new stage
+              const firstStage = await tx.select({ id: dealStages.id })
+                .from(dealStages)
+                .where(and(eq(dealStages.tenantId, ctx.tenantId), eq(dealStages.pipelineId, pipelineId)))
+                .limit(1);
+
+              if (firstStage[0]) {
+                await tx.update(deals)
+                  .set({ stageId: firstStage[0].id })
+                  .where(and(
+                    eq(deals.tenantId, ctx.tenantId),
+                    inArray(deals.stageId, extraStageIds)
+                  ));
+              }
+
+              await tx.delete(dealStages).where(
+                and(eq(dealStages.tenantId, ctx.tenantId), inArray(dealStages.id, extraStageIds))
+              );
+            }
+
+            await tx.delete(pipelines).where(eq(pipelines.id, extra.id));
+          }
+        }
+      } else {
+        // No existing default pipeline, create a new one
+        const [p] = await tx.insert(pipelines).values({
+          tenantId: ctx.tenantId,
+          name: v.pipelineName.trim(),
+          isDefault: true,
+        }).returning();
+
+        if (!p) throw new Error('Failed to create pipeline');
+        pipelineId = p.id;
+
         await tx.insert(dealStages).values(
           pipelineStages.map((stage, idx) => ({
             tenantId: ctx.tenantId,
-            pipelineId: p.id,
+            pipelineId,
             name: stage,
             order: idx,
           }))
@@ -91,7 +190,7 @@ export async function POST(request: NextRequest) {
         set: { isCompleted: true, completedAt: new Date(), updatedAt: new Date() },
       });
 
-      return [p];
+      return [{ id: pipelineId }];
     });
 
     return NextResponse.json({

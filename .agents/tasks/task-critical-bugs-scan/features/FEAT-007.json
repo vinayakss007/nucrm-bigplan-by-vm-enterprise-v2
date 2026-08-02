@@ -1,0 +1,21 @@
+{
+  "id": "FEAT-007",
+  "type": "fix",
+  "description": "Address 3 issues from v2 review: (1) escapeLike must escape backslash before other metacharacters, (2) onboarding pipeline deletion must handle FK constraint on deals.stageId, (3) deals endpoint cache key pollution must be removed like contacts.",
+  "status": "in_progress",
+  "steps": [
+    "Fix lib/api/sanitize-like.ts: add .replace(/\\\\/g, '\\\\\\\\') as the FIRST replacement before % and _",
+    "Fix app/api/tenant/onboarding/route.ts: instead of delete-and-recreate, update the existing pipeline in place - update name, delete old stages (reassigning deals first), then insert new stages",
+    "Fix app/api/tenant/deals/route.ts: remove cache.get() and cache.set() from GET handler, remove cache import if unused (keep cache.delByPattern in POST)"
+  ],
+  "acceptance_criteria": [
+    "escapeLike escapes backslash before % and _",
+    "Onboarding pipeline update does not violate FK constraints when deals exist",
+    "Deals GET endpoint does not use cache.get/cache.set with raw query string key",
+    "TypeScript compiles without errors",
+    "Unit tests pass"
+  ],
+  "verification": ["npm run typecheck", "npm run test:unit"],
+  "blocked_reason": null,
+  "findings": null
+}

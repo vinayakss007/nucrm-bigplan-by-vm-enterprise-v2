@@ -14,6 +14,7 @@ import { resolveAssignee } from '@/lib/assignment-resolver';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
+import { escapeLike } from '@/lib/api/sanitize-like';
 
 // Whitelist for sort columns to prevent SQL injection
  
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (q) {
-      const searchWildcard = `%${q}%`;
+      const searchWildcard = `%${escapeLike(q)}%`;
       filters.push(or(
         ilike(leads.firstName, searchWildcard),
         ilike(leads.lastName, searchWildcard),
@@ -353,7 +354,7 @@ export async function POST(request: NextRequest) {
 
     fireWebhooks(ctx.tenantId, 'lead.created', { id: newLead.id, email: v.email }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
-    return NextResponse.json(newLead, { status: 201 });
+    return NextResponse.json({ data: newLead }, { status: 201 });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

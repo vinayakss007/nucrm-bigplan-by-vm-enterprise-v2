@@ -1,0 +1,26 @@
+{
+  "id": "FEAT-006",
+  "type": "fix",
+  "description": "Address 6 issues found during semantic review: (1) Invoices page reads old key data.invoices, (2) Subscriptions page reads old key data.subscriptions, (3) Products search endpoint missing escapeLike, (4) Subscriptions total count ignores status filter, (5) deal-related-panel JSDoc comment stale, (6) Invoice unique-violation detection should use error code 23505 instead of message.includes('unique').",
+  "status": "in_progress",
+  "steps": [
+    "Fix app/tenant/invoices/page.tsx: change data.invoices to data.data",
+    "Fix app/tenant/subscriptions/page.tsx: change data.subscriptions to data.data",
+    "Fix app/api/tenant/products/route.ts: import and use escapeLike on the q parameter",
+    "Fix app/api/tenant/subscriptions/route.ts: use and(...conditions) for total count query",
+    "Fix components/tenant/deal-related-panel.tsx: update stale JSDoc comment",
+    "Fix app/api/tenant/invoices/route.ts and app/api/tenant/quotes/[id]/convert-to-invoice/route.ts: check (err as any).code === '23505' instead of message.includes('unique')"
+  ],
+  "acceptance_criteria": [
+    "Frontend pages read data.data instead of old keys",
+    "Products search uses escapeLike on user input",
+    "Subscriptions total count respects status filter",
+    "JSDoc comment is accurate",
+    "Unique violation detection uses PostgreSQL error code",
+    "TypeScript compiles without errors",
+    "Unit tests pass"
+  ],
+  "verification": ["npm run typecheck", "npm run test:unit"],
+  "blocked_reason": null,
+  "findings": null
+}

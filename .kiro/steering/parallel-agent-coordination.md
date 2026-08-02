@@ -41,7 +41,7 @@ The failure compounds:
    failure — so the next batch merges red too.
 
 `main` went red three times this way. Once, **19 typecheck errors landed in a
-single batch**. The `Deploy` workflow runs `npm test` *before* Docker and SSH, so
+single batch**. The `Deploy` workflow runs `npm test` _before_ Docker and SSH, so
 it had never completed successfully in 387 runs.
 
 `Lint & Typecheck` is the fast check that catches real breakage. Wait for it on
@@ -94,6 +94,6 @@ implementation change does not produce a false failure.
 
 Do not pin a moving target either. A rollback test hardcoded
 `TAG_NO_ROLLBACK = '0000_init'`; #829 then gave that migration a rollback and five
-tests broke at once. Two of its assertions were literally *that coverage must be
-incomplete* — impossible to satisfy once #640 completes. Use a fixture you
+tests broke at once. Two of its assertions were literally _that coverage must be
+incomplete_ — impossible to satisfy once #640 completes. Use a fixture you
 control.

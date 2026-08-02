@@ -6,10 +6,10 @@ import { FileText, ListChecks, Receipt } from 'lucide-react';
 
 /**
  * Field names below are the camelCase Drizzle row shapes actually returned by
- * the three APIs — verified against:
+ * the three APIs - verified against:
  *   GET /api/tenant/follow-ups?deal_id=  -> { data: [...] }
  *   GET /api/tenant/quotes?dealId=       -> { quotes: [...] }
- *   GET /api/tenant/invoices             -> { invoices: [...] }  (no deal filter)
+ *   GET /api/tenant/invoices             -> { data: [...] }  (no deal filter)
  */
 interface FollowUpItem {
   id: string;
@@ -81,8 +81,8 @@ export default function DealRelatedPanel({ dealId }: { dealId: string }) {
       setFollowUps(Array.isArray(fuRes.data) ? (fuRes.data as FollowUpItem[]) : []);
       setQuotes(Array.isArray(qRes.quotes) ? (qRes.quotes as QuoteItem[]) : []);
       setInvoices(
-        Array.isArray(iRes.invoices)
-          ? (iRes.invoices as InvoiceItem[]).filter((inv) => inv.dealId === dealId)
+        Array.isArray(iRes.data)
+          ? (iRes.data as InvoiceItem[]).filter((inv) => inv.dealId === dealId)
           : []
       );
       setLoading(false);

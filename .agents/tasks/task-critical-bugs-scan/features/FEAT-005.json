@@ -1,0 +1,23 @@
+{
+  "id": "FEAT-005",
+  "type": "fix",
+  "description": "Fix reliability issues: unhandled error conditions, missing permission checks, and retry_after calculation bug. Multiple issues: (1) In lib/auth/api-handlers.ts login, the `retry_after` calculation `Math.ceil((blockedUntil.getTime() - Date.now() - Date.now()) / 1000 / 60)` subtracts Date.now() TWICE, producing a negative/wrong value. (2) Invoices GET endpoint silently swallows query validation errors and falls back to defaults instead of returning 400. (3) Subscriptions GET uses raw unchecked page/limit params that can be NaN. (4) The contacts GET endpoint caches responses by search params but the cache key includes the raw query string which can be manipulated to poison cache. (5) The invoices GET total count query does NOT apply the same status/contactId filters as the results query, always returning total unfiltered count.",
+  "status": "in_progress",
+  "steps": [
+    "Fix retry_after calculation in lib/auth/api-handlers.ts: change `Math.ceil((ipBlockCheck.blockedUntil?.getTime() ?? Date.now() - Date.now()) / 1000 / 60)` to `Math.ceil(((ipBlockCheck.blockedUntil?.getTime() ?? Date.now()) - Date.now()) / 1000 / 60)` - add parentheses around the nullish coalescing to fix operator precedence. Same fix for the email block check below it.",
+    "In app/api/tenant/invoices/route.ts GET: change the fallback pattern. Instead of silently using defaults when validation fails (`const q = qValidated instanceof NextResponse ? { offset: 0, limit: 50 } : qValidated.data`), return the validation error response: `if (qValidated instanceof NextResponse) return qValidated;`",
+    "In app/api/tenant/subscriptions/route.ts GET: add parseInt validation for page/limit with fallback and bounds checking: `const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1);` and `const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50') || 50));`",
+    "In app/api/tenant/invoices/route.ts GET: fix the total count query to use the SAME whereConditions as the results query (currently it only filters by tenantId, ignoring status and contactId filters).",
+    "In app/api/tenant/contacts/route.ts GET: normalize the cache key to prevent cache pollution. Sort search params or use a canonical representation. Better yet, remove the manual cache.set() since the data is already tenant-scoped and 30-second TTL provides minimal benefit with high invalidation complexity."
+  ],
+  "acceptance_criteria": [
+    "retry_after in login 429 responses returns correct positive minutes until unblock",
+    "Invoice list total count reflects filtered results, not total unfiltered count",
+    "Invalid query params on invoices/subscriptions return 400 instead of silently defaulting",
+    "TypeScript compiles without errors",
+    "Existing tests pass"
+  ],
+  "verification": ["npm run typecheck", "npm run test:unit"],
+  "blocked_reason": null,
+  "findings": ""
+}

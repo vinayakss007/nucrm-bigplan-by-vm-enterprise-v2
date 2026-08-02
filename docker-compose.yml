@@ -38,7 +38,15 @@ services:
     network_mode: host
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/api/health",
+        ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -228,7 +236,14 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "dacaf6be257062d9839bf9cacbbaccd237df7649335acad5", "ping"]
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "-a",
+          "dacaf6be257062d9839bf9cacbbaccd237df7649335acad5",
+          "ping",
+        ]
       interval: 10s
       timeout: 3s
       retries: 5

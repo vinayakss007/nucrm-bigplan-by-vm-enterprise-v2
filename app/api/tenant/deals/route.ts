@@ -13,7 +13,7 @@ import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
 import { cache } from '@/lib/cache';
 import { archiveFilter } from '@/lib/api/deals-archive-filter';
-import { escapeIlikeWildcards } from '@/lib/export';
+import { escapeLike } from '@/lib/api/sanitize-like';
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,10 +32,6 @@ export async function GET(request: NextRequest) {
     if (query instanceof NextResponse) return query;
     const { offset, limit, stage_id, stage: _stage, pipeline_id, q, archived } = query.data;
 
-    const cacheKey = `tenant:${ctx.tenantId}:deals:${searchParams.toString()}`;
-    const cached = await cache.get(cacheKey);
-    if (cached) return NextResponse.json(cached);
-
     const filters = [
       eq(deals.tenantId, ctx.tenantId),
       isNull(deals.deletedAt),
@@ -52,7 +48,7 @@ export async function GET(request: NextRequest) {
 
     if (stage_id) filters.push(eq(deals.stageId, stage_id));
     if (pipeline_id) filters.push(eq(deals.pipelineId, pipeline_id));
-    if (q) filters.push(ilike(deals.title, `%${escapeIlikeWildcards(q)}%`));
+    if (q) filters.push(ilike(deals.title, `%${escapeLike(q)}%`));
 
     const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
       .from(deals)
@@ -87,7 +83,6 @@ export async function GET(request: NextRequest) {
     .offset(offset);
 
     const response = { data, total: countResult?.count ?? 0 };
-    cache.set(cacheKey, response, 30);
     return NextResponse.json(response);
   
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

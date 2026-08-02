@@ -4,24 +4,24 @@ Production deployment on a single VM (8 GB RAM recommended).
 
 ## Prerequisites
 
-| Service | Minimum | Recommended |
-|---------|---------|-------------|
-| VM RAM | 4 GB | 8 GB |
-| CPU | 2 vCPU | 4 vCPU |
-| Disk | 40 GB SSD | 80 GB SSD |
-| OS | Ubuntu 22.04+ / Debian 12+ | Ubuntu 24.04 |
-| Docker | 24+ | Latest |
+| Service | Minimum                    | Recommended  |
+| ------- | -------------------------- | ------------ |
+| VM RAM  | 4 GB                       | 8 GB         |
+| CPU     | 2 vCPU                     | 4 vCPU       |
+| Disk    | 40 GB SSD                  | 80 GB SSD    |
+| OS      | Ubuntu 22.04+ / Debian 12+ | Ubuntu 24.04 |
+| Docker  | 24+                        | Latest       |
 
 ### External Services Required
 
-| Service | Purpose | Where to get |
-|---------|---------|--------------|
-| **Domain + DNS** | Public URL | Any registrar |
-| **Email (Resend)** | Transactional email | [resend.com](https://resend.com) |
-| **Sentry** | Error tracking | [sentry.io](https://sentry.io) |
-| **LLM API key** | AI features | OpenAI / Anthropic / Groq |
-| Stripe *(optional)* | Billing | [stripe.com](https://stripe.com) |
-| Telegram Bot *(optional)* | Admin alerts | [@BotFather](https://t.me/BotFather) |
+| Service                   | Purpose             | Where to get                         |
+| ------------------------- | ------------------- | ------------------------------------ |
+| **Domain + DNS**          | Public URL          | Any registrar                        |
+| **Email (Resend)**        | Transactional email | [resend.com](https://resend.com)     |
+| **Sentry**                | Error tracking      | [sentry.io](https://sentry.io)       |
+| **LLM API key**           | AI features         | OpenAI / Anthropic / Groq            |
+| Stripe _(optional)_       | Billing             | [stripe.com](https://stripe.com)     |
+| Telegram Bot _(optional)_ | Admin alerts        | [@BotFather](https://t.me/BotFather) |
 
 ## Quick Start (5 minutes)
 
@@ -73,18 +73,18 @@ bash deploy/scripts/deploy.sh
 
 ## Environment Variables Overview
 
-| Section | Variables | Notes |
-|---------|-----------|-------|
-| Core | `NEXT_PUBLIC_APP_URL`, `ALLOWED_ORIGINS` | Your public domain |
-| Auth | `JWT_SECRET`, `SESSION_SECRET`, `ENCRYPTION_KEY`, `SETUP_KEY` | Generated secrets |
-| Database | `DATABASE_URL`, `POSTGRES_PASSWORD` | Auto-configured in Docker |
-| Redis | `REDIS_URL` | `redis://redis:6379` in Docker |
-| Storage | `S3_ENDPOINT`, `AWS_ACCESS_KEY_ID/SECRET` | MinIO or external S3 |
-| Email | `RESEND_API_KEY` | From resend.com dashboard |
-| AI | `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` | At least one required |
-| Sentry | `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT` | From sentry.io |
-| Monitoring | `GRAFANA_ADMIN_PASSWORD` | For Grafana login |
-| Billing | `STRIPE_SECRET_KEY` *(optional)* | For paid plans |
+| Section    | Variables                                                     | Notes                          |
+| ---------- | ------------------------------------------------------------- | ------------------------------ |
+| Core       | `NEXT_PUBLIC_APP_URL`, `ALLOWED_ORIGINS`                      | Your public domain             |
+| Auth       | `JWT_SECRET`, `SESSION_SECRET`, `ENCRYPTION_KEY`, `SETUP_KEY` | Generated secrets              |
+| Database   | `DATABASE_URL`, `POSTGRES_PASSWORD`                           | Auto-configured in Docker      |
+| Redis      | `REDIS_URL`                                                   | `redis://redis:6379` in Docker |
+| Storage    | `S3_ENDPOINT`, `AWS_ACCESS_KEY_ID/SECRET`                     | MinIO or external S3           |
+| Email      | `RESEND_API_KEY`                                              | From resend.com dashboard      |
+| AI         | `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`                       | At least one required          |
+| Sentry     | `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`                  | From sentry.io                 |
+| Monitoring | `GRAFANA_ADMIN_PASSWORD`                                      | For Grafana login              |
+| Billing    | `STRIPE_SECRET_KEY` _(optional)_                              | For paid plans                 |
 
 See `deploy/.env.production` for the full documented template.
 
@@ -148,27 +148,27 @@ bash deploy/scripts/deploy.sh --migrate
 
 ## Memory Budget (8 GB)
 
-| Service | RAM |
-|---------|-----|
-| App (x2) | 1.5 GB |
-| PostgreSQL | 1.5 GB |
-| Worker | 512 MB |
-| Redis | 512 MB |
-| MinIO | 512 MB |
-| Monitoring (Prometheus + Grafana) | 512 MB |
-| Nginx + Cron + Exporters | 256 MB |
-| OS overhead | ~1.2 GB |
-| **Total** | **~6.5 GB** |
+| Service                           | RAM         |
+| --------------------------------- | ----------- |
+| App (x2)                          | 1.5 GB      |
+| PostgreSQL                        | 1.5 GB      |
+| Worker                            | 512 MB      |
+| Redis                             | 512 MB      |
+| MinIO                             | 512 MB      |
+| Monitoring (Prometheus + Grafana) | 512 MB      |
+| Nginx + Cron + Exporters          | 256 MB      |
+| OS overhead                       | ~1.2 GB     |
+| **Total**                         | **~6.5 GB** |
 
 ## Troubleshooting
 
-| Symptom | Check |
-|---------|-------|
-| 502 Bad Gateway | `docker logs nucrm-nginx` — app may still be starting |
-| App crashes on start | `docker logs <app-container>` — usually missing env var |
-| Database connection refused | `docker exec nucrm-postgres pg_isready` |
-| Emails not sending | Verify `RESEND_API_KEY` in .env, check worker logs |
-| AI features not working | Verify `ENCRYPTION_KEY` is set, add API key at `/tenant/settings/ai-providers` |
+| Symptom                     | Check                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------ |
+| 502 Bad Gateway             | `docker logs nucrm-nginx` — app may still be starting                          |
+| App crashes on start        | `docker logs <app-container>` — usually missing env var                        |
+| Database connection refused | `docker exec nucrm-postgres pg_isready`                                        |
+| Emails not sending          | Verify `RESEND_API_KEY` in .env, check worker logs                             |
+| AI features not working     | Verify `ENCRYPTION_KEY` is set, add API key at `/tenant/settings/ai-providers` |
 
 ## Security Checklist
 
@@ -182,18 +182,18 @@ bash deploy/scripts/deploy.sh --migrate
 
 ## Port Reference
 
-| Port | Service | Type | Bind |
-|------|---------|------|------|
-| 80 | Nginx (reverse proxy → App) | System service | 0.0.0.0 (public) |
-| 3000 | App (Next.js dev/start) | Host process | 127.0.0.1 |
-| 3001 | Grafana dashboards | Docker | 127.0.0.1 |
-| 5432 | PostgreSQL | Host system | 127.0.0.1 |
-| 6379 | Redis | Docker | 127.0.0.1 |
-| 9000 | MinIO S3 API | Docker | 127.0.0.1 |
-| 9001 | MinIO Console | Docker | 127.0.0.1 |
-| 9090 | Prometheus | Docker | 127.0.0.1 |
-| 9093 | Alertmanager | Docker | 127.0.0.1 |
-| 9100 | Node Exporter (host metrics) | Docker | 127.0.0.1 |
-| 9121 | Redis Exporter | Docker | 127.0.0.1 |
-| 9187 | PostgreSQL Exporter | Docker | 127.0.0.1 |
-| 3100 | Loki (log aggregation) | Docker | 127.0.0.1 |
+| Port | Service                      | Type           | Bind             |
+| ---- | ---------------------------- | -------------- | ---------------- |
+| 80   | Nginx (reverse proxy → App)  | System service | 0.0.0.0 (public) |
+| 3000 | App (Next.js dev/start)      | Host process   | 127.0.0.1        |
+| 3001 | Grafana dashboards           | Docker         | 127.0.0.1        |
+| 5432 | PostgreSQL                   | Host system    | 127.0.0.1        |
+| 6379 | Redis                        | Docker         | 127.0.0.1        |
+| 9000 | MinIO S3 API                 | Docker         | 127.0.0.1        |
+| 9001 | MinIO Console                | Docker         | 127.0.0.1        |
+| 9090 | Prometheus                   | Docker         | 127.0.0.1        |
+| 9093 | Alertmanager                 | Docker         | 127.0.0.1        |
+| 9100 | Node Exporter (host metrics) | Docker         | 127.0.0.1        |
+| 9121 | Redis Exporter               | Docker         | 127.0.0.1        |
+| 9187 | PostgreSQL Exporter          | Docker         | 127.0.0.1        |
+| 3100 | Loki (log aggregation)       | Docker         | 127.0.0.1        |

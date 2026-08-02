@@ -6,20 +6,20 @@
 
 ## Complete Service Map
 
-| Service | Internal Port | External Access | Container Name |
-|---------|--------------|-----------------|----------------|
-| App (Next.js) | 3000 | via nginx :443 | nucrm-app-1, nucrm-app-2 |
-| Worker (BullMQ) | - | none | nucrm-worker |
-| Cron | - | none | nucrm-cron |
-| PostgreSQL | 5432 | 127.0.0.1:5432 | nucrm-postgres |
-| Redis | 6379 | 127.0.0.1:6379 | nucrm-redis |
-| MinIO (S3) | 9000/9001 | 127.0.0.1:9000 | nucrm-minio |
-| Nginx | 80/443 | PUBLIC | nucrm-nginx |
-| Prometheus | 9090 | 127.0.0.1:9090 | nucrm-prometheus |
-| Grafana | 3000 (→3001) | 127.0.0.1:3001 | nucrm-grafana |
-| Node Exporter | 9100 | internal only | nucrm-node-exporter |
-| Postgres Exporter | 9187 | internal only | nucrm-postgres-exporter |
-| Redis Exporter | 9121 | internal only | nucrm-redis-exporter |
+| Service           | Internal Port | External Access | Container Name           |
+| ----------------- | ------------- | --------------- | ------------------------ |
+| App (Next.js)     | 3000          | via nginx :443  | nucrm-app-1, nucrm-app-2 |
+| Worker (BullMQ)   | -             | none            | nucrm-worker             |
+| Cron              | -             | none            | nucrm-cron               |
+| PostgreSQL        | 5432          | 127.0.0.1:5432  | nucrm-postgres           |
+| Redis             | 6379          | 127.0.0.1:6379  | nucrm-redis              |
+| MinIO (S3)        | 9000/9001     | 127.0.0.1:9000  | nucrm-minio              |
+| Nginx             | 80/443        | PUBLIC          | nucrm-nginx              |
+| Prometheus        | 9090          | 127.0.0.1:9090  | nucrm-prometheus         |
+| Grafana           | 3000 (→3001)  | 127.0.0.1:3001  | nucrm-grafana            |
+| Node Exporter     | 9100          | internal only   | nucrm-node-exporter      |
+| Postgres Exporter | 9187          | internal only   | nucrm-postgres-exporter  |
+| Redis Exporter    | 9121          | internal only   | nucrm-redis-exporter     |
 
 ---
 
@@ -178,14 +178,14 @@ ssh -N \
   DEPLOY_USER@SERVER_IP
 ```
 
-| Dashboard | URL (with the tunnel up) | Credentials |
-|-----------|--------------------------|-------------|
-| Grafana | http://localhost:3001 | `GRAFANA_ADMIN_USER` (default `admin`) / `GRAFANA_ADMIN_PASSWORD` |
-| Prometheus | http://localhost:9090 | none — the tunnel *is* the access control |
-| Alertmanager | http://localhost:9093 | none |
-| Loki | http://localhost:3100 | none — queried through Grafana, rarely direct |
-| MinIO Console | http://localhost:9001 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` |
-| Sentry | https://sentry.io/organizations/YOUR_ORG/ | Your Sentry account |
+| Dashboard     | URL (with the tunnel up)                  | Credentials                                                       |
+| ------------- | ----------------------------------------- | ----------------------------------------------------------------- |
+| Grafana       | http://localhost:3001                     | `GRAFANA_ADMIN_USER` (default `admin`) / `GRAFANA_ADMIN_PASSWORD` |
+| Prometheus    | http://localhost:9090                     | none — the tunnel _is_ the access control                         |
+| Alertmanager  | http://localhost:9093                     | none                                                              |
+| Loki          | http://localhost:3100                     | none — queried through Grafana, rarely direct                     |
+| MinIO Console | http://localhost:9001                     | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`                     |
+| Sentry        | https://sentry.io/organizations/YOUR_ORG/ | Your Sentry account                                               |
 
 Prometheus, Alertmanager and Loki have **no authentication of their own**. They are
 safe only because they are not listening on a public interface. Do not publish them
@@ -197,32 +197,32 @@ If the team outgrows tunnels, put the services behind an authenticating proxy
 
 ### Key Grafana Metrics to Watch
 
-| Metric | Warning | Critical |
-|--------|---------|----------|
-| Memory usage | > 80% | > 90% |
-| CPU usage | > 70% | > 85% |
-| Disk usage | > 75% | > 85% |
-| Postgres connections | > 40 | > 50 (max 60) |
-| Redis memory | > 400MB | > 450MB (max 512MB) |
-| App response time P95 | > 500ms | > 2000ms |
-| Error rate (Sentry) | > 1/min | > 10/min |
+| Metric                | Warning | Critical            |
+| --------------------- | ------- | ------------------- |
+| Memory usage          | > 80%   | > 90%               |
+| CPU usage             | > 70%   | > 85%               |
+| Disk usage            | > 75%   | > 85%               |
+| Postgres connections  | > 40    | > 50 (max 60)       |
+| Redis memory          | > 400MB | > 450MB (max 512MB) |
+| App response time P95 | > 500ms | > 2000ms            |
+| Error rate (Sentry)   | > 1/min | > 10/min            |
 
 ---
 
 ## Cron Jobs Running
 
-| Schedule | Job | What it does |
-|----------|-----|--------------|
-| */5 min | process-sequences | Advance email sequences |
-| */10 min | retry-webhooks | Retry failed webhook deliveries |
-| Hourly | task-reminders | Send task due notifications |
-| Daily 00:00 | trial-check | Expire trial tenants |
-| Weekly Sun | usage-snapshot | Record usage stats |
-| Daily 02:00 | auto-backup | PostgreSQL dump → S3 |
-| Weekly Sun 03:00 | backup-health | Verify backup integrity |
-| Weekly Sun 04:00 | cleanup | Purge soft-deleted records >30d |
-| Daily 05:00 | subscription-check | Catch missed Stripe webhooks |
-| 3x daily | warmup-emails | Email deliverability warm-up |
+| Schedule         | Job                | What it does                    |
+| ---------------- | ------------------ | ------------------------------- |
+| \*/5 min         | process-sequences  | Advance email sequences         |
+| \*/10 min        | retry-webhooks     | Retry failed webhook deliveries |
+| Hourly           | task-reminders     | Send task due notifications     |
+| Daily 00:00      | trial-check        | Expire trial tenants            |
+| Weekly Sun       | usage-snapshot     | Record usage stats              |
+| Daily 02:00      | auto-backup        | PostgreSQL dump → S3            |
+| Weekly Sun 03:00 | backup-health      | Verify backup integrity         |
+| Weekly Sun 04:00 | cleanup            | Purge soft-deleted records >30d |
+| Daily 05:00      | subscription-check | Catch missed Stripe webhooks    |
+| 3x daily         | warmup-emails      | Email deliverability warm-up    |
 
 ---
 
@@ -266,15 +266,15 @@ ufw enable
 
 ## Cost Estimate (Monthly)
 
-| Item | Provider Example | Cost |
-|------|-----------------|------|
-| VM 8GB/4vCPU | Hetzner CX32 / DigitalOcean | ~$20-40 |
-| Domain | Cloudflare | ~$10/year |
-| Resend (email) | 3000 free/month, then $20 | $0-20 |
-| Sentry | 5K errors free, then $26 | $0-26 |
-| LLM (Anthropic) | Pay per token | $5-50 |
-| Stripe | 2.9% + 30c per transaction | Variable |
-| **Total (base)** | | **~$25-50/month** |
+| Item             | Provider Example            | Cost              |
+| ---------------- | --------------------------- | ----------------- |
+| VM 8GB/4vCPU     | Hetzner CX32 / DigitalOcean | ~$20-40           |
+| Domain           | Cloudflare                  | ~$10/year         |
+| Resend (email)   | 3000 free/month, then $20   | $0-20             |
+| Sentry           | 5K errors free, then $26    | $0-26             |
+| LLM (Anthropic)  | Pay per token               | $5-50             |
+| Stripe           | 2.9% + 30c per transaction  | Variable          |
+| **Total (base)** |                             | **~$25-50/month** |
 
 ---
 
@@ -312,11 +312,13 @@ deploy/
 ## Runbook: Migration Ledger Drift Recovery (Incident 2026-07-31)
 
 ### Symptoms
+
 - `npm run db:migrate` fails with `ERROR: Database has schema but it is NOT at the latest migration state`
 - App API writes fail with `column "..." does not exist` (e.g. `team_id` on contacts)
 - `drizzle.__drizzle_migrations` is empty (or shorter than the journal) while tables exist
 
 ### Root Cause
+
 A database provisioned with `db:push`/`db:sync` or restored from an older dump has
 schema but no migration ledger, or a ledger shorter than the current schema state.
 The recovery check in `scripts/migrate.ts` now verifies the LAST journal
@@ -324,6 +326,7 @@ migration's marker (`backup_records.last_verified_at` from 0044) before stamping
 a drifted DB is refused instead of being silently stamped as fully migrated.
 
 ### Recovery Steps
+
 1. **Back up first** (non-negotiable):
    ```bash
    pg_dump "$DATABASE_URL" > /tmp/pre-recovery-$(date +%F).sql
@@ -357,6 +360,7 @@ a drifted DB is refused instead of being silently stamped as fully migrated.
 5. **Smoke test the app** — create a contact and a deal; both must return 2xx.
 
 ### Prevention
+
 - Never provision with `db:sync`/`db:push` on production — always `db:migrate`.
 - If a dump restore is required, restore the `drizzle` schema too (it holds the ledger).
 - After any restore, run the marker check in step 2 BEFORE pointing traffic at the DB.
