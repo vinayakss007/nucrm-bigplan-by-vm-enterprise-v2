@@ -4,17 +4,27 @@ import type { NextRequest } from 'next/server';
 const mockReturning = vi.fn().mockResolvedValue([]);
 const mockUpdateSet = vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ returning: mockReturning }) });
 const mockTxUpdate = vi.fn().mockReturnValue({ set: mockUpdateSet });
+const mockTxInsert = vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
 const mockTransaction = vi.fn(async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
-  const tx = { update: mockTxUpdate, insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }) };
+  const tx = { update: mockTxUpdate, insert: mockTxInsert };
   return cb(tx);
 });
+const mockSelectLimit = vi.fn().mockResolvedValue([]);
+const mockSelectWhere = vi.fn().mockReturnValue({ limit: mockSelectLimit });
+const mockSelectFrom = vi.fn().mockReturnValue({ where: mockSelectWhere });
+const mockDbUpdateReturning = vi.fn().mockResolvedValue([]);
+const mockDbUpdateWhere = vi.fn().mockReturnValue({ returning: mockDbUpdateReturning });
+const mockDbUpdateSet = vi.fn().mockReturnValue({ where: mockDbUpdateWhere });
+const mockInsertValues = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('@/drizzle/db', () => ({
   db: {
     transaction: mockTransaction,
     insert: vi.fn().mockReturnValue({
-      values: vi.fn().mockResolvedValue(undefined),
+      values: mockInsertValues,
     }),
+    select: vi.fn().mockReturnValue({ from: mockSelectFrom }),
+    update: vi.fn().mockReturnValue({ set: mockDbUpdateSet }),
   },
 }));
 
@@ -141,6 +151,46 @@ describe('resend webhook DNC', () => {
 
       const res = await POST(req);
       expect(res.status).toBe(401);
+    });
+  });
+
+  describe('email.replied', () => {
+    beforeEach(() => {
+      mockSelectLimit.mockResolvedValue([]);
+      mockDbUpdateReturning.mockResolvedValue([]);
+      mockUpdateSet.mockReturnValue({ where: vi.fn().mockReturnValue({ returning: mockReturning }) });
+    });
+
+    it('cancels active sequence enrollments when a contact replies', async () => {
+      mockSelectLimit.mockResolvedValue([{ id: 'c3', tenantId: 't3' }]);
+      mockDbUpdateReturning.mockResolvedValue([{ id: 'e1' }, { id: 'e2' }]);
+
+      const { POST } = await import('@/app/api/webhooks/resend/route');
+      const req = makeRequest({
+        type: 'email.replied',
+        data: { to: ['replier@test.com'], created_at: new Date().toISOString() },
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      expect(mockSelectFrom).toHaveBeenCalled();
+      expect(mockDbUpdateSet).toHaveBeenCalled();
+      expect(mockDbUpdateReturning).toHaveBeenCalled();
+    });
+
+    it('does NOT mark a replier as doNotContact', async () => {
+      mockSelectLimit.mockResolvedValue([{ id: 'c4', tenantId: 't4' }]);
+      mockDbUpdateReturning.mockResolvedValue([]);
+
+      const { POST } = await import('@/app/api/webhooks/resend/route');
+      const req = makeRequest({
+        type: 'email.replied',
+        data: { to: ['engaged@test.com'], created_at: new Date().toISOString() },
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      expect(mockTransaction).not.toHaveBeenCalled();
     });
   });
 
