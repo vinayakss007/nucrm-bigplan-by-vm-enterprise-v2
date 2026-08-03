@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
     ctx.userId,
     row.plan_name ?? 'free',
     row.industry ?? null,
+    ctx.roleSlug ?? null,
   );
 
   return NextResponse.json({ layout: layoutResult.layout, source: layoutResult.source });
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest) {
     ctx.userId,
     row.plan_name ?? 'free',
     row.industry ?? null,
+    ctx.roleSlug ?? null,
   );
 
   return NextResponse.json({

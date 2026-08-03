@@ -1,7 +1,7 @@
 import { db } from '@/drizzle/db';
 import { dashboardLayouts } from '@/drizzle/schema/dashboard';
 import { eq, and, desc } from 'drizzle-orm';
-import { getPlanDefaultLayout, getIndustryDefaultLayout } from '@/lib/dashboard/layout-defaults';
+import { getPlanDefaultLayout, getIndustryDefaultLayout, getRoleDefaultLayout } from '@/lib/dashboard/layout-defaults';
 import type { DashboardLayout, LayoutSource } from '@/types/dashboard';
 
 export async function getSavedLayout(
@@ -80,6 +80,7 @@ export async function resolveDashboardLayout(
   userId: string,
   planName: string,
   industryId?: string | null,
+  roleSlug?: string | null,
 ): Promise<{ layout: DashboardLayout; source: LayoutSource }> {
   const saved = await getSavedLayout(tenantId, userId);
   if (saved) return saved;
@@ -88,6 +89,13 @@ export async function resolveDashboardLayout(
     const industry = getIndustryDefaultLayout(industryId);
     if (industry) {
       return { layout: industry, source: 'industry' };
+    }
+  }
+
+  if (roleSlug) {
+    const role = getRoleDefaultLayout(roleSlug);
+    if (role) {
+      return { layout: role, source: 'role' };
     }
   }
 
