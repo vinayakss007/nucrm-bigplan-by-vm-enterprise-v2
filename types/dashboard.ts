@@ -37,7 +37,7 @@ export interface DashboardDataState<T> {
   stale: boolean
 }
 
-export type LayoutSource = 'user' | 'admin' | 'industry' | 'plan'
+export type LayoutSource = 'user' | 'admin' | 'industry' | 'plan' | 'role'
 
 export interface SavedDashboardLayout {
   id: string

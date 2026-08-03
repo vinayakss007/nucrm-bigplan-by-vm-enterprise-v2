@@ -37,5 +37,5 @@ datasources:
         - name: requestId
           type: field
           matcherRegex: '\[([^\]]+)\]'
-          url: ''
-          urlDisplayLabel: 'Request ID'
+          url: ""
+          urlDisplayLabel: "Request ID"
