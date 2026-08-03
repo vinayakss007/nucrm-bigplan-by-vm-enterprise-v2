@@ -8,6 +8,7 @@ import { fireWebhooks, type WebhookEvent } from '@/lib/webhooks';
 import { logAudit } from '@/lib/audit';
 import { devLogger } from '@/lib/dev-logger';
 import { logError } from '@/lib/errors-server';
+import { validateJsonb } from '@/lib/validation/jsonb';
 import {
   applyFieldMappings,
   loadFieldMappings,
@@ -121,6 +122,20 @@ function normalizeFields(data: Record<string, unknown>): Record<string, unknown>
     out[toCamelKey(key)] = val;
   }
   return out;
+}
+
+/**
+ * Sanitize a customFields JSONB value: validate size, depth, and key count.
+ * Returns the original value if valid, or `{}` if invalid (with a warning logged).
+ */
+function sanitizeCustomFields(raw: unknown, entity: string): Record<string, unknown> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const result = validateJsonb(raw, { label: `${entity}.customFields` });
+  if (!result.valid) {
+    console.warn(`[webhook] ${result.error} — sanitizing to empty`);
+    return {};
+  }
+  return raw as Record<string, unknown>;
 }
 
 /**
@@ -417,7 +432,7 @@ async function handleContact(
     website: sanitizeString(d['website'] as string, 500),
     linkedinUrl: sanitizeString(d['linkedinUrl'] as string, 500),
     twitterUrl: sanitizeString(d['twitterUrl'] as string, 500),
-    customFields: typeof d['customFields'] === 'object' ? d['customFields'] : {},
+    customFields: sanitizeCustomFields(d['customFields'], 'contact'),
     updatedAt: new Date(),
   };
 
@@ -501,7 +516,7 @@ async function handleLead(
     assignedTo: (d['assignedTo'] as string) || userId,
     tags: Array.isArray(d['tags']) ? d['tags'] : [],
     notes: sanitizeString(d['notes'] as string, 5000),
-    customFields: typeof d['customFields'] === 'object' ? d['customFields'] : {},
+    customFields: sanitizeCustomFields(d['customFields'], 'lead'),
     updatedAt: new Date(),
   };
 
@@ -655,7 +670,7 @@ async function handleDeal(
   // keys inside the `customFields` jsonb, so nothing the caller sends is lost.
   const amount = toDecimalString(d['amount'] ?? d['value']);
 
-  const customFields: Record<string, unknown> = { ...asPlainObject(d['customFields']) };
+  const customFields: Record<string, unknown> = sanitizeCustomFields(d['customFields'], 'deal');
   const probabilityRaw = d['probability'];
   if (probabilityRaw !== undefined && probabilityRaw !== null) {
     const n = typeof probabilityRaw === 'number' ? probabilityRaw : Number(String(probabilityRaw).trim());
@@ -755,7 +770,7 @@ async function handleCompany(
     phone: sanitizeString(d['phone'] as string, 50),
     address: sanitizeString(d['address'] as string, 500),
     notes: sanitizeString(d['notes'] as string, 5000),
-    customFields: typeof d['customFields'] === 'object' ? d['customFields'] : {},
+    customFields: sanitizeCustomFields(d['customFields'], 'company'),
     updatedAt: new Date(),
   };
 
@@ -809,7 +824,7 @@ async function handleTask(
     dealId: (d['dealId'] as string) || null,
     assignedTo: (d['assignedTo'] as string) || userId,
     completed: typeof d['completed'] === 'boolean' ? d['completed'] : false,
-    customFields: typeof d['customFields'] === 'object' ? d['customFields'] : {},
+    customFields: sanitizeCustomFields(d['customFields'], 'task'),
     updatedAt: new Date(),
   };
 

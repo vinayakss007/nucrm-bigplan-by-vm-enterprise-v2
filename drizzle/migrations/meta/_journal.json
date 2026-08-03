@@ -351,6 +351,13 @@
       "when": 1700000050000,
       "tag": "0050_data_validation_checks",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1700000051000,
+      "tag": "0051_jsonb_safety_limits",
+      "breakpoints": true
     }
   ]
 }
