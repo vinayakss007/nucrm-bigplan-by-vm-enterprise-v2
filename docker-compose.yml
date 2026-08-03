@@ -155,10 +155,13 @@ services:
   # Sits between app and postgres. Transaction mode with pool_size=20.
   # App should connect to pgbouncer:6432 instead of postgres:5432.
   pgbouncer:
-    image: edoburu/pgbouncer:1.22.0
+    image: edoburu/pgbouncer:latest
     container_name: nucrm-pgbouncer
+    network_mode: host
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER:-nucrm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nucrm}
+      - DATABASE_URL=postgres://${POSTGRES_USER:-nucrm}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB:-nucrm}
+      - LISTEN_PORT=6432
+      - AUTH_TYPE=scram-sha-256
       - POOL_MODE=transaction
       - DEFAULT_POOL_SIZE=20
       - MAX_CLIENT_CONN=200
@@ -176,8 +179,6 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
-    networks:
-      - nucrm-net
 
   # ── MinIO (S3-compatible storage) ─────────────────────────────────────────
   minio:
@@ -288,7 +289,7 @@ services:
       - ./deploy/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafdata:/var/lib/grafana
     ports:
-      - "127.0.0.1:3001:3000"
+      - "127.0.0.1:3001:3001"
     depends_on:
       - prometheus
       - loki
@@ -392,7 +393,7 @@ services:
     container_name: nucrm-postgres-exporter
     profiles: ["monitoring"]
     environment:
-      - DATA_SOURCE_NAME=postgresql://nucrm:nucrm_prod_db_pass_2026@localhost:5432/nucrm?sslmode=disable
+      - DATA_SOURCE_NAME=postgresql://nucrm:nucrm_prod_db_pass_2026@postgres:5432/nucrm?sslmode=disable
     ports:
       - "127.0.0.1:9187:9187"
     restart: unless-stopped
