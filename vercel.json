@@ -35,7 +35,7 @@
     {
       "path": "/api/cron/warmup-emails",
       "schedule": "0 9,13,17 * * *"
-    },
+    },,
     {
       "path": "/api/cron/process-at-risk",
       "schedule": "0 8 * * *"
@@ -47,6 +47,10 @@
     {
       "path": "/api/cron/subscription-renewal-check",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/scheduled-report-delivery",
+      "schedule": "0 8 * * *"
     }
   ]
 }
