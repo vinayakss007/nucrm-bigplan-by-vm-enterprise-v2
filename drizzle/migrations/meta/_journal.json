@@ -365,6 +365,13 @@
       "when": 1700000052000,
       "tag": "0052_email_format_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1700000053000,
+      "tag": "0053_text_length_limits",
+      "breakpoints": true
     }
   ]
 }
