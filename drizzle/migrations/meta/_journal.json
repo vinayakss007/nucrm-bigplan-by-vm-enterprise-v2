@@ -337,6 +337,13 @@
       "when": 1700000048000,
       "tag": "0048_deals_tasks_custom_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1700000049000,
+      "tag": "0049_fk_integrity",
+      "breakpoints": true
     }
   ]
 }
