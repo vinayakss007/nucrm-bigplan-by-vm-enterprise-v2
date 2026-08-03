@@ -216,4 +216,57 @@ describe('GET /api/tenant/reports/builder', () => {
     expect(contacts.metricOptions).toBeInstanceOf(Array);
     expect(contacts.groupByOptions.length).toBeGreaterThan(0);
   });
+
+  it('exposes the expanded entity set (quotes, invoices, tickets, leads)', async () => {
+    const { GET } = await import('@/app/api/tenant/reports/builder/route');
+
+    const request = testRequest('/api/tenant/reports/builder');
+    const response = await GET(request);
+    const json = await response.json();
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ids = json.entities.map((e: any) => e.id);
+    for (const id of ['quotes', 'invoices', 'tickets', 'leads']) {
+      expect(ids).toContain(id);
+    }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const invoices = json.entities.find((e: any) => e.id === 'invoices');
+    expect(invoices.metricOptions.some((m: any) => m.field === 'total_amount')).toBe(true);
+  });
+});
+
+describe('expanded entities', () => {
+  it('accepts the new entities in POST validation', async () => {
+    const { POST } = await import('@/app/api/tenant/reports/builder/route');
+
+    const request = testRequest('/api/tenant/reports/builder', {
+      method: 'POST',
+      body: {
+        entity: 'quotes',
+        metric: 'sum',
+        metricField: 'total_amount',
+        groupBy: 'status',
+      },
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+  });
+
+  it('rejects an invalid groupBy field for the new entities', async () => {
+    const { POST } = await import('@/app/api/tenant/reports/builder/route');
+
+    const request = testRequest('/api/tenant/reports/builder', {
+      method: 'POST',
+      body: {
+        entity: 'invoices',
+        metric: 'count',
+        groupBy: 'total_amount',
+      },
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(500);
+  });
 });

@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Validate inputs
-    const validEntities = ['contacts', 'deals', 'tasks', 'companies', 'activities'];
+    const validEntities = ['contacts', 'deals', 'tasks', 'companies', 'activities', 'quotes', 'invoices', 'tickets', 'leads'];
     if (!validEntities.includes(entity)) {
       return NextResponse.json({ error: `Invalid entity. Use: ${validEntities.join(', ')}` }, { status: 400 });
     }
@@ -132,15 +132,23 @@ const ALLOWED_GROUP_FIELDS: Record<string, string[]> = {
   tasks: ['priority', 'completed', 'created_at_month', 'created_at_week', 'assigned_to'],
   companies: ['industry', 'size', 'created_at_month'],
   activities: ['type', 'created_at_month', 'created_at_week', 'user_id'],
+  quotes: ['status', 'created_at_month', 'created_at_week'],
+  invoices: ['status', 'created_at_month', 'created_at_week'],
+  tickets: ['status', 'priority', 'category', 'created_at_month', 'created_at_week', 'assigned_to'],
+  leads: ['lead_status', 'lead_source', 'created_at_month', 'created_at_week'],
 };
 
 // Allowed metric fields per entity
 const ALLOWED_METRIC_FIELDS: Record<string, string[]> = {
   contacts: ['score'],
-  deals: ['value', 'probability'],
+  deals: ['amount', 'win_probability'],
   tasks: [],
   companies: [],
   activities: [],
+  quotes: ['total_amount'],
+  invoices: ['total_amount'],
+  tickets: [],
+  leads: ['score', 'value'],
 };
 
 async function executeReport(params: ReportParams): Promise<ReportResult> {
@@ -171,6 +179,10 @@ async function executeReport(params: ReportParams): Promise<ReportResult> {
     tasks: 'tasks',
     companies: 'companies',
     activities: 'activities',
+    quotes: 'quotes',
+    invoices: 'invoices',
+    tickets: 'support_tickets',
+    leads: 'leads',
   };
   const tableName = tableMap[entity]!;
 
@@ -184,7 +196,7 @@ async function executeReport(params: ReportParams): Promise<ReportResult> {
     conditions.push(sql`${sql.identifier(tableName)}.created_at <= ${new Date(dateRange.to)}`);
   }
 
-  if (['contacts', 'deals', 'tasks', 'companies', 'activities'].includes(entity)) {
+  if (['contacts', 'deals', 'tasks', 'companies', 'activities', 'quotes', 'invoices', 'tickets', 'leads'].includes(entity)) {
     conditions.push(sql`${sql.identifier(tableName)}.deleted_at IS NULL`);
   }
 
@@ -277,9 +289,9 @@ export async function GET(request: NextRequest) {
           ],
           metricOptions: [
             { id: 'count', label: 'Count' },
-            { id: 'sum', label: 'Total Value', field: 'value' },
-            { id: 'avg', label: 'Avg Value', field: 'value' },
-            { id: 'avg', label: 'Avg Probability', field: 'probability' },
+            { id: 'sum', label: 'Total Value', field: 'amount' },
+            { id: 'avg', label: 'Avg Value', field: 'amount' },
+            { id: 'avg', label: 'Avg Probability', field: 'win_probability' },
           ],
         },
         {
@@ -317,6 +329,58 @@ export async function GET(request: NextRequest) {
           ],
           metricOptions: [
             { id: 'count', label: 'Count' },
+          ],
+        },
+        {
+          id: 'quotes',
+          label: 'Quotes',
+          groupByOptions: [
+            { id: 'status', label: 'Status' },
+            { id: 'created_at_month', label: 'Month' },
+          ],
+          metricOptions: [
+            { id: 'count', label: 'Count' },
+            { id: 'sum', label: 'Total Amount', field: 'total_amount' },
+            { id: 'avg', label: 'Avg Amount', field: 'total_amount' },
+          ],
+        },
+        {
+          id: 'invoices',
+          label: 'Invoices',
+          groupByOptions: [
+            { id: 'status', label: 'Status' },
+            { id: 'created_at_month', label: 'Month' },
+          ],
+          metricOptions: [
+            { id: 'count', label: 'Count' },
+            { id: 'sum', label: 'Total Amount', field: 'total_amount' },
+            { id: 'avg', label: 'Avg Amount', field: 'total_amount' },
+          ],
+        },
+        {
+          id: 'tickets',
+          label: 'Tickets',
+          groupByOptions: [
+            { id: 'status', label: 'Status' },
+            { id: 'priority', label: 'Priority' },
+            { id: 'category', label: 'Category' },
+            { id: 'created_at_month', label: 'Month' },
+          ],
+          metricOptions: [
+            { id: 'count', label: 'Count' },
+          ],
+        },
+        {
+          id: 'leads',
+          label: 'Leads',
+          groupByOptions: [
+            { id: 'lead_status', label: 'Lead Status' },
+            { id: 'lead_source', label: 'Lead Source' },
+            { id: 'created_at_month', label: 'Month' },
+          ],
+          metricOptions: [
+            { id: 'count', label: 'Count' },
+            { id: 'avg', label: 'Avg Score', field: 'score' },
           ],
         },
       ],
