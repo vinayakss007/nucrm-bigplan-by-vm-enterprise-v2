@@ -337,6 +337,27 @@
       "when": 1700000048000,
       "tag": "0048_deals_tasks_custom_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1700000049000,
+      "tag": "0049_fk_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1700000050000,
+      "tag": "0050_data_validation_checks",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1700000051000,
+      "tag": "0051_jsonb_safety_limits",
+      "breakpoints": true
     }
   ]
 }
