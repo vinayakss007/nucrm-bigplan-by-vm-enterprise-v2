@@ -386,6 +386,13 @@
       "when": 1700000055000,
       "tag": "0055_jsonb_size_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1700000056000,
+      "tag": "0056_text_length_limits_phase0",
+      "breakpoints": true
     }
   ]
 }
