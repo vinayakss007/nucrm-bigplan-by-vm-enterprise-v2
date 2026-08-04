@@ -10,6 +10,7 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { installTemplateModules } from '@/lib/modules/auto-install';
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 export async function GET(request: NextRequest) {
   try {
@@ -214,6 +215,9 @@ export async function PATCH(request: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
+    const guardResult = await concurrencyGuard(db, onboardingProgress, undefined, ctx.tenantId, (rawBody as Record<string, unknown>).expectedUpdatedAt as string | Date | null | undefined);
+    if (guardResult) return guardResult;
+
     if (v.complete) {
       await db.insert(onboardingProgress).values({
         tenantId: ctx.tenantId,
@@ -223,7 +227,7 @@ export async function PATCH(request: NextRequest) {
         completedAt: new Date(),
       }).onConflictDoUpdate({
         target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
-        set: { isCompleted: true, completedAt: new Date(), updatedAt: new Date() }
+        set: { isCompleted: true, completedAt: new Date() }
       });
     } else if (v.step) {
       await db.insert(onboardingProgress).values({
@@ -234,7 +238,7 @@ export async function PATCH(request: NextRequest) {
         completedAt: new Date(),
       }).onConflictDoUpdate({
         target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
-        set: { isCompleted: true, completedAt: new Date(), updatedAt: new Date() }
+        set: { isCompleted: true, completedAt: new Date() }
       });
     }
     return NextResponse.json({ ok: true });

@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const IP_WHITELIST_KEY = 'ip_whitelist';
 
@@ -55,6 +56,21 @@ export async function PUT(request: NextRequest) {
     const enabled = v.enabled;
 
     const value = enabled && ipArray.length > 0 ? JSON.stringify(ipArray) : '[]';
+
+    const expectedUpdatedAt: string | Date | null | undefined = (rawBody as Record<string, unknown>).expectedUpdatedAt as string | Date | null ?? (rawBody as Record<string, unknown>)._updated_at as string | Date | null;
+
+    // Read existing row's id + updatedAt for concurrency check
+    const [existing] = await db
+      .select({ id: platformSettings.id, updatedAt: platformSettings.updatedAt })
+      .from(platformSettings)
+      .where(and(
+        eq(platformSettings.tenantId, ctx.tenantId),
+        eq(platformSettings.key, IP_WHITELIST_KEY),
+      ))
+      .limit(1);
+
+    const guard = await concurrencyGuard(db, platformSettings, existing?.id ?? null, ctx.tenantId, expectedUpdatedAt ?? existing?.updatedAt as string | Date | null | undefined);
+    if (guard) return guard;
 
     await db
       .insert(platformSettings)

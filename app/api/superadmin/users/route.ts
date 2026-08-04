@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { users, tenantMembers, tenants } from '@/drizzle/schema';
 import { eq, and, sql, ilike, desc, or } from 'drizzle-orm';
 import { hashPassword, validatePassword } from '@/lib/auth/session';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 /**
  * Super Admin Users API
@@ -135,6 +136,7 @@ export async function PATCH(request: NextRequest) {
       role?: string;
       status?: string;
     };
+    const expectedUpdatedAt: string | Date | null | undefined = (body as Record<string, unknown>).expectedUpdatedAt as string | Date | null ?? (body as Record<string, unknown>)._updated_at as string | Date | null;
 
     if (!id) return NextResponse.json({ error: 'User id is required' }, { status: 400 });
 
@@ -176,18 +178,13 @@ export async function PATCH(request: NextRequest) {
       if (status !== undefined) newMeta.account_status = status;
       updates.metadata = newMeta;
 
-      // Read-existing concurrency guard
-      const [freshExisting] = await db
-        .select({ updatedAt: users.updatedAt })
-        .from(users)
-        .where(eq(users.id, id))
-        .limit(1);
-      if (!freshExisting) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      const guard = await concurrencyGuard(db, users, id, null, expectedUpdatedAt);
+      if (guard) return guard;
 
       const [updated] = await db
         .update(users)
         .set(updates)
-        .where(and(eq(users.id, id), eq(users.updatedAt, freshExisting.updatedAt!)))
+        .where(and(eq(users.id, id), eq(users.updatedAt, new Date(expectedUpdatedAt as string | number | Date))))
         .returning({
           id: users.id,
           email: users.email,
@@ -200,17 +197,13 @@ export async function PATCH(request: NextRequest) {
     }
 
     // No metadata changes — plain update with concurrency guard
-    const [existingPlain] = await db
-      .select({ updatedAt: users.updatedAt })
-      .from(users)
-      .where(eq(users.id, id))
-      .limit(1);
-    if (!existingPlain) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const guard = await concurrencyGuard(db, users, id, null, expectedUpdatedAt);
+    if (guard) return guard;
 
     const [updated] = await db
       .update(users)
       .set(updates)
-      .where(and(eq(users.id, id), eq(users.updatedAt, existingPlain.updatedAt!)))
+      .where(and(eq(users.id, id), eq(users.updatedAt, new Date(expectedUpdatedAt as string | number | Date))))
       .returning({
         id: users.id,
         email: users.email,

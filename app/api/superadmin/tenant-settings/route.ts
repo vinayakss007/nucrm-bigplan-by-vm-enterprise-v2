@@ -12,6 +12,7 @@ import { db } from '@/drizzle/db';
 import { tenants, tenantMembers } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 export async function GET(req: NextRequest) {
   try {
@@ -91,12 +92,15 @@ export async function PATCH(req: NextRequest) {
     if (!incoming || typeof incoming !== 'object') return NextResponse.json({ error: 'settings object required' }, { status: 400 });
 
     const [tenant] = await db
-      .select({ id: tenants.id, settings: tenants.settings, updatedAt: tenants.updatedAt })
+      .select({ id: tenants.id, settings: tenants.settings })
       .from(tenants)
       .where(eq(tenants.id, tenant_id))
       .limit(1);
 
     if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+
+    const guardResult = await concurrencyGuard(db, tenants, tenant_id, tenant_id, body.expectedUpdatedAt);
+    if (guardResult) return guardResult;
 
     const existing = (tenant.settings as Record<string, unknown>) ?? {};
     // Merge only the known editable keys
@@ -114,11 +118,11 @@ export async function PATCH(req: NextRequest) {
 
     const [updated] = await db
       .update(tenants)
-      .set({ settings: merged, updatedAt: new Date() })
-      .where(and(eq(tenants.id, tenant_id), eq(tenants.updatedAt, tenant.updatedAt!)))
+      .set({ settings: merged })
+      .where(eq(tenants.id, tenant_id))
       .returning();
 
-    if (!updated) return NextResponse.json({ error: 'Settings were modified by another user — please refresh' }, { status: 409 });
+    if (!updated) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
 
     return NextResponse.json({ ok: true, message: 'Settings updated' });
  

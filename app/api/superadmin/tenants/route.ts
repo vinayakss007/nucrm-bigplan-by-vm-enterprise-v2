@@ -9,6 +9,7 @@ import { eq, and, sql, ilike, desc, or } from 'drizzle-orm';
 import { hashPassword } from '@/lib/auth/session';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { invalidateTenantCache } from '@/lib/cache';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 export async function GET(request: NextRequest) {
   try {
@@ -207,6 +208,7 @@ export async function PATCH(request: NextRequest) {
     const _v = validated.data;
     const id = rawBody.id;
     const updates = rawBody;
+    const expectedUpdatedAt: string | Date | null | undefined = rawBody.expectedUpdatedAt ?? rawBody._updated_at;
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
     const allowed = ['name', 'planId', 'status', 'billingEmail', 'primaryColor', 'logoUrl', 'customDomain', 'trialEndsAt', 'adminNotes', 'billingType', 'manualPaidUntil'];
@@ -238,17 +240,13 @@ export async function PATCH(request: NextRequest) {
 
     if (!Object.keys(mappedUpdates).length) return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
 
-    const [existing] = await db
-      .select({ updatedAt: tenants.updatedAt })
-      .from(tenants)
-      .where(eq(tenants.id, id))
-      .limit(1);
-    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const guard = await concurrencyGuard(db, tenants, id, null, expectedUpdatedAt);
+    if (guard) return guard;
 
     const [row] = await db
       .update(tenants)
       .set({ ...mappedUpdates, updatedAt: new Date() })
-      .where(and(eq(tenants.id, id), eq(tenants.updatedAt, existing.updatedAt!)))
+      .where(and(eq(tenants.id, id), eq(tenants.updatedAt, new Date(expectedUpdatedAt!))))
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Tenant was modified by another user — please refresh' }, { status: 409 });

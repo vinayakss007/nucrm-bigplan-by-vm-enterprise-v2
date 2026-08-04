@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, planLimits } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { readJsonBody } from '@/lib/api/validate';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const LIMIT_FIELDS = [
   'maxUsers', 'maxContacts', 'maxDeals', 'maxStorageBytes',
@@ -69,10 +70,13 @@ export async function PATCH(
 
     const tenant = await db.query.tenants.findFirst({
       where: eq(tenants.id, id),
-      columns: { settings: true, updatedAt: true },
+      columns: { settings: true },
     });
 
     if (!tenant) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    const guardResult = await concurrencyGuard(db, tenants, id, id, body.expectedUpdatedAt);
+    if (guardResult) return guardResult;
 
     const currentSettings = (tenant.settings as Record<string, unknown>) ?? {};
     const currentOverrides = (currentSettings.limitOverrides as Record<string, number | null>) ?? {};
@@ -98,11 +102,11 @@ export async function PATCH(
 
     const [updated] = await db
       .update(tenants)
-      .set({ settings: newSettings, updatedAt: new Date() })
-      .where(and(eq(tenants.id, id), eq(tenants.updatedAt, tenant.updatedAt!)))
+      .set({ settings: newSettings })
+      .where(eq(tenants.id, id))
       .returning();
 
-    if (!updated) return NextResponse.json({ error: 'Tenant was modified by another user — please refresh' }, { status: 409 });
+    if (!updated) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
 
     logSuperAdminAction({
       adminId: ctx.userId,

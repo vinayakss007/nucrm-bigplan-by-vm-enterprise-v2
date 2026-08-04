@@ -7,6 +7,7 @@ import { and, eq } from 'drizzle-orm';
 import { dbCache, invalidateCache } from '@/lib/db/cache';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 export async function GET(request: NextRequest) {
   try {
@@ -104,8 +105,11 @@ export async function PATCH(request: NextRequest) {
     if (limited) return limited;
 
     const body = await readJsonBody(request);
- 
- 
+    const expectedUpdatedAt = body.expectedUpdatedAt ?? body._updated_at;
+
+    const guardResponse = await concurrencyGuard(db, tenants, ctx.tenantId, ctx.tenantId, expectedUpdatedAt);
+    if (guardResponse) return guardResponse;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = {};
     
@@ -124,18 +128,13 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'No valid fields' }, { status: 400 });
     }
 
-    const [existing] = await db
-      .select({ updatedAt: tenants.updatedAt })
-      .from(tenants)
-      .where(eq(tenants.id, ctx.tenantId))
-      .limit(1);
-    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
     updateData.updatedAt = new Date();
+
+    const updatedAtGuard = concurrencyGuard(tenants, expectedUpdatedAt);
 
     const [tenant] = await db.update(tenants)
       .set(updateData)
-      .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing.updatedAt!)))
+      .where(and(eq(tenants.id, ctx.tenantId), ...(updatedAtGuard ? [updatedAtGuard] : [])))
       .returning();
 
     if (!tenant) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });

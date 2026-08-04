@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
-import { and, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 export async function GET(req: NextRequest) {
   try {
@@ -45,12 +46,8 @@ export async function PATCH(req: NextRequest) {
 
     const safe = { autoAiEnabled: body.autoAiEnabled };
 
-    const [existing] = await db
-      .select({ updatedAt: tenants.updatedAt })
-      .from(tenants)
-      .where(eq(tenants.id, ctx.tenantId))
-      .limit(1);
-    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const guardResult = await concurrencyGuard(db, tenants, ctx.tenantId, ctx.tenantId, (body as Record<string, unknown>).expectedUpdatedAt as string | Date | null | undefined);
+    if (guardResult) return guardResult;
 
     const [updated] = await db
       .update(tenants)
@@ -62,12 +59,11 @@ export async function PATCH(req: NextRequest) {
             COALESCE(${tenants.settings}->'ai_auto_followup', '{}'::jsonb) || ${JSON.stringify(safe)}::jsonb
           )
         `,
-        updatedAt: new Date(),
       })
-      .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing.updatedAt!)))
+      .where(eq(tenants.id, ctx.tenantId))
       .returning({ id: tenants.id });
 
-    if (!updated) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });
+    if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
