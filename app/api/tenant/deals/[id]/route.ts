@@ -13,6 +13,7 @@ import { logError } from '@/lib/errors-server';
 import { cache } from '@/lib/cache';
 import { withConcurrencyGuard } from '@/lib/concurrency';
 import { checkConcurrency } from '@/lib/api/optimistic-lock';
+import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -176,7 +177,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         () => tx
           .update(deals)
           .set(updateData)
-          .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId), eq(deals.updatedAt, prev.updatedAt!), sql`${deals.deletedAt} IS NULL`))
+          .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId), updatedAtMs(deals, prev.updatedAt!), sql`${deals.deletedAt} IS NULL`))
           .returning(),
         'Deal',
         prev.updatedAt!,

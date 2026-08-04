@@ -16,7 +16,7 @@ import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
-import { concurrencyGuard } from '@/lib/api/concurrency';
+import { concurrencyGuard, updatedAtMs } from '@/lib/api/concurrency';
 
 const VALID = {
   theme:           ['light', 'dark', 'system'],
@@ -180,7 +180,7 @@ export async function DELETE(req: NextRequest) {
         settings: sql`COALESCE(${tenants.settings}, '{}'::jsonb) - 'user_defaults'`,
         updatedAt: new Date(),
       })
-      .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing.updatedAt!)))
+      .where(and(eq(tenants.id, ctx.tenantId), updatedAtMs(tenants, existing.updatedAt!)))
       .returning({ id: tenants.id });
 
     if (!updated) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });

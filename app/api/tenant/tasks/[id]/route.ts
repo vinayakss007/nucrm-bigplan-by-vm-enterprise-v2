@@ -11,6 +11,7 @@ import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
 import { withConcurrencyGuard } from '@/lib/concurrency';
+import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
  
@@ -79,7 +80,7 @@ export async function PATCH(req: NextRequest, { params }: any) {
         .where(and(
           eq(tasks.id, id),
           eq(tasks.tenantId, ctx.tenantId),
-          eq(tasks.updatedAt, existing.updatedAt!),
+          updatedAtMs(tasks, existing.updatedAt!),
           isNull(tasks.deletedAt)
         ))
         .returning(),

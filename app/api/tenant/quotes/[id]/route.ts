@@ -6,6 +6,7 @@ import { quotes } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { withConcurrencyGuard } from '@/lib/concurrency';
+import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 
@@ -114,7 +115,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           updatedAt: new Date(),
           updatedBy: ctx.userId,
         })
-        .where(and(eq(quotes.id, quoteId), eq(quotes.tenantId, ctx.tenantId), eq(quotes.updatedAt, existing.updatedAt!), sql`${quotes.deletedAt} IS NULL`))
+        .where(and(eq(quotes.id, quoteId), eq(quotes.tenantId, ctx.tenantId), updatedAtMs(quotes, existing.updatedAt!), sql`${quotes.deletedAt} IS NULL`))
         .returning(),
       'Quote',
       existing.updatedAt!,
