@@ -25,6 +25,7 @@ import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 export type PicklistEntry = { value: string; label: string; color?: string };
 export type PicklistCategory = 'lead_sources' | 'loss_reasons' | 'win_reasons' | 'activity_types' | 'deal_types' | 'industries';
@@ -128,6 +129,11 @@ export async function PATCH(req: NextRequest) {
     if (!incoming || typeof incoming !== 'object')
       return NextResponse.json({ error: 'picklists object required' }, { status: 400 });
 
+    const expectedUpdatedAt = body.expectedUpdatedAt ?? body._updated_at;
+
+    const guardResponse = await concurrencyGuard(db, tenants, ctx.tenantId, ctx.tenantId, expectedUpdatedAt);
+    if (guardResponse) return guardResponse;
+
     const safe: Partial<Record<PicklistCategory, PicklistEntry[]>> = {};
 
     for (const cat of CATEGORIES) {
@@ -168,12 +174,7 @@ export async function PATCH(req: NextRequest) {
     if (Object.keys(safe).length === 0)
       return NextResponse.json({ error: 'No categories provided' }, { status: 400 });
 
-    const [existing] = await db
-      .select({ updatedAt: tenants.updatedAt })
-      .from(tenants)
-      .where(eq(tenants.id, ctx.tenantId))
-      .limit(1);
-    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const updatedAtGuard = concurrencyGuard(tenants, expectedUpdatedAt);
 
     const [updated] = await db
       .update(tenants)
@@ -187,7 +188,7 @@ export async function PATCH(req: NextRequest) {
         `,
         updatedAt: new Date(),
       })
-      .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing.updatedAt!)))
+      .where(and(eq(tenants.id, ctx.tenantId), ...(updatedAtGuard ? [updatedAtGuard] : [])))
       .returning({ id: tenants.id });
 
     if (!updated) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });

@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { plans, tenants } from '@/drizzle/schema';
 import { eq, and, sql, asc } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { concurrencyGuard, concurrencyGuardById } from '@/lib/api/concurrency';
 
 export async function GET(request: NextRequest) {
   try {
@@ -101,6 +102,11 @@ export async function PATCH(request: NextRequest) {
     const { id } = v;
     if (!id) return NextResponse.json({ error: 'Plan ID required' }, { status: 400 });
 
+    const expectedUpdatedAt = rawBody.expectedUpdatedAt ?? rawBody._updated_at;
+
+    const guardResponse = await concurrencyGuardById(db, plans, id, expectedUpdatedAt);
+    if (guardResponse) return guardResponse;
+
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -130,17 +136,12 @@ export async function PATCH(request: NextRequest) {
     if (rawBody.is_active !== undefined) updateData.isActive = rawBody.is_active;
     if (v.description !== undefined) updateData.description = v.description;
 
-    const [existing] = await db
-      .select({ updatedAt: plans.updatedAt })
-      .from(plans)
-      .where(eq(plans.id, id))
-      .limit(1);
-    if (!existing) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
+    const updatedAtGuard = concurrencyGuard(plans, expectedUpdatedAt);
 
     const [row] = await db
       .update(plans)
       .set(updateData)
-      .where(and(eq(plans.id, id), eq(plans.updatedAt, existing.updatedAt!)))
+      .where(and(eq(plans.id, id), ...(updatedAtGuard ? [updatedAtGuard] : [])))
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Plan was modified by another user — please refresh' }, { status: 409 });

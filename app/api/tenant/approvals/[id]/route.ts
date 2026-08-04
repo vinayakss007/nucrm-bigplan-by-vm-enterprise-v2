@@ -18,6 +18,7 @@ import { logAudit } from '@/lib/audit';
 import { approveRequest, rejectRequest } from '@/lib/rbac/approval-workflows';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 interface PatchBody {
   action?: 'approve' | 'reject';
@@ -61,6 +62,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         error: `Approval request is already ${existing.status} — cannot ${action}`,
       }, { status: 409 });
     }
+
+    const expectedUpdatedAt: string | Date | null | undefined = (body as Record<string, unknown>).expectedUpdatedAt as string | Date | null ?? (body as Record<string, unknown>)._updated_at as string | Date | null ?? existing.updatedAt;
+    const guard = await concurrencyGuard(db, approvalRequests, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     let result;
     if (action === 'approve') {

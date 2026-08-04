@@ -30,6 +30,7 @@ import {
   SecretsVaultError,
 } from '@/lib/ai/secrets';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 /** Named providers with built-in defaults. Any other key in the config is a custom provider. */
 const NAMED_PROVIDERS = ['openai', 'anthropic', 'groq', 'ollama', 'opencode'];
@@ -111,6 +112,8 @@ export async function PATCH(req: NextRequest) {
     if (parsed instanceof NextResponse) return parsed;
     const incoming = parsed.data.providers;
 
+    const expectedUpdatedAt = body.expectedUpdatedAt ?? body._updated_at;
+
     // Split incoming payload into:
     //   - configPatch (written to tenants.settings.ai_providers via jsonb_set)
     //   - keyUpdates  (written to ai_provider_secrets via the vault)
@@ -164,12 +167,10 @@ export async function PATCH(req: NextRequest) {
 
     // 1. Persist non-secret config via jsonb_set merge (preserve sibling keys).
     if (Object.keys(configPatch).length > 0) {
-      const [existing] = await db
-        .select({ updatedAt: tenants.updatedAt })
-        .from(tenants)
-        .where(eq(tenants.id, ctx.tenantId))
-        .limit(1);
-      if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      const guardResponse = await concurrencyGuard(db, tenants, ctx.tenantId, ctx.tenantId, expectedUpdatedAt);
+      if (guardResponse) return guardResponse;
+
+      const updatedAtGuard = concurrencyGuard(tenants, expectedUpdatedAt);
 
       const [updated] = await db
         .update(tenants)
@@ -183,7 +184,7 @@ export async function PATCH(req: NextRequest) {
           `,
           updatedAt: new Date(),
         })
-        .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing.updatedAt!)))
+        .where(and(eq(tenants.id, ctx.tenantId), ...(updatedAtGuard ? [updatedAtGuard] : [])))
         .returning({ id: tenants.id });
 
       if (!updated) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });

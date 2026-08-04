@@ -8,6 +8,7 @@ import { platformSettings } from '@/drizzle/schema';
 import { eq, and, like } from 'drizzle-orm';
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const ALGORITHM = 'aes-256-gcm';
 const CONFIG_KEY_PREFIX = 'tenant_backup_config:';
@@ -217,6 +218,20 @@ export async function PUT(request: NextRequest) {
       retention_days: String(retention_days),
       point_in_time_recovery: String(point_in_time_recovery),
     };
+
+    // Read existing config row's id + updatedAt for concurrency check
+    const [existingConfig] = await db
+      .select({ id: platformSettings.id, updatedAt: platformSettings.updatedAt })
+      .from(platformSettings)
+      .where(and(
+        eq(platformSettings.tenantId, ctx.tenantId),
+        eq(platformSettings.key, `${prefix}:bucket`),
+      ))
+      .limit(1);
+
+    const expectedUpdatedAt: string | Date | null | undefined = (rawBody as Record<string, unknown>).expectedUpdatedAt as string | Date | null ?? (rawBody as Record<string, unknown>)._updated_at as string | Date | null ?? existingConfig?.updatedAt;
+    const guard = await concurrencyGuard(db, platformSettings, existingConfig?.id ?? null, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     await db.transaction(async (tx) => {
       for (const [field, value] of Object.entries(fields)) {
