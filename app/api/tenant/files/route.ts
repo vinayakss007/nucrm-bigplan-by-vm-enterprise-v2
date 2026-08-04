@@ -39,7 +39,8 @@ async function s3Upload(data: Buffer, key: string, contentType: string) {
 async function s3SignedUrl(key: string, expiresIn: number) {
   const { client, bucket } = getS3Client();
   const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
-  return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return getSignedUrl(client as any, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn });
 }
 
 async function s3Delete(key: string) {

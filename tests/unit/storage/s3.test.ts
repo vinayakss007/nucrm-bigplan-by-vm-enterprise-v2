@@ -337,6 +337,7 @@ describe('lib/storage/s3', () => {
         region: 'auto',
         endpoint: 'https://acct.r2.cloudflarestorage.com',
         credentials: { accessKeyId: 'compose-access', secretAccessKey: 'compose-secret' },
+        forcePathStyle: true,
       });
     });
   });
