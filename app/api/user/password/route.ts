@@ -7,6 +7,7 @@ import { eq, and, lt } from 'drizzle-orm';
 import { verifyPassword, hashPassword } from '@/lib/auth/session';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { changePasswordSchema } from '@/lib/api/schemas';
+import { concurrencyGuardById } from '@/lib/api/concurrency';
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -17,7 +18,10 @@ export async function PATCH(request: NextRequest) {
     const validated = validateBody(changePasswordSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const { current_password, new_password } = validated.data;
-    
+
+    const conflict = await concurrencyGuardById(db, users, ctx.userId, rawBody.expectedUpdatedAt);
+    if (conflict) return conflict;
+
     // Password validation
     if (new_password.length < 12) return NextResponse.json({ error: 'New password must be at least 12 characters' }, { status: 400 });
     if (!/[A-Z]/.test(new_password)) return NextResponse.json({ error: 'Password must contain an uppercase letter' }, { status: 400 });

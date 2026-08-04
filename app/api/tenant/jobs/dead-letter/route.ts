@@ -6,6 +6,7 @@ import { deadLetterQueue } from '@/drizzle/schema/automation';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { concurrencyGuardById } from '@/lib/api/concurrency';
 
 export async function GET(request: NextRequest) {
   try {
@@ -61,11 +62,14 @@ export async function PATCH(request: NextRequest) {
     const deny = requirePerm(ctx, 'settings.manage');
     if (deny) return deny;
 
-    const { id, action, resolution } = await readJsonBody(request);
+    const { id, action, resolution, expectedUpdatedAt } = await readJsonBody(request);
 
     if (!id) {
       return NextResponse.json({ error: 'Job ID required' }, { status: 400 });
     }
+
+    const conflict = await concurrencyGuardById(db, deadLetterQueue, id, expectedUpdatedAt);
+    if (conflict) return conflict;
 
     if (action === 'retry') {
       const [updated] = await db

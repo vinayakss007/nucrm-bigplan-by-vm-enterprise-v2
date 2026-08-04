@@ -28,6 +28,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { readJsonBody } from '@/lib/api/validate';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const DEFAULT_OOO = {
   enabled: false,
@@ -114,6 +115,9 @@ export async function PATCH(req: NextRequest) {
       auto_reassign: autoReassign,
     };
 
+    const conflict = await concurrencyGuard(db, tenantMembers, ctx.userId, ctx.tenantId, body.expectedUpdatedAt);
+    if (conflict) return conflict;
+
     await db
       .update(tenantMembers)
       .set({
@@ -133,6 +137,7 @@ export async function PATCH(req: NextRequest) {
       ));
 
     let reassigned = { leads: 0, contacts: 0, deals: 0, tasks: 0 };
+
     if (enabled && autoReassign && delegate) {
       const now = new Date();
       await db.transaction(async (tx) => {
