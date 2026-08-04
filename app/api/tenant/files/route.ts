@@ -14,8 +14,38 @@ import { logAudit } from '@/lib/audit';
 import { extname } from 'path';
 import { randomBytes } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
-import { uploadFileToS3, getSignedUrl, deleteObject } from '@/lib/storage/s3';
-import { isS3Configured } from '@/lib/storage/s3-config';
+import { getS3Config, isS3Configured } from '@/lib/storage/s3-config';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+
+function getS3Client() {
+  const cfg = getS3Config();
+  const bucket = cfg.bucket || 'nucrm-files';
+  return {
+    client: new S3Client({
+      region: cfg.region,
+      endpoint: cfg.endpoint,
+      credentials: cfg.credentials,
+      forcePathStyle: true,
+    }),
+    bucket,
+  };
+}
+
+async function s3Upload(data: Buffer, key: string, contentType: string) {
+  const { client, bucket } = getS3Client();
+  await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: data, ContentType: contentType }));
+}
+
+async function s3SignedUrl(key: string, expiresIn: number) {
+  const { client, bucket } = getS3Client();
+  const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
+  return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn });
+}
+
+async function s3Delete(key: string) {
+  const { client, bucket } = getS3Client();
+  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+}
 
 const ALLOWED_TYPES = new Set([
   'image/jpeg','image/png','image/gif','image/webp','image/svg+xml',
@@ -72,7 +102,6 @@ export async function GET(req: NextRequest) {
     if (ctx instanceof NextResponse) return ctx;
     const { searchParams } = new URL(req.url);
 
-    // GET by id → presigned download URL
     const id = searchParams.get('id');
     if (id) {
       if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id format' }, { status: 400 });
@@ -86,11 +115,10 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'S3 storage not configured' }, { status: 503 });
       }
 
-      const url = await getSignedUrl(file.filePath, 3600);
+      const url = await s3SignedUrl(file.filePath, 3600);
       return NextResponse.json({ data: { url, expires_in: 3600, mime_type: file.mimeType, file_name: file.fileName } });
     }
 
-    // List by resource
     const resource_type = searchParams.get('resource_type');
     const resource_id   = searchParams.get('resource_id');
     if (!resource_type || !resource_id) return NextResponse.json({ error: 'resource_type and resource_id required' }, { status: 400 });
@@ -183,7 +211,7 @@ export async function POST(req: NextRequest) {
     }
 
     const s3Key = `${ctx.tenantId}/${resource_type}/${resource_id}/${randomBytes(16).toString('hex')}${ext || '.bin'}`;
-    await uploadFileToS3(buffer, s3Key, finalMime);
+    await s3Upload(buffer, s3Key, finalMime);
 
     const attachment = await db.transaction(async (tx) => {
       const [newAttachment] = await tx.insert(fileAttachments)
@@ -239,10 +267,9 @@ export async function DELETE(req: NextRequest) {
 
     if (!file) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Delete from S3
     if (isS3Configured()) {
       try {
-        await deleteObject(file.filePath);
+        await s3Delete(file.filePath);
       } catch (e) {
         console.error('[files DELETE] S3 delete failed, continuing with DB cleanup:', e);
       }

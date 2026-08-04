@@ -23,6 +23,7 @@ const s3Client = new S3Client({
   region: s3Config.region,
   endpoint: s3Config.endpoint, // For R2: https://xxx.r2.cloudflarestorage.com
   credentials: s3Config.credentials,
+  forcePathStyle: true,
 });
 
 const BUCKET = s3Config.backupBucket || 'nucrm-backups';
@@ -91,10 +92,11 @@ export async function deleteOldBackups(keepCount: number = 30): Promise<void> {
 export async function uploadFileToS3(
   data: Buffer | Uint8Array,
   key: string,
-  contentType: string = 'application/octet-stream'
+  contentType: string = 'application/octet-stream',
+  bucket?: string
 ): Promise<string> {
   await s3Client.send(new PutObjectCommand({
-    Bucket: BUCKET,
+    Bucket: bucket || BUCKET,
     Key: key,
     Body: data,
     ContentType: contentType,
@@ -103,9 +105,9 @@ export async function uploadFileToS3(
   return key;
 }
 
-export async function getSignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
+export async function getSignedUrl(key: string, expiresIn: number = 3600, bucket?: string): Promise<string> {
   const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
-  const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
+  const command = new GetObjectCommand({ Bucket: bucket || BUCKET, Key: key });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -140,6 +142,6 @@ export async function getSignedPutUrl(args: {
 }
 
 /** Hard-delete a single object. Caller decides what to do about the metadata row. */
-export async function deleteObject(key: string): Promise<void> {
-  await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+export async function deleteObject(key: string, bucket?: string): Promise<void> {
+  await s3Client.send(new DeleteObjectCommand({ Bucket: bucket || BUCKET, Key: key }));
 }
