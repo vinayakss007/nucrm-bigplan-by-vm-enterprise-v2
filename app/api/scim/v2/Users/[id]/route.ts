@@ -19,6 +19,7 @@ import {
   verifySCIMToken,
   type SCIMUser,
 } from '@/lib/scim';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 // ── Auth Helper ──────────────────────────────────────────────────────────────
 
@@ -143,8 +144,10 @@ export async function PATCH(
         id: users.id,
         email: users.email,
         fullName: users.fullName,
+        updatedAt: users.updatedAt,
         memberId: tenantMembers.id,
         memberStatus: tenantMembers.status,
+        memberUpdatedAt: tenantMembers.updatedAt,
       })
       .from(users)
       .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
@@ -221,11 +224,15 @@ export async function PATCH(
     if (userUpdates['email']) dbUpdates['email'] = userUpdates['email'];
 
     if (Object.keys(dbUpdates).length > 1) {
+      const userGuard = await concurrencyGuard(db, users, id, tenantId, existingUser.updatedAt);
+      if (userGuard) return userGuard;
       await db.update(users).set(dbUpdates).where(eq(users.id, id));
     }
 
     // Handle activation/deactivation
     if (deactivate) {
+      const memberGuard = await concurrencyGuard(db, tenantMembers, existingUser.memberId, tenantId, existingUser.memberUpdatedAt);
+      if (memberGuard) return memberGuard;
       await db.update(tenantMembers)
         .set({ status: 'inactive', updatedAt: new Date() })
         .where(eq(tenantMembers.id, existingUser.memberId));
@@ -233,6 +240,8 @@ export async function PATCH(
       // Revoke all active sessions for this user
       await db.delete(sessions).where(eq(sessions.userId, id));
     } else if (activate) {
+      const memberGuard = await concurrencyGuard(db, tenantMembers, existingUser.memberId, tenantId, existingUser.memberUpdatedAt);
+      if (memberGuard) return memberGuard;
       await db.update(tenantMembers)
         .set({ status: 'active', updatedAt: new Date() })
         .where(eq(tenantMembers.id, existingUser.memberId));

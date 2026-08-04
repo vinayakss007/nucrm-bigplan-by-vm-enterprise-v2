@@ -3,10 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { announcements } from '@/drizzle/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createAnnouncementSchema, updateAnnouncementSchema, deleteAnnouncementSchema } from '@/lib/api/schemas';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { concurrencyGuardById } from '@/lib/api/concurrency';
 
 export async function GET(request: NextRequest) {
   try {
@@ -105,10 +106,13 @@ export async function PATCH(request: NextRequest) {
       .limit(1);
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+    const guard = await concurrencyGuardById(db, announcements, result.data.id, existing.updatedAt);
+    if (guard) return guard;
+
     const [row] = await db
       .update(announcements)
       .set({ isActive: result.data.is_active, updatedAt: new Date() })
-      .where(and(eq(announcements.id, result.data.id), eq(announcements.updatedAt, existing.updatedAt!)))
+      .where(eq(announcements.id, result.data.id))
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Announcement was modified by another user — please refresh' }, { status: 409 });

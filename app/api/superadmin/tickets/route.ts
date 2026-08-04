@@ -6,6 +6,7 @@ import { supportTickets, tenants, users } from '@/drizzle/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { concurrencyGuardById } from '@/lib/api/concurrency';
 
 export async function GET(request: NextRequest) {
   try {
@@ -151,10 +152,13 @@ export async function PATCH(request: NextRequest) {
       .limit(1);
     if (!existing) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
 
+    const guard = await concurrencyGuardById(db, supportTickets, id, existing.updatedAt);
+    if (guard) return guard;
+
     const [row] = await db
       .update(supportTickets)
       .set(updateData)
-      .where(and(eq(supportTickets.id, id), eq(supportTickets.updatedAt, existing.updatedAt!)))
+      .where(eq(supportTickets.id, id))
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Ticket was modified by another user — please refresh' }, { status: 409 });

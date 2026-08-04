@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { webhookFieldMappings, customFieldDefs, apiKeys } from '@/drizzle/schema';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuardById } from '@/lib/api/concurrency';
 import { isValidNativeTarget, NATIVE_TARGETS } from '@/lib/webhooks/field-mapping';
 
 /**
@@ -196,6 +197,9 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Mapping not found' }, { status: 404 });
     }
 
+    const guard = await concurrencyGuardById(db, webhookFieldMappings, id, current.updatedAt);
+    if (guard) return guard;
+
     // Validate the combination the row will end up with, not just the fields
     // that happen to be in this request — switching targetType alone can turn a
     // valid custom-field target into a disallowed native one.
@@ -218,7 +222,6 @@ export async function PATCH(req: NextRequest) {
       .where(and(
         eq(webhookFieldMappings.id, id),
         eq(webhookFieldMappings.tenantId, ctx.tenantId),
-        eq(webhookFieldMappings.updatedAt, current.updatedAt!)
       ))
       .returning();
 
