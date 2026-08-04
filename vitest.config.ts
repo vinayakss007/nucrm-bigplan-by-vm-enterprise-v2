@@ -44,17 +44,17 @@ export default defineConfig({
         'lib/sdk/modules.ts',
         'lib/server-only-shim.ts',
       ],
-      // Coverage target: 72/72/82/72 (lines/functions/branches/statements).
+      // Coverage target: 74/76/85/74 (lines/functions/branches/statements).
       //
       // lib/**/index.ts excluded — barrel files with minimal executable code.
       // Only pure type files, test files, and the server-only shim remain excluded.
       //
       // Please do not add a module here to make a build pass.
       thresholds: {
-        lines: 72,
-        functions: 72,
-        branches: 82,
-        statements: 72,
+        lines: 74,
+        functions: 76,
+        branches: 85,
+        statements: 74,
       },
     },
     testTimeout: 15000,
