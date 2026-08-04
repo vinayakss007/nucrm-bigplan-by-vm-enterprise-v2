@@ -1,5 +1,5 @@
 groups:
-  - name: nucrm-critical
+  - name: nucrm-app
     rules:
       - alert: AppDown
         expr: up{job="nucrm-app"} == 0
@@ -8,153 +8,114 @@ groups:
           severity: critical
         annotations:
           summary: "NuCRM app is DOWN"
-          description: "The application health endpoint has been unreachable for 1 minute."
+          description: "The NuCRM application has been unreachable for over 1 minute."
 
+      - alert: AppHighLatency
+        expr: nucrm_db_latency_ms > 200
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DB latency > 200ms"
+          description: "Database query latency has exceeded 200ms for 5 minutes."
+
+      - alert: AppHeapHigh
+        expr: nucrm_memory_heap_used_bytes / nucrm_memory_heap_total_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "App heap usage > 90%"
+          description: "Node.js heap usage has exceeded 90% for 5 minutes."
+
+      - alert: AppHighErrorRate
+        expr: rate(nucrm_http_requests_total{status=~"5.."}[5m]) / rate(nucrm_http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HTTP 5xx error rate > 5%"
+          description: "More than 5% of requests are returning 5xx errors."
+
+      - alert: NoTasksPending
+        expr: nucrm_tasks_pending_total == 0
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: "All tasks completed"
+          description: "All pending tasks are now completed."
+
+  - name: nucrm-infra
+    rules:
       - alert: PostgresDown
         expr: up{job="postgres"} == 0
-        for: 30s
+        for: 1m
         labels:
           severity: critical
         annotations:
           summary: "PostgreSQL is DOWN"
+          description: "PostgreSQL exporter has been unreachable for over 1 minute."
+
+      - alert: PostgresHighConnections
+        expr: nucrm_db_active_connections / nucrm_db_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connections > 80%"
+          description: "Active DB connections have exceeded 80% of the maximum for 5 minutes."
+
+      - alert: PostgresHighWaitingQueries
+        expr: nucrm_db_waiting_queries > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL waiting queries > 5"
+          description: "More than 5 queries are waiting for a connection pool slot."
 
       - alert: RedisDown
         expr: up{job="redis"} == 0
-        for: 30s
+        for: 1m
         labels:
           severity: critical
         annotations:
           summary: "Redis is DOWN"
+          description: "Redis exporter has been unreachable for over 1 minute."
 
-      - alert: WorkerDown
-        expr: nucrm_worker_running == 0
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Background worker is DOWN"
-          description: "No worker heartbeat for 1 minute. Queues will not be processed."
-
-      - alert: PgBouncerDown
-        expr: up{job="pgbouncer"} == 0
-        for: 30s
-        labels:
-          severity: critical
-        annotations:
-          summary: "PgBouncer is DOWN"
-
-      - alert: HighErrorRate
-        expr: rate(nucrm_http_errors_total[5m]) / rate(nucrm_http_requests_total[5m]) > 0.01
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Error rate > 1% over 5min"
-          description: "Current error rate: {{ $value | humanizePercentage }}"
-
-      - alert: HighP95Latency
-        expr: histogram_quantile(0.95, rate(nucrm_http_request_duration_seconds_bucket[5m])) > 2
+      - alert: RedisHighMemory
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "P95 response time > 2s"
-          description: "P95 latency is {{ $value }}s. Investigate slow endpoints."
+          summary: "Redis memory > 90%"
+          description: "Redis memory usage has exceeded 90% of max memory."
 
-      - alert: DBPoolExhaustion
-        expr: nucrm_db_pool_available < 2
-        for: 2m
+      - alert: HostHighCPU
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 10m
         labels:
-          severity: critical
+          severity: warning
         annotations:
-          summary: "DB pool exhaustion"
-          description: "Only {{ $value }} connections available in the pool."
+          summary: "Host CPU > 90%"
+          description: "Server CPU usage has exceeded 90% for 10 minutes."
 
-      - alert: QueueBackpressure
-        expr: nucrm_queue_jobs_total{status="waiting"} > 1000
+      - alert: HostHighMemory
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 90
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "Queue backlog > 1000 jobs"
-          description: "Queue {{ $labels.queue }} has {{ $value }} waiting jobs."
+          summary: "Host memory > 90%"
+          description: "Server memory usage has exceeded 90% for 5 minutes."
 
-      - alert: CacheHitRateLow
-        expr: nucrm_cache_hit_rate < 70
-        for: 15m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Cache hit rate < 70%"
-          description: "Hit rate is {{ $value }}%. Review cache strategy."
-
-      - alert: RedisUnreachable
-        expr: nucrm_cache_up == 0
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Redis is unreachable"
-          description: "The metrics endpoint cannot connect to Redis."
-
-  - name: nucrm-high-memory
-    rules:
-      - alert: HighMemoryUsage
-        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.9
+      - alert: HostDiskFull
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 > 90
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "Host memory usage > 90%"
-          description: "Memory usage is {{ $value | humanizePercentage }}. Consider scaling."
-
-      - alert: HighCPU
-        expr: (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 0.85
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Host CPU usage > 85%"
-
-      - alert: DiskSpaceLow
-        expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) > 0.85
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Disk usage > 85%"
-
-      - alert: WorkerMemoryHigh
-        expr: nucrm_worker_memory_heap_bytes > 400 * 1024 * 1024
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Worker memory > 400MB"
-          description: "Worker heap is {{ $value | humanize1024 }}. Consider increasing limits."
-
-  - name: nucrm-connections
-    rules:
-      - alert: PostgresConnectionsHigh
-        expr: nucrm_db_active_connections > 50
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "PostgreSQL connections > 50"
-
-      - alert: RedisMemoryHigh
-        expr: nucrm_redis_used_memory_bytes > 450 * 1024 * 1024
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Redis memory > 450MB (max 512MB)"
-
-      - alert: SSLExpiringSoon
-        expr: nucrm_ssl_days_until_expiry < 14
-        for: 1h
-        labels:
-          severity: critical
-        annotations:
-          summary: "SSL certificate expires in {{ $value }} days"
+          summary: "Disk > 90% full"
+          description: "Root filesystem usage has exceeded 90%."
