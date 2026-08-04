@@ -74,11 +74,16 @@ DROP POLICY IF EXISTS tenant_hierarchy_super_admin_only ON tenant_hierarchy;
 ALTER TABLE tenant_hierarchy DISABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS tenants_read_all ON tenants;
-DROP POLICY IF EXISTS tenants_super_admin_write ON tenants;
+DROP POLICY IF EXISTS tenants_authenticated_insert ON tenants;
+DROP POLICY IF EXISTS tenants_authenticated_update ON tenants;
 ALTER TABLE tenants DISABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS users_read_self ON users;
-DROP POLICY IF EXISTS users_super_admin_all ON users;
+DROP POLICY IF EXISTS users_super_admin_read ON users;
+DROP POLICY IF EXISTS users_insert_auth ON users;
+DROP POLICY IF EXISTS users_update_own ON users;
+DROP POLICY IF EXISTS users_super_admin_update ON users;
+DROP POLICY IF EXISTS users_super_admin_delete ON users;
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS sessions_user_own ON sessions;
