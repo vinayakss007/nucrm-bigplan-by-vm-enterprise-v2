@@ -6,6 +6,7 @@ import { db } from '@/drizzle/db';
 import { productTemplates } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { concurrencyGuardById } from '@/lib/api/concurrency';
 
 export async function GET(
   req: NextRequest,
@@ -45,6 +46,7 @@ const updateTemplateSchema = z.object({
   automations: z.array(z.record(z.string(), z.unknown())).optional(),
   status: z.enum(['active', 'draft', 'archived']).optional(),
   is_builtin: z.boolean().optional(),
+  updated_at: z.string().datetime().optional(),
 });
 
 export async function PATCH(
@@ -87,10 +89,18 @@ export async function PATCH(
       .limit(1);
     if (!existing) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
 
+    const expectedUpdatedAt = new Date(v.updated_at ?? existing.updatedAt!);
+    const guard = await concurrencyGuardById(db, productTemplates, id, expectedUpdatedAt);
+    if (guard) return guard;
+
     const [updated] = await db
       .update(productTemplates)
       .set(updates)
-      .where(and(eq(productTemplates.id, id), sql`${productTemplates.deletedAt} IS NULL`, eq(productTemplates.updatedAt, existing.updatedAt!)))
+      .where(and(
+        eq(productTemplates.id, id),
+        sql`${productTemplates.deletedAt} IS NULL`,
+        eq(productTemplates.updatedAt, expectedUpdatedAt),
+      ))
       .returning();
 
     if (!updated) return NextResponse.json({ error: 'Template was modified by another user — please refresh' }, { status: 409 });

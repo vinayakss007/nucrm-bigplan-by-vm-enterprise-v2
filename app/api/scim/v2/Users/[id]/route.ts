@@ -19,6 +19,7 @@ import {
   verifySCIMToken,
   type SCIMUser,
 } from '@/lib/scim';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 // ── Auth Helper ──────────────────────────────────────────────────────────────
 
@@ -143,8 +144,10 @@ export async function PATCH(
         id: users.id,
         email: users.email,
         fullName: users.fullName,
+        updatedAt: users.updatedAt,
         memberId: tenantMembers.id,
         memberStatus: tenantMembers.status,
+        memberUpdatedAt: tenantMembers.updatedAt,
       })
       .from(users)
       .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
@@ -215,27 +218,71 @@ export async function PATCH(
       delete userUpdates['familyName'];
     }
 
+    // Use client-provided If-Match header (SCIM versioning convention) for
+    // concurrency check.  The IdP sends the ETag it last saw; we compare
+    // against the DB snapshot.  If absent, fall back to the DB snapshot
+    // (backward-compatible, but two concurrent PATCHes can both pass).
+    const ifMatch = request.headers.get('if-match');
+    const expectedUserUpdatedAt = ifMatch
+      ? ifMatch.replace(/^W\//, '').replace(/^"|"$/g, '')  // strip weak-etag prefix/quotes
+      : existingUser.updatedAt;
+    const expectedMemberUpdatedAt = ifMatch
+      ? ifMatch.replace(/^W\//, '').replace(/^"|"$/g, '')
+      : existingUser.memberUpdatedAt;
+
     // Apply user record updates
     const dbUpdates: Record<string, unknown> = { updatedAt: new Date() };
     if (userUpdates['fullName']) dbUpdates['fullName'] = userUpdates['fullName'];
     if (userUpdates['email']) dbUpdates['email'] = userUpdates['email'];
 
-    if (Object.keys(dbUpdates).length > 1) {
-      await db.update(users).set(dbUpdates).where(eq(users.id, id));
-    }
-
     // Handle activation/deactivation
-    if (deactivate) {
-      await db.update(tenantMembers)
-        .set({ status: 'inactive', updatedAt: new Date() })
-        .where(eq(tenantMembers.id, existingUser.memberId));
+    const memberUpdates: { table: typeof tenantMembers; id: string; status: string } | null =
+      deactivate
+        ? { table: tenantMembers, id: existingUser.memberId, status: 'inactive' }
+        : activate
+          ? { table: tenantMembers, id: existingUser.memberId, status: 'active' }
+          : null;
 
-      // Revoke all active sessions for this user
-      await db.delete(sessions).where(eq(sessions.userId, id));
-    } else if (activate) {
-      await db.update(tenantMembers)
-        .set({ status: 'active', updatedAt: new Date() })
-        .where(eq(tenantMembers.id, existingUser.memberId));
+    // Wrap user + member updates in a transaction to avoid partial writes
+    const hasUserUpdates = Object.keys(dbUpdates).length > 1;
+    if (hasUserUpdates || memberUpdates) {
+      await db.transaction(async (tx) => {
+        if (hasUserUpdates) {
+          const guard = await concurrencyGuard(db, users, id, tenantId, expectedUserUpdatedAt);
+          if (guard) throw guard;
+          const [updated] = await tx
+            .update(users)
+            .set(dbUpdates)
+            .where(and(eq(users.id, id), eq(users.updatedAt, new Date(expectedUserUpdatedAt as string | Date))))
+            .returning({ id: users.id });
+          if (!updated) throw NextResponse.json(
+            generateSCIMError('Stale data — record was modified. Please refresh.', 409),
+            { status: 409, headers: { 'Content-Type': 'application/scim+json' } },
+          );
+        }
+
+        if (memberUpdates) {
+          const guard = await concurrencyGuard(db, tenantMembers, memberUpdates.id, tenantId, expectedMemberUpdatedAt);
+          if (guard) throw guard;
+          const [updatedMember] = await tx
+            .update(tenantMembers)
+            .set({ status: memberUpdates.status, updatedAt: new Date() })
+            .where(and(
+              eq(tenantMembers.id, memberUpdates.id),
+              eq(tenantMembers.updatedAt, new Date(expectedMemberUpdatedAt as string | Date)),
+            ))
+            .returning({ id: tenantMembers.id });
+          if (!updatedMember) throw NextResponse.json(
+            generateSCIMError('Stale data — record was modified. Please refresh.', 409),
+            { status: 409, headers: { 'Content-Type': 'application/scim+json' } },
+          );
+
+          // Revoke all active sessions for deactivated users
+          if (deactivate) {
+            await tx.delete(sessions).where(eq(sessions.userId, id));
+          }
+        }
+      });
     }
 
     // Fetch updated user

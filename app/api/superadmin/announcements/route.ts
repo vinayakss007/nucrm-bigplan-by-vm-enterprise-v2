@@ -7,6 +7,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createAnnouncementSchema, updateAnnouncementSchema, deleteAnnouncementSchema } from '@/lib/api/schemas';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { concurrencyGuardById } from '@/lib/api/concurrency';
 
 export async function GET(request: NextRequest) {
   try {
@@ -105,10 +106,14 @@ export async function PATCH(request: NextRequest) {
       .limit(1);
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+    const expectedUpdatedAt = new Date(result.data.updated_at ?? existing.updatedAt!);
+    const guard = await concurrencyGuardById(db, announcements, result.data.id, expectedUpdatedAt);
+    if (guard) return guard;
+
     const [row] = await db
       .update(announcements)
       .set({ isActive: result.data.is_active, updatedAt: new Date() })
-      .where(and(eq(announcements.id, result.data.id), eq(announcements.updatedAt, existing.updatedAt!)))
+      .where(and(eq(announcements.id, result.data.id), eq(announcements.updatedAt, expectedUpdatedAt)))
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Announcement was modified by another user — please refresh' }, { status: 409 });

@@ -6,6 +6,7 @@ import { supportTickets, tenants, users } from '@/drizzle/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { concurrencyGuardById } from '@/lib/api/concurrency';
 
 export async function GET(request: NextRequest) {
   try {
@@ -80,6 +81,7 @@ const updateTicketSchema = z.object({
   status: z.string().optional(),
   resolution: z.string().optional(),
   assigned_to: z.string().optional().nullable(),
+  updated_at: z.string().datetime().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -122,7 +124,7 @@ export async function PATCH(request: NextRequest) {
     const body = await readJsonBody(request);
     const validated = validateBody(updateTicketSchema, body);
     if (validated instanceof NextResponse) return validated;
-    const { id, status, resolution, assigned_to } = validated.data;
+    const { id, status, resolution, assigned_to, updated_at } = validated.data;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = { updatedAt: new Date() };
@@ -151,10 +153,14 @@ export async function PATCH(request: NextRequest) {
       .limit(1);
     if (!existing) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
 
+    const expectedUpdatedAt = new Date(updated_at ?? existing.updatedAt!);
+    const guard = await concurrencyGuardById(db, supportTickets, id, expectedUpdatedAt);
+    if (guard) return guard;
+
     const [row] = await db
       .update(supportTickets)
       .set(updateData)
-      .where(and(eq(supportTickets.id, id), eq(supportTickets.updatedAt, existing.updatedAt!)))
+      .where(and(eq(supportTickets.id, id), eq(supportTickets.updatedAt, expectedUpdatedAt)))
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Ticket was modified by another user — please refresh' }, { status: 409 });

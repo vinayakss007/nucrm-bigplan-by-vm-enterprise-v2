@@ -7,6 +7,7 @@ import { tenants } from '@/drizzle/schema';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 const brandingUpdateSchema = z.object({
   logoUrl: z.string().trim().max(500).nullable().optional(),
@@ -70,9 +71,13 @@ export async function PUT(request: NextRequest) {
           .limit(1);
         if (!existing1) throw new Error('NOT_FOUND');
 
+        const guard1 = concurrencyGuard(tenants, existing1.updatedAt);
+        const conditions1 = [eq(tenants.id, ctx.tenantId)];
+        if (guard1) conditions1.push(guard1);
+
         const [updated1] = await tx.update(tenants)
           .set({ ...tenantUpdate, updatedAt: new Date() })
-          .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing1.updatedAt!)))
+          .where(and(...conditions1))
           .returning({ id: tenants.id });
 
         if (!updated1) throw new Error('CONFLICT');
@@ -93,6 +98,10 @@ export async function PUT(request: NextRequest) {
           .limit(1);
         if (!existing2) throw new Error('NOT_FOUND');
 
+        const guard2 = concurrencyGuard(tenants, existing2.updatedAt);
+        const conditions2 = [eq(tenants.id, ctx.tenantId)];
+        if (guard2) conditions2.push(guard2);
+
         const currentSettings = (existing2.settings as Record<string, unknown>) ?? {};
         const currentBranding = (currentSettings['branding'] as Record<string, unknown>) ?? {};
 
@@ -104,7 +113,7 @@ export async function PUT(request: NextRequest) {
             },
             updatedAt: new Date(),
           })
-          .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing2.updatedAt!)))
+          .where(and(...conditions2))
           .returning({ id: tenants.id });
 
         if (!updated2) throw new Error('CONFLICT');
