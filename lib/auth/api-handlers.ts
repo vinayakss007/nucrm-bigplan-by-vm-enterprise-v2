@@ -230,7 +230,7 @@ export async function POST_signup(request: NextRequest) {
 
     const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
     if (existing) {
-      return NextResponse.json({ message: 'If an account with this email does not exist, a new account has been created. Please check your email for verification.' }, { status: 200 });
+      return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
     }
 
     const trialDays = parseInt(process.env.DEFAULT_TRIAL_DAYS ?? '14');

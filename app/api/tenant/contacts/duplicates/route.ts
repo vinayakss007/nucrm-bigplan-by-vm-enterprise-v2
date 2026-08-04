@@ -3,7 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts } from '@/drizzle/schema';
-import { sql } from 'drizzle-orm';
+import { sql, inArray } from 'drizzle-orm';
 
 /**
  * GET /api/tenant/contacts/duplicates
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     // Strategy 1: Exact email duplicates (most reliable)
     const emailDupes = await db.execute(sql`
-      SELECT email, array_agg(id) as contact_ids, count(*) as cnt
+      SELECT LOWER(email) as email, array_agg(id) as contact_ids, count(*) as cnt
       FROM contacts
       WHERE tenant_id = ${tid}
         AND deleted_at IS NULL
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
           createdAt: contacts.createdAt,
         })
         .from(contacts)
-        .where(sql`${contacts.id} = ANY(${allIds})`);
+        .where(inArray(contacts.id, allIds));
     }
 
     const contactMap = new Map(contactDetails.map(c => [c.id, c]));

@@ -1,6 +1,19 @@
 import { NextResponse } from 'next/server';
-import { ZodError, ZodSchema } from 'zod';
+import { ZodError, ZodSchema, z } from 'zod';
 import { logger } from '@/lib/logger';
+
+/**
+ * Permissive UUID validator that matches PostgreSQL's uuid type.
+ *
+ * PostgreSQL accepts any 32 hex chars with dashes (no version/variant check),
+ * while Zod's built-in `.uuid()` enforces RFC 4122 (version 1-5, variant 89ab).
+ * Seed data and some legacy records use non-RFC UUIDs (e.g. version 0), so we
+ * need a validator that accepts them.
+ */
+export const uuidField = z.string().regex(
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  'must be a valid UUID',
+);
 
 /**
  * Validate request body against a Zod schema.
