@@ -32,7 +32,6 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
       include: ['lib/**/?*.ts'],
       exclude: [
-        'lib/**/index.ts',
         'lib/**/*.test.ts',
         'lib/**/*.spec.ts',
         'lib/**/__tests__/**',
@@ -44,21 +43,20 @@ export default defineConfig({
         'lib/sdk/modules.ts',
         'lib/server-only-shim.ts',
       ],
-      // Coverage target: 70/70/80/70 (lines/functions/branches/statements).
+      // Coverage target: 80/80/90/80 (lines/functions/branches/statements).
       //
-      // Nothing under lib/ is excluded for being untested any more. The three
-      // modules that used to be (lib/db/services, lib/plugins, lib/usage) are all
-      // imported by application code, so excluding them hid live code from the
-      // gate rather than deferring work on dead code. Folding them in costs
-      // ~1.7 points of line coverage and still clears every threshold.
+      // The lib/**/index.ts exclusion was removed — many index.ts files contain
+      // substantial testable code (e.g. lib/cache/index.ts has a circuit breaker,
+      // distributed locks, and rate limiting; lib/scim/index.ts has SCIM protocol
+      // parsing; lib/flags/index.ts has feature flag logic). Only pure type
+      // files, test files, and the server-only shim remain excluded.
       //
-      // The remaining exclusions are type-only or barrel files with nothing to
-      // execute. Please do not add a module here to make a build pass.
+      // Please do not add a module here to make a build pass.
       thresholds: {
-        lines: 72,
-        functions: 72,
-        branches: 82,
-        statements: 72,
+        lines: 80,
+        functions: 80,
+        branches: 90,
+        statements: 80,
       },
     },
     testTimeout: 15000,

@@ -18,6 +18,7 @@ import { logAudit } from '@/lib/audit';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createLeadScoringRuleSchema, updateLeadScoringRuleSchema } from '@/lib/api/schemas';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 
 export async function GET(req: NextRequest) {
   try {
@@ -84,8 +85,10 @@ export async function PATCH(req: NextRequest) {
     const parsed = validateBody(updateLeadScoringRuleSchema, body);
     if (parsed instanceof NextResponse) return parsed;
 
+    const guardResult = await concurrencyGuard(db, leadScoringRules, body.id, ctx.tenantId, (body as Record<string, unknown>).expectedUpdatedAt as string | Date | null | undefined);
+    if (guardResult) return guardResult;
+
     const updateData: Record<string, unknown> = {
-      updatedAt: new Date(),
       updatedBy: ctx.userId,
     };
 
@@ -95,20 +98,13 @@ export async function PATCH(req: NextRequest) {
     if (parsed.data.sortOrder !== undefined) updateData.sortOrder = parsed.data.sortOrder;
     if (parsed.data.active !== undefined) updateData.active = parsed.data.active;
 
-    const [existing] = await db
-      .select({ updatedAt: leadScoringRules.updatedAt })
-      .from(leadScoringRules)
-      .where(and(eq(leadScoringRules.id, body.id), eq(leadScoringRules.tenantId, ctx.tenantId)))
-      .limit(1);
-    if (!existing) return NextResponse.json({ error: 'Rule not found' }, { status: 404 });
-
     const [row] = await db
       .update(leadScoringRules)
       .set(updateData)
-      .where(and(eq(leadScoringRules.id, body.id), eq(leadScoringRules.tenantId, ctx.tenantId), eq(leadScoringRules.updatedAt, existing.updatedAt!)))
+      .where(and(eq(leadScoringRules.id, body.id), eq(leadScoringRules.tenantId, ctx.tenantId)))
       .returning();
 
-    if (!row) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });
+    if (!row) return NextResponse.json({ error: 'Rule not found' }, { status: 404 });
 
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
