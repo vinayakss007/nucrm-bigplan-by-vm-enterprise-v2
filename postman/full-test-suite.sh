@@ -6,7 +6,7 @@
 # Usage: bash full-test-suite.sh
 # ═══════════════════════════════════════════════════════════════════════════
 
-BASE_URL="http://localhost:3000"
+BASE_URL="http://localhost:3099"
 RESULTS_DIR="/tmp/nucrm-test-results"
 RESULTS_FILE="$RESULTS_DIR/full-test-results-$(date +%Y%m%d-%H%M%S).txt"
 COOKIE_FILE="/tmp/nucrm_cookies.txt"
@@ -28,7 +28,7 @@ flush_rate_limits() {
         docker exec nucrm-redis redis-cli -a "$redis_password" FLUSHDB >/dev/null 2>&1 || true
     fi
     # Clear brute-force blocks and failed attempts from DB
-    docker exec nucrm-db psql -U nucrm -d nucrm -c "DELETE FROM login_blocks; DELETE FROM login_attempts;" >/dev/null 2>&1 || true
+        PGPASSWORD=nucrm_prod_db_pass_2026 psql -h localhost -U nucrm -d nucrm_fresh -c "DELETE FROM login_blocks; DELETE FROM login_attempts;" >/dev/null 2>&1 || true
 }
 flush_rate_limits
 
@@ -36,7 +36,7 @@ flush_rate_limits
 log() { echo "[$(date +%H:%M:%S)] $1"; }
 
 # Clear stale brute-force blocks that accumulate across test runs
-docker exec nucrm-db psql -U nucrm -d nucrm -c "DELETE FROM login_blocks;" >/dev/null 2>&1 || true
+PGPASSWORD=nucrm_prod_db_pass_2026 psql -h localhost -U nucrm -d nucrm_fresh -c "DELETE FROM login_blocks;" >/dev/null 2>&1 || true
 
 test_result() {
     local id="$1" name="$2" expected="$3" actual="$4" detail="${5:-}"
@@ -199,10 +199,10 @@ test_result "H08" "GET /api/setup/check" "200" "$(http_code "$R")"
 section "2. AUTHENTICATION"
 
 # 2.1 Login
-R=$(curl -s -w "\n%{http_code}" --max-time 10 -c "$COOKIE_FILE" -H "Content-Type: application/json" -X POST -d '{"email":"admin@test.com","password":"password123"}' "$BASE_URL/api/auth/login" 2>/dev/null)
+R=$(curl -s -w "\n%{http_code}" --max-time 10 -c "$COOKIE_FILE" -H "Content-Type: application/json" -X POST -d '{"email":"a@a.com","password":"password123"}' "$BASE_URL/api/auth/login" 2>/dev/null)
 test_result "A01" "POST /auth/login (valid credentials)" "200" "$(http_code "$R")"
 
-R=$(post "$BASE_URL/api/auth/login" '{"email":"admin@test.com","password":"wrongpassword"}')
+R=$(post "$BASE_URL/api/auth/login" '{"email":"a@a.com","password":"wrongpassword"}')
 test_result "A02" "POST /auth/login (wrong password)" "401" "$(http_code "$R")"
 
 R=$(post "$BASE_URL/api/auth/login" '{"email":"nonexistent@test.com","password":"password123"}')
@@ -223,7 +223,7 @@ else
     test_result "A06" "POST /auth/signup (valid)" "201" "$LC"
 fi
 
-R=$(post "$BASE_URL/api/auth/signup" '{"email":"admin@test.com","password":"SecurePass1234!","full_name":"Dup User","workspace_name":"TestCo"}')
+R=$(post "$BASE_URL/api/auth/signup" '{"email":"a@a.com","password":"SecurePass1234!","full_name":"Dup User","workspace_name":"TestCo"}')
 test_result "A07" "POST /auth/signup (duplicate email)" "409" "$(http_code "$R")"
 
 R=$(post "$BASE_URL/api/auth/signup" '{}')
@@ -236,7 +236,7 @@ LC=$(http_code "$R")
 test_result "A09" "POST /auth/logout" "200" "$LC"
 
 # Re-login after logout to restore session for protected-route tests
-R=$(curl -s -w "\n%{http_code}" --max-time 10 -c "$COOKIE_FILE" -H "Content-Type: application/json" -X POST -d '{"email":"admin@test.com","password":"password123"}' "$BASE_URL/api/auth/login" 2>/dev/null)
+R=$(curl -s -w "\n%{http_code}" --max-time 10 -c "$COOKIE_FILE" -H "Content-Type: application/json" -X POST -d '{"email":"a@a.com","password":"password123"}' "$BASE_URL/api/auth/login" 2>/dev/null)
 
 # Create API key via session cookie + CSRF for all subsequent resource tests
 # Use longer timeout (60s) since first request may trigger compilation
@@ -255,18 +255,18 @@ R=$(get "$BASE_URL/api/auth/csrf-token")
 test_result "A10" "GET /auth/csrf-token" "200" "$(http_code "$R")"
 
 # 2.5 Password Reset
-R=$(post "$BASE_URL/api/auth/forgot-password" '{"email":"admin@test.com"}')
+R=$(post "$BASE_URL/api/auth/forgot-password" '{"email":"a@a.com"}')
 test_result "A11" "POST /auth/forgot-password (valid email)" "200" "$(http_code "$R")"
 
 R=$(post "$BASE_URL/api/auth/forgot-password" '{"email":"nonexistent@test.com"}')
 # Should still return 200 to prevent user enumeration
 test_result "A12" "POST /auth/forgot-password (nonexistent, no enum)" "200" "$(http_code "$R")"
 
-R=$(post "$BASE_URL/api/auth/password-reset/request" '{"email":"admin@test.com"}')
+R=$(post "$BASE_URL/api/auth/password-reset/request" '{"email":"a@a.com"}')
 test_result "A13" "POST /auth/password-reset/request" "200" "$(http_code "$R")"
 
 # 2.6 Email Verification (empty body → 400)
-R=$(post "$BASE_URL/api/auth/resend-verification" '{"email":"admin@test.com"}')
+R=$(post "$BASE_URL/api/auth/resend-verification" '{"email":"a@a.com"}')
 test_result "A14" "POST /auth/resend-verification (no auth)" "400" "$(http_code "$R")"
 
 # 2.7 OAuth
