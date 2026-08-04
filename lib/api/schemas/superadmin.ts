@@ -46,6 +46,7 @@ export const updateAnnouncementSchema = z.object({
   is_active: z.boolean().optional(),
   starts_at: z.string().datetime().optional().nullable(),
   ends_at: z.string().datetime().optional().nullable(),
+  updated_at: z.string().datetime().optional(),
 });
 
 export const deleteAnnouncementSchema = z.object({

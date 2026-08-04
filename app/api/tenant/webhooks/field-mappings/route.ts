@@ -222,6 +222,7 @@ export async function PATCH(req: NextRequest) {
       .where(and(
         eq(webhookFieldMappings.id, id),
         eq(webhookFieldMappings.tenantId, ctx.tenantId),
+        eq(webhookFieldMappings.updatedAt, current.updatedAt!),
       ))
       .returning();
 

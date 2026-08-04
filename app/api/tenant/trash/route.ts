@@ -172,7 +172,11 @@ export async function PATCH(req: NextRequest) {
       .from(table)
       .where(and(eq(table.id, id), eq(table.tenantId, ctx.tenantId), isNotNull(table.deletedAt)))
       .limit(1);
-    const guard = concurrencyGuard(table, current?.updatedAt);
+
+    // Row not in trash at all → 404
+    if (!current) return NextResponse.json({ error: 'Not found in trash' }, { status: 404 });
+
+    const guard = concurrencyGuard(table, current.updatedAt);
     const conditions = [eq(table.id, id), eq(table.tenantId, ctx.tenantId), isNotNull(table.deletedAt)];
     if (guard) conditions.push(guard);
 
@@ -182,7 +186,8 @@ export async function PATCH(req: NextRequest) {
       .where(and(...conditions))
       .returning({ id: table.id });
 
-    if (!row) return NextResponse.json({ error: 'Not found in trash' }, { status: 404 });
+    // Row was in trash but update returned 0 rows → stale write (concurrent modification)
+    if (!row) return NextResponse.json({ error: 'Stale data — this record was modified by another user. Please refresh and retry.' }, { status: 409 });
     // Re-increment the tenant counter for the restored resource
     if (resource_type === 'contact') {
       await db.update(tenants)
