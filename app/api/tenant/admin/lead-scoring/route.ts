@@ -18,7 +18,7 @@ import { logAudit } from '@/lib/audit';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createLeadScoringRuleSchema, updateLeadScoringRuleSchema } from '@/lib/api/schemas';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
-import { concurrencyGuard } from '@/lib/api/concurrency';
+import { concurrencyGuard, updatedAtMs } from '@/lib/api/concurrency';
 
 export async function GET(req: NextRequest) {
   try {
@@ -142,7 +142,7 @@ export async function DELETE(req: NextRequest) {
         deletedAt: new Date(),
         updatedBy: ctx.userId,
       })
-      .where(and(eq(leadScoringRules.id, id), eq(leadScoringRules.tenantId, ctx.tenantId), eq(leadScoringRules.updatedAt, existing.updatedAt!)))
+      .where(and(eq(leadScoringRules.id, id), eq(leadScoringRules.tenantId, ctx.tenantId), updatedAtMs(leadScoringRules, existing.updatedAt!)))
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });

@@ -12,6 +12,7 @@ import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 import { withConcurrencyGuard } from '@/lib/concurrency';
+import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -189,7 +190,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             ...updateData,
             updatedAt: new Date(),
           })
-          .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId), eq(contacts.updatedAt, existing.updatedAt!), sql`${contacts.deletedAt} IS NULL`))
+          .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId), updatedAtMs(contacts, existing.updatedAt!), sql`${contacts.deletedAt} IS NULL`))
           .returning(),
         'Contact',
         existing.updatedAt!,

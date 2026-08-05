@@ -12,6 +12,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateEmailTemplateSchema } from '@/lib/api/schemas';
 import { withConcurrencyGuard } from '@/lib/concurrency';
+import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
  
@@ -95,7 +96,7 @@ export async function PATCH(request: NextRequest, { params }: any) {
           eq(emailTemplates.id, id),
           eq(emailTemplates.tenantId, ctx.tenantId),
           isNull(emailTemplates.deletedAt),
-          eq(emailTemplates.updatedAt, existing.updatedAt!)
+          updatedAtMs(emailTemplates, existing.updatedAt!)
         ))
         .returning({
           id: emailTemplates.id,

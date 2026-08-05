@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { meetings, contacts } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { withConcurrencyGuard } from '@/lib/concurrency';
+import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -80,7 +81,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const [updated] = await withConcurrencyGuard(
       () => db.update(meetings)
         .set(updates)
-        .where(and(eq(meetings.id, id), eq(meetings.updatedAt, existing.updatedAt!), isNull(meetings.deletedAt)))
+        .where(and(eq(meetings.id, id), updatedAtMs(meetings, existing.updatedAt!), isNull(meetings.deletedAt)))
         .returning(),
       'Meeting',
       existing.updatedAt!,

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
-import { eq, and, isNull, SQL } from 'drizzle-orm';
+import { eq, and, isNull, sql, SQL } from 'drizzle-orm';
 import { PgTableWithColumns } from 'drizzle-orm/pg-core';
 
 /**
@@ -144,6 +144,25 @@ export async function concurrencyGuardById(
   expectedUpdatedAt: Date | string | null | undefined,
 ): Promise<NextResponse | null> {
   return concurrencyGuardAsync(db, table, id, null, expectedUpdatedAt);
+}
+
+/**
+ * Returns a SQL fragment that compares `table.updatedAt` with `expected`,
+ * truncating both to millisecond precision so the comparison survives the
+ * JS/pg driver round-trip (pg stores microseconds, JS Date has only ms).
+ *
+ * Use this instead of `eq(table.updatedAt, expected)` in UPDATE … WHERE clauses
+ * that implement optimistic locking via `withConcurrencyGuard`.
+ *
+ * Example:
+ *   .where(and(eq(deals.id, id), updatedAtMs(deals, prev.updatedAt!)))
+ */
+export function updatedAtMs(
+  table: PgTableWithColumns<any>,
+  expected: Date | string,
+): SQL<unknown> {
+  const ts = expected instanceof Date ? expected : new Date(expected);
+  return sql`date_trunc('millisecond', ${table.updatedAt}::timestamptz) = date_trunc('millisecond', ${ts}::timestamptz)`;
 }
 
 /**

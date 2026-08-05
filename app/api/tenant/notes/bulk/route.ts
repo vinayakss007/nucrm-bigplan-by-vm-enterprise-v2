@@ -21,8 +21,6 @@ const entityTables: Record<string, { table: any; idField: any; tenantField: any 
 };
 
 export async function POST(req: NextRequest) {
-  const limited = await rateLimitMutating(req, 'bulk', 'post');
-  if (limited) return limited;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let ctx: any;
   try {
@@ -50,6 +48,9 @@ export async function POST(req: NextRequest) {
     if (!content?.trim()) {
       return NextResponse.json({ error: 'content required' }, { status: 400 });
     }
+
+    const limited = await rateLimitMutating(req, 'bulk', 'post');
+    if (limited) return limited;
 
     const entityTable = entityTables[entity_type];
     if (!entityTable) {

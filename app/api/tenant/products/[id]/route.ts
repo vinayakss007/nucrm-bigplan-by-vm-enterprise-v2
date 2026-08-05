@@ -9,6 +9,7 @@ import { logError } from '@/lib/errors-server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { withConcurrencyGuard } from '@/lib/concurrency';
+import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { apiError } from '@/lib/api-error';
 
@@ -82,7 +83,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     const [updated] = await withConcurrencyGuard(
       () => db.update(products)
         .set(updateData)
-        .where(and(eq(products.id, id), eq(products.tenantId, ctx.tenantId), isNull(products.deletedAt), eq(products.updatedAt, existing.updatedAt!)))
+        .where(and(eq(products.id, id), eq(products.tenantId, ctx.tenantId), isNull(products.deletedAt), updatedAtMs(products, existing.updatedAt!)))
         .returning(),
       'Product',
       existing.updatedAt!,

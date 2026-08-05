@@ -12,6 +12,7 @@ import { notifyTenantMembers } from '@/lib/notifications';
 import { logError } from '@/lib/errors-server';
 import { cache } from '@/lib/cache';
 import { withConcurrencyGuard } from '@/lib/concurrency';
+import { updatedAtMs } from '@/lib/api/concurrency';
 import { checkConcurrency } from '@/lib/api/optimistic-lock';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
@@ -181,7 +182,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         () => tx
           .update(deals)
           .set(updateData)
-          .where(and(...whereConditions))
+          .where(and(...whereConditions, updatedAtMs(deals, prev.updatedAt!)))
           .returning(),
         'Deal',
         prev.updatedAt!,
