@@ -784,14 +784,44 @@ if [ -n "$NEW_KEY_ID" ]; then
     R=$(get "$BASE_URL/api/tenant/api-keys/$NEW_KEY_ID" "$API_KEY" "$API_KEY")
     test_result "AK03" "GET /tenant/api-keys/:id" "200" "$(http_code "$R")"
 
-    # Rotate endpoint does not exist on api-keys [id] (only GET and DELETE)
-    skip_test "AK04" "POST /tenant/api-keys/:id/rotate" "rotate endpoint not implemented"
+    # Rotate: POST /tenant/api-keys/:id (revoke old, create new)
+    R=$(post "$BASE_URL/api/tenant/api-keys/$NEW_KEY_ID" "$API_KEY" "$API_KEY" '{}')
+    CODE=$(http_code "$R")
+    if [ "$CODE" = "200" ]; then
+        # Extract new key prefix from response
+        NEW_PREFIX=$(echo "$(body "$R")" | python3 -c "import sys,json; print(json.load(sys.stdin).get('prefix',''))" 2>/dev/null)
+        test_result "AK04" "POST /tenant/api-keys/:id (rotate)" "200" "$CODE"
+        # Verify new key works (if we got a prefix)
+        if [ -n "$NEW_PREFIX" ]; then
+            R2=$(get "$BASE_URL/api/tenant/api-keys" "$API_KEY" "$API_KEY")
+            ROTATED_OK=$(echo "$(body "$R2")" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+for k in d.get('data',[]):
+    if k.get('key_prefix','').startswith('$NEW_PREFIX'):
+        print('yes'); break
+else:
+    print('no')
+" 2>/dev/null)
+            if [ "$ROTATED_OK" = "yes" ]; then
+                pass_count=$((pass_count + 1))
+                echo "  [32m✓ PASS[0m  AK04b  new key visible in list"
+            else
+                fail_count=$((fail_count + 1))
+                echo "  [31m✗ FAIL[0m  AK04b  new key not found in list"
+            fi
+        fi
+    elif [ "$CODE" = "404" ]; then
+        test_result "AK04" "POST /tenant/api-keys/:id (rotate)" "200" "$CODE"
+    else
+        test_result "AK04" "POST /tenant/api-keys/:id (rotate)" "200" "$CODE"
+    fi
 
     R=$(del "$BASE_URL/api/tenant/api-keys/$NEW_KEY_ID" "$API_KEY")
     test_result "AK05" "DELETE /tenant/api-keys/:id" "200" "$(http_code "$R")"
 else
     skip_test "AK03" "GET /tenant/api-keys/:id" "no id"
-    skip_test "AK04" "POST /tenant/api-keys/:id/rotate" "no id"
+    skip_test "AK04" "POST /tenant/api-keys/:id (rotate)" "no id"
     skip_test "AK05" "DELETE /tenant/api-keys/:id" "no id"
 fi
 
