@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { products } from '@/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
@@ -82,7 +82,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     const [updated] = await withConcurrencyGuard(
       () => db.update(products)
         .set(updateData)
-        .where(and(eq(products.id, id), eq(products.tenantId, ctx.tenantId), isNull(products.deletedAt), eq(products.updatedAt, existing.updatedAt!)))
+        .where(and(eq(products.id, id), eq(products.tenantId, ctx.tenantId), isNull(products.deletedAt), sql`date_trunc('millisecond', ${products.updatedAt}::timestamptz) = date_trunc('millisecond', ${existing.updatedAt!}::timestamptz)`))
         .returning(),
       'Product',
       existing.updatedAt!,

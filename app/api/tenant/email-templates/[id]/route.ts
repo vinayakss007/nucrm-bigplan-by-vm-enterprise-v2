@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { emailTemplates } from '@/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateEmailTemplateSchema } from '@/lib/api/schemas';
 import { withConcurrencyGuard } from '@/lib/concurrency';
@@ -95,7 +95,7 @@ export async function PATCH(request: NextRequest, { params }: any) {
           eq(emailTemplates.id, id),
           eq(emailTemplates.tenantId, ctx.tenantId),
           isNull(emailTemplates.deletedAt),
-          eq(emailTemplates.updatedAt, existing.updatedAt!)
+          sql`date_trunc('millisecond', ${emailTemplates.updatedAt}::timestamptz) = date_trunc('millisecond', ${existing.updatedAt!}::timestamptz)`
         ))
         .returning({
           id: emailTemplates.id,

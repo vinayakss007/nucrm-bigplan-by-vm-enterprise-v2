@@ -114,7 +114,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           updatedAt: new Date(),
           updatedBy: ctx.userId,
         })
-        .where(and(eq(quotes.id, quoteId), eq(quotes.tenantId, ctx.tenantId), eq(quotes.updatedAt, existing.updatedAt!), sql`${quotes.deletedAt} IS NULL`))
+        .where(and(eq(quotes.id, quoteId), eq(quotes.tenantId, ctx.tenantId), sql`date_trunc('millisecond', ${quotes.updatedAt}::timestamptz) = date_trunc('millisecond', ${existing.updatedAt!}::timestamptz)`, sql`${quotes.deletedAt} IS NULL`))
         .returning(),
       'Quote',
       existing.updatedAt!,

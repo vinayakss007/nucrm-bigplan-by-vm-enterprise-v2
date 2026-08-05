@@ -5,7 +5,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateTaskSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { tasks } from '@/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
@@ -79,7 +79,7 @@ export async function PATCH(req: NextRequest, { params }: any) {
       () => {
         const whereConditions = [eq(tasks.id, id), eq(tasks.tenantId, ctx.tenantId), isNull(tasks.deletedAt)];
         if (clientVersion) {
-          whereConditions.push(eq(tasks.updatedAt, existing.updatedAt!));
+          whereConditions.push(sql`date_trunc('millisecond', ${tasks.updatedAt}::timestamptz) = date_trunc('millisecond', ${existing.updatedAt!}::timestamptz)`);
         }
         return db.update(tasks)
           .set(updateData)

@@ -1,7 +1,7 @@
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { leads, users, leadActivities } from '@/drizzle/schema';
-import { eq, and, desc, isNull } from 'drizzle-orm';
+import { eq, and, desc, isNull, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -184,7 +184,7 @@ export async function PATCH(
           .where(and(
             eq(leads.id, id),
             eq(leads.tenantId, ctx.tenantId),
-            eq(leads.updatedAt, existing.updatedAt!),
+            sql`date_trunc('millisecond', ${leads.updatedAt}::timestamptz) = date_trunc('millisecond', ${existing.updatedAt!}::timestamptz)`,
             isNull(leads.deletedAt)
           ))
           .returning(),

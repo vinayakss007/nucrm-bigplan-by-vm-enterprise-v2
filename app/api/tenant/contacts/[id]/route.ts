@@ -189,7 +189,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             ...updateData,
             updatedAt: new Date(),
           })
-          .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId), eq(contacts.updatedAt, existing.updatedAt!), sql`${contacts.deletedAt} IS NULL`))
+          .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, ctx.tenantId), sql`date_trunc('millisecond', ${contacts.updatedAt}::timestamptz) = date_trunc('millisecond', ${existing.updatedAt!}::timestamptz)`, sql`${contacts.deletedAt} IS NULL`))
           .returning(),
         'Contact',
         existing.updatedAt!,

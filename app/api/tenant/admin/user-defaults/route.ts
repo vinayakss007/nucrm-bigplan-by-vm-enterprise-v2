@@ -180,7 +180,7 @@ export async function DELETE(req: NextRequest) {
         settings: sql`COALESCE(${tenants.settings}, '{}'::jsonb) - 'user_defaults'`,
         updatedAt: new Date(),
       })
-      .where(and(eq(tenants.id, ctx.tenantId), eq(tenants.updatedAt, existing.updatedAt!)))
+      .where(and(eq(tenants.id, ctx.tenantId), sql`date_trunc('millisecond', ${tenants.updatedAt}::timestamptz) = date_trunc('millisecond', ${existing.updatedAt!}::timestamptz)`))
       .returning({ id: tenants.id });
 
     if (!updated) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });

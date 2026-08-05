@@ -80,7 +80,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const [updated] = await withConcurrencyGuard(
       () => db.update(meetings)
         .set(updates)
-        .where(and(eq(meetings.id, id), eq(meetings.updatedAt, existing.updatedAt!), isNull(meetings.deletedAt)))
+        .where(and(eq(meetings.id, id), sql`date_trunc('millisecond', ${meetings.updatedAt}::timestamptz) = date_trunc('millisecond', ${existing.updatedAt!}::timestamptz)`, isNull(meetings.deletedAt)))
         .returning(),
       'Meeting',
       existing.updatedAt!,

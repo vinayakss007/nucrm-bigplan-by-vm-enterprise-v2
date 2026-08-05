@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { leadScoringRules } from '@/drizzle/schema/ai';
-import { eq, and, isNull, desc, asc } from 'drizzle-orm';
+import { eq, and, isNull, desc, asc, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -142,7 +142,7 @@ export async function DELETE(req: NextRequest) {
         deletedAt: new Date(),
         updatedBy: ctx.userId,
       })
-      .where(and(eq(leadScoringRules.id, id), eq(leadScoringRules.tenantId, ctx.tenantId), eq(leadScoringRules.updatedAt, existing.updatedAt!)))
+      .where(and(eq(leadScoringRules.id, id), eq(leadScoringRules.tenantId, ctx.tenantId), sql`date_trunc('millisecond', ${leadScoringRules.updatedAt}::timestamptz) = date_trunc('millisecond', ${existing.updatedAt!}::timestamptz)`))
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });
