@@ -175,9 +175,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const [row] = await db.transaction(async (tx) => {
       const whereConditions = [eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId), sql`${deals.deletedAt} IS NULL`];
-      if (clientVersion) {
-        whereConditions.push(eq(deals.updatedAt, prev.updatedAt!));
-      }
       const [r] = await withConcurrencyGuard(
         () => tx
           .update(deals)

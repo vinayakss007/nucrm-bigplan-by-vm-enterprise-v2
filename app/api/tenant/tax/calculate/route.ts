@@ -5,6 +5,8 @@ import { requireModule } from '@/lib/modules/gate';
 import { calculateTax, calculateCompoundTax, applyTaxToLineItems } from '@/lib/tax';
 import { readJsonBody } from '@/lib/api/validate';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * POST /api/tenant/tax/calculate
  * Calculate tax for a given amount or line items.
@@ -20,6 +22,16 @@ export async function POST(req: NextRequest) {
 
     const body = await readJsonBody(req);
     const { amount, taxRateIds, items } = body;
+
+    if (taxRateIds && Array.isArray(taxRateIds)) {
+      const invalid = taxRateIds.filter((id: string) => !UUID_RE.test(id));
+      if (invalid.length > 0) {
+        return NextResponse.json(
+          { error: `Invalid taxRateId(s): ${invalid.join(', ')}` },
+          { status: 400 }
+        );
+      }
+    }
 
     // If items are provided, apply tax to line items
     if (items && Array.isArray(items)) {

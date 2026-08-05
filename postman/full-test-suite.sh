@@ -1099,7 +1099,7 @@ R=$(get "$BASE_URL/api/tenant/tax" "$API_KEY" "$API_KEY")
 test_result "TX01" "GET /tenant/tax" "200" "$(http_code "$R")"
 
 R=$(post "$BASE_URL/api/tenant/tax/calculate" '{"amount":100,"taxRateIds":["default"]}' "$API_KEY")
-test_result "TX02" "POST /tenant/tax/calculate (needs taxRateIds)" "500" "$(http_code "$R")" "(server error without valid IDs)"
+test_result "TX02" "POST /tenant/tax/calculate (needs taxRateIds)" "400" "$(http_code "$R")" "(rejects invalid UUIDs)"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 37. SLA
