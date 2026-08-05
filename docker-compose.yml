@@ -14,15 +14,15 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=postgresql://nucrm:nucrm_prod_db_pass_2026@localhost:5432/nucrm?sslmode=require
+      - DATABASE_URL=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@localhost:5432/nucrm?sslmode=require
       - REDIS_URL=redis://:${REDIS_PASSWORD}@localhost:6379
       - JWT_SECRET=${JWT_SECRET}
       - SESSION_SECRET=${SESSION_SECRET}
       - SETUP_KEY=${SETUP_KEY}
       - CRON_SECRET=${CRON_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - ALLOWED_ORIGINS=http://34.70.191.180
-      - COOKIE_SECURE=false
+      - ALLOWED_ORIGINS=${NEXT_PUBLIC_APP_URL:?REQUIRED}
+      - COOKIE_SECURE=${COOKIE_SECURE:-true}
       - NEXT_PUBLIC_APP_URL=http://34.70.191.180
       - BREVO_SMTP_HOST=${BREVO_SMTP_HOST}
       - BREVO_SMTP_PORT=${BREVO_SMTP_PORT}
@@ -59,7 +59,7 @@ services:
     command: ["node", "--import", "tsx", "worker.ts"]
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://nucrm:nucrm_prod_db_pass_2026@localhost:5432/nucrm?sslmode=require
+      - DATABASE_URL=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@localhost:5432/nucrm?sslmode=require
       - REDIS_URL=redis://:${REDIS_PASSWORD}@localhost:6379
       - JWT_SECRET=${JWT_SECRET}
       - SESSION_SECRET=${SESSION_SECRET}
@@ -386,7 +386,7 @@ services:
     container_name: nucrm-postgres-exporter
     profiles: ["monitoring"]
     environment:
-      - DATA_SOURCE_NAME=postgresql://nucrm:nucrm_prod_db_pass_2026@postgres:5432/nucrm?sslmode=require
+      - DATA_SOURCE_NAME=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@postgres:5432/nucrm?sslmode=require
     ports:
       - "127.0.0.1:9187:9187"
     restart: unless-stopped

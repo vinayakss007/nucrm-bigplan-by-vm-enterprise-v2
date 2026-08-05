@@ -18,14 +18,14 @@ import { db } from '@/drizzle/db';
 import { leads, leadAssignments, leadActivities, activities, users, tenantMembers } from '@/drizzle/schema';
 import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody, uuidField } from '@/lib/api/validate';
 import { logAudit } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 
 const assignSchema = z.object({
-  assigned_to: z.string().uuid('assigned_to must be a uuid'),
+  assigned_to: uuidField,
   reason: z.string().trim().max(500).optional().nullable(),
 });
 

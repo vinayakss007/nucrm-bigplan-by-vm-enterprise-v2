@@ -3,7 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts } from '@/drizzle/schema';
-import { sql } from 'drizzle-orm';
+import { sql, inArray } from 'drizzle-orm';
 
 /**
  * GET /api/tenant/contacts/duplicates
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
           createdAt: contacts.createdAt,
         })
         .from(contacts)
-        .where(sql`${contacts.id} = ANY(${allIds})`);
+        .where(inArray(contacts.id, allIds));
     }
 
     const contactMap = new Map(contactDetails.map(c => [c.id, c]));

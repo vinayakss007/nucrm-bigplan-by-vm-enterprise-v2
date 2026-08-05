@@ -9,6 +9,7 @@ import { updateLeadSchema } from '@/lib/api/schemas';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { withConcurrencyGuard } from '@/lib/concurrency';
+import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { apiError } from '@/lib/api-error';
 
@@ -184,7 +185,7 @@ export async function PATCH(
           .where(and(
             eq(leads.id, id),
             eq(leads.tenantId, ctx.tenantId),
-            eq(leads.updatedAt, existing.updatedAt!),
+            updatedAtMs(leads, existing.updatedAt!),
             isNull(leads.deletedAt)
           ))
           .returning(),
