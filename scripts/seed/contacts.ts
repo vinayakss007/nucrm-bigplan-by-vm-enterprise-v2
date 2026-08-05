@@ -37,7 +37,7 @@ const jobTitles = [
   'Marketing Manager', 'Operations Manager',
 ];
 
-const leadStatuses = ['new', 'contacted', 'qualified', 'customer'];
+const leadStatuses = ['new', 'contacted', 'qualified', 'won'];
 const lifecycleStages = ['subscriber', 'lead', 'mql', 'sql', 'opportunity', 'customer', 'evangelist'];
 
 /** Company domains used to generate contact emails. Must align with companies seed order. */

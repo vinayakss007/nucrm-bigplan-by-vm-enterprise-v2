@@ -360,7 +360,7 @@ async function main() {
     // ========================================================================
     logSection('Seeding Leads');
 
-    const leadStatusOptions = ['new', 'contacted', 'qualified', 'proposal', 'won', 'lost'];
+    const leadStatusOptions = ['new', 'contacted', 'qualified', 'converted', 'rejected', 'unqualified'];
     const leadSources = ['website', 'referral', 'linkedin', 'cold_call', 'trade_show', 'webinar', 'partner'];
 
     const leadsValues = Array.from({ length: 25 }, (_, i) => ({
@@ -393,18 +393,18 @@ async function main() {
     ]);
 
     await db.insert(schema.dealStages).values([
-      { id: IDS.stages.lead, pipelineId: IDS.pipelines.sales, name: 'Lead', order: 1 },
-      { id: IDS.stages.qualified, pipelineId: IDS.pipelines.sales, name: 'Qualified', order: 2 },
-      { id: IDS.stages.proposal, pipelineId: IDS.pipelines.sales, name: 'Proposal', order: 3 },
-      { id: IDS.stages.negotiation, pipelineId: IDS.pipelines.sales, name: 'Negotiation', order: 4 },
-      { id: IDS.stages.closedWon, pipelineId: IDS.pipelines.sales, name: 'Closed Won', order: 5 },
-      { id: IDS.stages.closedLost, pipelineId: IDS.pipelines.sales, name: 'Closed Lost', order: 6 },
-      { id: IDS.stages.discovery, pipelineId: IDS.pipelines.enterprise, name: 'Discovery', order: 1 },
-      { id: IDS.stages.evaluation, pipelineId: IDS.pipelines.enterprise, name: 'Evaluation', order: 2 },
-      { id: IDS.stages.poc, pipelineId: IDS.pipelines.enterprise, name: 'POC', order: 3 },
-      { id: IDS.stages.contract, pipelineId: IDS.pipelines.enterprise, name: 'Contract', order: 4 },
-      { id: IDS.stages.entWon, pipelineId: IDS.pipelines.enterprise, name: 'Won', order: 5 },
-      { id: IDS.stages.entLost, pipelineId: IDS.pipelines.enterprise, name: 'Lost', order: 6 },
+      { id: IDS.stages.lead, tenantId: IDS.tenant, pipelineId: IDS.pipelines.sales, name: 'Lead', order: 1 },
+      { id: IDS.stages.qualified, tenantId: IDS.tenant, pipelineId: IDS.pipelines.sales, name: 'Qualified', order: 2 },
+      { id: IDS.stages.proposal, tenantId: IDS.tenant, pipelineId: IDS.pipelines.sales, name: 'Proposal', order: 3 },
+      { id: IDS.stages.negotiation, tenantId: IDS.tenant, pipelineId: IDS.pipelines.sales, name: 'Negotiation', order: 4 },
+      { id: IDS.stages.closedWon, tenantId: IDS.tenant, pipelineId: IDS.pipelines.sales, name: 'Closed Won', order: 5 },
+      { id: IDS.stages.closedLost, tenantId: IDS.tenant, pipelineId: IDS.pipelines.sales, name: 'Closed Lost', order: 6 },
+      { id: IDS.stages.discovery, tenantId: IDS.tenant, pipelineId: IDS.pipelines.enterprise, name: 'Discovery', order: 1 },
+      { id: IDS.stages.evaluation, tenantId: IDS.tenant, pipelineId: IDS.pipelines.enterprise, name: 'Evaluation', order: 2 },
+      { id: IDS.stages.poc, tenantId: IDS.tenant, pipelineId: IDS.pipelines.enterprise, name: 'POC', order: 3 },
+      { id: IDS.stages.contract, tenantId: IDS.tenant, pipelineId: IDS.pipelines.enterprise, name: 'Contract', order: 4 },
+      { id: IDS.stages.entWon, tenantId: IDS.tenant, pipelineId: IDS.pipelines.enterprise, name: 'Won', order: 5 },
+      { id: IDS.stages.entLost, tenantId: IDS.tenant, pipelineId: IDS.pipelines.enterprise, name: 'Lost', order: 6 },
     ]);
     logDone('pipelines', 2);
     logDone('deal_stages', 12);
@@ -711,6 +711,7 @@ async function main() {
 
     const lineItemsValues = Array.from({ length: 12 }, (_, i) => ({
       quoteId: IDS.quotes[i % 5],
+      tenantId: IDS.tenant,
       productId: IDS.products[i % 6],
       description: productsData[i % 6].name,
       quantity: String(Math.ceil((i + 1) / 2)),
@@ -774,18 +775,18 @@ async function main() {
     logSection('Seeding Modules');
 
     await db.insert(schema.modules).values([
-      { id: 'core-crm', name: 'Core CRM', version: '1.0.0', description: 'Core CRM functionality', category: 'core', isAvailable: 'true' },
-      { id: 'ai-assistant', name: 'AI Assistant', version: '1.0.0', description: 'AI-powered insights and automation', category: 'ai', isAvailable: 'true' },
-      { id: 'forms-builder', name: 'Forms Builder', version: '1.0.0', description: 'Build and manage forms', category: 'marketing', isAvailable: 'true' },
-      { id: 'automation-engine', name: 'Automation Engine', version: '1.0.0', description: 'Workflow automation', category: 'automation', isAvailable: 'true' },
-      { id: 'automation-basic', name: 'Automation Basic', version: '1.0.0', description: 'Basic workflow automation', category: 'automation', isAvailable: 'true' },
-      { id: 'automation-pro', name: 'Automation Pro', version: '1.0.0', description: 'Advanced workflow automation', category: 'automation', isAvailable: 'true' },
-      { id: 'email-sequences', name: 'Email Sequences', version: '1.0.0', description: 'Drip campaign management', category: 'marketing', isAvailable: 'true' },
-      { id: 'whatsapp-bot', name: 'WhatsApp Bot', version: '1.0.0', description: 'WhatsApp messaging and SMS', category: 'messaging', isAvailable: 'true' },
-      { id: 'sales-quotes', name: 'Sales Quotes', version: '1.0.0', description: 'Quote generation and management', category: 'sales', isAvailable: 'true' },
-      { id: 'analytics-pro', name: 'Analytics Pro', version: '1.0.0', description: 'Advanced analytics and leaderboards', category: 'analytics', isAvailable: 'true' },
-      { id: 'service-helpdesk', name: 'Service Helpdesk', version: '1.0.0', description: 'Tickets, chat, and SLA management', category: 'service', isAvailable: 'true' },
-      { id: 'compliance', name: 'Compliance', version: '1.0.0', description: 'GDPR and SOC2 compliance', category: 'compliance', isAvailable: 'true' },
+      { id: 'core-crm', name: 'Core CRM', version: '1.0.0', description: 'Core CRM functionality', category: 'core' },
+      { id: 'ai-assistant', name: 'AI Assistant', version: '1.0.0', description: 'AI-powered insights and automation', category: 'ai' },
+      { id: 'forms-builder', name: 'Forms Builder', version: '1.0.0', description: 'Build and manage forms', category: 'marketing' },
+      { id: 'automation-engine', name: 'Automation Engine', version: '1.0.0', description: 'Workflow automation', category: 'automation' },
+      { id: 'automation-basic', name: 'Automation Basic', version: '1.0.0', description: 'Basic workflow automation', category: 'automation' },
+      { id: 'automation-pro', name: 'Automation Pro', version: '1.0.0', description: 'Advanced workflow automation', category: 'automation' },
+      { id: 'email-sequences', name: 'Email Sequences', version: '1.0.0', description: 'Drip campaign management', category: 'marketing' },
+      { id: 'whatsapp-bot', name: 'WhatsApp Bot', version: '1.0.0', description: 'WhatsApp messaging and SMS', category: 'messaging' },
+      { id: 'sales-quotes', name: 'Sales Quotes', version: '1.0.0', description: 'Quote generation and management', category: 'sales' },
+      { id: 'analytics-pro', name: 'Analytics Pro', version: '1.0.0', description: 'Advanced analytics and leaderboards', category: 'analytics' },
+      { id: 'service-helpdesk', name: 'Service Helpdesk', version: '1.0.0', description: 'Tickets, chat, and SLA management', category: 'service' },
+      { id: 'compliance', name: 'Compliance', version: '1.0.0', description: 'GDPR and SOC2 compliance', category: 'compliance' },
     ]).onConflictDoNothing();
     logDone('modules', 12);
 
@@ -866,7 +867,7 @@ async function main() {
       { tenantId: IDS.tenant, entityType: 'contact', fieldKey: 'contract_renewal', fieldLabel: 'Contract Renewal Date', fieldType: 'date', displayOrder: 3 },
       { tenantId: IDS.tenant, entityType: 'deal', fieldKey: 'competitor', fieldLabel: 'Main Competitor', fieldType: 'text', displayOrder: 1 },
       { tenantId: IDS.tenant, entityType: 'deal', fieldKey: 'decision_date', fieldLabel: 'Expected Decision Date', fieldType: 'date', displayOrder: 2 },
-      { tenantId: IDS.tenant, entityType: 'deal', fieldKey: 'is_strategic', fieldLabel: 'Strategic Deal', fieldType: 'checkbox', displayOrder: 3 },
+      { tenantId: IDS.tenant, entityType: 'deal', fieldKey: 'is_strategic', fieldLabel: 'Strategic Deal', fieldType: 'boolean', displayOrder: 3 },
       { tenantId: IDS.tenant, entityType: 'company', fieldKey: 'account_tier', fieldLabel: 'Account Tier', fieldType: 'select', fieldOptions: ['Bronze', 'Silver', 'Gold', 'Platinum'], displayOrder: 1 },
     ]);
     logDone('custom_field_defs', 7);
@@ -946,7 +947,7 @@ async function main() {
     // ========================================================================
     logSection('Seeding Notifications');
 
-    const notifTypes = ['info', 'success', 'warning'];
+    const notifTypes = ['info', 'mention', 'deal_stage'];
     const notifTitles = [
       'New deal created', 'Task overdue', 'Contact imported', 'Deal won!',
       'New lead assigned', 'Meeting reminder', 'Report ready', 'System update',
