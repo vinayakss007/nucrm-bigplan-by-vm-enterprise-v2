@@ -140,7 +140,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     // Optimistic concurrency check: reject early if the client version is stale
-    const conflict = checkConcurrency(prev.updatedAt!, rawBody?._version ?? rawBody?.updated_at);
+    const clientVersion = rawBody?._version ?? rawBody?.updated_at;
+    const conflict = checkConcurrency(prev.updatedAt!, clientVersion);
     if (conflict) return conflict;
     
 
@@ -172,11 +173,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const [row] = await db.transaction(async (tx) => {
+      const whereConditions = [eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId), sql`${deals.deletedAt} IS NULL`];
+      if (clientVersion) {
+        whereConditions.push(eq(deals.updatedAt, prev.updatedAt!));
+      }
       const [r] = await withConcurrencyGuard(
         () => tx
           .update(deals)
           .set(updateData)
-          .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId), eq(deals.updatedAt, prev.updatedAt!), sql`${deals.deletedAt} IS NULL`))
+          .where(and(...whereConditions))
           .returning(),
         'Deal',
         prev.updatedAt!,
