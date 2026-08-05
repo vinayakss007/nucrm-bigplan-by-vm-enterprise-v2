@@ -47,6 +47,8 @@ export async function PATCH(req: NextRequest, { params }: any) {
       }
     }
 
+    const clientVersion = body?._version ?? body?.updated_at;
+
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,15 +76,16 @@ export async function PATCH(req: NextRequest, { params }: any) {
     }
 
     const [row] = await withConcurrencyGuard(
-      () => db.update(tasks)
-        .set(updateData)
-        .where(and(
-          eq(tasks.id, id),
-          eq(tasks.tenantId, ctx.tenantId),
-          eq(tasks.updatedAt, existing.updatedAt!),
-          isNull(tasks.deletedAt)
-        ))
-        .returning(),
+      () => {
+        const whereConditions = [eq(tasks.id, id), eq(tasks.tenantId, ctx.tenantId), isNull(tasks.deletedAt)];
+        if (clientVersion) {
+          whereConditions.push(eq(tasks.updatedAt, existing.updatedAt!));
+        }
+        return db.update(tasks)
+          .set(updateData)
+          .where(and(...whereConditions))
+          .returning();
+      },
       'Task',
       existing.updatedAt!,
     );

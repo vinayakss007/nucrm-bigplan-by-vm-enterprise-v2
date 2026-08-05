@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     // Strategy 1: Exact email duplicates (most reliable)
     const emailDupes = await db.execute(sql`
-      SELECT email, array_agg(id) as contact_ids, count(*) as cnt
+      SELECT LOWER(email) as email, ARRAY_AGG(id::text) as contact_ids, count(*) as cnt
       FROM contacts
       WHERE tenant_id = ${tid}
         AND deleted_at IS NULL
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 
     // Strategy 2: Exact phone duplicates
     const phoneDupes = await db.execute(sql`
-      SELECT phone, array_agg(id) as contact_ids, count(*) as cnt
+      SELECT phone, ARRAY_AGG(id::text) as contact_ids, count(*) as cnt
       FROM contacts
       WHERE tenant_id = ${tid}
         AND deleted_at IS NULL
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     // Strategy 3: Same first_name + last_name (fuzzy — could be different people)
     const nameDupes = await db.execute(sql`
       SELECT LOWER(first_name || ' ' || COALESCE(last_name, '')) as full_name,
-             array_agg(id) as contact_ids, count(*) as cnt
+             ARRAY_AGG(id::text) as contact_ids, count(*) as cnt
       FROM contacts
       WHERE tenant_id = ${tid}
         AND deleted_at IS NULL
