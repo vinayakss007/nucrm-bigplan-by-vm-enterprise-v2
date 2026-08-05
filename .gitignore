@@ -67,3 +67,4 @@ bundle-report.json
 
 # Sandbox scratch output (screenshots, traces). Curated captures live in docs/.
 .kiro/artifacts/
+server.key
