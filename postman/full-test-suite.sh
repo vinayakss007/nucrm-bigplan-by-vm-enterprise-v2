@@ -28,7 +28,7 @@ flush_rate_limits() {
         docker exec nucrm-redis redis-cli -a "$redis_password" FLUSHDB >/dev/null 2>&1 || true
     fi
     # Clear brute-force blocks and failed attempts from DB
-        PGPASSWORD=nucrm_prod_db_pass_2026 psql -h localhost -U nucrm -d nucrm_fresh -c "DELETE FROM login_blocks; DELETE FROM login_attempts;" >/dev/null 2>&1 || true
+        docker exec nucrm-db psql -U nucrm -d nucrm -c "DELETE FROM login_blocks; DELETE FROM login_attempts;" >/dev/null 2>&1 || true
 }
 flush_rate_limits
 
@@ -36,7 +36,7 @@ flush_rate_limits
 log() { echo "[$(date +%H:%M:%S)] $1"; }
 
 # Clear stale brute-force blocks that accumulate across test runs
-PGPASSWORD=nucrm_prod_db_pass_2026 psql -h localhost -U nucrm -d nucrm_fresh -c "DELETE FROM login_blocks;" >/dev/null 2>&1 || true
+docker exec nucrm-db psql -U nucrm -d nucrm -c "DELETE FROM login_blocks;" >/dev/null 2>&1 || true
 
 test_result() {
     local id="$1" name="$2" expected="$3" actual="$4" detail="${5:-}"
@@ -244,7 +244,7 @@ test_result "A09" "POST /auth/logout" "200" "$LC"
 R=$(curl -s -w "\n%{http_code}" --max-time 10 -c "$COOKIE_FILE" -H "Content-Type: application/json" -X POST -d '{"email":"a@a.com","password":"password123"}' "$BASE_URL/api/auth/login" 2>/dev/null)
 
 # Get the logged-in user's ID for assign tests
-USER_ID=$(PGPASSWORD=nucrm_prod_db_pass_2026 psql -h localhost -U nucrm -d nucrm_fresh -t -A -c "SELECT id FROM users WHERE email='a@a.com' LIMIT 1" 2>/dev/null | tr -d '[:space:]')
+USER_ID=$(docker exec nucrm-db psql -U nucrm -d nucrm -t -A -c "SELECT id FROM users WHERE email='a@a.com' LIMIT 1" 2>/dev/null | tr -d '[:space:]')
 echo "[INFO] Logged-in user ID: $USER_ID"
 
 # Create API key via session cookie + CSRF for all subsequent resource tests
@@ -274,9 +274,9 @@ test_result "A12" "POST /auth/forgot-password (nonexistent, no enum)" "200" "$(h
 R=$(post "$BASE_URL/api/auth/password-reset/request" '{"email":"a@a.com"}')
 test_result "A13" "POST /auth/password-reset/request" "200" "$(http_code "$R")"
 
-# 2.6 Email Verification (empty body → 400)
-R=$(post "$BASE_URL/api/auth/resend-verification" '{"email":"a@a.com"}')
-test_result "A14" "POST /auth/resend-verification (no auth)" "400" "$(http_code "$R")"
+# 2.6 Email Verification — no cookies, no auth header → requireAuth returns 401
+R=$(curl -s -w "\n%{http_code}" --max-time 10 -H "Content-Type: application/json" -X POST -d '{"email":"a@a.com"}' "$BASE_URL/api/auth/resend-verification" 2>/dev/null)
+test_result "A14" "POST /auth/resend-verification (no auth)" "401" "$(http_code "$R")"
 
 # 2.7 OAuth
 R=$(get "$BASE_URL/api/auth/oauth/authorize")
