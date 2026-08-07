@@ -1,0 +1,21 @@
+{
+  "dataset_name": "NuCRM Gemma Training Data",
+  "version": "1.0",
+  "total_conversations": 10000,
+  "categories": {
+    "contact_management": 1120,
+    "analytics": 1115,
+    "task_management": 1114,
+    "lead_management": 1078,
+    "data_management": 1079,
+    "automation": 1168,
+    "invoicing": 1138,
+    "ticket_management": 1123,
+    "deal_management": 1065
+  },
+  "format": "ShareGPT",
+  "model": "Google Gemma",
+  "system_prompt": "You are NuCRM, an intelligent CRM assistant. You help sales teams manage leads, contacts, deals, tickets, and customer relationships. Be professional, concise, and actionable.",
+  "created_at": "2026-08-07T04:08:10.396538",
+  "license": "Apache 2.0"
+}

@@ -1,0 +1,6 @@
+id,name,slug,short_code,status,plan_id,trial_ends_at,primary_color,billing_email,industry,company_size,country,current_users,current_contacts,current_deals,storage_used_bytes,billing_type,created_at
+6e2684b5-dd18-4549-8440-7276b577d2b5,Opal Solutions CRM,tenant-1,T001,active,free,2026-10-16T00:13:23.921975,#7248ad,billingadmin@yahoo.com,Insurance,1-10,MX,0,0,0,1812140441,trial,2025-05-11T11:16:02.922067
+7319bb38-0e1a-42a0-a1a3-c170af371232,Summit Analytics CRM,tenant-2,T002,active,starter,2027-01-20T11:08:51.922106,#d6cb4d,billing_admin76@yahoo.com,Technology,11-50,IN,0,0,0,5756332150,trial,2025-09-13T15:33:43.922139
+2742825a-3e35-4f86-ae5a-aca92762e3ea,IronClad Security CRM,tenant-3,T003,active,enterprise,2026-08-31T04:22:37.922169,#b01af6,billing_admin@company.com,Telecommunications,500+,CA,0,0,0,1625792787,manual,2025-12-03T02:11:42.922193
+fa6b3223-0c9a-40e9-b075-9220ef58763e,Topaz Digital CRM,tenant-4,T004,active,starter,2027-02-02T17:50:21.922227,#17764b,billing.admin99@work.org,Finance,11-50,CA,0,0,0,5927597015,subscription,2026-02-13T09:13:44.922250
+7179207a-0cc9-48e0-87e1-8cd7d2f9f721,NovaTech Solutions CRM,tenant-5,T005,active,starter,2027-01-25T01:01:38.922292,#248ede,billingadmin@company.com,Marketing,11-50,BR,0,0,0,5924716023,manual,2025-09-17T15:06:49.922318
