@@ -4,11 +4,16 @@ import { oauthClients, oauthCodes } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { requireAuth } from '@/lib/auth/middleware';
 
 export async function GET(request: NextRequest) {
   try {
     const limited = await checkRateLimit(request, { action: 'oauth-authorize', max: 20, windowMinutes: 1 });
     if (limited) return limited;
+
+    // Require authentication — unauthenticated users cannot mint authorization codes
+    const ctx = await requireAuth(request);
+    if (ctx instanceof NextResponse) return ctx;
 
     const { searchParams } = new URL(request.url);
     const clientId = searchParams.get('client_id');

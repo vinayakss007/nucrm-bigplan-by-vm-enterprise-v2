@@ -9,7 +9,7 @@
  * - PAYU_MERCHANT_SALT: Merchant salt for hash generation
  * - PAYU_MODE: 'test' | 'production' (defaults to 'test')
  */
-import crypto from 'crypto';
+import crypto, { timingSafeEqual } from 'crypto';
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -141,7 +141,11 @@ export function verifyPayUResponse(params: PayUResponseParams): boolean {
   const hashString = parts.join('|');
   const calculatedHash = crypto.createHash('sha512').update(hashString).digest('hex');
 
-  return calculatedHash === params.hash;
+  // Timing-safe comparison to prevent timing attacks
+  const stored = Buffer.from(calculatedHash, 'hex');
+  const provided = Buffer.from(params.hash, 'hex');
+  if (stored.length !== provided.length) return false;
+  return timingSafeEqual(stored, provided);
 }
 
 // ── Payment Link Creation ────────────────────────────────────────────────────
