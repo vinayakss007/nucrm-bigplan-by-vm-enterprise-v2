@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users, sessions } from '@/drizzle/schema';
-import { eq, and, lt } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { verifyPassword, hashPassword } from '@/lib/auth/session';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { changePasswordSchema } from '@/lib/api/schemas';
@@ -48,12 +48,9 @@ export async function PATCH(request: NextRequest) {
         })
         .where(eq(users.id, ctx.userId));
 
-      // 2. Invalidate sessions (all sessions created before now)
+      // 2. Invalidate ALL sessions for this user (unconditional — no race condition)
       await tx.delete(sessions)
-        .where(and(
-          eq(sessions.userId, ctx.userId),
-          lt(sessions.createdAt, new Date())
-        ));
+        .where(eq(sessions.userId, ctx.userId));
     });
 
     return NextResponse.json({ ok: true });

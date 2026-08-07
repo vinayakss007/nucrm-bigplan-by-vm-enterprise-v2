@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
-import { users } from '@/drizzle/schema';
+import { users, sessions } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import { timingSafeEqual } from 'crypto';
 import { readJsonBody } from '@/lib/api/validate';
+import { deleteUserSessions } from '@/lib/cache/sessions';
 
 /**
  * Emergency Admin Recovery Endpoint
@@ -168,6 +169,10 @@ export async function POST(request: NextRequest) {
   await db.update(users)
     .set(updateFields)
     .where(eq(users.id, user.id));
+
+  // CRITICAL: Invalidate all existing sessions so stolen cookies are immediately revoked
+  await db.delete(sessions).where(eq(sessions.userId, user.id));
+  await deleteUserSessions(user.id);
 
   console.error(`[EMERGENCY RECOVERY] SUCCESS — email: ${email}, 2FA disabled: ${disable_2fa}, IP: ${ip}`);
 
