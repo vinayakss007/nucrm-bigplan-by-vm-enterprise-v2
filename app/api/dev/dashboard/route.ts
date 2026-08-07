@@ -28,11 +28,7 @@ import { eq, and } from 'drizzle-orm';
  * ✅ External monitoring (Sentry, Grafana) works in production
  */
 async function requireSuperAdmin(req: NextRequest): Promise<{ userId: string; isSuperAdmin: boolean } | null> {
-  // Dev dashboard disabled in production for security
-  // Use Sentry/Grafana for production monitoring instead
-  if (process.env.NODE_ENV === 'production') {
-    return null;
-  }
+  // Dev dashboard available in all environments — secured by super admin auth below
 
   // In development, verify super admin authentication
   try {

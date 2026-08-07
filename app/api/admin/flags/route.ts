@@ -1,13 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth/middleware';
 import { getAllFlags, isEnabled, setOverride, deleteOverride, DEFINED_FLAGS } from '@/lib/flags';
 import { readJsonBody } from '@/lib/api/validate';
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
+  const ctx = await requireAuth(request);
+  if (ctx instanceof NextResponse) return ctx;
+  if (!ctx.isSuperAdmin) {
+    return NextResponse.json({ error: 'Super admin only' }, { status: 403 });
+  }
+
   const flags = await getAllFlags();
   return NextResponse.json({ flags });
 }
 
 export async function POST(request: NextRequest) {
+  const ctx = await requireAuth(request);
+  if (ctx instanceof NextResponse) return ctx;
+  if (!ctx.isSuperAdmin) {
+    return NextResponse.json({ error: 'Super admin only' }, { status: 403 });
+  }
+
   const body = await readJsonBody(request);
   const { key, enabled, tenantIds, userIds, percentage } = body;
 
@@ -25,6 +38,12 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const ctx = await requireAuth(request);
+  if (ctx instanceof NextResponse) return ctx;
+  if (!ctx.isSuperAdmin) {
+    return NextResponse.json({ error: 'Super admin only' }, { status: 403 });
+  }
+
   const { searchParams } = new URL(request.url);
   const key = searchParams.get('key');
   if (!key) return NextResponse.json({ error: 'key required' }, { status: 400 });
