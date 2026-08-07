@@ -114,14 +114,19 @@ export async function POST(request: NextRequest) {
     const stageName = v.stage || body.stage_name;
     
     if (!stageId && stageName) {
+      const stageConds = [
+        ilike(dealStages.name, stageName),
+        eq(pipelines.tenantId, ctx.tenantId),
+      ];
+      // When pipeline_id is provided, scope stage lookup to that pipeline
+      if (v.pipeline_id) {
+        stageConds.push(eq(dealStages.pipelineId, v.pipeline_id));
+      }
       const [stageRecord] = await db
         .select({ id: dealStages.id })
         .from(dealStages)
         .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
-        .where(and(
-          ilike(dealStages.name, stageName),
-          eq(pipelines.tenantId, ctx.tenantId)
-        ))
+        .where(and(...stageConds))
         .limit(1);
       
       if (stageRecord) {
@@ -129,7 +134,10 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    if (!stageId) return NextResponse.json({ error: 'stage_id is required (or valid stage/stage_name)' }, { status: 400 });
+    if (!stageId) {
+      const hint = stageName ? ` No stage named "${stageName}" found${v.pipeline_id ? ' in the specified pipeline' : ''}.` : '';
+      return NextResponse.json({ error: `stage_id is required (or valid stage/stage_name).${hint}` }, { status: 400 });
+    }
     
     const amount = v.amount ?? v.value ?? 0;
 

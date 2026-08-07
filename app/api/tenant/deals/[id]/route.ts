@@ -110,14 +110,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     let resolvedStageId = v.stage_id;
     const stageName = v.stage || v.stage_name;
     if (!resolvedStageId && stageName) {
+      const stageConds = [
+        ilike(dealStages.name, stageName),
+        eq(pipelines.tenantId, ctx.tenantId),
+      ];
+      if (v.pipeline_id) {
+        stageConds.push(eq(dealStages.pipelineId, v.pipeline_id));
+      }
       const [stageRecord] = await db
         .select({ id: dealStages.id, name: dealStages.name })
         .from(dealStages)
         .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
-        .where(and(
-          ilike(dealStages.name, stageName),
-          eq(pipelines.tenantId, ctx.tenantId)
-        ))
+        .where(and(...stageConds))
         .limit(1);
       
       if (stageRecord) {
