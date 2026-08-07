@@ -15,6 +15,7 @@ import { logAudit } from '@/lib/audit';
 import { hashPassword } from '@/lib/auth/session';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { deleteUserSessions } from '@/lib/cache/sessions';
 
 export async function POST(request: NextRequest) {
   try {
@@ -218,6 +219,10 @@ export async function PATCH(request: NextRequest) {
         await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'role_change', entityType: 'member', entityId: target.userId, newData: { role: roleSlug }, dbOrTx: tx as DbClient });
       });
 
+      // Invalidate session cache so the role/permission change takes effect immediately
+      // (the middleware re-checks DB on cache miss, but this forces it)
+      await deleteUserSessions(target.userId);
+
     } else if (action === 'remove') {
       const reassignUserId = reassignTo || ctx.userId;
 
@@ -273,6 +278,9 @@ export async function PATCH(request: NextRequest) {
       }
       await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'member_removed', entityType: 'member', entityId: target.userId, newData: { reassigned_to: reassignTo, contacts: cCount?.n, deals: dCount?.n } });
 
+      // Invalidate removed member's sessions
+      await deleteUserSessions(target.userId);
+
     } else if (action === 'suspend') {
       const concurrencyWhere = concurrencyGuard(tenantMembers, rawPatch.expectedUpdatedAt);
       const whereConditions: SQL[] = [eq(tenantMembers.id, memberId)];
@@ -282,6 +290,9 @@ export async function PATCH(request: NextRequest) {
 
       const stale = checkStaleUpdate(updated);
       if (stale) return stale;
+
+      // Invalidate suspended member's sessions
+      await deleteUserSessions(target.userId);
     } else if (action === 'reactivate') {
       const concurrencyWhere = concurrencyGuard(tenantMembers, rawPatch.expectedUpdatedAt);
       const whereConditions: SQL[] = [eq(tenantMembers.id, memberId)];

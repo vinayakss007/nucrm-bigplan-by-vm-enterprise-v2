@@ -8,6 +8,7 @@ import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { verifyPassword } from '@/lib/auth/session';
+import { deleteUserSessions } from '@/lib/cache/sessions';
 
 const schema = z.object({
   targetUserId: z.string().min(1),
@@ -71,6 +72,10 @@ export async function POST(request: NextRequest) {
         .set({ isSuperAdmin: false, updatedAt: new Date() })
         .where(eq(users.id, ctx.userId));
     });
+
+    // Invalidate both users' session caches so the privilege change takes effect immediately
+    await deleteUserSessions(targetUserId);
+    await deleteUserSessions(ctx.userId);
 
     await logSuperAdminAction({
       adminId: ctx.userId,
