@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
     environment: {
       nodeEnv: process.env.NODE_ENV,
       databaseUrl: (process.env as Record<string, string | undefined>).DATABASE_URL ? 'configured' : 'not configured',
-      resendApiKey: (process.env as Record<string, string | undefined>).RESEND_API_KEY ? ((process.env as Record<string, string | undefined>).RESEND_API_KEY?.startsWith('re_test_') ? 'test mode' : 'configured') : 'not configured',
+      resendApiKey: process.env.NODE_ENV === 'development' ? ((process.env as Record<string, string | undefined>).RESEND_API_KEY ? ((process.env as Record<string, string | undefined>).RESEND_API_KEY?.startsWith('re_test_') ? 'test mode': 'configured') : 'not configured') : 'not exposed',
       sentryDsn: (process.env as Record<string, string | undefined>).SENTRY_DSN ? 'configured' : 'not configured',
       databaseSsl: (process.env as Record<string, string | undefined>).DATABASE_SSL,
       databasePoolSize: (process.env as Record<string, string | undefined>).DATABASE_POOL_SIZE,
