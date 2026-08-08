@@ -17,13 +17,3 @@ ALTER TABLE backup_records ADD COLUMN IF NOT EXISTS checksum TEXT;
 ALTER TABLE backup_records ADD COLUMN IF NOT EXISTS checksum_algorithm TEXT DEFAULT 'sha256';
 
 COMMIT;
-
--- DOWN Migration
--- DOWN
-BEGIN;
-
-ALTER TABLE backup_records DROP COLUMN IF EXISTS checksum;
-ALTER TABLE backup_records DROP COLUMN IF EXISTS checksum_algorithm;
-
-COMMIT;
--- END DOWN

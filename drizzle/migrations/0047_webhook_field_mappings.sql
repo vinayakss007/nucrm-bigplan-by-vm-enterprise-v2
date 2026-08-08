@@ -10,20 +10,7 @@
 --
 -- Idempotent: safe to re-run.
 
-CREATE TABLE IF NOT EXISTS "webhook_field_mappings" (
-  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-  "tenant_id" uuid NOT NULL,
-  "api_key_id" uuid,
-  "entity_type" text NOT NULL,
-  "source_key" text NOT NULL,
-  "target_type" text DEFAULT 'custom_field' NOT NULL,
-  "target_key" text NOT NULL,
-  "transform" text,
-  "is_active" boolean DEFAULT true,
-  "created_at" timestamp with time zone DEFAULT now() NOT NULL,
-  "updated_at" timestamp with time zone DEFAULT now(),
-  "deleted_at" timestamp with time zone
-);
+-- dedup: webhook_field_mappings (created by 0058_webhook_field_mappings)
 
 -- ── Foreign keys ──────────────────────────────────────────────────────────────
 
@@ -53,14 +40,6 @@ $$;
 
 -- ── Indexes ───────────────────────────────────────────────────────────────────
 
-CREATE INDEX IF NOT EXISTS "idx_webhook_field_mappings_tenant"
-  ON "webhook_field_mappings" USING btree ("tenant_id");
-
-CREATE INDEX IF NOT EXISTS "idx_webhook_field_mappings_lookup"
-  ON "webhook_field_mappings" USING btree ("tenant_id","entity_type","api_key_id");
-
 -- One mapping per (tenant, api key, entity, incoming key). Postgres treats NULLs
 -- as distinct in a unique index, so this does NOT constrain the tenant-wide
 -- (api_key_id IS NULL) rows — the management API rejects those duplicates.
-CREATE UNIQUE INDEX IF NOT EXISTS "idx_webhook_field_mappings_unique"
-  ON "webhook_field_mappings" USING btree ("tenant_id","api_key_id","entity_type","source_key");

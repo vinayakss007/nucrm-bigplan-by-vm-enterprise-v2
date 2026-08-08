@@ -10,6 +10,7 @@ UPDATE "ai_provider_secrets" SET "key_type" = 'tenant' WHERE "key_type" IS NULL;
 --> statement-breakpoint
 
 -- Unique index: one key per (tenant, provider, keyType) for non-personal keys
+DROP INDEX IF EXISTS "idx_ai_provider_secrets_unique";
 CREATE UNIQUE INDEX "idx_ai_provider_secrets_unique" ON "ai_provider_secrets" ("tenant_id", "provider", "key_type") WHERE "deleted_at" IS NULL;
 --> statement-breakpoint
 

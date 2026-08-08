@@ -421,6 +421,13 @@
       "when": 1785932400000,
       "tag": "0059_custom_entities",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1785932460000,
+      "tag": "0060_fk_constraints_repair",
+      "breakpoints": true
     }
   ]
 }
