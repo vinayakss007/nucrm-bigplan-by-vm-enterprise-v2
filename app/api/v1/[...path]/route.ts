@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveGatewayTenant, validateCORS } from '@/lib/api/gateway';
 
 /**
- * Catch-all handler for /api/v2/*
+ * Catch-all handler for /api/v1/*
  * Resolves tenant via gateway and proxies to /api/tenant/* routes.
  */
 
