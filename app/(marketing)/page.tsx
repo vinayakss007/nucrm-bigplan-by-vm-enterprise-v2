@@ -9,7 +9,7 @@ import { PLANS, PRICING_FAQ } from '@/lib/marketing/pricing';
 import { COMPARE_OVERVIEW } from '@/lib/marketing/compare';
 import { CONNECTORS } from '@/lib/marketing/integrations';
 import { Icon } from '@/components/marketing/icon';
-import { AnimatedNumber, Reveal } from '@/components/marketing/reveal';
+import { AnimatedNumber, MagneticButton, Reveal, StaggerText, TiltCard } from '@/components/marketing/reveal';
 import { Faq } from '@/components/marketing/faq';
 import { ProductTour, type TourTab } from '@/components/marketing/product-tour';
 import {
@@ -167,9 +167,9 @@ export default function LandingPage() {
   const builtIn = CONNECTORS.filter((c) => c.builtIn).slice(0, 16);
 
   return (
-    <>
+    <div className="mk-noise">
       {/* ══════════════════════════ HERO ══════════════════════════ */}
-      <section className="relative overflow-hidden pt-28 sm:pt-36">
+      <section className="relative overflow-hidden pt-28 sm:pt-36 mk-spotlight">
         <Aurora />
         <Container>
           <div className="mx-auto max-w-3xl text-center">
@@ -189,9 +189,13 @@ export default function LandingPage() {
 
             <Reveal delay={70}>
               <h1 className="mk-display mt-7">
-                <span className="mk-grad">Your whole revenue</span>
+                <span className="mk-grad">
+                  <StaggerText text="Your whole revenue" wordDelay={70} />
+                </span>
                 <br />
-                <span className="text-white">operation. One place.</span>
+                <span className="text-white">
+                  <StaggerText text="operation. One place." wordDelay={70} startDelay={280} />
+                </span>
               </h1>
             </Reveal>
 
@@ -204,10 +208,14 @@ export default function LandingPage() {
 
             <Reveal delay={210}>
               <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <PrimaryCta className="w-full sm:w-auto">Start free — no card</PrimaryCta>
-                <GhostCta href="/features" className="w-full sm:w-auto">
-                  See everything it does
-                </GhostCta>
+                <MagneticButton className="w-full sm:w-auto">
+                  <PrimaryCta>Start free — no card</PrimaryCta>
+                </MagneticButton>
+                <MagneticButton className="w-full sm:w-auto">
+                  <GhostCta href="/features">
+                    See everything it does
+                  </GhostCta>
+                </MagneticButton>
               </div>
               <div className="mk-tiny mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
                 <span className="flex items-center gap-1.5">
@@ -381,42 +389,44 @@ export default function LandingPage() {
               const wide = b.span === 'lg:col-span-3';
               return (
                 <Reveal key={b.slug} delay={i * 60} className={b.span}>
-                  <Link
-                    href={`/features/${p.slug}`}
-                    className="mk-card mk-card-hover group relative flex h-full flex-col overflow-hidden p-6"
-                  >
-                    <div
-                      className={`pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-gradient-to-br ${p.accent} opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-25`}
-                      aria-hidden
-                    />
-                    <div className="relative flex flex-1 flex-col">
-                      <div className="flex items-start justify-between gap-3">
-                        <IconTile name={p.icon} accent={p.accent} size={wide ? 'lg' : 'md'} />
-                        <span className="mk-mono rounded-md border border-white/[0.07] bg-white/[0.03] px-2 py-1 text-[10px] text-slate-500">
-                          {b.stat}
+                  <TiltCard intensity={8} glare={wide}>
+                    <Link
+                      href={`/features/${p.slug}`}
+                      className="mk-card mk-card-hover group relative flex h-full flex-col overflow-hidden p-6"
+                    >
+                      <div
+                        className={`pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-gradient-to-br ${p.accent} opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-25`}
+                        aria-hidden
+                      />
+                      <div className="relative flex flex-1 flex-col">
+                        <div className="flex items-start justify-between gap-3">
+                          <IconTile name={p.icon} accent={p.accent} size={wide ? 'lg' : 'md'} />
+                          <span className="mk-mono rounded-md border border-white/[0.07] bg-white/[0.03] px-2 py-1 text-[10px] text-slate-500">
+                            {b.stat}
+                          </span>
+                        </div>
+                        <h3 className={`${wide ? 'mk-h3' : 'mk-h4'} mt-5 text-white`}>{p.name}</h3>
+                        <p className="mk-body mt-2 flex-1">{wide ? p.sub : p.blurb}</p>
+                        {wide && (
+                          <div className="mt-4 flex flex-wrap gap-1.5">
+                            {p.highlights.slice(0, 3).map((h) => (
+                              <span key={h.title} className="mk-chip !text-[11px]">
+                                {h.title}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <span className="mk-link mt-5 inline-flex items-center gap-1.5 text-[13px]">
+                          Explore {softLower(p.short)}
+                          <Icon
+                            name="ArrowUpRight"
+                            className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                            strokeWidth={2.2}
+                          />
                         </span>
                       </div>
-                      <h3 className={`${wide ? 'mk-h3' : 'mk-h4'} mt-5 text-white`}>{p.name}</h3>
-                      <p className="mk-body mt-2 flex-1">{wide ? p.sub : p.blurb}</p>
-                      {wide && (
-                        <div className="mt-4 flex flex-wrap gap-1.5">
-                          {p.highlights.slice(0, 3).map((h) => (
-                            <span key={h.title} className="mk-chip !text-[11px]">
-                              {h.title}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <span className="mk-link mt-5 inline-flex items-center gap-1.5 text-[13px]">
-                        Explore {softLower(p.short)}
-                        <Icon
-                          name="ArrowUpRight"
-                          className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-                          strokeWidth={2.2}
-                        />
-                      </span>
-                    </div>
-                  </Link>
+                    </Link>
+                  </TiltCard>
                 </Reveal>
               );
             })}
@@ -684,7 +694,7 @@ export default function LandingPage() {
                 <div
                   className={`relative flex h-full flex-col rounded-2xl border p-6 ${
                     plan.featured
-                      ? 'mk-edge border-violet-400/30 bg-gradient-to-b from-violet-600/[0.14] to-white/[0.02]'
+                      ? 'mk-edge mk-glow border-violet-400/30 bg-gradient-to-b from-violet-600/[0.14] to-white/[0.02]'
                       : 'border-white/[0.08] bg-white/[0.025]'
                   }`}
                 >
@@ -742,6 +752,6 @@ export default function LandingPage() {
       </Section>
 
       <CtaBand />
-    </>
+    </div>
   );
 }
