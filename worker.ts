@@ -46,7 +46,9 @@ const emailWorker = new Worker(
   'send-email',
   async (job) => {
     const { to, subject, body, html, tenantId: _tenantId } = job.data;
-    console.log(`[Email Worker] Processing job: ${job.id} - Sending email to ${to}`);
+    // Mask PII in logs
+    const maskedEmail = to.replace(/(.{2}).*(@.*)/, '$1***$2');
+    console.log(`[Email Worker] Processing job: ${job.id} - Sending email to ${maskedEmail}`);
     
     try {
       const { sendEmail } = await import('@/lib/email/service');
@@ -57,11 +59,11 @@ const emailWorker = new Worker(
         text: body,
       });
       
-      console.log(`[Email Worker] Email sent successfully to ${to}`);
+      console.log(`[Email Worker] Email sent successfully to ${maskedEmail}`);
       return { sent: true, to, messageId: result?.messageId };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      console.error(`[Email Worker] Failed to send email to ${to}:`, error.message);
+      console.error(`[Email Worker] Failed to send email to ${maskedEmail}:`, error.message);
       throw error;
     }
   },
@@ -259,7 +261,9 @@ const leadWarmingWorker = new Worker(
             eqOp(leadWarmingMessages.channel, 'whatsapp')
           ));
 
-        console.log(`[Lead Warming] WhatsApp sent to ${phone} for ${eventName}`);
+        // Mask phone number in logs
+        const maskedPhone = phone.replace(/(\d{4})\d+(\d{2})/, '$1***$2');
+        console.log(`[Lead Warming] WhatsApp sent to ${maskedPhone} for ${eventName}`);
         return { sent: true, phone, event: eventName };
       }
 

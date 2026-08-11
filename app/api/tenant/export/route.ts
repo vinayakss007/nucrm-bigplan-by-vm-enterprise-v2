@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
           headers: { 'Content-Type': 'text/csv', 'Content-Disposition': `attachment; filename="${entity}-export.csv"` },
         });
       }
-      // Convert to CSV
+      // Convert to CSV with formula injection protection
       const headers = Object.keys(data[0]!);
       const csvRows = [
         headers.join(','),
@@ -81,6 +81,10 @@ export async function POST(request: NextRequest) {
             const val = (row as Record<string, unknown>)[h];
             if (val === null || val === undefined) return '';
             const str = String(val).replace(/"/g, '""');
+            // Prevent CSV formula injection by prefixing dangerous characters
+            if (str.match(/^[=+\-@\t\r]/)) {
+              return `"'${str}"`;
+            }
             return `"${str}"`;
           }).join(',')
         ),

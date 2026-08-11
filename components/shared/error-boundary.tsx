@@ -42,7 +42,7 @@ export class AppErrorBoundary extends Component<Props, State> {
           </div>
           <h2 className="text-lg font-bold mb-1">Something went wrong</h2>
           <p className="text-sm text-muted-foreground text-center max-w-sm mb-2">
-            {this.state.error?.message || 'An unexpected error occurred'}
+            An unexpected error occurred
           </p>
           <p className="text-[10px] text-muted-foreground text-center max-w-sm mb-4 font-mono">
             Check console (F12) for full error details

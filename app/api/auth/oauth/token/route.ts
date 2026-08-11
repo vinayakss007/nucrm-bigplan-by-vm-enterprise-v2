@@ -4,6 +4,7 @@ import { oauthClients, oauthCodes, oauthTokens } from '@/drizzle/schema';
 import { eq, and, gt } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { timingSafeEqual } from 'crypto';
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,7 +39,17 @@ export async function POST(request: NextRequest) {
       .where(and(eq(oauthClients.clientId, clientId), eq(oauthClients.isActive, true)))
       .limit(1);
 
-    if (!client || client.clientSecret !== clientSecret) {
+    if (!client) {
+      return NextResponse.json(
+        { error: 'invalid_client', error_description: 'Invalid client credentials' },
+        { status: 401 }
+      );
+    }
+
+    // Timing-safe comparison to prevent timing attacks
+    const storedSecret = Buffer.from(client.clientSecret);
+    const providedSecret = Buffer.from(clientSecret);
+    if (storedSecret.length !== providedSecret.length || !timingSafeEqual(storedSecret, providedSecret)) {
       return NextResponse.json(
         { error: 'invalid_client', error_description: 'Invalid client credentials' },
         { status: 401 }

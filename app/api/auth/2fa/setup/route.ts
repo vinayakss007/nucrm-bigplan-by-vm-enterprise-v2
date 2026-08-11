@@ -87,7 +87,6 @@ export async function POST(req: NextRequest) {
 
     const otpauth = generateOTPAuthURL(secret, user.email || '');
     return NextResponse.json({ 
-      secret, 
       otpauth, 
       note: 'Scan QR or enter secret in authenticator app, then POST to /api/auth/2fa/verify with a token to activate.' 
     });

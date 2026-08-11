@@ -32,7 +32,7 @@ export async function GET() {
       uptime_seconds: heartbeat.uptime,
       all_workers_running: allRunning,
       timestamp: new Date().toISOString(),
-    }, { status: allRunning ? 200 : 200 });
+    }, { status: allRunning ? 200 : 503 });
  
  
  
