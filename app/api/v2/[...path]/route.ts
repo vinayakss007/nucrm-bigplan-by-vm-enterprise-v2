@@ -45,11 +45,8 @@ async function handleRequest(request: NextRequest, params: { path: string[] }): 
   const internalPath = `/api/tenant/${pathSegments.join('/')}`;
   const targetUrl = new URL(internalPath, request.url);
 
-  // Preserve query string
-  const searchParams = request.nextUrl.searchParams;
-  searchParams.forEach((value, key) => {
-    targetUrl.searchParams.set(key, value);
-  });
+  // Preserve query string natively using URLSearchParams constructor
+  targetUrl.search = request.nextUrl.search;
 
   // Proxy the request to the internal path
   const headers = new Headers(request.headers);
@@ -60,16 +57,20 @@ async function handleRequest(request: NextRequest, params: { path: string[] }): 
   try {
     let body = undefined;
     if (request.method !== 'GET' && request.method !== 'HEAD') {
-      body = await request.blob();
+      body = request.body; // Stream the body directly instead of fully buffering into a blob
     }
 
-    const proxyRes = await fetch(targetUrl.toString(), {
+    // Explicitly casting the fetch options to bypass the duplex typing limitation in standard node fetch definitions,
+    // which is safely supported in Next.js's patched fetch for streaming.
+    const fetchOptions = {
       method: request.method,
       headers,
       body,
-
       redirect: 'manual',
-    });
+      duplex: 'half'
+    } as RequestInit;
+
+    const proxyRes = await fetch(targetUrl.toString(), fetchOptions);
 
     const responseHeaders = new Headers(proxyRes.headers);
 
