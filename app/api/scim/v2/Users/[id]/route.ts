@@ -35,24 +35,19 @@ async function authenticateSCIM(
   }
 
   const token = authHeader.slice(7);
-  const tenantId = request.headers.get('x-tenant-id') ?? '';
+  // Accept tenant ID from header as fallback for v1 tokens;
+  // v2 tokens embed the tenant ID and ignore the header value.
+  const headerTenantId = request.headers.get('x-tenant-id') ?? '';
 
-  if (!tenantId) {
-    return NextResponse.json(
-      generateSCIMError('x-tenant-id header is required', 400),
-      { status: 400, headers: { 'Content-Type': 'application/scim+json' } }
-    );
-  }
-
-  const valid = await verifySCIMToken(token, tenantId);
-  if (!valid) {
+  const result = await verifySCIMToken(token, headerTenantId);
+  if (!result) {
     return NextResponse.json(
       generateSCIMError('Invalid or expired SCIM token', 401),
       { status: 401, headers: { 'Content-Type': 'application/scim+json' } }
     );
   }
 
-  return { tenantId };
+  return { tenantId: result.tenantId };
 }
 
 // ── GET: Retrieve User ───────────────────────────────────────────────────────

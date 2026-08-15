@@ -1,8 +1,11 @@
 import { existsSync, unlinkSync } from 'fs';
 
+const MAX_RESTORE_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB safety limit
+
 export async function downloadFromS3(backup: { storagePath: string; id: string }, s3Options: { bucket: string; region?: string; endpoint?: string }): Promise<string> {
   const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
   const { writeFile } = await import('fs/promises');
+  const { Readable } = await import('stream');
 
   const tempPath = `/tmp/restore_${backup.id}.dump`;
   const s3Client = new S3Client({
@@ -15,12 +18,25 @@ export async function downloadFromS3(backup: { storagePath: string; id: string }
     Key: backup.storagePath,
   }));
 
-  const fileBuffer = await response.Body?.transformToByteArray();
-  if (!fileBuffer) {
+  if (!response.Body) {
     throw new Error('Failed to download backup from S3');
   }
 
-  await writeFile(tempPath, fileBuffer);
+  const stream = response.Body as Readable;
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+
+  for await (const chunk of stream) {
+    totalBytes += chunk.length;
+    if (totalBytes > MAX_RESTORE_SIZE_BYTES) {
+      throw new Error(
+        `Restore file exceeded ${MAX_RESTORE_SIZE_BYTES / (1024 * 1024)} MB limit during download. Aborting.`
+      );
+    }
+    chunks.push(Buffer.from(chunk));
+  }
+
+  await writeFile(tempPath, Buffer.concat(chunks));
   return tempPath;
 }
 

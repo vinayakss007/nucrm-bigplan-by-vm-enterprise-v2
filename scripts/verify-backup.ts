@@ -68,6 +68,8 @@ function run(cmd: string, args: string[], env?: NodeJS.ProcessEnv): Promise<void
   });
 }
 
+const MAX_VERIFY_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB safety limit
+
 /** Download an S3/R2-stored backup to a local temp path. */
 async function fetchFromS3(storagePath: string, destDir: string): Promise<string> {
   const { getS3Config } = await import('../lib/storage/s3-config');
@@ -88,9 +90,22 @@ async function fetchFromS3(storagePath: string, destDir: string): Promise<string
   );
   if (!res.Body) throw new Error(`Empty body for s3://${cfg.backupBucket}/${storagePath}`);
 
+  const stream = res.Body as import('stream').Readable;
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+  for await (const chunk of stream) {
+    totalBytes += chunk.length;
+    if (totalBytes > MAX_VERIFY_SIZE_BYTES) {
+      throw new Error(
+        `Backup file exceeded ${MAX_VERIFY_SIZE_BYTES / (1024 * 1024)} MB limit during download. Aborting.`
+      );
+    }
+    chunks.push(Buffer.from(chunk));
+  }
+
   const dest = path.join(destDir, path.basename(storagePath));
   const { writeFile } = await import('fs/promises');
-  await writeFile(dest, Buffer.from(await res.Body.transformToByteArray()));
+  await writeFile(dest, Buffer.concat(chunks));
   return dest;
 }
 

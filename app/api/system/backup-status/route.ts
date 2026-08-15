@@ -3,7 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { backupRecords, backupSchedules } from '@/drizzle/schema';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 
 /**
  * GET /api/system/backup-status
@@ -24,8 +24,10 @@ export async function GET(request: NextRequest) {
       .limit(1);
 
     // Get total count
-    const allBackups = await db.select({ id: backupRecords.id }).from(backupRecords);
-    const totalCount = allBackups.length;
+    const [countRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(backupRecords);
+    const totalCount = countRow?.count ?? 0;
 
     // Get active schedules
     const schedules = await db

@@ -47,7 +47,18 @@ async function getAuthenticatedUserId(request: NextRequest): Promise<string | nu
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
     const payload = await verifyToken(token);
-    if (payload) return payload.userId;
+    if (payload) {
+      // Validate against sessions table to ensure token hasn't been revoked
+      const tokenHash = await hashToken(token);
+      const results = await db.select({ userId: sessions.userId })
+        .from(sessions)
+        .where(and(
+          eq(sessions.tokenHash, tokenHash),
+          gt(sessions.expiresAt, new Date()),
+        ))
+        .limit(1);
+      if (results[0]) return results[0].userId;
+    }
   }
 
   return null;

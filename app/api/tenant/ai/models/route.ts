@@ -1,6 +1,7 @@
 /**
  * Fetch available models from an AI provider's base URL.
- *   GET /api/tenant/ai/models?provider=openai&base_url=https://api.openai.com&api_key=sk-...
+ *   GET /api/tenant/ai/models?provider=openai&base_url=https://api.openai.com
+ *   Header: X-API-Key: sk-...
  *
  * Supports:
  *   - OpenAI-compatible providers (OpenAI, Groq, OpenCode, etc.) — GET /v1/models
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
 
     const provider = req.nextUrl.searchParams.get('provider');
     const baseUrl = req.nextUrl.searchParams.get('base_url')?.trim();
-    const apiKey = req.nextUrl.searchParams.get('api_key')?.trim();
+    const apiKey = req.headers.get('x-api-key')?.trim() ?? '';
 
     if (!provider) {
       return NextResponse.json({ error: 'provider is required' }, { status: 400 });

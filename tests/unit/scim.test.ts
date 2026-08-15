@@ -352,14 +352,14 @@ describe('SCIM 2.0 Protocol Handler', () => {
   });
 
   describe('verifySCIMToken', () => {
-    it('should return false when no SCIM_SECRET is configured', async () => {
+    it('should return null when no SCIM_SECRET is configured', async () => {
       delete process.env['SCIM_SECRET'];
       const { verifySCIMToken } = await import('@/lib/scim');
       const result = await verifySCIMToken('sometoken', 'tenant-1');
-      expect(result).toBe(false);
+      expect(result).toBeNull();
     });
 
-    it('should verify a valid token', async () => {
+    it('should verify a v1 token (deprecated format)', async () => {
       process.env['SCIM_SECRET'] = 'test-secret-key';
       const { verifySCIMToken } = await import('@/lib/scim');
 
@@ -369,25 +369,49 @@ describe('SCIM 2.0 Protocol Handler', () => {
         .digest('hex');
 
       const result = await verifySCIMToken(expectedToken, tenantId);
-      expect(result).toBe(true);
+      expect(result).toEqual({ tenantId });
+    });
+
+    it('should verify a v2 token with embedded tenant', async () => {
+      process.env['SCIM_SECRET'] = 'test-secret-key';
+      const { createSCIMToken, verifySCIMToken } = await import('@/lib/scim');
+
+      const token = createSCIMToken('tenant-v2', 3600);
+      expect(token).toBeTruthy();
+
+      const result = await verifySCIMToken(token!, 'ignored');
+      expect(result).toEqual({ tenantId: 'tenant-v2' });
+    });
+
+    it('should reject an expired v2 token', async () => {
+      process.env['SCIM_SECRET'] = 'test-secret-key';
+      const { verifySCIMToken } = await import('@/lib/scim');
+
+      const tenantId = 'tenant-expired';
+      const expiryMs = Date.now() - 1000; // already expired
+      const hmac = createHmac('sha256', 'test-secret-key')
+        .update(`${tenantId}:${expiryMs}`)
+        .digest('hex');
+      const expiredToken = `${tenantId}:${expiryMs}:${hmac}`;
+
+      const result = await verifySCIMToken(expiredToken, '');
+      expect(result).toBeNull();
     });
 
     it('should reject an invalid token', async () => {
       process.env['SCIM_SECRET'] = 'test-secret-key';
       const { verifySCIMToken } = await import('@/lib/scim');
       const result = await verifySCIMToken('invalid-token', 'tenant-123');
-      expect(result).toBe(false);
+      expect(result).toBeNull();
     });
 
-    it('should reject empty token or tenantId', async () => {
+    it('should reject empty token', async () => {
       process.env['SCIM_SECRET'] = 'test-secret-key';
       const { verifySCIMToken } = await import('@/lib/scim');
-
-      expect(await verifySCIMToken('', 'tenant-1')).toBe(false);
-      expect(await verifySCIMToken('token', '')).toBe(false);
+      expect(await verifySCIMToken('', 'tenant-1')).toBeNull();
     });
 
-    it('should reject token for wrong tenant', async () => {
+    it('should reject v1 token for wrong tenant', async () => {
       process.env['SCIM_SECRET'] = 'test-secret-key';
       const { verifySCIMToken } = await import('@/lib/scim');
 
@@ -396,7 +420,7 @@ describe('SCIM 2.0 Protocol Handler', () => {
         .digest('hex');
 
       const result = await verifySCIMToken(token, 'tenant-B');
-      expect(result).toBe(false);
+      expect(result).toBeNull();
     });
   });
 

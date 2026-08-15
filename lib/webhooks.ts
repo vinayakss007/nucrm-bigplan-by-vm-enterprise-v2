@@ -158,13 +158,14 @@ export async function fireWebhooks(
               .where(eq(webhookQueue.id, delivery.id));
           } else {
             const responseBody = await res.text().catch(() => '');
-            const retryDelay = getRetryDelay(1);
+            const nextAttempt = (delivery.attempt ?? 0) + 1;
+            const retryDelay = getRetryDelay(nextAttempt);
             await tx.update(webhookQueue)
               .set({
                 status: 'failed',
                 responseStatus: res.status,
                 responseBody: responseBody.slice(0, 1000),
-                 attempt: 1,
+                 attempt: nextAttempt,
                  failedAt: new Date(),
                 nextRetryAt: new Date(Date.now() + retryDelay),
               })

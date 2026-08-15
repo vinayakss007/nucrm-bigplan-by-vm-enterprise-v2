@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { emailTracking, activities } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
+import { isPrivateIpv4, isPrivateIpv6, isBlockedHostname } from '@/lib/security/ssrf';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -20,8 +21,15 @@ export async function GET(req: NextRequest) {
   if (rawUrl) {
     try {
       const decoded = decodeURIComponent(rawUrl);
-      // Only allow http/https URLs — prevent open redirect to javascript:
-      if (/^https?:\/\//i.test(decoded)) destination = decoded;
+      if (/^https?:\/\//i.test(decoded)) {
+        const dest = new URL(decoded);
+        const host = dest.hostname;
+        if (isBlockedHostname(host) || isPrivateIpv4(host) || isPrivateIpv6(host)) {
+          console.warn('[track] click blocked SSRF attempt to', host);
+        } else {
+          destination = decoded;
+        }
+      }
   } catch (err) {
     console.error('[track] click error', err);
   }
