@@ -184,12 +184,14 @@ function createMemoryAdapter(): QueueAdapter {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pendingJobs: Array<{ type: JobType; data: any; runAt: number }> = [];
 
-  // Process jobs every 5 seconds
+  // Process jobs every 5 seconds — but we have no registered handlers, so
+  // every due job is silently dropped.  Log a loud warning so operators know
+  // jobs are being lost instead of executed.
   const interval = setInterval(() => {
     const now = Date.now();
     const dueJobs = pendingJobs.filter(j => j.runAt <= now);
     for (const job of dueJobs) {
-      console.log(`[MemoryQueue] Processing: ${job.type}`, job.data);
+      console.warn(`[MemoryQueue] DISCARDING job ${job.type} — no worker registered. Data:`, job.data);
       const idx = pendingJobs.indexOf(job);
       if (idx !== -1) pendingJobs.splice(idx, 1);
     }
@@ -204,12 +206,12 @@ function createMemoryAdapter(): QueueAdapter {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async addJob(jobType: JobType, data: any, options?: JobOptions) {
+      console.warn(`[MemoryQueue] Job ${jobType} queued but will be DISCARDED — no worker registered. This adapter is dev-only and does not execute jobs.`);
       pendingJobs.push({
         type: jobType,
         data,
         runAt: Date.now() + (options?.delay || 0),
       });
-      console.log(`[MemoryQueue] Queued: ${jobType}`);
     },
     async close() {
       clearInterval(interval);
