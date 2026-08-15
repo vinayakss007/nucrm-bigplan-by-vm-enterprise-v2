@@ -35,5 +35,6 @@ export const segmentMembers = pgTable('segment_members', {
   return {
     pk: index('idx_segment_members_pk').on(table.segmentId, table.entityId),
     tenantIdx: utils.tenantIdx(table),
+    entityIdx: index('idx_segment_members_entity').on(table.entityId),
   };
 });

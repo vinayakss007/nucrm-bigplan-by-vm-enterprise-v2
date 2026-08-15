@@ -426,6 +426,7 @@ export const quoteLineItems = pgTable('quote_line_items', {
 }, (table) => {
   return {
     quoteIdx: index('idx_quote_line_items_quote').on(table.quoteId),
+    tenantIdx: utils.tenantIdx(table),
   };
 });
 
@@ -716,6 +717,7 @@ export const leadActivities = pgTable('lead_activities', {
 }, (table) => {
   return {
     tenantIdx: utils.tenantIdx(table),
+    leadIdx: index('idx_lead_activities_lead').on(table.leadId),
     metadataGinIdx: utils.metadataIdx(table),
   };
 });

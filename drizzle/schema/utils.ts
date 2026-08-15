@@ -48,9 +48,9 @@ export const metadata = () => jsonb('metadata').default({});
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Return type must be `any` so audit() spread is compatible with all pgTable column maps (Drizzle uses complex conditional builder types)
 export const createdBy = (): any => uuid('created_by').references(() => _usersRef?.id ?? sql`users.id`, { onDelete: 'set null' });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Return type must be `any` so audit() spread is compatible with all pgTable column maps
-export const updatedBy = (): any => uuid('updated_by');
+export const updatedBy = (): any => uuid('updated_by').references(() => _usersRef?.id ?? sql`users.id`, { onDelete: 'set null' });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Return type must be `any` so audit() spread is compatible with all pgTable column maps
-export const deletedBy = (): any => uuid('deleted_by');
+export const deletedBy = (): any => uuid('deleted_by').references(() => _usersRef?.id ?? sql`users.id`, { onDelete: 'set null' });
 
 // =============================================================================
 // HELPERS

@@ -4,7 +4,7 @@
  * Tracks anonymous and identified website visitors, their page views,
  * and calculates engagement scores for lead prioritization.
  */
-import { pgTable, uuid, text, integer, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, timestamp, index } from 'drizzle-orm/pg-core';
 import * as utils from './utils';
 
 export const visitors = pgTable('visitors', {
@@ -28,4 +28,9 @@ export const pageViews = pgTable('page_views', {
   referrer: text('referrer').default(''),
   durationSeconds: integer('duration_seconds').default(0),
   viewedAt: timestamp('viewed_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    visitorIdx: index('idx_page_views_visitor').on(table.visitorId),
+  };
 });

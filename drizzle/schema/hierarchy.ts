@@ -4,7 +4,7 @@
  * Supports parent-child relationships between tenants for franchises,
  * divisions, and multi-brand organizations.
  */
-import { pgTable, uuid, text } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, index } from 'drizzle-orm/pg-core';
 import * as utils from './utils';
 
 export const tenantHierarchy = pgTable('tenant_hierarchy', {
@@ -13,6 +13,11 @@ export const tenantHierarchy = pgTable('tenant_hierarchy', {
   childTenantId: uuid('child_tenant_id').notNull(),
   relationship: text('relationship', { enum: ['parent', 'division', 'franchise', 'branch'] }).notNull().default('parent'),
   ...utils.lifecycle(),
+}, (table) => {
+  return {
+    parentIdx: index('idx_tenant_hierarchy_parent').on(table.parentTenantId),
+    childIdx: index('idx_tenant_hierarchy_child').on(table.childTenantId),
+  };
 });
 
 export const hierarchyPermissions = pgTable('hierarchy_permissions', {
