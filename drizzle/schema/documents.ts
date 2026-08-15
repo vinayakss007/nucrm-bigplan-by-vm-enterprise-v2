@@ -32,7 +32,7 @@ export const documents = pgTable('documents', {
   sizeBytes: integer('size_bytes').notNull(),
   s3Key: text('s3_key').notNull(),
   s3Bucket: text('s3_bucket').notNull(),
-  folderId: uuid('folder_id'),
+  folderId: uuid('folder_id').references(() => documentFolders.id, { onDelete: 'set null' }),
   entityType: text('entity_type'), // 'contact' | 'deal' | 'company' | null
   entityId: text('entity_id'),
   uploadedBy: uuid('uploaded_by').notNull().references(() => _users.id, { onDelete: 'restrict' }),

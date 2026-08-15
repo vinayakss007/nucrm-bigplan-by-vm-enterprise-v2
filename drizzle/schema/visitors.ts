@@ -6,12 +6,13 @@
  */
 import { pgTable, uuid, text, integer, timestamp } from 'drizzle-orm/pg-core';
 import * as utils from './utils';
+import { contacts } from './crm';
 
 export const visitors = pgTable('visitors', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
   fingerprintId: text('fingerprint_id').notNull(),
-  identifiedContactId: uuid('identified_contact_id'),
+  identifiedContactId: uuid('identified_contact_id').references(() => contacts.id, { onDelete: 'set null' }),
   firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).defaultNow().notNull(),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).defaultNow().notNull(),
   totalPageViews: integer('total_page_views').default(0).notNull(),
@@ -22,7 +23,7 @@ export const visitors = pgTable('visitors', {
 export const pageViews = pgTable('page_views', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
-  visitorId: uuid('visitor_id').notNull(),
+  visitorId: uuid('visitor_id').notNull().references(() => visitors.id, { onDelete: 'cascade' }),
   url: text('url').notNull(),
   title: text('title').default(''),
   referrer: text('referrer').default(''),

@@ -6,18 +6,19 @@
  */
 import { pgTable, uuid, text } from 'drizzle-orm/pg-core';
 import * as utils from './utils';
+import { tenants } from './core';
 
 export const tenantHierarchy = pgTable('tenant_hierarchy', {
   id: utils.pk(),
-  parentTenantId: uuid('parent_tenant_id').notNull(),
-  childTenantId: uuid('child_tenant_id').notNull(),
+  parentTenantId: uuid('parent_tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  childTenantId: uuid('child_tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   relationship: text('relationship', { enum: ['parent', 'division', 'franchise', 'branch'] }).notNull().default('parent'),
   ...utils.lifecycle(),
 });
 
 export const hierarchyPermissions = pgTable('hierarchy_permissions', {
   id: utils.pk(),
-  hierarchyId: uuid('hierarchy_id').notNull(),
+  hierarchyId: uuid('hierarchy_id').notNull().references(() => tenantHierarchy.id, { onDelete: 'cascade' }),
   permission: text('permission', { enum: ['view_data', 'manage_users', 'share_contacts', 'aggregate_reports'] }).notNull(),
   ...utils.lifecycle(),
 });

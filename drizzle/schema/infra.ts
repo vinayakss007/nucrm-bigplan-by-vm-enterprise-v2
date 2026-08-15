@@ -222,7 +222,7 @@ export const backupSchedules = pgTable('backup_schedules', {
 // ── 9. CRITICAL DATA BACKUPS ────────────────────────
 export const criticalDataBackups = pgTable('critical_data_backups', {
   id: utils.pk(),
-  tenantId: uuid('tenant_id').notNull(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   tableName: text('table_name').notNull(),
   recordId: uuid('record_id').notNull(),
   backupData: jsonb('backup_data').notNull(),
