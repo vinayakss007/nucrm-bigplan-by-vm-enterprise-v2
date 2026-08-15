@@ -16,6 +16,8 @@
  * Note: This is a direct REST implementation - no razorpay npm package needed.
  */
 
+import { webcrypto } from 'crypto';
+
 const RAZORPAY_API = 'https://api.razorpay.com/v1';
 
 // -- Error Classes ------------------------------------------------------------
@@ -172,14 +174,14 @@ async function razorpayRequest<T = any>(
  */
 async function hmacSha256(message: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
+  const key = await webcrypto.subtle.importKey(
     'raw',
     encoder.encode(secret),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign'],
   );
-  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
+  const signature = await webcrypto.subtle.sign('HMAC', key, encoder.encode(message));
   return Array.from(new Uint8Array(signature))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
