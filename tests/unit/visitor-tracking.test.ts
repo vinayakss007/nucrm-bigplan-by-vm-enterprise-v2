@@ -203,7 +203,7 @@ describe('getVisitorScore', () => {
     mockSelectBasic([]);
 
     const { getVisitorScore } = await import('@/lib/visitor-tracking');
-    const score = await getVisitorScore('non-existent');
+    const score = await getVisitorScore('non-existent', 't-1');
 
     expect(score).toEqual({ totalScore: 0, pageScore: 0, frequencyBonus: 0, recencyBonus: 0 });
   });
@@ -230,7 +230,7 @@ describe('getVisitorScore', () => {
       });
 
     const { getVisitorScore } = await import('@/lib/visitor-tracking');
-    const score = await getVisitorScore('v-1');
+    const score = await getVisitorScore('v-1', 't-1');
 
     expect(score.pageScore).toBe(15);
     expect(score.frequencyBonus).toBe(5);
@@ -260,7 +260,7 @@ describe('getVisitorScore', () => {
       });
 
     const { getVisitorScore } = await import('@/lib/visitor-tracking');
-    const score = await getVisitorScore('v-2');
+    const score = await getVisitorScore('v-2', 't-1');
 
     expect(score.pageScore).toBe(2);
     expect(score.frequencyBonus).toBe(0);
@@ -286,7 +286,7 @@ describe('getVisitorScore', () => {
       });
 
     const { getVisitorScore } = await import('@/lib/visitor-tracking');
-    const score = await getVisitorScore('v-3');
+    const score = await getVisitorScore('v-3', 't-1');
 
     expect(score.recencyBonus).toBe(0);
   });
@@ -301,7 +301,7 @@ describe('getVisitorProfile', () => {
     mockSelectBasic([]);
 
     const { getVisitorProfile } = await import('@/lib/visitor-tracking');
-    const profile = await getVisitorProfile('non-existent');
+    const profile = await getVisitorProfile('non-existent', 't-1');
 
     expect(profile).toBeNull();
   });
@@ -340,7 +340,7 @@ describe('getVisitorProfile', () => {
       });
 
     const { getVisitorProfile } = await import('@/lib/visitor-tracking');
-    const profile = await getVisitorProfile('v-1');
+    const profile = await getVisitorProfile('v-1', 't-1');
 
     expect(profile).not.toBeNull();
     expect(profile!.visitor).toEqual(visitorData);
