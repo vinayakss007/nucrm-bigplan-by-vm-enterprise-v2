@@ -28,4 +28,5 @@ export const pageViews = pgTable('page_views', {
   referrer: text('referrer').default(''),
   durationSeconds: integer('duration_seconds').default(0),
   viewedAt: timestamp('viewed_at', { withTimezone: true }).defaultNow().notNull(),
+  ...utils.lifecycle(),
 });
