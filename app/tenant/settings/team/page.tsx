@@ -9,8 +9,7 @@ export default async function TeamPage() {
   let ctx;
   try {
     ctx = await requireTenantCtx();
-  } catch (e) {
-    console.error('[TeamPage] requireTenantCtx failed:', e);
+  } catch {
     redirect('/auth/login');
   }
   if (!ctx) redirect('/auth/login');

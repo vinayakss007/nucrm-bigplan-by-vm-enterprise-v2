@@ -57,7 +57,7 @@ export default function PortalQuotesPage() {
     })
       .then(r => r.json())
       .then(d => { setQuotes(d.data || []); setLoading(false); })
-      .catch((err) => { console.error('[portal/quotes] fetch failed', err); setLoading(false); });
+      .catch(() => { setLoading(false); });
   }, [router]);
 
   const acceptQuote = async (quoteId: string) => {

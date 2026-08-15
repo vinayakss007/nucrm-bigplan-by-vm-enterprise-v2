@@ -130,8 +130,8 @@ export default async function DealDetailPage({ params }: PageProps) {
     ))
     .orderBy(desc(activitiesTable.createdAt))
     .limit(100);
-  } catch (e) {
-    console.error('Failed to load deal activities:', e);
+  } catch {
+    // Failed to load deal activities
   }
 
   const permissions = {

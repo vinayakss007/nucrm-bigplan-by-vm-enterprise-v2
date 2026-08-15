@@ -132,8 +132,8 @@ function SearchPageContent() {
       const data = await res.json();
       setAdvancedResults(data.data ?? []);
       setAdvancedTotal(data.pagination?.total ?? 0);
-    } catch (err) {
-      console.error('[AdvancedSearch] Error:', err);
+    } catch {
+      // Search failed
     } finally {
       setLoading(false);
     }

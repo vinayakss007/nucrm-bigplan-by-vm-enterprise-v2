@@ -50,34 +50,37 @@ export default function SecuritySettingsPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   useEffect(() => {
-    loadUser();
+    const controller = new AbortController();
+    loadUser(controller.signal);
+    return () => controller.abort();
   }, []);
 
-  const loadUser = async () => {
+  const loadUser = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/me');
+      const res = await fetch('/api/tenant/me', { signal });
       const data = await res.json();
       setUser(data.user);
       setTotpEnabled(data.user?.totp_enabled ?? false);
     } catch (_err) {
+      if (_err instanceof DOMException && _err.name === 'AbortError') return;
       toast.error('Failed to load user data');
     } finally {
       setLoading(false);
     }
   };
 
-  const loadTrashRetention = async () => {
+  const loadTrashRetention = async (signal?: AbortSignal) => {
     try {
       const [settingsRes, cleanupRes] = await Promise.all([
-        fetch('/api/tenant/trash/settings'),
-        fetch('/api/tenant/trash/auto-cleanup')
+        fetch('/api/tenant/trash/settings', { signal }),
+        fetch('/api/tenant/trash/auto-cleanup', { signal })
       ]);
       const settingsData = await settingsRes.json();
       const cleanupData = await cleanupRes.json();
       setRetentionDays(settingsData.data?.retention_days || 30);
       setPendingDeletion(cleanupData.data);
     } catch (err) {
-      console.error('Failed to load trash settings', err);
+      if (err instanceof DOMException && err.name === 'AbortError') return;
     } finally {
       setLoadingRetention(false);
     }
@@ -101,14 +104,14 @@ export default function SecuritySettingsPage() {
     }
   };
 
-  const loadIpWhitelist = async () => {
+  const loadIpWhitelist = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/security/ip-whitelist');
+      const res = await fetch('/api/tenant/security/ip-whitelist', { signal });
       const data = await res.json();
       setIpWhitelist(data.data?.ips || []);
       setIpEnabled(data.data?.enabled || false);
     } catch (err) {
-      console.error('Failed to load IP whitelist', err);
+      if (err instanceof DOMException && err.name === 'AbortError') return;
     } finally {
       setLoadingIp(false);
     }
@@ -153,8 +156,10 @@ export default function SecuritySettingsPage() {
   };
 
   useEffect(() => {
-    loadTrashRetention();
-    loadIpWhitelist();
+    const controller = new AbortController();
+    loadTrashRetention(controller.signal);
+    loadIpWhitelist(controller.signal);
+    return () => controller.abort();
   }, []);
 
   // ── Enable 2FA ──────────────────────────────────────────────

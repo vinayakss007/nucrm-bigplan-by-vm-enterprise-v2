@@ -17,6 +17,7 @@ import {
   Code,
 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import toast from 'react-hot-toast';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,32 +75,35 @@ export default function TenantCustomFields() {
   const [editingField, setEditingField] = useState<CustomField | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  const loadFields = useCallback(async () => {
+  const loadFields = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/tenant/custom-fields?entityType=${entityType}`);
+      const res = await fetch(`/api/tenant/custom-fields?entityType=${entityType}`, { signal });
       const data = await res.json();
       if (data.fields) setFields(data.fields);
     } catch (err) {
-      console.error('Failed to load fields:', err);
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      toast.error('Failed to load fields');
     } finally {
       setLoading(false);
     }
   }, [entityType])
 
-  const loadFeatures = useCallback(async () => {
+  const loadFeatures = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/custom-fields?action=features');
+      const res = await fetch('/api/tenant/custom-fields?action=features', { signal });
       const data = await res.json();
       if (data.features) setFeatures(data.features);
     } catch (err) {
-      console.error('Failed to load features:', err);
+      if (err instanceof DOMException && err.name === 'AbortError') return;
     }
   }, []);
 
   useEffect(() => {
-    loadFields();
-    loadFeatures();
+    const controller = new AbortController();
+    loadFields(controller.signal);
+    loadFeatures(controller.signal);
+    return () => controller.abort();
   }, [entityType, loadFields, loadFeatures]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -116,7 +120,8 @@ export default function TenantCustomFields() {
         loadFields();
       }
     } catch (err) {
-      console.error('Failed to create field:', err);
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      toast.error('Failed to create field');
     }
   };
 
@@ -135,7 +140,8 @@ export default function TenantCustomFields() {
         loadFields();
       }
     } catch (err) {
-      console.error('Failed to update field:', err);
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      toast.error('Failed to update field');
     }
   };
 
@@ -146,15 +152,11 @@ export default function TenantCustomFields() {
         await fetch(`/api/tenant/custom-fields?fieldId=${fieldId}`, { method: 'DELETE' });
         loadFields();
       } catch (err) {
-        console.error('Failed to delete field:', err);
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        toast.error('Failed to delete field');
       }
     });
   };
-
-  useEffect(() => {
-    loadFields();
-    loadFeatures();
-  }, [entityType, loadFields, loadFeatures]);
 
   const ENTITY_TYPES = [
     { value: 'contact', label: 'Contacts', icon: '👤' },

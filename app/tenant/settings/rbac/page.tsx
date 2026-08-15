@@ -40,16 +40,18 @@ export default function RBACSettingsPage() {
   const [message, _setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    loadData();
+    const controller = new AbortController();
+    loadData(controller.signal);
+    return () => controller.abort();
   }, []);
 
-  async function loadData() {
+  async function loadData(signal?: AbortSignal) {
     setLoading(true);
     try {
       const [fpRes, rpRes, arRes] = await Promise.all([
-        fetch('/api/tenant/rbac/field-permissions').catch((e) => { console.error('[rbac] field-permissions fetch failed:', e); return null; }),
-        fetch('/api/tenant/rbac/record-permissions').catch((e) => { console.error('[rbac] record-permissions fetch failed:', e); return null; }),
-        fetch('/api/tenant/rbac/approval-rules').catch((e) => { console.error('[rbac] approval-rules fetch failed:', e); return null; }),
+        fetch('/api/tenant/rbac/field-permissions', { signal }).catch((e) => { if (e instanceof DOMException && e.name === 'AbortError') return null; return null; }),
+        fetch('/api/tenant/rbac/record-permissions', { signal }).catch((e) => { if (e instanceof DOMException && e.name === 'AbortError') return null; return null; }),
+        fetch('/api/tenant/rbac/approval-rules', { signal }).catch((e) => { if (e instanceof DOMException && e.name === 'AbortError') return null; return null; }),
       ]);
 
       if (fpRes?.ok) {
@@ -65,7 +67,7 @@ export default function RBACSettingsPage() {
         setApprovalRules(data || []);
       }
     } catch (err) {
-      console.error('[rbac] failed to load roles', err);
+      if (err instanceof DOMException && err.name === 'AbortError') return;
     } finally {
       setLoading(false);
     }
