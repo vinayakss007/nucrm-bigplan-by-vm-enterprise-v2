@@ -35,14 +35,3 @@ CREATE INDEX IF NOT EXISTS "idx_follow_ups_contact" ON "follow_ups" ("contact_id
 CREATE INDEX IF NOT EXISTS "idx_follow_ups_deal" ON "follow_ups" ("deal_id");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_follow_ups_active" ON "follow_ups" ("id") WHERE "deleted_at" IS NULL;
-
--- DOWN
-DROP INDEX IF EXISTS idx_follow_ups_active;
-DROP INDEX IF EXISTS idx_follow_ups_deal;
-DROP INDEX IF EXISTS idx_follow_ups_contact;
-DROP INDEX IF EXISTS idx_follow_ups_lead;
-DROP INDEX IF EXISTS idx_follow_ups_status;
-DROP INDEX IF EXISTS idx_follow_ups_due_date;
-DROP INDEX IF EXISTS idx_follow_ups_assigned;
-DROP INDEX IF EXISTS idx_follow_ups_tenant;
-DROP TABLE IF EXISTS follow_ups CASCADE;

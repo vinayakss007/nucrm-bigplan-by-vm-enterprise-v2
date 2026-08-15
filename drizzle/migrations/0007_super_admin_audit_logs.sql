@@ -25,12 +25,3 @@ CREATE INDEX IF NOT EXISTS idx_sa_audit_target ON super_admin_audit_logs(target_
 CREATE INDEX IF NOT EXISTS idx_sa_audit_tenant ON super_admin_audit_logs(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_sa_audit_time ON super_admin_audit_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sa_audit_admin_time ON super_admin_audit_logs(admin_id, created_at DESC);
-
--- DOWN
-DROP INDEX IF EXISTS idx_sa_audit_admin_time;
-DROP INDEX IF EXISTS idx_sa_audit_time;
-DROP INDEX IF EXISTS idx_sa_audit_tenant;
-DROP INDEX IF EXISTS idx_sa_audit_target;
-DROP INDEX IF EXISTS idx_sa_audit_action;
-DROP INDEX IF EXISTS idx_sa_audit_admin;
-DROP TABLE IF EXISTS super_admin_audit_logs CASCADE;

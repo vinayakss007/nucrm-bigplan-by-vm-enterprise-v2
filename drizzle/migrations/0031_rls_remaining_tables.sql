@@ -1,9 +1,9 @@
--- 0034: Enable RLS on remaining 164 tenant-scoped tables
+-- 0031: Enable RLS on remaining tenant-scoped tables
 -- Covers: AI, automation, billing, chat, comms, CRM, documents, financial,
 -- infra, knowledge, lead-warming, marketing, plugins, projects, segments,
 -- services, support, templates, tokens, visitors, webhooks, workflows, etc.
 --
--- Uses same pattern as 0012_rls_policies.sql: tenant_id = current_setting('app.current_tenant')::uuid
+-- Uses same pattern as 0015_rls_policies.sql: tenant_id = current_setting('app.current_tenant')::uuid
 -- Special handling for platform_settings which has global (NULL tenant_id) rows.
 
 DO $$
@@ -38,7 +38,7 @@ DECLARE
     -- Dead letter
     'dead_letter_queue',
     -- Deal helpers
-    'deal_forecasts', 'deal_products', 'deal_stages',
+    'deal_forecasts', 'deal_products',
     -- Documents
     'document_folders', 'documents', 'storage_documents',
     -- Edit history
@@ -58,7 +58,7 @@ DECLARE
     -- Invitations
     'invitations',
     -- Invoicing
-    'invoice_line_items', 'invoice_payments', 'invoices',
+    'invoices',
     -- Knowledge base
     'kb_articles', 'kb_categories',
     -- Lead helpers
@@ -74,7 +74,7 @@ DECLARE
     -- Onboarding
     'onboarding_progress',
     -- Orders
-    'order_line_items', 'orders',
+    'orders',
     -- Pages / Permissions / Pipelines
     'page_views', 'permission_overrides',
     'pipeline_health_metrics', 'pipelines',
@@ -157,6 +157,15 @@ BEGIN
       CONTINUE;
     END IF;
 
+    -- Skip tables that don't have a tenant_id column (e.g. deal_stages, invoice_line_items, etc.)
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = t AND column_name = 'tenant_id'
+    ) THEN
+      RAISE NOTICE 'Skipping RLS for %: no tenant_id column', t;
+      CONTINUE;
+    END IF;
+
     -- Enable RLS (safe to call if already enabled)
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY;', t);
 
@@ -173,17 +182,22 @@ BEGIN
 
   -- Special case: platform_settings has global rows (tenant_id IS NULL) + per-tenant rows.
   -- Allow both: global rows accessible to all, per-tenant rows scoped normally.
-  EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY;', 'platform_settings');
-  EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I;', 'platform_settings');
-  EXECUTE format('
-    CREATE POLICY tenant_isolation ON platform_settings
-      FOR ALL
-      USING (
-        tenant_id IS NULL
-        OR tenant_id = current_setting(''app.current_tenant'')::uuid
-      )
-      WITH CHECK (
-        tenant_id = current_setting(''app.current_tenant'')::uuid
-      );
-  ');
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'platform_settings'
+  ) THEN
+    EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY;', 'platform_settings');
+    EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I;', 'platform_settings');
+    EXECUTE format('
+      CREATE POLICY tenant_isolation ON platform_settings
+        FOR ALL
+        USING (
+          tenant_id IS NULL
+          OR tenant_id = current_setting(''app.current_tenant'')::uuid
+        )
+        WITH CHECK (
+          tenant_id = current_setting(''app.current_tenant'')::uuid
+        );
+    ');
+  END IF;
 END $$;
