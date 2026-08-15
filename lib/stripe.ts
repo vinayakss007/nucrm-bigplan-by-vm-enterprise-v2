@@ -17,6 +17,8 @@
  * No `stripe` npm package needed — reduces bundle size and avoids version lock-in.
  */
 
+import { webcrypto } from 'crypto';
+
 const STRIPE_API = 'https://api.stripe.com/v1';
 
 // ── Error Classes ────────────────────────────────────────────────────────────
@@ -392,14 +394,14 @@ export async function verifyWebhookSignature(
   // Compute expected signature
   const signedPayload = `${timestamp}.${payload}`;
   const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
+  const key = await webcrypto.subtle.importKey(
     'raw',
     encoder.encode(secret),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign']
   );
-  const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(signedPayload));
+  const signatureBuffer = await webcrypto.subtle.sign('HMAC', key, encoder.encode(signedPayload));
   const expectedSig = Array.from(new Uint8Array(signatureBuffer))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
