@@ -27,13 +27,14 @@ export const segments = pgTable('segments', {
 
 // Cache for segment members (to avoid re-running complex queries every time)
 export const segmentMembers = pgTable('segment_members', {
+  id: utils.pk(),
   segmentId: uuid('segment_id').notNull().references(() => segments.id, { onDelete: 'cascade' }),
   entityId: uuid('entity_id').notNull(),
   tenantId: utils.tenantId(),
   addedAt: timestamp('added_at', { withTimezone: true }).defaultNow(),
 }, (table) => {
   return {
-    pk: index('idx_segment_members_pk').on(table.segmentId, table.entityId),
+    segmentEntityIdx: index('idx_segment_members_segment_entity').on(table.segmentId, table.entityId),
     tenantIdx: utils.tenantIdx(table),
   };
 });
