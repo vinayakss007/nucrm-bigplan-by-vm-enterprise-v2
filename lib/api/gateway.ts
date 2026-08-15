@@ -116,6 +116,21 @@ export async function resolveGatewayTenant(request: NextRequest): Promise<Gatewa
 
     const tenant = result[0];
     if (tenant) {
+      // Domain-based resolution requires authentication + tenant membership
+      const userId = await getAuthenticatedUserId(request);
+      if (!userId) return null;
+
+      const membership = await db.select({ id: tenantMembers.id })
+        .from(tenantMembers)
+        .where(and(
+          eq(tenantMembers.tenantId, tenant.id),
+          eq(tenantMembers.userId, userId),
+          eq(tenantMembers.status, 'active'),
+        ))
+        .limit(1);
+
+      if (!membership[0]) return null;
+
       return {
         tenantId: tenant.id,
         authContext: null,
@@ -135,6 +150,21 @@ export async function resolveGatewayTenant(request: NextRequest): Promise<Gatewa
 
       const tenant = result[0];
       if (tenant) {
+        // Subdomain-based resolution requires authentication + tenant membership
+        const userId = await getAuthenticatedUserId(request);
+        if (!userId) return null;
+
+        const membership = await db.select({ id: tenantMembers.id })
+          .from(tenantMembers)
+          .where(and(
+            eq(tenantMembers.tenantId, tenant.id),
+            eq(tenantMembers.userId, userId),
+            eq(tenantMembers.status, 'active'),
+          ))
+          .limit(1);
+
+        if (!membership[0]) return null;
+
         return {
           tenantId: tenant.id,
           authContext: null,
