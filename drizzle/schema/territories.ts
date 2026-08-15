@@ -4,7 +4,7 @@
  * Supports hierarchical territory structures (region > country > state > city)
  * for routing leads and contacts to the appropriate sales team members.
  */
-import { pgTable, uuid, text, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, jsonb, index } from 'drizzle-orm/pg-core';
 import * as utils from './utils';
 import { users } from './core';
 
@@ -17,6 +17,11 @@ export const territories = pgTable('territories', {
   geoConfig: jsonb('geo_config').default({}), // {countries:[], states:[], cities:[], postalCodes:[]}
   assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }), // primary owner shortcut
   ...utils.lifecycle(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    parentIdx: index('idx_territories_parent').on(table.parentId),
+  };
 });
 
 export const territoryAssignments = pgTable('territory_assignments', {

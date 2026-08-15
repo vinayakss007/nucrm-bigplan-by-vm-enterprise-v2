@@ -18,6 +18,15 @@ const ALLOWED = [
   'backup_retention_days', 'backup_bucket', 'ai_features_enabled', 'anthropic_api_key',
 ];
 
+/** Keys whose values must come from environment variables, never stored in DB */
+const ENV_SECRET_MAP: Record<string, string> = {
+  stripe_secret_key: 'STRIPE_SECRET_KEY',
+  stripe_webhook_secret: 'STRIPE_WEBHOOK_SECRET',
+  resend_api_key: 'RESEND_API_KEY',
+  smtp_pass: 'SMTP_PASS',
+  anthropic_api_key: 'ANTHROPIC_API_KEY',
+};
+
 /** Pattern that identifies setting keys containing secrets */
 const SECRET_KEY_PATTERN = /secret|key|pass|token/i;
 
@@ -73,10 +82,20 @@ export async function GET(request: NextRequest) {
     };
 
     for (const row of rows) {
+      // Skip secrets stored in DB — they must come from env vars
+      if (row.key in ENV_SECRET_MAP) continue;
       if (typeof row.value === 'string') {
         defaults[row.key] = row.value;
       } else {
         defaults[row.key] = JSON.stringify(row.value);
+      }
+    }
+
+    // Override secret values from environment variables
+    for (const [settingKey, envVar] of Object.entries(ENV_SECRET_MAP)) {
+      const envVal = process.env[envVar];
+      if (envVal) {
+        defaults[settingKey] = envVal;
       }
     }
 
@@ -107,8 +126,15 @@ export async function POST(request: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
+    const updatedKeys = Object.keys(v).filter((k) => !(k in ENV_SECRET_MAP));
+
+    if (updatedKeys.length === 0) {
+      return NextResponse.json({ ok: true, warning: 'Secrets cannot be stored in the database. Set them via environment variables instead.' });
+    }
+
     await db.transaction(async (tx) => {
-      for (const [k, val] of Object.entries(v)) {
+      for (const k of updatedKeys) {
+        const val = v[k];
         if (ALLOWED.includes(k)) {
           await tx
             .insert(platformSettings)
@@ -129,17 +155,17 @@ export async function POST(request: NextRequest) {
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'settings.changed',
-      metadata: { keys: Object.keys(v) },
+      metadata: { keys: updatedKeys },
     });
 
-    // Audit trail: log separately when secrets are updated
-    const updatedSecretKeys = Object.keys(v).filter(isSecretKey);
-    if (updatedSecretKeys.length > 0) {
+    // Audit trail: log when secret updates are rejected (must use env vars)
+    const rejectedSecretKeys = Object.keys(v).filter((k) => k in ENV_SECRET_MAP);
+    if (rejectedSecretKeys.length > 0) {
       logSuperAdminAction({
         adminId: ctx.userId,
         adminEmail: ctx.user?.email || "",
-        action: 'settings.secrets_updated',
-        metadata: { secretKeys: updatedSecretKeys },
+        action: 'settings.secrets_rejected',
+        metadata: { rejectedKeys: rejectedSecretKeys },
       });
     }
 

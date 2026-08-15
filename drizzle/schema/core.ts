@@ -51,6 +51,7 @@ export const tenants = pgTable('tenants', {
   return {
     slugIdx: index('idx_tenants_slug').on(table.slug),
     subdomainIdx: index('idx_tenants_subdomain').on(table.subdomain),
+    statusIdx: index('idx_tenants_status').on(table.status),
     metadataGinIdx: utils.metadataIdx(table),
   };
 });
@@ -281,6 +282,11 @@ export const apiKeyUsage = pgTable('api_key_usage', {
   responseTimeMs: integer('response_time_ms'),
   ipAddress: inet('ip_address'),
   ...utils.lifecycle(),
+}, (table) => {
+  return {
+    tenantIdx: index('idx_api_key_usage_tenant').on(table.tenantId),
+    createdAtIdx: index('idx_api_key_usage_created_at').on(table.createdAt),
+  };
 });
 
 // ── 6. LOGS & NOTIFICATIONS ───────────────────────────
