@@ -6,7 +6,7 @@
  */
 import { db } from '@/drizzle/db';
 import { visitors, pageViews } from '@/drizzle/schema/visitors';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 
 /** Page scoring rules based on URL patterns */
 const PAGE_SCORES: Array<{ pattern: RegExp; points: number }> = [
@@ -50,20 +50,20 @@ export async function trackPageView(
     durationSeconds: duration,
   });
 
-  // Update visitor record
+  // Update visitor record using atomic increment to prevent race conditions
+  const points = scorePageUrl(url);
   const existing = await db
     .select()
     .from(visitors)
     .where(and(eq(visitors.id, visitorId), eq(visitors.tenantId, tenantId)));
 
   if (existing.length > 0) {
-    const points = scorePageUrl(url);
     await db
       .update(visitors)
       .set({
         lastSeenAt: new Date(),
-        totalPageViews: (existing[0]!.totalPageViews ?? 0) + 1,
-        score: (existing[0]!.score ?? 0) + points,
+        totalPageViews: sql`${visitors.totalPageViews} + 1`,
+        score: sql`${visitors.score} + ${points}`,
       })
       .where(eq(visitors.id, visitorId));
   }
@@ -91,7 +91,7 @@ export async function identifyVisitor(
  * Calculate full engagement score for a visitor.
  * Includes: page-based scoring + frequency bonus + recency bonus
  */
-export async function getVisitorScore(visitorId: string): Promise<{
+export async function getVisitorScore(visitorId: string, tenantId: string): Promise<{
   totalScore: number;
   pageScore: number;
   frequencyBonus: number;
@@ -100,7 +100,7 @@ export async function getVisitorScore(visitorId: string): Promise<{
   const visitorRows = await db
     .select()
     .from(visitors)
-    .where(eq(visitors.id, visitorId));
+    .where(and(eq(visitors.id, visitorId), eq(visitors.tenantId, tenantId)));
 
   if (visitorRows.length === 0) {
     return { totalScore: 0, pageScore: 0, frequencyBonus: 0, recencyBonus: 0 };
@@ -108,11 +108,11 @@ export async function getVisitorScore(visitorId: string): Promise<{
 
   const visitor = visitorRows[0]!;
 
-  // Get all page views for detailed scoring
+  // Get all page views for detailed scoring (with tenantId filter to prevent cross-tenant leak)
   const views = await db
     .select()
     .from(pageViews)
-    .where(eq(pageViews.visitorId, visitorId));
+    .where(and(eq(pageViews.visitorId, visitorId), eq(pageViews.tenantId, tenantId)));
 
   // Calculate page-based score
   let pageScore = 0;
@@ -136,9 +136,9 @@ export async function getVisitorScore(visitorId: string): Promise<{
 /**
  * Get full visitor profile with page views and score
  */
-export async function getVisitorProfile(visitorId: string): Promise<{
- 
- 
+export async function getVisitorProfile(visitorId: string, tenantId: string): Promise<{
+  
+  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   visitor: any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -148,17 +148,17 @@ export async function getVisitorProfile(visitorId: string): Promise<{
   const visitorRows = await db
     .select()
     .from(visitors)
-    .where(eq(visitors.id, visitorId));
+    .where(and(eq(visitors.id, visitorId), eq(visitors.tenantId, tenantId)));
 
   if (visitorRows.length === 0) return null;
 
   const views = await db
     .select()
     .from(pageViews)
-    .where(eq(pageViews.visitorId, visitorId))
+    .where(and(eq(pageViews.visitorId, visitorId), eq(pageViews.tenantId, tenantId)))
     .orderBy(desc(pageViews.viewedAt));
 
-  const score = await getVisitorScore(visitorId);
+  const score = await getVisitorScore(visitorId, tenantId);
 
   return {
     visitor: visitorRows[0],
