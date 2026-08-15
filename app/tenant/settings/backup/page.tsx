@@ -95,9 +95,9 @@ export default function TenantBackupSettingsPage() {
   const [bkType, setBkType] = useState<'full' | 'schema'>('full');
 
   // Load config
-  const loadConfig = useCallback(async () => {
+  const loadConfig = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/backup/config');
+      const res = await fetch('/api/tenant/backup/config', { signal });
       if (res.ok) {
         const d = await res.json();
         if (d.data) {
@@ -118,26 +118,31 @@ export default function TenantBackupSettingsPage() {
         }
       }
     } catch (err) {
-      console.error('[backup] failed to load config', err);
+      if (err instanceof DOMException && err.name === 'AbortError') return;
     }
     setLoaded(true);
   }, []);
 
   // Load backup history
-  const loadBackups = useCallback(async () => {
+  const loadBackups = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/backup');
+      const res = await fetch('/api/tenant/backup', { signal });
       if (res.ok) {
         const d = await res.json();
         setBackups(d.backups || []);
       }
     } catch (err) {
-      console.error('[backup] failed to load backups', err);
+      if (err instanceof DOMException && err.name === 'AbortError') return;
     }
     setLoadingBackups(false);
   }, []);
 
-  useEffect(() => { loadConfig(); loadBackups(); }, [loadConfig, loadBackups]);
+  useEffect(() => {
+    const controller = new AbortController();
+    loadConfig(controller.signal);
+    loadBackups(controller.signal);
+    return () => controller.abort();
+  }, [loadConfig, loadBackups]);
 
   // Save config
   const saveConfig = async (e: React.FormEvent) => {

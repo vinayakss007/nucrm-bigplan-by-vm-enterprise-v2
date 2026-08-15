@@ -63,7 +63,7 @@ function InvoicesPageInner() {
       const res = await fetch('/api/tenant/contacts');
       const data = await res.json();
       setContacts(data.contacts || []);
-    } catch (error) { console.error('Failed to fetch contacts', error); toast.error('Failed to load contacts'); }
+    } catch { toast.error('Failed to load contacts'); }
   };
 
   const fetchInvoices = async () => {
@@ -71,8 +71,7 @@ function InvoicesPageInner() {
       const res = await fetch('/api/tenant/invoices');
       const data = await res.json();
       setInvoices(data.data || []);
-    } catch (error) {
-      console.error('Failed to fetch invoices', error);
+    } catch {
       toast.error('Failed to load invoices');
     } finally {
       setLoading(false);

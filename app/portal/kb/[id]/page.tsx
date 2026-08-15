@@ -31,7 +31,7 @@ export default function PortalKBArticlePage() {
 
     fetch(`/api/public/kb/articles/${params.id}`).then(r => r.json()).then(d => {
       setArticle(d.data); setLoading(false);
-    }).catch((err) => { console.error('[portal/kb/article] fetch failed', err); setLoading(false); });
+    }).catch(() => { setLoading(false); });
   }, [params.id, router]);
 
   if (loading) return (

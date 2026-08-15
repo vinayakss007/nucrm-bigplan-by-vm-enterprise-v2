@@ -36,12 +36,14 @@ export default function SSOSettingsPage() {
   });
 
   useEffect(() => {
-    loadProviders();
+    const controller = new AbortController();
+    loadProviders(controller.signal);
+    return () => controller.abort();
   }, []);
 
-  async function loadProviders() {
+  async function loadProviders(signal?: AbortSignal) {
     try {
-      const res = await fetch('/api/tenant/sso');
+      const res = await fetch('/api/tenant/sso', { signal });
       if (res.ok) {
         const { data } = await res.json();
         setProviders(data || []);
@@ -65,7 +67,7 @@ export default function SSOSettingsPage() {
         }
       }
     } catch (err) {
-      console.error('[sso] failed to load SSO config', err);
+      if (err instanceof DOMException && err.name === 'AbortError') return;
     } finally {
       setLoading(false);
     }

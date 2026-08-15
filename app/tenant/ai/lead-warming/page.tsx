@@ -86,7 +86,7 @@ export default function LeadWarmingPage() {
       if (statsData) setStats(statsData);
       if (repliesData?.data) setReplies(repliesData.data);
       if (campaignsData?.data) setCampaigns(campaignsData.data);
-    }).catch((e) => console.error('[lead-warming] Error:', e)).finally(() => setLoading(false));
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);

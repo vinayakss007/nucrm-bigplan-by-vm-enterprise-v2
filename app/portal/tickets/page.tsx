@@ -24,7 +24,7 @@ export default function PortalTicketsPage() {
       setSession(s);
       fetch('/api/public/tickets', { headers: { 'x-portal-email': s.email } }).then(r => r.json()).then(d => {
         setTickets(d.data || []); setLoading(false);
-      }).catch((err) => { console.error('[portal/tickets] fetch failed', err); setLoading(false); });
+      }).catch(() => { setLoading(false); });
     } catch { router.replace('/portal/login'); }
   }, [router]);
 

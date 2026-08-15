@@ -46,8 +46,8 @@ export default function ProductsPage() {
       const res = await fetch('/api/tenant/products?limit=200');
       const data = await res.json();
       setProducts(data.data || []);
-    } catch (error) {
-      console.error('Failed to fetch products', error);
+    } catch {
+      // Failed to load products
     } finally {
       setLoading(false);
     }

@@ -20,7 +20,7 @@ export default function PortalInvoicesPage() {
       if (!s.email || !s.token) { router.replace('/portal/login'); return; }
       fetch(`/api/public/invoices?email=${encodeURIComponent(s.email)}`).then(r => r.json()).then(d => {
         setInvoices(d.data || []); setLoading(false);
-      }).catch((err) => { console.error('[portal/invoices] fetch failed', err); setLoading(false); });
+      }).catch(() => { setLoading(false); });
     } catch { router.replace('/portal/login'); }
   }, [router]);
 

@@ -101,9 +101,8 @@ export default function DataExplorerPage() {
       if (!res.ok) throw new Error('Search failed');
       const data = await res.json();
       setResults(data);
-    } catch (err) {
+    } catch {
       toast.error('Search failed');
-      console.error(err);
     } finally {
       setLoading(false);
     }

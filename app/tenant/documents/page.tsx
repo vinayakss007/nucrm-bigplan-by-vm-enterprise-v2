@@ -44,8 +44,8 @@ export default function DocumentsPage() {
         setDocuments(data.documents ?? []);
         setFolders(data.folders ?? []);
       }
-    } catch (err) {
-      console.error('[documents] failed to load', err);
+    } catch {
+      // Failed to load documents
     }
     setLoading(false);
   }, [currentFolder]);

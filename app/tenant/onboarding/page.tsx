@@ -129,8 +129,8 @@ export default function OnboardingPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ product_id: 'skip', modules: [] }),
               });
-            } catch (err) {
-              console.error('[onboarding] skip error:', err);
+            } catch {
+              // Skip onboarding error
             }
             window.location.href = '/tenant/dashboard';
           }}

@@ -17,10 +17,12 @@ export default function AILayout({ children }: { children: React.ReactNode }) {
   const { hasFeature, loaded: featuresLoaded } = usePlanFeatures();
 
   useEffect(() => {
-    fetch('/api/tenant/me')
+    const controller = new AbortController();
+    fetch('/api/tenant/me', { signal: controller.signal })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setIsAdmin(d.is_admin ?? false))
-      .catch((err) => console.error('[AI Layout] fetch /api/tenant/me failed:', err));
+      .catch(() => {});
+    return () => controller.abort();
   }, []);
 
   const items = AI_CAPABILITIES.filter(c => {

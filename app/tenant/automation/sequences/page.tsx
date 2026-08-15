@@ -30,7 +30,7 @@ export default function SequencesPage() {
 
   const load = async () => {
     setLoading(true);
-    const res = await fetch('/api/tenant/sequences').catch((e) => { console.error('[sequences] load failed:', e); return null; });
+    const res = await fetch('/api/tenant/sequences').catch(() => null);
     if (res?.ok) { const d = await res.json(); setSequences(d.data ?? []); }
     setLoading(false);
   };

@@ -80,8 +80,8 @@ export default function ServicesPage() {
       const res = await fetch('/api/tenant/services');
       const data = await res.json();
       setServices(data.services || []);
-    } catch (error) {
-      console.error('Failed to fetch services', error);
+    } catch {
+      // Failed to load services
     } finally {
       setLoading(false);
     }
@@ -92,8 +92,8 @@ export default function ServicesPage() {
       const res = await fetch('/api/tenant/contacts?limit=500');
       const data = await res.json();
       setContacts(data.data || []);
-    } catch (error) {
-      console.error('Failed to fetch contacts', error);
+    } catch {
+      // Failed to load contacts
     }
   };
 
@@ -102,8 +102,8 @@ export default function ServicesPage() {
       const res = await fetch('/api/tenant/companies?limit=500');
       const data = await res.json();
       setCompanies(data.data || []);
-    } catch (error) {
-      console.error('Failed to fetch companies', error);
+    } catch {
+      // Failed to load companies
     }
   };
 
