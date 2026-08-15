@@ -205,8 +205,8 @@ ALTER TABLE record_links ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON record_links;
 CREATE POLICY tenant_isolation ON record_links
   FOR ALL
-  USING (tenant_id = current_setting('app.current_tenant')::uuid)
-  WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+  USING (tenant_id::text = current_setting('app.current_tenant'))
+  WITH CHECK (tenant_id::text = current_setting('app.current_tenant'));
 
 COMMIT;
 

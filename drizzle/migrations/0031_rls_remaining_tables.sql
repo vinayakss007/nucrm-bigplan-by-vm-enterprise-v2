@@ -173,10 +173,11 @@ BEGIN
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I;', t);
 
     -- Create standard tenant isolation policy
+    -- Cast tenant_id to text for comparison to handle both text and uuid column types
     EXECUTE format('
       CREATE POLICY tenant_isolation ON %I
-      USING (tenant_id IS NULL OR tenant_id = current_setting(''app.current_tenant'')::uuid)
-      WITH CHECK (tenant_id = current_setting(''app.current_tenant'')::uuid)
+      USING (tenant_id IS NULL OR tenant_id::text = current_setting(''app.current_tenant''))
+      WITH CHECK (tenant_id::text = current_setting(''app.current_tenant''))
     ', t);
   END LOOP;
 
@@ -193,10 +194,10 @@ BEGIN
         FOR ALL
         USING (
           tenant_id IS NULL
-          OR tenant_id = current_setting(''app.current_tenant'')::uuid
+          OR tenant_id::text = current_setting(''app.current_tenant'')
         )
         WITH CHECK (
-          tenant_id = current_setting(''app.current_tenant'')::uuid
+          tenant_id::text = current_setting(''app.current_tenant'')
         );
     ');
   END IF;

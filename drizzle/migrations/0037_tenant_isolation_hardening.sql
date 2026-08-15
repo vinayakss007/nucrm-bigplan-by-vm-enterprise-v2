@@ -236,9 +236,9 @@ BEGIN
       -- platform_settings legitimately stores global rows with a NULL tenant_id
       -- that every tenant must be able to read.
       IF rec.tenant_not_null AND rec.table_name <> 'platform_settings' THEN
-        using_expr := 'tenant_id = current_setting(''app.current_tenant'')::uuid';
+        using_expr := 'tenant_id::text = current_setting(''app.current_tenant'')';
       ELSE
-        using_expr := 'tenant_id IS NULL OR tenant_id = current_setting(''app.current_tenant'')::uuid';
+        using_expr := 'tenant_id IS NULL OR tenant_id::text = current_setting(''app.current_tenant'')';
       END IF;
 
       EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', rec.table_name);
@@ -246,7 +246,7 @@ BEGIN
       EXECUTE format(
         'CREATE POLICY tenant_isolation ON %I FOR ALL
            USING (%s)
-           WITH CHECK (tenant_id = current_setting(''app.current_tenant'')::uuid)',
+           WITH CHECK (tenant_id::text = current_setting(''app.current_tenant''))',
         rec.table_name, using_expr
       );
       applied := applied + 1;

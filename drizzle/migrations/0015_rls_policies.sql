@@ -19,8 +19,8 @@ BEGIN
       DROP POLICY IF EXISTS tenant_isolation ON %I;
       CREATE POLICY tenant_isolation ON %I
         FOR ALL
-        USING (tenant_id = current_setting(''app.current_tenant'')::uuid)
-        WITH CHECK (tenant_id = current_setting(''app.current_tenant'')::uuid);
+        USING (tenant_id::text = current_setting(''app.current_tenant''))
+        WITH CHECK (tenant_id::text = current_setting(''app.current_tenant''));
     ', t, t);
   END LOOP;
 END $$;
