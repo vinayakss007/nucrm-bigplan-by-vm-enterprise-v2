@@ -5,8 +5,21 @@ import { portalClients, platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimit } from '@/lib/rate-limit';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
+
+/** Constant-time string comparison to prevent timing attacks */
+function timingSafeEqual(a: string, b: string): boolean {
+  const maxLen = Math.max(a.length, b.length);
+  const aPadded = a.padEnd(maxLen, '\0');
+  const bPadded = b.padEnd(maxLen, '\0');
+  let result = 0;
+  for (let i = 0; i < maxLen; i++) {
+    result |= aPadded.charCodeAt(i) ^ bPadded.charCodeAt(i);
+  }
+  return result === 0 && a.length === b.length;
+}
 
 async function getPortalConfig(tenantId: string) {
   const [setting] = await db
@@ -25,8 +38,21 @@ export async function POST(request: NextRequest) {
   try {
     const { email, token, tenant_id } = await readJsonBody(request);
 
-    if (!email || !token) {
-      return NextResponse.json({ error: 'Email and token required' }, { status: 400 });
+    if (!email || !token || !tenant_id) {
+      return NextResponse.json({ error: 'Email, token, and tenant_id required' }, { status: 400 });
+    }
+
+    // Validate tenant_id format (UUID) to prevent injection
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(tenant_id)) {
+      return NextResponse.json({ error: 'Invalid tenant_id format' }, { status: 400 });
+    }
+
+    // Rate limit: max 10 login attempts per email per 15 minutes
+    const rateLimitKey = `portal_login:${email}`;
+    const { allowed } = await rateLimit(rateLimitKey, 10, 15 * 60 * 1000);
+    if (!allowed) {
+      return NextResponse.json({ error: 'Too many login attempts. Please try again later.' }, { status: 429 });
     }
 
     const config = await getPortalConfig(tenant_id);
@@ -48,7 +74,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    const isValid = client.accessToken === token && client.expiresAt > new Date();
+    // Use constant-time comparison to prevent timing attacks
+    const isValid = timingSafeEqual(client.accessToken, token) && client.expiresAt > new Date();
     if (!isValid) {
       return NextResponse.json({ error: 'Token expired or invalid' }, { status: 401 });
     }
