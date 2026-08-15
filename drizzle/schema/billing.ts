@@ -387,8 +387,8 @@ export const serviceSubscriptions = pgTable('service_subscriptions', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
 
-  contactId: uuid('contact_id'),
-  companyId: uuid('company_id'),
+  contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
 
   name: text('name').notNull(),
   planName: text('plan_name'),

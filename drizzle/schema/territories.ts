@@ -6,6 +6,7 @@
  */
 import { pgTable, uuid, text, jsonb } from 'drizzle-orm/pg-core';
 import * as utils from './utils';
+import { users } from './core';
 
 export const territories = pgTable('territories', {
   id: utils.pk(),
@@ -14,15 +15,15 @@ export const territories = pgTable('territories', {
   parentId: uuid('parent_id'), // self-ref, no FK to avoid circular
   type: text('type', { enum: ['region', 'country', 'state', 'city', 'custom'] }).notNull().default('custom'),
   geoConfig: jsonb('geo_config').default({}), // {countries:[], states:[], cities:[], postalCodes:[]}
-  assignedTo: uuid('assigned_to'), // primary owner shortcut
+  assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }), // primary owner shortcut
   ...utils.lifecycle(),
 });
 
 export const territoryAssignments = pgTable('territory_assignments', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
-  territoryId: uuid('territory_id').notNull(),
-  userId: uuid('user_id').notNull(),
+  territoryId: uuid('territory_id').notNull().references(() => territories.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   role: text('role', { enum: ['owner', 'member'] }).notNull().default('member'),
   ...utils.lifecycle(),
 });

@@ -7,6 +7,7 @@
 
 import { pgTable, uuid, text, timestamp, boolean, jsonb, integer, index } from 'drizzle-orm/pg-core';
 import * as utils from './utils';
+import { users } from './core';
 
 // ── COMPLIANCE REQUESTS ──────────────────────────────────
 export const complianceRequests = pgTable('compliance_requests', {
@@ -14,7 +15,7 @@ export const complianceRequests = pgTable('compliance_requests', {
   tenantId: utils.tenantId(),
   type: text('type').notNull(), // 'gdpr_export' | 'gdpr_delete' | 'soc2_report'
   status: text('status').notNull().default('pending'), // 'pending' | 'processing' | 'completed' | 'failed'
-  requestedBy: uuid('requested_by').notNull(),
+  requestedBy: uuid('requested_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   metadata: jsonb('metadata').default({}),
   result: jsonb('result').default({}),
