@@ -98,7 +98,7 @@ function CreateTicketModal({ onClose, onCreated, sessionEmail }: { onClose: () =
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      if (res.ok) { toast.success('Ticket created'); onCreated(); window.location.reload(); }
+      if (res.ok) { toast.success('Ticket created'); onCreated(); }
       else { const d = await res.json(); toast.error(d.error || 'Failed'); }
     } catch { toast.error('Failed'); }
     setSaving(false);

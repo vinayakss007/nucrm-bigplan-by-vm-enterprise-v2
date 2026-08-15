@@ -5,24 +5,25 @@ export default function TestPage() {
   const [test, setTest] = useState('Loading...');
   
   useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
     setTest('JavaScript is working! Time: ' + new Date().toLocaleTimeString());
   }, []);
   
+  if (process.env.NODE_ENV !== 'development') {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-sm text-muted-foreground">This page is only available in development.</p>
+      </div>
+    );
+  }
+  
   return (
-    <div style={{ padding: '50px', textAlign: 'center', fontFamily: 'sans-serif' }}>
+    <div className="p-12 text-center font-sans">
       <h1>NuCRM JS Test</h1>
-      <p style={{ fontSize: '24px', color: 'green' }}>{test}</p>
+      <p className="text-2xl text-green-600">{test}</p>
       <button 
-        onClick={() => alert('Button works!')}
-        style={{ 
-          padding: '15px 30px', 
-          fontSize: '18px', 
-          background: '#7c3aed', 
-          color: 'white', 
-          border: 'none', 
-          borderRadius: '10px',
-          cursor: 'pointer'
-        }}
+        onClick={() => console.log('Button works!')}
+        className="px-8 py-4 text-lg bg-violet-600 text-white rounded-xl cursor-pointer hover:bg-violet-700"
       >
         Click Me
       </button>

@@ -298,28 +298,34 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       }
     }
 
-    const [row] = await db
-      .update(deals)
-      .set({
-        deletedAt: new Date(),
-        deletedBy: ctx.userId,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(deals.id, dealId),
-          eq(deals.tenantId, ctx.tenantId),
-          sql`${deals.deletedAt} IS NULL`
+    const [row] = await db.transaction(async (tx) => {
+      const [r] = await tx
+        .update(deals)
+        .set({
+          deletedAt: new Date(),
+          deletedBy: ctx.userId,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(deals.id, dealId),
+            eq(deals.tenantId, ctx.tenantId),
+            sql`${deals.deletedAt} IS NULL`
+          )
         )
-      )
-      .returning({ id: deals.id });
+        .returning({ id: deals.id });
+
+      if (!r) return [null] as const;
+
+      // Decrement the tenant's currentDeals counter
+      await tx.update(tenants)
+        .set({ currentDeals: sql`greatest(0, ${tenants.currentDeals} - 1)` })
+        .where(eq(tenants.id, ctx.tenantId));
+
+      return [r] as const;
+    });
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-    // Decrement the tenant's currentDeals counter
-    await db.update(tenants)
-      .set({ currentDeals: sql`greatest(0, ${tenants.currentDeals} - 1)` })
-      .where(eq(tenants.id, ctx.tenantId));
 
     await logAudit({
       tenantId: ctx.tenantId,

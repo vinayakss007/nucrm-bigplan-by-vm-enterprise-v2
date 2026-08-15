@@ -262,7 +262,7 @@ export const reportExecutions = pgTable('report_executions', {
   userId: uuid('user_id').references(() => users.id),
   reportId: uuid('report_id').notNull(),
   executedAt: timestamp('executed_at', { withTimezone: true }).defaultNow().notNull(),
-  status: text('status').default('completed'),
+  status: text('status').default('pending'),
   resultCount: integer('result_count').default(0),
   metadata: utils.metadata(),
   ...utils.lifecycle(),

@@ -1,9 +1,10 @@
 import { pgTable, uuid, text, timestamp, index } from 'drizzle-orm/pg-core';
-import { tenants, users } from './core';
+import * as utils from './utils';
+import { users } from './core';
 
 export const editHistory = pgTable('edit_history', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
   
   entityType: text('entity_type').notNull(),
   entityId: uuid('entity_id').notNull(),
@@ -34,8 +35,8 @@ export const editHistory = pgTable('edit_history', {
 });
 
 export const fieldSnapshots = pgTable('field_snapshots', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
   
   entityType: text('entity_type').notNull(),
   entityId: uuid('entity_id').notNull(),

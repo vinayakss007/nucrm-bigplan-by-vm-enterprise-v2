@@ -3,7 +3,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, deals, companies, tasks } from '@/drizzle/schema';
-import { eq, and, or, ilike, gte, lte, desc, sql, inArray } from 'drizzle-orm';
+import { eq, and, or, gte, lte, desc, sql, inArray } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 
@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
     const offset = (Math.max(1, page) - 1) * limit;
     const tid = ctx.tenantId;
     const pattern = q ? `%${q}%` : null;
+    const escapeClause = "ESCAPE '\\\\'";
 
  
  
@@ -73,11 +74,11 @@ export async function POST(request: NextRequest) {
 
         if (pattern) {
           conditions.push(or(
-            ilike(contacts.firstName, pattern),
-            ilike(contacts.lastName, pattern),
-            ilike(contacts.email, pattern),
-            ilike(contacts.phone, pattern),
-            sql`(${contacts.firstName} || ' ' || ${contacts.lastName}) ILIKE ${pattern}`
+            sql`${contacts.firstName} ILIKE ${pattern} ${sql.raw(escapeClause)}`,
+            sql`${contacts.lastName} ILIKE ${pattern} ${sql.raw(escapeClause)}`,
+            sql`${contacts.email} ILIKE ${pattern} ${sql.raw(escapeClause)}`,
+            sql`${contacts.phone} ILIKE ${pattern} ${sql.raw(escapeClause)}`,
+            sql`(${contacts.firstName} || ' ' || ${contacts.lastName}) ILIKE ${pattern} ${sql.raw(escapeClause)}`
           )!);
         }
         if (filters.status?.length) {
@@ -142,7 +143,7 @@ export async function POST(request: NextRequest) {
         ];
 
         if (pattern) {
-          conditions.push(ilike(deals.title, pattern));
+          conditions.push(sql`${deals.title} ILIKE ${pattern} ${sql.raw(escapeClause)}`);
         }
         if (filters.stage?.length) {
           conditions.push(inArray(deals.stageId, filters.stage));
@@ -205,8 +206,8 @@ export async function POST(request: NextRequest) {
 
         if (pattern) {
           conditions.push(or(
-            ilike(companies.name, pattern),
-            ilike(companies.domain, pattern)
+            sql`${companies.name} ILIKE ${pattern} ${sql.raw(escapeClause)}`,
+            sql`${companies.domain} ILIKE ${pattern} ${sql.raw(escapeClause)}`
           )!);
         }
         if (filters.industry?.length) {
@@ -261,7 +262,7 @@ export async function POST(request: NextRequest) {
         ];
 
         if (pattern) {
-          conditions.push(ilike(tasks.title, pattern));
+          conditions.push(sql`${tasks.title} ILIKE ${pattern} ${sql.raw(escapeClause)}`);
         }
         if (filters.priority?.length) {
           conditions.push(inArray(tasks.priority, filters.priority));

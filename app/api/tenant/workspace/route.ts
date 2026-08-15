@@ -107,9 +107,6 @@ export async function PATCH(request: NextRequest) {
     const body = await readJsonBody(request);
     const expectedUpdatedAt = body.expectedUpdatedAt ?? body._updated_at;
 
-    const guardResponse = await concurrencyGuard(db, tenants, ctx.tenantId, ctx.tenantId, expectedUpdatedAt);
-    if (guardResponse) return guardResponse;
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = {};
     
