@@ -152,7 +152,7 @@ async function razorpayRequest<T = any>(
   }
 
   const url = endpoint.startsWith('http') ? endpoint : `${RAZORPAY_API}${endpoint}`;
-  const response = await fetch(url, options);
+  const response = await fetch(url, { ...options, signal: AbortSignal.timeout(15_000) });
   const data = await response.json();
 
   if (!response.ok) {

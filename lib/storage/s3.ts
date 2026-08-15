@@ -59,19 +59,39 @@ export async function listBackups(): Promise<{ key: string; size: number; lastMo
   })).sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime());
 }
 
+const MAX_BACKUP_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB safety limit
+
 export async function downloadBackup(key: string): Promise<Buffer> {
   const response = await s3Client.send(new GetObjectCommand({
     Bucket: BUCKET,
     Key: key,
   }));
 
+  if (!response.ContentLength || response.ContentLength > MAX_BACKUP_SIZE_BYTES) {
+    const sizeMB = response.ContentLength
+      ? (response.ContentLength / (1024 * 1024)).toFixed(1)
+      : 'unknown';
+    throw new Error(
+      `Backup too large to load into memory (${sizeMB} MB). ` +
+      `Maximum allowed is ${MAX_BACKUP_SIZE_BYTES / (1024 * 1024)} MB. ` +
+      'Use streaming or signed-URL download for larger files.'
+    );
+  }
+
   const stream = response.Body as Readable;
   const chunks: Buffer[] = [];
-  
+  let totalBytes = 0;
+
   for await (const chunk of stream) {
+    totalBytes += chunk.length;
+    if (totalBytes > MAX_BACKUP_SIZE_BYTES) {
+      throw new Error(
+        `Backup exceeded ${MAX_BACKUP_SIZE_BYTES / (1024 * 1024)} MB limit during download. Aborting.`
+      );
+    }
     chunks.push(Buffer.from(chunk));
   }
-  
+
   return Buffer.concat(chunks);
 }
 

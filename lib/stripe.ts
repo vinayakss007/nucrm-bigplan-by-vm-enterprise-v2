@@ -94,7 +94,7 @@ async function stripeRequest<T = any>(
   }
 
   const url = endpoint.startsWith('http') ? endpoint : `${STRIPE_API}${endpoint}`;
-  const response = await fetch(url, options);
+  const response = await fetch(url, { ...options, signal: AbortSignal.timeout(15_000) });
   const data = await response.json();
 
   if (!response.ok) {
@@ -173,7 +173,7 @@ export async function stripeFetch<T = unknown>(
     fetchOptions.body = new URLSearchParams(flattenObject(params)).toString();
   }
   const url = endpoint.startsWith('http') ? endpoint : `${STRIPE_API}${endpoint}`;
-  const res = await fetch(url, fetchOptions);
+  const res = await fetch(url, { ...fetchOptions, signal: AbortSignal.timeout(15_000) });
   const parsed = await res.json() as Record<string, unknown>;
   if (!res.ok) {
     const errObj = parsed.error as { message?: string; code?: string } | undefined;
