@@ -123,6 +123,57 @@ export interface RollbackResult {
 }
 
 // -------------------------------------------------------------------
+// Security helpers
+// -------------------------------------------------------------------
+
+/** Valid migration tag pattern: 4-digit prefix + underscore + descriptive name. */
+const VALID_TAG_PATTERN = /^\d{4}_\w+$/;
+
+/**
+ * Validate a migration tag to prevent injection via crafted filenames.
+ * Tags must match the drizzle convention: `NNNN_descriptive_name`.
+ */
+export function validateMigrationTag(tag: string): boolean {
+  return VALID_TAG_PATTERN.test(tag);
+}
+
+/**
+ * Ensure a resolved file path is inside the migrations directory.
+ * Prevents path traversal attacks like `../../etc/passwd`.
+ */
+function validateFilePath(filePath: string, migrationsDir: string): void {
+  const resolved = path.resolve(filePath);
+  const resolvedDir = path.resolve(migrationsDir);
+  if (!resolved.startsWith(resolvedDir + path.sep) && resolved !== resolvedDir) {
+    throw new Error(`Path traversal detected: "${filePath}" is outside migrations directory`);
+  }
+}
+
+/**
+ * Block SQL patterns that could cause catastrophic damage.
+ * This is a defense-in-depth measure — not a substitute for proper access controls.
+ */
+const DANGEROUS_SQL_PATTERNS = [
+  /\bDROP\s+DATABASE\b/i,
+  /\bTRUNCATE\b/i,
+  /\bALTER\s+SYSTEM\b/i,
+  /\bpg_ctl\b/i,
+  /\bCOPY\b.*\bFROM\b.*\bPROGRAM\b/i,
+  /\blo_import\b/i,
+  /\blo_export\b/i,
+  /\bpg_read_file\b/i,
+  /\bpg_write_file\b/i,
+  /\bpg_sleep\b/i,
+  /\bdbe_exec_sql\b/i,
+];
+
+export function containsDangerousSql(sql: string): boolean {
+  // Strip dollar-quoted blocks (PL/pgSQL bodies) before checking
+  const stripped = sql.replace(/\$[^$]*\$/g, '');
+  return DANGEROUS_SQL_PATTERNS.some(pattern => pattern.test(stripped));
+}
+
+// -------------------------------------------------------------------
 // Filesystem helpers
 // -------------------------------------------------------------------
 
@@ -206,6 +257,9 @@ export function stripTransactionControl(sql: string): string {
 /**
  * Resolve rollback SQL for a migration tag, supporting both conventions.
  * A separate `<tag>.down.sql` file wins over an inline `-- DOWN` section.
+ *
+ * Security: validates the migration tag pattern and ensures file paths
+ * stay within the migrations directory to prevent path traversal.
  */
 export function resolveRollback(
   migrationTag: string,
@@ -214,8 +268,15 @@ export function resolveRollback(
   const dir = resolveMigrationsDir(migrationsDir);
   const tag = migrationTag.replace(/\.(down\.)?sql$/i, '');
 
+  // Validate tag format to prevent injection via crafted filenames
+  if (!validateMigrationTag(tag)) {
+    logger.warn('[rollback] Invalid migration tag format, skipping', { tag });
+    return null;
+  }
+
   // Convention 1: sibling <tag>.down.sql file (preferred).
   const downPath = path.join(dir, `${tag}.down.sql`);
+  validateFilePath(downPath, dir);
   if (fs.existsSync(downPath)) {
     const sql = fs.readFileSync(downPath, 'utf-8').trim();
     if (sql.length > 0) {
@@ -225,6 +286,7 @@ export function resolveRollback(
 
   // Convention 2: inline -- DOWN ... -- END DOWN section in <tag>.sql.
   const upPath = path.join(dir, `${tag}.sql`);
+  validateFilePath(upPath, dir);
   if (fs.existsSync(upPath)) {
     const inline = extractInlineDownSection(fs.readFileSync(upPath, 'utf-8'));
     if (inline) {
@@ -397,6 +459,14 @@ export async function rollbackMigration(
   }
 
   const executableSql = stripTransactionControl(resolved.sql);
+
+  // Block dangerous SQL patterns to prevent catastrophic damage
+  if (containsDangerousSql(executableSql)) {
+    throw new Error(
+      `Rollback SQL for "${target.tag}" contains dangerous operations (DROP DATABASE, TRUNCATE, etc.). ` +
+        `Review the file manually before executing.`
+    );
+  }
 
   if (dryRun) {
     logger.info('[rollback] Dry run — SQL that would be executed', {
