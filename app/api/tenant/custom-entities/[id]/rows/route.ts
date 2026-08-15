@@ -24,7 +24,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     ];
 
     if (search) {
-      conditions.push(sql`cast(${customEntityData.data} as text) ILIKE ${'%' + search + '%'}`);
+      const safeSearch = search.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+      conditions.push(sql`cast(${customEntityData.data} as text) ILIKE ${'%' + safeSearch + '%'} ESCAPE '\\'`);
     }
 
     const rows = await db

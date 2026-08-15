@@ -219,29 +219,31 @@ export async function POST(req: NextRequest) {
         const deny = requirePerm(ctx, 'contacts.delete');
         if (deny) return deny;
         
-        const res = await db
-          .update(contacts)
-          .set({
-            deletedAt: new Date(),
-            deletedBy: ctx.userId,
-            isArchived: true,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              inArray(contacts.id, validIds),
-              eq(contacts.tenantId, ctx.tenantId),
-              sql`${contacts.deletedAt} IS NULL`
-            )
-          );
-        
-        affected = res.rowCount ?? 0;
-        // Decrement the tenant's currentContacts counter by the number of affected contacts
-        if (affected > 0) {
-          await db.update(tenants)
-            .set({ currentContacts: sql`greatest(0, ${tenants.currentContacts} - ${affected})` })
-            .where(eq(tenants.id, ctx.tenantId));
-        }
+        await db.transaction(async (tx) => {
+          const res = await tx
+            .update(contacts)
+            .set({
+              deletedAt: new Date(),
+              deletedBy: ctx.userId,
+              isArchived: true,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                inArray(contacts.id, validIds),
+                eq(contacts.tenantId, ctx.tenantId),
+                sql`${contacts.deletedAt} IS NULL`
+              )
+            );
+          
+          affected = res.rowCount ?? 0;
+          // Decrement the tenant's currentContacts counter by the number of affected contacts
+          if (affected > 0) {
+            await tx.update(tenants)
+              .set({ currentContacts: sql`greatest(0, ${tenants.currentContacts} - ${affected})` })
+              .where(eq(tenants.id, ctx.tenantId));
+          }
+        });
         break;
       }
       case 'do_not_contact': {
