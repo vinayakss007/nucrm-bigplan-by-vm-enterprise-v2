@@ -110,14 +110,33 @@ export function sanitizeCustomCss(css: string): string {
   let sanitized = css.replace(/<\/?[a-z][^>]*>/gi, '');
   // Remove any remaining < or > that could form tags
   sanitized = sanitized.replace(/</g, '').replace(/>/g, '');
-  // Remove javascript: URLs
+  // Remove javascript: URLs (anywhere, not just at start)
   sanitized = sanitized.replace(/javascript\s*:/gi, '');
   // Remove expression() (IE CSS expression attack)
   sanitized = sanitized.replace(/expression\s*\(/gi, '');
-  // Remove @import to prevent loading external stylesheets
-  sanitized = sanitized.replace(/@import\b/gi, '');
-  // Remove url() with data: or javascript: schemes
-  sanitized = sanitized.replace(/url\s*\(\s*['"]?\s*(data|javascript)\s*:/gi, 'url(blocked:');
+  // Remove @import anywhere in the CSS (not just start of string)
+  // Matches @import with any leading whitespace, quotes, or url() wrapper
+  sanitized = sanitized.replace(/(?:^|[\s;])@import\b/gi, '$1');
+  // Remove @import that appears after other CSS (e.g., in a rule block)
+  sanitized = sanitized.replace(/@import\b/gi, '/* blocked @import */');
+  // Block url() with any non-http/https scheme (data:, javascript:, file:, ftp:, etc.)
+  // Only allow http/https URLs in url()
+  sanitized = sanitized.replace(/url\s*\(\s*['"]?\s*([^'")\s]+)\s*['"]?\s*\)/gi, (match, url) => {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return match; // Allow http/https
+      }
+      return 'url(blocked)';
+    } catch {
+      // Not a valid URL - could be a relative path or malformed
+      // Block anything that looks like a scheme (e.g., data:, file:)
+      if (/^[a-zA-Z]+:/.test(url)) {
+        return 'url(blocked)';
+      }
+      return match; // Allow relative paths
+    }
+  });
   return sanitized;
 }
 
