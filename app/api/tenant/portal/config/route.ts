@@ -5,8 +5,19 @@ import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
+import { z } from 'zod';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
+
+/** Schema for portal config validation */
+const portalConfigSchema = z.object({
+  enabled: z.boolean(),
+  allow_quotes: z.boolean().optional().default(true),
+  allow_invoices: z.boolean().optional().default(true),
+  allow_cases: z.boolean().optional().default(true),
+  custom_message: z.string().max(1000).optional().default(''),
+  allowed_domains: z.array(z.string().max(255)).max(10).optional().default([]),
+}).strict();
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,7 +62,18 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const config = await readJsonBody(request);
+    const rawConfig = await readJsonBody(request);
+
+    // Validate config against schema to prevent injection of arbitrary keys
+    const parseResult = portalConfigSchema.safeParse(rawConfig);
+    if (!parseResult.success) {
+      return NextResponse.json({
+        error: 'Invalid portal config',
+        details: parseResult.error.flatten().fieldErrors,
+      }, { status: 400 });
+    }
+
+    const config = parseResult.data;
 
     await db
       .insert(platformSettings)
