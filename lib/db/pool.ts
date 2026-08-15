@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import { pgSslConfig } from './ssl-config';
 
-declare global { var __pgPool: Pool | undefined; }
+declare global { var __pgPool: Pool | undefined; var __pgPoolCreating: boolean | undefined; }
 
 /**
  * Maximum number of clients waiting to acquire a connection from the pool.
@@ -47,7 +47,33 @@ export function getPoolStats(): PoolStats {
  * to prevent cascading failures from connection exhaustion.
  */
 export function getPool(): Pool {
-  if (!global.__pgPool) {
+  if (global.__pgPool) {
+    // Pool already exists — fast path
+    const pool = global.__pgPool;
+    if (pool.waitingCount > MAX_WAITING_CLIENTS) {
+      throw new Error(
+        `Connection pool exhausted: ${pool.waitingCount} requests waiting (max ${MAX_WAITING_CLIENTS}). ` +
+        'Increase DATABASE_POOL_SIZE or reduce concurrent queries.',
+      );
+    }
+    return pool;
+  }
+
+  // Race-condition guard: only one caller creates the pool
+  if (global.__pgPoolCreating) {
+    // Another caller is currently creating the pool — spin briefly
+    const start = Date.now();
+    while (global.__pgPoolCreating && Date.now() - start < 30_000) {
+      // busy-wait is fine here; pool creation takes <100ms
+    }
+    if (!global.__pgPool) {
+      throw new Error('Pool creation timed out');
+    }
+    return global.__pgPool;
+  }
+
+  global.__pgPoolCreating = true;
+  try {
     const pgBouncer = isPgBouncerEnabled();
     const cs = process.env.DATABASE_URL;
     if (!cs) throw new Error('DATABASE_URL is required');
@@ -67,7 +93,6 @@ export function getPool(): Pool {
       }
       throw e;
     }
-
 
     const poolSize = parseInt(process.env['DATABASE_POOL_SIZE'] ?? '20');
     if (poolSize < 1 || poolSize > 100) {
@@ -98,16 +123,18 @@ export function getPool(): Pool {
       }
       console.error('[db-pool] error:', err.message);
     });
-  }
 
-  // Reject early if pool waiting queue is too deep
-  const pool = global.__pgPool;
-  if (pool.waitingCount > MAX_WAITING_CLIENTS) {
-    throw new Error(
-      `Connection pool exhausted: ${pool.waitingCount} requests waiting (max ${MAX_WAITING_CLIENTS}). ` +
-      'Increase DATABASE_POOL_SIZE or reduce concurrent queries.',
-    );
-  }
+    // Reject early if pool waiting queue is too deep
+    const pool = global.__pgPool;
+    if (pool.waitingCount > MAX_WAITING_CLIENTS) {
+      throw new Error(
+        `Connection pool exhausted: ${pool.waitingCount} requests waiting (max ${MAX_WAITING_CLIENTS}). ` +
+        'Increase DATABASE_POOL_SIZE or reduce concurrent queries.',
+      );
+    }
 
-  return pool;
+    return pool;
+  } finally {
+    global.__pgPoolCreating = false;
+  }
 }

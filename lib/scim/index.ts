@@ -215,42 +215,100 @@ export function generateSCIMError(detail: string, status: number): SCIMError {
 // ── Token Verification ───────────────────────────────────────────────────────
 
 /**
- * Verify a SCIM bearer token for a given tenant.
+ * Verify a SCIM bearer token and extract the tenant ID.
  *
- * Tokens are expected to be HMAC-SHA256 hashes derived from a secret.
- * In production, these would be stored securely per-tenant. Here we
- * verify against the SCIM_SECRET environment variable combined with
- * the tenant ID.
+ * Token format (v2): "<tenantId>:<expiryMs>:<hmac>"
+ *   - hmac = HMAC-SHA256(secret, "<tenantId>:<expiryMs>")
+ *   - Token is rejected if expiryMs < now
  *
- * Returns true if the token is valid, false otherwise.
+ * Token format (v1, deprecated): raw HMAC-SHA256(secret, tenantId)
+ *   - Kept for backward compatibility; caller must still supply tenantId.
+ *
+ * Returns { tenantId } on success, null on failure.
  */
-export async function verifySCIMToken(token: string, tenantId: string): Promise<boolean> {
-  if (!token || !tenantId) {
-    return false;
+export async function verifySCIMToken(
+  token: string,
+  fallbackTenantId: string,
+): Promise<{ tenantId: string } | null> {
+  if (!token) {
+    return null;
   }
 
   const secret = process.env['SCIM_SECRET'];
   if (!secret) {
-    // If no SCIM secret is configured, SCIM endpoints are disabled
-    return false;
+    return null;
   }
 
-  try {
-    const expectedToken = createHmac('sha256', secret)
-      .update(tenantId)
-      .digest('hex');
+  // ── v2 token: tenantId:expiryMs:hmac ──
+  const parts = token.split(':');
+  if (parts.length === 3) {
+    const [tenantId, expiryStr, providedHmac] = parts;
+    if (!tenantId || !expiryStr || !providedHmac) return null;
 
-    const tokenBuffer = Buffer.from(token, 'utf8');
-    const expectedBuffer = Buffer.from(expectedToken, 'utf8');
-
-    if (tokenBuffer.length !== expectedBuffer.length) {
-      return false;
+    const expiryMs = parseInt(expiryStr, 10);
+    if (Number.isNaN(expiryMs) || Date.now() > expiryMs) {
+      return null; // expired or malformed
     }
 
-    return timingSafeEqual(tokenBuffer, expectedBuffer);
-  } catch {
-    return false;
+    try {
+      const expectedHmac = createHmac('sha256', secret)
+        .update(`${tenantId}:${expiryStr}`)
+        .digest('hex');
+
+      const tokenBuf = Buffer.from(providedHmac, 'utf8');
+      const expectedBuf = Buffer.from(expectedHmac, 'utf8');
+
+      if (tokenBuf.length !== expectedBuf.length) return null;
+      if (!timingSafeEqual(tokenBuf, expectedBuf)) return null;
+
+      return { tenantId };
+    } catch {
+      return null;
+    }
   }
+
+  // ── v1 token (deprecated): raw HMAC of tenantId ──
+  if (fallbackTenantId) {
+    try {
+      const expectedHmac = createHmac('sha256', secret)
+        .update(fallbackTenantId)
+        .digest('hex');
+
+      const tokenBuf = Buffer.from(token, 'utf8');
+      const expectedBuf = Buffer.from(expectedHmac, 'utf8');
+
+      if (tokenBuf.length !== expectedBuf.length) return null;
+      if (!timingSafeEqual(tokenBuf, expectedBuf)) return null;
+
+      return { tenantId: fallbackTenantId };
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+// ── Token Creation ───────────────────────────────────────────────────────────
+
+/**
+ * Create a SCIM bearer token for a tenant.
+ *
+ * Returns a v2 token: "<tenantId>:<expiryMs>:<hmac>"
+ * Default expiry: 24 hours.
+ */
+export function createSCIMToken(tenantId: string, expiresInSeconds: number = 86400): string | null {
+  const secret = process.env['SCIM_SECRET'];
+  if (!secret || !tenantId) {
+    return null;
+  }
+
+  const expiryMs = Date.now() + expiresInSeconds * 1000;
+  const hmac = createHmac('sha256', secret)
+    .update(`${tenantId}:${expiryMs}`)
+    .digest('hex');
+
+  return `${tenantId}:${expiryMs}:${hmac}`;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
