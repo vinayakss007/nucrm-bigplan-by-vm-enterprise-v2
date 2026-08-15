@@ -12,7 +12,7 @@ const REPORT_TYPES = [
   { id: 'leads', label: 'Leads', columns: ['first_name','last_name','email','phone','title','company_name','lead_status','lead_source','score','created_at'] },
   { id: 'companies', label: 'Companies', columns: ['name','industry','size','phone','website','address','created_at'] },
   { id: 'tasks', label: 'Tasks', columns: ['title','description','priority','due_date','completed','first_name','last_name','assigned_to','created_at'] },
-];
+] as const;
 
 const FILTER_OPS = [
   { id: 'equals', label: 'Equals' },
@@ -20,16 +20,36 @@ const FILTER_OPS = [
   { id: 'gt', label: 'Greater than' },
   { id: 'lt', label: 'Less than' },
   { id: 'in', label: 'In' },
-];
+] as const;
+
+type ReportTypeId = typeof REPORT_TYPES[number]['id'];
+
+interface SavedReport {
+  id: string;
+  name: string;
+  type: ReportTypeId;
+  description: string;
+  filters: Record<string, string>;
+  columns: string[];
+  groupBy?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+interface ReportFilter {
+  column: string;
+  op: string;
+  value: string;
+}
+
+type ReportRow = Record<string, string | number | boolean | null | undefined>;
 
 export default function CustomReportBuilder() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [savedReports, setSavedReports] = useState<any[]>([]);
-  const [reportType, setReportType] = useState('contacts');
+  const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
+  const [reportType, setReportType] = useState<ReportTypeId>('contacts');
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
-  const [filters, setFilters] = useState<{ column: string; op: string; value: string }[]>([]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [results, setResults] = useState<any[]>([]);
+  const [filters, setFilters] = useState<ReportFilter[]>([]);
+  const [results, setResults] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [reportName, setReportName] = useState('');
   const [showSaved, setShowSaved] = useState(false);
@@ -56,7 +76,7 @@ export default function CustomReportBuilder() {
   const addFilter = () => setFilters(prev => [...prev, { column: currentType?.columns[0] || '', op: 'equals', value: '' }]);
 
   const updateFilter = (i: number, key: string, value: string) => {
-    setFilters(prev => prev.map((f, j) => j === i ? { ...f, [key]: value } as { column: string; op: string; value: string } : f));
+    setFilters(prev => prev.map((f, j) => j === i ? { ...f, [key]: value } as ReportFilter : f));
   };
 
   const removeFilter = (i: number) => setFilters(prev => prev.filter((_, j) => j !== i));
@@ -70,24 +90,20 @@ export default function CustomReportBuilder() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           report_type: reportType,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          filters: filters.reduce((acc, f) => { if (f.value) acc[f.column] = f.value; return acc; }, {} as Record<string, any>),
+          filters: filters.reduce<Record<string, string>>((acc, f) => { if (f.value) acc[f.column] = f.value; return acc; }, {}),
           limit: 500,
         }),
       });
       const d = await res.json();
       if (!res.ok) { toast.error(d.error || 'Failed'); setLoading(false); return; }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data = (d.data || []).map((row: any) => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const filtered: any = {};
+      const data: ReportRow[] = (d.data || []).map((row: ReportRow) => {
+        const filtered: ReportRow = {};
         selectedColumns.forEach(col => { filtered[col] = row[col]; });
         return filtered;
       });
       setResults(data);
       if (!data.length) toast('No data found', { icon: '📊' });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) { toast.error(err.message); }
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Unknown error'); }
     setLoading(false);
   };
 
@@ -109,11 +125,10 @@ export default function CustomReportBuilder() {
     } catch { toast.error('Failed'); }
   };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const loadReport = (r: any) => {
+  const loadReport = (r: SavedReport) => {
     setReportType(r.type);
     setSelectedColumns(r.columns || []);
-    setFilters(r.filters || []);
+    setFilters(r.filters ? Object.entries(r.filters).map(([column, value]) => ({ column, op: 'equals', value: String(value) })) : []);
     setReportName(r.name);
     setShowSaved(false);
   };
@@ -155,6 +170,7 @@ export default function CustomReportBuilder() {
           <p className="text-sm text-muted-foreground">Select columns, add filters, and generate custom reports</p>
         </div>
         <button onClick={() => setShowSaved(!showSaved)}
+          aria-expanded={showSaved}
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-accent text-xs font-medium transition-colors">
           <Save className="w-3.5 h-3.5" />Saved Reports ({savedReports.length})
         </button>
@@ -170,7 +186,7 @@ export default function CustomReportBuilder() {
               <button onClick={() => loadReport(r)} className="text-sm font-medium hover:text-violet-600 transition-colors text-left">
                 {r.name} <span className="text-xs text-muted-foreground font-normal">({r.type})</span>
               </button>
-              <button onClick={() => deleteSaved(r.id)} className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/20 text-muted-foreground hover:text-red-600">
+              <button onClick={() => deleteSaved(r.id)} aria-label={`Delete saved report ${r.name}`} className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/20 text-muted-foreground hover:text-red-600">
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -228,16 +244,19 @@ export default function CustomReportBuilder() {
                 {filters.map((f, i) => (
                   <div key={i} className="flex gap-1.5 items-start">
                     <select value={f.column} onChange={e => updateFilter(i, 'column', e.target.value)}
+                      aria-label={`Filter column for filter ${i + 1}`}
                       className="flex-1 px-2 py-1.5 rounded-lg border border-border bg-transparent text-xs focus:outline-none focus:ring-1 focus:ring-violet-500">
                       {currentType.columns.map(c => <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>)}
                     </select>
                     <select value={f.op} onChange={e => updateFilter(i, 'op', e.target.value)}
+                      aria-label={`Filter operator for filter ${i + 1}`}
                       className="w-24 px-2 py-1.5 rounded-lg border border-border bg-transparent text-xs focus:outline-none focus:ring-1 focus:ring-violet-500">
                       {FILTER_OPS.map(op => <option key={op.id} value={op.id}>{op.label}</option>)}
                     </select>
                     <input value={f.value} onChange={e => updateFilter(i, 'value', e.target.value)}
+                      aria-label={`Filter value for filter ${i + 1}`}
                       className="flex-1 px-2 py-1.5 rounded-lg border border-border bg-transparent text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" placeholder="Value" />
-                    <button onClick={() => removeFilter(i)} className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-950/20 text-muted-foreground hover:text-red-600">
+                    <button onClick={() => removeFilter(i)} aria-label={`Remove filter ${i + 1}`} className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-950/20 text-muted-foreground hover:text-red-600">
                       <X className="w-3 h-3" />
                     </button>
                   </div>
@@ -248,12 +267,13 @@ export default function CustomReportBuilder() {
 
           {/* Actions */}
           <div className="space-y-2">
-            <button onClick={runReport} disabled={loading}
+            <button onClick={runReport} disabled={loading} aria-label={loading ? 'Running report...' : 'Run report'}
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
               <Play className={cn('w-4 h-4', loading && 'animate-spin')} />{loading ? 'Running...' : 'Run Report'}
             </button>
             <div className="flex gap-2">
               <input value={reportName} onChange={e => setReportName(e.target.value)}
+                aria-label="Report name"
                 className="flex-1 px-3 py-2 rounded-xl border border-border bg-transparent text-xs focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="Report name..." />
               <button onClick={saveReport}
                 className="px-4 py-2 rounded-xl border border-border hover:bg-accent text-xs font-medium transition-colors">
@@ -275,7 +295,7 @@ export default function CustomReportBuilder() {
             <div className="admin-card overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                 <p className="text-sm font-semibold">{results.length} records</p>
-                <button onClick={downloadCSV} disabled={!results.length}
+                <button onClick={downloadCSV} disabled={!results.length} aria-label="Export results as CSV"
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border hover:bg-accent text-xs font-medium disabled:opacity-40 transition-colors">
                   <Download className="w-3.5 h-3.5" />Export CSV
                 </button>

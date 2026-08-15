@@ -76,7 +76,7 @@ export default function VisitorsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="admin-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <Users className="w-4 h-4" />
@@ -109,9 +109,10 @@ export default function VisitorsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-4">
-        <div className="flex gap-2">
+        <div className="flex gap-2" role="group" aria-label="Filter visitors by type">
           {(['all', 'identified', 'anonymous'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)}
+              aria-pressed={filter === f}
               className={cn('px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
                 filter === f ? 'bg-violet-600 text-white border-violet-600' : 'border-border hover:bg-accent')}>
               {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -119,12 +120,13 @@ export default function VisitorsPage() {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Score:</span>
-          <input type="number" placeholder="Min" value={minScore}
+          <label htmlFor="visitor-min-score" className="text-xs text-muted-foreground">Score:</label>
+          <input id="visitor-min-score" type="number" placeholder="Min" value={minScore}
             onChange={e => setMinScore(e.target.value)}
             className="w-16 px-2 py-1 rounded-lg border border-border bg-transparent text-xs focus:outline-none focus:ring-2 focus:ring-violet-500" />
-          <span className="text-xs text-muted-foreground">-</span>
-          <input type="number" placeholder="Max" value={maxScore}
+          <span className="text-xs text-muted-foreground" aria-hidden="true">-</span>
+          <label htmlFor="visitor-max-score" className="sr-only">Maximum score</label>
+          <input id="visitor-max-score" type="number" placeholder="Max" value={maxScore}
             onChange={e => setMaxScore(e.target.value)}
             className="w-16 px-2 py-1 rounded-lg border border-border bg-transparent text-xs focus:outline-none focus:ring-2 focus:ring-violet-500" />
         </div>
@@ -134,26 +136,27 @@ export default function VisitorsPage() {
       {loading ? (
         [...Array(5)].map((_, i) => <div key={i} className="h-14 bg-muted rounded-2xl animate-pulse" />)
       ) : sorted.length === 0 ? (
-        <div className="text-center py-12 border border-dashed border-border rounded-2xl">
+        <div className="text-center py-12 border border-dashed border-border rounded-2xl" role="status">
           <Eye className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
           <p className="font-medium">No visitors found</p>
           <p className="text-sm text-muted-foreground mt-1">Visitors will appear once tracking is active</p>
         </div>
       ) : (
         <div className="admin-card overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm" aria-label="Visitor tracking data">
             <thead>
               <tr className="border-b border-border text-left">
-                <th className="px-4 py-3 font-medium text-muted-foreground">Fingerprint</th>
-                <th className="px-4 py-3 font-medium text-muted-foreground">Pages Viewed</th>
-                <th className="px-4 py-3 font-medium text-muted-foreground">
-                  <button onClick={() => toggleSort('score')} className="flex items-center gap-1 hover:text-foreground">
+                <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">Fingerprint</th>
+                <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">Pages Viewed</th>
+                <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
+                  <button onClick={() => toggleSort('score')} aria-label={`Sort by score ${sortBy === 'score' && sortDesc ? 'ascending' : 'descending'}`} className="flex items-center gap-1 hover:text-foreground">
                     Score <ArrowUpDown className="w-3 h-3" />
                   </button>
                 </th>
-                <th className="px-4 py-3 font-medium text-muted-foreground">Contact</th>
-                <th className="px-4 py-3 font-medium text-muted-foreground">
-                  <button onClick={() => toggleSort('lastSeenAt')} className="flex items-center gap-1 hover:text-foreground">
+                <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">Contact</th>
+                <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
+                  <button onClick={() => toggleSort('lastSeenAt')} aria-label={`Sort by last seen ${sortBy === 'lastSeenAt' && sortDesc ? 'ascending' : 'descending'}`} className="flex items-center gap-1 hover:text-foreground">
                     Last Seen <ArrowUpDown className="w-3 h-3" />
                   </button>
                 </th>
@@ -191,6 +194,7 @@ export default function VisitorsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>
