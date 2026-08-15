@@ -17,10 +17,3 @@ ALTER TABLE super_admin_audit_logs ADD COLUMN IF NOT EXISTS hash TEXT;
 
 COMMENT ON COLUMN super_admin_audit_logs.previous_hash IS 'SHA-256 hash of the previous super admin audit entry (null for first entry)';
 COMMENT ON COLUMN super_admin_audit_logs.hash IS 'SHA-256 hash of this entry''s data + previous_hash, forming an immutable chain';
-
--- DOWN
-ALTER TABLE super_admin_audit_logs DROP COLUMN IF EXISTS hash;
-ALTER TABLE super_admin_audit_logs DROP COLUMN IF EXISTS previous_hash;
-DROP INDEX IF EXISTS idx_audit_logs_tenant_created;
-ALTER TABLE audit_logs DROP COLUMN IF EXISTS hash;
-ALTER TABLE audit_logs DROP COLUMN IF EXISTS previous_hash;

@@ -26,8 +26,3 @@ CREATE INDEX IF NOT EXISTS idx_plans_rate_limit ON "plans" USING btree ("is_acti
 -- Comment on columns
 COMMENT ON COLUMN "plans"."rate_limit_config" IS 'Per-plan rate limits in requests per minute/hour. Keys: api, auth, contacts, deals, export, import, ai, webhook, passwordReset, emailVerification, bulk';
 COMMENT ON COLUMN "users"."unlimited_rate_limit" IS 'When true, user bypasses all rate limits (for super admin)';
-
--- DOWN
-DROP INDEX IF EXISTS idx_plans_rate_limit;
-ALTER TABLE users DROP COLUMN IF EXISTS unlimited_rate_limit;
-ALTER TABLE plans DROP COLUMN IF EXISTS rate_limit_config;

@@ -103,22 +103,3 @@ CREATE TABLE IF NOT EXISTS "canned_responses" (
 CREATE INDEX IF NOT EXISTS "idx_canned_responses_tenant" ON "canned_responses" ("tenant_id");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_canned_shortcut" ON "canned_responses" ("tenant_id", "shortcut");
-
--- DOWN
-DROP INDEX IF EXISTS idx_canned_shortcut;
-DROP INDEX IF EXISTS idx_canned_responses_tenant;
-DROP TABLE IF EXISTS canned_responses CASCADE;
-DROP INDEX IF EXISTS idx_csat_responded;
-DROP INDEX IF EXISTS idx_csat_token;
-DROP INDEX IF EXISTS idx_csat_contact;
-DROP INDEX IF EXISTS idx_csat_ticket;
-DROP INDEX IF EXISTS idx_csat_surveys_tenant;
-DROP TABLE IF EXISTS csat_surveys CASCADE;
-DROP INDEX IF EXISTS idx_dunning_attempts_scheduled;
-DROP INDEX IF EXISTS idx_dunning_attempts_status;
-DROP INDEX IF EXISTS idx_dunning_attempts_subscription;
-DROP INDEX IF EXISTS idx_dunning_attempts_tenant;
-DROP TABLE IF EXISTS dunning_attempts CASCADE;
-DROP INDEX IF EXISTS idx_dunning_settings_active;
-DROP INDEX IF EXISTS idx_dunning_settings_tenant;
-DROP TABLE IF EXISTS dunning_settings CASCADE;
