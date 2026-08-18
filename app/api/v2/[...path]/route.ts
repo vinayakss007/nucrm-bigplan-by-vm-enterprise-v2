@@ -3,7 +3,7 @@ import { resolveGatewayTenant, validateCORS } from '@/lib/api/gateway';
 
 /**
  * Catch-all handler for /api/v2/*
- * Resolves tenant via gateway and proxies to /api/tenant/* routes.
+ * Resolves tenant via gateway and rewrites to /api/tenant/* routes.
  */
 
 function setCORSHeaders(response: NextResponse, origin: string | null): NextResponse {
@@ -45,49 +45,20 @@ async function handleRequest(request: NextRequest, params: { path: string[] }): 
   const internalPath = `/api/tenant/${pathSegments.join('/')}`;
   const targetUrl = new URL(internalPath, request.url);
 
-  // Preserve query string natively using URLSearchParams constructor
-  targetUrl.search = request.nextUrl.search;
+  // Preserve query string
+  const searchParams = request.nextUrl.searchParams;
+  searchParams.forEach((value, key) => {
+    targetUrl.searchParams.set(key, value);
+  });
 
-  // Proxy the request to the internal path
+  // Rewrite to internal path, injecting the resolved tenant ID as a header
+  // so downstream routes can validate it against the user's session tenant.
   const headers = new Headers(request.headers);
   headers.set('X-NuCRM-Gateway-Tenant', resolution.tenantId);
-  // Remove host header to avoid conflicts when making loopback fetch
-  headers.delete('host');
-
-  try {
-    let body = undefined;
-    if (request.method !== 'GET' && request.method !== 'HEAD') {
-      body = request.body; // Stream the body directly instead of fully buffering into a blob
-    }
-
-    // Explicitly casting the fetch options to bypass the duplex typing limitation in standard node fetch definitions,
-    // which is safely supported in Next.js's patched fetch for streaming.
-    const fetchOptions = {
-      method: request.method,
-      headers,
-      body,
-      redirect: 'manual',
-      duplex: 'half'
-    } as RequestInit;
-
-    const proxyRes = await fetch(targetUrl.toString(), fetchOptions);
-
-    const responseHeaders = new Headers(proxyRes.headers);
-
-    const response = new NextResponse(proxyRes.body, {
-      status: proxyRes.status,
-      statusText: proxyRes.statusText,
-      headers: responseHeaders,
-    });
-
-    return setCORSHeaders(response, origin);
-  } catch (error) {
-    const errorResponse = NextResponse.json(
-      { error: 'Internal gateway error during proxy' },
-      { status: 502 }
-    );
-    return setCORSHeaders(errorResponse, origin);
-  }
+  const response = NextResponse.rewrite(targetUrl, {
+    request: { headers },
+  });
+  return setCORSHeaders(response, origin);
 }
 
 export async function GET(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {

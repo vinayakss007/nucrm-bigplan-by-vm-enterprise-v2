@@ -105,7 +105,8 @@ export async function getSignedUrl(key: string, expiresIn: number = 3600): Promi
   const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
  
  
-  return getSignedUrl(s3Client, command, { expiresIn });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return getSignedUrl(s3Client as any, command, { expiresIn });
 }
 
 /**
@@ -129,7 +130,8 @@ export async function getSignedPutUrl(args: {
   });
  
  
-  return getSignedUrl(s3Client, command, {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return getSignedUrl(s3Client as any, command, {
     expiresIn: args.expiresInSeconds ?? 600, // 10 minutes
   });
 }

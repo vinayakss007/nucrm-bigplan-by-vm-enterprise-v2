@@ -399,3 +399,6 @@ npx npm-check-updates          # Check for updates
 npm audit                      # Security audit
 npm audit fix                  # Auto-fix vulnerabilities
 ```
+
+### Important Build Requirements
+**JWT_SECRET** is strictly required not only at runtime but also during the Next.js **build phase** (`npm run build`). This is due to statically pre-rendered components evaluating authentication scopes and tokens during generation. If `JWT_SECRET` is missing during the build step, the build will fail. Ensure this environment variable is injected into your CI/CD pipelines and Docker build contexts.
