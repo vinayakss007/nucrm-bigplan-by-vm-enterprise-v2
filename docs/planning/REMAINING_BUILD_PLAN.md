@@ -147,7 +147,7 @@
 - [ ] **10.1** Knock out the 63 lingering TS errors (every PR notes "unchanged from main")
 - [ ] **10.2** Stabilise the 2 always-failing integration tests — `tests/integration/backup-integrity.test.ts` + `tests/integration/tenant-isolation.test.ts` need real Postgres + `tmp/backup-test-corrupt.sql`
 - [ ] **10.3** AWS SDK version mismatch fix — `@aws-sdk/client-s3` vs `@aws-sdk/s3-request-presigner` (currently an `as any` cast)
-- [x] **10.4** Document `JWT_SECRET` requirement at build-time (not just at runtime) in `MAINTENANCE_UPDATE_GUIDE.md`
+- [ ] **10.4** Document `JWT_SECRET` requirement at build-time (not just at runtime) in `MAINTENANCE_UPDATE_GUIDE.md`
 - [ ] **10.5** Remove the still-unused `STRIPE_PRICE_ID_MONTHLY/_YEARLY` placeholders if any references remain
 - [ ] **10.6** Pre-existing eslint warnings on touched files (every PR notes them) — sweep
 - [ ] **10.7** `tmp/` test fixtures folder — generate at test-runtime so backup tests pass in sandboxes without manual setup
