@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 'use client';
 import { X } from 'lucide-react';
 import type { EmailBlock, HeadingContent, TextContent, ImageContent, ButtonContent, DividerContent, SpacerContent, HtmlContent } from './blocks';

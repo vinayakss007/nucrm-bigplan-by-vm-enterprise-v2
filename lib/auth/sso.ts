@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 import { db } from '@/drizzle/db';
 import { ssoProviders, ssoSessions } from '@/drizzle/schema/infra';
 import { users, sessions } from '@/drizzle/schema/core';

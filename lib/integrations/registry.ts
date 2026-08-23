@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 import type { ProviderDefinition, ActionResult, IntegrationInstance } from './types';
 import { sendgridProvider } from './providers/sendgrid';
 import { slackProvider } from './providers/slack';

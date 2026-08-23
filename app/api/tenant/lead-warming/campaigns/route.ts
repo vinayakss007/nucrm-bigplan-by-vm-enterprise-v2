@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 /**
  * GET  /api/tenant/lead-warming/campaigns — List campaigns
  * POST /api/tenant/lead-warming/campaigns — Create campaign

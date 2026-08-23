@@ -44,9 +44,10 @@ describe('Form Embed Widget (/api/embed/form.js)', () => {
   it('GET JS includes view and submit tracking', async () => {
     const res = await embedRoute.GET();
     const js = await res.text();
-    expect(js).toContain('trackView');
-    expect(js).toContain('trackSubmit');
+    // Minified build: assert on stable endpoint/contract strings, not identifiers
     expect(js).toContain('/analytics');
+    expect(js).toContain('"view"');
+    expect(js).toContain('"submit"');
   });
 
   it('GET JS includes success state rendering', async () => {
@@ -79,8 +80,9 @@ describe('Form Embed Widget (/api/embed/form.js)', () => {
   it('GET JS includes submit button disable/enable during submission', async () => {
     const res = await embedRoute.GET();
     const js = await res.text();
-    expect(js).toContain('submitBtn.disabled = true');
-    expect(js).toContain('submitBtn.disabled = false');
+    // Minified build: property names survive mangling
+    expect(js).toContain('disabled=!0');
+    expect(js).toContain('disabled=!1');
   });
 });
 

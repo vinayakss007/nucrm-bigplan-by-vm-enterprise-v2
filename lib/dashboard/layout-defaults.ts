@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 import { getWidgetsForPlan } from '@/components/tenant/dashboard/widget-registry';
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 import type { DashboardLayout } from '@/types/dashboard';

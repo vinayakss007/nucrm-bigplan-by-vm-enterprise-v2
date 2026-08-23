@@ -1,5 +1,9 @@
 # NuCRM Enterprise
 
+> **⚠️ PROPRIETARY SOFTWARE — All code is the property of [abetworks.in](https://abetworks.in).**
+> Copyright (c) 2026 abetworks.in. All Rights Reserved.
+> Unauthorized copying, modification, distribution, or use is strictly prohibited. See [`LICENSE`](./LICENSE).
+
 **Multi-tenant Enterprise SaaS CRM** — Next.js 16, PostgreSQL, Drizzle ORM, TypeScript.  
 Self-hosted with full plugin engine, workflow automation, AI-powered insights, and 215 database tables.
 
@@ -722,7 +726,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [REPO_POLICY.md](REPO_POLICY.md).
 
 ## License
 
-MIT
+**Proprietary — All code is the property of [abetworks.in](https://abetworks.in).**
+
+Copyright (c) 2026 abetworks.in. All Rights Reserved.
+
+- This software and its source code are the exclusive property of abetworks.in
+- Use is permitted only under written authorization from abetworks.in
+- Copying, modification, redistribution, or derivative works are strictly prohibited
+- See [`LICENSE`](./LICENSE) for full terms · Contact: legal@abetworks.in
 
 ---
 

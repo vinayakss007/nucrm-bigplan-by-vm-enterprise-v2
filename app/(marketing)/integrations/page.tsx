@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 import type { Metadata } from 'next';
 import { API_POINTS, CONNECTORS, CONNECTOR_CATEGORIES, ENGINE_POINTS } from '@/lib/marketing/integrations';
 import { Icon } from '@/components/marketing/icon';

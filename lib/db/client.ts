@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 import { PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { devLogger } from '@/lib/dev-logger';
 import { AsyncLocalStorage } from 'async_hooks';

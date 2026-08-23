@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 import { existsSync, unlinkSync } from 'fs';
 
 const MAX_RESTORE_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB safety limit

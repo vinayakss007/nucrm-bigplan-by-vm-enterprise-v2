@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 // Re-export all domain schemas from a single entry point.
 // This preserves backward compatibility with `import { ... } from '@/lib/api/schemas'`.
 
