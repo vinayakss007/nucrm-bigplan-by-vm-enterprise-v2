@@ -70,8 +70,10 @@ let nextConfig = {
         ...(process.env.NODE_ENV === 'production' ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }] : []),
         // NOTE: 'unsafe-inline' in script-src is required by Next.js for hydration scripts.
         // Style-src unsafe-inline is required for styled-jsx/CSS-in-JS.
-        // To fully remove unsafe-inline, switch to nonce-based CSP via middleware (not trivial in Next.js).
-        { key: 'Content-Security-Policy', value: process.env.NODE_ENV === 'production' ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; form-action 'self'" : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; form-action 'self'" },
+        // To fully remove unsafe-inline, switch to nonce-based CSP via proxy middleware
+        // (requires per-request headers + verifying every inline script/style; see Issue #657).
+        // object-src/base-uri/frame-src/worker-src are safe tightenings that need no nonce.
+        { key: 'Content-Security-Policy', value: process.env.NODE_ENV === 'production' ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; frame-src 'self'; form-action 'self'; object-src 'none'; base-uri 'self'; worker-src 'self' blob:" : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; frame-src 'self'; form-action 'self'; object-src 'none'; base-uri 'self'; worker-src 'self' blob:" },
       ],
     }, {
       source: '/api/:path*',
