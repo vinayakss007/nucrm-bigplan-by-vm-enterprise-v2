@@ -9,8 +9,22 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { sql } from 'drizzle-orm';
+import { sql, getTableColumns } from 'drizzle-orm';
+import { contacts, leads, deals, companies, tasks } from '@/drizzle/schema';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+
+const EDITABLE_TABLES = { contacts, leads, deals, companies, tasks };
+
+// System columns that must never be editable via data-explorer (Issue #1236)
+const PROTECTED_COLUMNS = new Set(['id', 'tenant_id', 'created_at', 'updated_at', 'deleted_at']);
+
+function getAllowedColumns(tableName: string): string[] {
+  const table = EDITABLE_TABLES[tableName as keyof typeof EDITABLE_TABLES];
+  if (!table) return [];
+  return Object.values(getTableColumns(table))
+    .map((col) => col.name)
+    .filter((name) => !PROTECTED_COLUMNS.has(name));
+}
 
 const ENTITY_CONFIG: Record<string, { label: string; searchFields: string[]; sortFields: string[]; defaultSort: string }> = {
   contacts: {
@@ -189,15 +203,24 @@ export async function PUT(req: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const { table, id, field, value } = validated.data;
 
-    const safeField = field.replace(/[^a-zA-Z0-9_]/g, '');
-    if (!safeField) {
+    // Strict identifier format, then allowlist derived from the real Drizzle
+    // table columns (Issue #1236) — rejects any column that does not exist on
+    // the table and blocks protected/system columns entirely.
+    if (!/^[a-zA-Z0-9_]+$/.test(field)) {
       return NextResponse.json({ error: 'Invalid field name' }, { status: 400 });
+    }
+    const allowedColumns = getAllowedColumns(table);
+    if (!allowedColumns.includes(field)) {
+      return NextResponse.json(
+        { error: `Column '${field}' is not allowed for editing on table '${table}'` },
+        { status: 400 }
+      );
     }
 
     const result = await db.execute(sql`
-      UPDATE ${sql.identifier(table)} SET ${sql.identifier(safeField)} = ${value}, updated_at = now()
+      UPDATE ${sql.identifier(table)} SET ${sql.identifier(field)} = ${value}, updated_at = now()
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-      RETURNING id, ${sql.identifier(safeField)}
+      RETURNING id, ${sql.identifier(field)}
     `);
 
     if (result.rows.length === 0) {
