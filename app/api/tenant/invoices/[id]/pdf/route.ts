@@ -14,6 +14,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { invoices, invoiceLineItems, contacts } from '@/drizzle/schema';
 import { eq, and, sql, asc } from 'drizzle-orm';
+import { escapeHtml } from '@/lib/email/escape-html';
 
 function formatCurrency(amount: number | string | null): string {
   const num = typeof amount === 'string' ? parseFloat(amount) : (amount ?? 0);
@@ -31,7 +32,7 @@ function renderHTML(invoice: Record<string, unknown>, lineItems: Record<string, 
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Invoice ${invoice.invoiceNumber || ''}</title>
+  <title>Invoice ${escapeHtml(String(invoice.invoiceNumber || ''))}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a1a1a; padding: 40px; max-width: 800px; margin: 0 auto; }
@@ -68,11 +69,11 @@ function renderHTML(invoice: Record<string, unknown>, lineItems: Record<string, 
   <div class="header">
     <div>
       <h1>Invoice</h1>
-      <span class="status status-${invoice.status}">${invoice.status}</span>
+      <span class="status status-${escapeHtml(String(invoice.status))}">${escapeHtml(String(invoice.status))}</span>
     </div>
     <div class="meta">
-      <div class="invoice-number">${invoice.invoiceNumber || ''}</div>
-      <div>${invoice.title}</div>
+      <div class="invoice-number">${escapeHtml(String(invoice.invoiceNumber || ''))}</div>
+      <div>${escapeHtml(String(invoice.title))}</div>
       <div>Issued: ${new Date(invoice.issueDate as string).toLocaleDateString()}</div>
       ${invoice.dueDate ? `<div>Due: ${new Date(invoice.dueDate as string).toLocaleDateString()}</div>` : ''}
     </div>
@@ -81,11 +82,11 @@ function renderHTML(invoice: Record<string, unknown>, lineItems: Record<string, 
   <div class="details">
     <div class="detail-group">
       <h3>Bill To</h3>
-      <p>${contactName || 'N/A'}</p>
+      <p>${escapeHtml(contactName || 'N/A')}</p>
     </div>
     <div class="detail-group">
       <h3>Invoice Details</h3>
-      <p>${invoice.title}</p>
+      <p>${escapeHtml(String(invoice.title))}</p>
     </div>
   </div>
 
@@ -101,7 +102,7 @@ function renderHTML(invoice: Record<string, unknown>, lineItems: Record<string, 
     <tbody>
       ${lineItems.map(item => `
       <tr>
-        <td>${item.description}</td>
+        <td>${escapeHtml(String(item.description))}</td>
         <td>${item.quantity}</td>
         <td>${formatCurrency(item.unitPrice as string | number | null)}</td>
         <td>${formatCurrency(item.total as string | number | null)}</td>
@@ -120,9 +121,9 @@ function renderHTML(invoice: Record<string, unknown>, lineItems: Record<string, 
     </div>
   </div>
 
-  ${invoice.notes ? `<div class="notes"><h3>Notes</h3><p>${invoice.notes}</p></div>` : ''}
-  ${invoice.terms ? `<div class="notes"><h3>Terms & Conditions</h3><p>${invoice.terms}</p></div>` : ''}
-  ${invoice.footer ? `<div class="notes"><h3>Footer</h3><p>${invoice.footer}</p></div>` : ''}
+  ${invoice.notes ? `<div class="notes"><h3>Notes</h3><p>${escapeHtml(String(invoice.notes))}</p></div>` : ''}
+  ${invoice.terms ? `<div class="notes"><h3>Terms & Conditions</h3><p>${escapeHtml(String(invoice.terms))}</p></div>` : ''}
+  ${invoice.footer ? `<div class="notes"><h3>Footer</h3><p>${escapeHtml(String(invoice.footer))}</p></div>` : ''}
 
   <div class="footer">Generated on ${new Date().toLocaleDateString()}</div>
 </body>
@@ -177,7 +178,7 @@ export async function GET(
     return new NextResponse(html, {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'Content-Disposition': `inline; filename="${invoice.invoiceNumber || 'invoice'}.html"`,
+        'Content-Disposition': `inline; filename="${String(invoice.invoiceNumber || 'invoice').replace(/[^a-zA-Z0-9_\-]/g, '_')}.html"`,
       },
     });
   } catch (err) {

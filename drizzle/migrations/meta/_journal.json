@@ -449,6 +449,20 @@
       "when": 1786364400000,
       "tag": "0064_add_audit_fk_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1786450800000,
+      "tag": "0065_assignment_logs_uuid_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1786537200000,
+      "tag": "0066_sla_breach_policy_uuid",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// Bypass the SSRF guard so stubbed global fetch is reached (guard has its own suite).
+vi.mock('@/lib/security/ssrf', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/security/ssrf')>();
+  return {
+    ...actual,
+    safeFetch: ((input: RequestInfo | URL, init?: RequestInit) =>
+      globalThis.fetch(input as string, init)) as typeof actual.safeFetch,
+    assertSafeUrl: () => undefined,
+    resolveAndValidateIp: async () => undefined,
+  };
+});
+
 describe('integrations/ai-connector', () => {
   beforeEach(() => {
     vi.resetModules();

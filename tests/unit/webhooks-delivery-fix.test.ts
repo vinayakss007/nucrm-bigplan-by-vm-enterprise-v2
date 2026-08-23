@@ -10,6 +10,19 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// Unit tests exercise business logic, not network egress policy — bypass the
+// SSRF guard (it has its own dedicated test suite) so stubbed fetch is reached.
+vi.mock('@/lib/security/ssrf', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/security/ssrf')>();
+  return {
+    ...actual,
+    safeFetch: ((input: RequestInfo | URL, init?: RequestInit) =>
+      globalThis.fetch(input as string, init)) as typeof actual.safeFetch,
+    assertSafeUrl: () => undefined,
+    resolveAndValidateIp: async () => undefined,
+  };
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test doubles stand in for Drizzle's builder chain types
 type Any = any;
 

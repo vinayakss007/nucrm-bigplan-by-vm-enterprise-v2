@@ -10,6 +10,9 @@ import { Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { db } from '@/drizzle/db';
 import { notifications } from '@/drizzle/schema';
+import { registerProcessErrorHandlers } from '@/lib/process-errors';
+
+registerProcessErrorHandlers('worker');
 
 const REDIS_URL = process.env['REDIS_URL'] || 'redis://localhost:6379';
 

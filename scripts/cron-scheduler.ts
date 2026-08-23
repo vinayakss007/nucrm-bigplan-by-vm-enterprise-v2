@@ -14,6 +14,10 @@
  *   pm2 start ecosystem.config.js --only cron
  */
 
+import { registerProcessErrorHandlers } from '@/lib/process-errors';
+
+registerProcessErrorHandlers('cron-scheduler');
+
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env['APP_URL'] || 'http://localhost:3000';
 const CRON_SECRET = process.env['CRON_SECRET'] || '';
 

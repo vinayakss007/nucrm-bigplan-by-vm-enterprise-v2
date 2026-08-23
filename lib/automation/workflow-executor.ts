@@ -27,6 +27,7 @@ import { eq, and } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { createNotification } from '@/lib/notifications';
 import { captureError } from '@/lib/capture-error';
+import { safeFetch } from '@/lib/security/ssrf';
 
 interface WorkflowNode {
   id: string;
@@ -334,7 +335,7 @@ async function executeActionNode(
       case 'fire_webhook': {
         const url = data.url as string;
         if (!url) break;
-        await fetch(url, {
+        await safeFetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

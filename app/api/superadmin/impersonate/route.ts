@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     let targetUserId = userId;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let targetUser: any;
 
     if (targetUserId) {
@@ -52,15 +52,34 @@ export async function POST(request: NextRequest) {
       targetUser = adminMember;
     }
 
+    // Save original membership state so we can restore it when impersonation ends.
+    // CRITICAL: We must NOT leave permanent admin memberships behind.
+    let originalMembershipState: {
+      existed: boolean;
+      status: string;
+      roleSlug: string;
+    } = { existed: false, status: 'active', roleSlug: 'member' };
+
     await db.transaction(async (tx) => {
-      // Ensure super admin is a member of the target tenant (add them if not)
       const [existingMember] = await tx
-        .select({ id: tenantMembers.id })
+        .select({ id: tenantMembers.id, status: tenantMembers.status, roleSlug: tenantMembers.roleSlug })
         .from(tenantMembers)
         .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, ctx.userId)))
         .limit(1);
 
-      if (!existingMember) {
+      if (existingMember) {
+        originalMembershipState = {
+          existed: true,
+          status: existingMember.status,
+          roleSlug: existingMember.roleSlug,
+        };
+        // Only upgrade to admin if not already admin; restore original on stop
+        await tx
+          .update(tenantMembers)
+          .set({ status: 'active', roleSlug: 'admin' })
+          .where(eq(tenantMembers.id, existingMember.id));
+      } else {
+        originalMembershipState = { existed: false, status: 'active', roleSlug: 'member' };
         const [adminRole] = await tx
           .select({ id: roles.id })
           .from(roles)
@@ -77,11 +96,6 @@ export async function POST(request: NextRequest) {
             status: 'active',
             joinedAt: new Date(),
           });
-      } else {
-        await tx
-          .update(tenantMembers)
-          .set({ status: 'active', roleSlug: 'admin' })
-          .where(eq(tenantMembers.id, existingMember.id));
       }
 
       // Update last tenant
@@ -108,6 +122,15 @@ export async function POST(request: NextRequest) {
 
     const sessionId = (res.rows[0] as Record<string, unknown>)?.session_id as string | undefined;
 
+    // Persist original membership state in the impersonation session so stop can restore it
+    if (sessionId) {
+      await db.execute(sql`
+        UPDATE impersonation_sessions
+        SET notes = ${JSON.stringify({ originalMembershipState })}
+        WHERE id = ${sessionId}::uuid
+      `);
+    }
+
     // Create session token for impersonated user (1-day expiry to limit blast radius)
     const token = await createToken(targetUserId, 1);
     const response = NextResponse.json({
@@ -129,13 +152,13 @@ export async function POST(request: NextRequest) {
       tenantId,
       ipAddress: clientIp ?? undefined,
       userAgent,
-      metadata: { reason, sessionId },
+      metadata: { reason, sessionId, originalMembershipState },
     });
 
     return response;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
     console.error('[Impersonation] Error:', err);
     return apiError(err); 
