@@ -416,10 +416,17 @@
       "breakpoints": true
     },
     {
-      "idx": 59,
+      "idx": 60,
       "version": "7",
-      "when": 1785932400000,
-      "tag": "0059_custom_entities",
+      "when": 1786018800000,
+      "tag": "0060_add_tenantid_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1786105200000,
+      "tag": "0061_fix_super_admin_audit_types",
       "breakpoints": true
     },
     {
