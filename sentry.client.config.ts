@@ -39,7 +39,7 @@ export const sentryConfig = {
   ],
   
   // GDPR: scrub PII from every event
-  beforeSend(event) {
+  beforeSend(event: Parameters<typeof scrubPii>[0]) {
     return scrubPii(event);
   },
 
