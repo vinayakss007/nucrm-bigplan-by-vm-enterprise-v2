@@ -79,6 +79,19 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid redirect target' }, { status: 400 });
       }
 
+      // Block private IP ranges (SSRF prevention)
+      const ipRegex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+      const ipMatch = hostname.match(ipRegex);
+      if (ipMatch) {
+        const octets = ipMatch.slice(1).map(Number);
+        const a = octets[0] ?? 0;
+        const b = octets[1] ?? 0;
+        // 10.x.x.x, 172.16-31.x.x, 192.168.x.x
+        if (a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) {
+          return NextResponse.json({ error: 'Invalid redirect target' }, { status: 400 });
+        }
+      }
+
       // Log click
       await db.insert(emailClicks).values({
         tenantId,
