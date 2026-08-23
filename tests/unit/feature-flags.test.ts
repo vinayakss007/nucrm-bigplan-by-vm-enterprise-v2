@@ -5,6 +5,8 @@ vi.mock('ioredis', () => {
   const store = new Map<string, string>();
   const MockRedis = vi.fn().mockImplementation(() => ({
     connect: vi.fn().mockResolvedValue(undefined),
+    on: vi.fn(),
+    disconnect: vi.fn(),
     get: vi.fn((key: string) => Promise.resolve(store.get(key) || null)),
     set: vi.fn((key: string, value: string) => { store.set(key, value); return Promise.resolve('OK'); }),
     keys: vi.fn((pattern: string) => {
@@ -14,12 +16,19 @@ vi.mock('ioredis', () => {
     mget: vi.fn((...keys: string[]) => Promise.resolve(keys.map(k => store.get(k) || null))),
     quit: vi.fn().mockResolvedValue(undefined),
   }));
-  return { default: MockRedis, __store: store };
+  return { default: MockRedis, Redis: MockRedis, __store: store };
 });
 
 describe('Feature Flags', () => {
   beforeEach(() => {
     vi.resetModules();
+    // The shared client is only created when REDIS_URL is configured
+    // (matches production behavior); point it at the ioredis mock.
+    vi.stubEnv('REDIS_URL', 'redis://localhost:6379');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('isFeatureEnabled returns false for unknown flags', async () => {

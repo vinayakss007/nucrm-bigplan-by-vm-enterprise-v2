@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import crypto from 'crypto';
+import { escapeHtml } from '@/lib/email/escape-html';
 
 export interface EmailPayload {
   to: string | string[];
@@ -190,6 +191,11 @@ export async function sendEmail(payload: EmailPayload): Promise<SendResult> {
 /** Render a simple template string with {{variable}} placeholders */
 export function renderTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '');
+}
+
+/** Render a template with {{variable}} placeholders, HTML-escaping each value (for HTML bodies) */
+export function renderTemplateHtml(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => escapeHtml(vars[key] ?? ''));
 }
 
 /** Send super admin alert for cron job failures */

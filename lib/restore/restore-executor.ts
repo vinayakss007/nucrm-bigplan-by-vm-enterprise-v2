@@ -210,8 +210,10 @@ export async function rollbackToSnapshot(snapshotId: string, tenantId: string): 
   
   await db.transaction(async (tx) => {
     for (const [table, rows] of Object.entries(snapshotData)) {
+      // Reject any table name not on the allowlist before it reaches SQL
+      const safeTable = validateTableName(table);
       // Delete current data
-      await tx.execute(sql`DELETE FROM ${sql.identifier(table)} WHERE tenant_id = ${tenantId}`);
+      await tx.execute(sql`DELETE FROM ${sql.identifier(safeTable)} WHERE tenant_id = ${tenantId}`);
       
       // Restore from snapshot
       if (Array.isArray(rows) && rows.length > 0) {
@@ -220,7 +222,7 @@ export async function rollbackToSnapshot(snapshotId: string, tenantId: string): 
           const colIdents = columns.map(c => sql.identifier(c));
           const valParams = columns.map(c => sql`${row[c]}`);
           await tx.execute(sql`
-            INSERT INTO ${sql.identifier(table)} (${sql.join(colIdents, sql`, `)})
+            INSERT INTO ${sql.identifier(safeTable)} (${sql.join(colIdents, sql`, `)})
             VALUES (${sql.join(valParams, sql`, `)})
           `);
         }
@@ -424,8 +426,9 @@ export async function countExistingRecords(
   
   for (const table of tables) {
     try {
+      const safeTable = validateTableName(table);
       const result = await db.execute(sql`
-        SELECT count(*)::int as cnt FROM ${sql.identifier(table)} WHERE tenant_id = ${tenantId}
+        SELECT count(*)::int as cnt FROM ${sql.identifier(safeTable)} WHERE tenant_id = ${tenantId}
       `);
       const row = result.rows[0] as { cnt?: number } | undefined;
       counts[table] = row?.cnt ?? 0;
@@ -481,6 +484,7 @@ function buildSafeInsertQuery(statement: string): SQL | null {
   // sql.identifier() quotes the name, so a mixed-case table survives the
   // round-trip; the schema prefix is dropped and the search_path applies.
   const tableName = unquoteIdentifier(rawTableName);
+  validateTableName(tableName);
   const columns = columnsStr.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
   const values = parseInsertValues(valuesStr);
   

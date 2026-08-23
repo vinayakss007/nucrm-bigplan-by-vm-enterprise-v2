@@ -32,6 +32,7 @@ import {
 } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
+import { escapeHtml } from '@/lib/email/escape-html';
 import { createNotification } from '@/lib/notifications';
 import { captureError } from '@/lib/capture-error';
 
@@ -166,7 +167,7 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: any, pa
       await sendEmail({
         to,
         subject: config.subject || 'Automated message from NuCRM',
-        html: interpolate(config.body || '', enrichedData),
+        html: interpolateHtml(config.body || '', enrichedData),
       });
       break;
     }
@@ -429,7 +430,20 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: any, pa
 
  
  
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- template data comes from arbitrary tenant record payloads
+function interpolate(template: string, data: Record<string, any>, opts?: { escapeValues?: boolean }): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    const value = String(data[key] ?? '');
+    return opts?.escapeValues ? escapeHtml(value) : value;
+  });
+}
+
+/**
+ * Like interpolate(), but HTML-escapes each substituted value.
+ * MUST be used whenever the result is rendered as HTML (e.g. email bodies)
+ * to prevent XSS via user-controlled template variables.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function interpolate(template: string, data: Record<string, any>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(data[key] ?? ''));
+function interpolateHtml(template: string, data: Record<string, any>): string {
+  return interpolate(template, data, { escapeValues: true });
 }

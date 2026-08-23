@@ -7,12 +7,16 @@
 // This file configures Sentry for both client and server-side error tracking
 
 import * as Sentry from '@sentry/nextjs';
+import { scrubPii } from './sentry-pii-scrub';
 
 const SENTRY_DSN = process.env['SENTRY_DSN'];
 
 export const sentryConfig = {
   dsn: SENTRY_DSN || '',
-  
+
+  // GDPR: never send PII by default
+  sendDefaultPii: false,
+
   // Enable in production and development to catch issues early
   enabled: process.env['SENTRY_ENABLE'] !== 'false',
   
@@ -39,6 +43,11 @@ export const sentryConfig = {
     'ResizeObserver loop completed with undelivered notifications',
   ],
   
+  // GDPR: scrub PII from every event
+  beforeSend(event: Parameters<typeof scrubPii>[0]) {
+    return scrubPii(event);
+  },
+
   // Only track meaningful requests
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   beforeSendTransaction(event: any) {
