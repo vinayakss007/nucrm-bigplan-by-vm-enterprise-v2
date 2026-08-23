@@ -116,25 +116,34 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // 3. Disk space (backup directory)
   try {
-    const { execSync } = await import('child_process');
+    const { execFileSync } = await import('child_process');
     const backupDir = process.env['BACKUP_DIR'] || '/tmp/backups';
-    const dfOutput = execSync(`df -B1 "${backupDir}" 2>/dev/null || df -B1 / 2>/dev/null`, {
-      encoding: 'utf-8',
-    });
-    const lines = dfOutput.trim().split('\n');
-    const parts = lines[1]?.split(/\s+/);
-    if (parts && parts.length >= 4) {
-      const total = parseInt(parts[1] || '0', 10);
-      const available = parseInt(parts[3] || '0', 10);
-      const usagePercent = total > 0 ? Math.round(((total - available) / total) * 100) : 0;
-      health.disk = {
-        status: usagePercent > 90 ? 'unhealthy' : usagePercent > 75 ? 'degraded' : 'healthy',
-        freeBytes: available,
-        totalBytes: total,
-        usagePercent,
-      };
+    // Validate directory path to prevent command injection
+    if (!/^[a-zA-Z0-9_\-/.~]+$/.test(backupDir)) {
+      health.disk = { status: 'degraded', error: 'Invalid BACKUP_DIR path' };
     } else {
-      health.disk = { status: 'healthy' };
+      let dfOutput: string;
+      try {
+        dfOutput = execFileSync('df', ['-B1', backupDir], { encoding: 'utf-8' });
+      } catch {
+        // Fallback to root filesystem
+        dfOutput = execFileSync('df', ['-B1', '/'], { encoding: 'utf-8' });
+      }
+      const lines = dfOutput.trim().split('\n');
+      const parts = lines[1]?.split(/\s+/);
+      if (parts && parts.length >= 4) {
+        const total = parseInt(parts[1] || '0', 10);
+        const available = parseInt(parts[3] || '0', 10);
+        const usagePercent = total > 0 ? Math.round(((total - available) / total) * 100) : 0;
+        health.disk = {
+          status: usagePercent > 90 ? 'unhealthy' : usagePercent > 75 ? 'degraded' : 'healthy',
+          freeBytes: available,
+          totalBytes: total,
+          usagePercent,
+        };
+      } else {
+        health.disk = { status: 'healthy' };
+      }
     }
   } catch {
     health.disk = { status: 'degraded', error: 'Unable to check disk space' };

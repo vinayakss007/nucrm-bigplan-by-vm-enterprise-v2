@@ -92,15 +92,20 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
 
   it('should create a backup file', async () => {
     // Create backup using pg_dump
-    const { execSync } = await import('child_process');
+    const { execFileSync } = await import('child_process');
     const databaseUrl = process.env.DATABASE_URL;
     if (!databaseUrl) throw new Error('DATABASE_URL not set');
 
     try {
-      execSync(
-        `pg_dump "${databaseUrl}" --format=plain --no-owner --no-privileges --schema-only --exclude-table=pg_* > "${backupFile}"`,
-        { stdio: 'pipe' }
-      );
+      execFileSync('pg_dump', [
+        databaseUrl,
+        '--format=plain',
+        '--no-owner',
+        '--no-privileges',
+        '--schema-only',
+        '--exclude-table=pg_*',
+        '-f', backupFile,
+      ], { stdio: 'pipe' });
 
       expect(fs.existsSync(backupFile)).toBe(true);
       const stats = fs.statSync(backupFile);

@@ -19,7 +19,7 @@
  *   S3_SECRET_ACCESS_KEY – S3 secret key
  */
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import {
   existsSync,
   mkdirSync,
@@ -53,7 +53,7 @@ async function createBackup(): Promise<void> {
 
   // Run pg_dump
   console.log('[Backup] Creating PostgreSQL dump...');
-  execSync(`pg_dump "${databaseUrl}" > ${localPath}`, { stdio: 'inherit' });
+  execFileSync('pg_dump', [databaseUrl, '-f', localPath], { stdio: 'inherit' });
 
   if (!existsSync(localPath)) {
     throw new Error('pg_dump did not produce output file');

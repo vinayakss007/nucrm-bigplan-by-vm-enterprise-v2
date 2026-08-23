@@ -13,10 +13,33 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { leads, tenants, plans, companies, leadActivities, forms, formSubmissions, contacts } from '@/drizzle/schema';
 import { eq, and, sql, ilike, isNull } from 'drizzle-orm';
+import { z } from 'zod';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createNotification } from '@/lib/notifications';
 import { fireWebhooks } from '@/lib/webhooks';
-import { readJsonBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
+
+const leadSubmitSchema = z.object({
+  first_name: z.string().max(200).optional().default(''),
+  last_name: z.string().max(200).optional().default(''),
+  email: z.string().email('Invalid email address').max(320),
+  phone: z.string().max(50).optional().default(''),
+  company: z.string().max(200).optional().default(''),
+  message: z.string().max(10000).optional().default(''),
+  source: z.string().max(200).optional().default('Website Form'),
+  tenant_id: z.string().min(1, 'tenant_id is required'),
+  form_id: z.string().optional().default(''),
+  tags: z.array(z.string().max(100)).max(20).optional().default([]),
+});
+
+function escapeHtmlEntities(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,6 +48,8 @@ export async function POST(request: NextRequest) {
     if (limited) return limited;
 
     const body = await readJsonBody(request);
+    const validated = validateBody(leadSubmitSchema, body);
+    if (validated instanceof NextResponse) return validated;
     const {
       first_name,
       last_name,
@@ -32,21 +57,17 @@ export async function POST(request: NextRequest) {
       phone,
       company,
       message,
-      source = 'Website Form',
-      tenant_id,   // required — the org this lead belongs to
-      form_id,     // optional — which form captured this lead
-      tags = [],   // optional — tags to apply
-    } = body;
+      source,
+      tenant_id,
+      form_id,
+      tags,
+    } = validated.data;
 
-    if (!email?.trim()) {
-      return NextResponse.json({ error: 'Email is required' }, { status: 400 });
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
-    }
-    if (!tenant_id) {
-      return NextResponse.json({ error: 'tenant_id is required' }, { status: 400 });
-    }
+    const safeFirst = escapeHtmlEntities(first_name);
+    const safeLast = escapeHtmlEntities(last_name);
+    const safeCompany = escapeHtmlEntities(company);
+    const safeMessage = escapeHtmlEntities(message);
+    const safeSource = escapeHtmlEntities(source);
 
     // Verify tenant exists and is active
     const tenant = await db.query.tenants.findFirst({
@@ -79,11 +100,11 @@ export async function POST(request: NextRequest) {
 
     // Look up or create company
     let company_id: string | null = null;
-    if (company?.trim()) {
+    if (safeCompany.trim()) {
       const existingCo = await db.query.companies.findFirst({
         where: and(
           eq(companies.tenantId, tenant_id),
-          ilike(companies.name, company.trim())
+          ilike(companies.name, safeCompany.trim())
         ),
         columns: { id: true }
       });
@@ -93,7 +114,7 @@ export async function POST(request: NextRequest) {
       } else {
         const [newCo] = await db.insert(companies).values({
           tenantId: tenant_id,
-          name: company.trim(),
+          name: safeCompany.trim(),
         }).returning({ id: companies.id });
         company_id = newCo?.id ?? null;
       }
@@ -119,8 +140,8 @@ export async function POST(request: NextRequest) {
 
       const [updated] = await db.update(leads)
         .set({
-          phone: phone?.trim() || undefined,
-          companyName: company?.trim() || undefined,
+          phone: phone.trim() || undefined,
+          companyName: safeCompany.trim() || undefined,
           companyId: company_id || undefined,
           leadStatus: ['lost', 'unqualified'].includes(existingLead.leadStatus || '') ? 'new' : undefined,
           tags: combinedTags,
@@ -136,15 +157,15 @@ export async function POST(request: NextRequest) {
       await db.transaction(async (tx) => {
         const [newLead] = await tx.insert(leads).values({
           tenantId: tenant_id,
-          firstName: first_name?.trim() || '',
-          lastName: last_name?.trim() || '',
+          firstName: safeFirst,
+          lastName: safeLast,
           email: email.trim().toLowerCase(),
-          phone: phone?.trim() || null,
-          companyName: company?.trim() || null,
+          phone: phone.trim() || null,
+          companyName: safeCompany.trim() || null,
           companyId: company_id,
-          source: source,
+          source: safeSource,
           leadStatus: 'new',
-          notes: message?.trim() || null,
+          notes: safeMessage || null,
           formId: form_id || null,
           tags: Array.isArray(tags) ? tags : [],
           formSubmissionsCount: 1,
@@ -158,7 +179,7 @@ export async function POST(request: NextRequest) {
           tenantId: tenant_id,
           leadId: contactId,
           activityType: 'created',
-          description: `Lead captured via ${source}${form_id ? ` (form: ${form_id})` : ''}`,
+          description: `Lead captured via ${safeSource}${form_id ? ` (form: ${form_id})` : ''}`,
         });
       });
     }
@@ -170,7 +191,7 @@ export async function POST(request: NextRequest) {
           tenantId: tenant_id,
           formId: form_id,
           contactId: contactId,
-          data: { body },
+          data: { first_name: safeFirst, last_name: safeLast, email: email.trim().toLowerCase(), phone: phone.trim(), company: safeCompany, message: safeMessage, source: safeSource },
         });
 
         await tx.update(forms)
@@ -185,8 +206,8 @@ export async function POST(request: NextRequest) {
         userId: tenant.ownerId,
         tenantId: tenant_id,
         type: 'contact_assigned',
-        title: `New lead: ${first_name || ''} ${last_name || email}`.trim(),
-        body: `Via ${source}${message ? ` — "${message.slice(0, 80)}"` : ''}`,
+        title: `New lead: ${safeFirst || ''} ${safeLast || email}`.trim(),
+        body: `Via ${safeSource}${safeMessage ? ` — "${safeMessage.slice(0, 80)}"` : ''}`,
         link: `/tenant/leads/${contactId}`,
       }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     }
@@ -195,8 +216,8 @@ export async function POST(request: NextRequest) {
     await fireWebhooks(tenant_id, 'contact.created', { // lead captured
       id: contactId, 
       email: email.trim(),
-      name: `${first_name || ''} ${last_name || ''}`.trim(),
-      source,
+      name: `${safeFirst || ''} ${safeLast || ''}`.trim(),
+      source: safeSource,
     }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     return NextResponse.json({

@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
 
     await db.insert(oauthCodes).values({
       clientId: client.id,
+      userId: ctx.userId,
       code,
       redirectUri,
       scope,

@@ -13,7 +13,7 @@
  *   CI_MIN_SCORE   – minimum overall score in CI (default 80)
  */
 
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import path from 'path';
@@ -101,11 +101,28 @@ async function checkLighthouse(): Promise<CheckResult> {
     return { category: 'lighthouse', label: 'Lighthouse Audit', passed: true, score: 0, weight: 10, details: 'Skipped (not installed)', durationMs: 0 };
   }
 
+  // Validate BASE_URL to prevent command injection
+  if (!/^https?:\/\/[a-zA-Z0-9.\-]+(:\d+)?(\/.*)?$/.test(BASE_URL)) {
+    return { category: 'lighthouse', label: 'Lighthouse Audit', passed: false, score: 0, weight: 10, details: 'Invalid BASE_URL', durationMs: 0 };
+  }
+
   const reportPath = path.join(REPORT_DIR, `lighthouse-${Date.now()}.json`);
   mkdirSync(REPORT_DIR, { recursive: true });
 
-  const cmd = `npx lighthouse ${BASE_URL} --output=json --output-path=${reportPath} --chrome-flags="--headless --no-sandbox" --only-categories=performance,accessibility,best-practices,seo 2>/dev/null`;
-  const { ok: _ok, out: _out } = run(cmd, 'lighthouse');
+  let _ok = false;
+  let _out = '';
+  try {
+    _out = execFileSync('npx', [
+      'lighthouse', BASE_URL,
+      '--output=json',
+      `--output-path=${reportPath}`,
+      '--chrome-flags=--headless --no-sandbox',
+      '--only-categories=performance,accessibility,best-practices,seo',
+    ], { encoding: 'utf-8', timeout: TIMEOUT_MS, stdio: ['pipe', 'pipe', 'pipe'], shell: false });
+    _ok = true;
+  } catch (e: unknown) {
+    _out = e instanceof Error ? e.message : String(e);
+  }
   const dur = Date.now() - t0;
 
   let perf = 0, a11y = 0, bp = 0, seo = 0;

@@ -107,8 +107,8 @@ export async function POST(request: NextRequest) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error(`[Stripe Webhook] Error processing ${eventType}:`, err.message);
-    // Return 200 to prevent Stripe from retrying (we logged the error)
-    return NextResponse.json({ received: true }); // error logged via apiError;
+    // Return 500 so Stripe retries — critical for subscription activations
+    return NextResponse.json({ error: 'Processing failed' }, { status: 500 });
   }
 }
 
