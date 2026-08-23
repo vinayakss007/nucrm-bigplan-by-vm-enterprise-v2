@@ -173,9 +173,8 @@ async function executeReport(params: ReportParams): Promise<ReportResult> {
     }
   }
 
-  // Build the SQL group expression
-  const groupExpr = buildGroupExpression(groupBy);
-  const metricExpr = buildMetricExpression(metric, metricField);
+  const groupSql = buildGroupExpression(groupBy);
+  const metricSql = buildMetricExpression(metric, metricField);
 
   // Build WHERE clause
   const tableMap: Record<string, string> = {
@@ -208,12 +207,12 @@ async function executeReport(params: ReportParams): Promise<ReportResult> {
   const whereClause = sql`WHERE ${sql.join(conditions, sql` AND `)}`;
 
   const { rows } = await db.execute(sql`
-    SELECT 
-      ${sql.raw(groupExpr)} as label,
-      ${sql.raw(metricExpr)} as value
+    SELECT
+      ${groupSql} as label,
+      ${metricSql} as value
     FROM ${sql.identifier(tableName)}
     ${whereClause}
-    GROUP BY ${sql.raw(groupExpr)}
+    GROUP BY ${groupSql}
     ORDER BY value DESC
     LIMIT ${limit}
   `);
@@ -237,25 +236,26 @@ async function executeReport(params: ReportParams): Promise<ReportResult> {
   return { data, total };
 }
 
-function buildGroupExpression(groupBy: string): string {
+function buildGroupExpression(groupBy: string): import('drizzle-orm').SQL {
   // Time-based grouping
-  if (groupBy === 'created_at_month') return "TO_CHAR(created_at, 'YYYY-MM')";
-  if (groupBy === 'created_at_week') return "TO_CHAR(created_at, 'IYYY-IW')";
-  if (groupBy === 'close_date_month') return "TO_CHAR(close_date, 'YYYY-MM')";
+  if (groupBy === 'created_at_month') return sql`TO_CHAR(created_at, 'YYYY-MM')`;
+  if (groupBy === 'created_at_week') return sql`TO_CHAR(created_at, 'IYYY-IW')`;
+  if (groupBy === 'close_date_month') return sql`TO_CHAR(close_date, 'YYYY-MM')`;
 
   // Boolean fields
-  if (groupBy === 'completed') return "CASE WHEN completed THEN 'Completed' ELSE 'Pending' END";
+  if (groupBy === 'completed') return sql`CASE WHEN completed THEN 'Completed' ELSE 'Pending' END`;
 
-  // Direct column reference (already validated against whitelist)
-  return `COALESCE(${groupBy}::text, 'Unknown')`;
+  // Direct column reference (already validated against whitelist;
+  // sql.identifier guarantees it cannot break out of the identifier quoting)
+  return sql`COALESCE(${sql.identifier(groupBy)}::text, 'Unknown')`;
 }
 
-function buildMetricExpression(metric: string, metricField?: string): string {
+function buildMetricExpression(metric: string, metricField?: string): import('drizzle-orm').SQL {
   switch (metric) {
-    case 'count': return 'COUNT(*)::int';
-    case 'sum': return `COALESCE(SUM(${metricField}::numeric), 0)::numeric`;
-    case 'avg': return `COALESCE(ROUND(AVG(${metricField}::numeric), 2), 0)::numeric`;
-    default: return 'COUNT(*)::int';
+    case 'count': return sql`COUNT(*)::int`;
+    case 'sum': return sql`COALESCE(SUM(${sql.identifier(metricField ?? '')}::numeric), 0)::numeric`;
+    case 'avg': return sql`COALESCE(ROUND(AVG(${sql.identifier(metricField ?? '')}::numeric), 2), 0)::numeric`;
+    default: return sql`COUNT(*)::int`;
   }
 }
 
