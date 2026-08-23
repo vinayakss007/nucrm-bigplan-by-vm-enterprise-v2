@@ -501,7 +501,7 @@ export default function TenantBackupSettingsPage() {
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <p className="text-sm font-semibold">Backup History</p>
           <button
-            onClick={loadBackups}
+            onClick={() => void loadBackups()}
             className="text-muted-foreground hover:text-foreground transition-colors"
           >
             <RefreshCw className="w-3.5 h-3.5" />

@@ -41,8 +41,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/tenant/calendar?error=invalid_session', request.url));
     }
 
-    const tenantId = payload.tenantId;
     const userId = payload.userId;
+
+    // Resolve the user's active tenant membership (JWT only carries userId)
+    const { db } = await import('@/drizzle/db');
+    const { tenantMembers } = await import('@/drizzle/schema');
+    const { eq } = await import('drizzle-orm');
+    const [membership] = await db
+      .select({ tenantId: tenantMembers.tenantId })
+      .from(tenantMembers)
+      .where(eq(tenantMembers.userId, userId))
+      .limit(1);
+    if (!membership) {
+      return NextResponse.redirect(new URL('/tenant/calendar?error=no_tenant', request.url));
+    }
+    const tenantId = membership.tenantId;
 
     const provider = createOutlookCalendarProvider();
     const tokens = await provider.exchangeCode(code, `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/tenant/calendar-sync/outlook/callback`);

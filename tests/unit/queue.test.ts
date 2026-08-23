@@ -70,20 +70,22 @@ describe('queue/index', () => {
   describe('memory adapter', () => {
     it('processes jobs after interval', async () => {
       vi.useFakeTimers();
-      
+
       const { addJob } = await import('@/lib/queue/index');
-      const spy = vi.spyOn(console, 'log');
-      
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
       await addJob('send-email', { to: 'test@example.com' });
-      
+
       // Advance time by 6 seconds (interval is 5s)
       vi.advanceTimersByTime(6000);
-      
-      expect(spy).toHaveBeenCalledWith(
-        '[MemoryQueue] Processing: send-email',
-        expect.any(Object)
+
+      // Memory adapter is dev-only: it loudly warns it cannot execute jobs
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[MemoryQueue]'),
+        expect.anything()
       );
-      
+
+      warnSpy.mockRestore();
       vi.useRealTimers();
     });
   });

@@ -5,7 +5,7 @@ import { portalClients, platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { readJsonBody } from '@/lib/api/validate';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimiter } from '@/lib/rate-limit';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
 
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     // Rate limit: max 10 login attempts per email per 15 minutes
     const rateLimitKey = `portal_login:${email}`;
-    const { allowed } = await rateLimit(rateLimitKey, 10, 15 * 60 * 1000);
+    const { allowed } = await rateLimiter.check(rateLimitKey, 10, 15 * 60 * 1000);
     if (!allowed) {
       return NextResponse.json({ error: 'Too many login attempts. Please try again later.' }, { status: 429 });
     }
