@@ -465,52 +465,17 @@
       "breakpoints": true
     },
     {
-      "idx": 60,
-      "version": "7",
-      "when": 1786018800000,
-      "tag": "0060_add_tenantid_rls",
-      "breakpoints": true
-    },
-    {
-      "idx": 61,
-      "version": "7",
-      "when": 1786105200000,
-      "tag": "0061_fix_super_admin_audit_types",
-      "breakpoints": true
-    },
-    {
-      "idx": 62,
-      "version": "7",
-      "when": 1786191600000,
-      "tag": "0062_add_pageviews_lifecycle",
-      "breakpoints": true
-    },
-    {
-      "idx": 63,
-      "version": "7",
-      "when": 1786278000000,
-      "tag": "0063_add_missing_indexes",
-      "breakpoints": true
-    },
-    {
-      "idx": 64,
-      "version": "7",
-      "when": 1786364400000,
-      "tag": "0064_add_audit_fk_constraints",
-      "breakpoints": true
-    },
-    {
-      "idx": 65,
-      "version": "7",
-      "when": 1786450800000,
-      "tag": "0065_assignment_logs_uuid_columns",
-      "breakpoints": true
-    },
-    {
       "idx": 66,
       "version": "7",
-      "when": 1786537200000,
-      "tag": "0066_sla_breach_policy_uuid",
+      "when": 1786710000000,
+      "tag": "0067_ticket_portal_token",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1786623600000,
+      "tag": "0068_force_rls_owner",
       "breakpoints": true
     }
   ]
