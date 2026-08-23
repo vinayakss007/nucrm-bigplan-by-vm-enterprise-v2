@@ -3,7 +3,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, emailTemplates } from '@/drizzle/schema';
 import { eq, and, inArray, isNull } from 'drizzle-orm';
-import { sendEmail, renderTemplate } from '@/lib/email/service';
+import { sendEmail, renderTemplate, renderTemplateHtml } from '@/lib/email/service';
 import { logAudit } from '@/lib/audit';
 import { readJsonBody } from '@/lib/api/validate';
 import { cache } from '@/lib/cache';
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
         };
 
         const subject = renderTemplate(template.subject, vars);
-        const html = renderTemplate(template.bodyHtml, vars);
+        const html = renderTemplateHtml(template.bodyHtml, vars);
 
         const result = await sendEmail({ to: ent.email, subject, html });
         if (result.success) {

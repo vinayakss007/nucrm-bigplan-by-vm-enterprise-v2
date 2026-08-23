@@ -15,7 +15,12 @@
  *
  * Admin API: POST /api/system/feature-flags to toggle flags.
  * Flags are cached with 30s TTL to reduce Redis round-trips.
+ *
+ * A single shared Redis connection is reused across all flag operations
+ * (module-level singleton) instead of opening a new connection per call.
  */
+
+import { Redis } from 'ioredis';
 
 export interface FeatureFlag {
   /** Unique flag key */
@@ -47,6 +52,51 @@ const DEFAULT_FLAGS: Record<string, FeatureFlag> = {
   'advanced-forecasting': { key: 'advanced-forecasting', enabled: false, description: 'ML-based deal forecasting' },
 };
 
+// Module-level Redis client singleton — one connection shared by all flag
+// operations. Previously every get/set/list call opened a fresh connection;
+// if a command threw before quit() the socket leaked (and stayed open until GC).
+let redis: Redis | null = null;
+let disabledReason: string | null = null;
+
+function getRedisClient(): Redis | null {
+  if (disabledReason) return null;
+  if (redis) return redis;
+
+  const url = process.env['REDIS_URL'];
+  if (!url) {
+    // Not an error: deployments without Redis just use the in-memory defaults.
+    disabledReason = 'REDIS_URL not configured';
+    return null;
+  }
+
+  redis = new Redis(url, {
+    maxRetriesPerRequest: 1,
+    connectTimeout: 2000,
+    enableOfflineQueue: false,
+    retryStrategy: (times) => (times > 5 ? null : Math.min(times * 200, 3000)),
+    lazyConnect: false,
+  });
+
+  redis.on('error', (err) => {
+    console.error('[FeatureFlags] Redis error:', err.message);
+  });
+
+  return redis;
+}
+
+/** Close the shared Redis connection (test/shutdown hook). */
+export async function closeFeatureFlagRedis(): Promise<void> {
+  if (redis) {
+    try {
+      await redis.quit();
+    } catch {
+      redis.disconnect();
+    }
+    redis = null;
+  }
+  disabledReason = null;
+}
+
 /**
  * Get a feature flag from cache or Redis.
  */
@@ -57,26 +107,20 @@ async function getFlag(key: string): Promise<FeatureFlag | null> {
     return cached.flag;
   }
 
-  // Try Redis
-  try {
-    const Redis = (await import('ioredis')).default;
-    const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-      maxRetriesPerRequest: 1,
-      connectTimeout: 2000,
-      lazyConnect: true,
-    });
-    await redis.connect();
+  // Try Redis (shared singleton connection)
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      const raw = await redis.get(`ff:${key}`);
 
-    const raw = await redis.get(`ff:${key}`);
-    await redis.quit();
-
-    if (raw) {
-      const flag = JSON.parse(raw) as FeatureFlag;
-      flagCache.set(key, { flag, expiresAt: Date.now() + CACHE_TTL_MS });
-      return flag;
+      if (raw) {
+        const flag = JSON.parse(raw) as FeatureFlag;
+        flagCache.set(key, { flag, expiresAt: Date.now() + CACHE_TTL_MS });
+        return flag;
+      }
+    } catch {
+      // Redis unavailable — fall through to defaults
     }
-  } catch {
-    // Redis unavailable — fall through to defaults
   }
 
   // Fallback to defaults
@@ -133,18 +177,13 @@ export async function isFeatureEnabled(
 export async function setFeatureFlag(flag: FeatureFlag): Promise<void> {
   flag.updatedAt = new Date().toISOString();
 
-  try {
-    const Redis = (await import('ioredis')).default;
-    const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-      maxRetriesPerRequest: 1,
-      connectTimeout: 2000,
-      lazyConnect: true,
-    });
-    await redis.connect();
-    await redis.set(`ff:${flag.key}`, JSON.stringify(flag));
-    await redis.quit();
-  } catch {
-    // Redis unavailable — flag only in memory
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      await redis.set(`ff:${flag.key}`, JSON.stringify(flag));
+    } catch {
+      // Redis unavailable — flag only in memory
+    }
   }
 
   // Update cache immediately
@@ -157,25 +196,19 @@ export async function setFeatureFlag(flag: FeatureFlag): Promise<void> {
 export async function getAllFlags(): Promise<FeatureFlag[]> {
   const flags: FeatureFlag[] = [];
 
-  try {
-    const Redis = (await import('ioredis')).default;
-    const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-      maxRetriesPerRequest: 1,
-      connectTimeout: 2000,
-      lazyConnect: true,
-    });
-    await redis.connect();
-
-    const keys = await redis.keys('ff:*');
-    if (keys.length > 0) {
-      const values = await redis.mget(...keys);
-      for (const raw of values) {
-        if (raw) flags.push(JSON.parse(raw) as FeatureFlag);
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      const keys = await redis.keys('ff:*');
+      if (keys.length > 0) {
+        const values = await redis.mget(...keys);
+        for (const raw of values) {
+          if (raw) flags.push(JSON.parse(raw) as FeatureFlag);
+        }
       }
+    } catch {
+      // Redis unavailable — return defaults
     }
-    await redis.quit();
-  } catch {
-    // Redis unavailable — return defaults
   }
 
   // Merge with defaults (defaults may not be in Redis yet)

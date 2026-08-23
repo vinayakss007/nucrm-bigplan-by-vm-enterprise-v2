@@ -1,7 +1,7 @@
 import { db } from '@/drizzle/db';
 import { criticalDataBackups } from '@/drizzle/schema';
 import { eq, and, gte, lte, sql, desc, count } from 'drizzle-orm';
-import { isValidTableName } from '@/lib/sql-allowlist';
+import { isValidTableName, validateTableName } from '@/lib/sql-allowlist';
 
 const CRITICAL_TABLES = [
   'contacts', 'leads', 'deals', 'companies',
@@ -69,6 +69,7 @@ export class CriticalDataCapture {
 
   async captureBeforeUpdate(tenantId: string, tableName: string, recordId: string): Promise<void> {
     if (!CRITICAL_TABLES.includes(tableName)) return;
+    if (!isValidTableName(tableName)) return;
 
     try {
       const result = await db.execute(
@@ -168,6 +169,7 @@ export class CriticalDataCapture {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data = backup.backupData as Record<string, any>;
+        const tableName = validateTableName(backup.tableName);
         const columns = Object.keys(data);
         const values = Object.values(data);
 
@@ -175,7 +177,7 @@ export class CriticalDataCapture {
         const placeholders = sql.join(values.map(v => sql`${v}`), sql`, `);
 
         await tx.execute(
-          sql`INSERT INTO ${sql.identifier(backup.tableName)} (${colList}) VALUES (${placeholders}) ON CONFLICT (id) DO NOTHING`
+          sql`INSERT INTO ${sql.identifier(tableName)} (${colList}) VALUES (${placeholders}) ON CONFLICT (id) DO NOTHING`
         );
 
         await tx.update(criticalDataBackups)

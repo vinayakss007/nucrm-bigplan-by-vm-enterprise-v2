@@ -20,6 +20,7 @@ import {
 } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
+import { escapeHtml } from '@/lib/email/escape-html';
 import { createNotification } from '@/lib/notifications';
 import { captureError } from '@/lib/capture-error';
 import { safeFetch } from '@/lib/security/ssrf';
@@ -265,7 +266,7 @@ async function executeActionNode(
         await sendEmail({
           to,
           subject: interpolate((data.subject as string) || 'Message from NuCRM', ctx),
-          html: interpolate((data.body as string) || '', ctx),
+          html: interpolateHtml((data.body as string) || '', ctx),
         });
         break;
       }
@@ -448,6 +449,18 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
   }, obj);
 }
 
-function interpolate(template: string, data: Record<string, unknown>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(data[key] ?? ''));
+function interpolate(template: string, data: Record<string, unknown>, opts?: { escapeValues?: boolean }): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    const value = String(data[key] ?? '');
+    return opts?.escapeValues ? escapeHtml(value) : value;
+  });
+}
+
+/**
+ * Like interpolate(), but HTML-escapes each substituted value.
+ * MUST be used whenever the result is rendered as HTML (e.g. email bodies)
+ * to prevent XSS via user-controlled template variables.
+ */
+function interpolateHtml(template: string, data: Record<string, unknown>): string {
+  return interpolate(template, data, { escapeValues: true });
 }

@@ -6,6 +6,7 @@
 
 import { Workflow } from './types';
 import { sendEmail } from '@/lib/email/service';
+import { escapeHtml } from '@/lib/email/escape-html';
 import { createNotification } from '@/lib/notifications';
 
 export const PREBUILT_WORKFLOWS: Workflow[] = [
@@ -24,15 +25,17 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         execute: async (data: any) => {
+          const tenantName = escapeHtml(String(data.tenant?.name ?? ''));
+          const firstName = escapeHtml(String(data.contact?.first_name || 'there'));
           await sendEmail({
             to: data.contact.email,
             subject: `Welcome to ${data.tenant.name}!`,
             html: `
-              <p>Hi ${data.contact.first_name || 'there'},</p>
-              <p>Welcome to ${data.tenant.name}! We're excited to work with you.</p>
+              <p>Hi ${firstName},</p>
+              <p>Welcome to ${tenantName}! We're excited to work with you.</p>
               <p>Our team will be in touch soon.</p>
               <br/>
-              <p>Best regards,<br/>${data.tenant.name} Team</p>
+              <p>Best regards,<br/>${tenantName} Team</p>
             `
           });
         }

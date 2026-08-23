@@ -1,13 +1,21 @@
 // Sentry Edge config (for middleware, etc.)
 import * as Sentry from '@sentry/nextjs';
+import { scrubPii } from './sentry-pii-scrub';
 
 const SENTRY_DSN = process.env['SENTRY_DSN'];
 
 if (SENTRY_DSN) {
   Sentry.init({
     dsn: SENTRY_DSN,
+
+    // GDPR: never send PII by default
+    sendDefaultPii: false,
+
     enabled: process.env['SENTRY_ENABLE'] !== 'false',
     tracesSampleRate: 0.2,
+    beforeSend(event) {
+      return scrubPii(event);
+    },
   });
 }
 
