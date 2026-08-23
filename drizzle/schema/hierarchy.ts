@@ -23,7 +23,12 @@ export const tenantHierarchy = pgTable('tenant_hierarchy', {
 
 export const hierarchyPermissions = pgTable('hierarchy_permissions', {
   id: utils.pk(),
+  tenantId: utils.tenantId(),
   hierarchyId: uuid('hierarchy_id').notNull().references(() => tenantHierarchy.id, { onDelete: 'cascade' }),
   permission: text('permission', { enum: ['view_data', 'manage_users', 'share_contacts', 'aggregate_reports'] }).notNull(),
   ...utils.lifecycle(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+  };
 });

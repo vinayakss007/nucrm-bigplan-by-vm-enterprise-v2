@@ -449,6 +449,7 @@ export const priceBooks = pgTable('price_books', {
 
 export const priceBookEntries = pgTable('price_book_entries', {
   id: utils.pk(),
+  tenantId: utils.tenantId(),
   priceBookId: uuid('price_book_id').notNull().references(() => priceBooks.id, { onDelete: 'cascade' }),
   productId: uuid('product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
   unitPrice: decimal('unit_price', { precision: 15, scale: 2 }).notNull(),
@@ -457,6 +458,7 @@ export const priceBookEntries = pgTable('price_book_entries', {
 }, (table) => {
   return {
     uniqueEntry: uniqueIndex('idx_price_book_entries_unique').on(table.priceBookId, table.productId),
+    tenantIdx: utils.tenantIdx(table),
   };
 });
 
@@ -582,6 +584,7 @@ export const formSubmissions = pgTable('form_submissions', {
 // ── 10. CONTACT EMAILS ────────────────────────────────
 export const contactEmails = pgTable('contact_emails', {
   id: utils.pk(),
+  tenantId: utils.tenantId(),
   contactId: uuid('contact_id').notNull().references(() => contacts.id, { onDelete: 'cascade' }),
   email: text('email').notNull(),
   phone: text('phone'),
@@ -591,6 +594,7 @@ export const contactEmails = pgTable('contact_emails', {
   return {
     contactIdx: index('idx_contact_emails_contact').on(table.contactId),
     emailUniqueIdx: uniqueIndex('idx_contact_emails_unique').on(table.contactId, table.email),
+    tenantIdx: utils.tenantIdx(table),
   };
 });
 
@@ -773,6 +777,7 @@ export const leadOffers = pgTable('lead_offers', {
 // ── 18. PIPELINE STAGES ──────────────────────────────
 export const pipelineStages = pgTable('pipeline_stages', {
   id: utils.pk(),
+  tenantId: utils.tenantId(),
   pipelineId: uuid('pipeline_id').notNull().references(() => pipelines.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   order: integer('order_val').default(0),
@@ -781,6 +786,7 @@ export const pipelineStages = pgTable('pipeline_stages', {
 }, (table) => {
   return {
     pipelineIdx: index('idx_pipeline_stages_pipeline').on(table.pipelineId, table.order),
+    tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
   };
 });

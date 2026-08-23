@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
         
         if (p) {
           const stageValues = pipe.stages.map((stageName: string, i: number) => ({
+            tenantId: ctx.tenantId,
             pipelineId: p.id,
             name: stageName,
             order: i,
