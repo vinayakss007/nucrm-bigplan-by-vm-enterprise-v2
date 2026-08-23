@@ -106,7 +106,12 @@ export function validateTwilioSignature(
     .update(data)
     .digest('base64');
 
-  return computed === signature;
+  // Timing-safe comparison: hash both sides to fixed-length digests so
+  // crypto.timingSafeEqual can be used regardless of attacker input length.
+  const computedDigest = crypto.createHash('sha256').update(computed).digest();
+  const providedDigest = crypto.createHash('sha256').update(signature).digest();
+
+  return crypto.timingSafeEqual(computedDigest, providedDigest);
 }
 
 // ── Core Functions ─────────────────────────────────────

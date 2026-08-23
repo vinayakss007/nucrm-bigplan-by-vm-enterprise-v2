@@ -34,13 +34,19 @@ export async function POST(req: NextRequest) {
       params = await readJsonBody(req);
     }
 
-    // Validate Twilio signature in production
-    if (process.env['NODE_ENV'] === 'production') {
+    // Validate Twilio signature whenever an auth token is configured.
+    // Fail-closed in production when no token is configured (dev warns and allows).
+    if (process.env['TWILIO_AUTH_TOKEN']) {
       const signature = req.headers.get('x-twilio-signature') || '';
       const url = req.url;
       if (!validateTwilioSignature(signature, url, params)) {
         return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
       }
+    } else if (process.env['NODE_ENV'] === 'production') {
+      console.error('[sms-webhook] TWILIO_AUTH_TOKEN is not set. Rejecting webhook request.');
+      return NextResponse.json({ error: 'SMS webhook secret not configured' }, { status: 403 });
+    } else {
+      console.warn('[sms-webhook] TWILIO_AUTH_TOKEN is not set — skipping signature validation (dev only)');
     }
 
     // Determine tenant from the 'To' number or custom parameter

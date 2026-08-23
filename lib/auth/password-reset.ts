@@ -1,3 +1,4 @@
+import { getAppUrl } from '../app-url';
 /*!
  * NuCRM Enterprise — Property of abetworks.in
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
@@ -47,7 +48,7 @@ export async function clearResetToken(userId: string): Promise<void> {
  */
 export async function requestPasswordReset(
   email: string,
-  appUrl: string = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  appUrl: string = getAppUrl()
 ): Promise<{ success: boolean; message: string }> {
   try {
     const normalizedEmail = email.toLowerCase().trim();
@@ -122,9 +123,10 @@ export async function requestPasswordReset(
         devLogger.error(emailErr as Error, '[password-reset] Failed to send email');
       }
     } else {
-      // In development without email configured, log the token
-      devLogger.log(`[password-reset] Email not configured - token: ${token}`);
-      console.log(`\n🔑 Password Reset URL: ${resetUrl}\n`);
+      // In development without email configured, surface the token in the
+      // server console only — never the full reset URL (#1259: URLs leak via
+      // log aggregation; the token alone is enough for local dev flows).
+      devLogger.log('[password-reset] Email not configured - DEV ONLY. Check DB password_resets table for the active token.');
     }
 
     return {

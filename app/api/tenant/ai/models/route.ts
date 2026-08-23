@@ -18,6 +18,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { apiError } from '@/lib/api-error';
+import { safeFetch, SsrfBlockedError } from '@/lib/security/ssrf';
 
 interface ModelEntry {
   id: string;
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest) {
     if (provider === 'ollama') {
       // Ollama: GET /api/tags
       try {
-        const res = await fetch(`${effectiveBase}/api/tags`, {
+        const res = await safeFetch(`${effectiveBase}/api/tags`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
           signal: AbortSignal.timeout(10000),
@@ -69,7 +70,10 @@ export async function GET(req: NextRequest) {
             owned_by: 'ollama',
           }));
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof SsrfBlockedError) {
+          return NextResponse.json({ error: 'Blocked: base_url points to a disallowed host' }, { status: 400 });
+        }
         // Ollama might not be running
         return NextResponse.json({ models: [], error: 'Could not connect to Ollama. Is it running?' });
       }
@@ -89,7 +93,7 @@ export async function GET(req: NextRequest) {
         if (apiKey) {
           headers['Authorization'] = `Bearer ${apiKey}`;
         }
-        const res = await fetch(`${effectiveBase}/v1/models`, {
+        const res = await safeFetch(`${effectiveBase}/v1/models`, {
           method: 'GET',
           headers,
           signal: AbortSignal.timeout(10000),
@@ -111,6 +115,9 @@ export async function GET(req: NextRequest) {
           });
         }
       } catch (err) {
+        if (err instanceof SsrfBlockedError) {
+          return NextResponse.json({ error: 'Blocked: base_url points to a disallowed host' }, { status: 400 });
+        }
         return NextResponse.json({
           models: [],
           error: `Could not connect to ${effectiveBase}/v1/models: ${(err as Error).message}`,

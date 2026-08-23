@@ -11,6 +11,7 @@ import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimiter } from '@/lib/rate-limit';
+import { PORTAL_SESSION_COOKIE, encodePortalSessionCookie, portalSessionCookieOptions } from '@/lib/portal-session';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
 
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
       .set({ lastLoginAt: new Date() })
       .where(eq(portalClients.id, client.id));
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       ok: true,
       session: {
         token: sessionToken,
@@ -110,6 +111,16 @@ export async function POST(request: NextRequest) {
         cases: config.allow_cases,
       },
     });
+
+    // Server-visible session cookie so the /portal layout can gate pages
+    // server-side (Issue #1326). Stores only a hash of the access token.
+    response.cookies.set(
+      PORTAL_SESSION_COOKIE,
+      encodePortalSessionCookie(client.email, tenant_id, client.accessToken),
+      portalSessionCookieOptions(sessionExpiry)
+    );
+
+    return response;
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

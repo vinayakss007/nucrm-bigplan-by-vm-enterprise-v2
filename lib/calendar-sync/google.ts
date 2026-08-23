@@ -1,3 +1,4 @@
+import { getAppUrl } from '../app-url';
 /*!
  * NuCRM Enterprise — Property of abetworks.in
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
@@ -186,7 +187,7 @@ export function createGoogleCalendarProvider(): CalendarProvider {
 }
 
 function getRedirectUri(): string {
-  return process.env.GOOGLE_CALENDAR_REDIRECT_URI || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/tenant/calendar-sync/google/callback`;
+  return process.env.GOOGLE_CALENDAR_REDIRECT_URI || `${getAppUrl()}/api/tenant/calendar-sync/google/callback`;
 }
 
 function extractMeetUrl(text: string): string | undefined {

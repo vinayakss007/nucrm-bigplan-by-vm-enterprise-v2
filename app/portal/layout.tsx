@@ -12,6 +12,11 @@ export const metadata: Metadata = {
   description: 'Customer self-service portal',
 };
 
+/**
+ * Shared chrome for the customer portal. Authentication itself is enforced
+ * server-side in `app/portal/(protected)/layout.tsx` so that /portal/login
+ * stays reachable without a session (Issue #1326).
+ */
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   return (
     <>

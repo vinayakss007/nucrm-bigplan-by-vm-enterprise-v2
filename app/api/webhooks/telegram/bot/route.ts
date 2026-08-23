@@ -32,18 +32,20 @@ export async function POST(req: NextRequest) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return NextResponse.json({ ok: false });
 
-  // Verify X-Telegram-Bot-Api-Secret-Token header if TELEGRAM_WEBHOOK_SECRET is configured
+  // Fail-closed: require TELEGRAM_WEBHOOK_SECRET and matching
+  // X-Telegram-Bot-Api-Secret-Token header (set via setWebhook secret_token).
   const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
-  if (webhookSecret) {
-    const providedToken = req.headers.get('x-telegram-bot-api-secret-token') ?? '';
-    const expectedBuf = Buffer.from(webhookSecret, 'utf8');
-    const providedBuf = Buffer.from(providedToken, 'utf8');
+  if (!webhookSecret) {
+    console.error('[telegram bot] TELEGRAM_WEBHOOK_SECRET is not set. Rejecting webhook request.');
+    return NextResponse.json({ error: 'telegram secret not configured' }, { status: 403 });
+  }
 
-    if (expectedBuf.length !== providedBuf.length || !timingSafeEqual(expectedBuf, providedBuf)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-  } else {
-    console.warn('[telegram bot] TELEGRAM_WEBHOOK_SECRET is not set. Webhook requests are not verified.');
+  const providedToken = req.headers.get('x-telegram-bot-api-secret-token') ?? '';
+  const expectedBuf = Buffer.from(webhookSecret, 'utf8');
+  const providedBuf = Buffer.from(providedToken, 'utf8');
+
+  if (expectedBuf.length !== providedBuf.length || !timingSafeEqual(expectedBuf, providedBuf)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const body: TelegramMessage = await readJsonBody(req);

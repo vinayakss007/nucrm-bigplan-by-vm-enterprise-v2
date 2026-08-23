@@ -1,3 +1,4 @@
+import { getAppUrl } from './app-url';
 /*!
  * NuCRM Enterprise — Property of abetworks.in
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
@@ -42,7 +43,7 @@ export function generatePublicToken(): string {
 
 /** Build the public URL the buyer clicks. */
 export function publicOfferUrl(publicToken: string): string {
-  const base = process.env['NEXT_PUBLIC_APP_URL'] || 'http://localhost:3000';
+  const base = getAppUrl();
   return `${base.replace(/\/$/, '')}/p/offers/${publicToken}`;
 }
 
