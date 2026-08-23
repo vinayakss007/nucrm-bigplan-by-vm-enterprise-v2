@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
@@ -122,7 +123,7 @@ export async function POST(request: NextRequest) {
         if (existing) {
           ownerId = existing.id;
         } else {
-          const pwd = owner_password || Math.random().toString(36).slice(2, 10) + 'A1!';
+          const pwd = owner_password || crypto.randomBytes(12).toString('hex') + 'A1!';
           const ownerPasswordHash = await hashPassword(pwd);
           const [newUser] = await tx
             .insert(users)

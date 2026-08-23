@@ -43,9 +43,9 @@ export async function POST(request: NextRequest) {
       .where(eq(users.id, ctx.userId));
 
     return NextResponse.json({
-      secret,
-      qr_code: `<img src="${qrCode}" alt="QR Code" class="w-48 h-48" />`,
+      qr_code: qrCode,
       backup_codes: backupCodes,
+      note: 'Save your backup codes securely. They can be used to access your account if you lose your authenticator device.',
     });
  
  

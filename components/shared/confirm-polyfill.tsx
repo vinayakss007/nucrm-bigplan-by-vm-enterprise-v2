@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, createContext, useContext, useCallback } from 'react';
+import { useState, createContext, useContext, useCallback } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
 interface ConfirmState {
@@ -29,17 +29,11 @@ export function ConfirmPolyfill({ children }: { children?: React.ReactNode }) {
     setState(null);
   };
 
-  // Override window.confirm so all existing confirm() calls show our modal
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const original = window.confirm;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).confirm = (msg: string) => {
-      confirm(msg);
-      return true; // Prevent native — modal handles it
-    };
-    return () => { window.confirm = original; };
-  }, [confirm]);
+  // NOTE: We intentionally do NOT override window.confirm here.
+  // window.confirm is synchronous by browser spec, so replacing it with
+  // an async Promise-based modal causes it to always return true (the
+  // bug reported in #1235). Code should use useAppConfirm() or
+  // confirmThen() for async confirmation instead.
 
   return (
     <Ctx.Provider value={{ confirm }}>

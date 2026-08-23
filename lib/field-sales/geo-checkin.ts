@@ -6,6 +6,8 @@
  * attachments, and manager-level team views.
  */
 
+import crypto from 'crypto';
+
 export interface CheckIn {
   id: string;
   userId: string;
@@ -249,5 +251,5 @@ let _idCounter = 0;
 
 function generateId(): string {
   _idCounter++;
-  return `checkin_${Date.now()}_${_idCounter}_${Math.random().toString(36).substring(2, 11)}`;
+  return `checkin_${Date.now()}_${_idCounter}_${crypto.randomBytes(8).toString('hex')}`;
 }
