@@ -11,6 +11,7 @@ import { db } from '@/drizzle/db';
 import { webhookDeliveries } from '@/drizzle/schema/automation';
 import { eq, and, sql, gt } from 'drizzle-orm';
 import { devLogger } from '@/lib/dev-logger';
+import { safeFetch } from '@/lib/security/ssrf';
 
 export interface WebhookPayload {
   id: string;
@@ -112,7 +113,7 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
   const startTime = Date.now();
 
   try {
-    const response = await fetch(deliveryUrl, {
+    const response = await safeFetch(deliveryUrl, {
       method: 'POST',
       headers: sigHeaders,
       body: JSON.stringify(payloadData),

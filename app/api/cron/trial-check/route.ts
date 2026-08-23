@@ -73,14 +73,14 @@ export async function POST(request: NextRequest) {
     .leftJoin(users, eq(users.id, tenants.ownerId))
     .where(and(
       eq(tenants.status, 'trialing'),
-      sql`\${tenants.trialEndsAt} BETWEEN now() AND now() + interval '3 days 1 hour'`,
+      sql`${tenants.trialEndsAt} BETWEEN now() AND now() + interval '3 days 1 hour'`,
       notExists(
         db.select()
           .from(activities)
           .where(and(
             eq(activities.tenantId, tenants.id),
             eq(activities.eventType, 'trial_warning'),
-            sql`\${activities.createdAt} > now() - interval '4 days'`
+            sql`${activities.createdAt} > now() - interval '4 days'`
           ))
       )
     ));

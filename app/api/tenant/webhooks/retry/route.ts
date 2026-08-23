@@ -5,6 +5,7 @@ import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { safeFetch } from '@/lib/security/ssrf';
 
 /**
  * POST /api/tenant/webhooks/retry
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     // Re-send the webhook
     try {
-      const res = await fetch(row.url, {
+      const res = await safeFetch(row.url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

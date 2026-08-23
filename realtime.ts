@@ -34,6 +34,7 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '@/drizzle/db';
 import { tenantMembers } from '@/drizzle/schema';
 import { verifyToken } from '@/lib/auth/session';
+import { registerProcessErrorHandlers } from '@/lib/process-errors';
 import {
   REALTIME_CHANNEL,
   REALTIME_PATH,
@@ -205,6 +206,8 @@ async function main() {
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
   process.on('SIGINT', () => void shutdown('SIGINT'));
 }
+
+registerProcessErrorHandlers('realtime');
 
 main().catch((err) => {
   console.error('[Realtime] fatal startup error:', err);

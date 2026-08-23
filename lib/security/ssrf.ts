@@ -2,7 +2,7 @@
  * SSRF (Server-Side Request Forgery) protection for outbound HTTP calls.
  *
  * Any server-side `fetch()` whose URL originates from tenant-supplied data
- * (custom plugin base URLs, integration configs, webhook targets, ...) MUST go
+ * (custom plugin base URLs, integration configs, webhook targets, ... MUST go
  * through `safeFetch()` — or at minimum call `assertSafeUrl()` immediately
  * before fetching.
  *
@@ -11,11 +11,19 @@
  * internal-only services and database ports, or enumerate the private network
  * through response/timing differences.
  *
+ * DNS rebinding protection: `safeFetch` resolves DNS *before* connecting and
+ * validates every resolved IP against the private-range blocklist.  This closes
+ * the TOCTOU window where a hostname initially resolves to a public IP (passing
+ * hostname-level checks) but is re-bound to a private IP before the TCP
+ * connection completes.
+ *
  * Escape hatch: set `SSRF_ALLOWED_HOSTS` (comma-separated hostnames) to let a
  * self-hosted operator deliberately permit specific internal hosts. Note that
  * supplying an allowlist makes it authoritative: when it is non-empty, only the
  * hostnames it lists are permitted.
  */
+
+import { resolve4, resolve6 } from 'dns/promises';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -285,10 +293,72 @@ export function assertSafeUrl(rawUrl: string, opts?: { allowedHosts?: string[] }
 }
 
 /**
+ * Resolve a hostname to IP addresses using DNS, then validate that every
+ * resolved IP is not private/reserved.  This closes the DNS rebinding window:
+ * the hostname is resolved once and the IPs are checked *before* any TCP
+ * connection is established.
+ *
+ * For IP-literal hostnames (no DNS lookup needed) the literal is validated
+ * directly.
+ *
+ * @throws {SsrfBlockedError} when DNS resolution fails or any resolved IP is
+ *   private / reserved.
+ * @returns the resolved IP addresses (used for logging / audit).
+ */
+export async function resolveAndValidateIp(
+  hostname: string,
+  allowedHosts: string[]
+): Promise<string[]> {
+  // If the hostname matches the allowlist, skip IP validation entirely.
+  if (matchesAllowlist(hostname, allowedHosts)) {
+    return [hostname];
+  }
+
+  // If it's already an IP literal, the existing assertSafeUrl checks cover it.
+  if (parseIpv4(hostname) !== null || hostname.includes(':')) {
+    return [hostname];
+  }
+
+  // DNS resolution — resolve both A and AAAA records.
+  const ips: string[] = [];
+  try {
+    const aRecords = await resolve4(hostname, { ttl: true });
+    ips.push(...aRecords.map((r) => r.address));
+  } catch {
+    // ENODATA / ENOTFOUND are expected for AAAA-only or missing records; not fatal.
+  }
+
+  try {
+    const aaaaRecords = await resolve6(hostname, { ttl: true });
+    ips.push(...aaaaRecords.map((r) => r.address));
+  } catch {
+    // Same as above.
+  }
+
+  if (ips.length === 0) {
+    throw new SsrfBlockedError(`DNS resolution for "${hostname}" returned no addresses`);
+  }
+
+  for (const ip of ips) {
+    if (isPrivateIpv4(ip) || isPrivateIpv6(ip)) {
+      throw new SsrfBlockedError(
+        `DNS rebinding blocked: "${hostname}" resolved to private IP ${ip}`
+      );
+    }
+  }
+
+  return ips;
+}
+
+/**
  * SSRF-aware `fetch`. Validates the target first, disables automatic redirect
  * following, and re-validates every redirect `location` before following it
  * (up to `MAX_REDIRECT_HOPS`) so a 3xx cannot smuggle the request to an
  * internal address.
+ *
+ * DNS rebinding protection: the hostname is resolved via DNS and every
+ * resulting IP is checked against the private-range blocklist *before* the
+ * fetch connection is opened.
  *
  * @throws {SsrfBlockedError} when the initial URL or any redirect target fails
  * validation, or the redirect hop limit is exceeded.
@@ -308,6 +378,11 @@ export async function safeFetch(
   let target = rawUrl;
 
   for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop++) {
+    const parsedUrl = new URL(target);
+
+    // DNS rebinding protection: resolve and validate IPs before connecting.
+    await resolveAndValidateIp(parsedUrl.hostname, allowedHosts);
+
     const requestInit: RequestInit = {
       ...init,
       redirect: 'manual',

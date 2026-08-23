@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
+import { safeFetch } from '@/lib/security/ssrf';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
   try {
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     let errorMessage: string | null = null;
 
     try {
-      const res = await fetch(url, {
+      const res = await safeFetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

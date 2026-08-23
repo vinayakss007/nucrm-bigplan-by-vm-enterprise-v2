@@ -4,7 +4,7 @@
  * Tables for SLA policies and breach tracking for the helpdesk module.
  */
 
-import { pgTable, text, integer, boolean, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, uuid, integer, boolean, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
 import * as utils from './utils';
 
 // ── SLA POLICIES ─────────────────────────────────────────
@@ -30,7 +30,7 @@ export const slaPolicies = pgTable('sla_policies', {
 export const slaBreaches = pgTable('sla_breaches', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
-  policyId: text('policy_id').notNull(),
+  policyId: uuid('policy_id').notNull(),
   entityType: text('entity_type').notNull(), // 'ticket' | 'deal' | 'task'
   entityId: text('entity_id').notNull(),
   breachType: text('breach_type').notNull(), // 'response' | 'resolution'
