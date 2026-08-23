@@ -92,7 +92,7 @@ export async function GET(
     const { id } = await params;
 
     const form = await db.query.forms.findFirst({
-      where: eq(forms.id, id),
+      where: and(eq(forms.id, id), eq(forms.tenantId, ctx.tenantId)),
       columns: { viewsCount: true, submissionsCount: true, name: true, fields: true },
     });
     if (!form) {
