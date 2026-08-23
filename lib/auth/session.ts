@@ -87,7 +87,8 @@ export async function setSessionCookie(token: string, maxAgeDays?: number) {
   const maxAge = (maxAgeDays ?? SESSION_EXPIRES_DAYS) * 24 * 60 * 60;
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env['COOKIE_SECURE'] === 'false' ? false : process.env['NODE_ENV'] === 'production',
+    // Secure is mandatory in production — COOKIE_SECURE=false cannot downgrade it (#1037)
+    secure: process.env['NODE_ENV'] === 'production' ? true : process.env['COOKIE_SECURE'] !== 'false',
     sameSite: 'strict',
     maxAge,
     path: '/',
