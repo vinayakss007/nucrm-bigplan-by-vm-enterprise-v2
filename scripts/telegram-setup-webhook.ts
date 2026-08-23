@@ -24,6 +24,12 @@ if (!url) {
 }
 
 const webhookUrl = `${url.replace(/\/$/, '')}/api/webhooks/telegram/bot`;
+const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+
+if (!webhookSecret) {
+  console.error('❌ TELEGRAM_WEBHOOK_SECRET is required (fail-closed webhook verification)');
+  process.exit(1);
+}
 
 async function main() {
   console.log(`Registering webhook: ${webhookUrl}`);
@@ -31,7 +37,7 @@ async function main() {
   const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: webhookUrl }),
+    body: JSON.stringify({ url: webhookUrl, secret_token: webhookSecret }),
   });
 
   const data = await res.json();

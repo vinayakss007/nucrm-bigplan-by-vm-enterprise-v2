@@ -22,15 +22,20 @@ const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
 
 /**
  * Verify an inbound webhook signature using HMAC-SHA256.
- * Returns true if no secret is configured (open webhook) or if signature matches.
+ * Fail-closed in production: if no secret is configured, verification fails.
+ * In dev/test, allows unverified payloads with a warning.
  */
 export function verifyWebhookSignature(
   payload: string,
   signature: string | null,
   secret: string | null
 ): boolean {
-  // If no secret configured, accept all payloads
-  if (!secret) return true;
+  // If no secret configured: reject in production, warn-and-allow in dev/test
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') return false;
+    console.warn('[PluginWebhook] No webhook secret configured — allowing unverified payload (dev only)');
+    return true;
+  }
 
   // If secret configured but no signature provided, reject
   if (!signature) return false;

@@ -7,21 +7,67 @@ import { NextRequest, NextResponse } from 'next/server';
 import { sendEmail } from '@/lib/email/service';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { requireAuth } from '@/lib/auth/middleware';
+
+/** Constant-time string comparison to prevent timing attacks */
+function timingSafeEqual(a: string, b: string): boolean {
+  const maxLen = Math.max(a.length, b.length);
+  const aPadded = a.padEnd(maxLen, '\0');
+  const bPadded = b.padEnd(maxLen, '\0');
+  let result = 0;
+  for (let i = 0; i < maxLen; i++) {
+    result |= aPadded.charCodeAt(i) ^ bPadded.charCodeAt(i);
+  }
+  return result === 0 && a.length === b.length;
+}
+
+/**
+ * Gate the test-email endpoint:
+ * - Requires an authenticated session (401 otherwise)
+ * - Requires ctx.isAdmin (403 otherwise)
+ * - If SETUP_KEY is configured, the 'x-setup-key' header must match (403 otherwise)
+ * - If SETUP_KEY is unset, only superadmins may proceed (403 otherwise)
+ */
+async function guardTestEmail(request: NextRequest): Promise<NextResponse | null> {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
+  if (!auth.isAdmin) {
+    return NextResponse.json({ error: 'Admin privileges required' }, { status: 403 });
+  }
+
+  const setupKey = process.env['SETUP_KEY'];
+  if (setupKey) {
+    const provided = request.headers.get('x-setup-key') || '';
+    if (!provided || !timingSafeEqual(provided, setupKey)) {
+      return NextResponse.json({ error: 'Invalid or missing x-setup-key header' }, { status: 403 });
+    }
+  } else if (!auth.isSuperAdmin) {
+    return NextResponse.json({ error: 'Super admin privileges required' }, { status: 403 });
+  }
+
+  return null;
+}
 
 /**
  * Test Email Endpoint
- * 
- * Use this to test if email is working
- * 
+ *
+ * Use this to test if email is working.
+ * Requires: authenticated admin session + (SETUP_KEY header match | superadmin).
+ *
  * Usage:
  * curl -X POST http://localhost:3000/api/test-email \
  *   -H "Content-Type: application/json" \
+ *   -H "x-setup-key: $SETUP_KEY" \
  *   -d '{"to":"your-email@example.com"}'
  */
 export async function POST(request: NextRequest) {
   try {
     const limited = await checkRateLimit(request, { action: 'test-email', max: 5, windowMinutes: 60 });
     if (limited) return limited;
+
+    const denied = await guardTestEmail(request);
+    if (denied) return denied;
 
     const body = await readJsonBody(request);
     const to = body.to;
@@ -83,7 +129,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const denied = await guardTestEmail(request);
+  if (denied) return denied;
+
   return NextResponse.json({
     message: 'Email test endpoint',
     usage: 'POST with { "to": "your@email.com" }',

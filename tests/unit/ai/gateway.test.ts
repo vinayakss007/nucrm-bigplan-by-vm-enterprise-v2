@@ -1,5 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Gateway unit tests stub global fetch with fake providers — bypass the SSRF
+// guard so localhost test endpoints resolve to the stub (guard has own suite).
+vi.mock('@/lib/security/ssrf', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/security/ssrf')>();
+  return {
+    ...actual,
+    safeFetch: ((input: RequestInfo | URL, init?: RequestInit) =>
+      globalThis.fetch(input as string, init)) as typeof actual.safeFetch,
+    assertSafeUrl: () => undefined,
+    resolveAndValidateIp: async () => undefined,
+  };
+});
+
 const mockFetch = vi.fn();
 const mockDbSelect = vi.fn();
 const mockDbInsert = vi.fn();

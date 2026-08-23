@@ -35,6 +35,7 @@ import { aiActivity } from '@/drizzle/schema/ai';
 import { eq } from 'drizzle-orm';
 import { getProviderKey, type KeyType } from './secrets';
 import { checkCredits, deductCredits, isCentralizedProvider } from './credits';
+import { safeFetch } from '@/lib/security/ssrf';
 
 export type GatewayMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -193,7 +194,7 @@ async function callOpenAILike(
       ...messages,
     ],
   };
-  const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+  const res = await safeFetch(`${baseUrl}/v1/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -264,7 +265,7 @@ async function callOllama(
   max_tokens: number,
   temperature: number,
 ): Promise<ProviderCall> {
-  const res = await fetch(`${baseUrl}/api/chat`, {
+  const res = await safeFetch(`${baseUrl}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

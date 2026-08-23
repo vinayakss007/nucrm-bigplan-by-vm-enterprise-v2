@@ -42,9 +42,14 @@ export async function POST(req: NextRequest) {
 
     const body = await req.text();
     
-    // Optional: Verify webhook secret if configured
+    // Verify webhook secret — fail-closed in production when not configured
     const urlSecret = process.env.RESEND_WEBHOOK_SECRET;
-    if (urlSecret) {
+    if (!urlSecret) {
+      if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 403 });
+      }
+      console.warn('[resend-webhook] RESEND_WEBHOOK_SECRET is not set — skipping verification (dev only)');
+    } else {
       const providedSecret = req.headers.get('x-webhook-secret') ?? '';
       const expectedBuf = Buffer.from(urlSecret, 'utf8');
       const providedBuf = Buffer.from(providedSecret, 'utf8');

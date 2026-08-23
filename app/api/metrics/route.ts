@@ -22,6 +22,14 @@ function push(metrics: string[], name: string, help: string, type: string, value
 }
 
 export async function GET(request: NextRequest) {
+  // Fail closed: in production, metrics require an explicit METRICS_SECRET.
+  if (!METRICS_SECRET && process.env['NODE_ENV'] === 'production') {
+    return new Response('# metrics disabled: METRICS_SECRET not configured\n', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain' },
+    });
+  }
+
   if (METRICS_SECRET) {
     const auth = request.headers.get('authorization');
     const headerSecret = request.headers.get('x-metrics-secret');

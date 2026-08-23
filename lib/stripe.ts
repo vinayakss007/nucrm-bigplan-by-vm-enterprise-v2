@@ -1,3 +1,4 @@
+import { getAppUrl } from './app-url';
 /*!
  * NuCRM Enterprise — Property of abetworks.in
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
@@ -70,10 +71,6 @@ function getWebhookSecret(): string {
   const secret = process.env['STRIPE_WEBHOOK_SECRET'];
   if (!secret) throw new Error('STRIPE_WEBHOOK_SECRET is not configured');
   return secret;
-}
-
-function getAppUrl(): string {
-  return process.env['NEXT_PUBLIC_APP_URL'] || 'http://localhost:3000';
 }
 
 // ── Core Stripe API Call ─────────────────────────────────────────────────────

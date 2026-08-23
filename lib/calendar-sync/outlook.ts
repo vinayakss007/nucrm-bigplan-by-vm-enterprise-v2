@@ -1,3 +1,4 @@
+import { getAppUrl } from '../app-url';
 /*!
  * NuCRM Enterprise — Property of abetworks.in
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
@@ -185,5 +186,5 @@ export function createOutlookCalendarProvider(): CalendarProvider {
 }
 
 function getRedirectUri(): string {
-  return process.env.OUTLOOK_CALENDAR_REDIRECT_URI || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/tenant/calendar-sync/outlook/callback`;
+  return process.env.OUTLOOK_CALENDAR_REDIRECT_URI || `${getAppUrl()}/api/tenant/calendar-sync/outlook/callback`;
 }

@@ -84,6 +84,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const rawBody = await request.text();
     const signature = request.headers.get('x-webhook-signature') ?? request.headers.get('x-hub-signature-256');
 
+    // Fail-closed: no secret configured on the plugin in production → reject
+    if (!plugin.webhookSecret && process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 403 });
+    }
+
     // Verify webhook signature
     const verified = verifyWebhookSignature(rawBody, signature, plugin.webhookSecret);
 
