@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
         for (const perm of parsed.data.permissions) {
           if (allowedPerms.includes(perm as typeof allowedPerms[number])) {
             await tx.insert(hierarchyPermissions).values({
+              tenantId: ctx.tenantId,
               hierarchyId: row.id,
               permission: perm as typeof allowedPerms[number],
             });
