@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockChat = vi.fn();
 const mockDbLimitResolve = vi.fn();
+let whereConditions: unknown[];
 
 vi.mock('@/lib/ai/gateway', () => ({
   chat: mockChat,
@@ -19,18 +20,32 @@ vi.mock('@/drizzle/db', () => ({
   db: {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => mockDbLimitResolve()),
-        })),
+        where: vi.fn((cond: unknown) => {
+          whereConditions!.push(cond);
+          return {
+            limit: vi.fn(() => mockDbLimitResolve()),
+          };
+        }),
       })),
     })),
   },
 }));
 
+const col = (name: string) => ({ __column: name });
+
 vi.mock('@/drizzle/schema/crm', () => ({
-  contacts: {},
-  companies: {},
-  deals: {},
+  contacts: {
+    id: col('contacts.id'),
+    tenantId: col('contacts.tenantId'),
+  },
+  companies: {
+    id: col('companies.id'),
+    tenantId: col('companies.tenantId'),
+  },
+  deals: {
+    id: col('deals.id'),
+    tenantId: col('deals.tenantId'),
+  },
 }));
 
 vi.mock('@/drizzle/schema/core', () => ({
@@ -40,6 +55,7 @@ vi.mock('@/drizzle/schema/core', () => ({
 
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((...a: unknown[]) => ({ type: 'eq', args: a })),
+  and: vi.fn((...conds: unknown[]) => ({ type: 'and', conds })),
 }));
 
 describe('AI Summarize', () => {
@@ -49,6 +65,7 @@ describe('AI Summarize', () => {
     vi.clearAllMocks();
     mockChat.mockReset();
     mockDbLimitResolve.mockReset();
+    whereConditions = [];
     mod = await import('@/lib/ai/summarize');
   });
 
@@ -148,6 +165,32 @@ describe('AI Summarize', () => {
         .mockResolvedValueOnce([{ id: 'u-1', fullName: 'Bob', email: 'bob@acme.com' }]);
 
       await expect(mod.summarizeEntity('t-1', 'u-1', 'contact', 'nonexistent')).rejects.toThrow('contact not found');
+    });
+
+    it.each([
+      ['contact', 'c-1'],
+      ['deal', 'd-1'],
+      ['company', 'comp-1'],
+    ])('scopes %s lookup to the caller tenant', async (entityType, entityId) => {
+      mockDbLimitResolve
+        .mockResolvedValueOnce([{ id: entityId, name: 'X' }])
+        .mockResolvedValueOnce([{ id: 't-1', name: 'Acme Inc', primaryColor: '#fff' }])
+        .mockResolvedValueOnce([{ id: 'u-1', fullName: 'Bob', email: 'bob@acme.com' }]);
+
+      mockChat.mockResolvedValue({
+        text: 'summary.', provider: 'openai', model: 'gpt-4',
+        tokensIn: 1, tokensOut: 1, latencyMs: 1, fallbacksUsed: 0, activityId: null,
+      });
+
+      await mod.summarizeEntity('tenant-A', 'u-1', entityType as 'contact' | 'deal' | 'company', entityId);
+
+      const tableSentinel = entityType === 'company' ? 'companies.tenantId' : `${entityType}s.tenantId`;
+      expect(whereConditions.length).toBeGreaterThan(0);
+      const scoped = whereConditions.some(c => {
+        const s = JSON.stringify(c);
+        return s.includes(tableSentinel) && s.includes('tenant-A');
+      });
+      expect(scoped).toBe(true);
     });
 
     it('passes custom instructions to the gateway', async () => {
