@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 'use client';
 import { useDraggable } from '@dnd-kit/core';
 import { Type, Image, MousePointerClick, Minus, Space, Columns, Code, AlignLeft } from 'lucide-react';

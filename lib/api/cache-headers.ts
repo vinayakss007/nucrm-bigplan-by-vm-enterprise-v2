@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 /**
  * API Response Cache Headers
  * Add to all API routes for browser caching

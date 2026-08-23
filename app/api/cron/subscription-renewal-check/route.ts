@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 /**
  * Subscription Renewal Check — runs daily
  * Finds service subscriptions ending within 30/14/7/3 days and sends reminders.

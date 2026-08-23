@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 /**
  * Assignment Resolver — the missing wiring between the assignment RULES an
  * admin configures and the pure assignment ENGINE that knows how to pick a

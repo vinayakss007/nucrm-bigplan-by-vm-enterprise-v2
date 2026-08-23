@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 /**
  * GET  /api/tenant/whatsapp/templates - List templates from Meta
  * POST /api/tenant/whatsapp/templates - Sync templates from Meta

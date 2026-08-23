@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 'use client';
 import { useState, useEffect } from 'react';
 import { Plus, Globe, Check, X, Trash2, Loader2, ChevronDown, CheckCircle, XCircle, Clock, Copy, Play, ExternalLink } from 'lucide-react';

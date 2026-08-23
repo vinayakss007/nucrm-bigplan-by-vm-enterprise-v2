@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 /**
  * Super-Admin: Recent platform activity (cross-tenant)
  *   GET /api/superadmin/recent-activity?limit=...

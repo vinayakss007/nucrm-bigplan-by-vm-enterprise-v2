@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 /**
  * GET    /api/tenant/documents/[id]  — metadata + signed download URL
  * DELETE /api/tenant/documents/[id]  — soft-delete row + remove S3 object

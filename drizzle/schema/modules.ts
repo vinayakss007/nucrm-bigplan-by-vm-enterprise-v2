@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 import { uniqueIndex, pgTable, uuid, text, timestamp, jsonb, boolean } from 'drizzle-orm/pg-core';
 import { users } from './core';
 import * as utils from './utils';

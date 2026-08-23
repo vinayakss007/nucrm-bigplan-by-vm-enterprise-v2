@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 import type { Metadata } from 'next';
 import { COMPLIANCE_ITEMS, RELIABILITY_ITEMS, SECURITY_FAQ, SECURITY_PILLARS } from '@/lib/marketing/security';
 import { BRAND } from '@/lib/marketing/site';

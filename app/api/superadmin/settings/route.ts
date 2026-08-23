@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 // SECURITY NOTE: Secrets should be migrated to environment variables. See issue #757 item 41.
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';

@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 /**
  * PATCH  /api/tenant/sso/providers/[id]  — update an existing provider
  * DELETE /api/tenant/sso/providers/[id]  — soft-delete a provider

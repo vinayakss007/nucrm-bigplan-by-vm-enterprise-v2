@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 import SettingsNav from '@/components/tenant/settings/settings-nav';
 import SettingsMobilePicker from '@/components/tenant/settings/settings-mobile-picker';
 import SettingsBreadcrumb from '@/components/tenant/settings/settings-breadcrumb';

@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 /**
  * Fetch available models from an AI provider's base URL.
  *   GET /api/tenant/ai/models?provider=openai&base_url=https://api.openai.com

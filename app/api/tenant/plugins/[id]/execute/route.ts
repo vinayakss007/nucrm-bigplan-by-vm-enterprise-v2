@@ -1,3 +1,8 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError, notFound, badRequest } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';

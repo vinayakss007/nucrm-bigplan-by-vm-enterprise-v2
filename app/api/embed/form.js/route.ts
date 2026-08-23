@@ -1,4 +1,11 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
 import { NextRequest, NextResponse } from 'next/server';
+
+/*! NuCRM embed widget — Property of abetworks.in. (c) 2026 abetworks.in. All Rights Reserved. Proprietary & confidential. */
 
 const WIDGET_JS = `
 (function() {
@@ -170,8 +177,37 @@ const WIDGET_JS = `
 })();
 `;
 
+/**
+ * Serve the widget minified+mangled so the distributed artifact is not
+ * human-readable (deters casual reuse of proprietary code on customer sites).
+ * Result is cached module-level — terser runs once per process.
+ */
+type MinifyFn = (code: string, opts: unknown) => Promise<{ code: string }>;
+let cachedMinified: string | null = null;
+
+async function getWidgetJs(): Promise<string> {
+  if (cachedMinified) return cachedMinified;
+  try {
+    const { minify } = (await import('terser')) as { minify: MinifyFn };
+    const out = await minify(WIDGET_JS, {
+      compress: true,
+      mangle: true,
+      format: { comments: false },
+    });
+    cachedMinified = BANNER_JS + '\n' + (out.code ?? WIDGET_JS);
+  } catch {
+    // Fallback: readable source with banner rather than a broken widget
+    cachedMinified = BANNER_JS + '\n' + WIDGET_JS;
+  }
+  return cachedMinified;
+}
+
+const BANNER_JS =
+  '/*! NuCRM embed widget | Property of abetworks.in | (c) 2026 abetworks.in | All Rights Reserved | Proprietary & confidential */';
+
 export async function GET(_req: NextRequest) {
-  return new NextResponse(WIDGET_JS, {
+  const js = await getWidgetJs();
+  return new NextResponse(js, {
     headers: {
       'Content-Type': 'application/javascript; charset=utf-8',
       'Access-Control-Allow-Origin': '*',
