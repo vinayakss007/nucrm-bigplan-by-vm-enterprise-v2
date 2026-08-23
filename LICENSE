@@ -1,21 +1,56 @@
-MIT License
+NuCRM Enterprise — PROPRIETARY SOFTWARE
+Copyright (c) 2026 abetworks.in — All Rights Reserved.
 
-Copyright (c) 2026 NuCRM Team
+This software, including its source code, binaries, documentation,
+design assets, configurations, and all associated materials
+(collectively, the "Software"), is the exclusive and confidential
+property of abetworks.in ("Owner"). All code is the property of
+abetworks.in.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. OWNERSHIP
+   The Software and all intellectual property rights therein are and
+   shall remain the sole property of abetworks.in. The Software is
+   licensed, not sold. No title or ownership is transferred.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+2. LICENSE GRANT
+   Subject to these terms, abetworks.in grants you a limited,
+   non-exclusive, non-transferable, revocable license to use the
+   Software solely for internal business purposes authorized by
+   abetworks.in in writing.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+3. RESTRICTIONS
+   You may NOT:
+   a) Copy, reproduce, modify, merge, publish, distribute, sublicense,
+      sell, lease, rent, or create derivative works of the Software,
+      in whole or in part;
+   b) Reverse engineer, decompile, disassemble, or attempt to derive
+      the source code of the Software;
+   c) Remove, alter, or obscure any copyright, trademark, or other
+      proprietary notices of abetworks.in;
+   d) Host, resell, or offer the Software (or any part of it) to third
+      parties as a service or competing product;
+   e) Use the Software after termination of your authorization.
+
+4. CONFIDENTIALITY
+   The Software's source code constitutes a trade secret of
+   abetworks.in and must be treated as confidential.
+
+5. TERM AND TERMINATION
+   This license is effective until terminated. It terminates
+   automatically upon breach. On termination you must cease all use
+   and destroy all copies of the Software.
+
+6. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR A
+   PARTICULAR PURPOSE.
+
+7. LIMITATION OF LIABILITY
+   IN NO EVENT SHALL ABETWORKS.IN BE LIABLE FOR ANY CLAIM, DAMAGES, OR
+   OTHER LIABILITY ARISING FROM THE SOFTWARE OR ITS USE.
+
+8. GOVERNING LAW
+   Governed by the laws of India. Jurisdiction: courts of the city
+   where abetworks.in is registered.
+
+Contact: legal@abetworks.in

@@ -2,8 +2,8 @@
   "name": "nucrm-enterprise",
   "version": "0.4.0",
   "description": "Multi-tenant Enterprise CRM built with Next.js 16, PostgreSQL, and JWT auth",
-  "author": "NuCRM Team",
-  "license": "MIT",
+  "author": "abetworks.in",
+  "license": "UNLICENSED",
   "private": true,
   "homepage": "https://github.com/vinayakss007/nucrm-bigplan-by-vm-enterprise-v2#readme",
   "repository": {
