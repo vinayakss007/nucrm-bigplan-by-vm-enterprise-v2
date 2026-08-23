@@ -131,13 +131,21 @@ export async function POST(request: NextRequest) {
       `);
     }
 
-    // Create session token for impersonated user (1-day expiry to limit blast radius)
+    // Create session token for impersonated user (1-day expiry to limit blast radius).
+    // Token is delivered ONLY via httpOnly cookie — never in the response body (XSS theft risk).
     const token = await createToken(targetUserId, 1);
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const response = NextResponse.json({
       ok: true,
       sessionId,
       message: `Impersonating ${targetUser.fullName || targetUser.email}`,
-      token,
+      user: {
+        id: targetUser.id,
+        email: targetUser.email,
+        fullName: targetUser.fullName,
+      },
+      tenantId,
+      expiresAt,
     });
     
     await setSessionCookie(token, 1);
