@@ -11,7 +11,8 @@ import { users, passwordResets } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { randomBytes, createHash } from 'crypto';
 import { sendEmail } from '@/lib/email/service';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkRateLimit, limiters, getRateLimitHeaders } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/client-ip';
 
 const schema = z.object({ email: z.string().email() });
 
@@ -24,6 +25,17 @@ export async function POST(request: NextRequest) {
     const validated = validateBody(schema, body);
     if (validated instanceof NextResponse) return validated;
     const { email } = validated.data;
+
+    // #1245: hard per-(email+ip) limit (3/hour) independent of DB-configured limits
+    const pwReset = await limiters.passwordReset.check(
+      `pwreset:${getClientIp(request)}:${email.toLowerCase().trim()}`
+    );
+    if (!pwReset.allowed) {
+      return NextResponse.json(
+        { error: 'Too many requests. Try again later.' },
+        { status: 429, headers: getRateLimitHeaders(pwReset) }
+      );
+    }
 
     // Always return success — never reveal if email exists
     const user = await db.query.users.findFirst({

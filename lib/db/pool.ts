@@ -15,6 +15,22 @@ declare global { var __pgPool: Pool | undefined; var __pgPoolCreating: boolean |
  */
 const MAX_WAITING_CLIENTS = 50;
 
+// #1188: warn at most once per 30s instead of throwing for every caller —
+// connection-level timeouts (connectionTimeoutMillis / statement_timeout)
+// already guard against hangs, and idle capacity may free up.
+let lastExhaustionWarnAt = 0;
+
+function warnPoolSaturation(waitingCount: number): void {
+  const now = Date.now();
+  if (now - lastExhaustionWarnAt >= 30_000) {
+    lastExhaustionWarnAt = now;
+    console.error(
+      `[db-pool] WARNING: Connection pool saturated: ${waitingCount} requests waiting (max ${MAX_WAITING_CLIENTS}). ` +
+      'Increase DATABASE_POOL_SIZE or reduce concurrent queries.',
+    );
+  }
+}
+
 function isPgBouncerEnabled(): boolean {
   return process.env['PGBOUNCER_ENABLED'] === 'true';
 }
@@ -48,18 +64,17 @@ export function getPoolStats(): PoolStats {
 
 /**
  * Get the singleton PostgreSQL connection pool.
- * Rejects immediately if the pool waiting queue exceeds MAX_WAITING_CLIENTS
- * to prevent cascading failures from connection exhaustion.
+ * #1188: when the waiting queue exceeds MAX_WAITING_CLIENTS, logs a
+ * throttled warning and still returns the pool — connection-level
+ * timeouts guard against hangs. Use getPoolStats().exhausted for
+ * health-check signal.
  */
 export function getPool(): Pool {
   if (global.__pgPool) {
     // Pool already exists — fast path
     const pool = global.__pgPool;
     if (pool.waitingCount > MAX_WAITING_CLIENTS) {
-      throw new Error(
-        `Connection pool exhausted: ${pool.waitingCount} requests waiting (max ${MAX_WAITING_CLIENTS}). ` +
-        'Increase DATABASE_POOL_SIZE or reduce concurrent queries.',
-      );
+      warnPoolSaturation(pool.waitingCount);
     }
     return pool;
   }
@@ -129,13 +144,10 @@ export function getPool(): Pool {
       console.error('[db-pool] error:', err.message);
     });
 
-    // Reject early if pool waiting queue is too deep
+    // Warn (don't throw) if the waiting queue is deep — callers still get the pool
     const pool = global.__pgPool;
     if (pool.waitingCount > MAX_WAITING_CLIENTS) {
-      throw new Error(
-        `Connection pool exhausted: ${pool.waitingCount} requests waiting (max ${MAX_WAITING_CLIENTS}). ` +
-        'Increase DATABASE_POOL_SIZE or reduce concurrent queries.',
-      );
+      warnPoolSaturation(pool.waitingCount);
     }
 
     return pool;

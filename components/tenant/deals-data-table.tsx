@@ -372,9 +372,9 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
       selectOptions: stages
         .filter(s => /won|lost|closed/i.test(s.name))
         .map(s => ({ value: s.id, label: `${s.pipeline} → ${s.name}` })),
-      onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
+      onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean, textInput?: string) => {
         if (!input) return toast.error('Pick a close stage (Won / Lost)')
-        const reason = window.prompt('Close reason (optional)') ?? null
+        const reason = (textInput ?? '').trim() || null
         const stage = stages.find(s => s.id === input)
         const outcome = stage && (/lost/i.test(stage.name) ? 'lost' : /won/i.test(stage.name) ? 'won' : undefined)
         await callBulk('close', ids, { stage_id: input, reason, outcome }, isSelectAllMatching)
@@ -386,11 +386,12 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
       icon: <Tag className="w-3.5 h-3.5" />,
       requiresSelect: true,
       selectOptions: customFields.map(f => ({ value: f.fieldKey, label: f.fieldLabel })),
-      onClick: async (ids: string[], fieldKey?: string, isSelectAllMatching?: boolean) => {
+      requiresTextInput: true,
+      textInputPlaceholder: 'New value',
+      onClick: async (ids: string[], fieldKey?: string, isSelectAllMatching?: boolean, textInput?: string) => {
         if (!fieldKey) return toast.error('Select a field')
-        const field = customFields.find(f => f.fieldKey === fieldKey)
-        const value = window.prompt(`Enter value for "${field?.fieldLabel || fieldKey}":`)
-        if (value === null) return
+        const value = (textInput ?? '').trim()
+        if (!value) return toast.error('Enter a value for the field')
         await callBulk('update_field', ids, { field_key: fieldKey, field_value: value }, isSelectAllMatching)
       },
     },

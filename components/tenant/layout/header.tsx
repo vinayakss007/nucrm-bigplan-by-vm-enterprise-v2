@@ -141,6 +141,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
             }}
             placeholder="Search contacts, deals, companies..."
             data-testid="search-input"
+            data-search
             className="w-full pl-8 pr-8 py-1.5 text-sm bg-muted/40 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-background transition-colors"
           />
           {query && <button type="button" aria-label="Clear search" onClick={()=>{setQuery('');setResults(null);setShowDrop(false);}} className="absolute right-2 top-1/2 -translate-y-1/2 min-h-11 min-w-11 flex items-center justify-center text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" aria-hidden="true"/></button>}

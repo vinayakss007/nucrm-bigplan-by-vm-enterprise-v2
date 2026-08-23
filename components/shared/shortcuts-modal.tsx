@@ -23,7 +23,7 @@ const SHORTCUTS: Shortcut[] = [
   // Global
   { keys: '⌘K', description: 'Open command palette', category: 'general' },
   { keys: '?', description: 'Show keyboard shortcuts', category: 'general' },
-  { keys: '⌘/', description: 'Focus search', category: 'general' },
+  { keys: '/', description: 'Focus search', category: 'general' },
   { keys: 'ESC', description: 'Close modal/dropdown', category: 'general' },
   
   // Navigation

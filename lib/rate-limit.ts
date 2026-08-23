@@ -17,6 +17,7 @@
 
 import { cache } from './cache/index';
 import { NextResponse } from 'next/server';
+import { getClientIp } from '@/lib/client-ip';
 import { db } from '@/drizzle/db';
 import { plans, users, systemSettings } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
@@ -309,7 +310,8 @@ export async function rateLimitMiddleware(
   endpointOrLimiter: string | RateLimiter,
   keyPrefix: string = 'api'
 ): Promise<RateLimitResult | null> {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
+  // #1249: header values only honored when TRUST_PROXY=true (see getClientIp)
+  const ip = getClientIp(request);
   const authHeader = request.headers.get('authorization');
 
   const identifier = authHeader ? `user:${authHeader.slice(0, 20)}` : `ip:${ip}`;
@@ -373,7 +375,8 @@ export async function checkRateLimit(
 ) {
   const { action = 'api', max: fallbackMax, windowMinutes: fallbackWindow } = options;
 
-  const ip = request?.headers?.get('x-forwarded-for')?.split(',')[0] || 'unknown';
+  // #1249: header values only honored when TRUST_PROXY=true (see getClientIp)
+  const ip = request?.headers?.get ? getClientIp(request) : 'unknown';
   const key = `v1_rate:${action}:${ip}`;
 
   // Get limit from DB first, fall back to provided max

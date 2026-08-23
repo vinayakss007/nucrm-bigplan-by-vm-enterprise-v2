@@ -592,11 +592,12 @@ export default function ContactsDataTable({
       label: 'Update Field',
       requiresSelect: true,
       selectOptions: customFields.map(f => ({ value: f.fieldKey, label: f.fieldLabel })),
-      onClick: async (selectedIds: string[], fieldKey?: string, isSelectAllMatching?: boolean) => {
+      requiresTextInput: true,
+      textInputPlaceholder: 'New value',
+      onClick: async (selectedIds: string[], fieldKey?: string, isSelectAllMatching?: boolean, textInput?: string) => {
         if (!fieldKey) { toast.error('Select a field'); return; }
-        const field = customFields.find(f => f.fieldKey === fieldKey);
-        const value = window.prompt(`Enter value for "${field?.fieldLabel || fieldKey}":`);
-        if (value === null) return;
+        const value = (textInput ?? '').trim();
+        if (!value) { toast.error('Enter a value for the field'); return; }
         setBulkActionLoading(true)
         const res = await fetch('/api/tenant/contacts/bulk', {
           method: 'POST',

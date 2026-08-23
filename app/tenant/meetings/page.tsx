@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
 import { Plus, Video, MapPin, Link as LinkIcon } from 'lucide-react';
+import { Breadcrumb } from '@/components/shared/breadcrumb';
 
 interface Meeting {
   id: string;
@@ -87,6 +88,7 @@ export default function MeetingsPage() {
 
   return (
     <div className="p-6 space-y-6">
+      <Breadcrumb />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Meetings</h1>
         <Button onClick={() => setShowCreate(true)}><Plus className="w-4 h-4 mr-2" />New Meeting</Button>

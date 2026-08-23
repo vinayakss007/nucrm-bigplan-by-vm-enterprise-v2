@@ -16,7 +16,8 @@ import { sendEmail, sendWebhookNotification, sendTelegram } from '@/lib/email/se
 import { sendAdminTelegram } from '@/lib/telegram-admin';
 import { devLogger } from '@/lib/dev-logger';
 import { logger } from '@/lib/logger';
-import { randomBytes, createHash, createHmac } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
+import { verifyTOTP } from '@/lib/auth/totp';
 import { installDefaultModules } from '@/lib/modules/auto-install';
 import { isBlocked, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/security/brute-force';
 import { validateBody } from '@/lib/api/validate';
@@ -123,25 +124,8 @@ export async function POST_login(request: NextRequest) {
       if (!totpToken) {
         return loginRespond(request, isForm, { requires_2fa: true, email: user.email }, 200);
       }
-      
-      const b32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-      let bits = 0, val = 0; const kb: number[] = [];
-      for (const ch of (user.totpSecret ?? '').toUpperCase()) {
-        const idx = b32.indexOf(ch); if (idx === -1) continue;
-        val = (val << 5) | idx; bits += 5;
-        if (bits >= 8) { kb.push((val >>> (bits-8)) & 255); bits -= 8; }
-      }
-      const key = Buffer.from(kb);
-      const ctr = Math.floor(Date.now() / 30000);
-      let valid = false;
-      for (let i = -1; i <= 1; i++) {
-        const c = ctr + i; const buf = Buffer.alloc(8);
-        buf.writeUInt32BE(Math.floor(c/0x100000000),0); buf.writeUInt32BE(c>>>0,4);
-        const hmac = createHmac('sha1',key).update(buf).digest();
-        const off = hmac[hmac.length-1]! & 0xf;
-        const code = (((hmac[off]!)&0x7f)<<24|(hmac[off+1]!)<<16|(hmac[off+2]!)<<8|(hmac[off+3]!))%1000000;
-        if (String(code).padStart(6,'0') === String(totpToken)) { valid = true; break; }
-      }
+
+      let valid = verifyTOTP(user.totpSecret ?? '', String(totpToken));
       if (!valid && user.totpBackupCodes) {
         const hash = createHash('sha256').update(String(totpToken).toUpperCase()).digest('hex');
         const codes: string[] = typeof user.totpBackupCodes === 'string' ? JSON.parse(user.totpBackupCodes) : (user.totpBackupCodes as string[]);

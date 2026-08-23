@@ -231,8 +231,14 @@ export async function POST(request: NextRequest) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     logError({ error: err, context: 'leads/public' }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
-    // Return generic success to visitor even on error
-    return NextResponse.json({ ok: true, message: 'Thank you! We will be in touch.' });
+    // Internal errors must NOT fake success (#1109): the caller's data was not
+    // saved, so report failure. Anti-enumeration masking only applies to
+    // validation-style checks (e.g. GET email-existence below), never to
+    // internal server errors.
+    return NextResponse.json(
+      { ok: false, error: 'Something went wrong. Please try again later.' },
+      { status: 500 }
+    );
   }
 }
 

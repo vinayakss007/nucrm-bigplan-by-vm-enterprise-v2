@@ -11,52 +11,57 @@ import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import { withCache } from '@/lib/dashboard/widget-cache';
 
 export async function GET(request: NextRequest) {
-  const ctx = await requireAuth(request);
-  if (ctx instanceof NextResponse) return ctx;
-  const tid = ctx.tenantId;
-  const uid = ctx.userId;
+  try {
+    const ctx = await requireAuth(request);
+    if (ctx instanceof NextResponse) return ctx;
+    const tid = ctx.tenantId;
+    const uid = ctx.userId;
 
-  return withCache(tid, 'notifications-list', 60, async () => {
-    const notifs = await db
-      .select({
-        id: notifications.id,
-        title: notifications.title,
-        body: notifications.body,
-        type: notifications.type,
-        link: notifications.link,
-        readAt: notifications.readAt,
-        createdAt: notifications.createdAt,
+    return withCache(tid, 'notifications-list', 60, async () => {
+      const notifs = await db
+        .select({
+          id: notifications.id,
+          title: notifications.title,
+          body: notifications.body,
+          type: notifications.type,
+          link: notifications.link,
+          readAt: notifications.readAt,
+          createdAt: notifications.createdAt,
+        })
+        .from(notifications)
+        .where(and(
+          eq(notifications.tenantId, tid),
+          eq(notifications.userId, uid),
+          isNull(notifications.deletedAt),
+        ))
+        .orderBy(desc(notifications.createdAt))
+        .limit(5);
+
+      const [unreadResult] = await db.select({
+        count: sql<number>`count(*)::int`,
       })
-      .from(notifications)
-      .where(and(
-        eq(notifications.tenantId, tid),
-        eq(notifications.userId, uid),
-        isNull(notifications.deletedAt),
-      ))
-      .orderBy(desc(notifications.createdAt))
-      .limit(5);
+        .from(notifications)
+        .where(and(
+          eq(notifications.tenantId, tid),
+          eq(notifications.userId, uid),
+          isNull(notifications.deletedAt),
+          isNull(notifications.readAt),
+        ));
 
-    const [unreadResult] = await db.select({
-      count: sql<number>`count(*)::int`,
-    })
-      .from(notifications)
-      .where(and(
-        eq(notifications.tenantId, tid),
-        eq(notifications.userId, uid),
-        isNull(notifications.deletedAt),
-        isNull(notifications.readAt),
-      ));
+      const unreadCount = unreadResult?.count ?? 0;
 
-    const unreadCount = unreadResult?.count ?? 0;
-
-    return NextResponse.json({
-      data: {
-        items: notifs,
-        stats: {
-          unreadCount,
-          totalCount: unreadCount,
+      return NextResponse.json({
+        data: {
+          items: notifs,
+          stats: {
+            unreadCount,
+            totalCount: unreadCount,
+          },
         },
-      },
+      });
     });
-  });
+  } catch (err) {
+    console.error('[widget:notifications-list] failed:', err);
+    return NextResponse.json({ error: 'Widget failed' }, { status: 500 });
+  }
 }

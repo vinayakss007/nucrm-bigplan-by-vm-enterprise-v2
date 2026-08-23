@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { Book, Search, Plus, Clock, Eye, ThumbsUp, ChevronRight, FolderPlus } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { Breadcrumb } from '@/components/shared/breadcrumb';
 
 export default function KBPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,6 +44,7 @@ export default function KBPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <Breadcrumb />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

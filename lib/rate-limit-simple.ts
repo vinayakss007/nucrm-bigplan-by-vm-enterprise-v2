@@ -12,6 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getClientIp } from '@/lib/client-ip';
 
 interface RateLimitEntry {
   count: number;
@@ -54,9 +55,8 @@ export function checkPublicRateLimit(
 
   cleanupExpired();
 
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-    || req.headers.get('x-real-ip')
-    || 'unknown';
+  // #1249: header values only honored when TRUST_PROXY=true (see getClientIp)
+  const ip = getClientIp(req);
 
   const key = `${prefix}:${ip}`;
   const now = Date.now();

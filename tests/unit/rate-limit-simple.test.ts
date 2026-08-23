@@ -1,5 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
+
+// Header-derived IPs are only honored when TRUST_PROXY=true (#1249)
+beforeEach(() => {
+  process.env.TRUST_PROXY = 'true';
+});
+afterEach(() => {
+  delete process.env.TRUST_PROXY;
+});
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mockRequest(ip: string | null): any {

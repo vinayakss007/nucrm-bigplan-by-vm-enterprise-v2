@@ -16,7 +16,8 @@ if (SENTRY_DSN) {
     // GDPR: never send PII by default
     sendDefaultPii: false,
 
-    enabled: process.env['SENTRY_ENABLE'] !== 'false',
+    // Initialize whenever a DSN is configured; explicit opt-out is SENTRY_DISABLE=true
+    enabled: process.env['SENTRY_DISABLE'] !== 'true',
     tracesSampleRate: process.env['SENTRY_TRACES_SAMPLE_RATE'] 
       ? parseFloat(process.env['SENTRY_TRACES_SAMPLE_RATE']) 
       : 0.2,

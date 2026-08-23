@@ -47,6 +47,7 @@ const COLUMN_MAP: Record<string, string> = {
   'tags': 'tags', 'tag': 'tags',
   'priority': 'priority',
   'status': 'status', 'deal_status': 'status',
+  'external_id': 'externalId', 'externalid': 'externalId', 'external_deal_id': 'externalId', 'crm_id': 'externalId',
 };
 
 export async function POST(request: NextRequest) {
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
     if (!rows.length) return NextResponse.json({ error: 'No data rows found in CSV' }, { status: 400 });
     if (rows.length > 50000) return NextResponse.json({ error: 'CSV too large (max 50,000 rows)' }, { status: 400 });
 
-    const results = { imported: 0, updated: 0, skipped: 0, errors: [] as string[] };
+    const results = { imported: 0, updated: 0, skipped: 0, skipped_duplicates: 0, errors: [] as string[] };
     const BATCH_SIZE = 500;
 
     await db.transaction(async (tx) => {
@@ -188,6 +189,45 @@ export async function POST(request: NextRequest) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const insertBuffer: any[] = [];
 
+      // Dedupe (#1122): match existing deals by (tenantId, title) OR externalId
+      // (stored in metadata.external_id). Duplicates are skipped and reported.
+      const dealTitleCache = new Map<string, string>();
+      const dealExtCache = new Map<string, string>();
+      const seenInFile = new Set<string>();
+
+      const findExistingDeal = async (title?: string, extId?: string): Promise<string | null> => {
+        if (extId) {
+          const cached = dealExtCache.get(extId);
+          if (cached) return cached;
+          const [row] = await tx
+            .select({ id: deals.id })
+            .from(deals)
+            .where(and(
+              eq(deals.tenantId, ctx.tenantId),
+              sql`${deals.metadata}->>'external_id' = ${extId}`,
+              sql`${deals.deletedAt} IS NULL`
+            ))
+            .limit(1);
+          if (row) { dealExtCache.set(extId, row.id); return row.id; }
+        }
+        if (title?.trim()) {
+          const key = title.toLowerCase().trim();
+          const cached = dealTitleCache.get(key);
+          if (cached) return cached;
+          const [row] = await tx
+            .select({ id: deals.id })
+            .from(deals)
+            .where(and(
+              eq(deals.tenantId, ctx.tenantId),
+              sql`lower(${deals.title}) = ${key}`,
+              sql`${deals.deletedAt} IS NULL`
+            ))
+            .limit(1);
+          if (row) { dealTitleCache.set(key, row.id); return row.id; }
+        }
+        return null;
+      };
+
       for (const [index, row] of rows.entries()) {
         try {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -202,6 +242,19 @@ export async function POST(request: NextRequest) {
             results.skipped++;
             continue;
           }
+
+          // Skip duplicates (#1122): existing deal (by title or externalId) or
+          // an earlier row in this same file with the same identity.
+          const existingDealId = await findExistingDeal(mapped.title, mapped.externalId);
+          const identityKey = mapped.externalId
+            ? `e:${mapped.externalId}`
+            : `t:${mapped.title.toLowerCase().trim()}`;
+          if (existingDealId || seenInFile.has(identityKey)) {
+            results.skipped_duplicates++;
+            results.skipped++;
+            continue;
+          }
+          seenInFile.add(identityKey);
 
           const pipelineId = await resolvePipeline(mapped.pipeline);
           if (!pipelineId) {
@@ -268,6 +321,7 @@ export async function POST(request: NextRequest) {
             companyId,
             assignedTo: assignedTo || ctx.userId,
             tags: tags.length > 0 ? tags : undefined,
+            metadata: mapped.externalId ? { external_id: mapped.externalId } : undefined,
           });
 
           if (insertBuffer.length >= BATCH_SIZE) {
@@ -316,7 +370,7 @@ export async function POST(request: NextRequest) {
       userId: ctx.userId,
       action: 'deals.imported',
       entityType: 'deal',
-      newData: { imported: results.imported, skipped: results.skipped, errors: results.errors.length },
+      newData: { imported: results.imported, skipped: results.skipped, skipped_duplicates: results.skipped_duplicates, errors: results.errors.length },
     });
 
     return NextResponse.json({ ok: true, results });

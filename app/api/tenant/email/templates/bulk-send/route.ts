@@ -54,13 +54,16 @@ export async function POST(request: NextRequest) {
 
     if (!template) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
 
-    // Fetch contacts - filter out doNotContact contacts
+    // Fetch contacts - filter out doNotContact contacts.
+    // Compliance (#1120): `unsubscribed` is fetched so opted-out contacts can be
+    // skipped and reported instead of emailed.
     const recipientContacts = await db
       .select({
         id: contacts.id,
         firstName: contacts.firstName,
         lastName: contacts.lastName,
         email: contacts.email,
+        unsubscribed: contacts.unsubscribed,
       })
       .from(contacts)
       .where(and(
@@ -71,14 +74,17 @@ export async function POST(request: NextRequest) {
         eq(contacts.doNotContact, false)
       ));
 
-    if (recipientContacts.length === 0) {
+    const skippedUnsubscribed = recipientContacts.filter(c => c.unsubscribed === true).length;
+    const eligibleContacts = recipientContacts.filter(c => c.unsubscribed !== true);
+
+    if (eligibleContacts.length === 0) {
       return NextResponse.json({ error: 'No valid recipients found (contacts need email addresses)' }, { status: 400 });
     }
 
     // Send to each contact with personalization
     const results: Array<{ contact_id: string; email: string; status: 'sent' | 'failed'; error?: string }> = [];
 
-    for (const contact of recipientContacts) {
+    for (const contact of eligibleContacts) {
       try {
         const personalVars: Record<string, string> = {
           ...variables,
@@ -114,7 +120,7 @@ export async function POST(request: NextRequest) {
     const failed = results.filter(r => r.status === 'failed').length;
 
     return NextResponse.json({
-      data: { sent, failed, total: results.length, results },
+      data: { sent, failed, total: results.length, skipped_unsubscribed: skippedUnsubscribed, results },
     });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {

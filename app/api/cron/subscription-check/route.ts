@@ -66,37 +66,42 @@ export async function POST(request: Request) {
 
     for (const sub of staleSubscriptions) {
       try {
-        // Downgrade tenant to free
-        await db
-          .update(tenants)
-          .set({
-            planId: 'free',
-            status: 'cancelled',
-            updatedAt: new Date(),
-          })
-          .where(eq(tenants.id, sub.tenantId));
+        // #1106: downgrade touches tenants + subscriptions + billing events —
+        // wrap all writes in one transaction so a partial failure can't leave
+        // the tenant half-downgraded.
+        await db.transaction(async (tx) => {
+          // Downgrade tenant to free
+          await tx
+            .update(tenants)
+            .set({
+              planId: 'free',
+              status: 'cancelled',
+              updatedAt: new Date(),
+            })
+            .where(eq(tenants.id, sub.tenantId));
 
-        // Clean subscription row
-        await db
-          .update(subscriptions)
-          .set({
-            planId: 'free',
-            stripeSubscriptionId: null,
-            cancelAtPeriodEnd: false,
-            updatedAt: new Date(),
-          })
-          .where(eq(subscriptions.id, sub.subscriptionId));
+          // Clean subscription row
+          await tx
+            .update(subscriptions)
+            .set({
+              planId: 'free',
+              stripeSubscriptionId: null,
+              cancelAtPeriodEnd: false,
+              updatedAt: new Date(),
+            })
+            .where(eq(subscriptions.id, sub.subscriptionId));
 
-        // Audit trail
-        await db.insert(billingEvents).values({
-          tenantId: sub.tenantId,
-          eventType: 'subscription_downgraded',
-          metadata: {
-            reason: 'fallback_cron',
-            previous_status: sub.stripeStatus,
-            period_end: sub.currentPeriodEnd?.toISOString(),
-            detected_at: new Date().toISOString(),
-          },
+          // Audit trail
+          await tx.insert(billingEvents).values({
+            tenantId: sub.tenantId,
+            eventType: 'subscription_downgraded',
+            metadata: {
+              reason: 'fallback_cron',
+              previous_status: sub.stripeStatus,
+              period_end: sub.currentPeriodEnd?.toISOString(),
+              detected_at: new Date().toISOString(),
+            },
+          });
         });
 
         downgraded++;

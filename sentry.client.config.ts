@@ -17,8 +17,8 @@ export const sentryConfig = {
   // GDPR: never send PII by default
   sendDefaultPii: false,
 
-  // Enable in production and development to catch issues early
-  enabled: process.env['SENTRY_ENABLE'] !== 'false',
+  // Initialize whenever a DSN is configured; explicit opt-out is SENTRY_DISABLE=true
+  enabled: process.env['SENTRY_DISABLE'] !== 'true',
   
   // Performance monitoring
   tracesSampleRate: process.env['SENTRY_TRACES_SAMPLE_RATE'] 

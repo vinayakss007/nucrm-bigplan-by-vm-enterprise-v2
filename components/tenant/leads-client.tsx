@@ -129,6 +129,7 @@ export default function LeadsClient({
   const [customFields, setCustomFields] = useState<{ fieldKey: string; fieldLabel: string }[]>([]);
   const [showBulkField, setShowBulkField] = useState(false);
   const [bulkFieldKey, setBulkFieldKey] = useState('');
+  const [bulkFieldValue, setBulkFieldValue] = useState('');
   const [segments, setSegments] = useState<{ id: string; name: string }[]>([]);
   const [showSegmentPicker, setShowSegmentPicker] = useState(false);
   const [segmentId, setSegmentId] = useState('');
@@ -441,11 +442,16 @@ export default function LeadsClient({
                     <option key={f.fieldKey} value={f.fieldKey}>{f.fieldLabel}</option>
                   ))}
                 </select>
+                <Input
+                  placeholder="New value"
+                  value={bulkFieldValue}
+                  onChange={(e) => setBulkFieldValue(e.target.value)}
+                  className="h-8 w-40"
+                />
                 <Button size="sm" onClick={async () => {
                   if (!bulkFieldKey) { toast.error('Select a field'); return; }
-                  const field = customFields.find(f => f.fieldKey === bulkFieldKey);
-                  const value = window.prompt(`Enter value for "${field?.fieldLabel || bulkFieldKey}":`);
-                  if (value === null) return;
+                  const value = bulkFieldValue.trim();
+                  if (!value) { toast.error('Enter a value for the field'); return; }
                   const res = await fetch('/api/tenant/leads/bulk', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -456,6 +462,7 @@ export default function LeadsClient({
                     setSelectedLeads(new Set());
                     setShowBulkField(false);
                     setBulkFieldKey('');
+                    setBulkFieldValue('');
                     load();
                   } else {
                     const data = await res.json();
@@ -464,7 +471,7 @@ export default function LeadsClient({
                 }}>
                   Apply
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => { setShowBulkField(false); setBulkFieldKey(''); }}>
+                <Button size="sm" variant="ghost" onClick={() => { setShowBulkField(false); setBulkFieldKey(''); setBulkFieldValue(''); }}>
                   <XCircle className="w-4 h-4" />
                 </Button>
               </div>

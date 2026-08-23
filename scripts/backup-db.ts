@@ -53,7 +53,22 @@ async function createBackup(): Promise<void> {
 
   // Run pg_dump
   console.log('[Backup] Creating PostgreSQL dump...');
-  execFileSync('pg_dump', [databaseUrl, '-f', localPath], { stdio: 'inherit' });
+  // #1247: never pass the full connection string as an argv element (visible in `ps`);
+  // split into flags and pass the password via PGPASSWORD env instead.
+  const parsed = new URL(databaseUrl);
+  const dbHost = parsed.hostname;
+  const dbPort = parsed.port || '5432';
+  const dbUser = decodeURIComponent(parsed.username);
+  const dbName = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
+  const dbPassword = decodeURIComponent(parsed.password);
+  if (!dbName) {
+    throw new Error('DATABASE_URL must include a database name');
+  }
+  execFileSync(
+    'pg_dump',
+    ['-h', dbHost, '-p', dbPort, '-U', dbUser, '-d', dbName, '-f', localPath],
+    { stdio: 'inherit', env: { ...process.env, PGPASSWORD: dbPassword } }
+  );
 
   if (!existsSync(localPath)) {
     throw new Error('pg_dump did not produce output file');

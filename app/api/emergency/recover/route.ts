@@ -120,18 +120,18 @@ export async function POST(request: NextRequest) {
 
   if (!keyValid) {
     console.error(`[EMERGENCY RECOVERY] INVALID KEY — IP: ${ip}, email: ${email}`);
-    return NextResponse.json(
-      { error: 'Invalid emergency key' },
-      { status: 403 }
-    );
+    // #1253: identical generic response — never reveal which branch failed
+    return NextResponse.json({
+      message: 'If the account exists, recovery instructions were sent',
+    });
   }
 
   // 5. Validate new password strength
   if (new_password.length < 12) {
-    return NextResponse.json(
-      { error: 'Password must be at least 12 characters' },
-      { status: 400 }
-    );
+    console.error(`[EMERGENCY RECOVERY] WEAK PASSWORD — IP: ${ip}`);
+    return NextResponse.json({
+      message: 'If the account exists, recovery instructions were sent',
+    });
   }
 
   // 6. Find the user (must be super admin)
@@ -142,15 +142,17 @@ export async function POST(request: NextRequest) {
 
   if (!user) {
     console.error(`[EMERGENCY RECOVERY] USER NOT FOUND — email: ${email}`);
-    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    // #1253: identical generic response — never reveal user existence
+    return NextResponse.json({
+      message: 'If the account exists, recovery instructions were sent',
+    });
   }
 
   if (!user.isSuperAdmin) {
     console.error(`[EMERGENCY RECOVERY] NOT SUPER ADMIN — email: ${email}`);
-    return NextResponse.json(
-      { error: 'Emergency recovery is only available for super admin accounts. For regular users, use the admin panel.' },
-      { status: 403 }
-    );
+    return NextResponse.json({
+      message: 'If the account exists, recovery instructions were sent',
+    });
   }
 
   // 7. Reset password
