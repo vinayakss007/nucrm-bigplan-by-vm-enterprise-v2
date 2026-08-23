@@ -76,6 +76,13 @@ export async function getQueueAdapter(): Promise<QueueAdapter> {
   }
 
   // Last resort: in-memory (dev only)
+  // In production, throw an error instead of silently dropping jobs
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      '[Queue] No queue provider available (Redis/pg-boss). ' +
+      'Jobs will be silently dropped. Configure REDIS_URL or DATABASE_URL.',
+    );
+  }
   const memoryAdapter = createMemoryAdapter();
   adapter = memoryAdapter;
   console.warn(`[Queue] Using in-memory provider (NOT FOR PRODUCTION)`);
