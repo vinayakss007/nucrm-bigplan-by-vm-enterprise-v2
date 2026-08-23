@@ -14,6 +14,7 @@ import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { convertLeadCore } from '@/lib/leads/convert';
 
 const MAX_BULK = 500;
 
@@ -50,6 +51,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No valid leads found' }, { status: 404 });
 
     let affected = 0;
+    let skippedAlreadyConverted = 0;
 
     switch (action) {
       case 'status': {
@@ -58,7 +60,43 @@ export async function POST(req: NextRequest) {
         const STATUSES = ['new','contacted','qualified','unqualified','converted','lost'];
         if (!STATUSES.includes(payload.lead_status))
           return NextResponse.json({ error: `lead_status must be one of: ${STATUSES.join(', ')}` }, { status: 400 });
-        
+
+        // Converted leads must go through the full lead→contact conversion
+        // pipeline (same logic as POST /api/tenant/leads/[id]/convert), not a
+        // bare field update. Skip leads that are already converted.
+        if (payload.lead_status === 'converted') {
+          const alreadyConverted = await db
+            .select({ id: leads.id })
+            .from(leads)
+            .where(
+              and(
+                inArray(leads.id, validIds),
+                eq(leads.tenantId, ctx.tenantId),
+                eq(leads.leadStatus, 'converted'),
+                sql`${leads.convertedContactId} IS NOT NULL`
+              )
+            );
+          const convertedSet = new Set(alreadyConverted.map(r => r.id));
+          const toConvert = validIds.filter(id => !convertedSet.has(id));
+
+          let convertedCount = 0;
+          for (const leadId of toConvert) {
+            try {
+              const result = await convertLeadCore({
+                tenantId: ctx.tenantId,
+                actorId: ctx.userId,
+                leadId,
+              });
+              if (result.ok) convertedCount += 1;
+            } catch (err) {
+              await logError({ error: err, context: 'leads/bulk:convert', tenantId: ctx.tenantId });
+            }
+          }
+          affected = convertedCount;
+          skippedAlreadyConverted = toConvert.length - convertedCount;
+          break;
+        }
+
         const res = await db
           .update(leads)
           .set({ 
@@ -316,7 +354,14 @@ export async function POST(req: NextRequest) {
       newData: { count: affected, lead_ids: validIds.slice(0, 20), payload },
     });
 
-    return NextResponse.json({ ok: true, affected, action });
+    return NextResponse.json({
+      ok: true,
+      affected,
+      action,
+      ...(action === 'status' && payload.lead_status === 'converted'
+        ? { skipped_already_converted: skippedAlreadyConverted }
+        : {}),
+    });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

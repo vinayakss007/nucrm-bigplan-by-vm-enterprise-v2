@@ -11,34 +11,50 @@ registerProcessErrorHandlers('worker');
 
 const REDIS_URL = process.env['REDIS_URL'] || 'redis://localhost:6379';
 
-const connection = new IORedis(REDIS_URL, {
-  maxRetriesPerRequest: null,
-  retryStrategy: (times) => {
-    if (times > 20) {
-      console.error(`[Worker] Redis connection failed after ${times} retries. Exiting.`);
-      process.exit(1);
-    }
-    const delay = Math.min(times * 500, 30_000);
-    console.warn(`[Worker] Redis retry #${times} in ${delay}ms...`);
-    return delay;
-  },
-  reconnectOnError: (err) => {
-    const targetErrors = ['READONLY', 'ECONNRESET', 'ETIMEDOUT'];
-    return targetErrors.some(e => err.message.includes(e));
-  },
-});
+// BullMQ Workers issue blocking Redis commands (BRPOPLPUSH/BZPOPMIN), so every
+// worker MUST have its own dedicated connection — sharing one causes workers to
+// block each other and stalls queues. maxRetriesPerRequest: null is required
+// for blocking connections. Connections are tracked here so they can be closed
+// on shutdown (BullMQ does not close user-supplied connections).
+const redisConnections: IORedis[] = [];
 
-connection.on('error', (err) => {
-  console.error('[Worker] Redis connection error:', err.message);
-});
+function createRedisConnection(): IORedis {
+  const conn = new IORedis(REDIS_URL, {
+    // Required: null so blocking commands never reject on retry limit
+    maxRetriesPerRequest: null,
+    retryStrategy: (times) => {
+      if (times > 20) {
+        console.error(`[Worker] Redis connection failed after ${times} retries. Exiting.`);
+        process.exit(1);
+      }
+      const delay = Math.min(times * 500, 30_000);
+      console.warn(`[Worker] Redis retry #${times} in ${delay}ms...`);
+      return delay;
+    },
+    reconnectOnError: (err) => {
+      const targetErrors = ['READONLY', 'ECONNRESET', 'ETIMEDOUT'];
+      return targetErrors.some(e => err.message.includes(e));
+    },
+  });
 
-connection.on('connect', () => {
-  console.log('[Worker] Redis connected successfully');
-});
+  conn.on('error', (err) => {
+    console.error('[Worker] Redis connection error:', err.message);
+  });
 
-connection.on('reconnecting', () => {
-  console.warn('[Worker] Redis reconnecting...');
-});
+  conn.on('connect', () => {
+    console.log('[Worker] Redis connected successfully');
+  });
+
+  conn.on('reconnecting', () => {
+    console.warn('[Worker] Redis reconnecting...');
+  });
+
+  redisConnections.push(conn);
+  return conn;
+}
+
+// Separate non-blocking connection for the health-check heartbeat writes
+const heartbeatConnection = createRedisConnection();
 
 console.log('[Worker] Background worker starting...');
 console.log('[Worker] Redis URL:', REDIS_URL.replace(/\/\/.*:.*@/, '//*****@'));
@@ -70,7 +86,7 @@ const emailWorker = new Worker(
       throw error;
     }
   },
-  { connection, concurrency: 5 }
+  { connection: createRedisConnection(), concurrency: 5 }
 );
 
 // Notification queue worker
@@ -98,7 +114,7 @@ const notificationWorker = new Worker(
       throw error;
     }
   },
-  { connection, concurrency: 5 }
+  { connection: createRedisConnection(), concurrency: 5 }
 );
 
 // Bulk emails worker
@@ -145,7 +161,7 @@ const bulkEmailWorker = new Worker(
     console.log(`[Bulk Email Worker] Completed: ${results.filter(r => r.success).length}/${results.length} sent`);
     return { total: recipients.length, success: results.filter(r => r.success).length, results };
   },
-  { connection, concurrency: 3 }
+  { connection: createRedisConnection(), concurrency: 3 }
 );
 
 // Automation queue worker
@@ -173,7 +189,7 @@ const automationWorker = new Worker(
       throw error;
     }
   },
-  { connection, concurrency: 5 }
+  { connection: createRedisConnection(), concurrency: 5 }
 );
 
 // Lead warming worker (premium feature: auto-send festival/birthday greetings)
@@ -278,7 +294,7 @@ const leadWarmingWorker = new Worker(
       throw error;
     }
   },
-  { connection, concurrency: 3 }
+  { connection: createRedisConnection(), concurrency: 3 }
 );
 
 // Webhook delivery worker
@@ -318,7 +334,7 @@ const webhookWorker = new Worker(
       throw error;
     }
   },
-  { connection, concurrency: 5 }
+  { connection: createRedisConnection(), concurrency: 5 }
 );
 
 // Health check heartbeat — writes worker status to Redis every 30s
@@ -340,15 +356,15 @@ const heartbeatInterval = setInterval(async () => {
       },
       timestamp: new Date().toISOString(),
     };
-    await connection.set('worker:heartbeat', JSON.stringify(info), 'EX', 60);
+    await heartbeatConnection.set('worker:heartbeat', JSON.stringify(info), 'EX', 60);
   } catch {
     console.error('[worker] Heartbeat write failed');
   }
 }, 30_000);
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  console.log('[Worker] SIGTERM received, shutting down gracefully...');
+// Graceful shutdown — closes all workers, then quits every Redis connection
+async function shutdown(signal: 'SIGTERM' | 'SIGINT') {
+  console.log(`[Worker] ${signal} received, shutting down gracefully...`);
   clearInterval(heartbeatInterval);
   await Promise.all([
     emailWorker.close(),
@@ -358,21 +374,17 @@ process.on('SIGTERM', async () => {
     leadWarmingWorker.close(),
     webhookWorker.close(),
   ]);
-  await connection.quit();
+  await Promise.allSettled(
+    redisConnections.map((conn) =>
+      conn.quit().catch((err) => {
+        console.error('[Worker] Error quitting Redis connection:', err.message);
+        conn.disconnect();
+      })
+    )
+  );
   process.exit(0);
-});
+}
 
-process.on('SIGINT', async () => {
-  console.log('[Worker] SIGINT received, shutting down gracefully...');
-  clearInterval(heartbeatInterval);
-  await Promise.all([
-    emailWorker.close(),
-    notificationWorker.close(),
-    bulkEmailWorker.close(),
-    automationWorker.close(),
-    leadWarmingWorker.close(),
-    webhookWorker.close(),
-  ]);
-  await connection.quit();
-  process.exit(0);
-});
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+process.on('SIGINT', () => shutdown('SIGINT'));
