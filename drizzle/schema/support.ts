@@ -116,6 +116,9 @@ export const supportTickets = pgTable('support_tickets', {
   slaPolicyId: uuid('sla_policy_id'),
   firstResponseAt: timestamp('first_response_at', { withTimezone: true }),
   
+  /** Opaque token for unauthenticated public ticket access (email-header auth replaced). */
+  portalToken: text('portal_token').notNull().unique(),
+
   metadata: utils.metadata(),
   ...utils.audit(),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
@@ -126,6 +129,7 @@ export const supportTickets = pgTable('support_tickets', {
     assignedIdx: index('idx_tickets_assigned').on(table.assignedTo),
     statusIdx: index('idx_tickets_status').on(table.status),
     tenantStatusIdx: index('idx_tickets_tenant_status').on(table.tenantId, table.status),
+    portalTokenIdx: index('idx_tickets_portal_token').on(table.portalToken),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
   };

@@ -6,19 +6,15 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
-import { supportTickets, ticketReplies, contacts } from '@/drizzle/schema';
+import { supportTickets, ticketReplies } from '@/drizzle/schema';
 import { eq, and, asc } from 'drizzle-orm';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const email = request.headers.get('x-portal-email');
-    if (!email) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-
-    const contact = await db.query.contacts.findFirst({
-      where: eq(contacts.email, email),
-      columns: { id: true, tenantId: true },
-    });
-    if (!contact) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const token = request.headers.get('x-portal-token');
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
 
     const { id } = await params;
     const [ticket] = await db
@@ -26,8 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .from(supportTickets)
       .where(and(
         eq(supportTickets.id, id),
-        eq(supportTickets.tenantId, contact.tenantId),
-        eq(supportTickets.contactId, contact.id),
+        eq(supportTickets.portalToken, token),
       ))
       .limit(1);
 

@@ -6,14 +6,14 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
-import { supportTickets, ticketReplies, contacts } from '@/drizzle/schema';
+import { supportTickets, ticketReplies } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 
 const replySchema = z.object({
-  email: z.string().email(),
+  portalToken: z.string().min(16, 'Valid portal token required'),
   body: z.string().min(1, 'Reply cannot be empty').max(10000),
 });
 
@@ -28,21 +28,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid input' }, { status: 400 });
     }
 
-    const { email, body } = parsed.data;
-    const contact = await db.query.contacts.findFirst({
-      where: eq(contacts.email, email),
-      columns: { id: true, tenantId: true },
-    });
-    if (!contact) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
+    const { portalToken, body } = parsed.data;
     const { id } = await params;
+
+    // Validate token and verify ticket ownership
     const [ticket] = await db
-      .select({ id: supportTickets.id, status: supportTickets.status })
+      .select({ id: supportTickets.id, status: supportTickets.status, contactId: supportTickets.contactId, tenantId: supportTickets.tenantId })
       .from(supportTickets)
       .where(and(
         eq(supportTickets.id, id),
-        eq(supportTickets.tenantId, contact.tenantId),
-        eq(supportTickets.contactId, contact.id),
+        eq(supportTickets.portalToken, portalToken),
       ))
       .limit(1);
 
@@ -55,8 +50,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const [reply] = await db.transaction(async (tx) => {
       const [r] = await tx.insert(ticketReplies).values({
         ticketId: id,
-        tenantId: contact.tenantId,
-        contactId: contact.id,
+        tenantId: ticket.tenantId,
+        contactId: ticket.contactId,
         body,
         isInternal: false,
       }).returning();

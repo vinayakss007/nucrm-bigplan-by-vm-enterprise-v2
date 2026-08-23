@@ -9,7 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users, sessions } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
-import { verifyPassword, hashPassword } from '@/lib/auth/session';
+import { verifyPassword, hashPassword, createToken, hashToken, setSessionCookie } from '@/lib/auth/session';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { changePasswordSchema } from '@/lib/api/schemas';
 import { concurrencyGuardById } from '@/lib/api/concurrency';
@@ -44,6 +44,9 @@ export async function PATCH(request: NextRequest) {
 
     const newHash = await hashPassword(new_password);
     
+    const sessionToken = await createToken(ctx.userId);
+    const sessionTokenHash = await hashToken(sessionToken);
+
     await db.transaction(async (tx) => {
       // 1. Update password
       await tx.update(users)
@@ -56,7 +59,16 @@ export async function PATCH(request: NextRequest) {
       // 2. Invalidate ALL sessions for this user (unconditional — no race condition)
       await tx.delete(sessions)
         .where(eq(sessions.userId, ctx.userId));
+
+      // 3. Create new session so the current user stays logged in
+      await tx.insert(sessions).values({
+        userId: ctx.userId,
+        tokenHash: sessionTokenHash,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
     });
+
+    await setSessionCookie(sessionToken);
 
     return NextResponse.json({ ok: true });
  

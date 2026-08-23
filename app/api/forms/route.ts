@@ -7,20 +7,59 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { forms, tenants, contacts, formSubmissions } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createNotification } from '@/lib/notifications';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
-import { readJsonBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
+
+const formSubmitSchema = z.object({
+  form_id: z.string().min(1, 'Form ID is required'),
+  data: z.record(z.string(), z.unknown()).optional().default({}),
+});
+
+function escapeHtmlEntities(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
+function sanitizeFormData(data: Record<string, unknown>): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (typeof value === 'string') {
+      sanitized[key] = escapeHtmlEntities(value);
+    } else if (Array.isArray(value)) {
+      sanitized[key] = value.map(item => {
+        if (typeof item === 'string') return escapeHtmlEntities(item);
+        if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
+          return sanitizeFormData(item as Record<string, unknown>);
+        }
+        return item;
+      });
+    } else if (value !== null && typeof value === 'object') {
+      sanitized[key] = sanitizeFormData(value as Record<string, unknown>);
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
 
 export async function POST(req: NextRequest) {
   try {
     const limited = await checkRateLimit(req, { action: 'form_submit', max: 20, windowMinutes: 60 });
     if (limited) return limited;
-    
+
     const body = await readJsonBody(req);
-    const { form_id, data: formData = {} } = body as { form_id: string; data?: Record<string, string | undefined> };
-    if (!form_id) return NextResponse.json({ error: 'form_id required' }, { status: 400 });
+    const validated = validateBody(formSubmitSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { form_id, data: rawData } = validated.data;
+    const formData = sanitizeFormData(rawData as Record<string, unknown>) as Record<string, string | undefined>;
 
     const formResult = await db.select({
       id: forms.id,

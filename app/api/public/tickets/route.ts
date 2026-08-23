@@ -11,6 +11,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { generatePortalToken } from '@/lib/ticket-portal';
 
 const publicTicketSchema = z.object({
   email: z.string().email('Valid email is required'),
@@ -20,22 +21,30 @@ const publicTicketSchema = z.object({
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
 });
 
-// Public ticket endpoint - uses email to identify the user
+/**
+ * Public ticket list — requires x-portal-token header.
+ * Token is a 32-char opaque string generated when the ticket was created.
+ * The old x-portal-email header auth was spoofable and has been removed.
+ */
 export async function GET(request: NextRequest) {
   try {
     const limited = await checkRateLimit(request, { action: 'public-tickets-list', max: 30, windowMinutes: 1 });
     if (limited) return limited;
 
-    const email = request.headers.get('x-portal-email') || request.nextUrl.searchParams.get('email');
-    if (!email) return NextResponse.json({ data: [] });
+    const token = request.headers.get('x-portal-token');
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
 
-    // Find contact by email
-    const contact = await db.query.contacts.findFirst({
-      where: eq(contacts.email, email),
-      columns: { id: true, tenantId: true }
+    // Validate the token — find the ticket it belongs to, then list all tickets for that contact
+    const ticket = await db.query.supportTickets.findFirst({
+      where: eq(supportTickets.portalToken, token),
+      columns: { contactId: true, tenantId: true },
     });
 
-    if (!contact) return NextResponse.json({ data: [] });
+    if (!ticket || !ticket.contactId) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
 
     const data = await db.select({
       id: supportTickets.id, subject: supportTickets.subject,
@@ -44,7 +53,7 @@ export async function GET(request: NextRequest) {
       created_at: supportTickets.createdAt,
     })
     .from(supportTickets)
-    .where(and(eq(supportTickets.tenantId, contact.tenantId), eq(supportTickets.contactId, contact.id)))
+    .where(and(eq(supportTickets.tenantId, ticket.tenantId), eq(supportTickets.contactId, ticket.contactId)))
     .orderBy(desc(supportTickets.createdAt))
     .limit(50);
 
@@ -52,6 +61,10 @@ export async function GET(request: NextRequest) {
   } catch { return NextResponse.json({ data: [] }); }
 }
 
+/**
+ * Public ticket creation — requires email in body to find/create contact.
+ * Returns the portal_token in the response so the client can use it for future access.
+ */
 export async function POST(request: NextRequest) {
   try {
     const limited = await checkRateLimit(request, { action: 'public-tickets-create', max: 10, windowMinutes: 1 });
@@ -69,6 +82,8 @@ export async function POST(request: NextRequest) {
 
     if (!contact) return NextResponse.json({ error: 'No account found with this email' }, { status: 404 });
 
+    const portalToken = generatePortalToken();
+
     const [ticket] = await db.insert(supportTickets).values({
       tenantId: contact.tenantId,
       contactId: contact.id,
@@ -77,6 +92,7 @@ export async function POST(request: NextRequest) {
       category,
       priority,
       status: 'open',
+      portalToken,
     }).returning();
 
     return NextResponse.json({ data: ticket }, { status: 201 });

@@ -473,6 +473,7 @@ async function main() {
       priority: ticketPriorities[i % 4],
       category: ticketCategories[i % 4],
       assignedTo: userIds[i % 4],
+      portalToken: `seed-ticket-token-${String(i).padStart(2, '0')}`,
       resolvedAt: ticketStatuses[i % 4] === 'resolved' ? pastDate(2) : null,
     }));
 

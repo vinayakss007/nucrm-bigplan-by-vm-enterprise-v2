@@ -12,6 +12,7 @@ import { eq, and, sql, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuardById } from '@/lib/api/concurrency';
+import { generatePortalToken } from '@/lib/ticket-portal';
 
 export async function GET(request: NextRequest) {
   try {
@@ -110,6 +111,7 @@ export async function POST(request: NextRequest) {
         body: ticketBody,
         category,
         priority,
+        portalToken: generatePortalToken(),
       })
       .returning();
 
