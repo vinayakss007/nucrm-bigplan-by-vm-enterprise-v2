@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
  
  
@@ -46,6 +47,8 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
+  const limited = await rateLimitMutating(request, 'dashboardLayout', 'put');
+  if (limited) return limited;
 
   const body = await readJsonBody(request);
   const parsed = validateBody(dashboardLayoutSchema, body);
@@ -59,6 +62,8 @@ export async function PUT(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
+  const limited = await rateLimitMutating(request, 'dashboardLayout', 'post');
+  if (limited) return limited;
 
   const result = await db.execute(
     sql`SELECT t.industry, COALESCE(p.name, 'free') AS plan_name

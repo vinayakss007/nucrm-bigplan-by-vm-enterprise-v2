@@ -12,6 +12,7 @@ import { dataRetentionPolicies } from '@/drizzle/schema/compliance';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 
 const retentionPolicySchema = z.object({
@@ -53,6 +54,8 @@ export async function POST(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const limited = await rateLimitMutating(req, 'retentionPolicies', 'post');
+    if (limited) return limited;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const moduleGate = await requireModule(ctx.tenantId, 'compliance', ctx.isSuperAdmin);
@@ -100,6 +103,8 @@ export async function PUT(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const limited = await rateLimitMutating(req, 'retentionPolicies', 'put');
+    if (limited) return limited;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const moduleGate = await requireModule(ctx.tenantId, 'compliance', ctx.isSuperAdmin);

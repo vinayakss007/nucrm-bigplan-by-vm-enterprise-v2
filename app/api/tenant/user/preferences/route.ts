@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(req: NextRequest) {
   try {
@@ -39,6 +40,8 @@ export async function PUT(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const limited = await rateLimitMutating(req, 'userPreferences', 'put');
+    if (limited) return limited;
 
     const body = await readJsonBody(req);
     const { pinned, sections } = body;

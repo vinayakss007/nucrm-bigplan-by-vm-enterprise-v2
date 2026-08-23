@@ -11,6 +11,7 @@ import { platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
 import { z } from 'zod';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
 
@@ -63,6 +64,8 @@ export async function PUT(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const limited = await rateLimitMutating(request, 'portalConfig', 'put');
+    if (limited) return limited;
     if (!ctx.isAdmin) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
