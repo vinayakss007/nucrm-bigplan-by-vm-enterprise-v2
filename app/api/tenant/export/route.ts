@@ -6,6 +6,7 @@ import { contacts, companies, deals, leads, tasks, activities } from '@/drizzle/
 import { eq, and, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { escapeCSV } from '@/lib/export';
 
 /**
  * POST /api/tenant/export
@@ -72,21 +73,12 @@ export async function POST(request: NextRequest) {
           headers: { 'Content-Type': 'text/csv', 'Content-Disposition': `attachment; filename="${entity}-export.csv"` },
         });
       }
-      // Convert to CSV with formula injection protection
+      // Convert to CSV with formula injection protection via shared escapeCSV
       const headers = Object.keys(data[0]!);
       const csvRows = [
         headers.join(','),
         ...data.map(row =>
-          headers.map(h => {
-            const val = (row as Record<string, unknown>)[h];
-            if (val === null || val === undefined) return '';
-            const str = String(val).replace(/"/g, '""');
-            // Prevent CSV formula injection by prefixing dangerous characters
-            if (str.match(/^[=+\-@\t\r]/)) {
-              return `"'${str}"`;
-            }
-            return `"${str}"`;
-          }).join(',')
+          headers.map(h => escapeCSV((row as Record<string, unknown>)[h])).join(',')
         ),
       ];
       const csv = csvRows.join('\n');

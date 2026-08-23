@@ -14,13 +14,14 @@ export async function GET(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { searchParams } = new URL(request.url);
     const list = searchParams.get('list');
     const critical = searchParams.get('critical');
 
     if (critical === 'true') {
+      if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
       const [deleted, statsRes] = await Promise.all([
         db.select()
           .from(criticalDataBackups)
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const stats: any = statsRes || { totalBackups: 0, restorable: 0, deletedRecords: 0, updatedRecords: 0 };
       stats.by_table = tableStats;
 
@@ -59,6 +60,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (list === 'recent') {
+      const tenantFilter = ctx.isSuperAdmin
+        ? undefined
+        : eq(sql`${backupRecords.metadata}->>'tenant_id'`, ctx.tenantId);
+
       const backups = await db
         .select({
           id: backupRecords.id,
@@ -78,6 +83,7 @@ export async function GET(request: NextRequest) {
         .from(backupRecords)
         .leftJoin(users, eq(users.id, backupRecords.createdBy))
         .leftJoin(tenants, eq(tenants.id, sql`${backupRecords.metadata}->>'tenant_id'`))
+        .where(tenantFilter)
         .orderBy(desc(backupRecords.createdAt))
         .limit(50)
         .catch((err) => { console.error('[backups] recent list failed', err); return []; });
@@ -85,7 +91,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ backups });
     }
 
-    // Default: return schedules
+    // Default: return schedules (superadmin only)
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
     const schedules = await db
       .select({
         id: backupSchedules.id,

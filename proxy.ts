@@ -27,10 +27,7 @@ const RATE_LIMIT_API_KEY = 300;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 function generateRequestId(): string {
-  const chars = 'abcdef0123456789';
-  let id = '';
-  for (let i = 0; i < 32; i++) id += chars[Math.floor(Math.random() * chars.length)];
-  return id;
+  return globalThis.crypto.randomUUID();
 }
 
 // Public marketing site — the route group at app/(marketing). These must be

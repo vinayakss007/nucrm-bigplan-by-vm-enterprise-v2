@@ -2,7 +2,7 @@ import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { supportTickets, slaPolicies, slaBreaches, users, tenantMembers } from '@/drizzle/schema';
-import { eq, and, isNull, sql, not } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
 import { sendEmail } from '@/lib/email/service';
 import { apiError } from '@/lib/api-error';
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     })
     .from(supportTickets)
     .where(and(
-      not(isNull(supportTickets.deletedAt)),
+      isNull(supportTickets.deletedAt),
       sql`${supportTickets.status} IN ('open', 'in_progress')`,
     ));
 

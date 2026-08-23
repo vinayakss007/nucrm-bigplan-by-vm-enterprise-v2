@@ -42,7 +42,7 @@ export default function FormBuilderPage() {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const addField = (template: any) => {
-    const id = Math.random().toString(36).substring(2, 9);
+    const id = crypto.randomUUID();
     const newField = {
       id,
       key: `${template.type}_${id}`,
