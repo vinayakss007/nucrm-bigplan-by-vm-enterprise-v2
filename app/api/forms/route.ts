@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     if (limited) return limited;
     
     const body = await readJsonBody(req);
-    const { form_id, data: formData = {} } = body;
+    const { form_id, data: formData = {} } = body as { form_id: string; data?: Record<string, string | undefined> };
     if (!form_id) return NextResponse.json({ error: 'form_id required' }, { status: 400 });
 
     const formResult = await db.select({
