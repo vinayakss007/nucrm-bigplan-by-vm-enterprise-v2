@@ -183,6 +183,16 @@ const updateSchema = z.object({
 // Explicit per-table allowlist of editable columns.
 // Prevents writes to system columns (id, tenant_id, created_at, deleted_at, ...)
 // even if upstream validation changes.
+// Field-level authorization (#1161): sensitive business fields (money,
+// ownership links, scoring) are admin-only; regular members get the rest.
+const ADMIN_ONLY_FIELDS: Record<string, Set<string>> = {
+  contacts: new Set(['company_id']),
+  leads: new Set(['score', 'lead_source']),
+  deals: new Set(['amount', 'stage_id', 'close_date']),
+  companies: new Set([]),
+  tasks: new Set(['priority']),
+};
+
 const EDITABLE_FIELDS: Record<string, string[]> = {
   contacts: ['first_name', 'last_name', 'email', 'phone', 'lead_status', 'lead_source', 'job_title', 'company_id'],
   leads: ['first_name', 'last_name', 'email', 'phone', 'lead_status', 'lead_source', 'score'],
@@ -204,6 +214,13 @@ export async function PUT(req: NextRequest) {
     const allowedFields = EDITABLE_FIELDS[table] || [];
     if (!allowedFields.includes(field)) {
       return NextResponse.json({ error: `Field '${field}' is not editable` }, { status: 400 });
+    }
+    // Field-level authz: admin-only fields require an admin (#1161)
+    if (!ctx.isAdmin && ADMIN_ONLY_FIELDS[table]?.has(field)) {
+      return NextResponse.json(
+        { error: `Field '${field}' requires admin access` },
+        { status: 403 },
+      );
     }
     const safeField = field.replace(/[^a-zA-Z0-9_]/g, '');
     if (!safeField || safeField !== field) {

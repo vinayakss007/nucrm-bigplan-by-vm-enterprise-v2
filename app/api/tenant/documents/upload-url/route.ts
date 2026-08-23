@@ -32,11 +32,30 @@ const uploadUrlSchema = z.object({
 
 const MAX_FILE_BYTES = Number(process.env['DOCUMENT_MAX_BYTES'] ?? 100 * 1024 * 1024); // 100 MB default
 
-const FORBIDDEN_MIME_PREFIXES = [
-  'application/x-msdownload', // .exe
-  'application/x-executable',
-  'application/x-sh',
-];
+// Allowlist (not blocklist): anything not listed is rejected. Prevents
+// stored XSS via text/html, script-bearing SVG, executables, etc. (#1162)
+const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'text/plain',
+  'text/csv',
+  'application/json',
+  'application/zip',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-excel',
+  'application/msword',
+]);
+
+// Extensions that must never be uploaded regardless of claimed MIME type
+const BLOCKED_EXTENSIONS = new Set([
+  '.html', '.htm', '.svg', '.xhtml', '.exe', '.dll', '.bat', '.cmd',
+  '.sh', '.ps1', '.js', '.mjs', '.php', '.jsp', '.asp', '.aspx', '.war',
+]);
 
 export async function POST(request: NextRequest) {
   const ctx = await requireAuth(request);
@@ -58,16 +77,23 @@ export async function POST(request: NextRequest) {
       { status: 413 },
     );
   }
-  if (FORBIDDEN_MIME_PREFIXES.some((p) => mimeType.toLowerCase().startsWith(p))) {
+  if (!ALLOWED_MIME_TYPES.has(mimeType.toLowerCase())) {
     return NextResponse.json(
-      { error: 'Executable file types are not allowed' },
+      { error: `File type ${mimeType} is not allowed. Permitted: documents, images, archives.` },
+      { status: 415 },
+    );
+  }
+
+  const ext = extractExtension(name);
+  if (BLOCKED_EXTENSIONS.has(ext)) {
+    return NextResponse.json(
+      { error: 'This file extension is not allowed for security reasons' },
       { status: 415 },
     );
   }
 
   // Build a tenant-scoped storage key. Including the original extension
   // helps S3 console previews; the UUID prefix keeps keys collision-free.
-  const ext = extractExtension(name);
   const storageKey = `documents/${ctx.tenantId}/${randomUUID()}${ext}`;
 
   let url: string;

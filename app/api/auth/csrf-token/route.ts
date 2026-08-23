@@ -13,6 +13,6 @@ export async function GET(request: NextRequest) {
 
   const token = generateCsrfToken();
   const response = NextResponse.json({ ok: true, token });
-  response.headers.append('Set-Cookie', setCsrfCookie(token, process.env.COOKIE_SECURE !== 'false' && process.env.NODE_ENV === 'production'));
+  response.headers.append('Set-Cookie', setCsrfCookie(token, process.env.NODE_ENV === 'production' ? true : process.env.COOKIE_SECURE !== 'false'));
   return response;
 }
