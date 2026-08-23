@@ -217,15 +217,33 @@ async function executeNode(
 
     case 'wait': {
       const { duration, unit } = node.data as { duration?: number; unit?: string };
-      // In a real implementation, this would schedule the next nodes for later
-      // For now, we log it and continue immediately
-      await dbOrTx.insert(workflowExecutionLogs).values({
-        workflowExecutionId: executionId,
-        tenantId,
-        message: `Wait step: ${duration} ${unit} (logged, not blocking)`,
-        level: 'info',
-        stepName: 'wait',
-      });
+      // Convert duration to milliseconds based on the unit
+      let delayMs = 0;
+      if (typeof duration === 'number' && duration > 0) {
+        switch ((unit || 'minutes').toLowerCase()) {
+          case 'seconds': delayMs = duration * 1000; break;
+          case 'hours': delayMs = duration * 3_600_000; break;
+          case 'days': delayMs = duration * 86_400_000; break;
+          default: delayMs = duration * 60_000; break;
+        }
+      }
+      // Cap at 60s: this executor runs inline inside a request/serverless
+      // context, so blocking longer than that is not viable.
+      const MAX_WAIT_MS = 60_000;
+      const capped = delayMs > MAX_WAIT_MS;
+      const effectiveDelayMs = Math.min(delayMs, MAX_WAIT_MS);
+      if (effectiveDelayMs > 0) {
+        await dbOrTx.insert(workflowExecutionLogs).values({
+          workflowExecutionId: executionId,
+          tenantId,
+          message: capped
+            ? `Wait step: ${duration} ${unit} exceeds 60s cap — waiting 60s instead`
+            : `Wait step: waiting ${effectiveDelayMs / 1000}s`,
+          level: capped ? 'warn' : 'info',
+          stepName: 'wait',
+        });
+        await new Promise(r => setTimeout(r, effectiveDelayMs));
+      }
       break;
     }
 

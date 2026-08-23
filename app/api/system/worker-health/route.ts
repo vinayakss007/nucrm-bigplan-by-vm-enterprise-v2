@@ -56,14 +56,18 @@ export async function GET(request: NextRequest) {
 
     const healthy = redisHealthy;
 
-    return NextResponse.json({
+    const payload = {
       data: {
         healthy,
         redis: { connected: redisHealthy, error: redisError },
         queues: { accessible: queuesHealthy, count: queueCount },
         timestamp: new Date().toISOString(),
       },
-    });
+    };
+
+    // Workers down (Redis unreachable) → 503 so monitoring/alerting can react;
+    // a 200 would mask outages for anything polling this endpoint.
+    return NextResponse.json(payload, { status: healthy ? 200 : 503 });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);

@@ -59,7 +59,8 @@ export async function POST(request: NextRequest) {
         if (!ids || !Array.isArray(ids) || ids.length === 0) {
           return NextResponse.json({ error: 'ids array is required' }, { status: 400 });
         }
-        const { succeeded, failed } = await dlq.bulkRetryDLQ(ids);
+        // Tenant-scoped: entries belonging to other tenants are skipped
+        const { succeeded, failed } = await dlq.bulkRetryDLQ(ids, ctx.tenantId);
         return NextResponse.json({ succeeded, failed });
       }
 
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
         if (entryIds.length === 0) {
           return NextResponse.json({ succeeded: 0, failed: 0, message: 'No pending DLQ entries' });
         }
-        const { succeeded, failed } = await dlq.bulkRetryDLQ(entryIds);
+        const { succeeded, failed } = await dlq.bulkRetryDLQ(entryIds, ctx.tenantId);
         return NextResponse.json({ succeeded, failed, total: entryIds.length });
       }
 
@@ -90,7 +91,8 @@ export async function POST(request: NextRequest) {
 
       case 'purge_old': {
         const daysOld = days || 30;
-        const purged = await dlq.purgeOldDLQEntries(daysOld);
+        // Tenant-scoped: never purge other tenants' entries from a tenant route
+        const purged = await dlq.purgeOldDLQEntries(daysOld, ctx.tenantId);
         return NextResponse.json({ purged, daysOld });
       }
 

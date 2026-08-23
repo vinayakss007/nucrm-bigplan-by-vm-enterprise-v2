@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
     // Get pending dunning attempts
     const pendingAttempts = await db.query.dunningAttempts.findMany({
       where: and(
+        eq(dunningAttempts.tenantId, ctx.tenantId),
         eq(dunningAttempts.subscriptionId, subscriptionId),
         eq(dunningAttempts.status, 'pending'),
       ),
@@ -148,7 +149,10 @@ export async function GET(request: NextRequest) {
     }
 
     const attempts = await db.query.dunningAttempts.findMany({
-      where: eq(dunningAttempts.subscriptionId, subscriptionId),
+      where: and(
+        eq(dunningAttempts.tenantId, ctx.tenantId),
+        eq(dunningAttempts.subscriptionId, subscriptionId),
+      ),
       orderBy: (dunningAttempts, { desc }) => [desc(dunningAttempts.attemptNumber)],
     });
 

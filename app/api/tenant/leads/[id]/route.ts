@@ -9,7 +9,8 @@ import { leads, users, leadActivities } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { z } from 'zod';
+import { validateBody, readJsonBody, uuidField } from '@/lib/api/validate';
 import { updateLeadSchema } from '@/lib/api/schemas';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
@@ -17,6 +18,50 @@ import { withConcurrencyGuard } from '@/lib/concurrency';
 import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { apiError } from '@/lib/api-error';
+
+/**
+ * PATCH body schema — every field the route consumes, all routed through Zod.
+ * Shared fields reuse the existing updateLeadSchema validators; lead-only
+ * BANT/address fields are validated inline. Unknown keys are stripped.
+ */
+const patchLeadBodySchema = updateLeadSchema
+  .pick({
+    first_name: true,
+    last_name: true,
+    email: true,
+    phone: true,
+    source: true,
+    status: true,
+    assigned_to: true,
+    notes: true,
+    custom_fields: true,
+    score: true,
+  })
+  .extend({
+    title: z.string().trim().max(200).nullable().optional(),
+    company_name: z.string().trim().max(200).nullable().optional(),
+    company_id: uuidField.optional().nullable().or(z.literal('')),
+    lifecycle_stage: z.string().trim().max(100).nullable().optional(),
+    authority_level: z.string().trim().max(100).nullable().optional(),
+    need_description: z.string().trim().max(2000).nullable().optional(),
+    timeline: z.string().trim().max(100).nullable().optional(),
+    timeline_target_date: z.union([z.string().date(), z.literal(''), z.null()]).optional(),
+    budget: z.union([z.coerce.number().min(0), z.literal(''), z.null()]).optional(),
+    budget_currency: z.string().trim().max(10).nullable().optional(),
+    company_industry: z.string().trim().max(100).nullable().optional(),
+    value: z.union([z.coerce.number().min(0), z.literal(''), z.null()]).optional(),
+    country: z.string().trim().max(100).nullable().optional(),
+    state: z.string().trim().max(100).nullable().optional(),
+    city: z.string().trim().max(100).nullable().optional(),
+    address: z.string().trim().max(500).nullable().optional(),
+    postal_code: z.string().trim().max(20).nullable().optional(),
+    linkedin_url: z.string().trim().max(500).nullable().optional(),
+    website: z.string().trim().max(500).nullable().optional(),
+    tags: z.array(z.string()).optional(),
+    // Free-form in the UI ('lost', 'nurturing', …) — only recorded on the
+    // activity log, never written to the lead row, so validate type/length only
+    lead_status: z.string().trim().max(50).optional(),
+  });
 
 /**
  * GET /api/tenant/leads/[id]
@@ -124,8 +169,8 @@ export async function PATCH(
     const { id } = await params;
     const rawBody = await readJsonBody(request);
 
-    // Validate shared fields with schema
-    const validated = validateBody(updateLeadSchema, rawBody);
+    // Validate the entire body — every field is routed through Zod
+    const validated = validateBody(patchLeadBodySchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
@@ -145,8 +190,9 @@ export async function PATCH(
     }
     
     // Update mapping (snake_case from body to camelCase for Drizzle)
- 
- 
+    // All values come from the Zod-validated body — no raw passthrough
+  
+  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = {
       updatedAt: new Date(),
@@ -156,29 +202,29 @@ export async function PATCH(
     if (v.last_name !== undefined) updateData.lastName = v.last_name;
     if (v.email !== undefined) updateData.email = v.email;
     if (v.phone !== undefined) updateData.phone = v.phone;
-    if (rawBody.title !== undefined) updateData.title = rawBody.title;
-    if (rawBody.company_name !== undefined) updateData.companyName = rawBody.company_name;
-    if (rawBody.company_id !== undefined) updateData.companyId = rawBody.company_id;
+    if (v.title !== undefined) updateData.title = v.title;
+    if (v.company_name !== undefined) updateData.companyName = v.company_name;
+    if (v.company_id !== undefined) updateData.companyId = v.company_id;
     if (v.source !== undefined) updateData.source = v.source;
     if (v.status !== undefined) updateData.leadStatus = v.status;
-    if (rawBody.lifecycle_stage !== undefined) updateData.lifecycleStage = rawBody.lifecycle_stage;
-    if (rawBody.authority_level !== undefined) updateData.authorityLevel = rawBody.authority_level;
-    if (rawBody.need_description !== undefined) updateData.needDescription = rawBody.need_description;
-    if (rawBody.timeline !== undefined) updateData.timeline = rawBody.timeline;
-    if (rawBody.timeline_target_date !== undefined) updateData.timelineTargetDate = rawBody.timeline_target_date;
-    if (rawBody.budget !== undefined) updateData.budget = rawBody.budget === '' || rawBody.budget == null ? null : String(rawBody.budget);
-    if (rawBody.budget_currency !== undefined) updateData.budgetCurrency = rawBody.budget_currency;
-    if (rawBody.company_industry !== undefined) updateData.companyIndustry = rawBody.company_industry;
-    if (rawBody.value !== undefined) updateData.value = rawBody.value === '' || rawBody.value == null ? null : String(rawBody.value);
-    if (rawBody.country !== undefined) updateData.country = rawBody.country;
-    if (rawBody.state !== undefined) updateData.state = rawBody.state;
-    if (rawBody.city !== undefined) updateData.city = rawBody.city;
-    if (rawBody.address !== undefined) updateData.address = rawBody.address;
-    if (rawBody.postal_code !== undefined) updateData.postalCode = rawBody.postal_code;
-    if (rawBody.linkedin_url !== undefined) updateData.linkedinUrl = rawBody.linkedin_url;
-    if (rawBody.website !== undefined) updateData.website = rawBody.website;
+    if (v.lifecycle_stage !== undefined) updateData.lifecycleStage = v.lifecycle_stage;
+    if (v.authority_level !== undefined) updateData.authorityLevel = v.authority_level;
+    if (v.need_description !== undefined) updateData.needDescription = v.need_description;
+    if (v.timeline !== undefined) updateData.timeline = v.timeline;
+    if (v.timeline_target_date !== undefined) updateData.timelineTargetDate = v.timeline_target_date;
+    if (v.budget !== undefined) updateData.budget = v.budget === '' || v.budget == null ? null : String(v.budget);
+    if (v.budget_currency !== undefined) updateData.budgetCurrency = v.budget_currency;
+    if (v.company_industry !== undefined) updateData.companyIndustry = v.company_industry;
+    if (v.value !== undefined) updateData.value = v.value === '' || v.value == null ? null : String(v.value);
+    if (v.country !== undefined) updateData.country = v.country;
+    if (v.state !== undefined) updateData.state = v.state;
+    if (v.city !== undefined) updateData.city = v.city;
+    if (v.address !== undefined) updateData.address = v.address;
+    if (v.postal_code !== undefined) updateData.postalCode = v.postal_code;
+    if (v.linkedin_url !== undefined) updateData.linkedinUrl = v.linkedin_url;
+    if (v.website !== undefined) updateData.website = v.website;
     if (v.assigned_to !== undefined) updateData.assignedTo = v.assigned_to;
-    if (rawBody.tags !== undefined) updateData.tags = rawBody.tags;
+    if (v.tags !== undefined) updateData.tags = v.tags;
     if (v.notes !== undefined) updateData.internalNotes = v.notes;
     if (v.custom_fields !== undefined) updateData.customFields = v.custom_fields;
     if (v.score !== undefined) updateData.score = v.score;
@@ -198,14 +244,14 @@ export async function PATCH(
         existing.updatedAt!,
       );
 
-      if (rawBody.lead_status) {
+      if (v.lead_status) {
         await tx.insert(leadActivities).values({
           tenantId: ctx.tenantId,
           leadId: id,
           performedBy: ctx.userId,
           activityType: 'status_change',
-          description: `Lead status changed to ${rawBody.lead_status}`,
-          activityData: { new_status: rawBody.lead_status },
+          description: `Lead status changed to ${v.lead_status}`,
+          activityData: { new_status: v.lead_status },
         });
       }
 

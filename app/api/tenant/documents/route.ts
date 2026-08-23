@@ -9,7 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { documents, documentFolders } from '@/drizzle/schema/documents';
-import { eq, and, desc, isNull } from 'drizzle-orm';
+import { eq, and, desc, isNull, sql } from 'drizzle-orm';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -42,6 +42,10 @@ export async function GET(req: NextRequest) {
     const entityId = searchParams.get('entityId');
     const folderId = searchParams.get('folderId');
 
+    // Pagination (#1324): bounded page size so the response can never be unbounded.
+    const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '', 10) || 1);
+    const limit = Math.min(Math.max(1, Number.parseInt(searchParams.get('limit') ?? '', 10) || 50), 200);
+
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -55,11 +59,18 @@ export async function GET(req: NextRequest) {
       filters.push(isNull(documents.folderId));
     }
 
+    const [countRow] = await db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(documents)
+      .where(and(...filters));
+
     const docs = await db
       .select()
       .from(documents)
       .where(and(...filters))
-      .orderBy(desc(documents.createdAt));
+      .orderBy(desc(documents.createdAt))
+      .limit(limit)
+      .offset((page - 1) * limit);
 
     // Also get folders at the same level
  
@@ -78,7 +89,7 @@ export async function GET(req: NextRequest) {
       .where(and(...folderFilters))
       .orderBy(desc(documentFolders.createdAt));
 
-    return NextResponse.json({ data: { documents: docs, folders } });
+    return NextResponse.json({ data: { documents: docs, folders }, page, limit, total: Number(countRow?.total ?? 0) });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

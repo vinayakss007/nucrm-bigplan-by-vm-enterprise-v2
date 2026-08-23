@@ -104,11 +104,13 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.json();
     const validated = validateBody(createTenantSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
+    // Build ONLY from validated data — never re-merge rawBody, which would let
+    // unvalidated keys (and un-coerced values) back into the insert path
     const v = validated.data;
-    const { 
-      name, plan_id = 'free', status = 'active', billing_email, primary_color = '#7c3aed',
-      owner_email, owner_name, owner_password, trial_days = 14 
-    } = { ...v, ...rawBody };
+    const {
+      name, plan_id, status, billing_email, primary_color,
+      owner_email, owner_name, owner_password, trial_days,
+    } = v;
 
     if (!name?.trim()) return NextResponse.json({ error: 'name required' }, { status: 400 });
 

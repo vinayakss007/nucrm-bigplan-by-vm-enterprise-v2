@@ -378,6 +378,14 @@ export async function POST(req: NextRequest) {
             )
           );
         affected = res.rowCount ?? 0;
+
+        // Re-increment the tenant's usage counter (mirrors single restore in trash route)
+        if (affected > 0) {
+          await db
+            .update(tenants)
+            .set({ currentDeals: sql`${tenants.currentDeals} + ${affected}` })
+            .where(eq(tenants.id, ctx.tenantId));
+        }
         break;
       }
       case 'add_to_segment': {

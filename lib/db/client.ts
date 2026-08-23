@@ -86,6 +86,7 @@ export async function withTransaction<T>(fn: (c: PoolClient) => Promise<T>): Pro
   }
 
   const client = await getPool().connect();
+  let rollbackFailed = false;
   try { 
     await client.query('BEGIN'); 
     // Run the function within the AsyncLocalStorage scope
@@ -94,11 +95,18 @@ export async function withTransaction<T>(fn: (c: PoolClient) => Promise<T>): Pro
     return r; 
   }
   catch (err) { 
-    await client.query('ROLLBACK'); 
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // Rollback failed: connection state is unknown (e.g. terminated backend),
+      // so it must be destroyed instead of returned to the pool for reuse.
+      rollbackFailed = true;
+      throw err;
+    }
     throw err; 
   }
   finally { 
-    client.release(); 
+    client.release(rollbackFailed);
   }
 }
 
