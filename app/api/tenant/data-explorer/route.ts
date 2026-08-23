@@ -9,22 +9,8 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { sql, getTableColumns } from 'drizzle-orm';
-import { contacts, leads, deals, companies, tasks } from '@/drizzle/schema';
+import { sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
-
-const EDITABLE_TABLES = { contacts, leads, deals, companies, tasks };
-
-// System columns that must never be editable via data-explorer (Issue #1236)
-const PROTECTED_COLUMNS = new Set(['id', 'tenant_id', 'created_at', 'updated_at', 'deleted_at']);
-
-function getAllowedColumns(tableName: string): string[] {
-  const table = EDITABLE_TABLES[tableName as keyof typeof EDITABLE_TABLES];
-  if (!table) return [];
-  return Object.values(getTableColumns(table))
-    .map((col) => col.name)
-    .filter((name) => !PROTECTED_COLUMNS.has(name));
-}
 
 const ENTITY_CONFIG: Record<string, { label: string; searchFields: string[]; sortFields: string[]; defaultSort: string }> = {
   contacts: {
@@ -100,6 +86,7 @@ export async function GET(req: NextRequest) {
 
     const where = sql`WHERE ${sql.join(buildConditions(type === 'deals' ? 'd' : type === 'companies' ? 'co' : type === 'tasks' ? 't' : type === 'leads' ? 'l' : 'c'), sql` AND `)}`;
 
+    const orderSql = order === 'ASC' ? sql`ASC` : sql`DESC`;
     let dataRes;
     const countQuery = sql`SELECT count(*) FROM ${sql.identifier(type === 'deals' ? 'deals' : type === 'companies' ? 'companies' : type === 'tasks' ? 'tasks' : type === 'leads' ? 'leads' : 'contacts')} ${type === 'deals' ? sql`d` : type === 'companies' ? sql`co` : type === 'tasks' ? sql`t` : type === 'leads' ? sql`l` : sql`c`} ${where}`;
     const totalRes = await db.execute(countQuery);
@@ -114,7 +101,7 @@ export async function GET(req: NextRequest) {
           FROM contacts c
           LEFT JOIN companies co ON c.company_id = co.id
           ${where}
-          ORDER BY ${sql.identifier('c')}.${sql.identifier(safeSort)} ${sql.raw(order)}
+          ORDER BY ${sql.identifier('c')}.${sql.identifier(safeSort)} ${orderSql}
           LIMIT ${limit} OFFSET ${offset}
         `);
         break;
@@ -125,7 +112,7 @@ export async function GET(req: NextRequest) {
                  l.lead_status, l.lead_source, l.score, l.created_at, l.updated_at
           FROM leads l
           ${where}
-          ORDER BY ${sql.identifier('l')}.${sql.identifier(safeSort)} ${sql.raw(order)}
+          ORDER BY ${sql.identifier('l')}.${sql.identifier(safeSort)} ${orderSql}
           LIMIT ${limit} OFFSET ${offset}
         `);
         break;
@@ -138,7 +125,7 @@ export async function GET(req: NextRequest) {
           FROM deals d
           LEFT JOIN contacts c ON d.contact_id = c.id
           ${where}
-          ORDER BY ${sql.identifier('d')}.${sql.identifier(safeSort === 'name' ? 'title' : safeSort)} ${sql.raw(order)}
+          ORDER BY ${sql.identifier('d')}.${sql.identifier(safeSort === 'name' ? 'title' : safeSort)} ${orderSql}
           LIMIT ${limit} OFFSET ${offset}
         `);
         break;
@@ -150,7 +137,7 @@ export async function GET(req: NextRequest) {
                  (SELECT count(*) FROM contacts WHERE company_id = co.id AND deleted_at IS NULL) as contact_count
           FROM companies co
           ${where}
-          ORDER BY ${sql.identifier('co')}.${sql.identifier(safeSort)} ${sql.raw(order)}
+          ORDER BY ${sql.identifier('co')}.${sql.identifier(safeSort)} ${orderSql}
           LIMIT ${limit} OFFSET ${offset}
         `);
         break;
@@ -161,7 +148,7 @@ export async function GET(req: NextRequest) {
                  t.due_date, t.created_at, t.updated_at
           FROM tasks t
           ${where}
-          ORDER BY ${sql.identifier('t')}.${sql.identifier(safeSort)} ${sql.raw(order)}
+          ORDER BY ${sql.identifier('t')}.${sql.identifier(safeSort)} ${orderSql}
           LIMIT ${limit} OFFSET ${offset}
         `);
         break;
@@ -193,6 +180,17 @@ const updateSchema = z.object({
   value: z.any(),
 });
 
+// Explicit per-table allowlist of editable columns.
+// Prevents writes to system columns (id, tenant_id, created_at, deleted_at, ...)
+// even if upstream validation changes.
+const EDITABLE_FIELDS: Record<string, string[]> = {
+  contacts: ['first_name', 'last_name', 'email', 'phone', 'lead_status', 'lead_source', 'job_title', 'company_id'],
+  leads: ['first_name', 'last_name', 'email', 'phone', 'lead_status', 'lead_source', 'score'],
+  deals: ['title', 'amount', 'stage_id', 'close_date'],
+  companies: ['name', 'industry', 'website', 'phone'],
+  tasks: ['title', 'description', 'status', 'priority', 'due_date'],
+};
+
 export async function PUT(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
@@ -203,24 +201,19 @@ export async function PUT(req: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const { table, id, field, value } = validated.data;
 
-    // Strict identifier format, then allowlist derived from the real Drizzle
-    // table columns (Issue #1236) — rejects any column that does not exist on
-    // the table and blocks protected/system columns entirely.
-    if (!/^[a-zA-Z0-9_]+$/.test(field)) {
-      return NextResponse.json({ error: 'Invalid field name' }, { status: 400 });
+    const allowedFields = EDITABLE_FIELDS[table] || [];
+    if (!allowedFields.includes(field)) {
+      return NextResponse.json({ error: `Field '${field}' is not editable` }, { status: 400 });
     }
-    const allowedColumns = getAllowedColumns(table);
-    if (!allowedColumns.includes(field)) {
-      return NextResponse.json(
-        { error: `Column '${field}' is not allowed for editing on table '${table}'` },
-        { status: 400 }
-      );
+    const safeField = field.replace(/[^a-zA-Z0-9_]/g, '');
+    if (!safeField || safeField !== field) {
+      return NextResponse.json({ error: 'Invalid field name' }, { status: 400 });
     }
 
     const result = await db.execute(sql`
-      UPDATE ${sql.identifier(table)} SET ${sql.identifier(field)} = ${value}, updated_at = now()
+      UPDATE ${sql.identifier(table)} SET ${sql.identifier(safeField)} = ${value}, updated_at = now()
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-      RETURNING id, ${sql.identifier(field)}
+      RETURNING id, ${sql.identifier(safeField)}
     `);
 
     if (result.rows.length === 0) {
