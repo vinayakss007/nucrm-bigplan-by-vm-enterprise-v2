@@ -93,7 +93,7 @@ export async function fireWebhooks(
         // Create delivery record. A failure here means the row never lands in
         // the queue, so the delivery is invisible — log it loudly instead of
         // swallowing it, but keep going so one bad hook cannot abort the rest.
-        let delivery: { id: string } | undefined;
+        let delivery: { id: string; attempt?: number } | undefined;
         try {
           [delivery] = await db.insert(webhookQueue).values({
             tenantId,

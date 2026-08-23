@@ -338,7 +338,7 @@ export function createLimiter(config: { max?: number; window?: number; windowMs?
 /**
  * Pre-configured limiters per endpoint (backward compat)
  */
-export const limiters: Record<string, RateLimiter> = {
+export const limiters = {
   api: new RateLimiter({ max: 60, window: 60 }),
   auth: new RateLimiter({ max: 200, window: 60 }),
   export: new RateLimiter({ max: 10, window: 3600 }),

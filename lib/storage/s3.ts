@@ -67,16 +67,16 @@ export async function downloadBackup(key: string): Promise<Buffer> {
     Key: key,
   }));
 
-  if (!response.ContentLength || response.ContentLength > MAX_BACKUP_SIZE_BYTES) {
-    const sizeMB = response.ContentLength
-      ? (response.ContentLength / (1024 * 1024)).toFixed(1)
-      : 'unknown';
+  if (response.ContentLength && response.ContentLength > MAX_BACKUP_SIZE_BYTES) {
+    const sizeMB = (response.ContentLength / (1024 * 1024)).toFixed(1);
     throw new Error(
       `Backup too large to load into memory (${sizeMB} MB). ` +
       `Maximum allowed is ${MAX_BACKUP_SIZE_BYTES / (1024 * 1024)} MB. ` +
       'Use streaming or signed-URL download for larger files.'
     );
   }
+  // When ContentLength is unavailable (some S3-compatible providers), the
+  // streaming loop below still enforces MAX_BACKUP_SIZE_BYTES via totalBytes.
 
   const stream = response.Body as Readable;
   const chunks: Buffer[] = [];

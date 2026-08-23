@@ -142,9 +142,11 @@ jobs:
           fetch-depth: 0
 
       - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: addnab/docker-run-action@v3
+        with:
+          image: zricethezav/gitleaks:latest
+          options: -v ${{ github.workspace }}:/repo
+          run: gitleaks detect --source=/repo --verbose --redact
 
   security-scan:
     name: Security Scan (SAST)

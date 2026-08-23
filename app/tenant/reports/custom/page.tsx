@@ -318,7 +318,7 @@ export default function CustomReportBuilder() {
                           <td key={col} className="px-4 py-2 text-xs text-muted-foreground max-w-[200px] truncate">
                             {row[col] === null || row[col] === undefined ? '—' :
                               typeof row[col] === 'number' && row[col] > 1000 ? `$${row[col].toLocaleString()}` :
-                              String(row[col]).includes('T') ? formatDate(row[col]) :
+                              typeof row[col] !== 'boolean' && String(row[col]).includes('T') ? formatDate(String(row[col])) :
                               String(row[col])}
                           </td>
                         ))}

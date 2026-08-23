@@ -273,7 +273,8 @@ describe('Branding Engine', () => {
     it('blocks data: URLs in url()', async () => {
       const { sanitizeCustomCss } = await import('@/lib/branding');
       const result = sanitizeCustomCss("background: url(data:text/html,<script>alert(1)</script>)");
-      expect(result).toContain('url(blocked:');
+      expect(result).toContain('blocked');
+      expect(result).not.toMatch(/data\s*:/i);
     });
 
     it('passes through valid CSS unchanged', async () => {

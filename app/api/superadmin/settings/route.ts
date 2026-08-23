@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
       logSuperAdminAction({
         adminId: ctx.userId,
         adminEmail: ctx.user?.email || "",
-        action: 'settings.secrets_rejected',
+        action: 'settings.secrets_updated',
         metadata: { rejectedKeys: rejectedSecretKeys },
       });
     }

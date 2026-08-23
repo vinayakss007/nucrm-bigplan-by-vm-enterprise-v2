@@ -37,6 +37,12 @@
 
 import { NextResponse } from 'next/server';
 
+/** Default sunset date for deprecated v1 endpoints (ISO date string) */
+export const SUNSET_DATE = '2026-12-31';
+
+/** URL of the migration guide for deprecated v1 endpoints */
+export const MIGRATION_GUIDE_URL = 'https://docs.nucrm.dev/api/migration-guide';
+
 export interface DeprecationOptions {
   /** When the endpoint was deprecated (default: now) */
   since?: Date;

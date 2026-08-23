@@ -19,3 +19,11 @@ ALTER TABLE backup_records ADD COLUMN IF NOT EXISTS checksum_algorithm TEXT DEFA
 COMMIT;
 
 -- DOWN Migration
+-- DOWN
+BEGIN;
+
+ALTER TABLE backup_records DROP COLUMN IF EXISTS checksum_algorithm;
+ALTER TABLE backup_records DROP COLUMN IF EXISTS checksum;
+
+COMMIT;
+-- END DOWN

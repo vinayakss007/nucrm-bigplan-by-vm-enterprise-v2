@@ -126,7 +126,9 @@ describe('API Gateway', () => {
     });
 
     it('resolves tenant from X-Tenant-ID header', async () => {
-      dbReturnValue = [{ id: 'membership-1' }];
+      // Shared mock return satisfies both queries:
+      // sessions lookup reads .userId, membership lookup reads the row itself
+      dbReturnValue = [{ id: 'membership-1', userId: 'user-123' }];
       const { resolveGatewayTenant } = await import('@/lib/api/gateway');
 
       const request = new Request('http://localhost:3000/api/v2/contacts', {
