@@ -92,7 +92,7 @@ export async function GET(
     const { id } = await params;
 
     const form = await db.query.forms.findFirst({
-      where: eq(forms.id, id),
+      where: and(eq(forms.id, id), eq(forms.tenantId, ctx.tenantId)),
       columns: { viewsCount: true, submissionsCount: true, name: true, fields: true },
     });
     if (!form) {
@@ -140,7 +140,19 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireAuth(req);
+    if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;
+
+    // Only track analytics for forms owned by the caller's tenant
+    const owned = await db.query.forms.findFirst({
+      where: and(eq(forms.id, id), eq(forms.tenantId, ctx.tenantId)),
+      columns: { id: true },
+    });
+    if (!owned) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
     let body: { type?: string } = {};
     try {
       body = await readJsonBody(req);
@@ -150,12 +162,12 @@ export async function POST(
       await db
         .update(forms)
         .set({ submissionsCount: sql`${forms.submissionsCount} + 1` })
-        .where(eq(forms.id, id));
+        .where(and(eq(forms.id, id), eq(forms.tenantId, ctx.tenantId)));
     } else {
       await db
         .update(forms)
         .set({ viewsCount: sql`${forms.viewsCount} + 1` })
-        .where(eq(forms.id, id));
+        .where(and(eq(forms.id, id), eq(forms.tenantId, ctx.tenantId)));
     }
 
     return NextResponse.json({ ok: true });

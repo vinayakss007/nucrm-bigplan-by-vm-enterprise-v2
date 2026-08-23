@@ -11,7 +11,7 @@ import {
 } from '@/lib/razorpay';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 
 /**
@@ -156,14 +156,17 @@ async function handleSubscriptionCancelled(payload: any) {
     return;
   }
 
-  // Downgrade to free plan
+  // Downgrade to free plan and mark the subscription cancelled.
+  // NOTE: tenants has no dedicated cancelled_at column, so the timestamp is
+  // recorded under metadata.cancelled_at (tenants.status becomes 'cancelled').
   await db.update(tenants)
     .set({
       planId: 'free',
-      status: 'active',
+      status: 'cancelled',
       subscriptionId: null,
       billingType: 'trial',
       updatedAt: new Date(),
+      metadata: sql`COALESCE(${tenants.metadata}, '{}'::jsonb) || ${JSON.stringify({ cancelled_at: new Date().toISOString() })}::jsonb`,
     })
     .where(eq(tenants.id, tenantId));
 

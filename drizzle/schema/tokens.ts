@@ -90,6 +90,7 @@ export const apiKeysRegistry = pgTable('api_keys_registry', {
 // ── 5. USAGE ALERTS ───────────────────────────────────
 export const usageAlerts = pgTable('usage_alerts', {
   id: utils.pk(),
+  tenantId: utils.tenantId(),
   alertType: text('alert_type').notNull(),
   targetType: text('target_type').notNull(),
   targetId: uuid('target_id'),
@@ -104,6 +105,7 @@ export const usageAlerts = pgTable('usage_alerts', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 }, (table) => {
   return {
+    tenantIdx: utils.tenantIdx(table),
     targetIdx: index('idx_usage_alerts_target').on(table.targetType, table.targetId),
     unackedIdx: index('idx_usage_alerts_unacked').on(table.acknowledged),
   };

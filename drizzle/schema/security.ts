@@ -42,7 +42,7 @@ export const securityEvents = pgTable('security_events', {
   eventType: text('event_type').notNull(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
-  metadata: text('metadata'),
+  metadata: jsonb('metadata'),
   ...utils.lifecycle(),
 }, (table) => ({
   tenantIdx: index('idx_security_events_tenant').on(table.tenantId),

@@ -72,6 +72,7 @@ export async function checkTokenAndLimits(
       await createAlert({
         alert_type: 'budget_100',
         target_type: 'platform',
+        tenant_id: tenantId,
         service,
         current_value: globalBudget.currentMonthCents,
         threshold_value: globalBudget.monthlyBudgetCents,
@@ -79,7 +80,7 @@ export async function checkTokenAndLimits(
       });
     } else if (pctUsed >= 80 && globalBudget.alertAt80pct) {
       // Only alert once per threshold crossing
-      await checkAndAlertThreshold('platform', null, service, 'budget_80', globalBudget.currentMonthCents, globalBudget.monthlyBudgetCents);
+      await checkAndAlertThreshold('platform', null, service, 'budget_80', globalBudget.currentMonthCents, globalBudget.monthlyBudgetCents, tenantId);
     }
   }
 
@@ -110,13 +111,14 @@ export async function checkTokenAndLimits(
     if (limit >= 0) {
       const pctUsed = ((usage.monthly_count ?? 0) / limit) * 100;
       if (pctUsed >= 80 && pctUsed < 85) { // Alert once around 80%
-        await checkAndAlertThreshold('tenant', tenantId, module, 'tenant_80', usage.monthly_count ?? 0, limit);
+        await checkAndAlertThreshold('tenant', tenantId, module, 'tenant_80', usage.monthly_count ?? 0, limit, tenantId);
       }
       if (pctUsed >= 100 && tenantLimits.hardCapAction === 'alert_only') {
         await createAlert({
           alert_type: 'tenant_limit_hit',
           target_type: 'tenant',
           target_id: tenantId,
+          tenant_id: tenantId,
           service: module,
           current_value: usage.monthly_count ?? undefined,
           threshold_value: limit,
@@ -302,6 +304,7 @@ export async function checkForAnomaly(
       alert_type: 'spike_detected',
       target_type: 'tenant',
       target_id: tenantId,
+      tenant_id: tenantId,
       service,
       current_value: todayTotal,
       threshold_value: Math.round(avgDaily),
@@ -423,6 +426,7 @@ async function createAlert(data: {
   alert_type: string;
   target_type: string;
   target_id?: string;
+  tenant_id: string;
   service?: string;
   current_value?: number;
   threshold_value?: number;
@@ -442,6 +446,7 @@ async function createAlert(data: {
 
   await db.insert(usageAlerts)
     .values({
+      tenantId: data.tenant_id,
       alertType: data.alert_type,
       targetType: data.target_type,
       targetId: data.target_id,
@@ -459,7 +464,8 @@ async function checkAndAlertThreshold(
   service: string,
   alertType: string,
   currentValue: number,
-  thresholdValue: number
+  thresholdValue: number,
+  tenantId: string
 ) {
   const existing = await db.query.usageAlerts.findFirst({
     where: and(
@@ -475,6 +481,7 @@ async function checkAndAlertThreshold(
       alert_type: alertType,
       target_type: targetType,
       target_id: targetId || undefined,
+      tenant_id: tenantId,
       service,
       current_value: currentValue,
       threshold_value: thresholdValue,

@@ -36,6 +36,18 @@ interface EmailOptions {
   from?: string;
 }
 
+/** Error thrown when provider fallback routing exceeds its depth limit. */
+export class EmailRoutingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'EmailRoutingError';
+  }
+}
+
+// Internal option: number of fallback hops already taken (loop guard)
+type SendOptions = EmailOptions & { _depth?: number };
+const MAX_FALLBACK_HOPS = 3;
+
 interface ProviderStats {
   name: string;
   sentToday: number;
@@ -259,8 +271,9 @@ function updateUsage(providerKey: string, success: boolean, error?: string) {
 /**
  * Smart email sender with multi-provider support
  */
-export async function sendSmartEmail(options: EmailOptions) {
+export async function sendSmartEmail(options: SendOptions) {
   const emailType = options.type || 'transactional';
+  const depth = options._depth || 0;
   
   console.log(`[EmailRouter] Sending ${emailType} email to ${options.to}`);
 
@@ -310,11 +323,17 @@ export async function sendSmartEmail(options: EmailOptions) {
     if (emailType === 'critical') {
       console.log('[EmailRouter] Trying fallback providers...');
       
+      // Depth guard: never chain more than MAX_FALLBACK_HOPS fallbacks,
+      // otherwise a misbehaving provider set could recurse forever.
+      if (depth >= MAX_FALLBACK_HOPS) {
+        throw new EmailRoutingError('routing loop: exceeded maximum fallback hops');
+      }
+
       // Try next available provider
       const fallback = getBestProvider(emailType);
       if (fallback && fallback !== providerKey) {
         console.log(`[EmailRouter] Falling back to ${PROVIDERS[fallback as keyof typeof PROVIDERS].name}`);
-        return sendSmartEmail({ ...options, type: emailType });
+        return sendSmartEmail({ ...options, type: emailType, _depth: depth + 1 });
       }
     }
 

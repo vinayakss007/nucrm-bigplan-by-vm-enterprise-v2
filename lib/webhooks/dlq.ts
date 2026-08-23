@@ -100,10 +100,15 @@ export async function moveToDeadLetterQueue(deliveryId: string): Promise<string 
 /**
  * Retry a dead letter queue entry.
  * Creates a new webhook delivery attempt with reset counter.
+ *
+ * When `tenantId` is provided, the entry is only retried if it belongs to
+ * that tenant — prevents one tenant from retrying another's dead letters.
  */
-export async function retryFromDLQ(dlqEntryId: string): Promise<boolean> {
+export async function retryFromDLQ(dlqEntryId: string, tenantId?: string): Promise<boolean> {
   const entry = await db.query.deadLetterQueue.findFirst({
-    where: eq(deadLetterQueue.id, dlqEntryId),
+    where: tenantId
+      ? and(eq(deadLetterQueue.id, dlqEntryId), eq(deadLetterQueue.tenantId, tenantId))
+      : eq(deadLetterQueue.id, dlqEntryId),
   });
 
   if (!entry) {
@@ -191,12 +196,12 @@ export async function getDLQStats(tenantId: string): Promise<{ pending: number; 
   return { pending, resolved, total };
 }
 
-export async function bulkRetryDLQ(ids: string[]): Promise<{ succeeded: number; failed: number }> {
+export async function bulkRetryDLQ(ids: string[], tenantId?: string): Promise<{ succeeded: number; failed: number }> {
   let succeeded = 0;
   let failed = 0;
   for (const id of ids) {
     try {
-      const result = await retryFromDLQ(id);
+      const result = await retryFromDLQ(id, tenantId);
       if (result) succeeded++;
       else failed++;
     } catch (e) {
@@ -215,12 +220,18 @@ export async function purgeDLQEntry(id: string, tenantId: string): Promise<boole
   return result.length > 0;
 }
 
-export async function purgeOldDLQEntries(daysOld: number): Promise<number> {
+/**
+ * Purge DLQ entries older than `daysOld`. When `tenantId` is provided the
+ * delete is scoped to that tenant; system callers (cron) may omit it.
+ */
+export async function purgeOldDLQEntries(daysOld: number, tenantId?: string): Promise<number> {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - daysOld);
   const result = await db
     .delete(deadLetterQueue)
-    .where(lt(deadLetterQueue.createdAt, cutoff))
+    .where(tenantId
+      ? and(lt(deadLetterQueue.createdAt, cutoff), eq(deadLetterQueue.tenantId, tenantId))
+      : lt(deadLetterQueue.createdAt, cutoff))
     .returning({ id: deadLetterQueue.id });
   return result.length;
 }

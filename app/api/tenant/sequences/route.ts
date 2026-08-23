@@ -71,6 +71,8 @@ export async function POST(request: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
     const { name, description, steps } = v;
+    // Honor the caller's status ('draft'|'active'|...); schema defaults to 'draft'
+    const status = v.status || 'draft';
 
     if (!name || !name.trim()) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -82,7 +84,7 @@ export async function POST(request: NextRequest) {
           tenantId: ctx.tenantId,
           name: name.trim(),
           description: description || null,
-          status: 'active',
+          status,
           createdBy: ctx.userId,
         })
         .returning();

@@ -92,14 +92,14 @@ export const TOKENS_TABLES = {
     metadata: {
       name: 'usage_alerts',
       schemaGroup: 'tokens',
-      hasTenantId: false,
+      hasTenantId: true,
       hasSoftDelete: false,
       hasAudit: false,
       hasMetadata: false,
-      dependencies: ['users'],
+      dependencies: ['tenants', 'users'],
       description: 'Usage threshold alerts',
       isCore: true,
-      indexes: ['idx_usage_alerts_target', 'idx_usage_alerts_unacked'],
+      indexes: ['idx_usage_alerts_tenant', 'idx_usage_alerts_target', 'idx_usage_alerts_unacked'],
     },
   },
   costAnomalies: {
