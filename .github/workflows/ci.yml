@@ -209,6 +209,8 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          NODE_OPTIONS: "--max-old-space-size=6144"
 
       - name: Check bundle size thresholds
         run: npx tsx scripts/analyze-bundle.ts
