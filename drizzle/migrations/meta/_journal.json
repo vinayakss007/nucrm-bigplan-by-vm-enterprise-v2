@@ -416,52 +416,38 @@
       "breakpoints": true
     },
     {
-      "idx": 60,
+      "idx": 59,
       "version": "7",
       "when": 1786018800000,
       "tag": "0060_add_tenantid_rls",
       "breakpoints": true
     },
     {
-      "idx": 61,
-      "version": "7",
-      "when": 1786105200000,
-      "tag": "0061_fix_super_admin_audit_types",
-      "breakpoints": true
-    },
-    {
-      "idx": 62,
-      "version": "7",
-      "when": 1786191600000,
-      "tag": "0062_add_pageviews_lifecycle",
-      "breakpoints": true
-    },
-    {
       "idx": 60,
       "version": "7",
-      "when": 1786018800000,
-      "tag": "0060_add_tenantid_rls",
-      "breakpoints": true
-    },
-    {
-      "idx": 61,
-      "version": "7",
       "when": 1786105200000,
       "tag": "0061_fix_super_admin_audit_types",
       "breakpoints": true
     },
     {
-      "idx": 62,
+      "idx": 61,
       "version": "7",
       "when": 1786191600000,
       "tag": "0062_add_pageviews_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1786278000000,
+      "tag": "0063_add_missing_indexes",
       "breakpoints": true
     },
     {
       "idx": 63,
       "version": "7",
-      "when": 1786278000000,
-      "tag": "0063_add_missing_indexes",
+      "when": 1786364400000,
+      "tag": "0064_add_audit_fk_constraints",
       "breakpoints": true
     }
   ]
