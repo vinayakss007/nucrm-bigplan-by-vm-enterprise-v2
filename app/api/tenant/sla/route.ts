@@ -12,6 +12,7 @@ import { slaPolicies, slaBreaches } from '@/drizzle/schema/sla';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(req: NextRequest) {
   try {
@@ -53,6 +54,8 @@ export async function POST(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const limited = await rateLimitMutating(req, 'slaPolicies', 'post');
+    if (limited) return limited;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const moduleGate = await requireModule(ctx.tenantId, 'service-helpdesk', ctx.isSuperAdmin);
@@ -90,6 +93,8 @@ export async function PUT(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const limited = await rateLimitMutating(req, 'slaPolicies', 'put');
+    if (limited) return limited;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const moduleGate = await requireModule(ctx.tenantId, 'service-helpdesk', ctx.isSuperAdmin);

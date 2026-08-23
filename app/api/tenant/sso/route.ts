@@ -12,6 +12,7 @@ import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const ssoConfigSchema = z.object({
   providerType: z.enum(['saml', 'oidc']),
@@ -55,6 +56,8 @@ export async function POST(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const limited = await rateLimitMutating(req, 'ssoProviders', 'post');
+    if (limited) return limited;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const body = await readJsonBody(req);
@@ -81,6 +84,8 @@ export async function PUT(req: NextRequest) {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const limited = await rateLimitMutating(req, 'ssoProviders', 'put');
+    if (limited) return limited;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const body = await readJsonBody(req);

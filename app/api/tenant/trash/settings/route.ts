@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const TRASH_RETENTION_KEY = 'trash_retention_days';
 
@@ -56,6 +57,8 @@ export async function PUT(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const limited = await rateLimitMutating(request, 'trash', 'put');
+    if (limited) return limited;
     if (!ctx.isAdmin) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }

@@ -89,9 +89,10 @@ const DEFAULT_LIMITS = { post: 15, patch: 30, delete: 10 };
 export async function rateLimitMutating(
   request: Request,
   entity: string,
-  method: 'post' | 'patch' | 'delete'
+  method: 'post' | 'patch' | 'put' | 'delete'
 ): Promise<import('next/server').NextResponse | null> {
   const limits = MUTATING_LIMITS[entity] || DEFAULT_LIMITS;
+  const bucket = method === 'put' ? 'patch' : method;
   const action = `${entity}_${method}`;
-  return checkRateLimit(request, { action, max: limits[method], windowMinutes: 1 });
+  return checkRateLimit(request, { action, max: limits[bucket], windowMinutes: 1 });
 }
