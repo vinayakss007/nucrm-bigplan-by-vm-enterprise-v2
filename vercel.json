@@ -51,6 +51,18 @@
     {
       "path": "/api/cron/scheduled-report-delivery",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/subscription-check",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/detect-missed-followups",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/ai-auto-followup",
+      "schedule": "0 * * * *"
     }
   ]
 }

@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { apiError } from '@/lib/api-error';
+import { acquireLock } from '@/lib/cache';
 import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { alertSuperAdmin } from '@/lib/email/service';
@@ -16,6 +17,13 @@ export async function POST(request: NextRequest) {
   const secret = request.headers.get('x-cron-secret');
   if (!verifySecret(secret, process.env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Distributed dedup guard (#1422): skip when another scheduler
+  // instance already fired this job within its interval.
+  const lock = await acquireLock('cron:backup-health', 1800);
+  if (!lock.acquired) {
+    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
   }
 
   try {
