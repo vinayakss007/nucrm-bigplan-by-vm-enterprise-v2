@@ -82,6 +82,7 @@ async function sendViaResend(payload: EmailPayload): Promise<SendResult> {
         reply_to: payload.replyTo,
         headers: Object.keys(headers).length > 0 ? headers : undefined,
       }),
+      signal: AbortSignal.timeout(15_000),
     });
 
     const data = await res.json() as { id?: string; message?: string };
@@ -249,6 +250,7 @@ export async function sendWebhookNotification(opts: {
             timestamp,
           }],
         }),
+        signal: AbortSignal.timeout(15_000),
       });
     } catch (err) {
       console.error('[webhook] Discord failed:', err);
@@ -271,6 +273,7 @@ export async function sendWebhookNotification(opts: {
           ],
           attachments: [{ color: `#${slackColor}` }],
         }),
+        signal: AbortSignal.timeout(15_000),
       });
     } catch (err) {
       console.error('[webhook] Slack failed:', err);
@@ -305,6 +308,7 @@ export async function sendTelegram(opts: {
         text,
         parse_mode: 'Markdown',
       }),
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!res.ok) {

@@ -72,7 +72,8 @@ async function handleRequest(request: NextRequest, params: { path: string[] }): 
       headers,
       body,
       redirect: 'manual',
-      duplex: 'half'
+      duplex: 'half',
+      signal: AbortSignal.timeout(30_000),
     } as RequestInit;
 
     const proxyRes = await fetch(targetUrl.toString(), fetchOptions);
@@ -86,7 +87,7 @@ async function handleRequest(request: NextRequest, params: { path: string[] }): 
     });
 
     return setCORSHeaders(response, origin);
-  } catch (error) {
+  } catch (_error) {
     const errorResponse = NextResponse.json(
       { error: 'Internal gateway error during proxy' },
       { status: 502 }
