@@ -23,7 +23,7 @@ import {
   loadProviderConfig,
   randomToken,
 } from '@/lib/auth/sso/oidc';
-import { setSsoState } from '@/lib/auth/sso/state';
+import { setSsoState, sanitizeRedirectTo } from '@/lib/auth/sso/state';
 import { decrypt } from '@/lib/crypto';
 import { checkRateLimit } from '@/lib/rate-limit';
 
@@ -33,7 +33,9 @@ export async function GET(request: NextRequest) {
 
   const url = new URL(request.url);
   const email = (url.searchParams.get('email') || '').trim().toLowerCase();
-  const redirectTo = url.searchParams.get('redirect') || '/tenant';
+  // #1213 (CWE-601): sanitize at capture time — reject protocol-relative
+  // redirect targets so they never enter the signed state.
+  const redirectTo = sanitizeRedirectTo(url.searchParams.get('redirect'), '/tenant');
 
   if (!email || !email.includes('@')) {
     return NextResponse.json({ error: 'email is required' }, { status: 400 });

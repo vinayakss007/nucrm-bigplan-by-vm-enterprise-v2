@@ -23,7 +23,7 @@ import {
 } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { exchangeAndVerify, loadProviderConfig } from '@/lib/auth/sso/oidc';
-import { readSsoState, clearSsoState } from '@/lib/auth/sso/state';
+import { readSsoState, clearSsoState, sanitizeRedirectTo } from '@/lib/auth/sso/state';
 import { createToken, hashToken, setSessionCookie } from '@/lib/auth/session';
 import { decrypt } from '@/lib/crypto';
 
@@ -147,9 +147,9 @@ export async function GET(request: NextRequest) {
   await setSessionCookie(sessionToken);
   await clearSsoState();
 
-  const dest = stateCookie.redirectTo && stateCookie.redirectTo.startsWith('/')
-    ? stateCookie.redirectTo
-    : '/tenant';
+  // #1213 (CWE-601): only same-origin relative paths — protocol-relative
+  // URLs ("//evil.com") must not become the redirect target.
+  const dest = sanitizeRedirectTo(stateCookie.redirectTo, '/tenant');
   return NextResponse.redirect(new URL(dest, request.url), 302);
 }
 

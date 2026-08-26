@@ -76,3 +76,18 @@ export async function clearSsoState(): Promise<void> {
   const jar = await cookies();
   jar.delete(COOKIE_NAME);
 }
+
+/**
+ * Sanitize a post-login redirect target (#1213, CWE-601).
+ *
+ * Only same-origin relative paths are allowed. Protocol-relative URLs
+ * ("//evil.com" — browsers resolve them against the current scheme) and
+ * backslash variants ("//\evil.com", "/\evil.com" — treated as
+ * protocol-relative by some browsers) fall back to the default.
+ */
+export function sanitizeRedirectTo(raw: string | undefined | null, fallback = '/tenant'): string {
+  if (!raw) return fallback;
+  if (!raw.startsWith('/')) return fallback;
+  if (raw.startsWith('//') || raw.includes('\\') || raw.startsWith('/\\')) return fallback;
+  return raw;
+}

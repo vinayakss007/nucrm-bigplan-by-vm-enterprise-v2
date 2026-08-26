@@ -109,3 +109,40 @@ describe('SSO State', () => {
     });
   });
 });
+
+describe('sanitizeRedirectTo (#1213 — CWE-601 open redirect)', () => {
+  it('accepts same-origin relative paths', async () => {
+    const { sanitizeRedirectTo } = await import('@/lib/auth/sso/state');
+    expect(sanitizeRedirectTo('/tenant')).toBe('/tenant');
+    expect(sanitizeRedirectTo('/tenant/contacts?tab=a')).toBe('/tenant/contacts?tab=a');
+    expect(sanitizeRedirectTo('/deals/123')).toBe('/deals/123');
+  });
+
+  it('rejects protocol-relative URLs', async () => {
+    const { sanitizeRedirectTo } = await import('@/lib/auth/sso/state');
+    expect(sanitizeRedirectTo('//evil.com')).toBe('/tenant');
+    expect(sanitizeRedirectTo('//evil.com/path?token=stolen')).toBe('/tenant');
+  });
+
+  it('rejects backslash and mixed-separator variants', async () => {
+    const { sanitizeRedirectTo } = await import('@/lib/auth/sso/state');
+    expect(sanitizeRedirectTo('/\\evil.com')).toBe('/tenant');
+    expect(sanitizeRedirectTo('\\evil.com')).toBe('/tenant');
+    expect(sanitizeRedirectTo('/path\\evil.com')).toBe('/tenant');
+  });
+
+  it('rejects absolute URLs and schemes', async () => {
+    const { sanitizeRedirectTo } = await import('@/lib/auth/sso/state');
+    expect(sanitizeRedirectTo('https://evil.com')).toBe('/tenant');
+    expect(sanitizeRedirectTo('javascript:alert(1)')).toBe('/tenant');
+    expect(sanitizeRedirectTo('data:text/html,<script>')).toBe('/tenant');
+  });
+
+  it('falls back for empty values and honours a custom fallback', async () => {
+    const { sanitizeRedirectTo } = await import('@/lib/auth/sso/state');
+    expect(sanitizeRedirectTo(undefined)).toBe('/tenant');
+    expect(sanitizeRedirectTo(null)).toBe('/tenant');
+    expect(sanitizeRedirectTo('')).toBe('/tenant');
+    expect(sanitizeRedirectTo('//evil.com', '/dashboard')).toBe('/dashboard');
+  });
+});
