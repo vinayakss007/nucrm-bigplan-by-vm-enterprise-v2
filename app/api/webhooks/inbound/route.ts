@@ -275,16 +275,6 @@ function toDecimalString(raw: unknown): string {
 }
 
 /**
- * A plain object, or `{}` for anything else. `typeof null === 'object'` and
- * arrays are objects too, so both are rejected here — a jsonb column that is
- * meant to hold a bag of keys should never receive `null` or `[]`.
- */
-function asPlainObject(raw: unknown): Record<string, unknown> {
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
-  return raw as Record<string, unknown>;
-}
-
-/**
  * Copy request headers for storage, replacing the value of any sensitive header
  * with `[REDACTED]`. Header-name matching is case-insensitive.
  */
@@ -405,7 +395,7 @@ async function handleContact(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let existing: any = null;
   if (email) {
-    existing = await db.query.contacts.findFirst({
+    existing = await tx.query.contacts.findFirst({
       where: and(
         eq(contacts.tenantId, tenantId),
         eq(contacts.email, email),
@@ -444,7 +434,7 @@ async function handleContact(
   // On "update", require existing record
   if (action === 'update' && !existing) {
     // Try by ID if provided
-    const byId = d['id'] ? await db.query.contacts.findFirst({
+    const byId = d['id'] ? await tx.query.contacts.findFirst({
       where: and(
         eq(contacts.id, d['id'] as string),
         eq(contacts.tenantId, tenantId)
@@ -494,7 +484,7 @@ async function handleLead(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let existing: any = null;
   if (email) {
-    existing = await db.query.leads.findFirst({
+    existing = await tx.query.leads.findFirst({
       where: and(
         eq(leads.tenantId, tenantId),
         eq(leads.email, email),
@@ -529,7 +519,7 @@ async function handleLead(
     const targetId = (d['id'] as string) || existing?.id;
     if (!targetId) throw new Error('Lead id is required for update');
     
-    const check = await db.query.leads.findFirst({
+    const check = await tx.query.leads.findFirst({
       where: and(
         eq(leads.id, targetId),
         eq(leads.tenantId, tenantId)
@@ -712,7 +702,7 @@ async function handleDeal(
   if (action === 'update' || action === 'upsert') {
     const dealId = d['id'] as string | null;
     if (dealId) {
-      const check = await db.query.deals.findFirst({
+      const check = await tx.query.deals.findFirst({
         where: and(
           eq(deals.id, dealId),
           eq(deals.tenantId, tenantId),
@@ -782,7 +772,7 @@ async function handleCompany(
   if (action === 'update' || action === 'upsert') {
     const companyId = d['id'] as string | null;
     if (companyId) {
-      const check = await db.query.companies.findFirst({
+      const check = await tx.query.companies.findFirst({
         where: and(
           eq(companies.id, companyId),
           eq(companies.tenantId, tenantId)
@@ -837,7 +827,7 @@ async function handleTask(
     const taskId = d['id'] as string | null;
     if (!taskId) throw new Error('id is required to update a task');
     
-    const check = await db.query.tasks.findFirst({
+    const check = await tx.query.tasks.findFirst({
       where: and(
         eq(tasks.id, taskId),
         eq(tasks.tenantId, tenantId),
