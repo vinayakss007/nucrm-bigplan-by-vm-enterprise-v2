@@ -3,19 +3,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock ioredis before importing the module
 vi.mock('ioredis', () => {
   const store = new Map<string, string>();
-  const MockRedis = vi.fn().mockImplementation(() => ({
-    connect: vi.fn().mockResolvedValue(undefined),
-    on: vi.fn(),
-    disconnect: vi.fn(),
-    get: vi.fn((key: string) => Promise.resolve(store.get(key) || null)),
-    set: vi.fn((key: string, value: string) => { store.set(key, value); return Promise.resolve('OK'); }),
-    keys: vi.fn((pattern: string) => {
-      const prefix = pattern.replace('*', '');
-      return Promise.resolve([...store.keys()].filter(k => k.startsWith(prefix)));
-    }),
-    mget: vi.fn((...keys: string[]) => Promise.resolve(keys.map(k => store.get(k) || null))),
-    quit: vi.fn().mockResolvedValue(undefined),
-  }));
+  const MockRedis = vi.fn(function MockRedis() {
+    return {
+      connect: vi.fn().mockResolvedValue(undefined),
+      on: vi.fn(),
+      disconnect: vi.fn(),
+      get: vi.fn((key: string) => Promise.resolve(store.get(key) || null)),
+      set: vi.fn((key: string, value: string) => { store.set(key, value); return Promise.resolve('OK'); }),
+      keys: vi.fn((pattern: string) => {
+        const prefix = pattern.replace('*', '');
+        return Promise.resolve([...store.keys()].filter(k => k.startsWith(prefix)));
+      }),
+      mget: vi.fn((...keys: string[]) => Promise.resolve(keys.map(k => store.get(k) || null))),
+      quit: vi.fn().mockResolvedValue(undefined),
+    };
+  });
   return { default: MockRedis, Redis: MockRedis, __store: store };
 });
 

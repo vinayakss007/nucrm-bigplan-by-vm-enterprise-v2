@@ -81,7 +81,7 @@ export async function fetchLatestRates(baseCurrency: string = 'USD'): Promise<Re
   const url = `https://v6.exchangerate-api.com/v6/${apiKey}/latest/${baseCurrency}`;
 
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
     if (!response.ok) {
       throw new Error(`Exchange rate API returned ${response.status}`);
     }

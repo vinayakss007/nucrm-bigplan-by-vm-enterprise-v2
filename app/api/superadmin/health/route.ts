@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
         const key = process.env.RESEND_API_KEY;
         if (!key) return { latency_ms: 0, message: 'Not configured' };
         const t = Date.now();
-        await fetch('https://api.resend.com/domains', { headers: { Authorization: `Bearer ${key}` } });
+        await fetch('https://api.resend.com/domains', { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(10_000) });
         return { latency_ms: Date.now() - t, message: 'Resend OK' };
       }),
       runCheck('object_storage', async () => {

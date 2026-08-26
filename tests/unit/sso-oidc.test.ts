@@ -122,7 +122,10 @@ describe('discover', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(mockFetch).toHaveBeenCalledWith(
       'https://accounts.example.com/.well-known/openid-configuration',
-      { headers: { Accept: 'application/json' } },
+      expect.objectContaining({
+        headers: { Accept: 'application/json' },
+        signal: expect.any(AbortSignal),
+      }),
     );
     expect(result).toEqual(fakeDoc);
     mockFetch.mockRestore();

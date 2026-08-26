@@ -95,6 +95,7 @@ export async function PATCH(request: NextRequest) {
             text: '✅ *NuCRM Connection Test*\n\nYour Telegram notifications are working! 🎉',
             parse_mode: 'Markdown',
           }),
+          signal: AbortSignal.timeout(10_000),
         });
 
         if (!res.ok) {
