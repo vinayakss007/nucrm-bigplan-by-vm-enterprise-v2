@@ -98,6 +98,8 @@ async function sendViaResend(payload: EmailPayload): Promise<SendResult> {
 }
 
 // FIX MEDIUM-09: Cache transporter to avoid recreating it on every email send
+// #1205: cache key includes the password (sha256) so credential rotation
+// creates a fresh transporter instead of reusing one with stale auth.
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -114,8 +116,11 @@ async function sendViaSMTP(payload: EmailPayload): Promise<SendResult> {
     const port = parseInt(process.env.SMTP_PORT ?? '587', 10);
     const secure = port === 465;
 
-    // FIX MEDIUM-09: Reuse transporter if config hasn't changed
-    const currentConfig = `${host}:${port}:${process.env.SMTP_USER}`;
+    // FIX MEDIUM-09 / #1205: Reuse transporter only when host|port|user|pass unchanged
+    const currentConfig = crypto
+      .createHash('sha256')
+      .update(`${host}|${port}|${process.env.SMTP_USER ?? ''}|${process.env.SMTP_PASS ?? ''}`)
+      .digest('hex');
     if (!smtpTransporter || smtpConfig !== currentConfig) {
       smtpTransporter = nodemailer.default.createTransport({
         host,

@@ -91,7 +91,7 @@ export interface BulkAction {
   id: string
   label: string
   icon?: React.ReactNode
-  onClick: (selectedRowIds: string[], input?: string, selectAllMatching?: boolean) => void | string | Promise<void | string | undefined> | undefined
+  onClick: (selectedRowIds: string[], input?: string, selectAllMatching?: boolean, textInput?: string) => void | string | Promise<void | string | undefined> | undefined
   requiresConfirmation?: boolean
   confirmationMessage?: string
   disabled?: boolean
@@ -99,6 +99,9 @@ export interface BulkAction {
   inputPlaceholder?: string
   requiresSelect?: boolean
   selectOptions?: { value: string; label: string }[]
+  /** Optional secondary free-text input shown alongside the select (#1189) */
+  requiresTextInput?: boolean
+  textInputPlaceholder?: string
 }
 
 export interface EmptyStateProps {
@@ -240,11 +243,12 @@ const handleBulkAction = async (action: BulkAction) => {
 
     try {
       const input = action.requiresSelect || action.requiresInput ? bulkActionInput[action.id] : undefined;
-      await action.onClick(selectedIds, input, selectAllMatching)
+      const textInput = action.requiresTextInput ? bulkActionInput[`${action.id}:text`] : undefined;
+      await action.onClick(selectedIds, input, selectAllMatching, textInput)
       // Clear selection after successful action
       table.toggleAllRowsSelected(false)
       onSelectAllMatching?.(false)
-      setBulkActionInput(prev => { const next = { ...prev }; delete next[action.id]; return next; })
+      setBulkActionInput(prev => { const next = { ...prev }; delete next[action.id]; delete next[`${action.id}:text`]; return next; })
     } catch (error) {
       console.error(`Bulk action "${action.label}" failed:`, error)
     }
@@ -404,6 +408,17 @@ const handleBulkAction = async (action: BulkAction) => {
                             }}
                           />
                         ) : null}
+                        {action.requiresTextInput && (
+                          <Input
+                            placeholder={action.textInputPlaceholder || 'Enter value...'}
+                            value={bulkActionInput[`${action.id}:text`] || ''}
+                            onChange={(e) => setBulkActionInput(prev => ({ ...prev, [`${action.id}:text`]: e.target.value }))}
+                            className="h-8 w-40"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleBulkAction(action)
+                            }}
+                          />
+                        )}
                         <Button
                           variant="default"
                           size="sm"

@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Search, Trash2, X, DollarSign, Clock, Package, Building2, User, Users } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import { Breadcrumb } from '@/components/shared/breadcrumb';
 import toast from 'react-hot-toast';
 
 interface Service {
@@ -304,6 +305,7 @@ export default function ServicesPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
+      <Breadcrumb />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -441,10 +443,10 @@ export default function ServicesPage() {
       {/* Service Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
+          <div className="bg-card text-foreground rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-lg font-semibold">{editingService ? 'Edit Service' : 'Add New Service'}</h2>
-              <button onClick={() => { setShowModal(false); resetForm(); }} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded">
+              <button onClick={() => { setShowModal(false); resetForm(); }} className="p-1 hover:bg-accent rounded">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -452,23 +454,23 @@ export default function ServicesPage() {
               <div>
                 <label className="block text-sm font-medium mb-1">Service Name *</label>
                 <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required
-                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700" />
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-transparent" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Description</label>
                 <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3}
-                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700" />
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-transparent" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Category</label>
                   <input type="text" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700" />
+                    className="w-full px-3 py-2 border border-border rounded-lg bg-transparent" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Pricing Type</label>
                   <select value={form.pricingType} onChange={(e) => setForm({ ...form, pricingType: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                    className="w-full px-3 py-2 border border-border rounded-lg bg-transparent">
                     <option value="fixed">Fixed Price</option>
                     <option value="hourly">Hourly Rate</option>
                     <option value="monthly">Monthly</option>
@@ -481,28 +483,28 @@ export default function ServicesPage() {
                   <div>
                     <label className="block text-sm font-medium mb-1">Unit Price</label>
                     <input type="number" step="0.01" value={form.unitPrice} onChange={(e) => setForm({ ...form, unitPrice: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700" />
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-transparent" />
                   </div>
                 )}
                 {form.pricingType === 'hourly' && (
                   <div>
                     <label className="block text-sm font-medium mb-1">Hourly Rate</label>
                     <input type="number" step="0.01" value={form.hourlyRate} onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700" />
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-transparent" />
                   </div>
                 )}
                 {form.pricingType === 'monthly' && (
                   <div>
                     <label className="block text-sm font-medium mb-1">Monthly Price</label>
                     <input type="number" step="0.01" value={form.monthlyPrice} onChange={(e) => setForm({ ...form, monthlyPrice: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700" />
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-transparent" />
                   </div>
                 )}
                 {form.pricingType === 'yearly' && (
                   <div>
                     <label className="block text-sm font-medium mb-1">Yearly Price</label>
                     <input type="number" step="0.01" value={form.yearlyPrice} onChange={(e) => setForm({ ...form, yearlyPrice: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700" />
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-transparent" />
                   </div>
                 )}
               </div>
@@ -510,12 +512,12 @@ export default function ServicesPage() {
                 <div>
                   <label className="block text-sm font-medium mb-1">Duration (minutes)</label>
                   <input type="number" value={form.durationMinutes} onChange={(e) => setForm({ ...form, durationMinutes: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700" />
+                    className="w-full px-3 py-2 border border-border rounded-lg bg-transparent" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Tax Rate (%)</label>
                   <input type="number" step="0.01" value={form.taxRate} onChange={(e) => setForm({ ...form, taxRate: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700" />
+                    className="w-full px-3 py-2 border border-border rounded-lg bg-transparent" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -523,13 +525,13 @@ export default function ServicesPage() {
                   <label className="block text-sm font-medium mb-1">Link to Contact (Optional)</label>
                   <div className="flex gap-2">
                     <select value={form.contactId} onChange={(e) => setForm({ ...form, contactId: e.target.value })}
-                      className="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                      className="flex-1 px-3 py-2 border border-border rounded-lg bg-transparent">
                       <option value="">No contact</option>
                       {contacts.map(c => (
                         <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
                       ))}
                     </select>
-                    <button type="button" onClick={() => openContactModal(editingService?.id || '')} className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">
+                    <button type="button" onClick={() => openContactModal(editingService?.id || '')} className="px-3 py-2 border border-border rounded-lg hover:bg-accent">
                       <Plus className="w-4 h-4" />
                     </button>
                   </div>
@@ -537,7 +539,7 @@ export default function ServicesPage() {
                 <div>
                   <label className="block text-sm font-medium mb-1">Link to Company</label>
                   <select value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                    className="w-full px-3 py-2 border border-border rounded-lg bg-transparent">
                     <option value="">No company</option>
                     {companies.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
@@ -546,7 +548,7 @@ export default function ServicesPage() {
                 </div>
               </div>
               <div className="flex gap-2 pt-4">
-                <button type="button" onClick={() => { setShowModal(false); resetForm(); }} className="flex-1 px-4 py-2 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">
+                <button type="button" onClick={() => { setShowModal(false); resetForm(); }} className="flex-1 px-4 py-2 border border-border rounded-lg hover:bg-accent">
                   Cancel
                 </button>
                 <button type="submit" className="flex-1 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700">
@@ -561,10 +563,10 @@ export default function ServicesPage() {
       {/* Create Contact Modal */}
       {showContactModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md">
-            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
+          <div className="bg-card text-foreground rounded-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-lg font-semibold">Create New Contact</h2>
-              <button onClick={() => setShowContactModal(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded">
+              <button onClick={() => setShowContactModal(false)} className="p-1 hover:bg-accent rounded">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -573,31 +575,31 @@ export default function ServicesPage() {
                 <div>
                   <label className="block text-sm font-medium mb-1">First Name *</label>
                   <input type="text" value={contactForm.firstName} onChange={(e) => setContactForm({ ...contactForm, firstName: e.target.value })} required
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700" />
+                    className="w-full px-3 py-2 border border-border rounded-lg bg-transparent" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Last Name</label>
                   <input type="text" value={contactForm.lastName} onChange={(e) => setContactForm({ ...contactForm, lastName: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700" />
+                    className="w-full px-3 py-2 border border-border rounded-lg bg-transparent" />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Email</label>
                 <input type="email" value={contactForm.email} onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700" />
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-transparent" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Phone</label>
                 <input type="tel" value={contactForm.phone} onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700" />
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-transparent" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Job Title</label>
                 <input type="text" value={contactForm.jobTitle} onChange={(e) => setContactForm({ ...contactForm, jobTitle: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700" />
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-transparent" />
               </div>
               <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setShowContactModal(false)} className="flex-1 px-4 py-2 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">
+                <button type="button" onClick={() => setShowContactModal(false)} className="flex-1 px-4 py-2 border border-border rounded-lg hover:bg-accent">
                   Cancel
                 </button>
                 <button type="submit" className="flex-1 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700">

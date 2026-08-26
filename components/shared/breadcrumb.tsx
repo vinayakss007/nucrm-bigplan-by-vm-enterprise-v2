@@ -48,6 +48,7 @@ const PATH_LABELS: Record<string, string> = {
   sequences: 'Sequences',
   tickets: 'Tickets',
   kb: 'Knowledge Base',
+  meetings: 'Meetings',
   docs: 'API Docs',
   integrations: 'Integrations',
   modules: 'Modules',

@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { logError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { sendCriticalErrorAlert } from '@/lib/critical-error-alert';
 import { InvalidJsonBodyError } from '@/lib/api/validate';
 import { ConcurrencyError } from '@/lib/concurrency';
@@ -36,6 +37,19 @@ import { ConcurrencyError } from '@/lib/concurrency';
 export function apiError(err: unknown, message = 'Internal server error', status = 500) {
   const isDev = process.env.NODE_ENV === 'development';
   const errMsg = err instanceof Error ? err.message : String(err);
+
+  // Structured log line for every apiError call. PII-safe by design: only the
+  // message and the first stack frame are recorded — never full stacks, bodies
+  // or request payloads. lib/logger does not import this module, so there is no
+  // recursion path.
+  const stackTopLine = err instanceof Error && typeof err.stack === 'string'
+    ? err.stack.split('\n')[1]?.trim()
+    : undefined;
+  logger.error('[api]', {
+    status,
+    message: errMsg,
+    ...(stackTopLine ? { stack: stackTopLine } : {}),
+  });
 
   // A malformed request body is the caller's fault, not a server fault. Routes
   // parse with readJsonBody() which raises this tagged error, so we can answer

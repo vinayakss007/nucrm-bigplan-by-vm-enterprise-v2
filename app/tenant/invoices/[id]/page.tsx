@@ -9,6 +9,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, FileText, Send, CheckCircle, XCircle, Calendar, Download, Mail, DollarSign } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import { PromptDialog } from '@/components/ui/prompt-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -62,6 +63,7 @@ export default function InvoiceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Invoice>>({});
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
 
   useEffect(() => {
     const fetchInvoice = async () => {
@@ -209,26 +211,7 @@ export default function InvoiceDetailPage() {
           <Download className="w-3 h-3" /> Download PDF
         </button>
         <button
-          onClick={async () => {
-            const email = window.prompt('Send invoice to email address:');
-            if (!email) return;
-            try {
-              const res = await fetch(`/api/tenant/invoices/${id}/send`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ to_email: email }),
-              });
-              if (res.ok) {
-                toast.success(`Invoice sent to ${email}`);
-                setInvoice(prev => prev ? { ...prev, status: 'sent' } : prev);
-              } else {
-                const data = await res.json();
-                toast.error(data.error || 'Failed to send');
-              }
-            } catch {
-              toast.error('Failed to send email');
-            }
-          }}
+          onClick={() => setShowEmailDialog(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-accent transition-colors"
         >
           <Mail className="w-3 h-3" /> Send via Email
@@ -460,6 +443,36 @@ export default function InvoiceDetailPage() {
           )}
         </>
       )}
+
+      {/* Send via Email dialog (#1114) */}
+      <PromptDialog
+        open={showEmailDialog}
+        onOpenChange={setShowEmailDialog}
+        title="Send Invoice via Email"
+        message="Enter the email address to send this invoice to."
+        placeholder="name@company.com"
+        confirmLabel="Send"
+        validate={(v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)}
+        invalidMessage="Please enter a valid email address"
+        onConfirm={async (email) => {
+          try {
+            const res = await fetch(`/api/tenant/invoices/${id}/send`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ to_email: email }),
+            });
+            if (res.ok) {
+              toast.success(`Invoice sent to ${email}`);
+              setInvoice(prev => prev ? { ...prev, status: 'sent' } : prev);
+            } else {
+              const data = await res.json();
+              toast.error(data.error || 'Failed to send');
+            }
+          } catch {
+            toast.error('Failed to send email');
+          }
+        }}
+      />
     </div>
   );
 }

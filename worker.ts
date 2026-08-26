@@ -11,10 +11,20 @@ import IORedis from 'ioredis';
 import { db } from '@/drizzle/db';
 import { notifications } from '@/drizzle/schema';
 import { registerProcessErrorHandlers } from '@/lib/process-errors';
+import { redactEmail, redactPhone } from '@/lib/logger/pii';
 
 registerProcessErrorHandlers('worker');
 
 const REDIS_URL = process.env['REDIS_URL'] || 'redis://localhost:6379';
+
+// Retention for finished jobs — without this the completed/failed sets grow
+// unbounded and Redis slowly fills up (Issue #1182). Completed jobs are kept
+// for 1 hour (max 1000) so dashboards can still show recent activity; failed
+// jobs are kept 24h for post-mortem, then evicted by BullMQ on the next job.
+const JOB_RETENTION = {
+  removeOnComplete: { age: 3600, count: 1000 },
+  removeOnFail: { age: 86400 },
+} as const;
 
 // BullMQ Workers issue blocking Redis commands (BRPOPLPUSH/BZPOPMIN), so every
 // worker MUST have its own dedicated connection — sharing one causes workers to
@@ -70,8 +80,8 @@ const emailWorker = new Worker(
   'send-email',
   async (job) => {
     const { to, subject, body, html, tenantId: _tenantId } = job.data;
-    // Mask PII in logs
-    const maskedEmail = to.replace(/(.{2}).*(@.*)/, '$1***$2');
+    // Redact PII in logs
+    const maskedEmail = redactEmail(to);
     console.log(`[Email Worker] Processing job: ${job.id} - Sending email to ${maskedEmail}`);
     
     try {
@@ -91,7 +101,7 @@ const emailWorker = new Worker(
       throw error;
     }
   },
-  { connection: createRedisConnection(), concurrency: 5 }
+  { connection: createRedisConnection(), concurrency: 5, ...JOB_RETENTION }
 );
 
 // Notification queue worker
@@ -119,7 +129,7 @@ const notificationWorker = new Worker(
       throw error;
     }
   },
-  { connection: createRedisConnection(), concurrency: 5 }
+  { connection: createRedisConnection(), concurrency: 5, ...JOB_RETENTION }
 );
 
 // Bulk emails worker
@@ -157,7 +167,7 @@ const bulkEmailWorker = new Worker(
         if (result.status === 'fulfilled') {
           results.push(result.value);
         } else {
-          console.error(`[Bulk Email Worker] Failed for ${recipient.email}:`, result.reason?.message);
+          console.error(`[Bulk Email Worker] Failed for ${redactEmail(recipient.email)}:`, result.reason?.message);
           results.push({ email: recipient.email, success: false, error: result.reason?.message });
         }
       }
@@ -166,7 +176,7 @@ const bulkEmailWorker = new Worker(
     console.log(`[Bulk Email Worker] Completed: ${results.filter(r => r.success).length}/${results.length} sent`);
     return { total: recipients.length, success: results.filter(r => r.success).length, results };
   },
-  { connection: createRedisConnection(), concurrency: 3 }
+  { connection: createRedisConnection(), concurrency: 3, ...JOB_RETENTION }
 );
 
 // Automation queue worker
@@ -194,7 +204,7 @@ const automationWorker = new Worker(
       throw error;
     }
   },
-  { connection: createRedisConnection(), concurrency: 5 }
+  { connection: createRedisConnection(), concurrency: 5, ...JOB_RETENTION }
 );
 
 // Lead warming worker (premium feature: auto-send festival/birthday greetings)
@@ -285,8 +295,8 @@ const leadWarmingWorker = new Worker(
             eqOp(leadWarmingMessages.channel, 'whatsapp')
           ));
 
-        // Mask phone number in logs
-        const maskedPhone = phone.replace(/(\d{4})\d+(\d{2})/, '$1***$2');
+        // Redact phone number in logs
+        const maskedPhone = redactPhone(phone);
         console.log(`[Lead Warming] WhatsApp sent to ${maskedPhone} for ${eventName}`);
         return { sent: true, phone, event: eventName };
       }
@@ -299,7 +309,7 @@ const leadWarmingWorker = new Worker(
       throw error;
     }
   },
-  { connection: createRedisConnection(), concurrency: 3 }
+  { connection: createRedisConnection(), concurrency: 3, ...JOB_RETENTION }
 );
 
 // Webhook delivery worker
@@ -339,7 +349,7 @@ const webhookWorker = new Worker(
       throw error;
     }
   },
-  { connection: createRedisConnection(), concurrency: 5 }
+  { connection: createRedisConnection(), concurrency: 5, ...JOB_RETENTION }
 );
 
 // Health check heartbeat — writes worker status to Redis every 30s

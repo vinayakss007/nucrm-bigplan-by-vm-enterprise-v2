@@ -328,11 +328,12 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
       icon: <Tag className="w-3.5 h-3.5" />,
       requiresSelect: true,
       selectOptions: customFields.map(f => ({ value: f.fieldKey, label: f.fieldLabel })),
-      onClick: async (ids: string[], fieldKey?: string, isSelectAllMatching?: boolean) => {
+      requiresTextInput: true,
+      textInputPlaceholder: 'New value',
+      onClick: async (ids: string[], fieldKey?: string, isSelectAllMatching?: boolean, textInput?: string) => {
         if (!fieldKey) return toast.error('Select a field')
-        const field = customFields.find(f => f.fieldKey === fieldKey)
-        const value = window.prompt(`Enter value for "${field?.fieldLabel || fieldKey}":`)
-        if (value === null) return
+        const value = (textInput ?? '').trim()
+        if (!value) return toast.error('Enter a value for the field')
         await callBulk(buildBody('update_field', ids, { field_key: fieldKey, field_value: value }, isSelectAllMatching))
       },
     },

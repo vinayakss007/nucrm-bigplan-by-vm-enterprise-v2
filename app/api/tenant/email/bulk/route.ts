@@ -8,22 +8,12 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, emailTemplates } from '@/drizzle/schema';
 import { eq, and, inArray, isNull } from 'drizzle-orm';
-import { sendEmail, renderTemplate, renderTemplateHtml } from '@/lib/email/service';
+import { addJob } from '@/lib/queue';
 import { logAudit } from '@/lib/audit';
 import { readJsonBody } from '@/lib/api/validate';
-import { cache } from '@/lib/cache';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const MAX_EMAILS = 50;
-
-/**
- * Generate a deterministic batch key for idempotency tracking.
- * Uses tenant + template + sorted contact IDs to identify a unique batch.
- */
-function makeBatchKey(tenantId: string, templateId: string, entityIds: string[]): string {
-  const sorted = [...entityIds].sort().join(',');
-  return `bulk-email:${tenantId}:${templateId}:${sorted}`;
-}
 
 export async function POST(req: NextRequest) {
   const limited = await rateLimitMutating(req, 'bulk', 'post');
@@ -47,11 +37,15 @@ export async function POST(req: NextRequest) {
       .limit(1);
     if (!template) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
 
+    // Compliance (#1120): exclude contacts flagged unsubscribed / do-not-contact.
+    // doNotContact is filtered in SQL; `unsubscribed` is fetched so we can report
+    // exactly how many recipients were skipped for compliance reasons.
     const ents = await db.select({
       id: contacts.id,
       email: contacts.email,
       firstName: contacts.firstName,
       lastName: contacts.lastName,
+      unsubscribed: contacts.unsubscribed,
     })
       .from(contacts)
       .where(and(
@@ -61,85 +55,63 @@ export async function POST(req: NextRequest) {
         eq(contacts.doNotContact, false)
       ));
 
-    // Per-contact completion tracking to prevent duplicate sends on crash/retry.
-    // We store the set of already-sent contact IDs in cache keyed by batch identity.
-    //
-    // LIMITATION: This tracking relies on the cache layer (Redis or in-memory fallback).
-    // When Redis is unavailable, the fallback is an in-memory Map which does NOT survive
-    // process restarts. This means if the process crashes mid-batch while Redis is down,
-    // a retry will re-send to all contacts (potential duplicates). For production
-    // deployments requiring crash-safe deduplication, ensure Redis is available or
-    // implement database-backed batch progress tracking (see FEAT-003 spec).
-    const batchKey = makeBatchKey(ctx.tenantId, template_id, entity_ids);
-    const alreadySent: Set<string> = new Set(
-      (await cache.get<string[]>(batchKey)) || []
-    );
+    const skippedUnsubscribed = ents.filter(ent => ent.unsubscribed === true).length;
+    const eligible = ents.filter(ent => ent.unsubscribed !== true);
 
-    // Warn if Redis is not backing the cache - batch dedup is not durable
-    if (!process.env['REDIS_URL']) {
-      console.warn(
-        '[email bulk] CRITICAL: Redis is not configured. Batch deduplication relies on ' +
-        'in-memory cache which does not survive process restarts. Duplicate sends are ' +
-        'possible if the process crashes mid-batch.'
-      );
+    const recipients = eligible
+      .filter(ent => !!ent.email)
+      .map(ent => ({
+        contact_id: ent.id,
+        email: ent.email as string,
+        first_name: ent.firstName || '',
+        last_name: ent.lastName || '',
+      }));
+
+    if (recipients.length === 0) {
+      return NextResponse.json({
+        error: skippedUnsubscribed > 0
+          ? 'All selected contacts are unsubscribed or do not accept marketing email'
+          : 'No valid recipients found (contacts need email addresses)',
+        queued: false,
+        count: 0,
+        skipped_unsubscribed: skippedUnsubscribed,
+      }, { status: 400 });
     }
 
-    let sent = 0, failed = 0;
-    const errors: string[] = [];
-    const newlySentIds: string[] = [];
+    // Normalize {{var}} template tokens to {var} so the send-bulk-emails worker's
+    // per-recipient substitution (e.g. {first_name}) applies during delivery.
+    const body = (template.bodyHtml || template.bodyText || '').replace(/\{\{(\w+)\}\}/g, '{$1}');
 
-    try {
-      for (const ent of ents) {
-        // Skip contacts already processed in a previous attempt of this batch
-        if (alreadySent.has(ent.id)) {
-          sent++;
-          continue;
-        }
+    // Queue instead of sending inline (#1325/#1124): bulk sends previously ran a
+    // sequential awaited loop inside the request. The worker processes recipients
+    // in parallel batches with retries.
+    await addJob('send-bulk-emails', {
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      subject: template.subject,
+      body,
+      recipients,
+    });
 
-        if (!ent.email) { failed++; errors.push(`No email for ${ent.id}`); continue; }
-
-        const vars: Record<string, string> = {
-          first_name: ent.firstName || '',
-          last_name: ent.lastName || '',
-          email: ent.email,
-        };
-
-        const subject = renderTemplate(template.subject, vars);
-        const html = renderTemplateHtml(template.bodyHtml, vars);
-
-        const result = await sendEmail({ to: ent.email, subject, html });
-        if (result.success) {
-          sent++;
-          newlySentIds.push(ent.id);
-          // Persist progress after each successful send so a crash mid-loop
-          // allows the next retry to skip already-sent contacts.
-          // TTL of 24 hours to cover delayed retries (background jobs may retry after hours)
-          await cache.set(batchKey, [...Array.from(alreadySent), ...newlySentIds], 86400);
-        } else {
-          failed++;
-          errors.push(`${ent.email}: ${result.error}`);
-        }
-      }
-    } catch (loopErr) {
-      // Unexpected error mid-loop (e.g., server issue). We still return
-      // partial results so the caller knows what was sent.
-      // The batch key in cache ensures a retry will not re-send to contacts
-      // that were already successfully sent in this invocation.
-      console.error('[email bulk] Error during send loop:', loopErr);
-      errors.push(`Batch interrupted: ${loopErr instanceof Error ? loopErr.message : 'Unknown error'}`);
-    }
+    console.log(`[email bulk] Queued ${recipients.length} emails for tenant ${ctx.tenantId} ` +
+      `(skipped_unsubscribed=${skippedUnsubscribed}, template=${template_id})`);
 
     await logAudit({
       tenantId: ctx.tenantId,
       userId: ctx.userId,
       action: 'bulk_email',
       entityType: entity_type,
-      newData: { sent, failed, template_id },
+      newData: { queued: recipients.length, skipped_unsubscribed: skippedUnsubscribed, template_id },
     });
 
-    return NextResponse.json({ ok: true, sent, failed, errors: errors.slice(0, 10) });
+    return NextResponse.json({
+      ok: true,
+      queued: true,
+      count: recipients.length,
+      skipped_unsubscribed: skippedUnsubscribed,
+    });
   } catch (err) {
     console.error('[email bulk]', err);
-    return NextResponse.json({ error: 'Failed to send emails' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to queue emails' }, { status: 500 });
   }
 }

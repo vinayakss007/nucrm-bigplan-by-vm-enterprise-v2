@@ -12,6 +12,7 @@ import { Plus, FileText, ExternalLink, Copy, Check, ToggleLeft, ToggleRight,
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import Pagination from '@/components/tenant/pagination';
+import { Breadcrumb } from '@/components/shared/breadcrumb';
 import toast from 'react-hot-toast';
 
 interface FormFieldDef {
@@ -166,6 +167,7 @@ export default function FormsPage() {
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6 animate-fade-in">
+      <Breadcrumb />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold">Forms</h1>
@@ -234,10 +236,6 @@ export default function FormsPage() {
             </form>
           </div>
         )}
-      {!loading && forms.length > 0 && (
-        <Pagination total={total} offset={offset} limit={limit} onChange={setOffset} />
-      )}
-
       {/* Forms list */}
       {loading ? [...Array(3)].map((_,i) => <div key={i} className="h-24 bg-muted rounded-2xl animate-pulse" />) :
       forms.length === 0 ? (
@@ -300,6 +298,9 @@ export default function FormsPage() {
               </div>
             </div>
           ))}
+
+          {/* Pagination — single instance below the list (#1116) */}
+          <Pagination total={total} offset={offset} limit={limit} onChange={setOffset} />
 
           {/* Submissions Modal */}
           {viewingSubmissions && (

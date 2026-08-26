@@ -43,7 +43,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Platform Super Admin already exists. Only one is allowed.' }, { status: 403 });
     }
 
-    // Setup key check disabled
+    // #1254: in production the endpoint requires the server-side SETUP_KEY
+    // (dev remains open so local bootstrap works without extra config)
+    if (process.env.NODE_ENV === 'production') {
+      const expectedKey = process.env.SETUP_KEY;
+      const providedKey = request.headers.get('x-setup-key');
+      if (!expectedKey || !providedKey || providedKey !== expectedKey) {
+        return NextResponse.json({ error: 'Valid x-setup-key header required' }, { status: 403 });
+      }
+    }
 
     const passwordError = validatePassword(password);
     if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 });

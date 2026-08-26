@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { getProvider, getIntegrationConfig } from '@/lib/calendar-sync/service';
 import { readJsonBody } from '@/lib/api/validate';
+import { signOAuthState } from '@/lib/calendar-sync/state';
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,10 +25,19 @@ export async function GET(request: NextRequest) {
     }
 
     const provider = getProvider(providerType);
-    const state = `${ctx.tenantId}:${ctx.userId}:${Date.now()}`;
+    // #1175: sign the state so the callback can reject forged values
+    const state = signOAuthState(`${ctx.tenantId}:${ctx.userId}:${Date.now()}`);
     const authUrl = provider.getAuthUrl(state);
 
-    return NextResponse.json({ authUrl, state });
+    const response = NextResponse.json({ authUrl, state });
+    response.cookies.set('oauth_state', state, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 600,
+    });
+    return response;
   } catch (err: unknown) {
     console.error('[calendar-sync auth GET]', err);
     return NextResponse.json({ error: 'Failed to generate auth URL' }, { status: 500 });
