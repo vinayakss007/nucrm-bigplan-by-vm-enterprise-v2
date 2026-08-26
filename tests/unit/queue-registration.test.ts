@@ -7,26 +7,40 @@ const mockClose = vi.fn(async () => {});
 const mockSend = vi.fn(async () => 'job-1');
 const mockWork = vi.fn(async () => {});
 
-const mockBullQueueCtor = vi.fn(() => ({
-  add: mockSend,
-  process: mockWork,
-  close: mockClose,
-  on: vi.fn(),
-}));
+const mockBullQueueCtor = vi.fn(function MockBullQueue() {
+  return {
+    add: mockSend,
+    process: mockWork,
+    close: mockClose,
+    on: vi.fn(),
+  };
+});
 const _mockBullShutdown = vi.fn(async () => {});
 
 vi.mock('bullmq', () => ({
   Queue: mockBullQueueCtor,
   Worker: vi.fn(),
 }));
+vi.mock('ioredis', () => ({
+  default: vi.fn(function MockIORedis() {
+    return {
+      connect: vi.fn(async () => {}),
+      ping: vi.fn(async () => 'PONG'),
+      quit: vi.fn(async () => {}),
+      on: vi.fn(),
+    };
+  }),
+}));
 vi.mock('pg-boss', () => ({
-  default: vi.fn(() => ({
-    start: mockStart,
-    send: mockSend,
-    work: mockWork,
-    createQueue: mockCreateQueue,
-    stop: mockClose,
-  })),
+  default: vi.fn(function MockPgBoss() {
+    return {
+      start: mockStart,
+      send: mockSend,
+      work: mockWork,
+      createQueue: mockCreateQueue,
+      stop: mockClose,
+    };
+  }),
 }));
 
 process.env.REDIS_URL = 'redis://localhost:6379';
@@ -46,15 +60,6 @@ describe('queue adapter registration', () => {
   });
 
   it('registers send-lead-warming in Redis adapter', async () => {
-    vi.mock('ioredis', () => ({
-      default: vi.fn(() => ({
-        connect: vi.fn(async () => {}),
-        ping: vi.fn(async () => 'PONG'),
-        quit: vi.fn(async () => {}),
-        on: vi.fn(),
-      })),
-    }));
-
     const { getQueueAdapter, closeQueue } = await import('@/lib/queue/index');
     const queue = await getQueueAdapter();
     expect(queue.provider).toBe('redis');

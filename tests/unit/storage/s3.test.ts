@@ -22,10 +22,9 @@ vi.mock('@aws-sdk/client-s3', () => {
     constructor(public readonly input: CommandInput) {}
   }
   return {
-    S3Client: vi.fn().mockImplementation((config: CommandInput) => ({
-      config,
-      send: awsMocks.send,
-    })),
+    S3Client: vi.fn(function MockS3Client(config: CommandInput) {
+      return { config, send: awsMocks.send };
+    }),
     PutObjectCommand: class PutObjectCommand extends BaseCommand {},
     GetObjectCommand: class GetObjectCommand extends BaseCommand {},
     ListObjectsV2Command: class ListObjectsV2Command extends BaseCommand {},

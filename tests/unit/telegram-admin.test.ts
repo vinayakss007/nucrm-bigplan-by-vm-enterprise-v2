@@ -6,6 +6,8 @@ describe('telegram-admin', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.resetModules();
+    // vitest v4: restoreAllMocks no longer clears call history on plain vi.fn()
+    vi.clearAllMocks();
     process.env['TELEGRAM_BOT_TOKEN'] = 'bot:token';
     process.env['TELEGRAM_CHAT_ID'] = 'chat-1';
   });

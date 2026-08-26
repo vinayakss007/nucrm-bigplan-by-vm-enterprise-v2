@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('pg', () => {
-  const MockPool = vi.fn(() => ({ on: vi.fn() }));
+  const MockPool = vi.fn(function MockPool() {
+    return { on: vi.fn() };
+  });
   return { Pool: MockPool, default: { Pool: MockPool } };
 });
 

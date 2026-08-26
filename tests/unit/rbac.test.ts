@@ -225,7 +225,9 @@ describe('RBAC - Record Permissions', () => {
 describe('RBAC - Field Permissions Additional', () => {
   beforeEach(() => {
     vi.resetModules();
-    vi.restoreAllMocks();
+    // vitest v4: restoreAllMocks no longer resets plain vi.fn() overrides;
+    // resetAllMocks restores original implementations and clears history.
+    vi.resetAllMocks();
   });
 
   describe('getFieldPermissions', () => {

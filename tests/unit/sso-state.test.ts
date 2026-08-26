@@ -21,15 +21,17 @@ describe('SSO State', () => {
       const { cookies } = await import('next/headers');
       (cookies as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ set: mockSet });
 
-      const mockSign = vi.fn(() => ({
-        setProtectedHeader: vi.fn(() => ({
-          setIssuedAt: vi.fn(() => ({
-            setExpirationTime: vi.fn(() => ({
-              sign: vi.fn(() => Promise.resolve('signed-jwt-token')),
+      const mockSign = vi.fn(function MockSignJWT() {
+        return {
+          setProtectedHeader: vi.fn(() => ({
+            setIssuedAt: vi.fn(() => ({
+              setExpirationTime: vi.fn(() => ({
+                sign: vi.fn(() => Promise.resolve('signed-jwt-token')),
+              })),
             })),
           })),
-        })),
-      }));
+        };
+      });
 
       const { SignJWT } = await import('jose');
       (SignJWT as unknown as ReturnType<typeof vi.fn>).mockImplementation(mockSign);
