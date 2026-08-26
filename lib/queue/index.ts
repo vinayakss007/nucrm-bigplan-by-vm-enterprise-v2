@@ -13,7 +13,7 @@
 import type { Queue as QueueType } from 'bullmq';
 
 export type QueueProvider = 'redis' | 'pgboss' | 'memory';
-export type JobType = 'send-email' | 'send-notification' | 'send-bulk-emails' | 'export-csv' | 'contact-import' | 'run-automation' | 'send-lead-warming';
+export type JobType = 'send-email' | 'send-notification' | 'send-bulk-emails' | 'export-csv' | 'contact-import' | 'run-automation' | 'send-lead-warming' | 'whatsapp-webhook';
 
 export interface JobData {
   type: JobType;
@@ -113,7 +113,7 @@ async function createRedisAdapter(redisUrl: string): Promise<QueueAdapter> {
 
   const queues = new Map<JobType, QueueType>();
 
-  const jobTypes: JobType[] = ['send-email', 'send-notification', 'send-bulk-emails', 'export-csv', 'contact-import', 'run-automation', 'send-lead-warming'];
+  const jobTypes: JobType[] = ['send-email', 'send-notification', 'send-bulk-emails', 'export-csv', 'contact-import', 'run-automation', 'send-lead-warming', 'whatsapp-webhook'];
   for (const type of jobTypes) {
     queues.set(type, new Queue(type, { connection }));
   }
@@ -160,7 +160,7 @@ async function createPgBossAdapter(databaseUrl: string): Promise<QueueAdapter> {
   await boss.start();
   pgbossInstance = boss;
 
-  const jobTypes: JobType[] = ['send-email', 'send-notification', 'send-bulk-emails', 'export-csv', 'contact-import', 'run-automation', 'send-lead-warming'];
+  const jobTypes: JobType[] = ['send-email', 'send-notification', 'send-bulk-emails', 'export-csv', 'contact-import', 'run-automation', 'send-lead-warming', 'whatsapp-webhook'];
 
   // Create queues for each job type
   for (const type of jobTypes) {
