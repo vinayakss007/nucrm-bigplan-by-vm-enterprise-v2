@@ -73,6 +73,7 @@ class NuCRMClient {
         'X-Tenant-ID': this.cfg.tenantId ?? '',
         ...(options.headers ?? {}),
       },
+      signal: AbortSignal.timeout(15_000),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);

@@ -96,6 +96,7 @@ export class DocuSignAdapter implements SigningProviderAdapter {
         },
         status: 'sent',
       }),
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {
@@ -109,6 +110,7 @@ export class DocuSignAdapter implements SigningProviderAdapter {
   async getStatus(externalId: string): Promise<SigningStatus> {
     const response = await fetch(`${this.baseUrl}/v2.1/accounts/me/envelopes/${externalId}`, {
       headers: { 'Authorization': `Bearer ${this.apiKey}` },
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {
@@ -166,6 +168,7 @@ export class HelloSignAdapter implements SigningProviderAdapter {
           order: s.order || i,
         })),
       }),
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {
@@ -181,6 +184,7 @@ export class HelloSignAdapter implements SigningProviderAdapter {
       headers: {
         'Authorization': `Basic ${Buffer.from(this.apiKey + ':').toString('base64')}`,
       },
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {

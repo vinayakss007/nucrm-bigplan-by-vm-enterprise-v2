@@ -285,6 +285,7 @@ class GrafanaOTLPClient extends EventEmitter {
         method: 'POST',
         headers: this.otlpHeaders,
         body: JSON.stringify(otlpPayload),
+        signal: AbortSignal.timeout(10_000),
       });
     } catch (error) {
       console.error('[Grafana OTLP] Failed to flush metrics:', error);
@@ -329,6 +330,7 @@ class GrafanaOTLPClient extends EventEmitter {
           'Authorization': `Basic ${Buffer.from(`${lokiUsername}:${lokiPassword}`).toString('base64')}`,
         },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10_000),
       });
     } catch (error) {
       console.error('[Grafana] Failed to flush logs:', error);

@@ -28,7 +28,8 @@ describe('Currency Module - Extended', () => {
 
       expect(rates).toEqual(mockRates);
       expect(fetch).toHaveBeenCalledWith(
-        'https://v6.exchangerate-api.com/v6/demo/latest/USD'
+        'https://v6.exchangerate-api.com/v6/demo/latest/USD',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
       );
     });
 
@@ -45,7 +46,8 @@ describe('Currency Module - Extended', () => {
       await fetchLatestRates('EUR');
 
       expect(fetch).toHaveBeenCalledWith(
-        'https://v6.exchangerate-api.com/v6/custom-key-456/latest/EUR'
+        'https://v6.exchangerate-api.com/v6/custom-key-456/latest/EUR',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
       );
     });
 
@@ -424,10 +426,12 @@ describe('Currency Module - Extended', () => {
       const { setRateCache } = await import('@/lib/currency');
 
       expect(() =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setRateCache({} as any)
       ).not.toThrow();
 
       expect(() =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setRateCache({ rates: {}, baseCurrency: 'USD' } as any)
       ).not.toThrow();
     });

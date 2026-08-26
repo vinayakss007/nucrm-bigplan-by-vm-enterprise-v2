@@ -144,6 +144,7 @@ export async function sendSMS(options: SendSMSOptions) {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: new URLSearchParams({ To: options.to, From: from, Body: options.body }),
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {
@@ -207,6 +208,7 @@ export async function sendTemplateSMS(options: SendTemplateSMSOptions) {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: new URLSearchParams({ To: options.to, From: config.fromNumber, Body: body }),
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {

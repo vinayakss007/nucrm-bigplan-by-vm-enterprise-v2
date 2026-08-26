@@ -73,7 +73,10 @@ export async function discover(issuer: string): Promise<OidcDiscovery> {
   if (cached && Date.now() - cached.at < DISCOVERY_TTL_MS) return cached.doc;
 
   const url = issuer.replace(/\/$/, '') + '/.well-known/openid-configuration';
-  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  const res = await fetch(url, {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(10_000),
+  });
   if (!res.ok) {
     throw new OidcError('discovery_failed', `Discovery for ${issuer} failed: ${res.status}`);
   }
@@ -151,6 +154,7 @@ export async function exchangeAndVerify(args: {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: body.toString(),
+    signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');

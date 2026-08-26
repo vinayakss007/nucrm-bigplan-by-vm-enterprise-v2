@@ -96,6 +96,7 @@ async function handleSendGrid(instance: IntegrationInstance, action: string, par
         subject: params['subject'],
         content: [{ type: 'text/html', value: params['body'] }],
       }),
+      signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) {
       const err = await res.text();
@@ -115,6 +116,7 @@ async function handleSendGrid(instance: IntegrationInstance, action: string, par
           last_name: params['last_name'],
         }],
       }),
+      signal: AbortSignal.timeout(15_000),
     });
     return { success: res.ok, data: await res.json().catch(() => ({ error: `HTTP ${res.status}` })) };
   }
@@ -135,6 +137,7 @@ async function handleSlack(instance: IntegrationInstance, action: string, params
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ channel, text: params['text'] }),
+      signal: AbortSignal.timeout(15_000),
     });
     const data = await res.json();
     return { success: data.ok, data };
@@ -165,6 +168,7 @@ async function handleMailgun(instance: IntegrationInstance, action: string, para
       method: 'POST',
       headers: { 'Authorization': `Basic ${btoa(`api:${apiKey}`)}` },
       body: formData,
+      signal: AbortSignal.timeout(15_000),
     });
     const data = await res.json();
     return { success: res.ok, data };
@@ -190,6 +194,7 @@ async function handleOpenAI(instance: IntegrationInstance, action: string, param
         messages: [{ role: 'user', content: params['prompt'] }],
         temperature: params['temperature'] ?? 0.7,
       }),
+      signal: AbortSignal.timeout(30_000),
     });
     const data = await res.json();
     if (!res.ok) return { success: false, error: data.error?.message };
@@ -205,6 +210,7 @@ async function handleOpenAI(instance: IntegrationInstance, action: string, param
         messages: [{ role: 'user', content: `Please summarize the following text concisely:\n\n${params['text']}` }],
         temperature: 0.3,
       }),
+      signal: AbortSignal.timeout(30_000),
     });
     const data = await res.json();
     return { success: true, data: { summary: data.choices?.[0]?.message?.content } };
@@ -223,6 +229,7 @@ async function handleOpenAI(instance: IntegrationInstance, action: string, param
         }],
         temperature: 0.7,
       }),
+      signal: AbortSignal.timeout(30_000),
     });
     const data = await res.json();
     return { success: true, data: { draft: data.choices?.[0]?.message?.content } };
