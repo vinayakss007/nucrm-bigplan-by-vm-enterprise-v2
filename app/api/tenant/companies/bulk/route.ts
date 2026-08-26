@@ -11,6 +11,7 @@
  * When selectAll=true, company_ids is optional; companies are resolved from filters.
  */
 import { apiError } from '@/lib/api-error';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
       ];
       if (filters?.q) {
         whereConditions.push(or(
-          ilike(companies.name, `%${filters.q}%`),
+          ilike(companies.name, `%${escapeLike(filters.q)}%`),
         )!);
       }
       const matched = await db.select({ id: companies.id }).from(companies).where(and(...whereConditions));

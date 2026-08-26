@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import crypto from 'crypto';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody } from '@/lib/api/validate';
@@ -31,9 +32,9 @@ export async function GET(request: NextRequest) {
     if (search) {
       filters.push(
         or(
-          ilike(tenants.name, `%${search}%`),
-          ilike(tenants.slug, `%${search}%`),
-          ilike(tenants.billingEmail, `%${search}%`)
+          ilike(tenants.name, `%${escapeLike(search)}%`),
+          ilike(tenants.slug, `%${escapeLike(search)}%`),
+          ilike(tenants.billingEmail, `%${escapeLike(search)}%`)
         )
       );
     }

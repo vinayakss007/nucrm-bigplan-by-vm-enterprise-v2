@@ -11,6 +11,7 @@
  * When selectAll=true, contact_ids is optional; contacts are resolved from filters.
  */
 import { apiError } from '@/lib/api-error';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { bulkUpdateSchema } from '@/lib/api/schemas';
@@ -60,10 +61,10 @@ export async function POST(req: NextRequest) {
       }
       if (filters?.q) {
         whereConditions.push(or(
-          ilike(contacts.firstName, `%${filters.q}%`),
-          ilike(contacts.lastName, `%${filters.q}%`),
-          ilike(contacts.email, `%${filters.q}%`),
-          ilike(contacts.phone, `%${filters.q}%`),
+          ilike(contacts.firstName, `%${escapeLike(filters.q)}%`),
+          ilike(contacts.lastName, `%${escapeLike(filters.q)}%`),
+          ilike(contacts.email, `%${escapeLike(filters.q)}%`),
+          ilike(contacts.phone, `%${escapeLike(filters.q)}%`),
         )!);
       }
 

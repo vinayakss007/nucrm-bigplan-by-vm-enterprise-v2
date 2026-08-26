@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { logError } from '@/lib/errors-server';
+import { escapeLike } from '@/lib/api/sanitize-like';
 /**
  * Public lead capture endpoint — no auth required.
  * Accepts leads from embedded forms, landing pages, etc.
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
       const existingCo = await db.query.companies.findFirst({
         where: and(
           eq(companies.tenantId, tenant_id),
-          ilike(companies.name, safeCompany.trim())
+          ilike(companies.name, escapeLike(safeCompany.trim()))
         ),
         columns: { id: true }
       });

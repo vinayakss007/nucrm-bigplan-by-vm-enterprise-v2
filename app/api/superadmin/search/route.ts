@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { apiError } from '@/lib/api-error';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -34,10 +35,10 @@ export async function GET(request: NextRequest) {
       })
       .from(tenants)
       .where(or(
-        ilike(tenants.name, `%${q}%`),
-        ilike(tenants.slug, `%${q}%`),
-        ilike(tenants.billingEmail, `%${q}%`),
-        ilike(tenants.id, `%${q}%`),
+        ilike(tenants.name, `%${escapeLike(q)}%`),
+        ilike(tenants.slug, `%${escapeLike(q)}%`),
+        ilike(tenants.billingEmail, `%${escapeLike(q)}%`),
+        ilike(tenants.id, `%${escapeLike(q)}%`),
       ))
       .orderBy(desc(tenants.createdAt))
       .limit(limit),
@@ -50,9 +51,9 @@ export async function GET(request: NextRequest) {
       })
       .from(users)
       .where(or(
-        ilike(users.fullName, `%${q}%`),
-        ilike(users.email, `%${q}%`),
-        ilike(users.id, `%${q}%`),
+        ilike(users.fullName, `%${escapeLike(q)}%`),
+        ilike(users.email, `%${escapeLike(q)}%`),
+        ilike(users.id, `%${escapeLike(q)}%`),
       ))
       .orderBy(desc(users.createdAt))
       .limit(limit),

@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { createHash } from 'crypto';
 import { db } from '@/drizzle/db';
 import { apiKeys, webhookInboundLogs, contacts, leads, deals, companies, tasks, dealStages, pipelines } from '@/drizzle/schema';
@@ -272,16 +273,6 @@ function toDecimalString(raw: unknown): string {
     return Number.isFinite(Number(s)) ? s : '0';
   }
   return '0';
-}
-
-/**
- * A plain object, or `{}` for anything else. `typeof null === 'object'` and
- * arrays are objects too, so both are rejected here — a jsonb column that is
- * meant to hold a bag of keys should never receive `null` or `[]`.
- */
-function asPlainObject(raw: unknown): Record<string, unknown> {
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
-  return raw as Record<string, unknown>;
 }
 
 /**
@@ -608,7 +599,7 @@ async function resolveRequestedStage(
       .from(dealStages)
       .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
       .where(and(
-        ilike(dealStages.name, stageName),
+        ilike(dealStages.name, escapeLike(stageName)),
         eq(pipelines.tenantId, tenantId)
       ))
       .limit(1);

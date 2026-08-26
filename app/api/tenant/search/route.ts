@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ contacts: [], leads: [], deals: [], companies: [], tasks: [], total: 0 });
     }
 
-    const pattern = `%${q}%`;
+    const pattern = `%${escapeLike(q)}%`;
     const tid = ctx.tenantId;
 
     const [contactResults, leadResults, dealResults, companyResults, taskResults] = await Promise.all([
