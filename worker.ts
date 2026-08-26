@@ -312,6 +312,18 @@ const leadWarmingWorker = new Worker(
   { connection: createRedisConnection(), concurrency: 3, ...JOB_RETENTION }
 );
 
+// WhatsApp webhook worker (#1256) — retried consumption of inbound
+// payloads; the API route enqueues here and falls back to inline only if
+// the queue is unreachable.
+const whatsappWebhookWorker = new Worker(
+  'whatsapp-webhook',
+  async (job) => {
+    const { processWhatsAppPayload } = await import('@/lib/whatsapp/webhook-processor');
+    await processWhatsAppPayload(job.data);
+  },
+  { connection: createRedisConnection(), concurrency: 2, ...JOB_RETENTION }
+);
+
 // Webhook delivery worker
 const webhookWorker = new Worker(
   'webhooks',
@@ -368,6 +380,7 @@ const heartbeatInterval = setInterval(async () => {
         automation: automationWorker.isRunning(),
         leadWarming: leadWarmingWorker.isRunning(),
         webhook: webhookWorker.isRunning(),
+        whatsappWebhook: whatsappWebhookWorker.isRunning(),
       },
       timestamp: new Date().toISOString(),
     };
@@ -388,6 +401,7 @@ async function shutdown(signal: 'SIGTERM' | 'SIGINT') {
     automationWorker.close(),
     leadWarmingWorker.close(),
     webhookWorker.close(),
+    whatsappWebhookWorker.close(),
   ]);
   await Promise.allSettled(
     redisConnections.map((conn) =>

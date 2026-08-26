@@ -8,16 +8,9 @@ import { apiError } from '@/lib/api-error';
  * WhatsApp Business API Webhook
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
-import { 
-  integrations, 
-  contacts, 
-  whatsappConversations, 
-  whatsappMessages, 
-  activities 
-} from '@/drizzle/schema';
-import { eq, and, or, sql } from 'drizzle-orm';
 import { createHmac, timingSafeEqual } from 'crypto';
+import { addJob } from '@/lib/queue';
+import { processWhatsAppPayload } from '@/lib/whatsapp/webhook-processor';
 
 // ─── GET: Verify Webhook ─────────────────────────────────────────────────────
 
@@ -59,10 +52,27 @@ export async function POST(req: NextRequest) {
 
     const body = JSON.parse(rawBody);
 
-    // Async processing to meet Meta's 15s requirement
-    processWhatsAppPayload(body).catch(err => {
-      console.error('[WhatsApp Webhook] Async processing error:', err);
-    });
+    // #1256: never drop messages on transient failures. Preferred path is the
+    // queue (BullMQ/pg-boss) which retries with exponential backoff. If the
+    // queue itself is unavailable, process inline; if that also fails, return
+    // 500 so Meta redelivers instead of us acknowledging a lost message.
+    let enqueued = false;
+    try {
+      await addJob('whatsapp-webhook', body, { attempts: 5 });
+      enqueued = true;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (enqueueErr: any) {
+      console.error('[WhatsApp Webhook] Queue unavailable, falling back to inline processing:', enqueueErr?.message);
+    }
+
+    if (!enqueued) {
+      try {
+        await processWhatsAppPayload(body);
+      } catch (processErr) {
+        console.error('[WhatsApp Webhook] Inline processing failed — returning 500 for Meta redelivery:', processErr);
+        return NextResponse.json({ error: 'Processing failed' }, { status: 500 });
+      }
+    }
 
     return NextResponse.json({ success: true });
  
@@ -71,128 +81,5 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error('[WhatsApp Webhook] Error:', err.message);
     return apiError(err);
-  }
-}
-
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function processWhatsAppPayload(body: any) {
-  const entry = body.entry?.[0];
-  if (!entry) return;
-
-  const changes = entry.changes?.[0];
-  if (!changes) return;
-
-  const value = changes.value;
-  const receivingPhoneId = value?.metadata?.phone_number_id;
-
-  if (!receivingPhoneId) return;
-
-  // ── Inbound Message ──────────────────────────────────────────────────────
-  if (value.messages) {
-    for (const msg of value.messages) {
-      const from = msg.from; 
-      const msgType = msg.type; 
-      const text = msg.text?.body || '';
-
-      // 1. Find integration
-      const integrationRow = await db.query.integrations.findFirst({
-        where: and(
-          eq(integrations.type, 'whatsapp'),
-          eq(integrations.isActive, true),
-          sql`${integrations.config}->>'phone_number_id' = ${receivingPhoneId}`
-        )
-      });
-
-      if (!integrationRow) continue;
-
-      // 2. Find contact
-      const contactRow = await db.query.contacts.findFirst({
-        where: and(
-          eq(contacts.tenantId, integrationRow.tenantId),
-          or(
-            eq(contacts.phone, from),
-            eq(contacts.phone, `+${from}`),
-            eq(contacts.phone, from.replace(/^\+/, ''))
-          )
-        )
-      });
-
-      // 3. Process message in transaction
-      await db.transaction(async (tx) => {
-        // Find or create conversation
-        let conversation = await tx.query.whatsappConversations.findFirst({
-          where: and(
-            eq(whatsappConversations.tenantId, integrationRow.tenantId),
-            eq(whatsappConversations.whatsappFrom, from),
-            eq(whatsappConversations.whatsappTo, receivingPhoneId)
-          )
-        });
-
-        if (!conversation) {
-          [conversation] = await tx.insert(whatsappConversations).values({
-            tenantId: integrationRow.tenantId,
-            contactId: contactRow?.id || null,
-            whatsappFrom: from,
-            whatsappTo: receivingPhoneId,
-            messageCount: 1,
-            lastMessageAt: new Date()
-          }).returning();
-        } else {
-          await tx.update(whatsappConversations)
-            .set({ 
-              messageCount: sql`${whatsappConversations.messageCount} + 1`,
-              lastMessageAt: new Date(),
-              contactId: contactRow?.id || conversation.contactId // Update contact if it was null
-            })
-            .where(eq(whatsappConversations.id, conversation!.id));
-        }
-
-        // Store message
-        await tx.insert(whatsappMessages).values({
-          conversationId: conversation!.id,
-          tenantId: integrationRow.tenantId,
-          direction: 'inbound',
-          contentType: msgType,
-          content: text,
-          externalId: msg.id,
-          status: 'received',
-          metadata: msg
-        });
-
-        // Activity log
-        if (contactRow) {
-          await tx.insert(activities).values({
-            tenantId: integrationRow.tenantId,
-            contactId: contactRow.id,
-            eventType: 'whatsapp_inbound',
-            description: `WhatsApp message from ${from}`,
-            metadata: { message_type: msgType, body: text },
-            entityType: 'contact',
-            entityId: contactRow.id,
-            action: 'whatsapp_message'
-          });
-        }
-      });
-    }
-  }
-
-  // ── Status Update ────────────────────────────────────────────────────────
-  if (value.statuses) {
-    for (const status of value.statuses) {
-      const msgStatus = status.status; 
-      const msgId = status.id;
-
-      await db.update(whatsappMessages)
-        .set({ 
-          status: msgStatus,
-          delivered: msgStatus === 'delivered' || msgStatus === 'read',
-          readAt: msgStatus === 'read' ? new Date() : undefined,
-          updatedAt: new Date(),
-          metadata: sql`jsonb_set(${whatsappMessages.metadata}, '{last_status_update}', ${JSON.stringify(status)}::jsonb)`
-        })
-        .where(eq(whatsappMessages.externalId, msgId));
-    }
   }
 }
