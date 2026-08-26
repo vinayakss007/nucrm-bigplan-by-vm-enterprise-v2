@@ -1,4 +1,11 @@
-# NuCRM — Cron Schedule (matches vercel.json crons)
+# NuCRM — Cron Schedule (kept in sync with vercel.json crons)
+#
+# SCHEDULER POLICY (#1422): exactly ONE of these sources is active per
+# environment. pm2/VM deployments (production) use THIS host crontab.
+# vercel.json crons are only active on Vercel-hosted deployments.
+# Never enable both against the same environment — routes carry Redis
+# dedup locks as a safety net, but do not rely on them.
+#
 # All jobs call the app's API endpoints with CRON_SECRET auth
 
 */5 * * * *   /usr/local/bin/run-cron.sh process-sequences
@@ -14,3 +21,6 @@
 */30 * * * *  /usr/local/bin/run-cron.sh detect-missed-followups
 0 * * * *     /usr/local/bin/run-cron.sh ai-auto-followup
 0 7 * * *     /usr/local/bin/run-cron.sh contract-renewal-check
+0 8 * * *     /usr/local/bin/run-cron.sh process-at-risk
+0 7 * * *     /usr/local/bin/run-cron.sh subscription-renewal-check
+0 8 * * *     /usr/local/bin/run-cron.sh scheduled-report-delivery

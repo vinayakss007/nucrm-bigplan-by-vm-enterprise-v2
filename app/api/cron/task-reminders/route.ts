@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { verifySecret } from '@/lib/crypto';
+import { acquireLock } from '@/lib/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { tasks, tenantMembers, users, contacts } from '@/drizzle/schema';
@@ -16,6 +17,13 @@ import { logError } from '@/lib/errors-server';
 export async function POST(request: NextRequest) {
   if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
     return NextResponse.json({ error:'Unauthorized' }, { status:401 });
+  }
+
+  // Distributed dedup guard (#1422): skip when another scheduler
+  // instance already fired this job within its interval.
+  const lock = await acquireLock('cron:task-reminders', 1800);
+  if (!lock.acquired) {
+    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
   }
   try {
     const today = new Date().toISOString().split('T')[0];
