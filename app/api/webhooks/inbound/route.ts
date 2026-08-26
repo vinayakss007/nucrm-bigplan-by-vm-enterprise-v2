@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { createHash } from 'crypto';
 import { db } from '@/drizzle/db';
 import { apiKeys, webhookInboundLogs, contacts, leads, deals, companies, tasks, dealStages, pipelines } from '@/drizzle/schema';
@@ -598,7 +599,7 @@ async function resolveRequestedStage(
       .from(dealStages)
       .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
       .where(and(
-        ilike(dealStages.name, stageName),
+        ilike(dealStages.name, escapeLike(stageName)),
         eq(pipelines.tenantId, tenantId)
       ))
       .limit(1);

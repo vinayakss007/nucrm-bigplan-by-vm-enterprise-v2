@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -116,7 +117,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const stageName = v.stage || v.stage_name;
     if (!resolvedStageId && stageName) {
       const stageConds = [
-        ilike(dealStages.name, stageName),
+        ilike(dealStages.name, escapeLike(stageName)),
         eq(pipelines.tenantId, ctx.tenantId),
       ];
       if (v.pipeline_id) {

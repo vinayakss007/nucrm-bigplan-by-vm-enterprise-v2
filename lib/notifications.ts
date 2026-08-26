@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { db } from '@/drizzle/db';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { notifications, tenantMembers, users } from '@/drizzle/schema';
 import { logger } from '@/lib/logger';
 import { eq, and, ne, sql, ilike, or } from 'drizzle-orm';
@@ -297,8 +298,8 @@ export async function processMentions(text: string, tenantId: string, authorId: 
           eq(tenantMembers.status, 'active'),
           ne(users.id, authorId),
           or(
-            ilike(users.fullName, `%${username}%`),
-            ilike(users.email, `${username}@%`),
+            ilike(users.fullName, `%${escapeLike(username)}%`),
+            ilike(users.email, `${escapeLike(username)}@%`),
             sql`split_part(${users.email}, '@', 1) = ${username}`
           )
         ))

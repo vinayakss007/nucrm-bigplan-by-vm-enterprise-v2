@@ -11,6 +11,7 @@
  * When selectAll=true, ticket_ids is optional; tickets are resolved from filters.
  */
 import { apiError } from '@/lib/api-error';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db, type DbClient } from '@/drizzle/db';
@@ -56,8 +57,8 @@ export async function POST(req: NextRequest) {
       }
       if (filters?.q) {
         whereConditions.push(or(
-          ilike(supportTickets.subject, `%${filters.q}%`),
-          ilike(supportTickets.body, `%${filters.q}%`),
+          ilike(supportTickets.subject, `%${escapeLike(filters.q)}%`),
+          ilike(supportTickets.body, `%${escapeLike(filters.q)}%`),
         )!);
       }
       const matched = await db

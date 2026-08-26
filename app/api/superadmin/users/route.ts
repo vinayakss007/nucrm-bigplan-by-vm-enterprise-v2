@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { apiError } from '@/lib/api-error';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { inviteMemberSchema } from '@/lib/api/schemas';
@@ -32,8 +33,8 @@ export async function GET(request: NextRequest) {
     if (q) {
       filters.push(
         or(
-          ilike(users.email, `%${q}%`),
-          ilike(users.fullName, `%${q}%`)
+          ilike(users.email, `%${escapeLike(q)}%`),
+          ilike(users.fullName, `%${escapeLike(q)}%`)
         )
       );
     }

@@ -13,6 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { db } from '@/drizzle/db';
 import { users, tenantMembers, roles } from '@/drizzle/schema';
 import { eq, and, ilike, sql } from 'drizzle-orm';
@@ -79,15 +80,15 @@ export async function GET(request: NextRequest) {
           if (parsed.operator === 'eq') {
             conditions.push(eq(users.email, parsed.value));
           } else if (parsed.operator === 'co') {
-            conditions.push(ilike(users.email, `%${parsed.value}%`));
+            conditions.push(ilike(users.email, `%${escapeLike(parsed.value)}%`));
           } else if (parsed.operator === 'sw') {
-            conditions.push(ilike(users.email, `${parsed.value}%`));
+            conditions.push(ilike(users.email, `${escapeLike(parsed.value)}%`));
           }
         } else if (parsed.attribute === 'displayname') {
           if (parsed.operator === 'eq') {
             conditions.push(eq(users.fullName, parsed.value));
           } else if (parsed.operator === 'co') {
-            conditions.push(ilike(users.fullName, `%${parsed.value}%`));
+            conditions.push(ilike(users.fullName, `%${escapeLike(parsed.value)}%`));
           }
         }
       }

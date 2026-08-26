@@ -11,6 +11,7 @@
  * When selectAll=true, deal_ids is optional; deals are resolved from filters.
  */
 import { apiError } from '@/lib/api-error';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
       if (filters?.assigned_to) whereConditions.push(eq(deals.assignedTo, filters.assigned_to));
       if (filters?.q) {
         whereConditions.push(or(
-          ilike(deals.title, `%${filters.q}%`),
+          ilike(deals.title, `%${escapeLike(filters.q)}%`),
         )!);
       }
       const matched = await db.select({ id: deals.id }).from(deals).where(and(...whereConditions));

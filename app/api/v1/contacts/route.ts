@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { db } from '@/drizzle/db';
 import { contacts, companies } from '@/drizzle/schema';
 import { eq, and, or, ilike, sql, desc, count } from 'drizzle-orm';
@@ -61,9 +62,9 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       whereClause = and(whereClause, or(
-        ilike(contacts.firstName, `%${search}%`),
-        ilike(contacts.lastName, `%${search}%`),
-        ilike(contacts.email, `%${search}%`)
+        ilike(contacts.firstName, `%${escapeLike(search)}%`),
+        ilike(contacts.lastName, `%${escapeLike(search)}%`),
+        ilike(contacts.email, `%${escapeLike(search)}%`)
       ));
     }
 

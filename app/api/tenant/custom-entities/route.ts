@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { customEntities } from '@/drizzle/schema';
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
     ];
 
     if (search) {
-      conditions.push(ilike(customEntities.name, `%${search}%`));
+      conditions.push(ilike(customEntities.name, `%${escapeLike(search)}%`));
     }
 
     const rows = await db

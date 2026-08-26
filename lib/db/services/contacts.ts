@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { db } from '@/drizzle/db';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { contacts, companies, users } from '@/drizzle/schema';
 import { eq, and, or, ilike, desc, sql } from 'drizzle-orm';
 
@@ -39,7 +40,7 @@ export async function getContacts(opts: GetContactsOptions) {
   }
 
   if (q) {
-    const searchPattern = `%${q}%`;
+    const searchPattern = `%${escapeLike(q)}%`;
     const orClause = or(
       ilike(contacts.firstName, searchPattern),
       ilike(contacts.lastName, searchPattern),
