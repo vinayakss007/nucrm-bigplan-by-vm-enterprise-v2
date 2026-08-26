@@ -8,6 +8,8 @@ describe('ensureSchema', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.resetModules();
+    // vitest v4: restoreAllMocks no longer clears call history on plain vi.fn()
+    mockQuery.mockReset();
   });
 
   it('returns ready=true when all required tables exist', async () => {

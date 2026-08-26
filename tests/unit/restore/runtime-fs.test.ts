@@ -17,7 +17,7 @@ const awsMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@aws-sdk/client-s3', () => ({
-  S3Client: vi.fn().mockImplementation((config: CommandInput) => {
+  S3Client: vi.fn(function MockS3Client(this: unknown, config: CommandInput) {
     awsMocks.clientCtor(config);
     return { send: awsMocks.send };
   }),

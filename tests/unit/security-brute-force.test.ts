@@ -24,6 +24,8 @@ describe('security/brute-force', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.restoreAllMocks();
+    // vitest v4: restoreAllMocks no longer clears call history on plain vi.fn()
+    mockExecute.mockReset();
   });
 
   describe('isBlocked', () => {

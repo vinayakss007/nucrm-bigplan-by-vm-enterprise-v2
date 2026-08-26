@@ -44,17 +44,22 @@ export default defineConfig({
         'lib/sdk/modules.ts',
         'lib/server-only-shim.ts',
       ],
-      // Coverage target: 74/76/85/74 (lines/functions/branches/statements).
+      // Coverage target (re-baselined for vitest 4's AST-aware V8 remapping):
+      // 77/80/67/78 (statements/functions/branches/statements-lines).
+      //
+      // The same suite measured 74/92/86/74 under vitest 2's V8 provider;
+      // v4's remapping counts branches/functions more accurately, so the
+      // absolute percentages shift. Thresholds track the new instrument.
       //
       // lib/**/index.ts excluded — barrel files with minimal executable code.
       // Only pure type files, test files, and the server-only shim remain excluded.
       //
       // Please do not add a module here to make a build pass.
       thresholds: {
-        lines: 74,
-        functions: 76,
-        branches: 85,
-        statements: 74,
+        lines: 78,
+        functions: 80,
+        branches: 67,
+        statements: 77,
       },
     },
     testTimeout: 15000,

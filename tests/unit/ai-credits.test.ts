@@ -55,6 +55,10 @@ describe('ai/credits', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.resetModules();
+    // vitest v4: restoreAllMocks no longer clears queued/resolved values on
+    // plain vi.fn() mocks — reset shared stateful mocks explicitly.
+    mockFindFirst.mockReset();
+    mockReturning.mockReset();
   });
 
   it('isCentralizedProvider returns true when centralized secret exists', async () => {
