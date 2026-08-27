@@ -1,11 +1,20 @@
 # Deployment Paths — read this before deploying (#1425)
 
-The repo currently ships **two** ways to run the application, and they overlap.
-A new operator cannot tell which is canonical, and **running both binds port
-3000 twice**. Pick ONE per environment.
+## ✅ DECISION (canonical)
 
-> ⚠️ This is an owner decision. This doc describes the two paths and the exact
-> files to keep/remove for each so the choice is unambiguous and reversible.
+- **Production → PM2 on the VM** (Path A). App/worker/cron run under PM2 via a
+  git-based update (`.github/workflows/deploy.yml`). In production Docker is
+  used **only** for the infra/monitoring stack
+  (`deploy/docker-compose.production.yml` — Postgres/Redis/MinIO/Prometheus/
+  Grafana/Loki), never for the app itself.
+- **Development → Docker** (Path B). The root `docker-compose.yml` runs the full
+  stack (app + worker + infra) locally for convenience. Do **not** use it to
+  serve production.
+
+Never run the production PM2 app and a Docker app container against the same
+host at once — they both bind port 3000.
+
+The two paths are described below for reference.
 
 ## Path A — PM2 on the VM (git-based updates)
 

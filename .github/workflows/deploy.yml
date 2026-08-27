@@ -2,11 +2,12 @@ name: Deploy
 
 # Runs only after the CI workflow has gone green for a commit on main.
 #
-# The app on the production VM runs via pm2 (`nucrm`, `next start` on
-# port 3000 behind nginx), not Docker. Docker hosts only the monitoring stack
-# (prometheus/grafana/promtail/alertmanager). A Docker-image-based rolling
-# update therefore can never deploy the app, and the compose file has no
-# `app` service at all.
+# The app on the production VM runs via pm2 (`web`, `next start` on
+# port 3000 behind nginx), not Docker. In production, Docker is used only for
+# the monitoring/infra stack (prometheus/grafana/promtail/alertmanager, redis,
+# minio) — see deploy/DEPLOYMENT_PATHS.md. Docker-based full-stack runs are for
+# LOCAL DEVELOPMENT only (root docker-compose.yml). This deploy is therefore a
+# git-based pm2 update, never a Docker image rollout.
 #
 # The deploy is a git-based update on the VM: fetch the exact commit CI
 # tested, install deps, build, restart pm2, gate on the health endpoint,
@@ -23,19 +24,17 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  DOCKER_IMAGE: ghcr.io/${{ github.repository }}
   HEALTH_CHECK_RETRIES: 12
   HEALTH_CHECK_INTERVAL: 10
 
 jobs:
   deploy:
-    name: Build & Deploy
+    name: Deploy
     # workflow_run fires on failure too, so this guard is what makes the gate real.
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
 
     steps:
       # github.sha is not the commit CI tested, so pin everything to head_sha.
@@ -43,21 +42,10 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.DOCKER_IMAGE }}:latest
-            ${{ env.DOCKER_IMAGE }}:${{ github.event.workflow_run.head_sha }}
+      # NOTE (#1425): production runs the app under PM2 via a git-based update
+      # (below), NOT from a Docker image. The previous ghcr build/push steps
+      # contradicted that and produced an image nothing consumed, so they are
+      # removed. Docker is used for local development only.
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
@@ -89,7 +77,7 @@ jobs:
             npm run build
 
             echo "Restarting app (pm2)..."
-            pm2 restart nucrm --update-env
+            pm2 restart web --update-env
             pm2 save
 
             echo "Waiting for app health check..."
@@ -111,7 +99,7 @@ jobs:
               echo "ERROR: app did not become healthy. Rolling back to previous commit."
               git checkout --force ${{ github.event.workflow_run.head_sha }}^
               npm run build
-              pm2 restart nucrm --update-env
+              pm2 restart web --update-env
               pm2 save
               git checkout main
               exit 1
