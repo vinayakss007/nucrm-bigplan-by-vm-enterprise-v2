@@ -316,11 +316,25 @@ export async function POST(request: NextRequest) {
             }
           }
 
+          // L-2: validate amount so a stray "1,000"/"abc" doesn't make Postgres
+          // reject the row. Strip thousands separators/currency symbols, then
+          // fall back to '0' with a warning if it still isn't a finite number.
+          let amount = '0';
+          if (mapped.amount !== undefined && mapped.amount !== null && String(mapped.amount).trim() !== '') {
+            const cleaned = String(mapped.amount).replace(/[,\s$€£]/g, '');
+            const parsedAmount = Number(cleaned);
+            if (Number.isFinite(parsedAmount)) {
+              amount = String(parsedAmount);
+            } else {
+              results.errors.push(`Row ${index + 2}: invalid amount "${mapped.amount}" — defaulted to 0`);
+            }
+          }
+
           insertBuffer.push({
             tenantId: ctx.tenantId,
             createdBy: ctx.userId,
             title: mapped.title.trim(),
-            amount: mapped.amount || '0',
+            amount,
             closeDate,
             pipelineId,
             stageId: resolvedStageId,

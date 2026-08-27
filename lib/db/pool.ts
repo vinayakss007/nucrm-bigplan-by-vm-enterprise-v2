@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { Pool } from 'pg';
+import type { PoolConfig, PoolClient } from 'pg';
 import { pgSslConfig } from './ssl-config';
 
 declare global { var __pgPool: Pool | undefined; var __pgPoolCreating: boolean | undefined; }
@@ -136,7 +137,7 @@ export function getPool(): Pool {
       ? cs + (cs.includes('?') ? '&' : '?') + 'pgbouncer=true'
       : cs;
 
-    global.__pgPool = new Pool({
+    const poolConfig: PoolConfig = {
       connectionString,
       ssl: pgSslConfig(),
       max: poolSize,
@@ -144,7 +145,40 @@ export function getPool(): Pool {
       connectionTimeoutMillis: 30_000,
       allowExitOnIdle: true,
       statement_timeout: parseIntEnv(process.env['DATABASE_STATEMENT_TIMEOUT'], 10000),
-    });
+    };
+
+    global.__pgPool = new Pool(poolConfig);
+
+    // RLS isolation guard (audit C-1).
+    //
+    // setTenantContext() sets app.current_tenant as a SESSION-scoped GUC
+    // (is_local=false) so it survives across the multiple statements of one
+    // request. On PgBouncer transaction-mode that GUC is cleared by
+    // server_reset_query='DISCARD ALL' when the connection returns to the pool.
+    // But this app talks to a plain node-postgres pool by default
+    // (PGBOUNCER_ENABLED unset), so nothing clears it — a tenant-A GUC would
+    // persist on the physical connection and could be observed by the next
+    // request that checks that connection out before its own setTenantContext
+    // runs.
+    //
+    // So when NOT behind PgBouncer we clear the GUCs on every release back to
+    // the pool (our own lightweight DISCARD-ALL for just these settings). The
+    // client is idle at this point and node-postgres serialises queries per
+    // client, so the RESET completes before the connection is handed to the
+    // next checkout. Combined with the fail-closed RLS policy (empty tenant GUC
+    // => deny), a request can never inherit a previous request's tenant
+    // context. (pg-pool's `verify` hook is NOT used: it only runs for brand-new
+    // physical connections, not on reuse of idle ones — verified empirically.)
+    if (!pgBouncer) {
+      global.__pgPool.on('release', (_err: Error | undefined, client: PoolClient) => {
+        // Fire-and-forget: RESET cannot fail meaningfully, and any error is
+        // surfaced via the pool 'error' handler. Swallow to avoid unhandled
+        // rejections on a client that may be tearing down.
+        void client
+          .query("SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false)")
+          .catch(() => { /* client removed/ending — next checkout re-resets */ });
+      });
+    }
 
     global.__pgPool.on('error', (err) => {
       const pool = global.__pgPool;

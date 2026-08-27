@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, validateQuery, readJsonBody } from '@/lib/api/validate';
 import { createInvoiceSchema, invoiceQuerySchema } from '@/lib/api/schemas';
+import { sumLineItems, lineTotal, money, round2 } from '@/lib/money';
 import { db } from '@/drizzle/db';
 import { invoices, invoiceLineItems } from '@/drizzle/schema';
 import { eq, and, desc, sql, count, isNull } from 'drizzle-orm';
@@ -77,30 +78,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate totals
-    let subtotal = 0;
-    if (items?.length) {
-      for (const item of items) {
-        const qty = parseFloat(String(item.quantity)) || 1;
-        const price = parseFloat(String(item.unit_price)) || 0;
-        subtotal += qty * price;
-      }
-    }
+    const subtotal = items?.length ? sumLineItems(items) : 0;
 
-    const rawDiscount = discount ?? 0;
+    const rawDiscount = money(discount ?? 0);
     let discountAmount: number;
     let resolvedDiscountType: string;
 
     if (discountType === 'percentage' && rawDiscount > 0) {
       resolvedDiscountType = 'percentage';
-      discountAmount = Math.round((subtotal * rawDiscount / 100) * 100) / 100;
+      discountAmount = round2(subtotal * rawDiscount / 100);
     } else {
       resolvedDiscountType = rawDiscount > 0 ? 'fixed' : 'percentage';
-      discountAmount = rawDiscount;
+      discountAmount = round2(rawDiscount);
     }
 
-    const taxableAmount = subtotal - discountAmount;
-    const taxAmount = (taxRate ?? 0) / 100 * taxableAmount;
-    const totalAmount = taxableAmount + taxAmount;
+    const taxableAmount = round2(subtotal - discountAmount);
+    const resolvedTaxRate = money(taxRate ?? 0);
+    const taxAmount = round2(resolvedTaxRate / 100 * taxableAmount);
+    const totalAmount = round2(taxableAmount + taxAmount);
 
     // #1462: Generate the invoice number inside the transaction while holding a
     // row lock on the tenant, deriving it from MAX(sequence) (not COUNT(*)). The
@@ -136,15 +131,15 @@ export async function POST(request: NextRequest) {
             status: status ?? 'draft',
             issueDate: new Date(issueDate).toISOString().split('T')[0],
             dueDate: dueDate ? new Date(dueDate).toISOString().split('T')[0] : null,
-            subtotal: String(subtotal.toFixed(2)),
+            subtotal: subtotal.toFixed(2),
             discountType: resolvedDiscountType,
             discountValue: String(rawDiscount),
-            discountAmount: String(discountAmount.toFixed(2)),
+            discountAmount: discountAmount.toFixed(2),
             taxRate: String(taxRate),
-            taxAmount: String(taxAmount.toFixed(2)),
-            totalAmount: String(totalAmount.toFixed(2)),
+            taxAmount: taxAmount.toFixed(2),
+            totalAmount: totalAmount.toFixed(2),
             amountPaid: '0',
-            balanceDue: String(totalAmount.toFixed(2)),
+            balanceDue: totalAmount.toFixed(2),
             notes: notes ?? null,
             terms: terms ?? null,
             createdBy: userId,
@@ -155,23 +150,31 @@ export async function POST(request: NextRequest) {
           // Add line items
           if (items?.length) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const lineItems = items.map((item: any, idx: number) => ({
-              tenantId: ctx.tenantId,
-              invoiceId: inv.id,
-              productId: null,
-              serviceId: null,
-              description: item.description,
-              itemType: 'custom',
-              quantity: String(item.quantity || 1),
-              unitPrice: String(item.unit_price || 0),
-              discountType: 'percentage',
-              discountValue: '0',
-              discountAmount: '0',
-              taxRate: String(item.tax_rate || 0),
-              taxAmount: '0',
-              total: String(((parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0)).toFixed(2)),
-              sortOrder: idx,
-            }));
+            const lineItems = items.map((item: any, idx: number) => {
+              // Money-math correctness (#1497): use rounded money helpers and
+              const base = lineTotal(item.quantity ?? 1, item.unit_price ?? 0);
+              const lineTaxRate = money(item.tax_rate ?? 0);
+              const lineTax = round2(base * lineTaxRate / 100);
+              return {
+                tenantId: ctx.tenantId,
+                invoiceId: inv.id,
+                productId: null,
+                serviceId: null,
+                description: item.description,
+                itemType: 'custom',
+                quantity: String(item.quantity || 1),
+                unitPrice: String(item.unit_price || 0),
+                discountType: 'percentage',
+                discountValue: '0',
+                discountAmount: '0',
+                taxRate: String(item.tax_rate || 0),
+                // L-1: persist the per-line tax instead of a hard-coded '0' so
+                // line-item sums reconcile with the invoice header.
+                taxAmount: lineTax.toFixed(2),
+                total: base.toFixed(2),
+                sortOrder: idx,
+              };
+            });
 
             await tx.insert(invoiceLineItems).values(lineItems);
           }

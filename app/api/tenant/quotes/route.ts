@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createQuoteSchema } from '@/lib/api/schemas';
 import { parsePageLimit } from '@/lib/api/query-params';
+import { sumLineItems, documentTotal, lineTotal } from '@/lib/money';
 import { db } from '@/drizzle/db';
 import { quotes, quoteLineItems } from '@/drizzle/schema';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
@@ -76,13 +77,8 @@ export async function POST(request: NextRequest) {
     const countResult = await db.select({ count: sql<number>`count(*)` }).from(quotes).where(eq(quotes.tenantId, tenantId));
     const quoteNumber = `QT-${String(Number(countResult[0]?.count ?? 0) + 1).padStart(5, '0')}`;
 
-    let subtotal = 0;
-    if (items?.length) {
-      for (const item of items) {
-        subtotal += (parseFloat(String(item.quantity)) || 1) * (parseFloat(String(item.unit_price)) || 0);
-      }
-    }
-    const totalAmount = subtotal - (parseFloat(String(discount)) || 0) + (parseFloat(String(tax)) || 0);
+    const subtotal = items?.length ? sumLineItems(items) : 0;
+    const totalAmount = documentTotal(subtotal, discount ?? 0, tax);
 
     const quote = await db.transaction(async (tx) => {
       const [q] = await tx.insert(quotes).values({
@@ -92,10 +88,10 @@ export async function POST(request: NextRequest) {
         quoteNumber,
         title,
         status: status ?? 'draft',
-        subtotal: String(subtotal.toFixed(2)),
+        subtotal: subtotal.toFixed(2),
         discount: String(discount ?? 0),
         tax: String(tax),
-        totalAmount: String(totalAmount.toFixed(2)),
+        totalAmount: totalAmount.toFixed(2),
         expiresAt: expiryDate ? new Date(expiryDate) : null,
         notes,
         terms,
@@ -116,7 +112,7 @@ export async function POST(request: NextRequest) {
           unitPrice: String(item.unit_price ?? 0),
           discountPercent: '0',
           taxPercent: String(item.tax_amount ?? 0),
-          total: String(((item.quantity ?? 1) * (item.unit_price ?? 0)).toFixed(2)),
+          total: lineTotal(item.quantity ?? 1, item.unit_price ?? 0).toFixed(2),
           sortOrder: idx,
         } as typeof quoteLineItems.$inferInsert));
         await tx.insert(quoteLineItems).values(lineItems as typeof quoteLineItems.$inferInsert[]);
