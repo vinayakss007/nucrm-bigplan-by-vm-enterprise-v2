@@ -54,6 +54,12 @@ export const whatsappMessages = pgTable('whatsapp_messages', {
     convIdx: index('idx_whatsapp_msg_conv').on(table.conversationId),
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
+    // H-A: dedup inbound messages by (tenant, provider message id). Partial so
+    // outbound rows that have no external_id yet aren't blocked. Backs the
+    // application-level idempotency check in lib/whatsapp/webhook-processor.ts.
+    externalIdUidx: uniqueIndex('uq_whatsapp_msg_tenant_external')
+      .on(table.tenantId, table.externalId)
+      .where(sql`external_id IS NOT NULL`),
   };
 });
 

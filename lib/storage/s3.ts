@@ -150,10 +150,11 @@ export async function getSignedPutUrl(args: {
   contentType: string;
   expiresInSeconds?: number;
   contentLengthBytes?: number;
+  bucket?: string;
 }): Promise<string> {
   const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
   const command = new PutObjectCommand({
-    Bucket: BUCKET,
+    Bucket: args.bucket || BUCKET,
     Key: args.key,
     ContentType: args.contentType,
     ...(args.contentLengthBytes ? { ContentLength: args.contentLengthBytes } : {}),

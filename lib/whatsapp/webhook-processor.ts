@@ -64,6 +64,22 @@ export async function processWhatsAppPayload(body: any) {
 
       // 3. Process message in transaction
       await db.transaction(async (tx) => {
+        // H-A: idempotency. The webhook is retried (BullMQ attempts:5) and Meta
+        // redelivers on a 500, so the same msg.id can arrive multiple times. If
+        // we've already stored this (tenant, external_id) message, skip the
+        // whole side-effect block — otherwise we'd duplicate the message row,
+        // double-increment messageCount, and log a duplicate activity.
+        if (msg.id) {
+          const existing = await tx.query.whatsappMessages.findFirst({
+            columns: { id: true },
+            where: and(
+              eq(whatsappMessages.tenantId, integrationRow.tenantId),
+              eq(whatsappMessages.externalId, msg.id),
+            ),
+          });
+          if (existing) return; // already processed this inbound message
+        }
+
         // Find or create conversation
         let conversation = await tx.query.whatsappConversations.findFirst({
           where: and(
@@ -123,6 +139,21 @@ export async function processWhatsAppPayload(body: any) {
 
   // ── Status Update ────────────────────────────────────────────────────────
   if (value.statuses) {
+    // H-B: resolve the tenant that owns this WhatsApp number so status updates
+    // are scoped to it. Meta's message id (status.id) is NOT unique across
+    // tenants and the column has no unique constraint, so filtering on
+    // external_id alone would let a status callback (or a crafted/colliding id)
+    // flip ANOTHER tenant's message row. If we can't resolve the integration we
+    // skip rather than write globally.
+    const statusIntegration = await db.query.integrations.findFirst({
+      where: and(
+        eq(integrations.type, 'whatsapp'),
+        eq(integrations.isActive, true),
+        sql`${integrations.config}->>'phone_number_id' = ${receivingPhoneId}`
+      )
+    });
+    if (!statusIntegration) return;
+
     for (const status of value.statuses) {
       const msgStatus = status.status; 
       const msgId = status.id;
@@ -135,7 +166,10 @@ export async function processWhatsAppPayload(body: any) {
           updatedAt: new Date(),
           metadata: sql`jsonb_set(${whatsappMessages.metadata}, '{last_status_update}', ${JSON.stringify(status)}::jsonb)`
         })
-        .where(eq(whatsappMessages.externalId, msgId));
+        .where(and(
+          eq(whatsappMessages.externalId, msgId),
+          eq(whatsappMessages.tenantId, statusIntegration.tenantId),
+        ));
     }
   }
 }

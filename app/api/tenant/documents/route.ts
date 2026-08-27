@@ -10,24 +10,37 @@ import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { documents, documentFolders } from '@/drizzle/schema/documents';
 import { eq, and, desc, isNull, sql } from 'drizzle-orm';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { getSignedPutUrl } from '@/lib/storage/s3';
+import { getS3Config } from '@/lib/storage/s3-config';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { randomUUID } from 'crypto';
 
-const s3 = new S3Client({
-  region: process.env['AWS_REGION'] || 'us-east-1',
-  credentials: process.env['AWS_ACCESS_KEY_ID'] ? {
-    accessKeyId: process.env['AWS_ACCESS_KEY_ID'],
-    secretAccessKey: process.env['AWS_SECRET_ACCESS_KEY'] || '',
-  } : undefined,
-  forcePathStyle: true,
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-}) as any;
+// H-C: upload validation, mirroring app/api/tenant/documents/upload-url.
+// Allowlist (not blocklist): anything not listed is rejected, preventing stored
+// XSS via text/html, script-bearing SVG, executables, etc.
+const MAX_FILE_BYTES = Number(process.env['DOCUMENT_MAX_BYTES'] ?? 100 * 1024 * 1024); // 100 MB
+const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+  'text/plain', 'text/csv', 'application/json', 'application/zip',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-excel', 'application/msword',
+]);
+const BLOCKED_EXTENSIONS = new Set([
+  '.html', '.htm', '.svg', '.xhtml', '.exe', '.dll', '.bat', '.cmd',
+  '.sh', '.ps1', '.js', '.mjs', '.php', '.jsp', '.asp', '.aspx', '.war',
+]);
 
-const BUCKET = process.env['S3_DOCUMENTS_BUCKET'] || 'nucrm-documents';
+function extractExtension(name: string): string {
+  const dot = name.lastIndexOf('.');
+  if (dot < 0 || dot === name.length - 1) return '';
+  const ext = name.slice(dot).toLowerCase();
+  if (!/^\.[a-z0-9]{1,12}$/.test(ext)) return '';
+  return ext;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -130,17 +143,59 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const s3Key = `${ctx.tenantId}/${Date.now()}-${name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    // H-C: reject oversized / disallowed content types and dangerous
+    // extensions so an attacker can't stage stored XSS (text/html, SVG) or
+    // upload executables that later download inline via the signed URL.
+    if (typeof sizeBytes !== 'number' || sizeBytes <= 0) {
+      return NextResponse.json({ error: 'sizeBytes must be a positive number' }, { status: 400 });
+    }
+    if (sizeBytes > MAX_FILE_BYTES) {
+      return NextResponse.json(
+        { error: `File exceeds maximum size of ${Math.round(MAX_FILE_BYTES / 1024 / 1024)} MB`, limit_bytes: MAX_FILE_BYTES },
+        { status: 413 },
+      );
+    }
+    if (typeof mimeType !== 'string' || !ALLOWED_MIME_TYPES.has(mimeType.toLowerCase())) {
+      return NextResponse.json(
+        { error: `File type ${mimeType} is not allowed. Permitted: documents, images, archives.` },
+        { status: 415 },
+      );
+    }
+    const ext = extractExtension(String(name));
+    if (BLOCKED_EXTENSIONS.has(ext)) {
+      return NextResponse.json(
+        { error: 'This file extension is not allowed for security reasons' },
+        { status: 415 },
+      );
+    }
 
-    // Generate presigned URL for direct client upload
-    const command = new PutObjectCommand({
-      Bucket: BUCKET,
-      Key: s3Key,
-      ContentType: mimeType,
-      ContentLength: sizeBytes,
-    });
+    // H-D: use the app's unified S3 config + user-files bucket so uploads and
+    // the download route (lib/storage/s3.getSignedUrl) hit the SAME bucket.
+    // The previous code uploaded to S3_DOCUMENTS_BUCKET via a separate client,
+    // while downloads signed against getS3Config()'s bucket — so downloads
+    // never resolved.
+    const cfg = getS3Config();
+    if (!cfg.configured || !cfg.bucket) {
+      return NextResponse.json({ error: 'Document storage is not configured' }, { status: 503 });
+    }
+    const bucket = cfg.bucket;
+    // UUID-prefixed, tenant-scoped, extension-preserving key (collision-free).
+    const s3Key = `documents/${ctx.tenantId}/${randomUUID()}${ext}`;
 
-    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
+    let uploadUrl: string;
+    try {
+      uploadUrl = await getSignedPutUrl({
+        key: s3Key,
+        contentType: mimeType,
+        contentLengthBytes: sizeBytes,
+        expiresInSeconds: 3600,
+        bucket,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not sign upload URL';
+      console.error('[documents POST] sign failed', msg);
+      return NextResponse.json({ error: msg }, { status: 502 });
+    }
 
     // Store document metadata
     const [doc] = await db.insert(documents).values({
@@ -149,7 +204,7 @@ export async function POST(req: NextRequest) {
       mimeType,
       sizeBytes,
       s3Key,
-      s3Bucket: BUCKET,
+      s3Bucket: bucket,
       folderId: folderId || null,
       entityType: entityType || null,
       entityId: entityId || null,
