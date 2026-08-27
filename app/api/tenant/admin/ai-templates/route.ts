@@ -18,6 +18,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
+import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { aiDraftTemplates } from '@/drizzle/schema/ai';
 import { eq, and, isNull, desc } from 'drizzle-orm';
@@ -158,7 +159,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ template: row });
   } catch (err) {
-    console.error('[ai-templates POST]', err);
+    void logError({ error: err, context: 'ai-templates POST' });
     return apiError(err);
   }
 }

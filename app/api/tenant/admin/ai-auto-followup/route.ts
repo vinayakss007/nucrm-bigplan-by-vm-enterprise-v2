@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
+import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
@@ -78,7 +79,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ ok: true, autoAiEnabled: safe.autoAiEnabled });
   } catch (err) {
-    console.error('[ai-auto-followup PATCH]', err);
+    void logError({ error: err, context: 'ai-auto-followup PATCH' });
     return apiError(err);
   }
 }

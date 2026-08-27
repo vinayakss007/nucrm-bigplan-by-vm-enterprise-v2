@@ -82,3 +82,19 @@ export async function withErrorLogging<T>(
     return null;
   }
 }
+
+/**
+ * Safely extract { tenantId, userId } from an auth context that may be a
+ * resolved AuthContext, a NextResponse (auth failed), or undefined (requireAuth
+ * threw before assignment). Used in catch blocks so #1063 structured logging
+ * can attach tenant/user without extra null-checking noise at each call site.
+ */
+export function tenantMeta(
+  ctx: unknown,
+): { tenantId?: string; userId?: string } {
+  if (ctx && typeof ctx === 'object' && 'tenantId' in ctx) {
+    const c = ctx as { tenantId?: string; userId?: string };
+    return { tenantId: c.tenantId, userId: c.userId };
+  }
+  return {};
+}

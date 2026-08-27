@@ -18,6 +18,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
+import { logError, tenantMeta } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
@@ -125,7 +126,7 @@ async function deleteAcrossTables(tenantId: string, tag: string) {
 const _TAG_RE = /^[\w \-./&]{1,40}$/;
 
 export async function POST(req: NextRequest) {
-  let ctx: Awaited<ReturnType<typeof requireAuth>>;
+  let ctx: Awaited<ReturnType<typeof requireAuth>> | undefined;
   try {
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -178,7 +179,7 @@ export async function POST(req: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[tags POST]', err);
+    void logError({ error: err, context: 'tags POST', ...tenantMeta(ctx) });
     return apiError(err);
   }
 }
