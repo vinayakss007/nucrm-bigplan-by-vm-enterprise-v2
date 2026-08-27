@@ -14,6 +14,7 @@
  * await emailService.send({ to, subject, html });
  */
 
+import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 
 export interface EmailOptions {
@@ -38,6 +39,41 @@ export interface EmailService {
 class MockEmailService implements EmailService {
   private testMode = process.env['RESEND_TEST_MODE'] === 'true' || !process.env['RESEND_API_KEY'];
 
+  // #1278: cache the SMTP transporter so it is created once and reused across
+  // sends instead of building a fresh one on every call. Mirrors the caching in
+  // lib/email/service.ts, keyed by a hash of the SMTP config so a credential
+  // change transparently rebuilds the transporter instead of reusing stale auth.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private transporter: any = null;
+  private transporterConfig: string | null = null;
+
+  private getTransporter() {
+    const host = process.env.SMTP_HOST || 'smtp.resend.com';
+    const port = parseInt(process.env.SMTP_PORT || '587');
+    const user = process.env.SMTP_USER || 'resend';
+    const pass = process.env.RESEND_API_KEY;
+
+    const currentConfig = crypto
+      .createHash('sha256')
+      .update(`${host}|${port}|${user}|${pass ?? ''}`)
+      .digest('hex');
+
+    if (!this.transporter || this.transporterConfig !== currentConfig) {
+      this.transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure: false,
+        auth: {
+          user,
+          pass,
+        },
+      });
+      this.transporterConfig = currentConfig;
+    }
+
+    return this.transporter;
+  }
+
   async send(options: EmailOptions): Promise<boolean> {
     if (this.testMode) {
       console.log('📧 [MOCK EMAIL] Would send to:', Array.isArray(options.to) ? options.to.join(', ') : options.to);
@@ -49,15 +85,7 @@ class MockEmailService implements EmailService {
 
     // In production with Resend, implement actual sending
     try {
-      const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || 'smtp.resend.com',
-        port: parseInt(process.env.SMTP_PORT || '587'),
-        secure: false,
-        auth: {
-          user: process.env.SMTP_USER || 'resend',
-          pass: process.env.RESEND_API_KEY,
-        },
-      });
+      const transporter = this.getTransporter();
 
       await transporter.sendMail({
         from: options.from || process.env.SMTP_FROM_NAME || 'NuCRM <noreply@yourdomain.com>',
