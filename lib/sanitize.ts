@@ -44,3 +44,23 @@ export function sanitizeHTML(html: string, windowRef?: Window): string {
 export function sanitizeHTMLServer(html: string): string {
   return html.replace(/<[^>]*>/gi, '');
 }
+
+/**
+ * Safely open a user-supplied URL in a new tab.
+ *
+ * Validates that the URL uses an http/https scheme before opening to prevent
+ * dangerous schemes (e.g. `javascript:`) from executing. Also passes
+ * `noopener,noreferrer` window features to prevent reverse-tabnabbing.
+ * No-ops for empty, malformed, or non-http(s) URLs.
+ */
+export function openExternalUrl(url: string | null | undefined): void {
+  if (!url) return;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
+  window.open(parsed.href, '_blank', 'noopener,noreferrer');
+}

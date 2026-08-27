@@ -15,6 +15,7 @@ import {
   Copy, ExternalLink, Plus
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
+import { openExternalUrl } from '@/lib/sanitize';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -326,7 +327,7 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
                 Copy Email
               </DropdownMenuItem>
               {lead.linkedin_url && (
-                <DropdownMenuItem onClick={() => window.open(lead.linkedin_url, '_blank')}>
+                <DropdownMenuItem onClick={() => openExternalUrl(lead.linkedin_url)}>
                   <Linkedin className="w-4 h-4 mr-2" />
                   View LinkedIn
                 </DropdownMenuItem>
