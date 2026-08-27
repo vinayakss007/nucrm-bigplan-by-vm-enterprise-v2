@@ -401,8 +401,16 @@ const heartbeatInterval = setInterval(async () => {
   }
 }, 30_000);
 
+// Guard against double shutdown when both SIGTERM and SIGINT arrive.
+let shuttingDown = false;
+
 // Graceful shutdown — closes all workers, then quits every Redis connection
 async function shutdown(signal: 'SIGTERM' | 'SIGINT') {
+  if (shuttingDown) {
+    console.log(`[Worker] ${signal} received, shutdown already in progress`);
+    return;
+  }
+  shuttingDown = true;
   console.log(`[Worker] ${signal} received, shutting down gracefully...`);
   clearInterval(heartbeatInterval);
   await Promise.all([
