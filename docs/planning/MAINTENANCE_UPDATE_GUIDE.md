@@ -7,7 +7,9 @@ This document covers how to keep NuCRM up-to-date, handle dependency upgrades, a
 ## 1. Sentry Error Monitoring (Already Configured)
 
 ### Setup (already done)
+
 Sentry is integrated via `@sentry/nextjs`. Configuration files:
+
 - `sentry.client.config.ts` — Browser-side error capture + replay
 - `sentry.server.config.ts` — Server-side error capture
 - `sentry.edge.config.ts` — Edge runtime capture
@@ -16,6 +18,7 @@ Sentry is integrated via `@sentry/nextjs`. Configuration files:
 - `app/global-error.tsx` — Catches unhandled React errors → sends to Sentry
 
 ### Environment Variables
+
 ```bash
 SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx    # Required
 SENTRY_ORG=your-org                                  # For source maps
@@ -26,6 +29,7 @@ SENTRY_TRACES_SAMPLE_RATE=0.2                        # 20% of requests traced
 ```
 
 ### What Sentry Catches
+
 - Unhandled exceptions (client + server)
 - API route errors (via `apiError()` → `Sentry.captureException()`)
 - React rendering errors (via `global-error.tsx`)
@@ -33,6 +37,7 @@ SENTRY_TRACES_SAMPLE_RATE=0.2                        # 20% of requests traced
 - Session replay on errors (100% of error sessions recorded)
 
 ### Viewing Errors
+
 1. Go to https://sentry.io → Your Project → Issues
 2. Filter by: Environment (production/staging), Level (error/fatal)
 3. Set up Slack/email alerts for new errors
@@ -42,12 +47,13 @@ SENTRY_TRACES_SAMPLE_RATE=0.2                        # 20% of requests traced
 ## 2. Dependency Update Strategy
 
 ### Schedule
-| Frequency | What | How |
-|:----------|:-----|:----|
-| Weekly | Security patches | `npm audit fix` |
-| Monthly | Minor versions | `npx npm-check-updates -u --target minor` |
-| Quarterly | Major versions | Manual review + test |
-| Immediately | Critical CVEs | `npm audit fix --force` + verify |
+
+| Frequency   | What             | How                                       |
+| :---------- | :--------------- | :---------------------------------------- |
+| Weekly      | Security patches | `npm audit fix`                           |
+| Monthly     | Minor versions   | `npx npm-check-updates -u --target minor` |
+| Quarterly   | Major versions   | Manual review + test                      |
+| Immediately | Critical CVEs    | `npm audit fix --force` + verify          |
 
 ### Step-by-Step: Monthly Update Process
 
@@ -76,18 +82,18 @@ git push -u origin chore/deps-update-$(date +%Y%m)
 
 ### Critical Dependencies — Handle With Care
 
-| Package | Why Critical | Update Strategy |
-|:--------|:------------|:----------------|
-| `next` | App framework | Test in staging first, check migration guide |
-| `react` / `react-dom` | UI runtime | Only update together, check breaking changes |
-| `drizzle-orm` / `drizzle-kit` | Database | Run `db:push` after update, verify schema |
-| `@sentry/nextjs` | Error tracking | Check SDK changelog for breaking changes |
-| `ioredis` | Cache/queues | Test Redis connection after update |
-| `pg` | Database driver | Test connection pool after update |
-| `jose` | JWT auth | Security-critical — update immediately on CVE |
-| `bcryptjs` | Password hashing | Security-critical |
-| `zod` | Validation | Check if schema APIs changed |
-| `tailwindcss` | Styling | Check for class name changes |
+| Package                       | Why Critical     | Update Strategy                               |
+| :---------------------------- | :--------------- | :-------------------------------------------- |
+| `next`                        | App framework    | Test in staging first, check migration guide  |
+| `react` / `react-dom`         | UI runtime       | Only update together, check breaking changes  |
+| `drizzle-orm` / `drizzle-kit` | Database         | Run `db:push` after update, verify schema     |
+| `@sentry/nextjs`              | Error tracking   | Check SDK changelog for breaking changes      |
+| `ioredis`                     | Cache/queues     | Test Redis connection after update            |
+| `pg`                          | Database driver  | Test connection pool after update             |
+| `jose`                        | JWT auth         | Security-critical — update immediately on CVE |
+| `bcryptjs`                    | Password hashing | Security-critical                             |
+| `zod`                         | Validation       | Check if schema APIs changed                  |
+| `tailwindcss`                 | Styling          | Check for class name changes                  |
 
 ---
 
@@ -96,6 +102,7 @@ git push -u origin chore/deps-update-$(date +%Y%m)
 ### Current: Next.js 16.2.1
 
 ### Upgrade Checklist
+
 ```bash
 # 1. Read the migration guide
 # https://nextjs.org/docs/upgrading
@@ -119,6 +126,7 @@ npm run test
 ```
 
 ### Common Breaking Changes to Watch For
+
 - `app/` router API changes (layout, loading, error conventions)
 - `next/image` prop changes
 - Middleware API changes
@@ -132,10 +140,12 @@ npm run test
 ### Current: Node.js 22.22.2
 
 ### When to Upgrade
+
 - Every **even-numbered** LTS release (Node 22 → 24 → 26)
 - Check: https://nodejs.org/en/about/previous-releases
 
 ### Upgrade Steps
+
 ```bash
 # 1. Update package.json engines field
 "engines": { "node": "24.x.x" }
@@ -159,6 +169,7 @@ npm run test && npx tsc --noEmit --skipLibCheck
 ```
 
 ### Things That Can Break
+
 - Native modules (`bcryptjs`, `pg`) — usually fine with pure-JS alternatives
 - `crypto` API changes — rare but check Web Crypto vs Node crypto
 - ESM vs CJS behavior changes
@@ -169,6 +180,7 @@ npm run test && npx tsc --noEmit --skipLibCheck
 ## 5. Database Schema Updates
 
 ### Adding New Columns/Tables
+
 ```bash
 # 1. Edit schema in drizzle/schema/*.ts
 # 2. Generate migration
@@ -188,6 +200,7 @@ DATABASE_URL=production_url npm run db:migrate
 ```
 
 ### Rules
+
 - NEVER drop columns in the same release that removes code using them
 - Use 2-phase approach: (1) stop writing, (2) drop column next release
 - Always add `DEFAULT` values for new required columns
@@ -214,6 +227,7 @@ npm audit fix --force  # Then run tests!
 ```
 
 ### Critical Security Checklist
+
 - [ ] JWT secret rotated every 6 months
 - [ ] Sentry DSN is not exposed in client bundles
 - [ ] EMERGENCY_RECOVERY_KEY is set and stored securely
@@ -226,6 +240,7 @@ npm audit fix --force  # Then run tests!
 ## 7. Performance Monitoring & Tuning
 
 ### Monthly Health Check
+
 ```bash
 # 1. Check database query performance
 psql $DATABASE_URL -c "
@@ -248,19 +263,21 @@ npm run analyze:bundle
 ```
 
 ### When to Optimize
-| Signal | Action |
-|:-------|:-------|
-| API P95 > 500ms | Add caching or optimize query |
-| Bundle > 300KB gzipped | Lazy load heavy components |
+
+| Signal                      | Action                         |
+| :-------------------------- | :----------------------------- |
+| API P95 > 500ms             | Add caching or optimize query  |
+| Bundle > 300KB gzipped      | Lazy load heavy components     |
 | Memory > 450MB per instance | Check for leaks, add instances |
-| Redis > 200MB | Review TTLs, flush stale keys |
-| Error rate > 1% | Investigate in Sentry |
+| Redis > 200MB               | Review TTLs, flush stale keys  |
+| Error rate > 1%             | Investigate in Sentry          |
 
 ---
 
 ## 8. Feature Flag Management
 
 ### Adding a New Feature Flag
+
 ```bash
 # 1. Add to .env
 FEATURE_NEW_THING=false
@@ -276,6 +293,7 @@ if (process.env['FEATURE_NEW_THING'] === 'true') {
 ```
 
 ### Module Gating (preferred over feature flags)
+
 - Use the module system (`lib/modules/gate.ts`) for per-tenant features
 - Advantages: per-tenant control, plan-based, no code changes to enable
 
@@ -284,6 +302,7 @@ if (process.env['FEATURE_NEW_THING'] === 'true') {
 ## 9. Release Process
 
 ### Standard Release
+
 ```bash
 # 1. Create release branch
 git checkout main && git pull
@@ -301,12 +320,13 @@ npm version patch  # or minor/major
 git push origin release/v1.x.x --tags
 
 # 5. Deploy
-pm2 reload ecosystem.config.js  # Zero-downtime
+pm2 reload ecosystem.config.cjs  # Zero-downtime
 # or
 docker compose -f docker-compose.scale.yml up -d --build
 ```
 
 ### Hotfix Process
+
 ```bash
 # 1. Branch from main
 git checkout -b hotfix/description
@@ -314,7 +334,7 @@ git checkout -b hotfix/description
 # 2. Fix + test
 # 3. Merge to main immediately
 # 4. Deploy
-pm2 reload ecosystem.config.js
+pm2 reload ecosystem.config.cjs
 ```
 
 ---
@@ -322,11 +342,13 @@ pm2 reload ecosystem.config.js
 ## 10. Backup & Disaster Recovery
 
 ### Automated (already configured)
+
 - Hourly backups via `/api/cron/auto-backup`
 - 90-day retention
 - Per-tenant + full-platform backup
 
 ### Manual Backup Before Risky Operations
+
 ```bash
 # Database dump
 pg_dump $DATABASE_URL > backup_$(date +%Y%m%d_%H%M%S).sql
@@ -336,6 +358,7 @@ curl -H "x-cron-secret: $CRON_SECRET" http://localhost:3000/api/cron/auto-backup
 ```
 
 ### Recovery
+
 See `EMERGENCY_RECOVERY.md` for full disaster recovery playbook.
 
 ---
@@ -343,6 +366,7 @@ See `EMERGENCY_RECOVERY.md` for full disaster recovery playbook.
 ## 11. Monitoring Dashboard Checklist
 
 Set up alerts for:
+
 - [ ] Sentry: New error (real-time Slack notification)
 - [ ] Uptime: `/api/health` check every 60s (UptimeRobot/Pingdom)
 - [ ] Database: Connection pool exhaustion
@@ -355,13 +379,14 @@ Set up alerts for:
 
 ## 12. Quarterly Maintenance Calendar
 
-| Month | Tasks |
-|:------|:------|
-| **Jan/Apr/Jul/Oct** | Major dep updates, Node.js LTS check, security audit |
+| Month               | Tasks                                                      |
+| :------------------ | :--------------------------------------------------------- |
+| **Jan/Apr/Jul/Oct** | Major dep updates, Node.js LTS check, security audit       |
 | **Feb/May/Aug/Nov** | Performance review, bundle analysis, DB query optimization |
-| **Mar/Jun/Sep/Dec** | Documentation review, backup integrity test, load test |
+| **Mar/Jun/Sep/Dec** | Documentation review, backup integrity test, load test     |
 
 ### Annual Tasks
+
 - [ ] Rotate JWT_SECRET (requires all users to re-login)
 - [ ] Rotate EMERGENCY_RECOVERY_KEY
 - [ ] Review and prune old database backups
@@ -385,7 +410,7 @@ npm run db:status               # Check migration status
 npm run db:generate             # Generate new migration
 
 # Deployment
-pm2 start ecosystem.config.js  # Start all processes
+pm2 start ecosystem.config.cjs  # Start all processes
 pm2 reload web                 # Zero-downtime restart
 pm2 scale web +2               # Add 2 more instances
 pm2 logs                       # View logs

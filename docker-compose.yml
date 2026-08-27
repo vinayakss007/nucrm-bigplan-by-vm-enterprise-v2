@@ -1,5 +1,10 @@
 ##############################################################################
-# NuCRM — Docker Compose (Production Stack)
+# NuCRM — Docker Compose (LOCAL DEVELOPMENT full stack)
+#
+# Runs the whole app (web + worker + infra) in Docker for local development.
+# PRODUCTION does NOT use this file — production runs the app under PM2 and uses
+# deploy/docker-compose.production.yml for infra/monitoring only.
+# See deploy/DEPLOYMENT_PATHS.md.
 ##############################################################################
 
 services:
