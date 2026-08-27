@@ -37,6 +37,11 @@ export async function aiConnector(
   // Try common API patterns
   const patterns = guessApiPatterns(providerName, action, params);
 
+  // Remember the most-informative HTTP error observed while probing so we can
+  // surface a real status/body instead of masking it as a generic "could not
+  // connect" failure when no pattern succeeds.
+  let lastHttpError: { status: number; error: string } | null = null;
+
   for (const pattern of patterns) {
     try {
       // pattern.url is derived from tenant-supplied config: guard against SSRF.
@@ -67,6 +72,22 @@ export async function aiConnector(
       if (res.status === 401 || res.status === 403) {
         return { success: false, error: `Authentication failed: ${data.error?.message || data.message || JSON.stringify(data)}` };
       }
+
+      // Non-OK, non-auth HTTP response. Extract a human-readable message.
+      const httpMessage = data?.error?.message || data?.error || data?.message || JSON.stringify(data);
+
+      // Clearly-terminal client errors are not fixed by trying another guessed
+      // endpoint against the same host, so short-circuit (mirrors 401/403).
+      if (res.status === 400 || res.status === 422 || res.status === 429) {
+        return { success: false, error: `${providerName} returned HTTP ${res.status}: ${httpMessage}`, raw: { status: res.status, headers: Object.fromEntries(res.headers) } };
+      }
+
+      // Otherwise remember this HTTP error and keep probing. If nothing
+      // succeeds, we surface the most-informative status instead of masking it
+      // as a generic connection failure.
+      if (!lastHttpError || res.status >= 500) {
+        lastHttpError = { status: res.status, error: httpMessage };
+      }
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -81,6 +102,16 @@ export async function aiConnector(
       }
       continue; // Try next pattern
     }
+  }
+
+  // If any pattern produced a real HTTP-level error, surface it rather than
+  // masking it as a generic connection/auto-discovery failure.
+  if (lastHttpError) {
+    return {
+      success: false,
+      error: `${providerName} returned HTTP ${lastHttpError.status}: ${lastHttpError.error}`,
+      raw: { status: lastHttpError.status },
+    };
   }
 
   return {
