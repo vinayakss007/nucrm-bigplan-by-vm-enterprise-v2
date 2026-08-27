@@ -23,6 +23,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
+import { logError, tenantMeta } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { and, eq, sql } from 'drizzle-orm';
@@ -120,7 +121,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  let ctx: Awaited<ReturnType<typeof requireAuth>>;
+  let ctx: Awaited<ReturnType<typeof requireAuth>> | undefined;
   try {
   const limited = await rateLimitMutating(req, 'settings', 'patch');
   if (limited) return limited;
@@ -209,7 +210,7 @@ export async function PATCH(req: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[picklists PATCH]', err);
+    void logError({ error: err, context: 'picklists PATCH', ...tenantMeta(ctx) });
     return apiError(err);
   }
 }

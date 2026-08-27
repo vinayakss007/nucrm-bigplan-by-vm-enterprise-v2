@@ -21,6 +21,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
+import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { and, eq, sql } from 'drizzle-orm';
@@ -227,7 +228,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ ok: true, config: Object.keys(configPatch), keys_rotated: updatedProviders });
   } catch (err) {
-    console.error('[ai-providers PATCH]', err);
+    void logError({ error: err, context: 'ai-providers PATCH' });
     return apiError(err);
   }
 }
