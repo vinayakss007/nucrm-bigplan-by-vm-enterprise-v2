@@ -412,6 +412,12 @@ async function shutdown(signal: 'SIGTERM' | 'SIGINT') {
   }
   shuttingDown = true;
   console.log(`[Worker] ${signal} received, shutting down gracefully...`);
+  // Watchdog: force-exit if graceful shutdown hangs (e.g. a close/quit stalls).
+  const forceExit = setTimeout(() => {
+    console.error('[Worker] Graceful shutdown timed out, forcing exit');
+    process.exit(1);
+  }, 10000);
+  forceExit.unref?.();
   clearInterval(heartbeatInterval);
   await Promise.all([
     emailWorker.close(),
@@ -430,6 +436,7 @@ async function shutdown(signal: 'SIGTERM' | 'SIGINT') {
       })
     )
   );
+  clearTimeout(forceExit);
   process.exit(0);
 }
 
