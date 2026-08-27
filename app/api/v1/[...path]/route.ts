@@ -28,8 +28,11 @@ async function handleRequest(request: NextRequest, params: { path: string[] }): 
   // Resolve tenant from gateway
   const resolution = await resolveGatewayTenant(request);
   if (!resolution) {
+    // #1156: return a generic 401 — do not enumerate the tenant-resolution
+    // methods (API key / X-Tenant-ID / custom domain), which aided attackers
+    // in mapping the auth architecture.
     const errorResponse = NextResponse.json(
-      { error: 'Unable to resolve tenant. Provide API key, X-Tenant-ID header, or use a custom domain.' },
+      { error: 'Unauthorized' },
       { status: 401 }
     );
     return setCORSHeaders(errorResponse, origin);

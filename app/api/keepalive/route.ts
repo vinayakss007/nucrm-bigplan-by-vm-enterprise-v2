@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 /**
  * Keep-Alive Endpoint
@@ -14,17 +15,17 @@ import { apiError } from '@/lib/api-error';
  * Simple query to keep Neon connection warm
  * Called every 5 minutes by client-side service
  */
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const start = Date.now();
+    // #1154: throttle this unauthenticated endpoint against abuse.
+    const limited = await checkRateLimit(request, { action: 'keepalive', max: 30, windowMinutes: 1 });
+    if (limited) return limited;
+
     await db.execute(sql`SELECT 1 as ping`);
-    const duration = Date.now() - start;
-    
-    return NextResponse.json({
-      ok: true,
-      duration_ms: duration,
-      timestamp: new Date().toISOString(),
-    });
+
+    // #1153: do not disclose server timestamp or query latency to
+    // unauthenticated callers — return only a liveness boolean.
+    return NextResponse.json({ ok: true });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,6 +35,6 @@ export async function POST(_request: NextRequest) {
   }
 }
 
-export async function GET() {
-  return POST({} as NextRequest);
+export async function GET(request: NextRequest) {
+  return POST(request);
 }
