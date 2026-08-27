@@ -116,18 +116,21 @@ export async function POST(request: NextRequest) {
           text: `Your NuCRM trial for ${t.name} expires in ${daysLeft} day(s). Upgrade: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing`,
         }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
       }
-      // Mark warned
-      if (t.ownerId) {
-        await db.insert(activities).values({
-          tenantId: t.id,
-          userId: t.ownerId,
-          eventType: 'trial_warning',
-          description: `Trial warning sent — ${daysLeft} days left`,
-          entityType: 'tenant',
-          entityId: t.id,
-          action: 'trial_warning'
-        }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
-      }
+      // Mark warned. The dedup marker must be written UNCONDITIONALLY: it does
+      // not depend on ownerId. activities.userId is nullable (references users
+      // with onDelete 'set null'), so owner-less tenants get a tenant-scoped
+      // marker with userId null. Without this, tenants with a null ownerId were
+      // warned every single run because the notExists dedup check never found a
+      // prior marker.
+      await db.insert(activities).values({
+        tenantId: t.id,
+        userId: t.ownerId ?? null,
+        eventType: 'trial_warning',
+        description: `Trial warning sent - ${daysLeft} days left`,
+        entityType: 'tenant',
+        entityId: t.id,
+        action: 'trial_warning'
+      }).catch((err) => logError({ error: err, context: 'trial-check:dedup-insert' }));
     }
 
     return NextResponse.json({ ok:true, expired, warned });
