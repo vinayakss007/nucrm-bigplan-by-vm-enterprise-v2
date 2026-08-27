@@ -249,7 +249,8 @@ const leadWarmingWorker = new Worker(
             .where(andOp(
               eqOp(leadWarmingMessages.campaignId, campaignId),
               eqOp(leadWarmingMessages.contactId, contactId),
-              eqOp(leadWarmingMessages.status, 'queued')
+              eqOp(leadWarmingMessages.status, 'queued'),
+              eqOp(leadWarmingMessages.channel, 'whatsapp')
             ));
           return { sent: false, error: 'WhatsApp not configured' };
         }
