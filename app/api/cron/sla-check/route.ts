@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { verifySecret } from '@/lib/crypto';
+import { acquireLock } from '@/lib/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { supportTickets, slaPolicies, slaBreaches, users, tenantMembers } from '@/drizzle/schema';
@@ -26,6 +27,12 @@ import { checkSLABreach, DEFAULT_SLA_TIMES, type SLADefinition } from '@/lib/sla
 export async function POST(request: NextRequest) {
   if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Distributed dedup guard (#1255): skip if another scheduler already ran it.
+  const lock = await acquireLock('cron:sla-check', 1800);
+  if (!lock.acquired) {
+    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
   }
 
   try {

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
+import { acquireLock } from '@/lib/cache';
 import { db } from '@/drizzle/db';
 import { backupRecords, backupAlerts } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
@@ -104,6 +105,13 @@ export async function POST(request: NextRequest) {
   const secret = request.headers.get('x-cron-secret');
   if (!verifySecret(secret, process.env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Distributed dedup guard (#1255): the verify restore is expensive (spins up
+  // a scratch DB) — never run two concurrently.
+  const lock = await acquireLock('cron:backup-verify', 7200);
+  if (!lock.acquired) {
+    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
   }
 
   const databaseUrl = process.env.DATABASE_URL;

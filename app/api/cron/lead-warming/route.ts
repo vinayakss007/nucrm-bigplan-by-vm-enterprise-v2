@@ -15,6 +15,7 @@
  */
 
 import { verifySecret } from '@/lib/crypto';
+import { acquireLock } from '@/lib/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { processLeadWarming, resetMonthlyCounters } from '@/lib/lead-warming/engine';
 import { analyzeUnprocessedReplies } from '@/lib/lead-warming/reply-analyzer';
@@ -24,6 +25,12 @@ export async function POST(req: NextRequest) {
   // Validate cron secret
   if (!verifySecret(req.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Distributed dedup guard (#1255): skip if another scheduler already ran it.
+  const lock = await acquireLock('cron:lead-warming', 1800);
+  if (!lock.acquired) {
+    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
   }
 
  
