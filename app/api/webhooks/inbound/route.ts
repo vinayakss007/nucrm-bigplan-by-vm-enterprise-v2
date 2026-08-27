@@ -1089,17 +1089,16 @@ export async function POST(request: NextRequest) {
 
     logRequest(keyPrefix, statusCode, request.nextUrl.pathname);
 
-    // Audit log
-    if (process.env.NODE_ENV === 'production') {
-      await logAudit({
-        tenantId: currentKey.tenantId,
-        userId: currentKey.userId!,
-        action: 'webhook_inbound',
-        entityType: 'api',
-        entityId: 'batch',
-        newData: { processed: results.length, succeeded: results.filter(r => r.status === 'ok').length, failed: results.filter(r => r.status === 'error').length, duration_ms: duration },
-      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
-    }
+    // Audit log — written in all environments so inbound webhook activity is
+    // always traceable, not only in production.
+    await logAudit({
+      tenantId: currentKey.tenantId,
+      userId: currentKey.userId!,
+      action: 'webhook_inbound',
+      entityType: 'api',
+      entityId: 'batch',
+      newData: { processed: results.length, succeeded: results.filter(r => r.status === 'ok').length, failed: results.filter(r => r.status === 'error').length, duration_ms: duration },
+    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
     // Dev log
     devLogger.request('POST', request.nextUrl.pathname, statusCode, duration);
