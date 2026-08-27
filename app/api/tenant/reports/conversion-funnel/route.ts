@@ -113,8 +113,9 @@ export async function GET(req: NextRequest) {
       const next = stages[i + 1];
       return {
         ...s,
+        // L-3: guard on the actual divisor (cumulativeCount), not s.count.
         conversionToNext: next
-          ? s.count > 0
+          ? s.cumulativeCount > 0
             ? Math.round((next.cumulativeCount / s.cumulativeCount) * 1000) / 10
             : 0
           : null,

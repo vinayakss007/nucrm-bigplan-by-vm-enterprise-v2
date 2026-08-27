@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
+import { sumLineItems } from '@/lib/money';
 import { db } from '@/drizzle/db';
 import { deals, dealProducts } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
@@ -50,7 +51,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .orderBy(dealProducts.createdAt);
 
     // Also return the computed total so the UI can show it without re-summing.
-    const total = items.reduce((sum, i) => sum + (Number(i.price) || 0) * (i.quantity ?? 1), 0);
+    // round at each step (audit M-1) so repeated float addition cannot drift.
+    const total = sumLineItems(
+      items.map((i) => ({ quantity: i.quantity ?? 1, unit_price: i.price })),
+    );
 
     return NextResponse.json({ data: items, total });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

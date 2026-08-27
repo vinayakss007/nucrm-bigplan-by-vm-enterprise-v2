@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { documentTotal, money } from '@/lib/money';
 import { db } from '@/drizzle/db';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { invoices } from '@/drizzle/schema';
@@ -69,6 +70,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           return NextResponse.json({ error: `${field} must be a valid number` }, { status: 400 });
         }
         body[field] = v;
+      }
+    }
+
+    // M-2: when the caller supplies subtotal + totalAmount, the total must equal
+    // subtotal - discountAmount + taxAmount. Prevents a client PATCHing an
+    // arbitrary totalAmount that disagrees with its components.
+    if (body.subtotal !== undefined && body.totalAmount !== undefined) {
+      const expected = documentTotal(body.subtotal, body.discountAmount ?? 0, body.taxAmount ?? 0);
+      if (Math.abs(expected - money(body.totalAmount)) > 0.01) {
+        return NextResponse.json(
+          { error: `totalAmount (${money(body.totalAmount).toFixed(2)}) is inconsistent with subtotal - discountAmount + taxAmount (${expected.toFixed(2)})` },
+          { status: 400 },
+        );
       }
     }
 
