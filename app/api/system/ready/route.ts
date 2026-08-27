@@ -47,38 +47,29 @@ export async function GET() {
 
   try {
     const pool = getPool();
-    const t0 = Date.now();
     await pool.query('SELECT 1');
-    const latencyMs = Date.now() - t0;
 
     // Pool saturation check: if all connections are busy and queries are
     // queueing, the instance is alive but unable to serve new traffic at
     // acceptable latency. The LB should route elsewhere.
-    const { totalCount, idleCount, waitingCount } = pool;
+    //
+    // #1152: the orchestrator only needs the 200/503 status and a coarse
+    // reason — it never consumes the numeric internals. Exposing exact pool
+    // sizing/latency to an unauthenticated endpoint aided infrastructure
+    // reconnaissance, so those figures are no longer in the response body.
+    const { idleCount, waitingCount } = pool;
     if (waitingCount > 0 && idleCount === 0) {
       return NextResponse.json(
-        {
-          ready: false,
-          reason: 'pool_saturated',
-          pool: { total: totalCount, idle: idleCount, waiting: waitingCount },
-          latencyMs,
-        },
+        { ready: false, reason: 'pool_saturated' },
         { status: 503 }
       );
     }
 
-    return NextResponse.json({
-      ready: true,
-      latencyMs,
-      pool: { total: totalCount, idle: idleCount, waiting: waitingCount },
-    });
-  } catch (err) {
+    return NextResponse.json({ ready: true });
+  } catch {
+    // Do not surface the underlying error message to unauthenticated callers.
     return NextResponse.json(
-      {
-        ready: false,
-        reason: 'db_unreachable',
-        error: err instanceof Error ? err.message : 'Unknown error',
-      },
+      { ready: false, reason: 'db_unreachable' },
       { status: 503 }
     );
   }
