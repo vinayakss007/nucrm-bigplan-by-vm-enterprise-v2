@@ -43,6 +43,11 @@ export function AnimatedNumber({
       return;
     }
 
+    // #1458: track the in-flight rAF so it can be cancelled on unmount.
+    // Previously only the observer was disconnected in cleanup; the count-up
+    // loop kept calling setDisplay for up to `duration` ms after unmount.
+    let rafId = 0;
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting && !hasAnimated.current) {
@@ -58,20 +63,23 @@ export function AnimatedNumber({
             setDisplay(current);
 
             if (progress < 1) {
-              requestAnimationFrame(step);
+              rafId = requestAnimationFrame(step);
             } else {
               setDisplay(numValue);
             }
           }
 
-          requestAnimationFrame(step);
+          rafId = requestAnimationFrame(step);
         }
       },
       { threshold: 0.3 }
     );
 
     if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (rafId) cancelAnimationFrame(rafId);
+    };
   }, [numValue, duration]);
 
   const formatted = formatter
