@@ -59,14 +59,33 @@ export async function aiConnector(
 
       const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
 
-      if (res.ok || res.status === 201) {
+      if (res.ok) {
         return { success: true, data, raw: { status: res.status, headers: Object.fromEntries(res.headers) } };
       }
 
-      // If we get auth error, stop trying patterns
-      if (res.status === 401 || res.status === 403) {
-        return { success: false, error: `Authentication failed: ${data.error?.message || data.message || JSON.stringify(data)}` };
+      // #1469: only a 404 (and 405 Method Not Allowed) plausibly means "this
+      // guessed endpoint is wrong — try the next pattern". Every other non-OK
+      // status is a real answer from a matched endpoint (auth failure, bad
+      // params, rate limit, server error) and must be surfaced, not swallowed
+      // by probing more endpoints against the same host. Previously only
+      // 401/403 short-circuited, so 400/409/422/429/5xx were silently discarded
+      // and reported as a generic "could not connect".
+      if (res.status === 404 || res.status === 405) {
+        continue; // wrong endpoint guess — keep trying patterns
       }
+
+      const upstreamMessage = data?.error?.message || data?.message || (typeof data?.error === 'string' ? data.error : '') || JSON.stringify(data);
+      if (res.status === 401 || res.status === 403) {
+        return { success: false, error: `Authentication failed: ${upstreamMessage}` };
+      }
+      if (res.status === 429) {
+        return { success: false, error: `Rate limited by ${providerName} (HTTP 429): ${upstreamMessage}` };
+      }
+      return {
+        success: false,
+        error: `${providerName} returned HTTP ${res.status}: ${upstreamMessage}`,
+        raw: { status: res.status, headers: Object.fromEntries(res.headers) },
+      };
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
