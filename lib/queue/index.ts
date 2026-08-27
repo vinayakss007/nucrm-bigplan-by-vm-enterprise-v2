@@ -177,7 +177,12 @@ async function createPgBossAdapter(databaseUrl: string): Promise<QueueAdapter> {
         startAfter: options?.delay ? new Date(Date.now() + options.delay) : undefined,
         priority: options?.priority,
         retryLimit: options?.attempts || 3,
-        retryDelay: 5,
+        // #1470: exponential backoff to match the BullMQ/Redis adapter. Without
+        // retryBackoff, pg-boss retried at a flat 5s interval — a retry storm
+        // against a downed dependency. With retryBackoff the delay grows
+        // exponentially from the retryDelay base (1s -> 2s -> 4s -> ...).
+        retryDelay: 1,
+        retryBackoff: true,
       });
     },
     async close() {

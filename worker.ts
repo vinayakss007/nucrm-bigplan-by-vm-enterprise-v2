@@ -243,12 +243,16 @@ const leadWarmingWorker = new Worker(
 
         if (!integration) {
           console.warn(`[Lead Warming] No WhatsApp integration for tenant ${tenantId}`);
-          // Update message status
+          // #1468: scope the failure update to the WhatsApp channel. Without the
+          // channel predicate this also marked the sibling queued *email* message
+          // (same campaign+contact) as failed, corrupting delivery state. The
+          // success path below already includes channel='whatsapp'.
           await database.update(leadWarmingMessages)
             .set({ status: 'failed', errorMessage: 'WhatsApp not configured' })
             .where(andOp(
               eqOp(leadWarmingMessages.campaignId, campaignId),
               eqOp(leadWarmingMessages.contactId, contactId),
+              eqOp(leadWarmingMessages.channel, 'whatsapp'),
               eqOp(leadWarmingMessages.status, 'queued')
             ));
           return { sent: false, error: 'WhatsApp not configured' };

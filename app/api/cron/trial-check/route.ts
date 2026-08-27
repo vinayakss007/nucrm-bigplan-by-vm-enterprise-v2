@@ -116,18 +116,21 @@ export async function POST(request: NextRequest) {
           text: `Your NuCRM trial for ${t.name} expires in ${daysLeft} day(s). Upgrade: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing`,
         }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
       }
-      // Mark warned
-      if (t.ownerId) {
-        await db.insert(activities).values({
-          tenantId: t.id,
-          userId: t.ownerId,
-          eventType: 'trial_warning',
-          description: `Trial warning sent — ${daysLeft} days left`,
-          entityType: 'tenant',
-          entityId: t.id,
-          action: 'trial_warning'
-        }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
-      }
+      // #1467: Record the dedup marker UNCONDITIONALLY. Previously this insert
+      // was gated on `if (t.ownerId)`, but the dedup query keys off a
+      // 'trial_warning' activity row regardless of owner. Tenants with a null
+      // ownerId (orphaned/removed owner) therefore never got a marker and were
+      // re-warned every run — spamming t.billingEmail. activities.userId is
+      // nullable, so we can always write it.
+      await db.insert(activities).values({
+        tenantId: t.id,
+        userId: t.ownerId ?? null,
+        eventType: 'trial_warning',
+        description: `Trial warning sent — ${daysLeft} days left`,
+        entityType: 'tenant',
+        entityId: t.id,
+        action: 'trial_warning'
+      }).catch((err) => logError({ error: err, context: "trial-check:mark-warned" }));
     }
 
     return NextResponse.json({ ok:true, expired, warned });
