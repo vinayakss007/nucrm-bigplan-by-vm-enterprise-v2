@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextRequest } from 'next/server';
+import { createHmac } from 'crypto';
 
 const mockReturning = vi.fn().mockResolvedValue([]);
 const mockUpdateSet = vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ returning: mockReturning }) });
@@ -139,15 +140,86 @@ describe('resend webhook DNC', () => {
     });
   });
 
-  describe('webhook secret', () => {
-    it('rejects requests with invalid secret', async () => {
-      process.env.RESEND_WEBHOOK_SECRET = 'my-secret';
+  describe('svix signature verification (#1430)', () => {
+    // whsec_<base64 key>. Build a valid Svix signature the way Resend/Svix does.
+    const WHSEC = 'whsec_' + Buffer.from('super-secret-key-bytes').toString('base64');
+
+    function signSvix(id: string, timestamp: number, body: string): string {
+      const key = Buffer.from(WHSEC.slice(6), 'base64');
+      const sig = createHmac('sha256', key).update(`${id}.${timestamp}.${body}`).digest('base64');
+      return `v1,${sig}`;
+    }
+
+    it('accepts a correctly Svix-signed event', async () => {
+      process.env.RESEND_WEBHOOK_SECRET = WHSEC;
+      mockReturning.mockResolvedValue([{ id: 'c1', tenantId: 't1', firstName: 'A' }]);
+
+      const id = 'msg_1';
+      const ts = Math.floor(Date.now() / 1000);
+      const payload = { type: 'email.bounced', data: { to: ['a@b.com'], bounce_type: 'hard', created_at: new Date().toISOString() } };
+      const rawBody = JSON.stringify(payload);
+
+      const { POST } = await import('@/app/api/webhooks/resend/route');
+      const req = new Request('http://localhost/api/webhooks/resend', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'svix-id': id,
+          'svix-timestamp': String(ts),
+          'svix-signature': signSvix(id, ts, rawBody),
+        },
+        body: rawBody,
+      }) as unknown as NextRequest;
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+    });
+
+    it('rejects an event with a bad signature', async () => {
+      process.env.RESEND_WEBHOOK_SECRET = WHSEC;
 
       const { POST } = await import('@/app/api/webhooks/resend/route');
       const req = makeRequest(
         { type: 'email.bounced', data: { to: ['a@b.com'], created_at: new Date().toISOString() } },
-        { 'x-webhook-secret': 'wrong' }
+        { 'svix-id': 'msg_2', 'svix-timestamp': String(Math.floor(Date.now() / 1000)), 'svix-signature': 'v1,not-a-real-signature' }
       );
+
+      const res = await POST(req);
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects when svix headers are missing (old x-webhook-secret no longer works)', async () => {
+      process.env.RESEND_WEBHOOK_SECRET = WHSEC;
+
+      const { POST } = await import('@/app/api/webhooks/resend/route');
+      const req = makeRequest(
+        { type: 'email.bounced', data: { to: ['a@b.com'], created_at: new Date().toISOString() } },
+        { 'x-webhook-secret': WHSEC }
+      );
+
+      const res = await POST(req);
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects a stale timestamp (replay protection)', async () => {
+      process.env.RESEND_WEBHOOK_SECRET = WHSEC;
+
+      const id = 'msg_3';
+      const staleTs = Math.floor(Date.now() / 1000) - 600; // 10 min ago
+      const payload = { type: 'email.bounced', data: { to: ['a@b.com'], created_at: new Date().toISOString() } };
+      const rawBody = JSON.stringify(payload);
+
+      const { POST } = await import('@/app/api/webhooks/resend/route');
+      const req = new Request('http://localhost/api/webhooks/resend', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'svix-id': id,
+          'svix-timestamp': String(staleTs),
+          'svix-signature': signSvix(id, staleTs, rawBody),
+        },
+        body: rawBody,
+      }) as unknown as NextRequest;
 
       const res = await POST(req);
       expect(res.status).toBe(401);

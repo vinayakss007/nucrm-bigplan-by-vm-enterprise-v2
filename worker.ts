@@ -12,6 +12,7 @@ import { db } from '@/drizzle/db';
 import { notifications } from '@/drizzle/schema';
 import { registerProcessErrorHandlers } from '@/lib/process-errors';
 import { redactEmail, redactPhone } from '@/lib/logger/pii';
+import { escapeHtml } from '@/lib/email/escape-html';
 
 registerProcessErrorHandlers('worker');
 
@@ -151,11 +152,17 @@ const bulkEmailWorker = new Worker(
       const batchResults = await Promise.allSettled(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         batch.map(async (recipient: any) => {
+          // #1170/#1191/#1272: HTML-escape first_name before interpolating it
+          // into the HTML body, otherwise a contact name containing markup
+          // (e.g. <script>) is injected verbatim — stored XSS in outgoing mail.
+          // The plaintext part uses the raw value (no markup interpretation).
+          const rawFirstName = recipient.first_name || '';
+          const safeFirstName = escapeHtml(String(rawFirstName));
           await sendEmail({
             to: recipient.email,
             subject,
-            html: body.replace(/\{first_name\}/g, recipient.first_name || ''),
-            text: body.replace(/\{first_name\}/g, recipient.first_name || ''),
+            html: body.replace(/\{first_name\}/g, safeFirstName),
+            text: body.replace(/\{first_name\}/g, rawFirstName),
           });
           return { email: recipient.email, success: true };
         })
