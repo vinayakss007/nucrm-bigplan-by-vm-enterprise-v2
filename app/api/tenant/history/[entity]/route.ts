@@ -26,7 +26,7 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const entityId = searchParams.get('entity_id');
     const type = searchParams.get('type') || 'changes';
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50') || 50));
 
     if (!entityId) {
       return NextResponse.json({ error: 'entity_id required' }, { status: 400 });

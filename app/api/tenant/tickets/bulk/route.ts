@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
         await db.transaction(async (tx) => {
           await tx.update(supportTickets).set({ assignedTo: userId, updatedAt: new Date() }).where(inArray(supportTickets.id, validIds));
           affected = validIds.length;
-          logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'bulk_assign', entityType: 'ticket', entityId: validIds[0], newData: { count: validIds.length, user_id: userId }, dbOrTx: tx as DbClient });
+          await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'bulk_assign', entityType: 'ticket', entityId: validIds[0], newData: { count: validIds.length, user_id: userId }, dbOrTx: tx as DbClient });
         });
         break;
       }
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
         await db.transaction(async (tx) => {
           await tx.update(supportTickets).set(update).where(inArray(supportTickets.id, validIds));
           affected = validIds.length;
-          logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'bulk_status', entityType: 'ticket', entityId: validIds[0], newData: { count: validIds.length, status }, dbOrTx: tx as DbClient });
+          await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'bulk_status', entityType: 'ticket', entityId: validIds[0], newData: { count: validIds.length, status }, dbOrTx: tx as DbClient });
         });
         break;
       }
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
         await db.transaction(async (tx) => {
           await tx.update(supportTickets).set({ priority, updatedAt: new Date() }).where(inArray(supportTickets.id, validIds));
           affected = validIds.length;
-          logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'bulk_priority', entityType: 'ticket', entityId: validIds[0], newData: { count: validIds.length, priority }, dbOrTx: tx as DbClient });
+          await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'bulk_priority', entityType: 'ticket', entityId: validIds[0], newData: { count: validIds.length, priority }, dbOrTx: tx as DbClient });
         });
         break;
       }
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
         await db.transaction(async (tx) => {
           await tx.update(supportTickets).set({ deletedAt: new Date() }).where(inArray(supportTickets.id, validIds));
           affected = validIds.length;
-          logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'bulk_delete', entityType: 'ticket', entityId: validIds[0], newData: { count: validIds.length }, dbOrTx: tx as DbClient });
+          await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'bulk_delete', entityType: 'ticket', entityId: validIds[0], newData: { count: validIds.length }, dbOrTx: tx as DbClient });
         });
         break;
       }

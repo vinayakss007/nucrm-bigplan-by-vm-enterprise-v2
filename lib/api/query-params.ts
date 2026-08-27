@@ -168,6 +168,38 @@ function parseFields(raw: string | null, config: QueryParamsConfig): string[] {
 }
 
 /**
+ * Minimal, safe page/limit/offset parser for list endpoints that only need
+ * offset pagination (not the full sort/filter/fields interface).
+ *
+ * Guarantees:
+ * - `limit` is clamped to [1, maxLimit] (default cap 200) — prevents
+ *   `?limit=999999` table dumps / DoS.
+ * - `page` is clamped to >= 1 — prevents `?page=0`/`?page=-5` producing a
+ *   negative OFFSET (Postgres 500) or a divide-by-zero in `totalPages`.
+ * - NaN/`"0"`/empty inputs fall back to sane defaults.
+ *
+ * Accepts either a URLSearchParams or a NextRequest.
+ */
+export function parsePageLimit(
+  input: URLSearchParams | NextRequest,
+  opts: { defaultLimit?: number; maxLimit?: number } = {},
+): { page: number; limit: number; offset: number } {
+  const searchParams =
+    input instanceof URLSearchParams ? input : new URL(input.url).searchParams;
+  const defaultLimit = opts.defaultLimit ?? DEFAULT_LIMIT;
+  const maxLimit = opts.maxLimit ?? MAX_LIMIT;
+
+  const pageRaw = parseInt(searchParams.get('page') ?? '1', 10);
+  const limitRaw = parseInt(searchParams.get('limit') ?? String(defaultLimit), 10);
+
+  const page = Math.max(1, Number.isNaN(pageRaw) ? 1 : pageRaw);
+  const limit = Math.min(Math.max(1, Number.isNaN(limitRaw) ? defaultLimit : limitRaw), maxLimit);
+  const offset = (page - 1) * limit;
+
+  return { page, limit, offset };
+}
+
+/**
  * Parse all query parameters from a request.
  */
 export function parseQueryParams(req: NextRequest, config: QueryParamsConfig = {}): ParsedQueryParams {

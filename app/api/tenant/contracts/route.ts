@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createContractSchema } from '@/lib/api/schemas';
+import { parsePageLimit } from '@/lib/api/query-params';
 import { db } from '@/drizzle/db';
 import { contracts } from '@/drizzle/schema';
 import { eq, and, desc, count } from 'drizzle-orm';
@@ -20,15 +21,13 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const _contactId = searchParams.get('contactId');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const { page, limit, offset } = parsePageLimit(searchParams);
 
     const filters = [eq(contracts.tenantId, tenantId)];
     if (status) {
       filters.push(eq(contracts.status, status));
     }
 
-    const offset = (page - 1) * limit;
     const results = await db.select().from(contracts).where(and(...filters)).orderBy(desc(contracts.startDate)).limit(limit).offset(offset);
     const countResult = await db.select({ count: count() }).from(contracts).where(eq(contracts.tenantId, tenantId));
     const total = countResult[0]?.count ?? 0;

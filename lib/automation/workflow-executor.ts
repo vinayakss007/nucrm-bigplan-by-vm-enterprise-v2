@@ -74,12 +74,16 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
   // Enrich context data
   const ctx: Record<string, unknown> = { ...inputData, contact_id: contactId, deal_id: dealId, tenant_id: tenantId, user_id: userId };
 
-  // Load contact data if available
+  // Load contact data if available.
+  // SECURITY: scope by tenantId. contactId originates from the caller-supplied
+  // trigger_entity_id (see app/api/tenant/workflows/[id]/run), so an id from
+  // another tenant must never hydrate the context — otherwise send_email /
+  // fire_webhook actions would exfiltrate cross-tenant PII.
   if (contactId) {
     const [contact] = await db
       .select()
       .from(contacts)
-      .where(eq(contacts.id, contactId))
+      .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId)))
       .limit(1);
     if (contact) {
       ctx.contact = contact;
@@ -92,12 +96,12 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
     }
   }
 
-  // Load deal data if available
+  // Load deal data if available. SECURITY: scope by tenantId (see contact note above).
   if (dealId) {
     const [deal] = await db
       .select()
       .from(deals)
-      .where(eq(deals.id, dealId))
+      .where(and(eq(deals.id, dealId), eq(deals.tenantId, tenantId)))
       .limit(1);
     if (deal) {
       ctx.deal = deal;

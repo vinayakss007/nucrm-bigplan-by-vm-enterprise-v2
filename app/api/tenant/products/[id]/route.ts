@@ -98,7 +98,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       tenantId: ctx.tenantId, userId: ctx.userId,
       action: 'update', entityType: 'product', entityId: id,
       newData: updateData,
-    });
+    }).catch(e => logError({ error: e, context: "async-catch:product.update:logAudit" }));
 
     fireWebhooks(ctx.tenantId, 'product.updated', { id }).catch(e => logError({ error: e, context: "async-catch:[context]" }));
 
@@ -142,7 +142,7 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
       action: 'delete', entityType: 'product', entityId: id,
-    });
+    }).catch(e => logError({ error: e, context: "async-catch:product.delete:logAudit" }));
 
     fireWebhooks(ctx.tenantId, 'product.deleted', { id }).catch(e => logError({ error: e, context: "async-catch:[context]" }));
 

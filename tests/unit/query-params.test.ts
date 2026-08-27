@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { NextRequest } from 'next/server';
-import { parseQueryParams } from '@/lib/api/query-params';
+import { parseQueryParams, parsePageLimit } from '@/lib/api/query-params';
 
 function makeRequest(queryString: string): NextRequest {
   return new NextRequest(`http://localhost/api/test?${queryString}`);
@@ -223,5 +223,48 @@ describe('parseQueryParams', () => {
       expect(params.search).toBe('hello');
       expect(params.pagination).toEqual({ page: 2, limit: 20, offset: 20 });
     });
+  });
+});
+
+
+describe('parsePageLimit', () => {
+  const sp = (qs: string) => new URLSearchParams(qs);
+
+  it('parses valid page/limit and computes offset', () => {
+    expect(parsePageLimit(sp('page=3&limit=20'))).toEqual({ page: 3, limit: 20, offset: 40 });
+  });
+
+  it('applies defaults when params are absent', () => {
+    expect(parsePageLimit(sp(''))).toEqual({ page: 1, limit: 50, offset: 0 });
+  });
+
+  it('caps limit at maxLimit (default 200) — prevents ?limit=999999 table dumps', () => {
+    expect(parsePageLimit(sp('limit=999999')).limit).toBe(200);
+  });
+
+  it('honours a custom maxLimit', () => {
+    expect(parsePageLimit(sp('limit=5000'), { maxLimit: 500 }).limit).toBe(500);
+  });
+
+  it('clamps limit=0 up to 1 (avoids divide-by-zero in totalPages)', () => {
+    expect(parsePageLimit(sp('limit=0')).limit).toBe(1);
+  });
+
+  it('clamps negative limit up to 1', () => {
+    expect(parsePageLimit(sp('limit=-10')).limit).toBe(1);
+  });
+
+  it('clamps page below 1 up to 1 (avoids negative OFFSET / Postgres 500)', () => {
+    expect(parsePageLimit(sp('page=0')).page).toBe(1);
+    expect(parsePageLimit(sp('page=-5')).offset).toBe(0);
+  });
+
+  it('falls back to defaults for non-numeric input', () => {
+    expect(parsePageLimit(sp('page=abc&limit=xyz'))).toEqual({ page: 1, limit: 50, offset: 0 });
+  });
+
+  it('accepts a NextRequest as input', () => {
+    const req = new NextRequest('http://localhost/api/test?page=2&limit=25');
+    expect(parsePageLimit(req)).toEqual({ page: 2, limit: 25, offset: 25 });
   });
 });

@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const contactId = searchParams.get('contact_id');
-    const limit = parseInt(searchParams.get('limit') || '100');
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '100') || 100));
 
     if (!contactId) {
       return NextResponse.json({ error: 'contact_id is required' }, { status: 400 });

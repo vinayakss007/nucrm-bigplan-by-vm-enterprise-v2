@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createQuoteSchema } from '@/lib/api/schemas';
+import { parsePageLimit } from '@/lib/api/query-params';
 import { db } from '@/drizzle/db';
 import { quotes, quoteLineItems } from '@/drizzle/schema';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
@@ -25,8 +26,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const contactId = searchParams.get('contactId');
     const dealId = searchParams.get('dealId');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const { page, limit, offset } = parsePageLimit(searchParams);
 
     const conditions: ReturnType<typeof eq>[] = [eq(quotes.tenantId, tenantId)];
     if (status) conditions.push(eq(quotes.status, status));
@@ -34,7 +34,6 @@ export async function GET(request: NextRequest) {
     if (dealId) conditions.push(eq(quotes.dealId, dealId));
     const whereClause = and(...conditions);
 
-    const offset = (page - 1) * limit;
     const results = await db.select().from(quotes).where(whereClause).orderBy(desc(quotes.createdAt)).limit(limit).offset(offset);
 
     const totalRes = await db.select({ count: count() }).from(quotes).where(eq(quotes.tenantId, tenantId));
@@ -75,7 +74,7 @@ export async function POST(request: NextRequest) {
     }
 
     const countResult = await db.select({ count: sql<number>`count(*)` }).from(quotes).where(eq(quotes.tenantId, tenantId));
-    const quoteNumber = `QT-${String(countResult[0]?.count ?? 0 + 1).padStart(5, '0')}`;
+    const quoteNumber = `QT-${String(Number(countResult[0]?.count ?? 0) + 1).padStart(5, '0')}`;
 
     let subtotal = 0;
     if (items?.length) {
