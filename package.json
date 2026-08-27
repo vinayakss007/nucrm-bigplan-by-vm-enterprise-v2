@@ -134,6 +134,7 @@
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
+    "exceljs": "^4.4.0",
     "ioredis": "5.10.1",
     "jose": "6.2.2",
     "lucide-react": "0.511.0",
@@ -157,7 +158,6 @@
     "tailwindcss": "3.4.19",
     "tsx": "^4.21.0",
     "uuid": "^14.0.0",
-    "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
