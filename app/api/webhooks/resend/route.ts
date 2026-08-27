@@ -314,20 +314,41 @@ async function handleSoftBounce(email: string): Promise<void> {
   const windowStart = new Date(now.getTime() - SOFT_BOUNCE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
   for (const contact of matchingContacts) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const meta = (contact.metadata as any) || {};
-    const bounces: string[] = Array.isArray(meta.softBounces) ? meta.softBounces : [];
-    
-    // Filter to only bounces within the window
-    const recentBounces = bounces.filter(ts => new Date(ts) >= windowStart);
-    recentBounces.push(now.toISOString());
+    // Atomic read-modify-write: lock the contact row (SELECT ... FOR UPDATE)
+    // so two concurrent soft bounces cannot read the same starting metadata
+    // and lose an increment. The pruning of stale (>window) bounces and the
+    // DNC threshold evaluation both require the post-append array, so we do
+    // the whole compute inside the locked transaction rather than in a single
+    // SQL statement.
+    const escalated = await db.transaction(async (tx): Promise<{ newCount: number; shouldDnc: boolean } | null> => {
+      // Re-read metadata under a row lock so the value cannot change until commit.
+      const locked = await tx
+        .select({ id: contacts.id, metadata: contacts.metadata })
+        .from(contacts)
+        .where(and(
+          eq(contacts.id, contact.id),
+          eq(contacts.doNotContact, false),
+          isNull(contacts.deletedAt)
+        ))
+        .for('update');
 
-    const newCount = recentBounces.length;
-    const shouldDnc = newCount >= SOFT_BOUNCE_THRESHOLD;
+      // Row may have been escalated/deleted by a concurrent update between the
+      // initial select and acquiring the lock — nothing to do.
+      const lockedContact = locked[0];
+      if (!lockedContact) return null;
 
-    if (shouldDnc) {
-      // Escalate to DNC — atomic flag + enrollment cancellation
-      await db.transaction(async (tx) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const meta = (lockedContact.metadata as any) || {};
+      const bounces: string[] = Array.isArray(meta.softBounces) ? meta.softBounces : [];
+
+      // Prune bounces outside the window, then append the current one.
+      const recentBounces = bounces.filter(ts => new Date(ts) >= windowStart);
+      recentBounces.push(now.toISOString());
+
+      const newCount = recentBounces.length;
+      const shouldDnc = newCount >= SOFT_BOUNCE_THRESHOLD;
+
+      if (shouldDnc) {
         await tx
           .update(contacts)
           .set({
@@ -351,9 +372,30 @@ async function handleSoftBounce(email: string): Promise<void> {
             eq(sequenceEnrollments.contactId, contact.id),
             eq(sequenceEnrollments.status, 'active')
           ));
-      });
+      } else {
+        // Just track the soft bounce
+        await tx
+          .update(contacts)
+          .set({
+            metadata: sql`jsonb_set(
+              jsonb_set(
+                COALESCE(${contacts.metadata}, '{}'::jsonb),
+                '{bounceType}', '"soft"'
+              ),
+              '{softBounces}', ${JSON.stringify(recentBounces)}::jsonb
+            ) || jsonb_build_object('lastBounceAt', ${now.toISOString()}, 'bounceCount', ${newCount})`,
+            updatedAt: now,
+          })
+          .where(eq(contacts.id, contact.id));
+      }
 
-      console.log(`[resend-webhook] Soft bounce escalated to DNC for contact ${contact.id} (${newCount} bounces)`);
+      return { newCount, shouldDnc };
+    });
+
+    if (!escalated) continue;
+
+    if (escalated.shouldDnc) {
+      console.log(`[resend-webhook] Soft bounce escalated to DNC for contact ${contact.id} (${escalated.newCount} bounces)`);
 
       // Activity logging is deliberately AFTER the commit and non-fatal.
       try {
@@ -361,7 +403,7 @@ async function handleSoftBounce(email: string): Promise<void> {
           tenantId: contact.tenantId,
           contactId: contact.id,
           eventType: 'note',
-          description: `Soft bounce threshold reached (${newCount} within ${SOFT_BOUNCE_WINDOW_DAYS} days) - do not contact flag set automatically`,
+          description: `Soft bounce threshold reached (${escalated.newCount} within ${SOFT_BOUNCE_WINDOW_DAYS} days) - do not contact flag set automatically`,
           entityType: 'contact',
           entityId: contact.id,
           action: 'email.soft_bounce_escalated'
@@ -370,22 +412,7 @@ async function handleSoftBounce(email: string): Promise<void> {
         await logError({ error: activityErr, context: 'resend-webhook:activity-log' });
       }
     } else {
-      // Just track the soft bounce
-      await db
-        .update(contacts)
-        .set({
-          metadata: sql`jsonb_set(
-            jsonb_set(
-              COALESCE(${contacts.metadata}, '{}'::jsonb),
-              '{bounceType}', '"soft"'
-            ),
-            '{softBounces}', ${JSON.stringify(recentBounces)}::jsonb
-          ) || jsonb_build_object('lastBounceAt', ${now.toISOString()}, 'bounceCount', ${newCount})`,
-          updatedAt: now,
-        })
-        .where(eq(contacts.id, contact.id));
-
-      console.log(`[resend-webhook] Soft bounce tracked for contact ${contact.id} (${newCount}/${SOFT_BOUNCE_THRESHOLD})`);
+      console.log(`[resend-webhook] Soft bounce tracked for contact ${contact.id} (${escalated.newCount}/${SOFT_BOUNCE_THRESHOLD})`);
     }
   }
 }
