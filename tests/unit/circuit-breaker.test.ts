@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { CircuitBreaker } from '@/lib/db/circuit-breaker';
+import { CircuitBreaker, withDbCircuitBreaker, dbCircuitBreaker, CircuitOpenError } from '@/lib/db/circuit-breaker';
 
 describe('CircuitBreaker', () => {
   let breaker: CircuitBreaker;
@@ -89,5 +89,39 @@ describe('CircuitBreaker', () => {
     expect(breaker.getState().state).toBe('CLOSED');
     expect(breaker.getState().failureCount).toBe(0);
     expect(breaker.allowRequest()).toBe(true);
+  });
+});
+
+// #1224: the shared helper that actually wires the breaker into DB calls.
+describe('withDbCircuitBreaker', () => {
+  beforeEach(() => {
+    dbCircuitBreaker.reset();
+  });
+
+  it('returns the result and records success when the op succeeds', async () => {
+    const result = await withDbCircuitBreaker(async () => 'ok');
+    expect(result).toBe('ok');
+    expect(dbCircuitBreaker.getState().state).toBe('CLOSED');
+  });
+
+  it('propagates the error and records a failure', async () => {
+    await expect(withDbCircuitBreaker(async () => { throw new Error('db down'); }))
+      .rejects.toThrow('db down');
+    expect(dbCircuitBreaker.getState().failureCount).toBe(1);
+  });
+
+  it('short-circuits with CircuitOpenError once the breaker is open', async () => {
+    // dbCircuitBreaker opens after 5 consecutive failures (its config).
+    for (let i = 0; i < 5; i++) {
+      await expect(withDbCircuitBreaker(async () => { throw new Error('fail'); })).rejects.toThrow();
+    }
+    expect(dbCircuitBreaker.getState().state).toBe('OPEN');
+
+    // The next call is rejected immediately without invoking the operation.
+    let invoked = false;
+    await expect(
+      withDbCircuitBreaker(async () => { invoked = true; return 'should not run'; })
+    ).rejects.toBeInstanceOf(CircuitOpenError);
+    expect(invoked).toBe(false);
   });
 });

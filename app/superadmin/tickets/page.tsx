@@ -24,23 +24,52 @@ export default function TicketsPage() {
   const [reply, setReply]     = useState('');
   const [replying, setReplying] = useState<string|null>(null);
 
+  // #1089: check res.ok before parsing and surface errors instead of silently
+  // swallowing them / always claiming success.
   const load = useCallback(async () => {
-    const q = status ? `?status=${status}` : '';
-    const res = await fetch('/api/superadmin/tickets' + q);
-    const d = await res.json(); setData(d); setLoading(false);
+    try {
+      const q = status ? `?status=${status}` : '';
+      const res = await fetch('/api/superadmin/tickets' + q);
+      if (!res.ok) {
+        toast.error('Failed to load tickets');
+        setData(null);
+        return;
+      }
+      setData(await res.json());
+    } catch {
+      toast.error('Failed to load tickets');
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
   }, [status]);
   useEffect(() => { load(); }, [load]);
 
   const update = async (id: string, updates: Record<string, unknown>) => {
-    await fetch('/api/superadmin/tickets',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,...updates}) });
-    toast.success('Updated'); load();
+    try {
+      const res = await fetch('/api/superadmin/tickets',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,...updates}) });
+      if (!res.ok) { toast.error('Update failed'); return; }
+      toast.success('Updated');
+      load();
+    } catch {
+      toast.error('Update failed');
+    }
   };
 
   const sendReply = async (id: string) => {
     if (!reply.trim()) return;
     setReplying(id);
-    await fetch('/api/superadmin/tickets',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,status:'in_progress',admin_reply:reply}) });
-    toast.success('Reply sent'); setReply(''); setReplying(null); load();
+    try {
+      const res = await fetch('/api/superadmin/tickets',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,status:'in_progress',admin_reply:reply}) });
+      if (!res.ok) { toast.error('Failed to send reply'); return; }
+      toast.success('Reply sent');
+      setReply('');
+      load();
+    } catch {
+      toast.error('Failed to send reply');
+    } finally {
+      setReplying(null);
+    }
   };
 
   const c = data?.counts ?? {};

@@ -121,69 +121,81 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check for duplicate email — upsert into leads table
-    const existingLead = await db.query.leads.findFirst({
-      where: and(
-        eq(leads.tenantId, tenant_id),
-        eq(sql`lower(${leads.email})`, email.trim().toLowerCase()),
-        isNull(leads.deletedAt)
-      ),
-      columns: { id: true, tags: true, leadStatus: true, formSubmissionsCount: true }
-    });
-
+    // #1061: the duplicate-email check and the insert must be atomic, or two
+    // concurrent submissions with the same email both pass the check and
+    // create duplicate leads. There is no unique constraint on
+    // (tenant_id, lower(email)), so we serialize per (tenant, email) using a
+    // transaction-scoped Postgres advisory lock, then re-check inside the tx.
+    const normalizedEmail = email.trim().toLowerCase();
     let contactId!: string;
 
-    if (existingLead) {
-      // Re-activate and update existing lead
-      const newTags = Array.isArray(tags) ? tags : [];
-      const currentTags = existingLead.tags || [];
-      const combinedTags = Array.from(new Set([...currentTags, ...newTags]));
+    await db.transaction(async (tx) => {
+      // Serialize concurrent submissions for the same (tenant, email). The lock
+      // is held until the transaction commits/rolls back.
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${tenant_id} || ':' || ${normalizedEmail}, 0))`
+      );
 
-      const [updated] = await db.update(leads)
-        .set({
-          phone: phone.trim() || undefined,
-          companyName: safeCompany.trim() || undefined,
-          companyId: company_id || undefined,
-          leadStatus: ['lost', 'unqualified'].includes(existingLead.leadStatus || '') ? 'new' : undefined,
-          tags: combinedTags,
-          formSubmissionsCount: (existingLead.formSubmissionsCount || 0) + 1,
-          lastActivityAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(leads.id, existingLead.id))
-        .returning({ id: leads.id });
-      
-      contactId = updated?.id ?? existingLead.id;
-    } else {
-      await db.transaction(async (tx) => {
-        const [newLead] = await tx.insert(leads).values({
-          tenantId: tenant_id,
-          firstName: safeFirst,
-          lastName: safeLast,
-          email: email.trim().toLowerCase(),
-          phone: phone.trim() || null,
-          companyName: safeCompany.trim() || null,
-          companyId: company_id,
-          source: safeSource,
-          leadStatus: 'new',
-          notes: safeMessage || null,
-          formId: form_id || null,
-          tags: Array.isArray(tags) ? tags : [],
-          formSubmissionsCount: 1,
-          lastActivityAt: new Date(),
-        }).returning({ id: leads.id });
-        
-        if (!newLead) throw new Error('Failed to create lead');
-        contactId = newLead.id;
-
-        await tx.insert(leadActivities).values({
-          tenantId: tenant_id,
-          leadId: contactId,
-          activityType: 'created',
-          description: `Lead captured via ${safeSource}${form_id ? ` (form: ${form_id})` : ''}`,
-        });
+      const existingLead = await tx.query.leads.findFirst({
+        where: and(
+          eq(leads.tenantId, tenant_id),
+          eq(sql`lower(${leads.email})`, normalizedEmail),
+          isNull(leads.deletedAt)
+        ),
+        columns: { id: true, tags: true, leadStatus: true, formSubmissionsCount: true }
       });
-    }
+
+      if (existingLead) {
+        // Re-activate and update existing lead
+        const newTags = Array.isArray(tags) ? tags : [];
+        const currentTags = existingLead.tags || [];
+        const combinedTags = Array.from(new Set([...currentTags, ...newTags]));
+
+        const [updated] = await tx.update(leads)
+          .set({
+            phone: phone.trim() || undefined,
+            companyName: safeCompany.trim() || undefined,
+            companyId: company_id || undefined,
+            leadStatus: ['lost', 'unqualified'].includes(existingLead.leadStatus || '') ? 'new' : undefined,
+            tags: combinedTags,
+            formSubmissionsCount: (existingLead.formSubmissionsCount || 0) + 1,
+            lastActivityAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(leads.id, existingLead.id))
+          .returning({ id: leads.id });
+
+        contactId = updated?.id ?? existingLead.id;
+        return;
+      }
+
+      const [newLead] = await tx.insert(leads).values({
+        tenantId: tenant_id,
+        firstName: safeFirst,
+        lastName: safeLast,
+        email: normalizedEmail,
+        phone: phone.trim() || null,
+        companyName: safeCompany.trim() || null,
+        companyId: company_id,
+        source: safeSource,
+        leadStatus: 'new',
+        notes: safeMessage || null,
+        formId: form_id || null,
+        tags: Array.isArray(tags) ? tags : [],
+        formSubmissionsCount: 1,
+        lastActivityAt: new Date(),
+      }).returning({ id: leads.id });
+
+      if (!newLead) throw new Error('Failed to create lead');
+      contactId = newLead.id;
+
+      await tx.insert(leadActivities).values({
+        tenantId: tenant_id,
+        leadId: contactId,
+        activityType: 'created',
+        description: `Lead captured via ${safeSource}${form_id ? ` (form: ${form_id})` : ''}`,
+      });
+    });
 
     // Insert into formSubmissions if form_id provided
     if (form_id && contactId) {

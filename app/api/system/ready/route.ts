@@ -32,6 +32,7 @@
 import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db/pool';
 import { isShuttingDown } from '@/lib/db/graceful-shutdown';
+import { withDbCircuitBreaker, CircuitOpenError } from '@/lib/db/circuit-breaker';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -47,7 +48,12 @@ export async function GET() {
 
   try {
     const pool = getPool();
-    await pool.query('SELECT 1');
+
+    // #1224: run the readiness probe query through the shared DB circuit
+    // breaker. When the DB has been failing, the breaker opens and the probe
+    // short-circuits to 503 without hammering an already-struggling database,
+    // then transitions to half-open after the cooldown to test recovery.
+    await withDbCircuitBreaker(() => pool.query('SELECT 1'));
 
     // Pool saturation check: if all connections are busy and queries are
     // queueing, the instance is alive but unable to serve new traffic at
@@ -66,10 +72,11 @@ export async function GET() {
     }
 
     return NextResponse.json({ ready: true });
-  } catch {
+  } catch (err) {
     // Do not surface the underlying error message to unauthenticated callers.
+    const reason = err instanceof CircuitOpenError ? 'circuit_open' : 'db_unreachable';
     return NextResponse.json(
-      { ready: false, reason: 'db_unreachable' },
+      { ready: false, reason },
       { status: 503 }
     );
   }

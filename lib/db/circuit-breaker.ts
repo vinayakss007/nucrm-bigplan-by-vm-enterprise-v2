@@ -137,3 +137,32 @@ export const dbCircuitBreaker = new CircuitBreaker({
   cooldownMs: 30_000,
   successThreshold: 2,
 });
+
+/** Error thrown when the DB circuit breaker is open. */
+export class CircuitOpenError extends Error {
+  constructor(message = 'Database circuit breaker is open — too many recent failures') {
+    super(message);
+    this.name = 'CircuitOpenError';
+  }
+}
+
+/**
+ * Run a database operation through the shared circuit breaker (#1224).
+ *
+ * When the circuit is OPEN the call is rejected immediately with
+ * CircuitOpenError instead of piling onto an already-failing database
+ * (cascade protection). Successes/failures feed the breaker's state machine.
+ */
+export async function withDbCircuitBreaker<T>(fn: () => Promise<T>): Promise<T> {
+  if (!dbCircuitBreaker.allowRequest()) {
+    throw new CircuitOpenError();
+  }
+  try {
+    const result = await fn();
+    dbCircuitBreaker.recordSuccess();
+    return result;
+  } catch (err) {
+    dbCircuitBreaker.recordFailure();
+    throw err;
+  }
+}
