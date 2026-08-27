@@ -302,6 +302,15 @@ const LOCK_SCRIPT = `
   return 0
 `;
 
+// Extend the lock TTL ONLY IF this holder still owns the lock (compare-and-expire).
+// Prevents blindly refreshing a lock that expired and was re-acquired by another holder.
+const REFRESH_SCRIPT = `
+  if redis.call('GET', KEYS[1]) == ARGV[1] then
+    return redis.call('EXPIRE', KEYS[1], ARGV[2])
+  end
+  return 0
+`;
+
 export async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<{ acquired: boolean; value: string }> {
   const redis = getRedisClient();
   // DESIGN NOTE: Fail-open when Redis is unavailable. This means distributed locks
@@ -335,7 +344,9 @@ export async function refreshLock(key: string, value: string, ttlSeconds: number
   const redis = getRedisClient();
   if (!redis || redis.status !== 'ready' || !value) return;
   try {
-    await redis.expire(`nucrm:lock:${key}`, ttlSeconds);
+    // Ownership-checked, atomic refresh: only extend the TTL if we still hold
+    // the lock. If ownership was lost, this is a no-op (returns 0).
+    await redis.eval(REFRESH_SCRIPT, 1, `nucrm:lock:${key}`, value, ttlSeconds);
   } catch { /* safe */ }
 }
 
