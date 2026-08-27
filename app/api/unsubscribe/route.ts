@@ -27,6 +27,9 @@ export async function GET(req: NextRequest) {
       const [c] = await tx.update(contacts)
         .set({ 
           doNotContact: true, 
+          // #1120: also set the dedicated unsubscribed flag so email/sequence
+          // sends that gate on `unsubscribed` honor the opt-out (CAN-SPAM/GDPR).
+          unsubscribed: true,
           updatedAt: new Date() 
         })
         .where(and(

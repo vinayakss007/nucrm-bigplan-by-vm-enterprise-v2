@@ -175,8 +175,16 @@ export async function POST(request: NextRequest) {
         const key = email.toLowerCase().trim();
         if (userCache[key]) return userCache[key];
 
+        // #1122: only resolve users who are ACTIVE members of THIS tenant.
+        // A bare `WHERE lower(email) = ...` matched users across all tenants,
+        // allowing an import to assign deals to users from other tenants.
         const result = await tx.execute(sql`
-          SELECT id FROM users WHERE lower(email) = ${key} LIMIT 1
+          SELECT u.id FROM users u
+          INNER JOIN tenant_members tm ON tm.user_id = u.id
+          WHERE lower(u.email) = ${key}
+            AND tm.tenant_id = ${ctx.tenantId}
+            AND tm.status = 'active'
+          LIMIT 1
         `);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const userId = (result.rows[0] as any)?.id ?? null;

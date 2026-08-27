@@ -113,6 +113,8 @@ export async function POST(req: NextRequest) {
 
     const payload = rawBody.payload ?? {};
     let affected = 0;
+    // Optional extra fields merged into the response (e.g. compliance skip counts).
+    let extraResult: Record<string, unknown> = {};
 
     switch (action) {
       case 'tag': {
@@ -345,9 +347,28 @@ export async function POST(req: NextRequest) {
           .where(and(eq(sequences.id, sequenceId), eq(sequences.tenantId, ctx.tenantId), isNull(sequences.deletedAt)))
           .limit(1);
         if (!seq) return NextResponse.json({ error: 'Sequence not found' }, { status: 404 });
-        
+
+        // #1120: never enroll contacts who have opted out. Resolve the eligible
+        // subset (not unsubscribed, not do-not-contact, not deleted) before
+        // building enrollment rows — CAN-SPAM/GDPR compliance.
+        const eligibleRows = await db.select({ id: contacts.id }).from(contacts)
+          .where(and(
+            inArray(contacts.id, validIds),
+            eq(contacts.tenantId, ctx.tenantId),
+            isNull(contacts.deletedAt),
+            eq(contacts.doNotContact, false),
+            eq(contacts.unsubscribed, false),
+          ));
+        const eligibleIds = eligibleRows.map(r => r.id);
+        const skippedOptedOut = validIds.length - eligibleIds.length;
+
+        if (eligibleIds.length === 0) {
+          affected = 0;
+          break;
+        }
+
         await db.transaction(async (tx) => {
-          const enrollValues = validIds.map(contactId => ({
+          const enrollValues = eligibleIds.map(contactId => ({
             tenantId: ctx.tenantId,
             sequenceId,
             contactId,
@@ -362,6 +383,10 @@ export async function POST(req: NextRequest) {
           await tx.update(sequences).set({ enrollCount: sql`COALESCE(${sequences.enrollCount}, 0) + ${affected}` })
             .where(eq(sequences.id, sequenceId));
         });
+
+        if (skippedOptedOut > 0) {
+          extraResult = { skipped_opted_out: skippedOptedOut };
+        }
         
         break;
       }
@@ -389,7 +414,7 @@ export async function POST(req: NextRequest) {
       newData: { count: affected, contact_ids: validIds.slice(0, 20), payload },
     });
 
-    return NextResponse.json({ ok: true, affected, action });
+    return NextResponse.json({ ok: true, affected, action, ...extraResult });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
