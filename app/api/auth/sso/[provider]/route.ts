@@ -71,15 +71,30 @@ export async function POST(
       );
     }
 
-    // Validate state parameter against the stored cookie to prevent CSRF
+    // Validate state parameter against the stored cookie to prevent CSRF.
+    // SECURITY (fail-closed): the state cookie MUST be present and MUST match
+    // the state echoed back by the IdP. Previously a missing cookie caused the
+    // check to be skipped entirely (fail-open CSRF).
     const expectedState = req.cookies.get('sso_state')?.value;
+    if (!expectedState) {
+      return NextResponse.json(
+        { error: 'Missing SSO state — start the login again' },
+        { status: 400 },
+      );
+    }
+    if (!body.state || body.state !== expectedState) {
+      return NextResponse.json(
+        { error: 'Invalid SSO state parameter' },
+        { status: 400 },
+      );
+    }
 
     const result = await handleSSOCallback(tenantId, provider, {
       code: body.code,
       SAMLResponse: body.SAMLResponse,
       state: body.state,
     }, {
-      expectedState: expectedState || undefined,
+      expectedState,
     });
 
     // Clear SSO state cookies and set session cookie directly on the response

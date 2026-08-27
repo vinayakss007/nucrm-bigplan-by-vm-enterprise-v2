@@ -215,6 +215,21 @@ export async function handleSSOCallback(
     throw new Error('Invalid SSO callback parameters');
   }
 
+  // SECURITY: enforce the provider's email-domain allowlist before matching a
+  // local account. Without this, any email an assertion returns could claim an
+  // existing account (account takeover). Mirrors the modern OIDC callback.
+  const normalizedEmail = email.toLowerCase().trim();
+  const allowedDomains = Array.isArray((config as { email_domains?: unknown }).email_domains)
+    ? ((config as { email_domains: unknown[] }).email_domains as string[])
+    : [];
+  if (allowedDomains.length > 0) {
+    const domain = normalizedEmail.split('@')[1] || '';
+    if (!allowedDomains.map((d) => String(d).toLowerCase()).includes(domain)) {
+      throw new Error('Email domain is not authorised for this workspace');
+    }
+  }
+  email = normalizedEmail;
+
   // Find or create user by email
   const existingUsers = await db.select()
     .from(users)
