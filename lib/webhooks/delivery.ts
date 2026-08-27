@@ -241,11 +241,13 @@ export async function getWebhookStats(webhookId: string, days: number = 7): Prom
     .from(webhookDeliveries)
     .where(and(eq(webhookDeliveries.webhookId, webhookId), gt(webhookDeliveries.createdAt, cutoffDate)));
 
+  // #1185/#1465: successful deliveries are written with status 'success'
+  // (see processWebhookDelivery + the table default), never 'delivered'.
   const successResults = await db.select({ count: sql<number>`count(*)::int` })
     .from(webhookDeliveries)
     .where(and(
       eq(webhookDeliveries.webhookId, webhookId), 
-      eq(webhookDeliveries.status, 'delivered'), 
+      eq(webhookDeliveries.status, 'success'), 
       gt(webhookDeliveries.createdAt, cutoffDate))
     );
 
@@ -265,11 +267,15 @@ export async function getWebhookStats(webhookId: string, days: number = 7): Prom
       gt(webhookDeliveries.createdAt, cutoffDate))
     );
 
-  const avgTimeResults = await db.select({ avg_ms: sql<number>`EXTRACT(EPOCH FROM AVG(delivered_at - created_at)) * 1000` })
+  // #1465: average the existing duration_ms column. The previous query
+  // referenced a non-existent `delivered_at` column, which threw at runtime
+  // ("column delivered_at does not exist") on every stats fetch. duration_ms
+  // is recorded on every delivery attempt, including successes.
+  const avgTimeResults = await db.select({ avg_ms: sql<number>`COALESCE(AVG(${webhookDeliveries.durationMs}), 0)` })
     .from(webhookDeliveries)
     .where(and(
       eq(webhookDeliveries.webhookId, webhookId), 
-      eq(webhookDeliveries.status, 'delivered'), 
+      eq(webhookDeliveries.status, 'success'), 
       gt(webhookDeliveries.createdAt, cutoffDate))
     );
 
