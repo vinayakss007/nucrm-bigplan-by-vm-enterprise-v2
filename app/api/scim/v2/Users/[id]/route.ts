@@ -14,6 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { db } from '@/drizzle/db';
 import { users, tenantMembers, sessions } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
@@ -117,16 +118,23 @@ export async function GET(
 
 // ── PATCH: Update User Attributes ────────────────────────────────────────────
 
-interface SCIMPatchOperation {
-  op: 'add' | 'replace' | 'remove';
-  path?: string;
-  value?: unknown;
-}
+// Runtime validation for the SCIM PatchOp body (#1270). IdPs send untrusted
+// JSON, so we validate the shape at runtime instead of trusting an
+// `as SCIMPatchRequest` cast.
+const scimPatchRequestSchema = z.object({
+  schemas: z.array(z.string()).optional(),
+  Operations: z
+    .array(
+      z.object({
+        op: z.enum(['add', 'replace', 'remove']),
+        path: z.string().optional(),
+        value: z.unknown().optional(),
+      }),
+    )
+    .optional(),
+});
 
-interface SCIMPatchRequest {
-  schemas: string[];
-  Operations: SCIMPatchOperation[];
-}
+type SCIMPatchRequest = z.infer<typeof scimPatchRequestSchema>;
 
 export async function PATCH(
   request: NextRequest,
@@ -161,7 +169,14 @@ export async function PATCH(
       );
     }
 
-    const body = (await request.json()) as SCIMPatchRequest;
+    const parsedBody = scimPatchRequestSchema.safeParse(await request.json());
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        generateSCIMError('Invalid SCIM PatchOp payload', 400),
+        { status: 400, headers: { 'Content-Type': 'application/scim+json' } }
+      );
+    }
+    const body: SCIMPatchRequest = parsedBody.data;
 
     if (!body.schemas?.includes('urn:ietf:params:scim:api:messages:2.0:PatchOp')) {
       return NextResponse.json(

@@ -35,6 +35,18 @@ function isPgBouncerEnabled(): boolean {
   return process.env['PGBOUNCER_ENABLED'] === 'true';
 }
 
+/**
+ * Parse a positive integer from an env var, falling back to `fallback` when the
+ * value is unset or non-numeric. Guards against parseInt() returning NaN for a
+ * garbage value (e.g. DATABASE_POOL_SIZE="abc"), which would otherwise slip past
+ * range checks and configure the pool with NaN (#1308).
+ */
+function parseIntEnv(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export interface PoolStats {
   totalCount: number;
   idleCount: number;
@@ -114,7 +126,7 @@ export function getPool(): Pool {
       throw e;
     }
 
-    const poolSize = parseInt(process.env['DATABASE_POOL_SIZE'] ?? '20');
+    const poolSize = parseIntEnv(process.env['DATABASE_POOL_SIZE'], 20);
     if (poolSize < 1 || poolSize > 100) {
       throw new Error('DATABASE_POOL_SIZE must be between 1 and 100');
     }
@@ -131,7 +143,7 @@ export function getPool(): Pool {
       idleTimeoutMillis: pgBouncer ? 10_000 : 60_000,
       connectionTimeoutMillis: 30_000,
       allowExitOnIdle: true,
-      statement_timeout: parseInt(process.env['DATABASE_STATEMENT_TIMEOUT'] ?? '10000'),
+      statement_timeout: parseIntEnv(process.env['DATABASE_STATEMENT_TIMEOUT'], 10000),
     });
 
     global.__pgPool.on('error', (err) => {

@@ -11,7 +11,34 @@ import { scheduledReports } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
-import { readJsonBody } from '@/lib/api/validate';
+import { readJsonBody, validateBody } from '@/lib/api/validate';
+import { z } from 'zod';
+
+const FREQUENCIES = ['hourly', 'daily', 'weekly', 'monthly'] as const;
+
+// Allowlist of client-updatable fields (#scheduled-reports mass-assignment).
+// tenantId, createdBy, id, timestamps, lastRunAt and nextRunAt are server-owned
+// and must never be assignable from the request body.
+const updateScheduledReportSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  type: z.string().trim().min(1).max(50).optional(),
+  frequency: z.enum(FREQUENCIES).optional(),
+  recipients: z.array(z.string().email()).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+  format: z.enum(['pdf', 'csv', 'xlsx']).optional(),
+  status: z.enum(['active', 'paused', 'error']).optional(),
+});
+
+function nextRunFrom(frequency: (typeof FREQUENCIES)[number], from: Date = new Date()): Date {
+  const nextRun = new Date(from);
+  switch (frequency) {
+    case 'hourly': nextRun.setHours(nextRun.getHours() + 1); break;
+    case 'daily': nextRun.setDate(nextRun.getDate() + 1); break;
+    case 'weekly': nextRun.setDate(nextRun.getDate() + 7); break;
+    case 'monthly': nextRun.setMonth(nextRun.getMonth() + 1); break;
+  }
+  return nextRun;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,14 +75,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Name, type, and frequency required' }, { status: 400 });
     }
 
-    const now = new Date();
-    const nextRun = new Date(now);
-    switch (body.frequency) {
-      case 'hourly': nextRun.setHours(nextRun.getHours() + 1); break;
-      case 'daily': nextRun.setDate(nextRun.getDate() + 1); break;
-      case 'weekly': nextRun.setDate(nextRun.getDate() + 7); break;
-      case 'monthly': nextRun.setMonth(nextRun.getMonth() + 1); break;
-    }
+    const nextRun = nextRunFrom(body.frequency);
 
     const [report] = await db.insert(scheduledReports).values({
       tenantId: ctx.tenantId,
@@ -85,16 +105,27 @@ export async function PATCH(request: NextRequest) {
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const deny = requirePerm(ctx, 'reports.create');
+    if (deny) return deny;
 
-    const { id, expectedUpdatedAt: expectedUpdatedAtRaw, ...updates } = await readJsonBody(request);
+    const { id, expectedUpdatedAt: expectedUpdatedAtRaw, ...rest } = await readJsonBody(request);
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
+
+    // Validate + allowlist the update payload — never spread the raw body into
+    // .set(), which would allow overwriting tenantId/createdBy/etc.
+    const parsed = validateBody(updateScheduledReportSchema, rest);
+    if (parsed instanceof NextResponse) return parsed;
+    const updates = parsed.data;
 
     const expectedUpdatedAt = expectedUpdatedAtRaw ? new Date(expectedUpdatedAtRaw) : null;
     const guard = await concurrencyGuard(db, scheduledReports, id, ctx.tenantId, expectedUpdatedAt);
     if (guard) return guard;
 
+    // When the cadence changes, recompute the next run so it takes effect.
+    const nextRunAt = updates.frequency ? nextRunFrom(updates.frequency) : undefined;
+
     await db.update(scheduledReports)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...updates, ...(nextRunAt ? { nextRunAt } : {}), updatedAt: new Date() })
       .where(and(
         eq(scheduledReports.tenantId, ctx.tenantId),
         eq(scheduledReports.id, id)
@@ -115,8 +146,11 @@ export async function DELETE(request: NextRequest) {
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const deny = requirePerm(ctx, 'reports.create');
+    if (deny) return deny;
 
     const { id } = await readJsonBody(request);
+    if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
     await db.update(scheduledReports)
       .set({ deletedAt: new Date() })
       .where(and(
