@@ -18,7 +18,7 @@ import { verifyCronSecret } from '@/lib/auth/cron';
 import { acquireLock } from '@/lib/cache';
 
 
-export async function GET(req: NextRequest) {
+export async function POST(req: NextRequest) {
   if (!await verifyCronSecret(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -58,4 +58,12 @@ export async function GET(req: NextRequest) {
     console.error('[LeadScoring] Error:', err);
     return NextResponse.json({ error: 'Failed to process lead scoring' }, { status: 500 });
   }
+}
+
+// This cron mutates data (creates/updates lead scores), so the handler lives on
+// POST to follow the safe/idempotent HTTP semantics used by the other cron routes.
+// A thin GET is kept as a backwards-compatible delegate for any external scheduler
+// that still invokes this route via GET.
+export async function GET(req: NextRequest) {
+  return POST(req);
 }
