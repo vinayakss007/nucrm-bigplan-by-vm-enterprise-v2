@@ -109,6 +109,31 @@ routes, and `npm run backup:verify`). The blocker is that it must be
 
 ---
 
+## §3.5. Database TLS — encrypt the DB connection · audit O2 🔴 BLOCKER
+
+`sslmode=disable` exposes DB credentials + all query data (PII) to any in-network
+MITM and fails SOC 2 / GDPR. `deploy/postgres/postgresql.conf` ships `ssl = on`;
+the cert/key are per-deploy artifacts (gitignored) that must be generated on the
+DB host.
+
+```bash
+# On the DB host — generate the server cert+key into the data directory:
+sudo bash deploy/postgres/generate-server-cert.sh "$PGDATA"
+# (for sslmode=verify-full, install a CA / Let's Encrypt cert instead)
+sudo systemctl restart postgresql      # or your PG service
+
+# In .env:
+#   DATABASE_URL=postgresql://nucrm:...@<host>:5432/nucrm?sslmode=require
+#   DATABASE_SSL=true
+
+# Verify TLS is actually negotiated:
+psql "host=<host> dbname=nucrm user=nucrm sslmode=require" -c 'SHOW ssl;'   # → on
+```
+
+Full detail: `deploy/POSTGRES_PRODUCTION_GUIDE.md` §10.3.
+
+---
+
 ## §4. Secrets — generate, rotate, and confirm none are in git · #1125 🔴 BLOCKER
 
 `.env*` is gitignored (`!.env.example` is the only exception) and the only
@@ -187,6 +212,7 @@ SMTP is the documented fallback (`SMTP_*` in `.env`) if Resend is unavailable.
 - [ ] `nmap` from outside shows only 22/80/443 open (§1)
 - [ ] `https://crm.yourdomain.com` serves a valid (non-self-signed) cert; HTTP→HTTPS redirect works (§2)
 - [ ] `crontab -l` shows `auto-backup`; a fresh backup exists off-VM; `npm run backup:verify` passes (§3)
+- [ ] `SHOW ssl;` returns `on` over an `sslmode=require` connection; no `sslmode=disable` anywhere (§3.5)
 - [ ] `git log --all -- .env .env.local` is empty; all secrets generated/rotated; `sslmode` matches `DATABASE_SSL` (§4)
 - [ ] A deliberate test error appears in Sentry (§5)
 - [ ] A password-reset email is received (§6)

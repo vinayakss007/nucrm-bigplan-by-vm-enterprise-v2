@@ -36,17 +36,19 @@
 ```
 
 ### Connection Flow
+
 - App connects via PgBouncer (port 6432) — not directly to PostgreSQL
 - PgBouncer pools connections to PostgreSQL (port 5432)
 - Max connections: 60 (PostgreSQL) → 120 (PgBouncer transaction mode)
 - Superuser reserved: 3 connections for emergency admin access
 
 ### Container Names
-| Container | Image | Ports |
-|-----------|-------|-------|
-| `nucrm-postgres` | `postgres:16-alpine` | 127.0.0.1:5432 |
-| `nucrm-pgbouncer` | `pgbouncer:latest` | 127.0.0.1:6432 |
-| `nucrm-postgres-exporter` | `prometheuscommunity/postgres-exporter` | 9187 |
+
+| Container                 | Image                                   | Ports          |
+| ------------------------- | --------------------------------------- | -------------- |
+| `nucrm-postgres`          | `postgres:16-alpine`                    | 127.0.0.1:5432 |
+| `nucrm-pgbouncer`         | `pgbouncer:latest`                      | 127.0.0.1:6432 |
+| `nucrm-postgres-exporter` | `prometheuscommunity/postgres-exporter` | 9187           |
 
 ---
 
@@ -126,6 +128,7 @@ docker exec nucrm-postgres psql -U nucrm -c "REINDEX DATABASE nucrm;"
 ### 2.4 Key Metrics Dashboard (Grafana)
 
 Open `http://<SERVER_IP>:3001` and check these panels:
+
 - **Active connections** — should be < 40 (warning) / < 50 (critical)
 - **Cache hit ratio** — should be > 99%. If below, increase `shared_buffers`
 - **Transaction rate** — baseline transactions/sec; spikes indicate issues
@@ -140,11 +143,13 @@ Open `http://<SERVER_IP>:3001` and check these panels:
 ### 3.1 Automatic Backups
 
 The cron container runs daily at 02:00 UTC. What it does:
+
 1. `pg_dump` in custom format (`-Fc`) with compression level 6
 2. Uploads to MinIO (local S3) bucket `nucrm-backups`
 3. Keeps last 5 local copies in `/tmp/nucrm-backups/`
 
 Check status:
+
 ```bash
 docker logs nucrm-cron --since 24h | grep -i backup
 ```
@@ -207,13 +212,13 @@ docker exec nucrm-postgres dropdb -U nucrm nucrm_verify
 
 ### 3.6 Backup Retention Policy
 
-| Tier | Retention | Location |
-|------|-----------|----------|
-| Daily | 30 days | MinIO bucket + local disk |
-| Weekly | 12 weeks | MinIO bucket |
-| Monthly | 6 months | MinIO bucket |
-| Yearly | 2 years | MinIO bucket (Glacier) |
-| WAL | 30 days | MinIO separate path |
+| Tier    | Retention | Location                  |
+| ------- | --------- | ------------------------- |
+| Daily   | 30 days   | MinIO bucket + local disk |
+| Weekly  | 12 weeks  | MinIO bucket              |
+| Monthly | 6 months  | MinIO bucket              |
+| Yearly  | 2 years   | MinIO bucket (Glacier)    |
+| WAL     | 30 days   | MinIO separate path       |
 
 ---
 
@@ -223,15 +228,15 @@ docker exec nucrm-postgres dropdb -U nucrm nucrm_verify
 
 These alerts will fire via PagerDuty/Telegram:
 
-| Condition | Action |
-|-----------|--------|
-| Connection pool > 80% | Scale up or investigate leak |
-| Any query fails | Check app logs, DB logs |
-| Backup fails | Retry, check disk space, check MinIO |
-| Disk > 85% | Clean old backups, prune Docker |
-| Deadlock detected | Report to dev team |
-| Slow query > 5s | Investigate immediately |
-| Replication lag (if standby) | Check network, WAL shipping |
+| Condition                    | Action                               |
+| ---------------------------- | ------------------------------------ |
+| Connection pool > 80%        | Scale up or investigate leak         |
+| Any query fails              | Check app logs, DB logs              |
+| Backup fails                 | Retry, check disk space, check MinIO |
+| Disk > 85%                   | Clean old backups, prune Docker      |
+| Deadlock detected            | Report to dev team                   |
+| Slow query > 5s              | Investigate immediately              |
+| Replication lag (if standby) | Check network, WAL shipping          |
 
 ### 4.2 Checking Logs
 
@@ -252,6 +257,7 @@ docker logs nucrm-cron 2>&1 | grep -i backup
 ### 4.3 Prometheus Metrics (Grafana)
 
 Available via Postgres Exporter on port 9187. Key metrics:
+
 - `pg_stat_activity_count` — active connections
 - `pg_stat_database_tup_fetched` — read activity
 - `pg_stat_database_xact_commit` + `rollback` — transaction health
@@ -322,13 +328,13 @@ find /tmp/nucrm-backups -name "*.sql.gz" -mtime +30 -delete
 
 The database is tuned for an 8GB VM with 1.5GB allocated to PostgreSQL:
 
-| Parameter | Value | When to Increase |
-|-----------|-------|-----------------|
-| `shared_buffers` | 384MB | If cache hit ratio < 99% |
-| `work_mem` | 4MB | If sort/hash operations spill to disk |
-| `maintenance_work_mem` | 96MB | If VACUUM is slow |
-| `effective_cache_size` | 1152MB | If OS has free memory |
-| `max_connections` | 60 | If you hit connection limit |
+| Parameter              | Value  | When to Increase                      |
+| ---------------------- | ------ | ------------------------------------- |
+| `shared_buffers`       | 384MB  | If cache hit ratio < 99%              |
+| `work_mem`             | 4MB    | If sort/hash operations spill to disk |
+| `maintenance_work_mem` | 96MB   | If VACUUM is slow                     |
+| `effective_cache_size` | 1152MB | If OS has free memory                 |
+| `max_connections`      | 60     | If you hit connection limit           |
 
 ### 6.2 Finding Slow Queries
 
@@ -490,14 +496,14 @@ docker compose -f deploy/docker-compose.production.yml exec app npx tsx scripts/
 
 ### 9.2 Migration Safety Rules
 
-| Rule | Why |
-|------|-----|
-| Always backup before migration | Rollback safety net |
+| Rule                                                  | Why                          |
+| ----------------------------------------------------- | ---------------------------- |
+| Always backup before migration                        | Rollback safety net          |
 | Never use DROP COLUMN without checking app code first | App may reference the column |
-| Add columns as NULLABLE, then backfill | Avoids long table locks |
-| Use CONCURRENTLY for index creation | No table lock |
-| Test migration on staging first | Catch errors early |
-| Keep migrations small and focused | Easy to roll back |
+| Add columns as NULLABLE, then backfill                | Avoids long table locks      |
+| Use CONCURRENTLY for index creation                   | No table lock                |
+| Test migration on staging first                       | Catch errors early           |
+| Keep migrations small and focused                     | Easy to roll back            |
 
 ### 9.3 If Migration Fails
 
@@ -518,11 +524,11 @@ docker compose -f deploy/docker-compose.production.yml exec app npx tsx scripts/
 
 ### 10.1 Access Control
 
-| Access Method | Allowed From | Authentication |
-|--------------|--------------|----------------|
-| Local Docker | 127.0.0.1 only | Environment variable |
-| PgBouncer | 127.0.0.1 only | User/password |
-| External | **BLOCKED** by firewall | N/A |
+| Access Method | Allowed From            | Authentication       |
+| ------------- | ----------------------- | -------------------- |
+| Local Docker  | 127.0.0.1 only          | Environment variable |
+| PgBouncer     | 127.0.0.1 only          | User/password        |
+| External      | **BLOCKED** by firewall | N/A                  |
 
 ### 10.2 Password Rotation
 
@@ -542,16 +548,34 @@ docker compose -f deploy/docker-compose.production.yml restart app worker pgboun
 
 ### 10.3 Connection Encryption
 
-Connections within Docker are on `127.0.0.1` (Docker's host network). SSL is not required for loopback connections. If PostgreSQL must listen on a public interface, enable SSL in `postgresql.conf`:
-```
-ssl = on
-ssl_cert_file = '/etc/ssl/certs/server.crt'
-ssl_key_file = '/etc/ssl/private/server.key'
+**TLS is required for production (audit O2).** Even though the app connects over
+the private network, an unencrypted DB link exposes credentials and PII to any
+in-network MITM and fails SOC 2 / GDPR. Do **not** use `sslmode=disable`.
+
+`deploy/postgres/postgresql.conf` already ships `ssl = on` with a TLSv1.2 floor.
+The certificate/key are per-deployment artifacts (gitignored — never committed).
+Generate them on the DB host and point the app at the DB with `sslmode=require`:
+
+```bash
+# 1. Generate the server cert + key into PGDATA (self-signed → sslmode=require)
+sudo bash deploy/postgres/generate-server-cert.sh "$PGDATA"
+# (for sslmode=verify-full, install a CA/Let's Encrypt cert instead)
+
+# 2. Ensure postgresql.conf has ssl = on (it does by default), then restart PG
+
+# 3. In .env:
+#    DATABASE_URL=postgresql://nucrm:...@host:5432/nucrm?sslmode=require
+#    DATABASE_SSL=true
+#    (verify-full additionally needs sslrootcert= and DATABASE_SSL_REJECT_UNAUTHORIZED unset)
+
+# 4. Verify TLS is actually in effect
+psql "host=<host> dbname=nucrm user=nucrm sslmode=require" -c 'SHOW ssl;'   # → on
 ```
 
 ### 10.4 Audit
 
 All schema changes are logged:
+
 ```sql
 -- View DDL change history
 SELECT * FROM public._migration_history ORDER BY applied_at DESC;
@@ -629,6 +653,7 @@ ORDER BY last_autovacuum NULLS FIRST;
 ## Quick Reference Cards
 
 ### Daily (2 minutes)
+
 ```bash
 docker ps | grep nucrm-postgres
 docker logs nucrm-cron --since 24h | grep -i backup
@@ -636,6 +661,7 @@ docker exec nucrm-postgres pg_isready -U nucrm
 ```
 
 ### Weekly (5 minutes)
+
 ```bash
 docker exec nucrm-postgres psql -U nucrm -c "
   SELECT pg_database_size('nucrm')/1024/1024 AS size_mb,
@@ -645,6 +671,7 @@ docker exec nucrm-postgres psql -U nucrm -c "
 ```
 
 ### Emergency (30 seconds)
+
 ```bash
 # Database down
 docker restart nucrm-postgres
