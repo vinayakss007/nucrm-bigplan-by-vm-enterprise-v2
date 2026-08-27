@@ -264,6 +264,26 @@ const leadWarmingWorker = new Worker(
           throw new Error('WhatsApp credentials incomplete');
         }
 
+        // M-E: claim the message BEFORE sending. Atomically flip queued->sending
+        // and only proceed if this attempt actually won the row. On a retry
+        // (after a successful send whose status update didn't persist, or a
+        // duplicate job) there is no 'queued' row left to claim, so we skip the
+        // send instead of messaging the contact twice.
+        const claimed = await database.update(leadWarmingMessages)
+          .set({ status: 'sending' })
+          .where(andOp(
+            eqOp(leadWarmingMessages.campaignId, campaignId),
+            eqOp(leadWarmingMessages.contactId, contactId),
+            eqOp(leadWarmingMessages.status, 'queued'),
+            eqOp(leadWarmingMessages.channel, 'whatsapp')
+          ))
+          .returning({ id: leadWarmingMessages.id });
+
+        if (claimed.length === 0) {
+          console.log('[Lead Warming] WhatsApp message already claimed/sent — skipping duplicate send');
+          return { sent: false, skipped: true, reason: 'already_processed' };
+        }
+
         const requestBody = templateName
           ? {
               messaging_product: 'whatsapp',
@@ -293,16 +313,27 @@ const leadWarmingWorker = new Worker(
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({ error: { message: `HTTP ${response.status}` } }));
+          // Release the claim back to failed so the failure is visible and the
+          // row isn't stuck in 'sending'. (We do NOT requeue: the message may
+          // have been delivered; a stuck 'sending' row is safer than a resend.)
+          await database.update(leadWarmingMessages)
+            .set({ status: 'failed', errorMessage: (errData.error?.message || `HTTP ${response.status}`).slice(0, 500) })
+            .where(andOp(
+              eqOp(leadWarmingMessages.campaignId, campaignId),
+              eqOp(leadWarmingMessages.contactId, contactId),
+              eqOp(leadWarmingMessages.status, 'sending'),
+              eqOp(leadWarmingMessages.channel, 'whatsapp')
+            ));
           throw new Error(errData.error?.message || `HTTP ${response.status}`);
         }
 
-        // Update message status to sent
+        // Update message status to sent (claimed as 'sending' above)
         await database.update(leadWarmingMessages)
           .set({ status: 'sent', sentAt: new Date() })
           .where(andOp(
             eqOp(leadWarmingMessages.campaignId, campaignId),
             eqOp(leadWarmingMessages.contactId, contactId),
-            eqOp(leadWarmingMessages.status, 'queued'),
+            eqOp(leadWarmingMessages.status, 'sending'),
             eqOp(leadWarmingMessages.channel, 'whatsapp')
           ));
 

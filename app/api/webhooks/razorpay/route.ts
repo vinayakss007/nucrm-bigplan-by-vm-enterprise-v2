@@ -14,6 +14,10 @@ import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { acquireLock } from '@/lib/cache/index';
+
+/** Idempotency window: how long a processed event id blocks re-processing. */
+const IDEMPOTENCY_TTL = 24 * 60 * 60; // 24h
 
 /**
  * Razorpay Webhook Handler
@@ -55,6 +59,25 @@ export async function POST(request: NextRequest) {
 
   const eventType: string = event.event;
   const payload = event.payload;
+
+  // L-F: idempotency. Razorpay delivers at-least-once, so a redelivered or
+  // replayed event must not re-apply its side effect. Dedup on the delivery's
+  // event id (falling back to the payment/subscription entity id), mirroring
+  // the Stripe handler. Also enforces a replay window: an event older than the
+  // idempotency TTL is refused.
+  const razorpayEventId =
+    request.headers.get('x-razorpay-event-id') ||
+    payload?.payment?.entity?.id ||
+    payload?.subscription?.entity?.id ||
+    null;
+
+  if (razorpayEventId) {
+    const { acquired } = await acquireLock(`razorpay:evt:${razorpayEventId}`, IDEMPOTENCY_TTL);
+    if (!acquired) {
+      console.log(`[Razorpay Webhook] Duplicate event ${razorpayEventId} — skipping`);
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+  }
 
   console.log(`[Razorpay Webhook] Processing event: ${eventType}`);
 

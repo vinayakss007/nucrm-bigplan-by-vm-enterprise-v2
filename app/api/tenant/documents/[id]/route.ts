@@ -30,6 +30,7 @@ export async function GET(
       tenantId: documents.tenantId,
       name: documents.name,
       s3Key: documents.s3Key,
+      s3Bucket: documents.s3Bucket,
       mimeType: documents.mimeType,
       sizeBytes: documents.sizeBytes,
       uploadedBy: documents.uploadedBy,
@@ -45,7 +46,9 @@ export async function GET(
 
   let downloadUrl: string;
   try {
-    downloadUrl = await getSignedUrl(row.s3Key, 600);
+    // H-D: sign against the bucket the object was actually stored in
+    // (getS3Config().bucket via the POST route), falling back to the default.
+    downloadUrl = await getSignedUrl(row.s3Key, 600, row.s3Bucket || undefined);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Could not sign URL';
     console.error('[documents GET] sign failed', msg);
@@ -81,6 +84,7 @@ export async function DELETE(
       id: documents.id,
       tenantId: documents.tenantId,
       s3Key: documents.s3Key,
+      s3Bucket: documents.s3Bucket,
     })
     .from(documents)
     .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
@@ -96,7 +100,7 @@ export async function DELETE(
   try {
   const limited = await rateLimitMutating(request, 'documents', 'delete');
   if (limited) return limited;
-    await deleteObject(row.s3Key);
+    await deleteObject(row.s3Key, row.s3Bucket || undefined);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'S3 delete failed';
     console.warn('[documents DELETE] s3 delete failed (soft-deleting row anyway)', msg);
