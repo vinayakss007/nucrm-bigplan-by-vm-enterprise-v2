@@ -138,7 +138,7 @@ describe('scheduled report delivery cron', () => {
     expect(mockSendEmail).not.toHaveBeenCalled();
   });
 
-  it('marks a report as error when generation or send fails', async () => {
+  it('keeps a report active and counts the failure on a transient error (#1466)', async () => {
     mockSelectResult.mockResolvedValue([{
       id: 'r3',
       tenantId: 't1',
@@ -147,6 +147,7 @@ describe('scheduled report delivery cron', () => {
       frequency: 'daily',
       recipients: ['ops@acme.com'],
       format: 'csv',
+      config: {},
     }]);
 
     const { generateExportData } = await import('@/lib/export');
@@ -158,7 +159,37 @@ describe('scheduled report delivery cron', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.delivered).toBe(0);
-    expect(mockUpdateSet).toHaveBeenCalledWith(expect.objectContaining({ status: 'error' }));
+    // A single transient failure must NOT permanently disable the report:
+    // it stays 'active', nextRunAt is advanced, and the failure is counted.
+    expect(mockUpdateSet).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'active',
+      config: expect.objectContaining({ _failureCount: 1 }),
+    }));
+  });
+
+  it('disables a report only after repeated consecutive failures (#1466)', async () => {
+    mockSelectResult.mockResolvedValue([{
+      id: 'r3b',
+      tenantId: 't1',
+      name: 'Chronically Broken',
+      type: 'contacts',
+      frequency: 'daily',
+      recipients: ['ops@acme.com'],
+      format: 'csv',
+      config: { _failureCount: 4 }, // 5th consecutive failure -> give up
+    }]);
+
+    const { generateExportData } = await import('@/lib/export');
+    vi.mocked(generateExportData).mockRejectedValueOnce(new Error('boom'));
+
+    const { POST } = await import('@/app/api/cron/scheduled-report-delivery/route');
+    const res = await POST(makeRequest());
+
+    expect(res.status).toBe(200);
+    expect(mockUpdateSet).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'error',
+      config: expect.objectContaining({ _failureCount: 5 }),
+    }));
   });
 
   it('skips when another instance holds the lock', async () => {
