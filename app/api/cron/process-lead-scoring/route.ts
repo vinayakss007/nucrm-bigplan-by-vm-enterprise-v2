@@ -15,11 +15,18 @@ import { tenants } from '@/drizzle/schema/core';
 import { eq } from 'drizzle-orm';
 import { bulkScoreLeads } from '@/lib/ai/scoring';
 import { verifyCronSecret } from '@/lib/auth/cron';
+import { acquireLock } from '@/lib/cache';
 
 
 export async function GET(req: NextRequest) {
   if (!await verifyCronSecret(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Distributed dedup guard (#1255): skip if another scheduler already ran it.
+  const lock = await acquireLock('cron:process-lead-scoring', 3600);
+  if (!lock.acquired) {
+    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
   }
 
   try {

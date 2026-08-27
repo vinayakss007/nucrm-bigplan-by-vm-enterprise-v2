@@ -5,6 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
+import { acquireLock } from '@/lib/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { backupRecords, backupAlerts, errorLogs } from '@/drizzle/schema';
@@ -98,6 +99,12 @@ export async function POST(request: NextRequest) {
   const secret = request.headers.get('x-cron-secret');
   if (!verifySecret(secret, process.env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Distributed dedup guard (#1255): never run two backups concurrently.
+  const lock = await acquireLock('cron:backup', 7200);
+  if (!lock.acquired) {
+    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
   }
 
   const backupType = new URL(request.url).searchParams.get('type') || 'full';
