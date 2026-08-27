@@ -16,7 +16,7 @@
  * This module loads the highest-priority active rule for a tenant + entity type,
  * feeds its configured members to the engine, records the decision in
  * `assignment_logs`, and returns the chosen assignee. Round-robin state
- * (`lastAssignedIndex`) is persisted back onto the rule inside the same
+ * (`lastAssignedUserId`) is persisted back onto the rule inside the same
  * transaction, with a row lock so two concurrent intakes cannot hand the same
  * position to two people.
  *
@@ -53,8 +53,12 @@ export interface AssignmentRuleConfig {
    * team changes routing without editing the rule.
    */
   teamId?: string;
-  /** Round-robin cursor, persisted between runs. */
-  lastAssignedIndex?: number;
+  /**
+   * Round-robin cursor, persisted between runs. Anchored to the last-assigned
+   * member's userId (identity) rather than a filtered-list index, so rotation
+   * stays stable as availability/roster changes.
+   */
+  lastAssignedUserId?: string | null;
   /** skill_based: skills the entity requires. */
   requiredSkills?: string[];
   /** skill_based: whether a member needs any or all of the required skills. */
@@ -138,12 +142,12 @@ export async function resolveAssignee(
 
     switch (rule.type) {
       case 'round_robin': {
-        const state = { lastAssignedIndex: config.lastAssignedIndex ?? -1 };
+        const state = { lastAssignedUserId: config.lastAssignedUserId ?? null };
         result = roundRobin(members, state);
-        // Persist the advanced cursor back onto the rule, in this tx.
+        // Persist the advanced cursor (member identity) back onto the rule, in this tx.
         await tx
           .update(assignmentRules)
-          .set({ config: { ...config, lastAssignedIndex: state.lastAssignedIndex } })
+          .set({ config: { ...config, lastAssignedUserId: state.lastAssignedUserId } })
           .where(eq(assignmentRules.id, rule.id));
         break;
       }
