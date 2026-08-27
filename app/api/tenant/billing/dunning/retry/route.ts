@@ -62,23 +62,31 @@ export async function POST(request: NextRequest) {
 
     const maxRetries = settings?.maxRetries || 3;
 
-    // Get pending dunning attempts
-    const pendingAttempts = await db.query.dunningAttempts.findMany({
+    // Get ALL dunning attempts for this tenant + subscription, regardless of
+    // status. Attempts that transition pending -> failed/succeeded must still
+    // count toward the retry cap and toward the monotonic attemptNumber,
+    // otherwise maxRetries is never enforced and attemptNumber collides/resets.
+    const allAttempts = await db.query.dunningAttempts.findMany({
       where: and(
         eq(dunningAttempts.tenantId, ctx.tenantId),
         eq(dunningAttempts.subscriptionId, subscriptionId),
-        eq(dunningAttempts.status, 'pending'),
       ),
     });
 
-    if (pendingAttempts.length >= maxRetries) {
+    if (allAttempts.length >= maxRetries) {
       return NextResponse.json({ 
         error: `Maximum retry attempts (${maxRetries}) reached. Contact support to override.` 
       }, { status: 400 });
     }
 
-    // Create new dunning attempt
-    const attemptNumber = pendingAttempts.length + 1;
+    // Create new dunning attempt. Derive the next attemptNumber from the max
+    // existing attemptNumber (over ALL attempts) so numbers stay monotonic and
+    // never collide with prior failed/succeeded attempts.
+    const maxAttemptNumber = allAttempts.reduce(
+      (max, a) => (a.attemptNumber > max ? a.attemptNumber : max),
+      0,
+    );
+    const attemptNumber = maxAttemptNumber + 1;
 
     const [attempt] = await db.transaction(async (tx) => {
       const [a] = await tx.insert(dunningAttempts).values({
