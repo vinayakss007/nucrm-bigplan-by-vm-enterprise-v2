@@ -55,24 +55,22 @@ export type ConvertLeadResult =
 export async function convertLeadCore(
   params: ConvertLeadParams
 ): Promise<ConvertLeadResult> {
+  // #1454: destructure the camelCase keys that ConvertLeadParams actually
+  // defines and every caller passes. The previous snake_case destructure
+  // (create_deal, deal_title, ...) never matched, so create_deal was always
+  // undefined -> the deal-creation branch never ran and conversions silently
+  // produced no deal.
   const {
     tenantId,
     actorId,
     leadId: id,
-    create_deal = false,
-    deal_title,
-    deal_value = 0,
-    deal_stage,
-    pipeline_id,
-    assigned_to,
-  } = params as ConvertLeadParams & {
-    create_deal?: boolean;
-    deal_title?: string;
-    deal_value?: number;
-    deal_stage?: string;
-    pipeline_id?: string;
-    assigned_to?: string;
-  };
+    createDeal = false,
+    dealTitle,
+    dealValue = 0,
+    dealStage,
+    pipelineId,
+    assignedTo,
+  } = params;
 
   // Load the lead
   const lead = await db.query.leads.findFirst({
@@ -90,7 +88,7 @@ export async function convertLeadCore(
     return { ok: false, reason: 'already_converted', contactId: lead.convertedContactId };
   }
 
-  const assignee = assigned_to || lead.assignedTo || actorId;
+  const assignee = assignedTo || lead.assignedTo || actorId;
 
   // Build a discovery summary from BANT-style lead fields so it isn't lost on conversion
   const discovery: Record<string, unknown> = {};
@@ -265,13 +263,13 @@ export async function convertLeadCore(
 
     // ── 4. Optionally create a deal ─────────────────────────────────
     let dealId: string | null = null;
-    if (create_deal) {
+    if (createDeal) {
       const fullName = `${lead.firstName} ${lead.lastName || ''}`.trim();
-      const title = (deal_title?.trim()) ||
+      const title = (dealTitle?.trim()) ||
         (lead.companyName ? `${lead.companyName} — ${fullName}` : fullName || 'New Deal');
 
       // Resolve pipeline
-      let resolvedPipelineId = pipeline_id || null;
+      let resolvedPipelineId = pipelineId || null;
       if (!resolvedPipelineId) {
         const defaultPipeline = await tx.query.pipelines.findFirst({
           where: and(
@@ -282,7 +280,7 @@ export async function convertLeadCore(
       }
 
       // Get first stage of the pipeline if stage not provided
-      let resolvedStageId = deal_stage;
+      let resolvedStageId = dealStage;
       if (!resolvedStageId && resolvedPipelineId) {
         const firstStage = await tx.query.dealStages.findFirst({
           where: eq(dealStages.pipelineId, resolvedPipelineId),
@@ -292,12 +290,12 @@ export async function convertLeadCore(
       }
 
       if (resolvedStageId) {
-        // Prefer the lead's estimated value if no explicit deal_value was supplied
+        // Prefer the lead's estimated value if no explicit dealValue was supplied
         const resolvedAmount =
-          (typeof deal_value === 'number' && deal_value > 0)
-            ? deal_value
-            : (parseFloat(String(deal_value)) > 0
-                ? parseFloat(String(deal_value))
+          (typeof dealValue === 'number' && dealValue > 0)
+            ? dealValue
+            : (parseFloat(String(dealValue)) > 0
+                ? parseFloat(String(dealValue))
                 : (lead.value != null ? parseFloat(String(lead.value)) || 0 : 0));
 
         const [deal] = await tx.insert(deals).values({
