@@ -183,24 +183,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user already exists
-    const [existing] = await db
+    // #1171: users are shared across tenants (membership lives in
+    // tenant_members), so an unscoped email lookup let one tenant's IdP mutate
+    // a user account owned/used by ANOTHER tenant. Resolve membership in THIS
+    // tenant first: only a user who is already a member here may have their
+    // profile (name) updated. A globally-existing but non-member account is
+    // re-used by id for the membership row below, but is never mutated.
+    const [existingMemberUser] = await db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.email, internalUser.email))
+      .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+      .where(and(eq(users.email, internalUser.email), eq(tenantMembers.tenantId, tenantId)))
       .limit(1);
+
+    const [existingGlobalUser] = existingMemberUser
+      ? [existingMemberUser]
+      : await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.email, internalUser.email))
+          .limit(1);
 
     let userId: string;
     let isNew = false;
 
-    if (existing) {
-      userId = existing.id;
-      // Update existing user's name if provided
+    if (existingMemberUser) {
+      userId = existingMemberUser.id;
+      // Safe to update: this user is a member of the requesting tenant.
       if (internalUser.fullName) {
         await db.update(users)
           .set({ fullName: internalUser.fullName, updatedAt: new Date() })
           .where(eq(users.id, userId));
       }
+    } else if (existingGlobalUser) {
+      // Account exists but is NOT a member of this tenant — re-use the id for
+      // the membership, but do NOT modify the foreign user's profile.
+      userId = existingGlobalUser.id;
     } else {
       // Create new user
       const [created] = await db.insert(users).values({

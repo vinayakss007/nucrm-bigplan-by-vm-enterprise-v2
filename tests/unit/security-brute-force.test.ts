@@ -11,6 +11,8 @@ vi.mock('@/drizzle/db', () => ({
 vi.mock('@/lib/logger', () => ({
   logger: {
     warn: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
   },
 }));
 
@@ -47,12 +49,24 @@ describe('security/brute-force', () => {
       expect(result.reason).toBe('Too many attempts');
     });
 
-    it('returns blocked=false on DB error (fail open)', async () => {
+    it('does not block on a single DB error but throttles a burst (#1174 fail-safe)', async () => {
       mockExecute.mockRejectedValue(new Error('DB connection lost'));
 
       const { isBlocked } = await import('@/lib/security/brute-force');
-      const result = await isBlocked('127.0.0.1', 'ip');
-      expect(result.blocked).toBe(false);
+
+      // First check during an outage should still allow the request through
+      // (don't hard-lock every user), but keep counting per-identifier.
+      const first = await isBlocked('10.0.0.99', 'ip');
+      expect(first.blocked).toBe(false);
+
+      // A burst against the SAME identifier eventually gets throttled by the
+      // in-memory fail-safe (threshold is 10), instead of silently failing open.
+      let lastResult = first;
+      for (let i = 0; i < 15; i++) {
+        lastResult = await isBlocked('10.0.0.99', 'ip');
+      }
+      expect(lastResult.blocked).toBe(true);
+      expect(lastResult.reason).toContain('unavailable');
     });
   });
 

@@ -94,6 +94,11 @@ export async function POST(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #1088: this is a superadmin-only surface. requireAuth alone let any
+    // authenticated tenant user create tickets in the superadmin system.
+    if (!ctx.isSuperAdmin) {
+      return NextResponse.json({ error: 'Super admin only' }, { status: 403 });
+    }
 
     const body = await readJsonBody(request);
     const validated = validateBody(createTicketSchema, body);

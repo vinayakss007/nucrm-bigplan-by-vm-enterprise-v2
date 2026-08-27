@@ -37,9 +37,9 @@ describe('brute-force', () => {
       expect(r.blocked).toBe(false);
     });
 
-    it('returns blocked=false on DB error (fail open)', async () => {
+    it('allows the first request through on DB error (#1174 fail-safe, not hard fail-closed)', async () => {
       mockExecute.mockRejectedValue(new Error('DB down'));
-      const r = await isBlocked('1.2.3.4', 'ip');
+      const r = await isBlocked('203.0.113.7', 'ip');
       expect(r.blocked).toBe(false);
     });
 
