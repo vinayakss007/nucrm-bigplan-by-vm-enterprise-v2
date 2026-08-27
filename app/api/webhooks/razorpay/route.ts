@@ -14,6 +14,9 @@ import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { acquireLock } from '@/lib/cache/index';
+
+const IDEMPOTENCY_TTL = 3600 * 24; // 24 hours
 
 /**
  * Razorpay Webhook Handler
@@ -56,7 +59,22 @@ export async function POST(request: NextRequest) {
   const eventType: string = event.event;
   const payload = event.payload;
 
-  console.log(`[Razorpay Webhook] Processing event: ${eventType}`);
+  // ── Idempotency check (#1274) ──────────────────────────────────────────────
+  // Razorpay delivers webhooks at-least-once and retries on non-2xx / timeouts,
+  // so a duplicate delivery must not reprocess (e.g. re-activate a subscription).
+  // Mirror the Stripe handler: derive a stable unique id, take a short-lived
+  // lock, and skip when the lock is already held. Razorpay has no top-level
+  // event.id; the reliable unique key is the x-razorpay-event-id request header,
+  // falling back to a composite of the event name + the entity id in the payload.
+  const eventId = resolveRazorpayEventId(request, eventType, payload);
+  const lockKey = `razorpay:evt:${eventId}`;
+  const { acquired } = await acquireLock(lockKey, IDEMPOTENCY_TTL);
+  if (!acquired) {
+    console.log(`[Razorpay Webhook] Duplicate event ${eventId} — skipping`);
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+
+  console.log(`[Razorpay Webhook] Processing event: ${eventType} (${eventId})`);
 
   try {
     switch (eventType) {
@@ -91,6 +109,29 @@ export async function POST(request: NextRequest) {
     // Return 200 to prevent Razorpay from retrying (we logged the error)
     return NextResponse.json({ received: true });
   }
+}
+
+/**
+ * Resolve a stable unique identifier for a Razorpay webhook delivery so
+ * duplicate retries can be deduplicated. Prefers the `x-razorpay-event-id`
+ * request header (Razorpay's per-event id). When absent, falls back to a
+ * composite of the event name and the primary entity id inside the payload
+ * (payment / subscription / order / refund / invoice), which is stable across
+ * retries of the same logical event.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function resolveRazorpayEventId(request: NextRequest, eventType: string, payload: any): string {
+  const headerId = request.headers.get('x-razorpay-event-id');
+  if (headerId) return headerId;
+
+  const entityId =
+    payload?.payment?.entity?.id ??
+    payload?.subscription?.entity?.id ??
+    payload?.order?.entity?.id ??
+    payload?.refund?.entity?.id ??
+    payload?.invoice?.entity?.id ??
+    'unknown';
+  return `${eventType}:${entityId}`;
 }
 
 // -- Event Handlers -----------------------------------------------------------
