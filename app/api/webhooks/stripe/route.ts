@@ -156,13 +156,57 @@ async function handleSubscriptionUpdated(subscription: any) {
   const status = subscription.status;
   const cancelAtPeriodEnd = subscription.cancel_at_period_end;
 
-  // Map Stripe status to NuCRM status
-  let nuCrmStatus = 'active';
-  if (status === 'past_due') nuCrmStatus = 'past_due';
-  else if (status === 'canceled' || status === 'unpaid') nuCrmStatus = 'cancelled';
-  else if (cancelAtPeriodEnd) nuCrmStatus = 'active'; // Still active until period ends
+  // #1463: Map Stripe subscription statuses EXPLICITLY with a safe default.
+  // Previously the default was 'active', so any unhandled Stripe status —
+  // notably 'incomplete', 'incomplete_expired' (payment never completed) and
+  // 'paused' — silently granted the tenant full paid access. Only genuinely
+  // paying/trialing states may elevate a tenant to 'active'.
+  let nuCrmStatus: string;
+  switch (status) {
+    case 'active':
+    case 'trialing':
+      // 'cancel_at_period_end' subscriptions are still active until the period ends.
+      nuCrmStatus = 'active';
+      break;
+    case 'past_due':
+      nuCrmStatus = 'past_due';
+      break;
+    case 'canceled':
+    case 'unpaid':
+    case 'incomplete_expired':
+      nuCrmStatus = 'cancelled';
+      break;
+    case 'incomplete':
+    case 'paused':
+      // Not yet paying / temporarily halted — do NOT grant active access.
+      nuCrmStatus = 'past_due';
+      break;
+    default:
+      // Unknown future Stripe status: fail safe, never auto-activate.
+      nuCrmStatus = 'past_due';
+      break;
+  }
+  // cancelAtPeriodEnd only matters while the sub is otherwise active/trialing,
+  // which is already handled above; keep it referenced for clarity.
+  void cancelAtPeriodEnd;
 
   const planId = determinePlanFromSubscription(subscription);
+
+  // Do not resurrect a tenant that an admin (or a prior terminal event) has
+  // already put into a terminal state. A routine metadata-only
+  // 'subscription.updated' must not silently undo a suspension/cancellation.
+  const existing = await db.query.tenants.findFirst({
+    where: eq(tenants.id, tenantId),
+    columns: { status: true },
+  });
+  const terminalStatuses = new Set(['suspended', 'deleted', 'cancelled']);
+  if (existing && terminalStatuses.has(existing.status) && nuCrmStatus === 'active') {
+    console.log(`[Stripe] Tenant ${tenantId} is '${existing.status}'; not re-activating from subscription.updated`);
+    await db.update(tenants)
+      .set({ planId: planId || undefined, updatedAt: new Date() })
+      .where(eq(tenants.id, tenantId));
+    return;
+  }
 
   await db.update(tenants)
     .set({
@@ -172,7 +216,7 @@ async function handleSubscriptionUpdated(subscription: any) {
     })
     .where(eq(tenants.id, tenantId));
 
-  console.log(`[Stripe] Tenant ${tenantId} subscription updated: status=${nuCrmStatus}, plan=${planId}`);
+  console.log(`[Stripe] Tenant ${tenantId} subscription updated: stripeStatus=${status} -> status=${nuCrmStatus}, plan=${planId}`);
 }
 
  
