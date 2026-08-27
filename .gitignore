@@ -67,4 +67,8 @@ bundle-report.json
 
 # Sandbox scratch output (screenshots, traces). Curated captures live in docs/.
 .kiro/artifacts/
+# Postgres server TLS material — generated per-deploy (O2), never committed.
 server.key
+server.crt
+deploy/postgres/server.crt
+deploy/postgres/server.key
