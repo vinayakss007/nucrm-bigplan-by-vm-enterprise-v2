@@ -245,7 +245,7 @@ export async function getWebhookStats(webhookId: string, days: number = 7): Prom
     .from(webhookDeliveries)
     .where(and(
       eq(webhookDeliveries.webhookId, webhookId), 
-      eq(webhookDeliveries.status, 'delivered'), 
+      eq(webhookDeliveries.status, 'success'), 
       gt(webhookDeliveries.createdAt, cutoffDate))
     );
 
@@ -265,11 +265,14 @@ export async function getWebhookStats(webhookId: string, days: number = 7): Prom
       gt(webhookDeliveries.createdAt, cutoffDate))
     );
 
-  const avgTimeResults = await db.select({ avg_ms: sql<number>`EXTRACT(EPOCH FROM AVG(delivered_at - created_at)) * 1000` })
+  // Average delivery time is the recorded durationMs (already in milliseconds).
+  // The prior query referenced a non-existent delivered_at column and filtered
+  // on a status literal ('delivered') that the delivery writes never set.
+  const avgTimeResults = await db.select({ avg_ms: sql<number>`AVG(duration_ms)` })
     .from(webhookDeliveries)
     .where(and(
       eq(webhookDeliveries.webhookId, webhookId), 
-      eq(webhookDeliveries.status, 'delivered'), 
+      eq(webhookDeliveries.status, 'success'), 
       gt(webhookDeliveries.createdAt, cutoffDate))
     );
 
