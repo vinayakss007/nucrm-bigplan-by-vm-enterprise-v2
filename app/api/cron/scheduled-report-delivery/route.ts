@@ -97,9 +97,15 @@ export async function POST(req: NextRequest) {
 
     for (const report of dueRows) {
       try {
+        // #1276: A scheduled report is tenant-scoped and already authorized at
+        // scheduling time, so it runs with a system/cron identity rather than an
+        // empty userId. generateExportData scopes every query by tenantId only
+        // (it does not filter or gate by userId), so passing a stable system
+        // marker keeps behaviour identical while avoiding the empty-string that
+        // could trip user-level access checks if the export layer adds them.
         const csv = await generateExportData({
           tenantId: report.tenantId,
-          userId: '',
+          userId: 'system:cron',
           entityType: exportEntityFor(report.type),
         });
 
