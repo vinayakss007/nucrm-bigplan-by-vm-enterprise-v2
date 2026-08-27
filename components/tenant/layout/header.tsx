@@ -46,6 +46,12 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
     return () => document.removeEventListener('mousedown', h);
   }, []);
 
+  // #1460: clear the pending search debounce on unmount. The header is chrome
+  // that unmounts on many route transitions; without this, a 250ms setTimeout
+  // scheduled just before navigation fires doSearch -> setState on an unmounted
+  // component.
+  useEffect(() => () => clearTimeout(timerRef.current), []);
+
   const loadNotifications = useCallback(async () => {
     try {
       const [unreadRes, notifRes] = await Promise.all([

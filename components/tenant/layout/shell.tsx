@@ -84,12 +84,21 @@ export default function TenantShell({ tenant, profile, roleSlug, permissions, is
     };
   }, [mobileOpen]);
 
-  // Return focus to hamburger button when mobile drawer closes
+  // Return focus to hamburger button when mobile drawer closes.
+  // #1459: the selector queried aria-label="Toggle sidebar", but the actual
+  // button (header.tsx) uses aria-label="Toggle navigation sidebar", so the
+  // query always returned null and focus was never restored (WCAG 2.4.3).
+  // Also only restore focus on an open->close transition, not on initial mount
+  // (mobileOpen starts false), so we don't steal focus on page load.
+  const drawerWasOpenRef = useRef(false);
   useEffect(() => {
     if (!mobileOpen) {
-      // Find the hamburger button by aria-label in the header
-      const hamburger = document.querySelector('button[aria-label="Toggle sidebar"]') as HTMLElement;
-      hamburger?.focus();
+      if (drawerWasOpenRef.current) {
+        const hamburger = document.querySelector('button[aria-label="Toggle navigation sidebar"]') as HTMLElement | null;
+        hamburger?.focus();
+      }
+    } else {
+      drawerWasOpenRef.current = true;
     }
   }, [mobileOpen]);
 

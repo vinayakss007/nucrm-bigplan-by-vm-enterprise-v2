@@ -213,7 +213,13 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
     e.preventDefault()
     setDragOverStage(null)
     if (draggingId) {
-      await updateDealStage(draggingId, stageId)
+      // #1457: columns now pass stage.id (so the drag-over highlight, which
+      // compares dragOverStage === stage.id, actually matches). updateDealStage
+      // expects a lowercased stage NAME, so resolve it from the id here.
+      const targetStage = stages.find(s => s.id === stageId)
+      if (targetStage) {
+        await updateDealStage(draggingId, targetStage.name.toLowerCase())
+      }
       setDraggingId(null)
     }
   }
@@ -408,9 +414,9 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
                 colors!.border,
                 (dragOverStage === stage.id || touchOverStage === stage.id) && 'bg-violet-100 dark:bg-violet-900/30 border-violet-400'
               )}
-              onDragOver={(e) => handleDragOver(e, stage.name.toLowerCase())}
+              onDragOver={(e) => handleDragOver(e, stage.id)}
               onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, stage.name.toLowerCase())}
+              onDrop={(e) => handleDrop(e, stage.id)}
             >
               <div className="flex items-center justify-between mb-3 pb-2 border-b border-border/50">
                 <div className="flex items-center gap-2">
@@ -516,9 +522,9 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
                 colors!.border,
                 dragOverStage === stage.id && 'bg-violet-100 dark:bg-violet-900/30 border-violet-400'
               )}
-              onDragOver={(e) => handleDragOver(e, stage.name.toLowerCase())}
+              onDragOver={(e) => handleDragOver(e, stage.id)}
               onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, stage.name.toLowerCase())}
+              onDrop={(e) => handleDrop(e, stage.id)}
             >
               <div className="flex items-center justify-between mb-3 pb-2 border-b border-border/50">
                 <div className="flex items-center gap-2">
