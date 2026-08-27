@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
       tenantId: ctx.tenantId, userId: ctx.userId,
       action: 'create', entityType: 'product', entityId: inserted.id,
       newData: { name: v.name, sku: v.sku },
-    });
+    }).catch(e => logError({ error: e, context: "async-catch:product.create:logAudit" }));
 
     fireWebhooks(ctx.tenantId, 'product.created', { id: inserted.id }).catch(e => logError({ error: e, context: "async-catch:[context]" }));
 

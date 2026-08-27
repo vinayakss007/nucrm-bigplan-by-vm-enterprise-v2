@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createOrderSchema } from '@/lib/api/schemas';
+import { parsePageLimit } from '@/lib/api/query-params';
 import { db } from '@/drizzle/db';
 import { orders, orderLineItems } from '@/drizzle/schema';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
@@ -24,8 +25,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const contactId = searchParams.get('contactId');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const { page, limit, offset } = parsePageLimit(searchParams);
 
     const whereConditions = [eq(orders.tenantId, tenantId)];
 
@@ -37,7 +37,6 @@ export async function GET(request: NextRequest) {
       whereConditions.push(eq(orders.contactId, contactId));
     }
 
-    const offset = (page - 1) * limit;
     const results = await db.select().from(orders).where(and(...whereConditions)).orderBy(desc(orders.createdAt)).limit(limit).offset(offset);
 
     const [countResult] = await db.select({ count: count() }).from(orders).where(eq(orders.tenantId, tenantId));

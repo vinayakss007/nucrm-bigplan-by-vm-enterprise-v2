@@ -44,8 +44,20 @@ export async function GET(request: NextRequest) {
     // Build query filters
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const filters: any[] = [eq(auditLogs.tenantId, ctx.tenantId), isNull(auditLogs.deletedAt)];
-    if (from) filters.push(gte(auditLogs.createdAt, new Date(from)));
-    if (to) filters.push(lte(auditLogs.createdAt, new Date(to)));
+    if (from) {
+      const fromDate = new Date(from);
+      if (Number.isNaN(fromDate.getTime())) {
+        return NextResponse.json({ error: "Invalid 'from' date" }, { status: 400 });
+      }
+      filters.push(gte(auditLogs.createdAt, fromDate));
+    }
+    if (to) {
+      const toDate = new Date(to);
+      if (Number.isNaN(toDate.getTime())) {
+        return NextResponse.json({ error: "Invalid 'to' date" }, { status: 400 });
+      }
+      filters.push(lte(auditLogs.createdAt, toDate));
+    }
 
     const entries = await db
       .select({
