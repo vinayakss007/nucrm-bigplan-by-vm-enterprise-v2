@@ -574,6 +574,13 @@ export const createProductSchema = z.object({
 export const updateProductSchema = createProductSchema.partial();
 
 // ── 2FA schemas ──
+// #1286: the `password` field in each of these schemas is the user's EXISTING
+// password re-entered to authorize a sensitive 2FA action (setup/verify/disable).
+// It is checked against the stored password hash (see app/api/tenant/2fa/*),
+// NOT against the new-password policy in validatePassword() (min 12 chars).
+// It is therefore deliberately left lenient — raising it to min(12) would lock
+// out users whose valid existing password predates the 12-char rule. Only
+// NEW-password fields (e.g. changePasswordSchema.new_password) use min(12).
 export const setup2faSchema = z.object({
   password: requiredString.min(8),
 });
