@@ -34,13 +34,33 @@ export async function POST(request: NextRequest) {
   }
   try {
     const r: Record<string, number> = {};
-    
-    await db.transaction(async (tx) => {
-      // 1. Sessions cleanup
-      const sessionsResult = await tx.delete(sessions)
-        .where(lt(sessions.expiresAt, new Date()));
-      r['sessions'] = sessionsResult.rowCount ?? 0;
 
+    // 1. Sessions cleanup (#1275)
+    // Delete expired sessions in bounded batches instead of a single
+    // unbounded DELETE. A single statement holds a write lock over every
+    // matching row for the whole delete, which causes lock contention on a
+    // large sessions table. Postgres DELETE has no LIMIT, so each batch
+    // targets a capped subquery of ids. Each batch runs as its own statement
+    // (NOT inside the big transaction) so lock hold time stays short.
+    const SESSION_BATCH = 1000;
+    const MAX_SESSION_ITERATIONS = 10000; // safety cap to avoid an infinite loop
+    let sessionsDeleted = 0;
+    for (let i = 0; i < MAX_SESSION_ITERATIONS; i++) {
+      const batch = await db.execute(sql`
+        DELETE FROM ${sessions}
+        WHERE ${sessions.id} IN (
+          SELECT ${sessions.id} FROM ${sessions}
+          WHERE ${sessions.expiresAt} < NOW()
+          LIMIT ${SESSION_BATCH}
+        )
+      `);
+      const removed = batch.rowCount ?? 0;
+      sessionsDeleted += removed;
+      if (removed === 0) break;
+    }
+    r['sessions'] = sessionsDeleted;
+
+    await db.transaction(async (tx) => {
       // 2. Invitations cleanup: older than 7 days and not accepted
       const invExpiry = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const invitationsResult = await tx.delete(invitations)
