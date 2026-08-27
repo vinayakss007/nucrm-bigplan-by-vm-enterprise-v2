@@ -57,8 +57,32 @@ export async function runPgDump(backupType: string, outputPath: string): Promise
     throw new Error('Invalid DATABASE_URL format');
   }
 
+  // Parse the connection string and pass credentials to pg_dump via the
+  // environment (libpq PG* vars) rather than as a positional CLI argument.
+  // A URL argument leaks user:password to `ps aux` and /proc/<pid>/cmdline,
+  // where any local process can read it. libpq reads these env vars instead,
+  // and the child's environment is not exposed by the process listing.
+  let parsed: URL;
+  try {
+    parsed = new URL(dbUrl);
+  } catch {
+    throw new Error('Invalid DATABASE_URL format');
+  }
+
+  const pgEnv: Record<string, string> = {};
+  if (parsed.hostname) pgEnv.PGHOST = decodeURIComponent(parsed.hostname);
+  if (parsed.port) pgEnv.PGPORT = parsed.port;
+  if (parsed.username) pgEnv.PGUSER = decodeURIComponent(parsed.username);
+  if (parsed.password) pgEnv.PGPASSWORD = decodeURIComponent(parsed.password);
+  const database = parsed.pathname.replace(/^\//, '');
+  if (database) pgEnv.PGDATABASE = decodeURIComponent(database);
+
+  // Honor sslmode (and any other libpq-recognised query params) from the URL
+  // so TLS behavior is preserved now that the URL is no longer passed directly.
+  const sslmode = parsed.searchParams.get('sslmode');
+  if (sslmode) pgEnv.PGSSLMODE = sslmode;
+
   const args = [
-    dbUrl,
     '--no-owner',
     '--no-acl',
     '-f', outputPath,
@@ -76,6 +100,7 @@ export async function runPgDump(backupType: string, outputPath: string): Promise
     const child = spawn('pg_dump', args, {
       timeout: 600_000,
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, ...pgEnv },
     });
 
     let stderr = '';
