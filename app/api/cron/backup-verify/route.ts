@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { backupRecords, backupAlerts } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
 import { Pool } from 'pg';
+import { pgSslConfig } from '@/lib/db/ssl-config';
 import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import { createReadStream, existsSync, mkdtempSync, rmSync } from 'fs';
@@ -113,7 +114,9 @@ export async function POST(request: NextRequest) {
   const failures: string[] = [];
   let workDir: string | null = null;
   let scratchDb: string | null = null;
-  const mainPool = new Pool({ connectionString: databaseUrl, max: 1 });
+  // SSL: match the shared pgSslConfig() TLS policy (on by default, verified in
+  // production) so the backup-verify path never transits the DB in plaintext.
+  const mainPool = new Pool({ connectionString: databaseUrl, max: 1, ssl: pgSslConfig() });
 
   try {
     // Find the most recent completed backup.
@@ -205,7 +208,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 4. Validate content ──────────────────────────────────────────────────
-    const scratchPool = new Pool({ connectionString: scratchUrl.toString(), max: 1 });
+    const scratchPool = new Pool({ connectionString: scratchUrl.toString(), max: 1, ssl: pgSslConfig() });
     try {
       const tables = await scratchPool.query<{ count: string }>(
         `SELECT count(*)::text AS count FROM information_schema.tables

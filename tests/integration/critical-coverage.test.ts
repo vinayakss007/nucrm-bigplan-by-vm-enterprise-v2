@@ -488,6 +488,8 @@ describe('env - 100% coverage', () => {
       vi.resetModules();
       process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/test';
       process.env.JWT_SECRET = 'a'.repeat(48);
+      process.env.SESSION_SECRET = 'c'.repeat(48);
+      process.env.ENCRYPTION_KEY = 'd'.repeat(64);
       process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
       process.env.SETUP_KEY = 'a'.repeat(24);
       process.env.ALLOWED_ORIGINS = '*';

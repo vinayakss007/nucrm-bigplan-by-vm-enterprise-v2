@@ -1,5 +1,26 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { sanitizeHTMLServer } from '@/lib/sanitize';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+// #CRIT-1: dompurify < 3.2.6 has HIGH-severity XSS bypass advisories
+// (selectedcontent re-clone; cross-realm IN_PLACE sanitization). The whole
+// dangerouslySetInnerHTML surface (email templates/builder, TOTP QR) relies on
+// this package, so guard against an accidental downgrade below the patched line.
+describe('dompurify version guard (#CRIT-1)', () => {
+  it('resolves a patched dompurify (>= 3.2.6)', () => {
+    // dompurify's exports map blocks importing ./package.json, so read it from
+    // the installed module directory directly.
+    const pkgPath = join(process.cwd(), 'node_modules', 'dompurify', 'package.json');
+    const { version } = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version: string };
+    const [major, minor, patch] = version.split('.').map((n) => parseInt(n, 10));
+    const patched =
+      major > 3 ||
+      (major === 3 && minor > 2) ||
+      (major === 3 && minor === 2 && patch >= 6);
+    expect(patched, `dompurify ${version} is below the patched 3.2.6`).toBe(true);
+  });
+});
 
 describe('sanitizeHTMLServer', () => {
   it('strips all HTML tags', () => {

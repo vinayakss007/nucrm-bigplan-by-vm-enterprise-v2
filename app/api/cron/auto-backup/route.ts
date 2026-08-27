@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { acquireLock } from '@/lib/cache';
 import { Pool } from 'pg';
+import { pgSslConfig } from '@/lib/db/ssl-config';
 import { verifyCronSecret } from '@/lib/auth/cron';
 import { TenantDataExporter } from '@/lib/tenant-data-export';
 import { sendAlertEmail } from '@/lib/email/alerts';
@@ -42,7 +43,9 @@ export async function POST(req: NextRequest) {
   }
 
   // FIX MEDIUM-07: Use try/finally to ensure pool is always closed
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  // SSL: use the shared pgSslConfig() so this backup pool matches the TLS
+  // policy of every other pool (TLS on by default, verified in production).
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: pgSslConfig() });
   try {
     // 1. Run scheduled backups
     const scheduledResult = await runScheduledBackups(pool);
