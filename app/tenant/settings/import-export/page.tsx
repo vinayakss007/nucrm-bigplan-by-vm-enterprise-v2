@@ -8,7 +8,6 @@ import { useState, useRef, useCallback } from 'react';
 import { Upload, Download, Loader2, AlertTriangle, CheckCircle, X, Database, FileSpreadsheet, ArrowRight, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import * as XLSX from 'xlsx';
 
 const ENTITY_TYPES = [
   { key: 'contacts', label: 'Contacts', requiredCols: ['first_name'], optionalCols: ['last_name', 'email', 'phone', 'company', 'job_title', 'lead_source', 'lead_status', 'notes', 'tags'] },
@@ -95,18 +94,44 @@ export default function ImportExportPage() {
 
     if (isXlsx) {
       const reader = new FileReader();
-      reader.onload = e => {
+      reader.onload = async e => {
         try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const sheetName = workbook.SheetNames[0];
-          if (!sheetName) { toast.error('No sheets found in file'); return; }
-          const worksheet = workbook.Sheets[sheetName];
-          if (!worksheet) { toast.error('Failed to read sheet'); return; }
-          const jsonData = XLSX.utils.sheet_to_json<ParsedRow>(worksheet, { raw: false, defval: '' });
+          // #1067 / xlsx HIGH advisory (prototype pollution + ReDoS): parse
+          // uploaded spreadsheets with exceljs instead of the vulnerable, no
+          // longer npm-maintained `xlsx` package. exceljs is loaded lazily so
+          // it never enters the main bundle for users who don't import.
+          const ExcelJS = (await import('exceljs')).default;
+          const workbook = new ExcelJS.Workbook();
+          await workbook.xlsx.load(e.target?.result as ArrayBuffer);
+
+          const worksheet = workbook.worksheets[0];
+          if (!worksheet) { toast.error('No sheets found in file'); return; }
+
+          // Row 1 = headers. exceljs is 1-indexed; getCell returns cell objects
+          // whose .text is the display string (matches the old raw:false path).
+          const headerRow = worksheet.getRow(1);
+          const cols: string[] = [];
+          headerRow.eachCell({ includeEmpty: false }, (cell) => {
+            cols.push(String(cell.text ?? '').trim());
+          });
+          if (!cols.length) { toast.error('No columns found in file'); return; }
+
+          const jsonData: ParsedRow[] = [];
+          worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+            if (rowNumber === 1) return; // skip header
+            const obj: ParsedRow = {};
+            let hasValue = false;
+            cols.forEach((col, i) => {
+              const cell = row.getCell(i + 1);
+              const val = cell?.text ?? '';
+              obj[col] = String(val); // defval '' — empty when missing
+              if (val !== '') hasValue = true;
+            });
+            if (hasValue) jsonData.push(obj);
+          });
+
           if (!jsonData.length) { toast.error('No data rows found in file'); return; }
 
-          const cols = Object.keys(jsonData[0]!);
           setHeaders(cols);
           setRawRows(jsonData);
           autoMapColumns(cols);
