@@ -30,6 +30,28 @@ const DEFAULT_CONFIG: BruteForceConfig = {
 };
 
 /**
+ * #1174: in-memory fail-safe used only when the persistent brute-force store is
+ * unreachable. Fully failing open silently disables all protection during a DB
+ * outage; fully failing closed locks out every user. Instead we degrade to a
+ * short-lived per-identifier counter so a burst against a single identifier is
+ * still throttled while legitimate traffic keeps flowing.
+ */
+const FALLBACK_MAX_ATTEMPTS = 10;
+const FALLBACK_WINDOW_MS = 15 * 60 * 1000;
+const fallbackAttempts = new Map<string, { count: number; firstAt: number }>();
+
+function fallbackCheck(key: string): boolean {
+  const now = Date.now();
+  const entry = fallbackAttempts.get(key);
+  if (!entry || now - entry.firstAt > FALLBACK_WINDOW_MS) {
+    fallbackAttempts.set(key, { count: 1, firstAt: now });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > FALLBACK_MAX_ATTEMPTS;
+}
+
+/**
  * Check if an IP or email is blocked
  */
 export async function isBlocked(
@@ -61,7 +83,22 @@ export async function isBlocked(
     return { blocked: false };
   } catch (err) {
     devLogger.error(err as Error, '[brute-force] isBlocked check failed');
-    return { blocked: false }; // Fail open - don't block legitimate users
+    // #1174: the store is unreachable. Do NOT silently disable protection —
+    // fall back to an in-memory per-identifier throttle so a burst is still
+    // blocked, without hard-locking every user during a transient outage.
+    logger.error('[brute-force] store unavailable — using in-memory fail-safe', {
+      identifier,
+      type,
+    });
+    const blocked = fallbackCheck(`${type}:${identifier}`);
+    if (blocked) {
+      return {
+        blocked: true,
+        blockedUntil: new Date(Date.now() + FALLBACK_WINDOW_MS),
+        reason: 'Security check temporarily unavailable — rate limited',
+      };
+    }
+    return { blocked: false };
   }
 }
 

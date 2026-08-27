@@ -121,10 +121,14 @@ export async function DELETE(request: NextRequest) {
     const { contact_ids, reason } = dv;
     if (!contact_ids?.length) return NextResponse.json({ error:'contact_ids required' }, { status:400 });
 
-    // Mark previous assignments as ended
+    // Mark previous assignments as ended.
+    // #1057: scope by tenant_id — without it, a user with contacts.assign in
+    // one tenant could end assignment records in ANY tenant.
     await db.execute(sql`
       UPDATE public.lead_assignments SET unassigned_at=now()
-      WHERE contact_id = ANY(${contact_ids}::uuid[]) AND unassigned_at IS NULL
+      WHERE contact_id = ANY(${contact_ids}::uuid[])
+        AND tenant_id = ${ctx.tenantId}
+        AND unassigned_at IS NULL
     `);
 
     // Unassign — set to null (unowned)
