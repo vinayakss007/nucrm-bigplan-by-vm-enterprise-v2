@@ -41,11 +41,12 @@ describe('computeHash', () => {
     expect(hash1).not.toBe(hash2);
   });
 
-  it('differentiates between null and undefined values', () => {
+  it('normalizes undefined to null (#1281 canonicalization)', () => {
     const hashNull = computeHash({ key: null });
     const hashUndefined = computeHash({ key: undefined });
-    // undefined values are omitted by JSON.stringify, so these differ
-    expect(hashNull).not.toBe(hashUndefined);
+    // Canonicalization treats undefined as null so payloads that only differ
+    // by JSON's undefined-dropping behavior hash consistently.
+    expect(hashNull).toBe(hashUndefined);
   });
 });
 
@@ -102,19 +103,25 @@ describe('computeEntryHash', () => {
     expect(computeEntryHash(baseEntry)).not.toBe(computeEntryHash(modified));
   });
 
-  it('does not change when newData nested values differ (replacer limitation)', () => {
-    // JSON.stringify with an array replacer only serializes top-level keys,
-    // so nested object contents are not included in the hash.
+  it('changes when newData nested values differ (#1281: nested content is hashed)', () => {
+    // Post-#1281 the payload is fully canonicalized, so nested object contents
+    // ARE part of the digest — tampering with nested data is now detectable.
     const modified = { ...baseEntry, newData: { name: 'Bob', email: 'bob@example.com' } };
-    expect(computeEntryHash(baseEntry)).toBe(computeEntryHash(modified));
+    expect(computeEntryHash(baseEntry)).not.toBe(computeEntryHash(modified));
   });
 
-  it('changes when metadata differs at top level (null vs object)', () => {
-    // Changing metadata from an object to a different type changes the hash
+  it('changes when metadata nested content differs (#1281)', () => {
     const withMetadata = { ...baseEntry, metadata: { source: 'api' } };
     const withEmptyMetadata = { ...baseEntry, metadata: {} };
-    // Both serialize nested content as {}, so these are the same
-    expect(computeEntryHash(withMetadata)).toBe(computeEntryHash(withEmptyMetadata));
+    // Nested metadata content is now included in the hash, so these differ.
+    expect(computeEntryHash(withMetadata)).not.toBe(computeEntryHash(withEmptyMetadata));
+  });
+
+  it('is independent of nested key order (#1281 canonicalization)', () => {
+    const a = { ...baseEntry, newData: { name: 'Alice', email: 'alice@example.com' } };
+    const b = { ...baseEntry, newData: { email: 'alice@example.com', name: 'Alice' } };
+    // Reordering nested keys must NOT change the hash (no false tamper alarms).
+    expect(computeEntryHash(a)).toBe(computeEntryHash(b));
   });
 
   it('changes when ipAddress differs', () => {

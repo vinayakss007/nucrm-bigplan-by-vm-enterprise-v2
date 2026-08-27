@@ -13,6 +13,17 @@ import { db } from '@/drizzle/db';
 import { visitors, pageViews } from '@/drizzle/schema/visitors';
 import { eq, and, desc, sql } from 'drizzle-orm';
 
+/**
+ * #1074: visitor-supplied url/title/referrer are stored raw and could be
+ * rendered elsewhere (dashboards, activity feeds). Strip tag characters and
+ * cap length before persisting so a page view cannot carry a stored-XSS
+ * payload. This is defense-in-depth in addition to escaping at render time.
+ */
+function sanitizeTrackingField(value: string | undefined | null, maxLen = 2048): string {
+  if (!value) return '';
+  return String(value).replace(/[<>]/g, '').slice(0, maxLen);
+}
+
 /** Page scoring rules based on URL patterns */
 const PAGE_SCORES: Array<{ pattern: RegExp; points: number }> = [
   { pattern: /\/demo/i, points: 10 },
@@ -45,18 +56,24 @@ export async function trackPageView(
   duration: number,
   tenantId: string
 ): Promise<void> {
+  // #1074: sanitize visitor-supplied fields before persisting.
+  const safeUrl = sanitizeTrackingField(url);
+  const safeTitle = sanitizeTrackingField(title, 512);
+  const safeReferrer = sanitizeTrackingField(referrer);
+
   // Insert page view
   await db.insert(pageViews).values({
     tenantId,
     visitorId,
-    url,
-    title,
-    referrer,
+    url: safeUrl,
+    title: safeTitle,
+    referrer: safeReferrer,
     durationSeconds: duration,
   });
 
   // Update visitor record using atomic increment to prevent race conditions
-  const points = scorePageUrl(url);
+  // (score is computed from the sanitized URL — pattern rules only match paths).
+  const points = scorePageUrl(safeUrl);
   const existing = await db
     .select()
     .from(visitors)

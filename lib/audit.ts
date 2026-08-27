@@ -9,7 +9,46 @@ import { logger } from '@/lib/logger';
 import { eq, desc } from 'drizzle-orm';
 import { createHash } from 'crypto';
 
+/**
+ * #1281: produce a deterministic, fully-canonical JSON string for hashing.
+ *
+ * `JSON.stringify(payload, Object.keys(payload).sort())` only sorted the
+ * TOP-LEVEL keys — nested objects (oldData/newData/metadata) kept their
+ * insertion order, so a reordered nested object produced a different hash for
+ * identical data (false tamper alarms) and, worse, subtle nested differences
+ * could collide. This recurses through objects/arrays, sorting every object's
+ * keys, so semantically-equal payloads always hash identically.
+ */
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalize);
+  }
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(obj).sort()) {
+      // Normalise undefined to null so { a: undefined } and {} do not diverge
+      // in a way that JSON.stringify would silently drop.
+      sorted[key] = obj[key] === undefined ? null : canonicalize(obj[key]);
+    }
+    return sorted;
+  }
+  return value === undefined ? null : value;
+}
+
 export function computeHash(payload: Record<string, unknown>): string {
+  const canonical = JSON.stringify(canonicalize(payload));
+  return createHash('sha256').update(canonical).digest('hex');
+}
+
+/**
+ * Legacy hash used before #1281. `JSON.stringify(payload, sortedTopLevelKeys)`
+ * passed a replacer ARRAY, which filters keys at EVERY nesting level — so
+ * nested oldData/newData/metadata content was effectively excluded from the
+ * digest. Retained ONLY so verifyAuditChain can still validate entries written
+ * before the fix; never used to write new entries.
+ */
+export function legacyComputeHash(payload: Record<string, unknown>): string {
   const canonical = JSON.stringify(payload, Object.keys(payload).sort());
   return createHash('sha256').update(canonical).digest('hex');
 }
@@ -27,7 +66,25 @@ export function computeEntryHash(entry: {
   userAgent: string | null;
   previousHash: string | null;
 }): string {
-  return computeHash({
+  return computeHash(entryHashPayload(entry));
+}
+
+type AuditHashEntry = {
+  tenantId: string;
+  userId: string | null;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  oldData: unknown;
+  newData: unknown;
+  metadata: Record<string, unknown>;
+  ipAddress: string | null;
+  userAgent: string | null;
+  previousHash: string | null;
+};
+
+function entryHashPayload(entry: AuditHashEntry): Record<string, unknown> {
+  return {
     tenantId: entry.tenantId,
     userId: entry.userId,
     action: entry.action,
@@ -39,7 +96,12 @@ export function computeEntryHash(entry: {
     ipAddress: entry.ipAddress,
     userAgent: entry.userAgent,
     previousHash: entry.previousHash,
-  });
+  };
+}
+
+/** Legacy entry hash (pre-#1281) — used only for backward-compatible verification. */
+export function legacyComputeEntryHash(entry: AuditHashEntry): string {
+  return legacyComputeHash(entryHashPayload(entry));
 }
 
 async function getPreviousHash(tenantId: string, dbOrTx?: DbClient): Promise<string | null> {
@@ -175,7 +237,7 @@ export async function verifyAuditChain(tenantId: string, limit = 10000): Promise
       };
     }
 
-    const entryHash = computeEntryHash({
+    const hashInput = {
       tenantId: entry.tenantId,
       userId: entry.userId,
       action: entry.action,
@@ -187,9 +249,13 @@ export async function verifyAuditChain(tenantId: string, limit = 10000): Promise
       ipAddress: entry.ipAddress,
       userAgent: entry.userAgent,
       previousHash: entry.previousHash,
-    });
+    };
+    const entryHash = computeEntryHash(hashInput);
 
-    if (entry.hash !== entryHash) {
+    // #1281: accept either the new canonical hash or the pre-fix legacy hash
+    // so entries written before the fix still verify (no forced re-hash of
+    // historical logs). New entries always use computeEntryHash.
+    if (entry.hash !== entryHash && entry.hash !== legacyComputeEntryHash(hashInput)) {
       return {
         valid: false,
         totalChecked: i + 1,

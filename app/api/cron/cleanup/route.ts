@@ -7,13 +7,23 @@ import { apiError } from '@/lib/api-error';
 import { acquireLock } from '@/lib/cache';
 import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { sessions, invitations, passwordResets } from '@/drizzle/schema';
 import { lt, and, isNull, sql } from 'drizzle-orm';
 
 export async function POST(request: NextRequest) {
-  if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Two ways to authorize this job:
+  //  1. the scheduler presents the shared CRON_SECRET, or
+  //  2. a logged-in super admin triggers it manually from the dashboard.
+  // #1087: the superadmin path means the settings UI no longer needs to send a
+  // cron secret from the browser (it previously sent an empty one).
+  const secretOk = verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET);
+  if (!secretOk) {
+    const ctx = await requireAuth(request);
+    if (ctx instanceof NextResponse || !ctx.isSuperAdmin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
   }
 
   // Distributed dedup guard (#1422): skip when another scheduler
