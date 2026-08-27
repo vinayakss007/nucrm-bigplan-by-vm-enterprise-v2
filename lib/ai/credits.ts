@@ -325,6 +325,12 @@ export async function getAggregatedUsage(): Promise<Array<{
   successRate: number;
 }>> {
   const period = getCurrentPeriod();
+  // Build the first-of-month date as a single JS string so the ::date cast
+  // applies to the whole bound parameter. Previously the template
+  // `${period}-01::date` bound only the `YYYY-MM` string as a param, turning
+  // `-01::date` into arithmetic on the param rather than a `'YYYY-MM-01'::date`
+  // literal.
+  const periodStart = `${period}-01`;
 
   const results = await db
     .select({
@@ -354,7 +360,7 @@ export async function getAggregatedUsage(): Promise<Array<{
       .from(aiActivity)
       .where(and(
         eq(aiActivity.tenantId, r.tenantId),
-        sql`${aiActivity.createdAt} >= ${period}-01::date`,
+        sql`${aiActivity.createdAt} >= ${periodStart}::date`,
       ));
 
     const stats = activityStats[0];
