@@ -7,7 +7,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -211,6 +211,11 @@ export async function PUT(req: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const { table, id, field, value } = validated.data;
 
+    // #1126: authenticated is not enough — updating a record requires the
+    // per-entity edit permission (e.g. deals.edit), not just a valid session.
+    const editDeny = requirePerm(ctx, `${table}.edit`);
+    if (editDeny) return editDeny;
+
     const allowedFields = EDITABLE_FIELDS[table] || [];
     if (!allowedFields.includes(field)) {
       return NextResponse.json({ error: `Field '${field}' is not editable` }, { status: 400 });
@@ -260,6 +265,11 @@ export async function DELETE(req: NextRequest) {
     const validated = validateBody(deleteSchema, body);
     if (validated instanceof NextResponse) return validated;
     const { table, id } = validated.data;
+
+    // #1126: deleting a record requires the per-entity delete permission
+    // (e.g. deals.delete), not just a valid session.
+    const deleteDeny = requirePerm(ctx, `${table}.delete`);
+    if (deleteDeny) return deleteDeny;
 
     const result = await db.execute(sql`
       UPDATE ${sql.identifier(table)} SET deleted_at = NOW() WHERE id = ${id} AND tenant_id = ${ctx.tenantId} RETURNING id

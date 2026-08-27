@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/auth/middleware', () => ({
   requireAuth: vi.fn(),
+  // Default: permission granted (returns null). Individual tests override to
+  // assert the #1126 permission gate on PUT/DELETE.
+  requirePerm: vi.fn(() => null),
 }));
 
 vi.mock('@/drizzle/db', () => ({
@@ -23,7 +26,7 @@ vi.mock('@/lib/api-error', () => ({
 }));
 
 import { GET, PUT, DELETE } from '@/app/api/tenant/data-explorer/route';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -311,5 +314,29 @@ describe('DELETE /api/tenant/data-explorer', () => {
       body: JSON.stringify({ table: 'contacts', id: 'nonexistent' }),
     }));
     expect(res.status).toBe(404);
+  });
+
+  it('returns 403 when caller lacks the delete permission (#1126)', async () => {
+    vi.mocked(requireAuth).mockResolvedValue({ tenantId: 'tenant-1' } as never);
+    // Simulate requirePerm denying the operation.
+    vi.mocked(requirePerm).mockReturnValue(
+      NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    );
+
+    const { validateBody } = await import('@/lib/api/validate');
+    vi.mocked(validateBody).mockReturnValue({
+      success: true,
+      data: { table: 'contacts', id: '1' },
+    } as never);
+
+    const res = await DELETE(makeRequest('http://localhost/api/tenant/data-explorer', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table: 'contacts', id: '1' }),
+    }));
+    expect(res.status).toBe(403);
+    expect(requirePerm).toHaveBeenCalledWith(expect.anything(), 'contacts.delete');
+    // The record must never be touched when permission is denied.
+    expect(db.execute).not.toHaveBeenCalled();
   });
 });

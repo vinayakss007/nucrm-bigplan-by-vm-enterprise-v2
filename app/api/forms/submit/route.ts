@@ -101,7 +101,10 @@ export async function POST(req: NextRequest) {
 
     await db.transaction(async (tx) => {
       if (email) {
-        const existing = await db.query.contacts.findFirst({
+        // #1130: read within the transaction (tx.query, not db.query) so the
+        // existence check and the insert below see a consistent snapshot and
+        // concurrent submissions with the same email don't create duplicates.
+        const existing = await tx.query.contacts.findFirst({
           where: and(eq(contacts.tenantId, form.tenantId), eq(contacts.email, email), isNull(contacts.deletedAt))
         });
 
