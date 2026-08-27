@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { subscriptions, dunningAttempts, dunningSettings, billingEvents } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { isStripeConfigured } from '@/lib/stripe';
@@ -16,6 +16,14 @@ import { isStripeConfigured } from '@/lib/stripe';
 const retrySchema = z.object({
   subscriptionId: z.string().uuid('Invalid subscription ID'),
 });
+
+/** Thrown inside the retry transaction when the dunning retry cap is hit. */
+class DunningCapReached extends Error {
+  constructor(public readonly maxRetries: number) {
+    super(`Maximum retry attempts (${maxRetries}) reached`);
+    this.name = 'DunningCapReached';
+  }
+}
 
 /**
  * POST /api/tenant/billing/dunning/retry
@@ -62,29 +70,49 @@ export async function POST(request: NextRequest) {
 
     const maxRetries = settings?.maxRetries || 3;
 
-    // Get pending dunning attempts
-    const pendingAttempts = await db.query.dunningAttempts.findMany({
-      where: and(
-        eq(dunningAttempts.tenantId, ctx.tenantId),
-        eq(dunningAttempts.subscriptionId, subscriptionId),
-        eq(dunningAttempts.status, 'pending'),
-      ),
-    });
+    // #1464: The retry cap and the next attemptNumber must be derived from ALL
+    // attempts in the current dunning cycle, not just those still 'pending'.
+    // The old code counted only status='pending'; once earlier attempts
+    // transitioned to 'failed', they stopped counting, so the cap was never
+    // enforced and attemptNumber reset to 1/2/3... producing collisions.
+    // A 'succeeded' attempt closes the cycle, so it (and everything before it)
+    // is excluded from the cap while still being counted for attemptNumber.
+    // Do the count + number allocation inside a transaction that locks the
+    // subscription row so two concurrent retries cannot allocate the same slot.
+    const [attempt, allocatedNumber] = await db.transaction(async (tx) => {
+      // Serialize retries for this subscription.
+      await tx.execute(sql`SELECT id FROM subscriptions WHERE id = ${subscriptionId} FOR UPDATE`);
 
-    if (pendingAttempts.length >= maxRetries) {
-      return NextResponse.json({ 
-        error: `Maximum retry attempts (${maxRetries}) reached. Contact support to override.` 
-      }, { status: 400 });
-    }
+      // Count active (non-succeeded) attempts toward the retry cap.
+      const [capRow] = await tx.select({ c: sql<number>`count(*)::int` })
+        .from(dunningAttempts)
+        .where(and(
+          eq(dunningAttempts.tenantId, ctx.tenantId),
+          eq(dunningAttempts.subscriptionId, subscriptionId),
+          ne(dunningAttempts.status, 'succeeded'),
+        ));
+      const activeAttempts = capRow?.c ?? 0;
 
-    // Create new dunning attempt
-    const attemptNumber = pendingAttempts.length + 1;
+      if (activeAttempts >= maxRetries) {
+        throw new DunningCapReached(maxRetries);
+      }
 
-    const [attempt] = await db.transaction(async (tx) => {
+      // Next attemptNumber = MAX(existing) + 1 across ALL attempts (monotonic,
+      // never collides even after attempts change status).
+      const [maxRow] = await tx.select({
+        maxNum: sql<number>`COALESCE(MAX(${dunningAttempts.attemptNumber}), 0)::int`,
+      })
+        .from(dunningAttempts)
+        .where(and(
+          eq(dunningAttempts.tenantId, ctx.tenantId),
+          eq(dunningAttempts.subscriptionId, subscriptionId),
+        ));
+      const nextNumber = (maxRow?.maxNum ?? 0) + 1;
+
       const [a] = await tx.insert(dunningAttempts).values({
         tenantId: ctx.tenantId,
         subscriptionId: subscriptionId,
-        attemptNumber: attemptNumber,
+        attemptNumber: nextNumber,
         status: 'pending',
         scheduledAt: new Date(),
         paymentAmount: '0', // Will be populated from Stripe invoice
@@ -97,6 +125,7 @@ export async function POST(request: NextRequest) {
       if (!a) {
         throw new Error('Failed to create dunning attempt');
       }
+      const attemptNumber = nextNumber;
 
       // TODO: In a real implementation, this would trigger a background job
       // to retry the payment via Stripe. For now, we'll just record the attempt.
@@ -115,19 +144,24 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      return [a];
+      return [a, attemptNumber] as const;
     });
 
     return NextResponse.json({
       data: {
         attemptId: attempt.id,
-        attemptNumber: attemptNumber,
+        attemptNumber: allocatedNumber,
         status: 'pending',
         scheduledAt: attempt.scheduledAt,
-        message: `Payment retry attempt ${attemptNumber} initiated`,
+        message: `Payment retry attempt ${allocatedNumber} initiated`,
       },
     });
   } catch (err: unknown) {
+    if (err instanceof DunningCapReached) {
+      return NextResponse.json({
+        error: `Maximum retry attempts (${err.maxRetries}) reached. Contact support to override.`,
+      }, { status: 400 });
+    }
     return apiError(err);
   }
 }
