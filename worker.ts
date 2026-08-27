@@ -94,7 +94,10 @@ const emailWorker = new Worker(
       });
       
       console.log(`[Email Worker] Email sent successfully to ${maskedEmail}`);
-      return { sent: true, to, messageId: result?.messageId };
+      // #1288: the job return value is persisted in Redis (BullMQ completed
+      // set). Never store the raw recipient address there — return the masked
+      // form so PII does not sit in Redis.
+      return { sent: true, to: maskedEmail, messageId: result?.messageId };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error(`[Email Worker] Failed to send email to ${maskedEmail}:`, error.message);

@@ -219,7 +219,10 @@ export default function SuperAdminSettingsPage() {
               }},
               { label:'Run Cleanup (sessions/rate limits)', action:async()=>{
                 await confirmThen('Run cleanup to remove stale sessions and rate limit entries?', async()=>{
-                  await fetch('/api/cron/cleanup',{method:'POST',headers:{'x-cron-secret':''}});
+                  // #1087: authenticated as super admin via the session cookie —
+                  // do NOT send a (blank) cron secret from the browser.
+                  const r = await fetch('/api/cron/cleanup',{method:'POST',credentials:'same-origin'});
+                  if (!r.ok) { toast.error('Cleanup failed'); return; }
                   toast.success('Cleanup triggered');
                 });
               }},
