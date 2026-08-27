@@ -68,7 +68,7 @@ describe('resolveAssignee', () => {
       type: 'round_robin',
       config: {
         members: [{ userId: 'u1' }, { userId: 'u2' }, { userId: 'u3' }],
-        lastAssignedIndex: 0, // last went to u1 -> next should be u2
+        lastAssignedUserId: 'u1', // last went to u1 -> next should be u2
       },
     };
     const { tx, calls } = makeTx([rule]);
@@ -78,9 +78,9 @@ describe('resolveAssignee', () => {
     expect(result?.strategy).toBe('round_robin');
     expect(result?.ruleId).toBe('r1');
 
-    // cursor advanced to index 1 and written back
+    // cursor advanced to the chosen member's identity and written back
     expect(calls.updates).toHaveLength(1);
-    expect(calls.updates[0].config.lastAssignedIndex).toBe(1);
+    expect(calls.updates[0].config.lastAssignedUserId).toBe('u2');
 
     // decision recorded in assignment_logs
     expect(calls.inserts).toHaveLength(1);
@@ -148,7 +148,7 @@ describe('resolveAssignee', () => {
     const rule = {
       id: 'rteam',
       type: 'round_robin',
-      config: { teamId: 'team-1', lastAssignedIndex: -1 },
+      config: { teamId: 'team-1', lastAssignedUserId: null },
     };
     const roster = [{ userId: 'm1' }, { userId: 'm2' }];
     const { tx, calls } = makeTx([rule], roster);

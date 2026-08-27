@@ -9,7 +9,7 @@ describe('Assignment Engine - Round Robin', () => {
       { userId: 'user-2', name: 'Bob' },
       { userId: 'user-3', name: 'Charlie' },
     ];
-    const state: RoundRobinState = { lastAssignedIndex: -1 };
+    const state: RoundRobinState = { lastAssignedUserId: null };
 
     const first = roundRobin(members, state);
     expect(first.assignedTo).toBe('user-1');
@@ -31,7 +31,7 @@ describe('Assignment Engine - Round Robin', () => {
       { userId: 'user-2', name: 'Bob', isAvailable: true },
       { userId: 'user-3', name: 'Charlie', isAvailable: true },
     ];
-    const state: RoundRobinState = { lastAssignedIndex: -1 };
+    const state: RoundRobinState = { lastAssignedUserId: null };
 
     const first = roundRobin(members, state);
     expect(first.assignedTo).toBe('user-2');
@@ -46,13 +46,13 @@ describe('Assignment Engine - Round Robin', () => {
       { userId: 'user-2', isAvailable: true },
       { userId: 'user-3', isAvailable: false },
     ];
-    const state: RoundRobinState = { lastAssignedIndex: -1 };
+    const state: RoundRobinState = { lastAssignedUserId: null };
 
     expect(roundRobin(members, state).assignedTo).toBe('user-2');
   });
 
   it('throws when no team members are provided', () => {
-    const state: RoundRobinState = { lastAssignedIndex: -1 };
+    const state: RoundRobinState = { lastAssignedUserId: null };
     expect(() => roundRobin([], state)).toThrow('No team members available');
   });
 
@@ -61,7 +61,7 @@ describe('Assignment Engine - Round Robin', () => {
       { userId: 'user-1', isAvailable: false },
       { userId: 'user-2', isAvailable: false },
     ];
-    const state: RoundRobinState = { lastAssignedIndex: -1 };
+    const state: RoundRobinState = { lastAssignedUserId: null };
     expect(() => roundRobin(members, state)).toThrow('No available team members');
   });
 
@@ -70,7 +70,7 @@ describe('Assignment Engine - Round Robin', () => {
       { userId: 'user-1', name: 'Alice' },
       { userId: 'user-2', name: 'Bob' },
     ];
-    const state: RoundRobinState = { lastAssignedIndex: -1 };
+    const state: RoundRobinState = { lastAssignedUserId: null };
 
     const result = roundRobin(members, state);
     expect(result.reason).toContain('position 1 of 2');

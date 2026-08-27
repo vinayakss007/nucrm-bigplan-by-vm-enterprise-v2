@@ -30,7 +30,14 @@ export interface AssignmentResult {
 }
 
 export interface RoundRobinState {
-  lastAssignedIndex: number;
+  /**
+   * The userId of the member assigned on the previous run. The cursor is
+   * anchored to member identity rather than a position in the filtered
+   * `available` list, because that list changes as availability/roster changes
+   * and an index would then map to a different member on the next call,
+   * producing uneven rotation. Null/undefined means "no prior assignment".
+   */
+  lastAssignedUserId?: string | null;
 }
 
 export interface TerritoryConfig {
@@ -51,6 +58,14 @@ export interface WeightedConfig {
 /**
  * Round Robin assignment - rotates through team members in order.
  * Skips unavailable members.
+ *
+ * The cursor is anchored to the last-assigned member's userId, not a position
+ * in the (volatile) filtered available list. Each call builds a STABLE ordering
+ * of the full roster (sorted by userId), finds where the last-assigned userId
+ * sits in that order, and picks the next AVAILABLE member after it (wrapping
+ * around). If the last-assigned userId is no longer present, it starts from the
+ * first available member in stable order. This keeps rotation stable even as
+ * availability or the roster changes between calls.
  */
 export function roundRobin(
   members: TeamMember[],
@@ -60,20 +75,41 @@ export function roundRobin(
     throw new Error('No team members available for assignment');
   }
 
-  const available = members.filter(m => m.isAvailable !== false);
+  // Stable ordering of the full roster so the rotation order does not depend on
+  // the incoming array order or on which members are currently available.
+  const ordered = [...members].sort((a, b) => (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0));
+
+  const available = ordered.filter(m => m.isAvailable !== false);
   if (available.length === 0) {
     throw new Error('No available team members for assignment');
   }
 
-  const nextIndex = (state.lastAssignedIndex + 1) % available.length;
-  const member = available[nextIndex]!;
+  // Find the last-assigned member's position in the stable full-roster order.
+  // If it is absent (roster changed) we treat it as "before the start" so we
+  // pick the first available member.
+  const lastId = state.lastAssignedUserId ?? null;
+  const lastPos = lastId == null ? -1 : ordered.findIndex(m => m.userId === lastId);
 
-  // Update state
-  state.lastAssignedIndex = nextIndex;
+  // Walk forward from the position after the last-assigned member, wrapping
+  // around the full roster, and pick the first available member we hit.
+  let member = available[0]!;
+  const start = lastPos < 0 ? 0 : lastPos + 1;
+  for (let step = 0; step < ordered.length; step++) {
+    const candidate = ordered[(start + step) % ordered.length]!;
+    if (candidate.isAvailable !== false) {
+      member = candidate;
+      break;
+    }
+  }
+
+  // Update state to the chosen member's identity.
+  state.lastAssignedUserId = member.userId;
+
+  const position = available.findIndex(m => m.userId === member.userId) + 1;
 
   return {
     assignedTo: member.userId,
-    reason: `Round robin assignment (position ${nextIndex + 1} of ${available.length})`,
+    reason: `Round robin assignment (position ${position} of ${available.length})`,
     strategy: 'round_robin',
   };
 }
