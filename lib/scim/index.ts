@@ -15,8 +15,49 @@
  */
 
 import { timingSafeEqual, createHmac } from 'crypto';
+import { z } from 'zod';
 
 // ── Types ────────────────────────────────────────────────────────────────────
+
+/**
+ * Runtime validation schema for an inbound SCIM User payload (#1270).
+ * IdPs send arbitrary JSON, so POST/PATCH handlers must validate the body at
+ * runtime rather than trusting a TypeScript `as SCIMUser` cast, which offers no
+ * protection against malformed or unexpected fields. Unknown top-level keys are
+ * stripped by Zod's default object parsing.
+ */
+export const scimUserSchema = z.object({
+  schemas: z.array(z.string()).optional(),
+  id: z.string().optional(),
+  externalId: z.string().optional(),
+  userName: z.string().optional(),
+  name: z
+    .object({
+      formatted: z.string().optional(),
+      familyName: z.string().optional(),
+      givenName: z.string().optional(),
+    })
+    .optional(),
+  displayName: z.string().optional(),
+  emails: z
+    .array(
+      z.object({
+        value: z.string(),
+        type: z.string().optional(),
+        primary: z.boolean().optional(),
+      }),
+    )
+    .optional(),
+  active: z.boolean().optional(),
+  meta: z
+    .object({
+      resourceType: z.string().optional(),
+      created: z.string().optional(),
+      lastModified: z.string().optional(),
+      location: z.string().optional(),
+    })
+    .optional(),
+});
 
 export interface SCIMUser {
   schemas: string[];

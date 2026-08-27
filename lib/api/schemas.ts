@@ -600,9 +600,11 @@ export const updateNotificationPrefsSchema = z.object({
 });
 
 // ── Password change schema ──
+// new_password min length must match validatePassword() in lib/auth/session.ts
+// (12 chars) so the schema doesn't accept passwords the validator later rejects (#1286).
 export const changePasswordSchema = z.object({
   current_password: requiredString.min(1),
-  new_password: requiredString.min(8, 'Password must be at least 8 characters'),
+  new_password: requiredString.min(12, 'Password must be at least 12 characters'),
 });
 
 // ── Profile update schema ──

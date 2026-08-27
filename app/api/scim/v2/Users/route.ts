@@ -24,6 +24,7 @@ import {
   generateSCIMResponse,
   generateSCIMError,
   verifySCIMToken,
+  scimUserSchema,
   type SCIMUser,
 } from '@/lib/scim';
 
@@ -157,7 +158,14 @@ export async function POST(request: NextRequest) {
   const { tenantId } = authResult;
 
   try {
-    const body = (await request.json()) as SCIMUser;
+    const parsedBody = scimUserSchema.safeParse(await request.json());
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        generateSCIMError('Invalid SCIM User payload', 400),
+        { status: 400, headers: { 'Content-Type': 'application/scim+json' } }
+      );
+    }
+    const body = parsedBody.data as SCIMUser;
 
     if (!body.schemas?.includes('urn:ietf:params:scim:schemas:core:2.0:User')) {
       return NextResponse.json(
