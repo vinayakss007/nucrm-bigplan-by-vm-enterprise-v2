@@ -145,10 +145,11 @@ export async function POST_login(request: NextRequest) {
     const token = await createToken(user.id, sessionDays);
     const tokenHash = await hashToken(token);
     await db.transaction(async (tx) => {
-      // Invalidate any existing sessions for this user (if backup codes were used)
-      if (user.totpEnabled && totpToken) {
-        // The backup code update already happened above; this ensures atomicity
-      }
+      // Invalidate any existing sessions for this user before issuing a new one.
+      // This remediates session fixation: an attacker who planted a session
+      // token cannot have it survive a legitimate login. Tradeoff: logging in
+      // also signs the user out of any other devices/sessions they hold.
+      await tx.delete(sessions).where(eq(sessions.userId, user.id));
 
       await tx.insert(sessions).values({
         userId: user.id,
