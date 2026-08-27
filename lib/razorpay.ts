@@ -346,6 +346,23 @@ export async function verifyWebhookSignature(
 
 // -- Plan Pricing (INR) -------------------------------------------------------
 
+/**
+ * #1210: Razorpay uses the plan names starter / growth / scale, but the rest
+ * of the app (plan limits, feature gating) uses the Stripe naming
+ * starter / pro / enterprise. Map the Razorpay names to the canonical ones so
+ * a Razorpay subscriber's stored planId matches the plan-limit lookup.
+ */
+const RAZORPAY_TO_CANONICAL_PLAN: Record<string, string> = {
+  growth: 'pro',
+  scale: 'enterprise',
+};
+
+/** Normalize a raw Razorpay plan id to the canonical app plan id. */
+export function normalizeRazorpayPlan(rawPlanId: string | undefined | null): string {
+  if (!rawPlanId) return 'starter';
+  return RAZORPAY_TO_CANONICAL_PLAN[rawPlanId] ?? rawPlanId;
+}
+
 export const RAZORPAY_PLAN_PRICING: Record<string, Record<string, number>> = {
   starter: {
     month: 149900,  // 1,499 INR in paise

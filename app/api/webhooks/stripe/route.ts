@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyWebhookSignature, isStripeConfigured, StripeError } from '@/lib/stripe';
+import { verifyWebhookSignature, isStripeConfigured, StripeError, type StripeWebhookEvent } from '@/lib/stripe';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
@@ -39,10 +39,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing stripe-signature header' }, { status: 400 });
   }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let event: any;
+  // #1287: verifyWebhookSignature returns a typed StripeWebhookEvent, so the
+  // envelope fields (id/type/data.object) are checked rather than bare `any`.
+  let event: StripeWebhookEvent;
 
   try {
     const body = await request.text();

@@ -8,6 +8,7 @@ import {
   isRazorpayConfigured,
   verifyWebhookSignature,
   RazorpaySignatureError,
+  normalizeRazorpayPlan,
 } from '@/lib/razorpay';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
@@ -105,7 +106,9 @@ async function handlePaymentCaptured(payload: any) {
     return;
   }
 
-  const planId = payment.notes?.plan_id || 'starter';
+  // #1210: map Razorpay plan name (growth/scale) to the canonical id
+  // (pro/enterprise) so plan limits match the paid plan.
+  const planId = normalizeRazorpayPlan(payment.notes?.plan_id);
 
   await db.update(tenants)
     .set({
@@ -130,7 +133,8 @@ async function handleSubscriptionActivated(payload: any) {
     return;
   }
 
-  const planId = subscription.notes?.plan_id || 'starter';
+  // #1210: normalize Razorpay plan name to the canonical app plan id.
+  const planId = normalizeRazorpayPlan(subscription.notes?.plan_id);
 
   await db.update(tenants)
     .set({
