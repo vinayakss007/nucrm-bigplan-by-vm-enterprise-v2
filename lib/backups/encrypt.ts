@@ -65,11 +65,12 @@ function deriveKey(rawKey: string): Buffer {
 export function getBackupEncryptionKey(): Buffer | null {
   const raw = process.env.BACKUP_ENCRYPTION_KEY;
   if (!raw || raw.trim() === '') return null;
-  if (raw.length < 16) {
-    console.warn(
-      '[backups/encrypt] BACKUP_ENCRYPTION_KEY is shorter than 16 characters. ' +
-        'Use a longer key for production.'
-    );
+  // Fail closed on a weak key rather than silently encrypting with low entropy.
+  // A short passphrase would still be stretched by HKDF, but that does not add
+  // entropy — it only spreads what little there is. Refuse anything under 32
+  // characters so encryption/decryption cannot proceed with a guessable key.
+  if (raw.length < 32) {
+    throw new Error('BACKUP_ENCRYPTION_KEY must be at least 32 characters');
   }
   return deriveKey(raw);
 }
