@@ -259,6 +259,41 @@ async function main() {
     process.exit(1);
   }
 
+  // Required PostgreSQL extensions.
+  //
+  // Migrations rely on functions that live in extensions, not in core:
+  //   - pgcrypto  -> gen_random_bytes() (0067_ticket_portal_token) and, on
+  //                  PostgreSQL <= 12, gen_random_uuid() (258 column defaults).
+  //   - uuid-ossp -> uuid_generate_v* (available if any migration uses it).
+  //   - pg_trgm   -> trigram indexes/search.
+  // These used to be created only in deploy/postgres/init.sql, which runs as
+  // the Docker Postgres entrypoint hook and is NOT part of db:migrate. Any
+  // managed/bare Postgres provisioned without that hook failed migration 0067
+  // with "42883 function gen_random_bytes(integer) does not exist" — and worse,
+  // 0067 partially applied (ADD COLUMN succeeded, backfill failed), leaving the
+  // schema inconsistent. Creating them here makes db:migrate self-sufficient on
+  // any target. IF NOT EXISTS keeps it a no-op when init.sql already ran.
+  const REQUIRED_EXTENSIONS = ['pgcrypto', 'uuid-ossp', 'pg_trgm'];
+  for (const ext of REQUIRED_EXTENSIONS) {
+    try {
+      await db.execute(sql.raw(`CREATE EXTENSION IF NOT EXISTS "${ext}"`));
+    } catch (extErr) {
+      const code = (extErr as { code?: string } | null)?.code;
+      // 42501 insufficient_privilege: the migration role can't CREATE EXTENSION.
+      // On many managed platforms extensions must be pre-installed by an admin
+      // (or via a control-plane setting). Fail early with an actionable message
+      // rather than deep inside migration 0067.
+      console.error(`[migrate] ERROR: could not ensure extension "${ext}" exists${code ? ` (SQLSTATE ${code})` : ''}.`);
+      console.error(`[migrate]   ${(extErr as Error).message}`);
+      console.error('[migrate] The migration role needs privilege to CREATE EXTENSION, or an admin');
+      console.error(`[migrate] must pre-create these extensions: ${REQUIRED_EXTENSIONS.join(', ')}.`);
+      lockClient.release();
+      await pool.end();
+      process.exit(1);
+    }
+  }
+  console.log(`[migrate] Ensured required extensions: ${REQUIRED_EXTENSIONS.join(', ')}`);
+
   // The ledger drizzle's migrate() actually consults is "drizzle"."__drizzle_migrations".
   //
   // This recovery block used to create and seed an UNQUALIFIED
