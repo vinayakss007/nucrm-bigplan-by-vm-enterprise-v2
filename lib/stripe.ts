@@ -59,6 +59,19 @@ export interface StripeCustomer {
   email: string | null;
 }
 
+/**
+ * Minimal shape of a Stripe webhook event (#1287). We only rely on the
+ * envelope fields; the object payload varies per event type so it stays
+ * loosely typed, but callers no longer operate on a bare `any`.
+ */
+export interface StripeWebhookEvent {
+  id: string;
+  type: string;
+  data: {
+    object: Record<string, unknown>;
+  };
+}
+
 // ── Core Stripe API Call ─────────────────────────────────────────────────────
 
 function getStripeKey(): string {
@@ -374,10 +387,7 @@ export async function getUpcomingInvoice(customerId: string): Promise<any> {
 export async function verifyWebhookSignature(
   payload: string,
   signature: string
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any> {
+): Promise<StripeWebhookEvent> {
   const secret = getWebhookSecret();
   const parts = signature.split(',');
   const timestamp = parts.find(p => p.startsWith('t='))?.slice(2);
@@ -413,7 +423,7 @@ export async function verifyWebhookSignature(
     throw new StripeError('Webhook signature verification failed');
   }
 
-  return JSON.parse(payload);
+  return JSON.parse(payload) as StripeWebhookEvent;
 }
 
 function timingSafeEqual(a: string, b: string): boolean {

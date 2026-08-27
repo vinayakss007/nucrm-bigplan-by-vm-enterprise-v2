@@ -369,7 +369,7 @@ function _parseAndBuildInsert(sqlString: string): any {
   `;
 }
 
-function parseSQLValues(valuesStr: string): (string | number | boolean | null)[] {
+export function parseSQLValues(valuesStr: string): (string | number | boolean | null)[] {
   const result: (string | number | boolean | null)[] = [];
   let current = '';
   let inQuote = false;
@@ -377,9 +377,18 @@ function parseSQLValues(valuesStr: string): (string | number | boolean | null)[]
 
   for (let i = 0; i < valuesStr.length; i++) {
     const ch = valuesStr[i];
-    if (ch === "'" && (i === 0 || valuesStr[i - 1] !== '\\')) {
-      inQuote = !inQuote;
-      current += ch;
+    if (ch === "'") {
+      // #1284: SQL standard escapes a quote inside a string by doubling it
+      // (''), not with a backslash. When we're inside a quoted value and the
+      // next char is also a quote, this is an escaped quote — consume both and
+      // stay in-quote so values like 'O''Brien' don't split the string.
+      if (inQuote && valuesStr[i + 1] === "'") {
+        current += "''";
+        i++; // skip the second quote of the pair
+      } else {
+        inQuote = !inQuote;
+        current += ch;
+      }
     } else if (!inQuote && ch === '(') {
       parenDepth++;
       current += ch;

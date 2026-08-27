@@ -270,4 +270,24 @@ describe('TenantDataImporter', () => {
       ).rejects.toThrow('SQL import failed');
     });
   });
+
+  describe('parseSQLValues (#1284 — SQL-standard doubled-quote escaping)', () => {
+    it("does not split on a doubled-quote-escaped apostrophe (O''Brien)", async () => {
+      const { parseSQLValues } = await import('@/lib/tenant-data-import');
+      const result = parseSQLValues("'O''Brien', 42, 'Dublin'");
+      expect(result).toEqual(["O'Brien", 42, 'Dublin']);
+    });
+
+    it('handles a comma inside a quoted value with an escaped quote', async () => {
+      const { parseSQLValues } = await import('@/lib/tenant-data-import');
+      const result = parseSQLValues("'a, b''c', 'plain'");
+      expect(result).toEqual(["a, b'c", 'plain']);
+    });
+
+    it('still parses plain values, NULL and booleans', async () => {
+      const { parseSQLValues } = await import('@/lib/tenant-data-import');
+      const result = parseSQLValues("1, 'hello', NULL, TRUE");
+      expect(result).toEqual([1, 'hello', null, true]);
+    });
+  });
 });

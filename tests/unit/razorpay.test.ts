@@ -65,6 +65,27 @@ describe('lib/razorpay', () => {
     });
   });
 
+  describe('normalizeRazorpayPlan (#1210)', () => {
+    it('maps growth -> pro and scale -> enterprise', async () => {
+      const { normalizeRazorpayPlan } = await import('@/lib/razorpay');
+      expect(normalizeRazorpayPlan('growth')).toBe('pro');
+      expect(normalizeRazorpayPlan('scale')).toBe('enterprise');
+    });
+
+    it('passes through canonical plan names unchanged', async () => {
+      const { normalizeRazorpayPlan } = await import('@/lib/razorpay');
+      expect(normalizeRazorpayPlan('starter')).toBe('starter');
+      expect(normalizeRazorpayPlan('pro')).toBe('pro');
+      expect(normalizeRazorpayPlan('enterprise')).toBe('enterprise');
+    });
+
+    it('defaults to starter when plan is missing', async () => {
+      const { normalizeRazorpayPlan } = await import('@/lib/razorpay');
+      expect(normalizeRazorpayPlan(undefined)).toBe('starter');
+      expect(normalizeRazorpayPlan(null)).toBe('starter');
+    });
+  });
+
   describe('createOrder', () => {
     it('calls Razorpay API with correct params', async () => {
       restoreFetch = mockRazorpayFetch();
