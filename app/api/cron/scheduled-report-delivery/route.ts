@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
         frequency: scheduledReports.frequency,
         recipients: scheduledReports.recipients,
         format: scheduledReports.format,
+        config: scheduledReports.config,
       })
       .from(scheduledReports)
       .where(and(
@@ -124,18 +125,43 @@ export async function POST(req: NextRequest) {
           });
         }
 
+        // Success: reset the failure counter and advance to the next run.
+        const baseConfig = (report.config && typeof report.config === 'object')
+          ? report.config as Record<string, unknown>
+          : {};
+        const { _failureCount: _fc, _lastError: _le, ...cleanConfig } = baseConfig;
+        void _fc; void _le;
         await db.update(scheduledReports).set({
           lastRunAt: new Date(),
           nextRunAt: computeNextRunAt(report.frequency),
           status: 'active',
+          config: cleanConfig,
           updatedAt: new Date(),
         }).where(eq(scheduledReports.id, report.id));
 
         delivered += 1;
       } catch (err) {
+        // #1466: A single transient failure must NOT permanently disable the
+        // report. Previously we set status='error' and left nextRunAt in the
+        // past — but the due query only selects status='active', so the report
+        // was never retried and silently died. Instead, keep it active and
+        // advance nextRunAt so it retries next cycle, tracking consecutive
+        // failures; only give up (status='error') after MAX_CONSECUTIVE_FAILURES.
         await logError({ error: err, context: 'scheduled-report-delivery' });
+        const MAX_CONSECUTIVE_FAILURES = 5;
+        const baseConfig = (report.config && typeof report.config === 'object')
+          ? report.config as Record<string, unknown>
+          : {};
+        const failureCount = (Number(baseConfig['_failureCount']) || 0) + 1;
+        const giveUp = failureCount >= MAX_CONSECUTIVE_FAILURES;
         await db.update(scheduledReports).set({
-          status: 'error',
+          status: giveUp ? 'error' : 'active',
+          nextRunAt: giveUp ? null : computeNextRunAt(report.frequency),
+          config: {
+            ...baseConfig,
+            _failureCount: failureCount,
+            _lastError: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500),
+          },
           updatedAt: new Date(),
         }).where(eq(scheduledReports.id, report.id));
       }
