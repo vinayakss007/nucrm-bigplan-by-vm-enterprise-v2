@@ -107,6 +107,37 @@ export async function getBrandingForDomain(domain: string): Promise<BrandingConf
 }
 
 /**
+ * #1062/#1282: sanitize an individual CSS *value* (e.g. a color or a url())
+ * that is interpolated into a <style> block or a CSS custom property.
+ *
+ * Tenant branding values (primaryColor, etc.) were injected verbatim into
+ * `dangerouslySetInnerHTML`, so a value like `red}</style><script>...` or one
+ * containing `expression()` / `javascript:` could break out of the CSS
+ * context. This strips the characters that allow such breakouts while leaving
+ * legitimate colors, gradients and http(s) url() values intact.
+ */
+export function sanitizeCssValue(value: string): string {
+  if (typeof value !== 'string') return '';
+  let v = value
+    // No tag/brace/semicolon/at breakout characters in a value.
+    .replace(/[<>{}\\;]/g, '')
+    // Neutralise dangerous CSS constructs.
+    .replace(/javascript\s*:/gi, '')
+    .replace(/expression\s*\(/gi, '')
+    .replace(/@import\b/gi, '');
+  // url() is only allowed with an http/https target.
+  v = v.replace(/url\s*\(\s*['"]?\s*([^'")\s]+)\s*['"]?\s*\)/gi, (match, url) => {
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? match : 'url()';
+    } catch {
+      return /^[a-zA-Z]+:/.test(url) ? 'url()' : match;
+    }
+  });
+  return v.trim();
+}
+
+/**
  * Sanitize custom CSS to prevent XSS attacks.
  * Strips any content that could break out of a <style> tag or inject scripts.
  */
@@ -151,9 +182,11 @@ export function sanitizeCustomCss(css: string): string {
 export function generateCSSVariables(config: BrandingConfig): string {
   const vars: string[] = [];
 
-  vars.push(`--brand-primary: ${config.primaryColor};`);
-  vars.push(`--brand-secondary: ${config.secondaryColor};`);
-  vars.push(`--brand-accent: ${config.accentColor};`);
+  // #1062: colors are tenant-controlled and injected into a <style> block —
+  // sanitize each value so it cannot break out of the CSS context.
+  vars.push(`--brand-primary: ${sanitizeCssValue(config.primaryColor)};`);
+  vars.push(`--brand-secondary: ${sanitizeCssValue(config.secondaryColor)};`);
+  vars.push(`--brand-accent: ${sanitizeCssValue(config.accentColor)};`);
 
   if (config.logoUrl) {
     // Only allow http/https URLs to prevent CSS injection via url()
@@ -231,12 +264,26 @@ export type TenantBranding = BrandingConfig;
  * Compat alias for generateCSSVariables that returns an object instead of a <style> block.
  */
 export function brandingToCssVars(branding: TenantBranding): Record<string, string> {
+  // #1062: these values flow into a <style dangerouslySetInnerHTML> in
+  // BrandingProvider, so every value must be sanitized. The logo URL is
+  // validated for an http/https scheme before being wrapped in url().
+  const safeLogo = (() => {
+    if (!branding.logoUrl) return undefined;
+    try {
+      const parsed = new URL(branding.logoUrl);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return `url(${parsed.toString()})`;
+      }
+    } catch { /* invalid URL — drop it */ }
+    return undefined;
+  })();
+
   return {
-    '--brand-primary': branding.primaryColor,
-    '--brand-secondary': branding.secondaryColor,
-    '--brand-accent': branding.accentColor,
-    ...(branding.logoUrl ? { '--brand-logo-url': `url(${branding.logoUrl})` } : {}),
-    '--brand-header-layout': branding.headerLayout,
+    '--brand-primary': sanitizeCssValue(branding.primaryColor),
+    '--brand-secondary': sanitizeCssValue(branding.secondaryColor),
+    '--brand-accent': sanitizeCssValue(branding.accentColor),
+    ...(safeLogo ? { '--brand-logo-url': safeLogo } : {}),
+    '--brand-header-layout': sanitizeCssValue(branding.headerLayout),
   };
 }
 

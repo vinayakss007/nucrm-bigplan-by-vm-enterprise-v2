@@ -27,18 +27,32 @@ export default function PublicFormClient({ form }: { form: FormProps }) {
   const [formData, setFormData] = useState<Record<string, string>>({});
   const containerRef = useRef<HTMLFormElement>(null);
 
+  // #1066: target the embedding page's specific origin instead of '*'.
+  // The form is embedded on customer sites, so the origin isn't known at build
+  // time — we derive it from document.referrer (the embedder). If it can't be
+  // determined, we skip posting rather than broadcasting to any origin.
+  const getEmbedderOrigin = (): string | null => {
+    if (typeof document === 'undefined' || !document.referrer) return null;
+    try {
+      return new URL(document.referrer).origin;
+    } catch {
+      return null;
+    }
+  };
+
   // Resize reporting for iframes
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
     const observer = new ResizeObserver((entries) => {
       const height = entries[0]?.contentRect.height;
-      if (height && window.parent !== window) {
+      const targetOrigin = getEmbedderOrigin();
+      if (height && targetOrigin && window.parent !== window) {
         window.parent.postMessage({ 
           type: 'nucrm-resize', 
           formId: form.id, 
           height: height + 64 // extra padding
-        }, '*');
+        }, targetOrigin);
       }
     });
     if (containerRef.current) observer.observe(containerRef.current);
@@ -68,9 +82,10 @@ export default function PublicFormClient({ form }: { form: FormProps }) {
 
       setSuccess(true);
       
-      // Notify parent about success
-      if (window.parent !== window) {
-        window.parent.postMessage({ type: 'nucrm-submit-success', formId: form.id }, '*');
+      // Notify parent about success — target the embedder's origin, not '*'.
+      const targetOrigin = getEmbedderOrigin();
+      if (targetOrigin && window.parent !== window) {
+        window.parent.postMessage({ type: 'nucrm-submit-success', formId: form.id }, targetOrigin);
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Submission failed');
