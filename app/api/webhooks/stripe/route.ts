@@ -156,13 +156,53 @@ async function handleSubscriptionUpdated(subscription: any) {
   const status = subscription.status;
   const cancelAtPeriodEnd = subscription.cancel_at_period_end;
 
-  // Map Stripe status to NuCRM status
-  let nuCrmStatus = 'active';
-  if (status === 'past_due') nuCrmStatus = 'past_due';
-  else if (status === 'canceled' || status === 'unpaid') nuCrmStatus = 'cancelled';
-  else if (cancelAtPeriodEnd) nuCrmStatus = 'active'; // Still active until period ends
+  // Map Stripe subscription status to a NuCRM tenant status EXPLICITLY, with a
+  // safe non-active default. Unknown/terminal Stripe statuses must NOT fall
+  // through to 'active' (that would keep dead subscriptions on paid access).
+  //   - active / trialing (and the still-active cancel_at_period_end case)
+  //     -> 'active'
+  //   - past_due                                   -> 'past_due'
+  //   - canceled / unpaid / incomplete_expired     -> 'cancelled' (terminal)
+  //   - incomplete / paused / anything unknown     -> 'cancelled' (non-active)
+  // 'cancelled' is the established terminal value used by the Razorpay handler
+  // (#1262) and the tenant status enum, so we reuse it for the non-active
+  // default rather than inventing a new value.
+  let nuCrmStatus: string;
+  if (status === 'active' || status === 'trialing') {
+    nuCrmStatus = 'active';
+  } else if (status === 'past_due') {
+    nuCrmStatus = 'past_due';
+  } else if (status === 'canceled' || status === 'unpaid' || status === 'incomplete_expired') {
+    nuCrmStatus = 'cancelled';
+  } else if (cancelAtPeriodEnd) {
+    // Scheduled to cancel but still within the paid period — keep access.
+    nuCrmStatus = 'active';
+  } else {
+    // incomplete, paused, or any future/unknown Stripe status: fail safe to a
+    // non-active status so we never grant paid access by default.
+    nuCrmStatus = 'cancelled';
+  }
 
   const planId = determinePlanFromSubscription(subscription);
+
+  // Do NOT clobber an admin-imposed terminal status. If a tenant was manually
+  // suspended or cancelled, a routine subscription.updated event must not
+  // silently reactivate it. Only guard the elevation to 'active'; genuine
+  // downgrades (past_due/cancelled) are still allowed to apply.
+  const existing = await db.query.tenants.findFirst({
+    where: eq(tenants.id, tenantId),
+    columns: { status: true },
+  });
+  const currentStatus = existing?.status;
+  if (nuCrmStatus === 'active' && (currentStatus === 'suspended' || currentStatus === 'cancelled')) {
+    console.log(`[Stripe] Tenant ${tenantId} is ${currentStatus} (admin-set) — skipping reactivation to active, plan=${planId}`);
+    if (planId) {
+      await db.update(tenants)
+        .set({ planId, updatedAt: new Date() })
+        .where(eq(tenants.id, tenantId));
+    }
+    return;
+  }
 
   await db.update(tenants)
     .set({
