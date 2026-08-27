@@ -127,9 +127,21 @@ export async function POST(req: NextRequest) {
 
         delivered += 1;
       } catch (err) {
+        // Transient failures (email provider hiccup, export timeout) must not
+        // permanently disable the report. The due query only selects
+        // status='active', so setting status='error' here means the report is
+        // never re-selected and silently dies. Instead, keep it active and
+        // advance nextRunAt so it retries on a future run. The error is already
+        // recorded via logError below.
+        //
+        // NOTE: the scheduled_reports schema has no lastError/lastErrorAt column
+        // and no consecutive-failure counter, so the failure detail lives only
+        // in the error log (logError) rather than on the row. Adding such a
+        // column would require a migration, which is out of scope for this fix.
         await logError({ error: err, context: 'scheduled-report-delivery' });
         await db.update(scheduledReports).set({
-          status: 'error',
+          nextRunAt: computeNextRunAt(report.frequency),
+          status: 'active',
           updatedAt: new Date(),
         }).where(eq(scheduledReports.id, report.id));
       }
