@@ -12,7 +12,7 @@ import { apiError } from '@/lib/api-error';
  * Complaints: sets doNotContact=true immediately.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { timingSafeEqual } from 'crypto';
+import { timingSafeEqual, createHmac } from 'crypto';
 import { db } from '@/drizzle/db';
 import { contacts, sequenceEnrollments, activities } from '@/drizzle/schema';
 import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
@@ -34,6 +34,55 @@ const SOFT_BOUNCE_THRESHOLD = 3;
 /** Window in days for soft bounce threshold */
 const SOFT_BOUNCE_WINDOW_DAYS = 7;
 
+/** Svix signature timestamp tolerance (seconds). */
+const SVIX_TOLERANCE_SECONDS = 5 * 60;
+
+/**
+ * Verify a Svix-signed webhook (Resend's mechanism).
+ *
+ * Headers: `svix-id`, `svix-timestamp`, `svix-signature`.
+ * Signed content: `${svix-id}.${svix-timestamp}.${body}`.
+ * Signature: base64 HMAC-SHA256 keyed by the secret bytes (the portion after
+ * the `whsec_` prefix, base64-decoded). `svix-signature` may contain multiple
+ * space-separated `v1,<sig>` entries; any match is accepted (constant-time).
+ */
+function verifySvixSignature(req: NextRequest, body: string, secret: string): boolean {
+  const svixId = req.headers.get('svix-id');
+  const svixTimestamp = req.headers.get('svix-timestamp');
+  const svixSignature = req.headers.get('svix-signature');
+  if (!svixId || !svixTimestamp || !svixSignature) return false;
+
+  // Enforce timestamp tolerance to prevent replay.
+  const ts = Number(svixTimestamp);
+  if (!Number.isFinite(ts)) return false;
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (Math.abs(nowSec - ts) > SVIX_TOLERANCE_SECONDS) return false;
+
+  // The secret is `whsec_<base64>`; the HMAC key is the decoded base64 portion.
+  const secretKey = secret.startsWith('whsec_') ? secret.slice(6) : secret;
+  let keyBytes: Buffer;
+  try {
+    keyBytes = Buffer.from(secretKey, 'base64');
+  } catch {
+    return false;
+  }
+
+  const signedContent = `${svixId}.${svixTimestamp}.${body}`;
+  const expected = createHmac('sha256', keyBytes).update(signedContent).digest('base64');
+  const expectedBuf = Buffer.from(expected, 'utf8');
+
+  // svix-signature: space-separated list of `v1,<base64sig>` entries.
+  for (const part of svixSignature.split(' ')) {
+    const comma = part.indexOf(',');
+    const sig = comma === -1 ? part : part.slice(comma + 1);
+    const sigBuf = Buffer.from(sig, 'utf8');
+    if (sigBuf.length === expectedBuf.length && timingSafeEqual(sigBuf, expectedBuf)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export async function POST(req: NextRequest) {
   try {
     // Rate limit: 60 requests per minute per IP
@@ -41,21 +90,24 @@ export async function POST(req: NextRequest) {
     if (limited) return limited;
 
     const body = await req.text();
-    
-    // Verify webhook secret — fail-closed in production when not configured
-    const urlSecret = process.env.RESEND_WEBHOOK_SECRET;
-    if (!urlSecret) {
+
+    // #1430: Resend signs webhooks using Svix (svix-id / svix-timestamp /
+    // svix-signature headers, HMAC-SHA256 over `${id}.${timestamp}.${body}`
+    // with the base64 secret that follows the `whsec_` prefix). The previous
+    // custom `x-webhook-secret` header check would 401 every genuine event
+    // (Resend never sends that header), silently killing the integration.
+    // Verification is always-on when the secret is set, fail-closed in prod
+    // when it is not, and enforces a 5-minute timestamp tolerance.
+    const signingSecret = process.env.RESEND_WEBHOOK_SECRET;
+    if (!signingSecret) {
       if (process.env.NODE_ENV === 'production') {
         return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 403 });
       }
       console.warn('[resend-webhook] RESEND_WEBHOOK_SECRET is not set — skipping verification (dev only)');
     } else {
-      const providedSecret = req.headers.get('x-webhook-secret') ?? '';
-      const expectedBuf = Buffer.from(urlSecret, 'utf8');
-      const providedBuf = Buffer.from(providedSecret, 'utf8');
-
-      if (expectedBuf.length !== providedBuf.length || !timingSafeEqual(expectedBuf, providedBuf)) {
-        return NextResponse.json({ error: 'Invalid webhook secret' }, { status: 401 });
+      const verified = verifySvixSignature(req, body, signingSecret);
+      if (!verified) {
+        return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
       }
     }
 
