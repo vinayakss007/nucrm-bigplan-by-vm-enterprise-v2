@@ -207,6 +207,22 @@ SMTP is the documented fallback (`SMTP_*` in `.env`) if Resend is unavailable.
 
 ---
 
+## §8. Log rotation · #1043 🟡
+
+PM2 logs grow unbounded without rotation and will eventually fill the disk.
+
+```bash
+# On the VM, as the user that runs PM2:
+bash deploy/scripts/setup-log-rotation.sh
+# tunables: PM2_LOG_MAX_SIZE=10M PM2_LOG_RETAIN=7 PM2_LOG_COMPRESS=true
+# (set NUCRM_LOG_DIR to also install an OS logrotate policy for app logs)
+
+# Verify:
+pm2 conf pm2-logrotate
+```
+
+---
+
 ## Final go/no-go checklist
 
 - [ ] `nmap` from outside shows only 22/80/443 open (§1)
@@ -217,6 +233,7 @@ SMTP is the documented fallback (`SMTP_*` in `.env`) if Resend is unavailable.
 - [ ] A deliberate test error appears in Sentry (§5)
 - [ ] A password-reset email is received (§6)
 - [ ] Grafana admin user is not `admin`; internal ports not publicly reachable (§7)
+- [ ] `pm2 conf pm2-logrotate` shows rotation configured (§8)
 - [ ] `npm run prod:preflight` is green
 
 When every box is checked, the deployment is safe to open to the internet.
