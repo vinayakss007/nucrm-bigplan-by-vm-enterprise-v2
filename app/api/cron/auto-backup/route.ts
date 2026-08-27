@@ -87,14 +87,25 @@ async function runScheduledBackups(pool: Pool) {
   );
 
   if (schedules.rows.length === 0) {
-    // No schedules exist — create default global monthly schedule
-    await pool.query(
-      `INSERT INTO backup_schedules (schedule_type, backup_type, retention_days, enabled, next_run_at)
-       VALUES ('monthly', 'full', $1, true, NOW() + INTERVAL '1 hour')
-       ON CONFLICT DO NOTHING`,
-      [BACKUP_RETENTION_DAYS]
+    // No schedule is currently DUE. That does not mean no schedule exists —
+    // an existing global schedule whose next_run_at is in the future also
+    // yields zero rows here. backup_schedules has no unique constraint, so the
+    // previous `ON CONFLICT DO NOTHING` never fired and a duplicate default
+    // was inserted on every run. Guard on the actual existence of a global
+    // schedule (tenant_id IS NULL) and only create the default when none exist.
+    const globalExists = await pool.query(
+      `SELECT 1 FROM backup_schedules WHERE tenant_id IS NULL LIMIT 1`
     );
-    return { message: 'Created default monthly backup schedule', backupsRun: 0 };
+    if (globalExists.rows.length === 0) {
+      await pool.query(
+        `INSERT INTO backup_schedules (schedule_type, backup_type, retention_days, enabled, next_run_at)
+         VALUES ('monthly', 'full', $1, true, NOW() + INTERVAL '1 hour')
+         ON CONFLICT DO NOTHING`,
+        [BACKUP_RETENTION_DAYS]
+      );
+      return { message: 'Created default monthly backup schedule', backupsRun: 0 };
+    }
+    return { message: 'No backups due', backupsRun: 0 };
   }
 
   for (const schedule of schedules.rows) {
