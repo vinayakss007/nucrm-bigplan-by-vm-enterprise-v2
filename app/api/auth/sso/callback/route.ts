@@ -198,42 +198,44 @@ async function upsertUserAndMembership(args: {
 
   // 2. membership — pick a default role for the tenant (sales_rep if it exists, else admin)
   const [existingMember] = await db
-    .select({ id: tenantMembers.id })
+    .select({ id: tenantMembers.id, status: tenantMembers.status })
     .from(tenantMembers)
     .where(and(eq(tenantMembers.tenantId, args.tenantId), eq(tenantMembers.userId, userId)))
     .limit(1);
 
   if (!existingMember) {
-    const [defaultRole] = await db
-      .select({ id: roles.id, slug: roles.slug })
+    // SECURITY: pick a LEAST-PRIVILEGE default role for auto-provisioned SSO
+    // users. The previous code fell back to `admin` when `sales_rep` was
+    // missing, so any tenant that renamed/removed the sales_rep role would make
+    // every SSO login a tenant admin (privilege escalation). See
+    // selectLeastPrivilegeRole below.
+    const tenantRoles = await db
+      .select({ id: roles.id, slug: roles.slug, sortOrder: roles.sortOrder })
       .from(roles)
-      .where(and(eq(roles.tenantId, args.tenantId), eq(roles.slug, 'sales_rep')))
-      .limit(1);
+      .where(eq(roles.tenantId, args.tenantId));
 
-    const fallbackRole =
-      defaultRole ??
-      (
-        await db
-          .select({ id: roles.id, slug: roles.slug })
-          .from(roles)
-          .where(and(eq(roles.tenantId, args.tenantId), eq(roles.slug, 'admin')))
-          .limit(1)
-      )[0];
+    const chosen = selectLeastPrivilegeRole(tenantRoles);
 
-    if (fallbackRole) {
+    if (chosen) {
       await db.insert(tenantMembers).values({
         tenantId: args.tenantId,
         userId,
-        roleId: fallbackRole.id,
-        roleSlug: fallbackRole.slug,
+        roleId: chosen.id,
+        roleSlug: chosen.slug,
         status: 'active',
         joinedAt: new Date(),
       });
+    } else {
+      // Only an admin role exists — do NOT auto-grant admin via SSO.
+      console.warn(
+        `[sso/callback] no non-admin role in tenant ${args.tenantId}; refusing to auto-provision ${userId} as admin`,
+      );
     }
-  } else {
-    // Reactivate an existing-but-inactive member silently — admins removed
-    // them, IdP says they're back. The audit trail in sso_sessions records
-    // the SSO sign-in regardless.
+  } else if (existingMember.status !== 'active' && existingMember.status !== 'removed') {
+    // Reactivate members whose access simply lapsed (e.g. 'invited'/'pending'/
+    // 'suspended'), but NOT members an admin explicitly removed — SSO must not
+    // silently undo a deliberate removal. A removed member has to be re-invited
+    // by an admin. Active members are left untouched.
     await db
       .update(tenantMembers)
       .set({ status: 'active', updatedAt: new Date() })
@@ -241,6 +243,32 @@ async function upsertUserAndMembership(args: {
   }
 
   return userId;
+}
+
+/** A tenant role, as needed for least-privilege default selection. */
+export interface SelectableRole {
+  id: string;
+  slug: string;
+  sortOrder: number | null;
+}
+
+/**
+ * Choose the least-privilege default role for an auto-provisioned SSO user.
+ *
+ * SECURITY: never returns an `admin`/`super_admin` role. Prefers the known
+ * low-privilege slugs; otherwise the lowest-privilege non-admin role (highest
+ * sortOrder in this schema, tie-broken by slug for determinism). Returns
+ * `undefined` when only admin-level roles exist, so the caller declines to
+ * auto-provision rather than silently granting admin.
+ */
+export function selectLeastPrivilegeRole<T extends SelectableRole>(tenantRoles: T[]): T | undefined {
+  const PREFERRED = ['sales_rep', 'member', 'viewer', 'user', 'agent'];
+  const nonAdmin = tenantRoles.filter((r) => r.slug !== 'admin' && r.slug !== 'super_admin');
+  const preferred = PREFERRED.map((slug) => nonAdmin.find((r) => r.slug === slug)).find(Boolean);
+  if (preferred) return preferred;
+  return [...nonAdmin].sort(
+    (a, b) => (b.sortOrder ?? 0) - (a.sortOrder ?? 0) || a.slug.localeCompare(b.slug),
+  )[0];
 }
 
 function absoluteCallbackUrl(request: NextRequest): string {
