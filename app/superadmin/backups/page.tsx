@@ -90,6 +90,7 @@ export default function SuperAdminBackups() {
   const [selectedBackup, setSelectedBackup] = useState<CriticalBackup | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [runningBackup, setRunningBackup] = useState(false);
+  const [backupError, setBackupError] = useState<string | null>(null);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -141,11 +142,16 @@ export default function SuperAdminBackups() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ backup_type: 'full' }),
       });
-      const data = await res.json();
-      console.log('Manual backup result:', data);
+      // #1090: do not console.log the backup result — it leaks backup metadata
+      // into the browser console in production. Surface a status instead.
+      if (!res.ok) {
+        setBackupError('Manual backup failed. Check server logs.');
+      } else {
+        setBackupError(null);
+      }
       loadBackups();
-    } catch (err) {
-      console.error('Manual backup failed:', err);
+    } catch {
+      setBackupError('Manual backup failed. Check your connection and try again.');
     } finally {
       setRunningBackup(false);
     }
@@ -227,6 +233,9 @@ export default function SuperAdminBackups() {
             {runningBackup ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
             Run Backup Now
           </button>
+          {backupError && (
+            <span className="text-sm text-red-400" role="alert">{backupError}</span>
+          )}
         </div>
       </div>
 
