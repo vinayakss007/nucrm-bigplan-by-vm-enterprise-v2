@@ -5,10 +5,19 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, tenantMembers, roles, pipelines, dealStages } from '@/drizzle/schema';
 import { and, eq, sql } from 'drizzle-orm';
+
+// tenantId is optional: when omitted (or an empty body is sent) the handler
+// falls back to joining the first active tenant. Extra keys are ignored so a
+// missing/empty body remains valid, preserving the original behavior.
+const joinTenantSchema = z.object({
+  tenantId: z.string().trim().min(1).optional(),
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,15 +28,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Super admin only' }, { status: 403 });
     }
 
-    // Parse optional tenantId from request body
+    // Parse optional tenantId from request body. A missing/empty/invalid body
+    // is tolerated and falls back to default behavior (join first active tenant).
     let requestedTenantId: string | undefined;
+    let rawBody: unknown;
     try {
-      const body = await request.json();
-      if (body && typeof body.tenantId === 'string' && body.tenantId.trim()) {
-        requestedTenantId = body.tenantId.trim();
-      }
+      rawBody = await readJsonBody(request);
     } catch {
-      // No body or invalid JSON is fine - fall back to default behavior
+      rawBody = undefined;
+    }
+    if (rawBody !== undefined && rawBody !== null) {
+      const validated = validateBody(joinTenantSchema, rawBody);
+      if (validated instanceof NextResponse) return validated;
+      requestedTenantId = validated.data.tenantId;
     }
 
     let tenant;

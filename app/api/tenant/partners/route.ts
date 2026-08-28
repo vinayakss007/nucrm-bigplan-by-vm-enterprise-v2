@@ -4,13 +4,28 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import {
   createPartner,
   getPartnersByTenant,
 } from '@/lib/partners';
-import type { PartnerType, PartnerStatus } from '@/lib/partners';
+import type { PartnerStatus } from '@/lib/partners';
+
+// Mirrors the fields the POST handler consumes and its previous manual checks:
+// name/email/type required, type constrained to the known PartnerType enum,
+// commissionRate an optional non-negative number, metadata an optional object.
+// email is kept as a non-empty string (not .email()) to avoid rejecting
+// requests the previous truthiness check would have accepted.
+const createPartnerSchema = z.object({
+  name: z.string().trim().min(1),
+  email: z.string().trim().min(1),
+  type: z.enum(['reseller', 'referral', 'distributor']),
+  commissionRate: z.number().min(0).optional().nullable(),
+  metadata: z.record(z.string(), z.unknown()).optional().nullable(),
+});
 
 /**
  * GET /api/tenant/partners
@@ -43,30 +58,10 @@ export async function POST(request: NextRequest) {
     const deny = requirePerm(ctx, 'partners.create');
     if (deny) return deny;
 
-    const body = await request.json();
-    const { name, email, type, commissionRate, metadata } = body;
-
-    if (!name || !email || !type) {
-      return NextResponse.json(
-        { error: 'name, email, and type are required' },
-        { status: 400 },
-      );
-    }
-
-    const validTypes: PartnerType[] = ['reseller', 'referral', 'distributor'];
-    if (!validTypes.includes(type)) {
-      return NextResponse.json(
-        { error: `type must be one of: ${validTypes.join(', ')}` },
-        { status: 400 },
-      );
-    }
-
-    if (commissionRate != null && (typeof commissionRate !== 'number' || commissionRate < 0)) {
-      return NextResponse.json(
-        { error: 'commissionRate must be a non-negative number' },
-        { status: 400 },
-      );
-    }
+    const raw = await readJsonBody(request);
+    const validated = validateBody(createPartnerSchema, raw);
+    if (validated instanceof NextResponse) return validated;
+    const { name, email, type, commissionRate, metadata } = validated.data;
 
     const status: PartnerStatus = 'active';
 

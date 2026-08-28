@@ -4,10 +4,24 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { isPayUConfigured, createPaymentLink } from '@/lib/payu';
 import crypto from 'crypto';
+
+// This is an admin-initiated payment-link request (NOT the PayU provider
+// callback — that lives at /api/webhooks/payu). The payload is fully
+// client-controlled, so a strict schema is appropriate. Fields mirror the
+// existing manual checks: all required, amount must be a positive number.
+const payuPaymentSchema = z.object({
+  quoteId: z.string().min(1),
+  amount: z.number().positive(),
+  customerName: z.string().min(1),
+  customerEmail: z.string().min(1),
+  customerPhone: z.string().min(1),
+});
 
 /**
  * POST /api/tenant/billing/payu
@@ -34,24 +48,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'PayU is not configured' }, { status: 503 });
     }
 
-    const body = await request.json() as Record<string, unknown>;
-    const { quoteId, amount, customerName, customerEmail, customerPhone } = body;
-
-    if (!quoteId || typeof quoteId !== 'string') {
-      return NextResponse.json({ error: 'quoteId is required' }, { status: 400 });
-    }
-    if (!amount || typeof amount !== 'number' || amount <= 0) {
-      return NextResponse.json({ error: 'amount must be a positive number' }, { status: 400 });
-    }
-    if (!customerName || typeof customerName !== 'string') {
-      return NextResponse.json({ error: 'customerName is required' }, { status: 400 });
-    }
-    if (!customerEmail || typeof customerEmail !== 'string') {
-      return NextResponse.json({ error: 'customerEmail is required' }, { status: 400 });
-    }
-    if (!customerPhone || typeof customerPhone !== 'string') {
-      return NextResponse.json({ error: 'customerPhone is required' }, { status: 400 });
-    }
+    const raw = await readJsonBody(request);
+    const validated = validateBody(payuPaymentSchema, raw);
+    if (validated instanceof NextResponse) return validated;
+    const { quoteId, amount, customerName, customerEmail, customerPhone } = validated.data;
 
     const txnId = `NUCRM_${quoteId}_${crypto.randomBytes(4).toString('hex')}`;
 
@@ -60,11 +60,11 @@ export async function POST(request: NextRequest) {
     const failureUrl = `${baseUrl}/api/webhooks/payu?status=failure`;
 
     const formData = createPaymentLink({
-      amount: amount as number,
+      amount,
       productInfo: `Quote Payment - ${quoteId}`,
-      customerName: customerName as string,
-      customerEmail: customerEmail as string,
-      customerPhone: customerPhone as string,
+      customerName,
+      customerEmail,
+      customerPhone,
       txnId,
       successUrl,
       failureUrl,
