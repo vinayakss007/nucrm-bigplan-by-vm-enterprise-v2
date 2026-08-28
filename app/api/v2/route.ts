@@ -33,9 +33,6 @@ export async function GET(_request: NextRequest) {
       api_key_prefix: 'ak_',
       header: 'Authorization: Bearer ak_...',
     },
-    rate_limits: {
-      default: '1000 requests/minute',
-      burst: '50 requests/second',
-    },
+    rate_limits: 'Rate limits vary per endpoint; see documentation.',
   });
 }
