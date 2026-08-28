@@ -1,0 +1,23 @@
+{
+  "id": "FEAT-004",
+  "type": "feat",
+  "description": "Lead filtering UI (#1083). The leads API tracks source, assigned_to, lifecycle_stage, tags, and score but the UI exposes no filters for them. Add filter controls to the leads client and make the leads API honor them. This is the one net-new feature in the bucket and is independent of the other features (could be parallelized).",
+  "status": "pending",
+  "steps": [
+    "Read app/api/tenant/leads/route.ts to see how the GET list query is built and which query params it currently parses (search, pagination, etc.). Read components/tenant/leads-client-new.tsx (and leads-client.tsx if it is the active one — confirm which client the leads page renders) to see the existing filter/search UI pattern.",
+    "Extend the leads GET route to accept and apply filters: source, assignedTo (assigned_to), lifecycleStage (lifecycle_stage), tags (array/contains), and score range (scoreMin/scoreMax). Use Drizzle where-clause composition consistent with the existing query, and keep tenant scoping intact. Validate params with the existing zod pattern (lib/api/schemas.ts) rather than trusting raw input.",
+    "Add UI filter controls in the leads client following the existing filter component patterns (Select/dropdown for source, assigned_to, lifecycle_stage; tag multiselect or chips; numeric min/max inputs for score). Wire them into the existing fetch call as query params. Preserve current search + pagination behavior.",
+    "Populate filter option lists from real data where the pattern already exists (e.g. distinct sources, team members for assigned_to). If an options source is not readily available, use the known enum/lifecycle values and note it in findings.",
+    "Ensure filters combine with search and reset correctly (clearing a filter refetches)."
+  ],
+  "acceptance_criteria": [
+    "The leads GET API applies source, assigned_to, lifecycle_stage, tags, and score-range filters when the corresponding query params are provided, scoped to the tenant.",
+    "The leads page renders working filter controls for source, assigned_to, lifecycle_stage, tags, and score range.",
+    "Applying/clearing a filter refetches the list; existing search and pagination still work.",
+    "npm run typecheck and npm run lint pass with no new errors.",
+    "If there are unit tests for the leads route, they still pass; add/extend a unit test covering at least one new filter param if the test harness for that route already exists."
+  ],
+  "verification": ["npm run typecheck", "npm run lint", "npm run test:unit"],
+  "blocked_reason": null,
+  "findings": ""
+}

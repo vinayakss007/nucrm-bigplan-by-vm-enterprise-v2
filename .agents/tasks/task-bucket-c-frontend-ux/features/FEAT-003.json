@@ -1,0 +1,36 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Navigation and page-state completeness: add missing co-located loading.tsx and error.tsx route files, standardize loading states to the shared skeleton components, add empty states, add breadcrumbs, add error boundaries around complex widgets, and reduce full-page reloads from window.location.href. Addresses #1338 (loading.tsx), #1339 (error.tsx), #1117 (consistent skeletons), #1118 (breadcrumbs), #1071 (empty states), #1075 (error boundaries), #1267 (window.location.href -> router.push), #1119 (keyboard shortcuts). This is a same-pattern batch across many route segments; treat the file list from each issue as the step checklist. Confirm which files already have loading/error/breadcrumbs before adding.",
+  "status": "pending",
+  "steps": [
+    "#1338 loading.tsx: For each route segment listed in the issue (tasks/[id], tickets/[id], reports/scheduled, reports/funnel, reports/custom, reports/saved, workflows, services, kb, kb/[id], kb/categories, deals/[id], deals/kanban, forms/[id]/analytics, forms/builder, forms/public/[id], companies/[id], orders, data-explorer, analytics/forecast) that lacks a co-located loading.tsx, add one that renders a shared skeleton from components/shared/page-skeleton.tsx (PageSkeleton or ListSkeleton as appropriate). Follow the shape of an existing loading.tsx in the repo. Skip any segment that already has one.",
+    "#1339 error.tsx: For each route segment listed in the issue that lacks a co-located error.tsx, add a 'use client' error.tsx that accepts { error, reset }, renders the existing themed error UI (reuse components/shared/route-error.tsx or error-fallback.tsx if suitable) and provides a retry button that calls reset(). Follow the existing app/error.tsx pattern. Skip segments that already have one.",
+    "#1117 consistent loading states: Replace ad-hoc/plain-text/spinner in-page loading in app/tenant/services/page.tsx (plain 'Loading...'), app/tenant/forms/page.tsx (ad-hoc skeleton), app/tenant/kb/page.tsx (custom skeleton), app/tenant/meetings/page.tsx (minimal skeleton) with PageSkeleton/ListSkeleton from components/shared/page-skeleton.tsx. Leave pages that already use a shared skeleton alone.",
+    "#1118 breadcrumbs: Add <Breadcrumb /> (components/shared/breadcrumb.tsx) to app/tenant/meetings/page.tsx, app/tenant/services/page.tsx, app/tenant/kb/page.tsx, app/tenant/forms/page.tsx, matching the placement used by other tenant pages that already have it. Verify the Breadcrumb component's expected props by reading an existing usage.",
+    "#1071 empty states: For the pages listed (tenant/visitors, tenant/sms, tenant/notifications, tenant/follow-ups, tenant/activities, tenant/chat, portal tickets/invoices/quotes/kb, superadmin tickets/usage/announcements/data-explorer) that render a list with no empty-state UI, add the shared EmptyState (components/shared/empty-state.tsx) with icon/message/CTA when the list is empty and not loading. Read empty-state.tsx to learn its props. Skip pages that already handle empty state.",
+    "#1075 error boundaries: Wrap the complex widgets named in the issue (components/tenant/dashboard/widget-grid.tsx individual widgets, components/tenant/email-builder/email-builder.tsx, components/tenant/automation/workflow-builder.tsx, components/ui/components/charts/index.tsx) in the existing ErrorBoundary (components/shared/error-boundary.tsx or components/ui/error-boundary.tsx). For widget-grid, wrap each widget individually so one bad widget cannot crash the whole dashboard. Verify exact file paths (workflow-builder may live at components/tenant/workflow-builder.tsx).",
+    "#1267 client navigation: Replace window.location.href assignments used purely for in-app navigation with router.push()/router.replace() (useRouter from next/navigation) in components/shared/command-palette.tsx (16 instances), components/tenant/deals-kanban.tsx, components/tenant/layout/shell.tsx. Do NOT convert cases that intentionally do a hard reload (e.g. logout, external URLs, or where a full reload is required for auth/session reset) — leave those and note them in findings.",
+    "#1119 keyboard shortcuts: Reconcile components/shared/shortcuts-modal.tsx with reality. Either implement the documented shortcuts (G D go dashboard, N C new contact, Cmd+S save, Cmd+E export, Cmd+/ focus search) using the existing use-hotkeys.ts / save-shortcut.tsx infrastructure, or, for any that cannot be reasonably implemented globally, remove them from the modal so the modal only lists working shortcuts. Document the decision per shortcut in findings."
+  ],
+  "acceptance_criteria": [
+    "Every route segment listed in #1338 has a co-located loading.tsx (either newly added or pre-existing).",
+    "Every route segment listed in #1339 has a co-located error.tsx with a working retry (reset) button.",
+    "services/forms/kb/meetings loading states use the shared page-skeleton components.",
+    "meetings/services/kb/forms tenant pages render <Breadcrumb />.",
+    "Listed pages render EmptyState when their primary list is empty.",
+    "widget-grid widgets and the named complex components are wrapped in ErrorBoundary.",
+    "command-palette navigations use router.push/replace instead of window.location.href (except intentional hard-reload cases which are documented).",
+    "shortcuts-modal only advertises shortcuts that actually work (implemented or removed).",
+    "npm run typecheck and npm run lint pass with no new errors."
+  ],
+  "verification": [
+    "npm run typecheck",
+    "npm run lint",
+    "for d in app/tenant/tasks/\\[id\\] app/tenant/reports/scheduled app/tenant/deals/kanban app/tenant/data-explorer; do echo $d; ls $d/loading.tsx $d/error.tsx 2>&1; done",
+    "grep -rn \"window.location.href\" components/shared/command-palette.tsx",
+    "grep -n \"Breadcrumb\" app/tenant/meetings/page.tsx app/tenant/services/page.tsx app/tenant/kb/page.tsx app/tenant/forms/page.tsx"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

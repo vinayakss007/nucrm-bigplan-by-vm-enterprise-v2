@@ -1,0 +1,14 @@
+{
+  "task_id": "task-bucket-c-frontend-ux",
+  "task_description": "Bucket C — Frontend/UX polish, code-quality/tech-debt sweeps, and small PII-in-logs fixes across the NuCRM Enterprise app (~40 GitHub issues). No behavioral security/correctness impact intended. Group into: (F2) themed dialogs + dark mode + duplicate-render + hydration; (F3) loading/error/empty/breadcrumbs/error-boundaries + client navigation + shortcuts; (F4) lead filter feature; (F5) code-quality sweeps (any/console/logError/AbortController/Window any/apiError/response-format/CSP/form-validation/large-files); (F6) PII-in-logs + worker/telegram reliability. Line numbers in issues are stale and several items are already partly fixed — coder must grep to confirm state before editing. Work on branch fix/bucket-c-frontend-ux-codequality; orchestrator publishes the PR.",
+  "status": "in_progress",
+  "feature_order": [
+    "FEAT-001",
+    "FEAT-002",
+    "FEAT-003",
+    "FEAT-004",
+    "FEAT-005",
+    "FEAT-006"
+  ],
+  "blocked_reason": null
+}

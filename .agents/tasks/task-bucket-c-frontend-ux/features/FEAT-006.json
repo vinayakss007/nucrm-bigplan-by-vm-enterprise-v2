@@ -1,0 +1,24 @@
+{
+  "id": "FEAT-006",
+  "type": "fix",
+  "description": "PII-in-logs and worker/webhook reliability hardening (small, targeted). Mask or remove sensitive data (emails, tokens, URLs with query secrets) from log output and fix two fire-and-forget/staleness reliability nits. Addresses #1292 (email in bulk-email failure log), #1294 (stale WhatsApp access token), #1295 (Telegram fire-and-forget sendReply), #1297 (user email sent to Telegram chat). NOTE: #1293 is CLOSED — skip it. Issue line numbers are stale; locate the actual code by content, not line number.",
+  "status": "pending",
+  "steps": [
+    "#1292 worker.ts bulk-email failure log: Find the bulk-email worker catch/failure log that includes a recipient email address in the message. Mask the email before logging (e.g. a maskEmail helper that keeps first char + domain, like `j***@example.com`) or drop the address entirely and log a non-PII identifier (recipientId/jobId). If a masking helper already exists in lib/ (grep for mask/redact/scrub, and check sentry-pii-scrub.ts), reuse it; otherwise add a tiny helper.",
+    "#1297 telegram bot: Find where a user's email is put into a Telegram chat reply/message (the line number in the issue is stale — search app/api/webhooks/telegram/bot/route.ts for the email being interpolated into sendReply text). Remove the email from the outbound Telegram message or replace it with a non-identifying reference (e.g. 'your account'), since Telegram servers may log it.",
+    "#1295 telegram fire-and-forget: In app/api/webhooks/telegram/bot/route.ts, sendReply calls fetch without await, so Telegram rate-limits cause silent failures. Make the relevant sendReply calls awaited (or collect and await them) so failures are observable/logged, without blocking the webhook 200 response longer than necessary. Ensure the webhook still returns promptly; log send failures via the project's error logger rather than swallowing.",
+    "#1294 stale WhatsApp token: In worker.ts where the WhatsApp access token is read from integration config before sending, add an expiry/staleness check or at least detect a 401/expired-token response and log a clear, actionable structured error (via logError) instead of failing silently. If token refresh infrastructure exists, prefer surfacing the staleness; do not implement a full OAuth refresh flow if none exists — document that as a follow-up.",
+    "Verify no email addresses, access tokens, or secret-bearing URLs are emitted in plaintext by the touched log statements (grep the changed lines)."
+  ],
+  "acceptance_criteria": [
+    "The bulk-email worker failure log no longer emits an unmasked recipient email (#1292).",
+    "The Telegram bot no longer sends the user's raw email into a Telegram chat message (#1297).",
+    "Telegram sendReply failures are awaited/observable rather than fire-and-forget-silent, while the webhook still responds promptly (#1295).",
+    "Stale/expired WhatsApp access tokens produce a clear structured log/error rather than a silent failure (#1294).",
+    "#1293 was intentionally skipped (closed) and this is noted in findings.",
+    "npm run typecheck and npm run lint pass; if worker/webhook unit tests exist they still pass."
+  ],
+  "verification": ["npm run typecheck", "npm run lint", "npm run test:unit"],
+  "blocked_reason": null,
+  "findings": ""
+}
