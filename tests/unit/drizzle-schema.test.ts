@@ -8,7 +8,7 @@ const TABLE_NAMES = [
   'recordPermissions', 'apiKeys', 'apiKeyUsage', 'auditLogs', 'notifications',
   'invitations', 'featureRegistry', 'systemSettings', 'plans', 'subscriptions',
   'companies', 'contacts', 'leads', 'pipelines', 'pipelineStages', 'deals',
-  'dealStages', 'tasks', 'customFields', 'customFieldDefs', 'tags',
+  'dealStages', 'tasks', 'customFieldDefs', 'tags',
   'emailTemplates', 'emailTracking', 'emailLog',
   'automations', 'automationRuns', 'webhooks', 'webhookDeliveries',
   'workflows', 'workflowActions', 'workflowExecutions',
@@ -107,7 +107,7 @@ describe('Drizzle Schema - Tenant Isolation', () => {
     const tables = [
       schema.tenantMembers, schema.roles, schema.contacts, schema.leads,
       schema.companies, schema.deals, schema.pipelines, schema.tasks,
-      schema.customFields, schema.emailTemplates, schema.automations,
+      schema.customFieldDefs, schema.emailTemplates, schema.automations,
       schema.workflows, schema.activities, schema.tenantBackups,
       schema.sequences, schema.forms,
       schema.supportTickets, schema.apiKeys, schema.auditLogs,
