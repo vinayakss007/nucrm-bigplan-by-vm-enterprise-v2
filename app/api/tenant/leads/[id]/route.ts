@@ -225,7 +225,7 @@ export async function PATCH(
     if (v.website !== undefined) updateData.website = v.website;
     if (v.assigned_to !== undefined) updateData.assignedTo = v.assigned_to;
     if (v.tags !== undefined) updateData.tags = v.tags;
-    if (v.notes !== undefined) updateData.internalNotes = v.notes;
+    if (v.notes !== undefined) updateData.notes = v.notes;
     if (v.custom_fields !== undefined) updateData.customFields = v.custom_fields;
     if (v.score !== undefined) updateData.score = v.score;
 
