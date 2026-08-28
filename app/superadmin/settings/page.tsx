@@ -18,19 +18,30 @@ import { cn } from '@/lib/utils';
 const PLANS = ['free','starter','pro','enterprise'];
 const TIMEZONES = ['UTC','America/New_York','America/Chicago','America/Los_Angeles','Europe/London','Europe/Paris','Asia/Kolkata','Asia/Singapore','Asia/Tokyo','Australia/Sydney'];
 
+// #1095: secret values are NEVER read back into client state. The server serves
+// them redacted (****xxxx) and refuses to persist them (env-var only), so
+// holding them in state only risked (a) posting a redacted value back / mixing
+// redacted+real, and (b) exposing them via the show/hide toggle. These inputs
+// are write-only: blank by default, and only sent if the admin types a new value.
+const SECRET_KEYS = [
+  'stripe_secret_key', 'stripe_webhook_secret', 'resend_api_key', 'smtp_pass', 'anthropic_api_key',
+] as const;
+const isSecretKey = (k: string): boolean => (SECRET_KEYS as readonly string[]).includes(k);
+
 export default function SuperAdminSettingsPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [s, setS] = useState<Record<string,any>>({
     platform_name:'NuCRM', support_email:'', app_url:'',
     allow_signups:'true', require_email_verify:'true', maintenance_mode:'false',
     default_trial_days:'14', default_plan:'free', max_free_tenants:'1000',
-    stripe_publishable_key:'', stripe_secret_key:'', stripe_webhook_secret:'',
-    resend_api_key:'', smtp_host:'', smtp_port:'587', smtp_user:'', smtp_pass:'', smtp_from:'',
+    stripe_publishable_key:'', smtp_host:'', smtp_port:'587', smtp_user:'', smtp_from:'',
     default_timezone:'UTC', contact_score_enabled:'true',
     session_duration_days:'30', max_sessions_per_user:'10',
     backup_retention_days:'30', backup_bucket:'',
-    ai_features_enabled:'false', anthropic_api_key:'',
+    ai_features_enabled:'false',
   });
+  // Write-only secret inputs, kept OUT of `s`. Empty means "leave unchanged".
+  const [secrets, setSecrets] = useState<Record<string,string>>({});
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [showKeys, setShowKeys] = useState<Record<string,boolean>>({});
@@ -41,7 +52,13 @@ export default function SuperAdminSettingsPage() {
   useEffect(() => {
     const abort = new AbortController();
     fetch('/api/superadmin/settings', { signal: abort.signal }).then(r=>r.json()).then(d=>{ if (abort.signal.aborted) return;
-      if(d.data) setS(prev => ({...prev,...d.data}));
+      if(d.data) {
+        // #1095: never load secret values (even redacted) into client state.
+        const nonSecret = Object.fromEntries(
+          Object.entries(d.data as Record<string, unknown>).filter(([k]) => !isSecretKey(k))
+        );
+        setS(prev => ({...prev, ...nonSecret}));
+      }
       setLoading(false);
     }).catch((err) => { if (err instanceof DOMException && err.name === 'AbortError') return; console.error('[settings] fetch failed', err); setLoading(false); });
     return () => abort.abort();
@@ -54,9 +71,16 @@ export default function SuperAdminSettingsPage() {
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
-    const res = await fetch('/api/superadmin/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(s)});
+    // #1095: send non-secret settings, plus only the secret fields the admin
+    // actually typed (non-empty). Blank secret inputs are omitted so we never
+    // overwrite with a redacted/empty value.
+    const typedSecrets = Object.fromEntries(
+      Object.entries(secrets).filter(([, val]) => typeof val === 'string' && val.trim() !== '')
+    );
+    const payload = { ...s, ...typedSecrets };
+    const res = await fetch('/api/superadmin/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const d = await res.json();
-    if(res.ok) toast.success('Settings saved to database');
+    if(res.ok) { toast.success('Settings saved'); setSecrets({}); }
     else toast.error(d.error||'Save failed');
     setSaving(false);
   };
@@ -92,14 +116,31 @@ export default function SuperAdminSettingsPage() {
       <div className="p-5 space-y-4">{children}</div>
     </div>
   );
-  const PwdInp = ({k,placeholder}:{k:string;placeholder:string}) => (
-    <div className="relative">
-      <input type={showKeys[k]?'text':'password'} value={s[k]||''} onChange={set(k)} placeholder={placeholder} className={inp+' pr-10'}/>
-      <button type="button" onClick={()=>setShowKeys(p=>({...p,[k]:!p[k]}))} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
-        {showKeys[k]?<EyeOff className="w-4 h-4"/>:<Eye className="w-4 h-4"/>}
-      </button>
-    </div>
-  );
+  // #1095: secret fields are write-only — bound to `secrets` (never `s`), blank
+  // by default. Typing a value stages it for save; leaving blank keeps the
+  // current env-configured value. Non-secret keys keep the old `s`-bound behavior.
+  const PwdInp = ({k,placeholder}:{k:string;placeholder:string}) => {
+    const secret = isSecretKey(k);
+    const value = secret ? (secrets[k] ?? '') : (s[k] || '');
+    const onChange = secret
+      ? (e: React.ChangeEvent<HTMLInputElement>) => setSecrets(p => ({...p, [k]: e.target.value}))
+      : set(k);
+    return (
+      <div className="relative">
+        <input
+          type={showKeys[k]?'text':'password'}
+          value={value}
+          onChange={onChange}
+          placeholder={secret ? 'Set via env var — type to override (leave blank to keep current)' : placeholder}
+          autoComplete="off"
+          className={inp+' pr-10'}
+        />
+        <button type="button" onClick={()=>setShowKeys(p=>({...p,[k]:!p[k]}))} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
+          {showKeys[k]?<EyeOff className="w-4 h-4"/>:<Eye className="w-4 h-4"/>}
+        </button>
+      </div>
+    );
+  };
 
   if(loading) return <div className="flex items-center gap-3 text-white/40 p-4"><Loader2 className="w-4 h-4 animate-spin"/>Loading settings...</div>;
 
