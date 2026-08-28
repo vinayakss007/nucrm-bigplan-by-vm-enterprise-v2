@@ -211,10 +211,14 @@ export const leads = pgTable('leads', {
   // or neither may be set. SET NULL on delete — losing a catalogue item must
   // never delete the lead that referenced it.
   requestedProductId: uuid('requested_product_id').references(() => products.id, { onDelete: 'set null' }),
+  // FK to services(id) added at the DB layer in migration
+  // 0074_leads_service_team_fk (#1051), ON DELETE SET NULL — kept out of the
+  // schema file to avoid a services/leads import cycle.
   requestedServiceId: uuid('requested_service_id'),
 
-  // Owning team (WF-04). FK to teams enforced at the DB layer (migration) to
-  // avoid a schema-file import cycle. SET NULL on team delete.
+  // Owning team (WF-04). FK to teams(id) added at the DB layer in migration
+  // 0074_leads_service_team_fk (#1051), ON DELETE SET NULL — kept out of the
+  // schema file to avoid a teams/leads import cycle.
   teamId: uuid('team_id'),
   
   metadata: utils.metadata(),
