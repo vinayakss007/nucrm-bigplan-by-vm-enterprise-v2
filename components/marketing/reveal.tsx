@@ -35,11 +35,30 @@ export function Reveal({
 }) {
   const ref = useRef<HTMLElement | null>(null);
   const [shown, setShown] = useState(false);
+  // Only arm the CSS "start hidden" state once JS is running on the client.
+  // Server-rendered / no-JS markup stays fully visible (progressive
+  // enhancement) so a hydration failure can never leave the page blank.
+  const [armed, setArmed] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    // Anything already on screen at mount should not wait for a scroll event.
+
+    setArmed(true);
+
+    // Respect reduced-motion: reveal immediately, skip the observer entirely.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setShown(true);
+      return;
+    }
+
+    // Anything already on screen at mount must reveal on the first client paint
+    // instead of waiting for an observer tick that may never come.
+    if (el.getBoundingClientRect().top < window.innerHeight) {
+      setShown(true);
+      return;
+    }
+
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
@@ -50,7 +69,16 @@ export function Reveal({
       { threshold, rootMargin: '0px 0px -8% 0px' },
     );
     obs.observe(el);
-    return () => obs.disconnect();
+
+    // Safety net: guarantee eventual visibility even if the observer never
+    // fires (edge cases, background tabs, throttling). This is the core
+    // regression guard — content can never stay invisible as a resting state.
+    const failSafe = window.setTimeout(() => setShown(true), 1200);
+
+    return () => {
+      obs.disconnect();
+      window.clearTimeout(failSafe);
+    };
   }, [threshold]);
 
   const dirClass = direction === 'up' ? '' : `mk-reveal-${direction}`;
@@ -58,7 +86,7 @@ export function Reveal({
   return (
     <Tag
       ref={ref}
-      className={`mk-reveal ${dirClass} ${shown ? 'is-in' : ''} ${className}`}
+      className={`mk-reveal ${armed ? 'mk-reveal-armed' : ''} ${dirClass} ${shown ? 'is-in' : ''} ${className}`}
       style={delay ? { transitionDelay: `${delay}ms` } : undefined}
     >
       {children}
@@ -97,25 +125,42 @@ export function AnimatedNumber({
       return;
     }
 
+    const runCountUp = () => {
+      if (started.current) return;
+      started.current = true;
+      let t0 = 0;
+      const step = (ts: number) => {
+        if (!t0) t0 = ts;
+        const p = Math.min((ts - t0) / duration, 1);
+        setValue(Math.round((1 - Math.pow(1 - p, 3)) * target));
+        if (p < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    };
+
     const obs = new IntersectionObserver(
       (entries) => {
         if (!entries[0]?.isIntersecting || started.current) return;
-        started.current = true;
         obs.disconnect();
-
-        let t0 = 0;
-        const step = (ts: number) => {
-          if (!t0) t0 = ts;
-          const p = Math.min((ts - t0) / duration, 1);
-          setValue(Math.round((1 - Math.pow(1 - p, 3)) * target));
-          if (p < 1) requestAnimationFrame(step);
-        };
-        requestAnimationFrame(step);
+        runCountUp();
       },
       { threshold: 0.4 },
     );
     obs.observe(el);
-    return () => obs.disconnect();
+
+    // Safety net: if the observer never fires, still show the final value so
+    // the number never stays stuck at 0.
+    const failSafe = window.setTimeout(() => {
+      if (started.current) return;
+      obs.disconnect();
+      setValue(target);
+      started.current = true;
+    }, 1600);
+
+    return () => {
+      obs.disconnect();
+      window.clearTimeout(failSafe);
+    };
   }, [target, duration]);
 
   return (
@@ -257,10 +302,25 @@ export function StaggerText({
 }) {
   const ref = useRef<HTMLSpanElement | null>(null);
   const [shown, setShown] = useState(false);
+  // Server-rendered / no-JS markup stays visible; the fade-in animation only
+  // engages once JS has armed it. A hydration failure keeps words readable.
+  const [armed, setArmed] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+
+    setArmed(true);
+
+    // Reduced-motion or already-visible-at-mount: reveal on first client paint.
+    if (
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+      el.getBoundingClientRect().top < window.innerHeight
+    ) {
+      setShown(true);
+      return;
+    }
+
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
@@ -271,7 +331,14 @@ export function StaggerText({
       { threshold: 0.2 },
     );
     obs.observe(el);
-    return () => obs.disconnect();
+
+    // Safety net so words can never stay invisible if the observer never fires.
+    const failSafe = window.setTimeout(() => setShown(true), 1200);
+
+    return () => {
+      obs.disconnect();
+      window.clearTimeout(failSafe);
+    };
   }, []);
 
   const words = text.split(' ');
@@ -281,10 +348,10 @@ export function StaggerText({
       {words.map((word, i) => (
         <span
           key={`${word}-${i}`}
-          className="mk-stagger-word inline-block"
+          className={`mk-stagger-word inline-block ${armed ? 'mk-stagger-armed' : ''}`}
           style={{
             animationDelay: shown ? `${startDelay + i * wordDelay}ms` : undefined,
-            opacity: shown ? undefined : 0,
+            opacity: armed && !shown ? 0 : undefined,
           }}
           aria-hidden
         >

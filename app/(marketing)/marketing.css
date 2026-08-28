@@ -402,31 +402,39 @@
 
 /* ── Scroll reveal (driven by components/marketing/reveal.tsx) ───────── */
 
+/* The resting state is VISIBLE. Content is only hidden for the entrance
+   animation once the client component has "armed" it (added .mk-reveal-armed
+   in a mount effect). With JS disabled or hydration broken, .mk-reveal-armed
+   is never applied, so the server-rendered markup stays fully visible
+   (progressive enhancement — the landing page can never render blank). */
 .mk-reveal {
-  opacity: 0;
-  transform: translateY(26px);
   transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), transform 0.75s cubic-bezier(0.16, 1, 0.3, 1),
     filter 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mk-reveal-armed:not(.is-in) {
+  opacity: 0;
+  transform: translateY(26px);
 }
 .mk-reveal.is-in {
   opacity: 1;
   transform: none;
   filter: none;
 }
-/* Direction variants */
-.mk-reveal-down {
+/* Direction variants — the starting offset only applies while armed and not
+   yet revealed, so an un-armed (no-JS) element renders in its final position. */
+.mk-reveal-armed.mk-reveal-down:not(.is-in) {
   transform: translateY(-26px);
 }
-.mk-reveal-left {
+.mk-reveal-armed.mk-reveal-left:not(.is-in) {
   transform: translateX(40px);
 }
-.mk-reveal-right {
+.mk-reveal-armed.mk-reveal-right:not(.is-in) {
   transform: translateX(-40px);
 }
-.mk-reveal-scale {
+.mk-reveal-armed.mk-reveal-scale:not(.is-in) {
   transform: scale(0.92);
 }
-.mk-reveal-blur {
+.mk-reveal-armed.mk-reveal-blur:not(.is-in) {
   transform: none;
   filter: blur(8px);
 }
@@ -459,7 +467,9 @@
     filter: none;
   }
 }
-.mk-stagger-word {
+/* Words are visible by default; the fade-in only runs once JS arms them, so a
+   no-JS / broken-hydration render keeps the headline readable. */
+.mk-stagger-word.mk-stagger-armed {
   opacity: 0;
   animation: mk-stagger-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
