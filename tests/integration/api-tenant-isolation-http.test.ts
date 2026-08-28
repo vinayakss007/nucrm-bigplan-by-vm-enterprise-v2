@@ -30,6 +30,7 @@ vi.mock('@/lib/webhooks', () => ({
 }));
 vi.mock('@/lib/cache', () => ({
   cache: { get: vi.fn().mockResolvedValue(null), set: vi.fn(), del: vi.fn() },
+  invalidateTenantCache: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/lib/audit', () => ({
   logAudit: vi.fn().mockResolvedValue(undefined),
