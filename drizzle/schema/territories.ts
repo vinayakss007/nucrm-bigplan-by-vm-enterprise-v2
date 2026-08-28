@@ -36,4 +36,10 @@ export const territoryAssignments = pgTable('territory_assignments', {
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   role: text('role', { enum: ['owner', 'member'] }).notNull().default('member'),
   ...utils.lifecycle(),
+}, (table) => {
+  return {
+    // #1054: index the FK columns used for joins/lookups.
+    territoryIdx: index('idx_territory_assignments_territory').on(table.territoryId),
+    userIdx: index('idx_territory_assignments_user').on(table.userId),
+  };
 });

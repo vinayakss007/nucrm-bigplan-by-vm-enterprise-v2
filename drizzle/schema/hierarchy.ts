@@ -35,5 +35,7 @@ export const hierarchyPermissions = pgTable('hierarchy_permissions', {
 }, (table) => {
   return {
     tenantIdx: utils.tenantIdx(table),
+    // #1054: index the hierarchyId FK used for permission lookups per hierarchy.
+    hierarchyIdx: index('idx_hierarchy_permissions_hierarchy').on(table.hierarchyId),
   };
 });
