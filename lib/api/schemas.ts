@@ -328,6 +328,7 @@ export const updateMeetingSchema = createMeetingSchema.partial();
 // ── Note schemas ──
 export const createNoteSchema = z.object({
   content: requiredString.max(10000),
+  type: z.enum(['note', 'call', 'email', 'meeting', 'task', 'deal_update']).optional().default('note'),
   contact_id: uuid,
   deal_id: uuid,
   company_id: uuid,
