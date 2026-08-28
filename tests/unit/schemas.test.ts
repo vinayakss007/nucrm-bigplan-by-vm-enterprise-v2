@@ -261,4 +261,31 @@ describe('api/schemas', () => {
     const { preferencesPatchSchema } = await import('@/lib/api/schemas');
     expect(() => preferencesPatchSchema.parse({ theme: 'invalid' })).toThrow();
   });
+
+  it('createNoteSchema accepts the `description` wire key and normalizes it to content', async () => {
+    const { createNoteSchema } = await import('@/lib/api/schemas');
+    // The contact-detail client and the integrations SDK both send the note
+    // body as `description`, not `content`.
+    const result = createNoteSchema.parse({ description: 'Called back', type: 'call' });
+    expect(result.content).toBe('Called back');
+    expect(result.type).toBe('call');
+  });
+
+  it('createNoteSchema still accepts the canonical `content` key and defaults type to note', async () => {
+    const { createNoteSchema } = await import('@/lib/api/schemas');
+    const result = createNoteSchema.parse({ content: 'A note' });
+    expect(result.content).toBe('A note');
+    expect(result.type).toBe('note');
+  });
+
+  it('createNoteSchema rejects a payload with neither content nor description', async () => {
+    const { createNoteSchema } = await import('@/lib/api/schemas');
+    expect(() => createNoteSchema.parse({ type: 'note' })).toThrow();
+    expect(() => createNoteSchema.parse({ description: '   ' })).toThrow();
+  });
+
+  it('createNoteSchema rejects an invalid activity type', async () => {
+    const { createNoteSchema } = await import('@/lib/api/schemas');
+    expect(() => createNoteSchema.parse({ content: 'x', type: 'bogus' })).toThrow();
+  });
 });

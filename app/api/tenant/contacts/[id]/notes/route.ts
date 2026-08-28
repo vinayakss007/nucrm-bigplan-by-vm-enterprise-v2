@@ -65,7 +65,7 @@ export async function POST(
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
     const description = v.content;
-    const type = 'note';
+    const type = v.type;
     const metadata = {};
     
     if (!description?.trim()) {
