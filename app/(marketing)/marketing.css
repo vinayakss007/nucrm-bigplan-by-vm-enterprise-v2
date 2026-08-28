@@ -148,7 +148,12 @@
 .mk-glass {
   background: rgba(9, 9, 19, 0.95);
   border: 1px solid var(--mk-line);
-  backdrop-filter: blur(20px) saturate(160%);
+  /* The 0.95 alpha does the readability work (see comment above); the blur is
+     pure decoration. This surface is the full-width fixed header, so the blur
+     kernel is recomputed across the viewport as content scrolls beneath it.
+     A 10px radius keeps the glass look at roughly half the per-frame blur cost
+     of 20px. */
+  backdrop-filter: blur(10px) saturate(160%);
 }
 
 /* Hairline gradient edge used on hero panels and feature cards. */
@@ -402,31 +407,39 @@
 
 /* ── Scroll reveal (driven by components/marketing/reveal.tsx) ───────── */
 
+/* The resting state is VISIBLE. Content is only hidden for the entrance
+   animation once the client component has "armed" it (added .mk-reveal-armed
+   in a mount effect). With JS disabled or hydration broken, .mk-reveal-armed
+   is never applied, so the server-rendered markup stays fully visible
+   (progressive enhancement — the landing page can never render blank). */
 .mk-reveal {
-  opacity: 0;
-  transform: translateY(26px);
   transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), transform 0.75s cubic-bezier(0.16, 1, 0.3, 1),
     filter 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mk-reveal-armed:not(.is-in) {
+  opacity: 0;
+  transform: translateY(26px);
 }
 .mk-reveal.is-in {
   opacity: 1;
   transform: none;
   filter: none;
 }
-/* Direction variants */
-.mk-reveal-down {
+/* Direction variants — the starting offset only applies while armed and not
+   yet revealed, so an un-armed (no-JS) element renders in its final position. */
+.mk-reveal-armed.mk-reveal-down:not(.is-in) {
   transform: translateY(-26px);
 }
-.mk-reveal-left {
+.mk-reveal-armed.mk-reveal-left:not(.is-in) {
   transform: translateX(40px);
 }
-.mk-reveal-right {
+.mk-reveal-armed.mk-reveal-right:not(.is-in) {
   transform: translateX(-40px);
 }
-.mk-reveal-scale {
+.mk-reveal-armed.mk-reveal-scale:not(.is-in) {
   transform: scale(0.92);
 }
-.mk-reveal-blur {
+.mk-reveal-armed.mk-reveal-blur:not(.is-in) {
   transform: none;
   filter: blur(8px);
 }
@@ -459,16 +472,23 @@
     filter: none;
   }
 }
-.mk-stagger-word {
+/* Words are visible by default; the fade-in only runs once JS arms them, so a
+   no-JS / broken-hydration render keeps the headline readable. */
+.mk-stagger-word.mk-stagger-armed {
   opacity: 0;
   animation: mk-stagger-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* ── Glow effects ───────────────────────────────────────────────────── */
 
+/* The pulse animates only opacity (a compositor-only property) with the blur
+   radius held static, so no per-frame re-rasterisation. It runs solely while
+   the glow layer is visible on hover — an always-on infinite animation would
+   keep a blurred compositing layer alive and repainting even when the card is
+   idle and off-screen, which is pure wasted GPU/CPU. */
 @keyframes mk-glow-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.7; }
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.85; }
 }
 .mk-glow {
   position: relative;
@@ -483,14 +503,20 @@
   filter: blur(12px);
   transition: opacity 0.4s ease;
   z-index: -1;
-  animation: mk-glow-pulse 3s ease-in-out infinite;
 }
 .mk-glow:hover::after {
-  opacity: 1;
+  opacity: 0.7;
+  animation: mk-glow-pulse 3s ease-in-out infinite;
 }
 
 /* ── Noise texture overlay (adds film grain depth) ──────────────────── */
 
+/* Static film grain. The feTurbulence data-URI is expensive to rasterise, so
+   the overlay must paint exactly once and stay cached: it is never animated,
+   and `will-change: transform` promotes it to its own compositor layer so the
+   many animated descendants underneath (aurora, marquee, sweep) can repaint
+   without ever re-rasterising the grain on top. `contain` keeps its paint
+   isolated from the rest of the tree. */
 .mk-noise::before {
   content: '';
   position: fixed;
@@ -501,6 +527,8 @@
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-repeat: repeat;
   background-size: 128px 128px;
+  contain: strict;
+  will-change: transform;
 }
 
 /* ── Hero spotlight (cursor-following light) ────────────────────────── */
@@ -538,8 +566,15 @@
   .mk-flow,
   .mk-caret,
   .mk-sweep::after,
-  .mk-ping::before {
+  .mk-ping::before,
+  .mk-glow:hover::after,
+  .mk-stagger-word.mk-stagger-armed {
     animation: none !important;
+  }
+  /* Keep the staggered words fully visible when their entrance animation is
+     suppressed, otherwise they would stay stuck at the keyframe's opacity: 0. */
+  .mk-stagger-word.mk-stagger-armed {
+    opacity: 1;
   }
 }
 
