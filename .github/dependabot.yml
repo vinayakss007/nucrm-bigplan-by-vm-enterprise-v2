@@ -1,0 +1,89 @@
+# Dependabot configuration — automated dependency & security updates.
+#
+# Rationale: the repo installs with `npm ci` against a single package-lock.json,
+# runs on GitHub Actions, and ships a Dockerfile. Before this config, dependency
+# and CVE updates were found reactively (via `npm audit` in CI) rather than
+# proposed automatically. Dependabot opens grouped PRs that flow through the same
+# CI gates (lint/typecheck/tests/audit/gitleaks) as any other change.
+#
+# Noise control: minor/patch updates are grouped per ecosystem so reviewers get
+# a small number of batched PRs instead of one-per-dependency. Major upgrades are
+# left individual (they need human judgement). Security updates are always raised
+# regardless of the schedule.
+version: 2
+updates:
+  # ── Application dependencies (npm) ──────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 5
+    versioning-strategy: "increase"
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      # Batch all non-major runtime updates into one PR.
+      production-minor-patch:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+      # Batch all non-major dev/tooling updates into one PR.
+      development-minor-patch:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Major upgrades of framework-level deps are handled deliberately, not by a
+      # bot — they carry breaking changes and migration work.
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "drizzle-orm"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
+  # ── GitHub Actions ──────────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # ── Docker base image ─────────────────────────────────────────────────────
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore(docker)"
