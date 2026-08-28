@@ -5,7 +5,12 @@
  */
 import { query } from './client';
 
-let checked = false;
+// Time-bounded cache: a successful check is trusted for this long before we
+// re-query. This keeps the hot path fast while still eventually detecting a
+// migration applied at runtime (a permanent boolean cache never re-detected it).
+const SCHEMA_CHECK_TTL_MS = 60_000;
+
+let lastOkAt = 0;
 
 /**
  * Checks if the DB schema is initialised.
@@ -13,7 +18,9 @@ let checked = false;
  * Returns { ready: boolean, missing_tables: string[] }
  */
 export async function ensureSchema(): Promise<{ ready: boolean; missing: string[] }> {
-  if (checked) return { ready: true, missing: [] };
+  if (lastOkAt !== 0 && Date.now() - lastOkAt < SCHEMA_CHECK_TTL_MS) {
+    return { ready: true, missing: [] };
+  }
   try {
     const REQUIRED = ['users','sessions','tenants','plans','contacts','deals','tasks','companies','activities','notifications'];
     const { rows } = await query<{ tablename: string }>(
@@ -22,7 +29,9 @@ export async function ensureSchema(): Promise<{ ready: boolean; missing: string[
     );
     const existing = rows.map(r => r.tablename);
     const missing = REQUIRED.filter(t => !existing.includes(t));
-    if (missing.length === 0) checked = true;
+    // Only cache a healthy result; when tables are missing keep re-checking so a
+    // later migration is picked up immediately.
+    lastOkAt = missing.length === 0 ? Date.now() : 0;
     return { ready: missing.length === 0, missing };
  
  

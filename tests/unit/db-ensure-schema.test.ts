@@ -38,7 +38,7 @@ describe('ensureSchema', () => {
     expect(result.missing).toContain('contacts');
   });
 
-  it('caches result after first successful check', async () => {
+  it('caches a successful check within the TTL', async () => {
     mockQuery.mockResolvedValue({
       rows: [
         { tablename: 'users' }, { tablename: 'sessions' }, { tablename: 'tenants' },
@@ -51,6 +51,36 @@ describe('ensureSchema', () => {
     await ensureSchema();
     await ensureSchema();
     expect(mockQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-queries after the cache TTL elapses (detects a later migration)', async () => {
+    vi.useFakeTimers();
+    try {
+      mockQuery.mockResolvedValue({
+        rows: [
+          { tablename: 'users' }, { tablename: 'sessions' }, { tablename: 'tenants' },
+          { tablename: 'plans' }, { tablename: 'contacts' }, { tablename: 'deals' },
+          { tablename: 'tasks' }, { tablename: 'companies' }, { tablename: 'activities' },
+          { tablename: 'notifications' },
+        ],
+      });
+      const { ensureSchema } = await import('@/lib/db/ensure-schema');
+
+      const first = await ensureSchema();
+      expect(first.ready).toBe(true);
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+
+      // Within the TTL: served from cache, no new query.
+      await ensureSchema();
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+
+      // Advance past the 60s TTL: the next call must re-query.
+      vi.advanceTimersByTime(60_000 + 1);
+      await ensureSchema();
+      expect(mockQuery).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not cache when tables are missing', async () => {
