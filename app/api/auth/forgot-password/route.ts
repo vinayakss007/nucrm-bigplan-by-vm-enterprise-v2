@@ -16,7 +16,21 @@ import { getClientIp } from '@/lib/client-ip';
 
 const schema = z.object({ email: z.string().email() });
 
+// #1166 (CWE-208): mask the timing difference between existing and non-existent
+// emails. Existing users trigger token creation + a DB insert + an email send
+// (a slow network call); non-existent users return immediately. We (a) run the
+// existing-user work OFF the response path (fire-and-forget) and (b) hold every
+// response to a consistent minimum time so response latency no longer leaks
+// whether the account exists.
+const MIN_RESPONSE_MS = 250;
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+async function normalizeTiming(startedAt: number): Promise<void> {
+  const elapsed = Date.now() - startedAt;
+  if (elapsed < MIN_RESPONSE_MS) await sleep(MIN_RESPONSE_MS - elapsed);
+}
+
 export async function POST(request: NextRequest) {
+  const startedAt = Date.now();
   try {
     const limited = await checkRateLimit(request, { action: 'forgot_password', max: 3, windowMinutes: 60 });
     if (limited) return limited;
@@ -43,25 +57,33 @@ export async function POST(request: NextRequest) {
       columns: { id: true, fullName: true }
     });
     
-    if (!user) return NextResponse.json({ ok: true });
+    if (!user) {
+      await normalizeTiming(startedAt);
+      return NextResponse.json({ ok: true });
+    }
 
-    // Create reset token — hash before storing so DB never holds raw tokens
-    const token = randomBytes(32).toString('hex');
-    const tokenHash = createHash('sha256').update(token).digest('hex');
+    // #1166: run the token-persist + email-send OFF the response timing path so
+    // an existing account doesn't take measurably longer than a non-existent one.
+    // Fire-and-forget with a .catch so a rejection can't crash the process.
+    void (async () => {
+      try {
+        // Create reset token — hash before storing so DB never holds raw tokens
+        const token = randomBytes(32).toString('hex');
+        const tokenHash = createHash('sha256').update(token).digest('hex');
 
-    await db.insert(passwordResets).values({
-      userId: user.id,
-      token: tokenHash,
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
-    });
+        await db.insert(passwordResets).values({
+          userId: user.id,
+          token: tokenHash,
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
+        });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-    const resetUrl = `${appUrl}/auth/reset-password?token=${token}`;
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+        const resetUrl = `${appUrl}/auth/reset-password?token=${token}`;
 
-    await sendEmail({
-      to: email,
-      subject: 'Reset your NuCRM password',
-      html: `
+        await sendEmail({
+          to: email,
+          subject: 'Reset your NuCRM password',
+          html: `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto">
           <div style="height:4px;background:linear-gradient(90deg,#7c3aed,#4f46e5);border-radius:4px 4px 0 0"></div>
           <div style="padding:40px 32px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
@@ -71,15 +93,21 @@ export async function POST(request: NextRequest) {
             <p style="color:#9ca3af;font-size:12px;margin-top:24px">If you didn't request this, ignore this email. Your password won't change.</p>
           </div>
         </div>`,
-      text: `Reset your NuCRM password: ${resetUrl} (expires in 1 hour)`,
-    });
+          text: `Reset your NuCRM password: ${resetUrl} (expires in 1 hour)`,
+        });
+      } catch (bgErr) {
+        console.error('[forgot-password] background token/email failed:', bgErr instanceof Error ? bgErr.message : bgErr);
+      }
+    })();
 
+    await normalizeTiming(startedAt);
     return NextResponse.json({ ok: true });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[forgot-password]', err);
+    await normalizeTiming(startedAt);
     return NextResponse.json({ ok: true }); // Don't reveal errors
   }
 }
