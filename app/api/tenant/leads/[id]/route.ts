@@ -11,7 +11,7 @@ import { logAudit } from '@/lib/audit';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody, uuidField } from '@/lib/api/validate';
-import { updateLeadSchema } from '@/lib/api/schemas';
+import { updateLeadSchema, LEAD_STATUS_VALUES } from '@/lib/api/schemas';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { withConcurrencyGuard } from '@/lib/concurrency';
@@ -58,9 +58,11 @@ const patchLeadBodySchema = updateLeadSchema
     linkedin_url: z.string().trim().max(500).nullable().optional(),
     website: z.string().trim().max(500).nullable().optional(),
     tags: z.array(z.string()).optional(),
-    // Free-form in the UI ('lost', 'nurturing', …) — only recorded on the
-    // activity log, never written to the lead row, so validate type/length only
-    lead_status: z.string().trim().max(50).optional(),
+    // Canonical wire field for the lead status. Written to the leadStatus
+    // column (aliases/overrides `status`) and also recorded on the activity
+    // log. Constrained to the shared LEAD_STATUS_VALUES allowlist so the
+    // canonical write path can no longer persist arbitrary status strings.
+    lead_status: z.enum(LEAD_STATUS_VALUES).optional(),
   });
 
 /**
@@ -207,6 +209,9 @@ export async function PATCH(
     if (v.company_id !== undefined) updateData.companyId = v.company_id;
     if (v.source !== undefined) updateData.source = v.source;
     if (v.status !== undefined) updateData.leadStatus = v.status;
+    // lead_status is the canonical wire field; honor it on the DB write too
+    // (it aliases to the same leadStatus column and wins over `status`).
+    if (v.lead_status !== undefined) updateData.leadStatus = v.lead_status;
     if (v.lifecycle_stage !== undefined) updateData.lifecycleStage = v.lifecycle_stage;
     if (v.authority_level !== undefined) updateData.authorityLevel = v.authority_level;
     if (v.need_description !== undefined) updateData.needDescription = v.need_description;

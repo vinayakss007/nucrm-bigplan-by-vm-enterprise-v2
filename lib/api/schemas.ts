@@ -122,6 +122,23 @@ export const companyQuerySchema = z.object({
 });
 
 // ── Lead schemas ──
+// Canonical allowlist of lead status values. Superset of the single-lead
+// `status` enum, the bulk endpoint's STATUSES allowlist, and the values the
+// leads Kanban UI emits (PIPELINE_CONFIG), so every write path that touches
+// leads.leadStatus is bounded to the same vocabulary.
+export const LEAD_STATUS_VALUES = [
+  'new',
+  'contacted',
+  'qualified',
+  'unqualified',
+  'converted',
+  'rejected',
+  'junk',
+  'archived',
+  'lost',
+  'nurturing',
+] as const;
+
 export const createLeadSchema = z.object({
   contact_id: uuid,
   first_name: requiredString.max(100),

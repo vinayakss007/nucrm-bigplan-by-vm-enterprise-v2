@@ -40,13 +40,13 @@ function LoadingSkeleton() {
   );
 }
 
-export default async function ContactsPage({ searchParams }: { searchParams: Promise<{ offset?: string; q?: string; status?: string }> }) {
+export default async function ContactsPage({ searchParams }: { searchParams: Promise<{ offset?: string; q?: string; lead_status?: string }> }) {
   const ctx = await requireTenantCtx();
   const tid = ctx.tenantId;
   const sp = await searchParams;
   const offset = parseInt(sp.offset || '0');
   const q = sp.q || '';
-  const status = sp.status || 'all';
+  const status = sp.lead_status || 'all';
   const limit = 25;
 
   const permissions = {
