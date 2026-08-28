@@ -540,6 +540,13 @@
       "when": 1788177600000,
       "tag": "0077_companies_status_assigned",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1788264000000,
+      "tag": "0078_drop_dead_backup_tables",
+      "breakpoints": true
     }
   ]
 }

@@ -13,8 +13,6 @@
 
 import {
   systemSettings,
-  tenantBackups,
-  tenantRestores,
   dashboards,
   savedReports,
   announcements,
@@ -163,36 +161,6 @@ export const INFRA_TABLES = {
       description: 'Task management',
       isCore: false,
       indexes: ['idx_tasks_tenant', 'idx_tasks_assigned', 'idx_tasks_due', 'idx_tasks_metadata_g', 'idx_tasks_active'],
-    },
-  },
-  tenantBackups: {
-    table: tenantBackups,
-    metadata: {
-      name: 'tenant_backups',
-      schemaGroup: 'infra',
-      hasTenantId: true,
-      hasSoftDelete: true,
-      hasAudit: false,
-      hasMetadata: true,
-      dependencies: ['tenants'],
-      description: 'Tenant data backups',
-      isCore: false,
-      indexes: ['idx_tenant_backups_tenant', 'idx_tenant_backups_metadata_g'],
-    },
-  },
-  tenantRestores: {
-    table: tenantRestores,
-    metadata: {
-      name: 'tenant_restores',
-      schemaGroup: 'infra',
-      hasTenantId: true,
-      hasSoftDelete: true,
-      hasAudit: false,
-      hasMetadata: true,
-      dependencies: ['tenants', 'tenantBackups', 'users'],
-      description: 'Tenant data restores',
-      isCore: false,
-      indexes: ['idx_tenant_restores_tenant', 'idx_tenant_restores_metadata_g'],
     },
   },
   dashboards: {
