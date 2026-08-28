@@ -5,11 +5,14 @@
  */
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ComponentProps } from 'react';
 import { BarChart3, PieChart, TrendingUp, Download, Loader2, Play, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
-import type { TooltipValueType, PieLabelRenderProps } from 'recharts';
+// Derive the Tooltip `formatter` type from the installed recharts Tooltip so it
+// matches the resolved version (recharts' type aliases aren't reliably exported
+// from root); coerce in-body to preserve exact output.
+type TooltipFormatter = NonNullable<ComponentProps<typeof Tooltip>['formatter']>;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -356,7 +359,7 @@ export default function ReportBuilder() {
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip
                       contentStyle={{ borderRadius: 12, border: '1px solid var(--border)', fontSize: 12 }}
-                      formatter={(value: TooltipValueType | undefined) => [Number(value ?? 0).toLocaleString(), 'Value']}
+                      formatter={((value) => [Number(value ?? 0).toLocaleString(), 'Value']) as TooltipFormatter}
                     />
                     <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                       {result.data.map((_, i) => (
@@ -377,9 +380,11 @@ export default function ReportBuilder() {
                       outerRadius="80%"
                       dataKey="value"
                       nameKey="label"
-                      label={(props: PieLabelRenderProps) => {
-                        // recharts v3 dropped `label`/`percentage` from PieLabelRenderProps;
-                        // read them from the original datum on `payload` to preserve exact output.
+                      label={(props: { payload?: unknown }) => {
+                        // recharts v3 dropped `label`/`percentage` from the pie-label
+                        // render props; read them from the original datum on `payload`
+                        // to preserve the exact pre-v3 label text. Typed locally so we
+                        // don't depend on recharts' (build-unstable) exported label type.
                         const datum = props.payload as ReportDataPoint;
                         return `${datum.label} (${datum.percentage}%)`;
                       }}
@@ -391,7 +396,7 @@ export default function ReportBuilder() {
                     </Pie>
                     <Tooltip
                       contentStyle={{ borderRadius: 12, border: '1px solid var(--border)', fontSize: 12 }}
-                      formatter={(value: TooltipValueType | undefined, name: number | string | undefined) => [Number(value ?? 0).toLocaleString(), String(name ?? '')]}
+                      formatter={((value, name) => [Number(value ?? 0).toLocaleString(), String(name ?? '')]) as TooltipFormatter}
                     />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                   </RePieChart>
@@ -412,7 +417,7 @@ export default function ReportBuilder() {
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip
                       contentStyle={{ borderRadius: 12, border: '1px solid var(--border)', fontSize: 12 }}
-                      formatter={(value: TooltipValueType | undefined) => [Number(value ?? 0).toLocaleString(), 'Value']}
+                      formatter={((value) => [Number(value ?? 0).toLocaleString(), 'Value']) as TooltipFormatter}
                     />
                     <Line
                       type="monotone"
