@@ -11,7 +11,7 @@ import { contacts, emailTemplates } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
-import { sendEmail } from '@/lib/email/service';
+import { addJob } from '@/lib/queue';
 import { escapeHtml } from '@/lib/email/escape-html';
 
 /**
@@ -22,6 +22,12 @@ import { escapeHtml } from '@/lib/email/escape-html';
  *
  * Template variables are interpolated: {{first_name}}, {{company}}, etc.
  * Max 50 recipients per request (use multiple requests for larger campaigns).
+ *
+ * #1052: instead of sending each email inline inside the HTTP request (an N+1
+ * synchronous loop that blocks the request and risks timeout/partial loss),
+ * this route now enqueues a single `send-bulk-emails` job — the same queue
+ * mechanism the already-fixed app/api/tenant/email/bulk route uses. The worker
+ * processes recipients in parallel batches with retries.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -56,7 +62,8 @@ export async function POST(request: NextRequest) {
 
     // Fetch contacts - filter out doNotContact contacts.
     // Compliance (#1120): `unsubscribed` is fetched so opted-out contacts can be
-    // skipped and reported instead of emailed.
+    // skipped and reported instead of emailed. Eligibility filtering happens
+    // BEFORE enqueuing so the queued job only ever targets valid recipients.
     const recipientContacts = await db
       .select({
         id: contacts.id,
@@ -81,46 +88,48 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No valid recipients found (contacts need email addresses)' }, { status: 400 });
     }
 
-    // Send to each contact with personalization
-    const results: Array<{ contact_id: string; email: string; status: 'sent' | 'failed'; error?: string }> = [];
+    // Pre-apply the caller-supplied static `variables` (e.g. {{company}}) that
+    // are identical for every recipient, then normalize the remaining
+    // per-recipient {{first_name}} token to {first_name} so the send-bulk-emails
+    // worker's per-recipient substitution applies during delivery. This mirrors
+    // the token contract used by app/api/tenant/email/bulk (worker substitutes
+    // {first_name} per recipient). Other per-contact tokens (last_name,
+    // full_name) are not substituted by the worker — same limitation as the
+    // sibling bulk route.
+    // Subject uses raw (unescaped) substitution — plain-text context.
+    const subject = normalizeFirstNameToken(applyStaticVars(template.subject || '', variables, false));
+    // Body values are HTML-escaped to preserve the anti-XSS behavior the inline
+    // implementation had (#1170/#1191/#1272 family). The worker separately
+    // escapes the per-recipient first_name.
+    const bodyContent = normalizeFirstNameToken(
+      applyStaticVars(template.bodyHtml || template.bodyText || '', variables, true)
+    );
 
-    for (const contact of eligibleContacts) {
-      try {
-        const personalVars: Record<string, string> = {
-          ...variables,
-          first_name: contact.firstName || '',
-          last_name: contact.lastName || '',
-          full_name: [contact.firstName, contact.lastName].filter(Boolean).join(' '),
-          email: contact.email || '',
-        };
+    // Build the recipient payload shape the send-bulk-emails worker reads
+    // ({ email, first_name, last_name }); contact_id is included for parity with
+    // the sibling bulk route.
+    const recipients = eligibleContacts.map(c => ({
+      contact_id: c.id,
+      email: c.email as string,
+      first_name: c.firstName || '',
+      last_name: c.lastName || '',
+    }));
 
-        const subject = interpolateRaw(template.subject || '', personalVars);
-        // emailTemplates stores bodyHtml / bodyText — there is no `body` column.
-        // Prefer the HTML body, fall back to the plain-text one.
-        const htmlBody = interpolate(template.bodyHtml || template.bodyText || '', personalVars);
-
-        await sendEmail({
-          to: contact.email!,
-          subject,
-          html: htmlBody,
-        });
-
-        results.push({ contact_id: contact.id, email: contact.email!, status: 'sent' });
-      } catch (err) {
-        results.push({
-          contact_id: contact.id,
-          email: contact.email || '',
-          status: 'failed',
-          error: err instanceof Error ? err.message : 'Send failed',
-        });
-      }
-    }
-
-    const sent = results.filter(r => r.status === 'sent').length;
-    const failed = results.filter(r => r.status === 'failed').length;
+    // Queue instead of sending inline (#1052).
+    await addJob('send-bulk-emails', {
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      subject,
+      body: bodyContent,
+      recipients,
+    });
 
     return NextResponse.json({
-      data: { sent, failed, total: results.length, skipped_unsubscribed: skippedUnsubscribed, results },
+      data: {
+        queued: true,
+        count: recipients.length,
+        skipped_unsubscribed: skippedUnsubscribed,
+      },
     });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
@@ -128,11 +137,21 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function interpolate(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => escapeHtml(vars[key] ?? ''));
+/**
+ * Substitute static, recipient-independent variables ({{company}}, etc.) into a
+ * template. Leaves the per-recipient {{first_name}} token intact so the worker
+ * can substitute it per recipient.
+ */
+function applyStaticVars(template: string, vars: Record<string, string>, escape: boolean): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    if (key === 'first_name') return match; // handled per-recipient by the worker
+    if (!Object.prototype.hasOwnProperty.call(vars, key)) return match;
+    const value = String(vars[key] ?? '');
+    return escape ? escapeHtml(value) : value;
+  });
 }
 
-/** Interpolate without HTML escaping — for plain-text contexts like email subjects */
-function interpolateRaw(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '');
+/** Normalize the remaining {{first_name}} token to the worker's {first_name} form. */
+function normalizeFirstNameToken(template: string): string {
+  return template.replace(/\{\{first_name\}\}/g, '{first_name}');
 }
