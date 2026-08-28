@@ -15,6 +15,9 @@ export async function register() {
     // requests and close the DB pool before exit. Without this, container
     // orchestrators (K8s, ECS) kill the process mid-request during deploys.
     const { registerShutdownHandlers } = await import("./lib/db/graceful-shutdown");
+    // The handler drains and then exits (process.exit lives inside the Node-only
+    // graceful-shutdown module, not here — instrumentation.ts is also bundled for
+    // the Edge runtime, which doesn't support process.exit).
     registerShutdownHandlers({
       drainTimeoutMs: 25_000, // K8s default terminationGracePeriodSeconds is 30
       onShutdownStart: () => {
@@ -22,7 +25,6 @@ export async function register() {
       },
       onShutdownComplete: () => {
         console.log('[instrumentation] Graceful shutdown: complete. Exiting.');
-        process.exit(0);
       },
     });
 

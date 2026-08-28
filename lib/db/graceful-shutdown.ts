@@ -26,6 +26,15 @@ export interface ShutdownOptions {
   onShutdownStart?: () => void;
   /** Callback invoked when shutdown completes */
   onShutdownComplete?: () => void;
+  /**
+   * When true (the default), the SIGTERM/SIGINT handler calls `process.exit(0)`
+   * after a successful drain. This lives here (a Node-only module) rather than
+   * in the caller so `process.exit` never appears in `instrumentation.ts`, which
+   * Next.js also bundles for the Edge runtime (where `process.exit` is
+   * unsupported and triggers "A Node.js API is used" build warnings). Set false
+   * in tests to keep the process alive.
+   */
+  exitProcess?: boolean;
 }
 
 // -------------------------------------------------------------------
@@ -81,11 +90,19 @@ export function registerShutdownHandlers(options: ShutdownOptions = {}): void {
   if (handlersRegistered) return;
   handlersRegistered = true;
 
+  const exitProcess = options.exitProcess !== false;
   const handler = () => {
-    initiateShutdown(options).catch((err) => {
-      console.error('[GracefulShutdown] Shutdown failed:', err);
-      process.exit(1);
-    });
+    initiateShutdown(options)
+      .then(() => {
+        // Successful drain: exit 0. Done here (Node-only module) so that
+        // instrumentation.ts stays free of process.exit and doesn't trip the
+        // Edge-runtime bundler.
+        if (exitProcess) process.exit(0);
+      })
+      .catch((err) => {
+        console.error('[GracefulShutdown] Shutdown failed:', err);
+        if (exitProcess) process.exit(1);
+      });
   };
 
   process.on('SIGTERM', handler);
