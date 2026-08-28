@@ -18,6 +18,8 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 import { escapeLike } from '@/lib/api/sanitize-like';
+import { cachedListCount, buildFilterKey } from '@/lib/api/list-count';
+import { invalidateTenantCache } from '@/lib/cache/index';
 
  
  
@@ -67,10 +69,23 @@ export async function GET(request: NextRequest) {
       )!);
     }
 
-    const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(contacts)
-      .leftJoin(companies, eq(companies.id, contacts.companyId))
-      .where(and(...filters));
+    // F2 (#1544): an exact filtered count(*) is O(matching-rows) and dominated
+    // page-load cost at scale. Memoise it briefly per (tenant, filters) so
+    // pagination/rapid re-fetch reuse it instead of re-scanning. Short TTL keeps
+    // the total fresh within seconds; correctness is unaffected (fallback runs
+    // the query directly if the cache is down).
+    const total = await cachedListCount(
+      ctx.tenantId,
+      'contacts',
+      buildFilterKey({ q, leadStatus, company_id }),
+      async () => {
+        const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
+          .from(contacts)
+          .leftJoin(companies, eq(companies.id, contacts.companyId))
+          .where(and(...filters));
+        return countResult?.count ?? 0;
+      },
+    );
 
     const data = await db.select({
       id: contacts.id,
@@ -101,7 +116,7 @@ export async function GET(request: NextRequest) {
     .limit(limit)
     .offset(offset);
 
-    const response = { data, total: countResult?.count ?? 0, offset, limit };
+    const response = { data, total, offset, limit };
     return NextResponse.json(response);
   
 
@@ -224,8 +239,10 @@ export async function POST(request: NextRequest) {
       name: `${v.first_name} ${v.last_name}` 
     });
 
-    // Invalidate dashboard widget caches
+    // Invalidate dashboard widget caches + the cached list count (#1544 F2) so
+    // the new contact reflects in list totals immediately, not after the TTL.
     invalidateWidgetCache(ctx.tenantId, 'stats-contacts', 'contacts-recent', 'activity');
+    void invalidateTenantCache(ctx.tenantId).catch(() => { /* cache best-effort */ });
 
     // WORKFLOW-C: trigger automation rules (non-blocking)
     const { evaluateAutomations } = await import('@/lib/automation/engine');
