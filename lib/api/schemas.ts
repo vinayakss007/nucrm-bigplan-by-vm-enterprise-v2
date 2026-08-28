@@ -477,6 +477,15 @@ export const inviteMemberSchema = z.object({
   permissions: z.record(z.string(), z.boolean()).optional().default({}),
 });
 
+// ── Superadmin user update schema (PATCH /api/superadmin/users) ──
+// role/status enums MUST match the route's allowed values.
+export const updateSuperadminUserSchema = z.object({
+  id: z.string().uuid(),
+  full_name: z.string().trim().max(200).optional().nullable(),
+  role: z.enum(['admin', 'user', 'viewer']).optional(),
+  status: z.enum(['active', 'suspended']).optional(),
+});
+
 // ── Bulk operation schemas ──
 export const bulkDeleteSchema = z.object({
   ids: z.array(z.string().uuid()).min(1, 'At least one ID required').max(1000),

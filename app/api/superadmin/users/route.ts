@@ -7,7 +7,7 @@ import { apiError } from '@/lib/api-error';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
-import { inviteMemberSchema } from '@/lib/api/schemas';
+import { inviteMemberSchema, updateSuperadminUserSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users, tenantMembers, tenants } from '@/drizzle/schema';
@@ -136,42 +136,27 @@ export async function PATCH(request: NextRequest) {
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const body = await readJsonBody(request);
-    const { id, full_name, role, status } = body as {
-      id?: string;
-      full_name?: string;
-      role?: string;
-      status?: string;
-    };
+    const validated = validateBody(updateSuperadminUserSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const v = validated.data;
+    // expectedUpdatedAt is a concurrency control field read from the raw body (not part of the schema).
     const expectedUpdatedAt: string | Date | null | undefined = (body as Record<string, unknown>).expectedUpdatedAt as string | Date | null ?? (body as Record<string, unknown>)._updated_at as string | Date | null;
-
-    if (!id) return NextResponse.json({ error: 'User id is required' }, { status: 400 });
-
-    // Validate status if provided
-    const allowedStatuses = ['active', 'suspended'];
-    if (status && !allowedStatuses.includes(status)) {
-      return NextResponse.json({ error: `Invalid status. Allowed: ${allowedStatuses.join(', ')}` }, { status: 400 });
-    }
-
-    // Validate role if provided
-    const allowedRoles = ['admin', 'user', 'viewer'];
-    if (role && !allowedRoles.includes(role)) {
-      return NextResponse.json({ error: `Invalid role. Allowed: ${allowedRoles.join(', ')}` }, { status: 400 });
-    }
 
     // Build update payload
     const updates: Record<string, unknown> = { updatedAt: new Date() };
 
-    if (full_name !== undefined) {
-      updates.fullName = full_name?.trim() || null;
+    if (v.full_name !== undefined) {
+      updates.fullName = v.full_name?.trim() || null;
     }
 
-    // Store role and status in metadata (no schema migration needed)
-    if (role !== undefined || status !== undefined) {
+    // Store role and status in metadata (no schema migration needed).
+    // Super admin status changes remain blocked — use /api/superadmin/transfer-admin instead.
+    if (v.role !== undefined || v.status !== undefined) {
       // Fetch current metadata first
       const [existing] = await db
         .select({ metadata: users.metadata, updatedAt: users.updatedAt })
         .from(users)
-        .where(eq(users.id, id))
+        .where(eq(users.id, v.id))
         .limit(1);
 
       if (!existing) {
@@ -180,17 +165,17 @@ export async function PATCH(request: NextRequest) {
 
       const currentMeta = (existing.metadata as Record<string, unknown>) || {};
       const newMeta = { ...currentMeta };
-      if (role !== undefined) newMeta.role = role;
-      if (status !== undefined) newMeta.account_status = status;
+      if (v.role !== undefined) newMeta.role = v.role;
+      if (v.status !== undefined) newMeta.account_status = v.status;
       updates.metadata = newMeta;
 
-      const guard = await concurrencyGuard(db, users, id, null, expectedUpdatedAt);
+      const guard = await concurrencyGuard(db, users, v.id, null, expectedUpdatedAt);
       if (guard) return guard;
 
       const [updated] = await db
         .update(users)
         .set(updates)
-        .where(and(eq(users.id, id), eq(users.updatedAt, new Date(expectedUpdatedAt as string | number | Date))))
+        .where(and(eq(users.id, v.id), eq(users.updatedAt, new Date(expectedUpdatedAt as string | number | Date))))
         .returning({
           id: users.id,
           email: users.email,
@@ -203,13 +188,13 @@ export async function PATCH(request: NextRequest) {
     }
 
     // No metadata changes — plain update with concurrency guard
-    const guard = await concurrencyGuard(db, users, id, null, expectedUpdatedAt);
+    const guard = await concurrencyGuard(db, users, v.id, null, expectedUpdatedAt);
     if (guard) return guard;
 
     const [updated] = await db
       .update(users)
       .set(updates)
-      .where(and(eq(users.id, id), eq(users.updatedAt, new Date(expectedUpdatedAt as string | number | Date))))
+      .where(and(eq(users.id, v.id), eq(users.updatedAt, new Date(expectedUpdatedAt as string | number | Date))))
       .returning({
         id: users.id,
         email: users.email,
