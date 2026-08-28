@@ -29,6 +29,17 @@ function sendReply(chatId: number, text: string) {
   }).catch((e) => console.error('[telegram bot] Error:', e));
 }
 
+/**
+ * #1296: escape Telegram Markdown (legacy `parse_mode: 'Markdown'`) special
+ * characters in dynamic/user-controlled values. Unescaped `*`, `_`, `` ` `` or
+ * `[` in a name/slug/email breaks message formatting — and Telegram rejects the
+ * whole message if the resulting Markdown is malformed. Only these four
+ * characters are special in legacy Markdown mode.
+ */
+function mdEscape(value: unknown): string {
+  return String(value ?? '').replace(/([_*`[])/g, '\\$1');
+}
+
 export async function POST(req: NextRequest) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return NextResponse.json({ ok: false });
@@ -107,7 +118,7 @@ export async function POST(req: NextRequest) {
   const cmd = (text.split(' ')[0] || '').toLowerCase();
 
   if (cmd === '/start' || cmd === '/help') {
-    let msg = `*Welcome, ${user.fullName}!*\n\nCommands:\n/info — Your account info\n`;
+    let msg = `*Welcome, ${mdEscape(user.fullName)}!*\n\nCommands:\n/info — Your account info\n`;
     if (user.isSuperAdmin) {
       msg += `/tenants — List all tenants\n/pending — Pending/approval tenants\n/recent — Recent signups (7d)\n/stats — Platform stats\n`;
     }
@@ -116,7 +127,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (cmd === '/info') {
-    let msg = `*Account Info*\nName: ${user.fullName}\nEmail: ${user.email}`;
+    let msg = `*Account Info*\nName: ${mdEscape(user.fullName)}\nEmail: ${mdEscape(user.email)}`;
     if (user.isSuperAdmin) msg += `\nRole: Super Admin`;
     sendReply(chatId, msg);
     return NextResponse.json({ ok: true });
@@ -139,7 +150,7 @@ export async function POST(req: NextRequest) {
     } else {
       let msg = `*Tenants (${all.length})*\n\n`;
       for (const t of all) {
-        msg += `• ${t.name} (\`${t.slug}\`) — ${t.planId} [${t.status}]\n`;
+        msg += `• ${mdEscape(t.name)} (\`${mdEscape(t.slug)}\`) — ${t.planId} [${t.status}]\n`;
       }
       if (all.length >= 20) msg += '\n_Limited to first 20_';
       sendReply(chatId, msg);
@@ -166,7 +177,7 @@ export async function POST(req: NextRequest) {
       let msg = `*Pending Tenants (${pending.length})*\n\n`;
       for (const t of pending) {
         const date = t.createdAt ? new Date(t.createdAt).toLocaleDateString() : 'N/A';
-        msg += `• ${t.name} (\`${t.slug}\`)\n  Email: ${t.billingEmail || 'N/A'} | Created: ${date}\n`;
+        msg += `• ${mdEscape(t.name)} (\`${mdEscape(t.slug)}\`)\n  Email: ${mdEscape(t.billingEmail || 'N/A')} | Created: ${date}\n`;
       }
       sendReply(chatId, msg);
     }
@@ -193,7 +204,7 @@ export async function POST(req: NextRequest) {
       let msg = `*Recent Signups (7d)*\n\n`;
       for (const t of recent) {
         const date = t.createdAt ? new Date(t.createdAt).toLocaleDateString() : 'N/A';
-        msg += `• ${t.name} (\`${t.slug}\`) — ${date}\n  Plan: ${t.planId} [${t.status}]\n`;
+        msg += `• ${mdEscape(t.name)} (\`${mdEscape(t.slug)}\`) — ${date}\n  Plan: ${t.planId} [${t.status}]\n`;
       }
       sendReply(chatId, msg);
     }
