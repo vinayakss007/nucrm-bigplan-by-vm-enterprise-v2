@@ -46,7 +46,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
   const result = await db.execute(sql`
     SELECT
       (SELECT count(*)::int FROM contacts WHERE company_id = ${company.id} AND deleted_at IS NULL) AS contact_count,
-      (SELECT count(*)::int FROM leads WHERE lower(company_name) = lower(${company.name}) AND tenant_id = ${tid} AND deleted_at IS NULL) AS lead_count,
+      (SELECT count(*)::int FROM leads WHERE company_id = ${company.id} AND tenant_id = ${tid} AND deleted_at IS NULL) AS lead_count,
       (SELECT count(*)::int FROM deals WHERE company_id = ${company.id} AND deleted_at IS NULL) AS deal_count,
       (SELECT COALESCE(sum(amount),0)::numeric FROM deals d LEFT JOIN deal_stages ds ON ds.id = d.stage_id WHERE d.company_id = ${company.id} AND ds.name NOT IN ('Lost', 'lost') AND d.deleted_at IS NULL) AS pipeline_value
   `);
@@ -83,7 +83,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
     })
     .from(leadsTable)
     .where(and(
-      eq(sql`lower(${leadsTable.companyName})`, company.name.toLowerCase()),
+      eq(leadsTable.companyId, company.id),
       eq(leadsTable.tenantId, tid),
       sql`${leadsTable.deletedAt} IS NULL`
     ))
