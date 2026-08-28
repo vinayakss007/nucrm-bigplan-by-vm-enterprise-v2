@@ -28,41 +28,51 @@ export default function TenantAnalyticsPage() {
 
   const { data: overviewRes, error: overviewErr } = useSWR('/api/tenant/analytics/overview');
 
-  const deals = ((overviewRes?.data?.deals || []) as { created_at?: string; stageId?: string; amount?: string; value?: string }[]).map(d => ({ ...d, value: d.value || d.amount || 0 }));
-  const contacts = (overviewRes?.data?.contacts || []) as { created_at?: string; lead_source?: string; lead_status?: string }[];
-  const tasks = (overviewRes?.data?.tasks || []) as { created_at?: string; completed?: boolean; due_date?: string }[];
-  const stages = ((overviewRes?.data?.pipelines || []).flatMap((pl: { stages?: { id: string; name: string }[] }) => (pl.stages || [])) as { id: string; name: string }[]);
+  // F4 (#1544): the endpoint now returns compact server-side aggregates over
+  // the FULL tenant dataset instead of raw rows. Derive every KPI/chart/label
+  // from those aggregates so nothing here relies on raw rows anymore.
+  const overview = (overviewRes?.data || {}) as {
+    deals?: { byStage?: { stageId: string; stageName: string; count: number; revenue: number }[] };
+    contacts?: { bySource?: { source: string | null; count: number }[]; byStatus?: { status: string | null; count: number }[] };
+    tasks?: { total?: number; completed?: number; open?: number; overdue?: number };
+    timeseries?: { weekly?: { weekStart: string; contacts: number; deals: number }[] };
+  };
+
+  const dealsByStage = useMemo(() => overview.deals?.byStage ?? [], [overview.deals]);
+  const contactsBySource = useMemo(() => overview.contacts?.bySource ?? [], [overview.contacts]);
+  const contactsByStatus = useMemo(() => overview.contacts?.byStatus ?? [], [overview.contacts]);
+  const tasksAgg = overview.tasks ?? {};
+  const weekly = useMemo(() => overview.timeseries?.weekly ?? [], [overview.timeseries]);
 
   const loading = !overviewRes && !overviewErr;
 
-  const dealsWithStage = useMemo(() =>
-    deals.map(d => ({
-      ...d,
-      stageName: stages.find(s => s.id === d.stageId)?.name || '',
-    })),
-    [deals, stages],
-  );
+  // Classify stages by NAME (case-insensitive) exactly as before.
+  const wonStages = useMemo(() => dealsByStage.filter(s => s.stageName?.toLowerCase() === 'won'), [dealsByStage]);
+  const lostStages = useMemo(() => dealsByStage.filter(s => s.stageName?.toLowerCase() === 'lost'), [dealsByStage]);
+  const openStages = useMemo(() => dealsByStage.filter(s => !['won', 'lost'].includes(s.stageName?.toLowerCase() || '')), [dealsByStage]);
 
-  const wonDeals = useMemo(() => dealsWithStage.filter(d => d.stageName?.toLowerCase() === 'won'), [dealsWithStage]);
-  const lostDeals = useMemo(() => dealsWithStage.filter(d => d.stageName?.toLowerCase() === 'lost'), [dealsWithStage]);
-  const openDeals = useMemo(() => dealsWithStage.filter(d => !['won', 'lost'].includes(d.stageName?.toLowerCase() || '')), [dealsWithStage]);
-  const pipeline = useMemo(() => openDeals.reduce((s, d) => s + Number(d.value || 0), 0), [openDeals]);
-  const wonRevenue = useMemo(() => wonDeals.reduce((s, d) => s + Number(d.value || 0), 0), [wonDeals]);
+  const wonCount = useMemo(() => wonStages.reduce((s, d) => s + Number(d.count || 0), 0), [wonStages]);
+  const lostCount = useMemo(() => lostStages.reduce((s, d) => s + Number(d.count || 0), 0), [lostStages]);
+  const openCount = useMemo(() => openStages.reduce((s, d) => s + Number(d.count || 0), 0), [openStages]);
+  const dealsTotal = useMemo(() => dealsByStage.reduce((s, d) => s + Number(d.count || 0), 0), [dealsByStage]);
+
+  const pipeline = useMemo(() => openStages.reduce((s, d) => s + Number(d.revenue || 0), 0), [openStages]);
+  const wonRevenue = useMemo(() => wonStages.reduce((s, d) => s + Number(d.revenue || 0), 0), [wonStages]);
   const winRate = useMemo(() =>
-    dealsWithStage.length > 0
-      ? Math.round((wonDeals.length / Math.max(1, wonDeals.length + lostDeals.length)) * 100)
+    dealsTotal > 0
+      ? Math.round((wonCount / Math.max(1, wonCount + lostCount)) * 100)
       : 0,
-    [dealsWithStage, wonDeals, lostDeals],
+    [dealsTotal, wonCount, lostCount],
   );
-  const avgDealSize = useMemo(() => (wonDeals.length > 0 ? wonRevenue / wonDeals.length : 0), [wonDeals, wonRevenue]);
+  const avgDealSize = useMemo(() => (wonCount > 0 ? wonRevenue / wonCount : 0), [wonCount, wonRevenue]);
 
   const byStage = useMemo(() => {
     const groups: Record<string, { count: number; value: number }> = {};
-    dealsWithStage.forEach(d => {
+    dealsByStage.forEach(d => {
       const stageName = d.stageName || 'Other';
       if (!groups[stageName]) groups[stageName] = { count: 0, value: 0 };
-      groups[stageName].count++;
-      groups[stageName].value += Number(d.value || 0);
+      groups[stageName].count += Number(d.count || 0);
+      groups[stageName].value += Number(d.revenue || 0);
     });
     return Object.entries(STAGE_COLORS)
       .map(([stageName, color]) => ({
@@ -72,42 +82,39 @@ export default function TenantAnalyticsPage() {
         color,
       }))
       .filter(s => s.count > 0);
-  }, [dealsWithStage]);
+  }, [dealsByStage]);
 
   const sourceData = useMemo(() => {
     const bySource: Record<string, number> = {};
-    contacts.forEach(c => { const s = c.lead_source || 'Unknown'; bySource[s] = (bySource[s] || 0) + 1; });
+    contactsBySource.forEach(c => { const s = c.source || 'Unknown'; bySource[s] = (bySource[s] || 0) + Number(c.count || 0); });
     return Object.entries(bySource)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
       .map(([name, value]) => ({ name, value }));
-  }, [contacts]);
+  }, [contactsBySource]);
 
   const statusData = useMemo(() => {
     const byStatus: Record<string, number> = {};
-    contacts.forEach(c => { const s = c.lead_status || 'unknown'; byStatus[s] = (byStatus[s] || 0) + 1; });
+    contactsByStatus.forEach(c => { const s = c.status || 'unknown'; byStatus[s] = (byStatus[s] || 0) + Number(c.count || 0); });
     return Object.entries(byStatus).map(([name, value]) => ({
       name: name.charAt(0).toUpperCase() + name.slice(1),
       value,
     }));
-  }, [contacts]);
+  }, [contactsByStatus]);
 
-  const completedTasks = useMemo(() => tasks.filter(t => t.completed), [tasks]);
-  const todayLocal = new Date().toLocaleDateString('en-CA');
-  const overdueTasks = useMemo(() => tasks.filter(t => !t.completed && t.due_date && t.due_date < todayLocal), [tasks, todayLocal]);
-  const taskRate = useMemo(() => (tasks.length > 0 ? Math.round(completedTasks.length / tasks.length * 100) : 0), [tasks, completedTasks]);
+  const tasksTotal = Number(tasksAgg.total ?? 0);
+  const completedCount = Number(tasksAgg.completed ?? 0);
+  const openTaskCount = Number(tasksAgg.open ?? 0);
+  const overdueCount = Number(tasksAgg.overdue ?? 0);
+  const taskRate = useMemo(() => (tasksTotal > 0 ? Math.round(completedCount / tasksTotal * 100) : 0), [tasksTotal, completedCount]);
 
   const weeklyData = useMemo(() =>
-    Array.from({ length: 8 }, (_, i) => {
-      const weekStart = new Date(Date.now() - (7 - i) * 7 * 86400000);
-      const weekEnd = new Date(Date.now() - (6 - i) * 7 * 86400000);
-      return {
-        week: weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        contacts: contacts.filter(c => { const d = new Date(c.created_at ?? ''); return d >= weekStart && d < weekEnd; }).length,
-        deals: dealsWithStage.filter(d => { const dt = new Date(d.created_at ?? ''); return dt >= weekStart && dt < weekEnd; }).length,
-      };
-    }),
-    [contacts, dealsWithStage],
+    weekly.map(w => ({
+      week: new Date(w.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      contacts: Number(w.contacts || 0),
+      deals: Number(w.deals || 0),
+    })),
+    [weekly],
   );
 
   if (loading) return (
@@ -135,10 +142,10 @@ export default function TenantAnalyticsPage() {
       {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label:'Open Pipeline',    value:formatCurrency(pipeline),      sub:`${openDeals.length} deals`,    icon:TrendingUp,  color:'text-amber-600', bg:'bg-amber-50 dark:bg-amber-950/20' },
-          { label:'Won Revenue',      value:formatCurrency(wonRevenue),     sub:`${wonDeals.length} deals won`, icon:DollarSign,  color:'text-emerald-600', bg:'bg-emerald-50 dark:bg-emerald-950/20' },
+          { label:'Open Pipeline',    value:formatCurrency(pipeline),      sub:`${openCount} deals`,    icon:TrendingUp,  color:'text-amber-600', bg:'bg-amber-50 dark:bg-amber-950/20' },
+          { label:'Won Revenue',      value:formatCurrency(wonRevenue),     sub:`${wonCount} deals won`, icon:DollarSign,  color:'text-emerald-600', bg:'bg-emerald-50 dark:bg-emerald-950/20' },
           { label:'Win Rate',         value:`${winRate}%`,                  sub:`Avg deal $${Math.round(avgDealSize).toLocaleString()}`, icon:Target, color:'text-violet-600', bg:'bg-violet-50 dark:bg-violet-950/20' },
-          { label:'Task Completion',  value:`${taskRate}%`,                 sub:`${overdueTasks.length} overdue`, icon:CheckSquare, color:'text-blue-600', bg:'bg-blue-50 dark:bg-blue-950/20' },
+          { label:'Task Completion',  value:`${taskRate}%`,                 sub:`${overdueCount} overdue`, icon:CheckSquare, color:'text-blue-600', bg:'bg-blue-50 dark:bg-blue-950/20' },
         ].map(m => (
           <div key={m.label} className="admin-card p-5">
             <div className="flex items-start justify-between mb-2">
@@ -222,10 +229,10 @@ export default function TenantAnalyticsPage() {
         <p className="text-sm font-semibold mb-4">Task Overview</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label:'Total Tasks',    value:tasks.length,            color:'text-foreground' },
-            { label:'Completed',      value:completedTasks.length,   color:'text-emerald-600' },
-            { label:'Open',           value:tasks.filter(t=>!t.completed).length, color:'text-blue-600' },
-            { label:'Overdue',        value:overdueTasks.length,     color:'text-red-600' },
+            { label:'Total Tasks',    value:tasksTotal,       color:'text-foreground' },
+            { label:'Completed',      value:completedCount,   color:'text-emerald-600' },
+            { label:'Open',           value:openTaskCount,    color:'text-blue-600' },
+            { label:'Overdue',        value:overdueCount,     color:'text-red-600' },
           ].map(m => (
             <div key={m.label} className="text-center p-3 rounded-xl bg-muted/30">
               <p className={cn('text-2xl font-bold', m.color)}>{m.value}</p>
@@ -233,7 +240,7 @@ export default function TenantAnalyticsPage() {
             </div>
           ))}
         </div>
-        {tasks.length > 0 && (
+        {tasksTotal > 0 && (
           <div className="mt-4">
             <div className="flex items-center justify-between text-xs mb-1">
               <span className="text-muted-foreground">Completion rate</span>
