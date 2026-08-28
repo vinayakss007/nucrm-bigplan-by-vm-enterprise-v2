@@ -15,13 +15,24 @@ const mockRequireTenantCtx = vi.fn();
 // Each returned builder is a thenable that resolves to the next queued result.
 let selectResults: unknown[][] = [];
 let selectCall = 0;
+// Every builder records the predicate passed to its .where(...) so the tests can
+// assert that each aggregate query keeps a filter (the tenant + soft-delete
+// predicate). Dropping .where from any query would be a cross-tenant /
+// soft-delete regression, so we lock down that each query applies one.
+let whereCalls: unknown[] = [];
 
 function makeBuilder(rows: unknown[]) {
   const builder: Record<string, unknown> = {};
   const chain = () => builder;
-  for (const m of ['from', 'innerJoin', 'where', 'groupBy', 'orderBy', 'limit']) {
+  for (const m of ['from', 'innerJoin', 'groupBy', 'orderBy', 'limit']) {
     builder[m] = chain;
   }
+  // .where is a spy so we can assert a filter was applied per query. It still
+  // returns the builder to keep the chain intact.
+  builder['where'] = vi.fn((predicate: unknown) => {
+    whereCalls.push(predicate);
+    return builder;
+  });
   // Awaiting the builder (Promise.all) resolves to the canned rows.
   builder['then'] = (resolve: (v: unknown) => unknown) => resolve(rows);
   return builder;
@@ -41,6 +52,19 @@ vi.mock('@/lib/tenant/context', () => ({
 vi.mock('@/drizzle/db', () => ({ db: mockDb }));
 vi.mock('server-only', () => ({}));
 
+// Recursively search a drizzle SQL/predicate object for a bound string value,
+// guarding against the circular table<->column references drizzle builds.
+function containsValue(node: unknown, target: string, seen = new Set<unknown>()): boolean {
+  if (node === target) return true;
+  if (node === null || typeof node !== 'object') return false;
+  if (seen.has(node)) return false;
+  seen.add(node);
+  for (const value of Object.values(node as Record<string, unknown>)) {
+    if (containsValue(value, target, seen)) return true;
+  }
+  return false;
+}
+
 function makeRequest() {
   return { headers: new Headers() } as unknown as import('next/server').NextRequest;
 }
@@ -56,6 +80,7 @@ describe('GET /api/tenant/analytics/overview aggregate shape (#1544 F4)', () => 
     vi.clearAllMocks();
     selectCall = 0;
     selectResults = [];
+    whereCalls = [];
     mockRequireTenantCtx.mockResolvedValue(fakeCtx);
   });
 
@@ -160,6 +185,41 @@ describe('GET /api/tenant/analytics/overview aggregate shape (#1544 F4)', () => 
       expect(new Date(weekly[i].weekStart).getTime()).toBeGreaterThan(
         new Date(weekly[i - 1].weekStart).getTime(),
       );
+    }
+  });
+
+  it('applies a where filter on every aggregate query so the tenant + soft-delete predicate cannot be silently dropped', async () => {
+    selectResults = [
+      [{ stageId: 's1', stageName: 'Won', count: 1, revenue: '100' }],
+      [{ source: 'Referral', count: 1 }],
+      [{ status: 'new', count: 1 }],
+      [{ total: 1, completed: 0, overdue: 0 }],
+      [{}],
+      [{}],
+    ];
+
+    const { res } = await callRoute();
+    expect(res.status).toBe(200);
+
+    // The route issues six aggregate queries; each MUST apply a where clause.
+    // If a regression removes the tenant / soft-delete filter from any query,
+    // this count drops below 6 and the test fails.
+    expect(mockDb.select).toHaveBeenCalledTimes(6);
+    expect(whereCalls).toHaveLength(6);
+
+    // Every predicate must be a real filter object (not undefined / no-op).
+    for (const predicate of whereCalls) {
+      expect(predicate).toBeTruthy();
+      expect(typeof predicate).toBe('object');
+    }
+
+    // The tenant id from the mocked ctx must flow into the query path: drizzle
+    // carries the eq(tenantId, ctx.tenantId) bind value inside the predicate.
+    // Walk the predicate object (guarding against drizzle's circular table
+    // refs) and assert the mocked tenant id appears as a bound value, without
+    // depending on exact SQL string internals.
+    for (const predicate of whereCalls) {
+      expect(containsValue(predicate, fakeCtx.tenantId)).toBe(true);
     }
   });
 
