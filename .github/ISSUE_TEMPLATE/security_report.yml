@@ -1,0 +1,33 @@
+name: "🔒 Security finding (non-sensitive)"
+description: "Report a security-hardening opportunity found in the codebase. Do NOT file an actively-exploitable vulnerability here — disclose it privately."
+labels: ["security"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **If this is an actively-exploitable vulnerability, do NOT open a public issue.**
+        Disclose it privately to the maintainers first.
+
+        Use this template for hardening findings (missing guard, weak default,
+        defense-in-depth gap) surfaced by audit or review.
+  - type: textarea
+    id: finding
+    attributes:
+      label: Finding
+      description: "What is the weakness? Which file/route?"
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: "What could go wrong (privilege escalation, IDOR, SSRF, injection, cross-tenant leak, ...)?"
+    validations:
+      required: true
+  - type: textarea
+    id: fix
+    attributes:
+      label: Suggested fix
+      description: "How should it be remediated?"
+    validations:
+      required: false
