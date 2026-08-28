@@ -25,19 +25,31 @@
  *  - Unauthenticated (the LB has no session cookie)
  *  - Binary (200 or 503, nothing else matters to the orchestrator)
  *
- * Rate limiting: Not applied. Orchestrators poll every 5-10s per instance;
- * rate-limiting them would cause false-negative health signals.
+ * Rate limiting (#1154): a light per-IP throttle guards this unauthenticated
+ * endpoint against abusive volume, matching how the sibling unauthenticated
+ * endpoints (`/api/flags`, `/api/keepalive`) use `checkRateLimit`. The cap is
+ * deliberately far more generous than those siblings (120/min vs 30/min):
+ * orchestrators and load balancers poll readiness every few seconds, and many
+ * probers/replicas can share a single source IP, so a tight limit would cause
+ * false-negative health signals. 120/min (~2 req/s sustained) comfortably
+ * exceeds legitimate health polling while still capping abuse.
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getPool } from '@/lib/db/pool';
 import { isShuttingDown } from '@/lib/db/graceful-shutdown';
 import { withDbCircuitBreaker, CircuitOpenError } from '@/lib/db/circuit-breaker';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // #1154: light per-IP throttle against abusive polling. Kept generous so it
+  // never trips on legitimate orchestrator/LB health checks.
+  const limited = await checkRateLimit(request, { action: 'system-ready', max: 120, windowMinutes: 1 });
+  if (limited) return limited;
+
   // If we are draining, tell the LB to stop sending traffic immediately.
   if (isShuttingDown()) {
     return NextResponse.json(
