@@ -65,6 +65,44 @@ describe('EdgeRateLimiter', () => {
     expect(limiter.size).toBe(1);
   });
 
+  it('evicts expired entries on a later sweep so the Map does not grow unbounded', async () => {
+    // Small default window so the throttled sweep is allowed to run again quickly.
+    const swept = new EdgeRateLimiter(5, 20);
+
+    // Populate many distinct short-lived keys (simulates many one-off IPs).
+    for (let i = 0; i < 100; i++) {
+      swept.check(`ip-${i}`, 5, 20);
+    }
+    expect(swept.size).toBe(100);
+
+    // Wait for the entries' windows AND the sweep throttle to elapse.
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    // A subsequent check triggers the lazy sweep, which removes the now-expired
+    // entries and inserts only the new key.
+    swept.check('trigger', 5, 20);
+    expect(swept.size).toBeLessThan(100);
+    expect(swept.size).toBe(1);
+  });
+
+  it('sweep never evicts still-active entries', async () => {
+    const swept = new EdgeRateLimiter(5, 30);
+
+    // Long-lived active key that must survive sweeps.
+    swept.check('active', 5, 10_000);
+    // Short-lived key that should be evicted.
+    swept.check('stale', 5, 20);
+
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    // Triggers a sweep: 'stale' expired, 'active' still within its window.
+    swept.check('trigger', 5, 30);
+    // 'active' must still be tracked (not reset), 'stale' removed.
+    const active = swept.check('active', 5, 10_000);
+    expect(active.remaining).toBe(3); // second hit on 'active', proves count preserved
+    expect(swept.size).toBe(2); // 'active' + 'trigger'; 'stale' evicted
+  });
+
   it('different keys are isolated', () => {
     limiter.check('iso1', 1, 60_000);
     expect(limiter.check('iso2', 1, 60_000).allowed).toBe(true);
