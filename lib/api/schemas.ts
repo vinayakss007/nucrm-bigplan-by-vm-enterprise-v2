@@ -945,6 +945,10 @@ export const updateTenantSchema = z.object({
   plan_id: z.string().max(50).optional(),
   admin_notes: z.string().max(2000).optional().nullable(),
   manual_paid_until: z.string().date().optional().nullable(),
+  logo_url: z.string().max(500).optional().nullable(),
+  custom_domain: z.string().max(255).optional().nullable(),
+  trial_ends_at: z.string().date().optional().nullable(),
+  billing_type: z.string().max(50).optional(),
 });
 
 export const platformSettingsSchema = z.record(
