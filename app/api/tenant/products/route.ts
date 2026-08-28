@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
 import { products } from '@/drizzle/schema';
 import { eq, and, desc, sql, isNull, ilike, type SQL } from 'drizzle-orm';
@@ -80,6 +81,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await rateLimitMutating(request, 'products', 'post');
+    if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

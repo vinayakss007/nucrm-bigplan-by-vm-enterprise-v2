@@ -8,6 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createMeetingSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
 import { meetings, contacts } from '@/drizzle/schema';
 import { eq, and, isNull, gte, lte, sql, asc } from 'drizzle-orm';
@@ -87,6 +88,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await rateLimitMutating(request, 'meetings', 'post');
+    if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

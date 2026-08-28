@@ -8,6 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createFollowUpSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
 import { followUps, contacts, leads, deals, users } from '@/drizzle/schema';
 import { eq, and, isNull, desc, asc, gte, lte, sql } from 'drizzle-orm';
@@ -95,6 +96,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await rateLimitMutating(request, 'followUps', 'post');
+    if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

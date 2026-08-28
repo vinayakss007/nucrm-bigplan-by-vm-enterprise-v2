@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createSequenceSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
 import { sequences, sequenceSteps } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
@@ -60,6 +61,8 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const limited = await rateLimitMutating(request, 'sequences', 'post');
+    if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

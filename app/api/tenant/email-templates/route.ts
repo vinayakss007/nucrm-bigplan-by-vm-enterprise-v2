@@ -10,6 +10,7 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createEmailTemplateSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
@@ -48,6 +49,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await rateLimitMutating(request, 'emailTemplates', 'post');
+    if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

@@ -12,6 +12,7 @@ import { contacts, companies, users } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const createCallSchema = z.object({
   contact_id: z.string().uuid('contact_id must be a valid UUID'),
@@ -31,6 +32,8 @@ const createCallSchema = z.object({
  */
 export async function POST(req: NextRequest) {
   try {
+    const limited = await rateLimitMutating(req, 'calls', 'post');
+    if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     const deny = requirePerm(ctx, 'contacts.edit');

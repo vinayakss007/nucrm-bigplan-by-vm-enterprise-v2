@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createKbArticleSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
@@ -57,6 +58,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await rateLimitMutating(request, 'kbArticles', 'post');
+    if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const body = await readJsonBody(request);
