@@ -337,9 +337,6 @@ export const customFieldDefs = pgTable('custom_field_defs', {
   };
 });
 
-// Alias for compatibility if needed, but better to use the new name
-export const customFields = customFieldDefs;
-
 export const forms = pgTable('forms', {
   id: utils.pk(),
   tenantId: utils.tenantId(),

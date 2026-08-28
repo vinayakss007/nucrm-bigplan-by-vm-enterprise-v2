@@ -192,7 +192,7 @@ export const integrations = pgTable('integrations', {
   };
 });
 
-// ── 4. EMAIL LOG ──────────────────────────────────────
+// ── 5. EMAIL LOG ──────────────────────────────────────
 export const emailLog = pgTable('email_log', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
@@ -218,7 +218,7 @@ export const emailLog = pgTable('email_log', {
   };
 });
 
-// ── 4. EMAIL VERIFICATIONS ────────────────────────────
+// ── 6. EMAIL VERIFICATIONS ────────────────────────────
 export const emailVerifications = pgTable('email_verifications', {
   id: utils.pk(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -228,7 +228,7 @@ export const emailVerifications = pgTable('email_verifications', {
   ...utils.lifecycle(),
 });
 
-// ── 5. EMAIL WARMUP CONFIGS ───────────────────────────
+// ── 7. EMAIL WARMUP CONFIGS ───────────────────────────
 export const emailWarmupConfigs = pgTable('email_warmup_configs', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
@@ -251,7 +251,7 @@ export const emailWarmupConfigs = pgTable('email_warmup_configs', {
   };
 });
 
-// ── 6. EMAIL WARMUP POOL ─────────────────────────────
+// ── 8. EMAIL WARMUP POOL ─────────────────────────────
 export const emailWarmupPool = pgTable('email_warmup_pool', {
   id: utils.pk(),
   configId: uuid('config_id').notNull().references(() => emailWarmupConfigs.id, { onDelete: 'cascade' }),
@@ -288,7 +288,7 @@ export const emailWarmupLogs = pgTable('email_warmup_logs', {
   };
 });
 
-// ── 7. WEBHOOK INBOUND LOGS ────────────────────────--
+// ── 9. WEBHOOK INBOUND LOGS ────────────────────────--
 export const webhookInboundLogs = pgTable('webhook_inbound_logs', {
   id: utils.pk(),
   webhookId: uuid('webhook_id').references(() => webhooks.id),
@@ -317,7 +317,7 @@ export const webhookInboundLogs = pgTable('webhook_inbound_logs', {
   };
 });
 
-// ── 8. WHATSAPP TEMPLATES ─────────────────────────────
+// ── 10. WHATSAPP TEMPLATES ────────────────────────────
 export const whatsappTemplates = pgTable('whatsapp_templates', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
@@ -339,7 +339,7 @@ export const whatsappTemplates = pgTable('whatsapp_templates', {
 });
 
 
-// ── 9. INBOUND WEBHOOK FIELD MAPPINGS ─────────────────
+// ── 11. INBOUND WEBHOOK FIELD MAPPINGS ────────────────
 /**
  * Routes an otherwise-unrecognised inbound webhook payload key into either a
  * native entity field or a custom field, without a code change or migration.
