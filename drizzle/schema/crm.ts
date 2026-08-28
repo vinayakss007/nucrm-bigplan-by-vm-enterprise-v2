@@ -39,7 +39,14 @@ export const companies = pgTable('companies', {
   
   isCustomer: boolean('is_customer').default(false),
   lastActivityAt: timestamp('last_activity_at', { withTimezone: true }),
-  
+
+  // #1084: first-class columns so companies are filterable/assignable like the
+  // other CRM entities (previously bulk status/assign were hacked into the
+  // metadata JSON, which is not queryable).
+  status: text('status').notNull().default('active'),
+  assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }),
+  lifecycleStage: text('lifecycle_stage').default('lead'),
+
   notes: text('notes'),
   tags: text('tags').array().default(sql`'{}'`),
   customFields: jsonb('custom_fields').default({}),
@@ -51,6 +58,9 @@ export const companies = pgTable('companies', {
     tenantIdx: utils.tenantIdx(table),
     nameIdx: index('idx_companies_name').on(table.name),
     domainIdx: index('idx_companies_domain').on(table.domain),
+    // #1084: index the new filter/assign columns.
+    tenantStatusIdx: index('idx_companies_tenant_status').on(table.tenantId, table.status),
+    assignedIdx: index('idx_companies_assigned').on(table.assignedTo),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
     searchIdx: index('idx_companies_search').using('gin', sql`to_tsvector('english', ${table.name} || ' ' || COALESCE(${table.domain}, ''))`),
