@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { dunningAttempts, tenants } from '@/drizzle/schema';
-import { eq, desc } from 'drizzle-orm';
+import { desc, inArray } from 'drizzle-orm';
 
 /**
  * GET /api/superadmin/billing/dunning
@@ -27,16 +27,18 @@ export async function GET(request: NextRequest) {
       limit: 100,
     });
 
-    // Get tenant names for each attempt
+    // Get tenant names for each attempt. #1094: resolve them in a SINGLE
+    // batched query (inArray) instead of one findFirst per tenant, which was an
+    // N+1 scaling linearly with the number of distinct tenants in the page.
     const tenantIds = [...new Set(attempts.map(a => a.tenantId))];
     const tenantMap = new Map<string, string>();
-    
-    for (const tenantId of tenantIds) {
-      const tenant = await db.query.tenants.findFirst({
-        where: eq(tenants.id, tenantId),
+
+    if (tenantIds.length > 0) {
+      const tenantRows = await db.query.tenants.findMany({
+        where: inArray(tenants.id, tenantIds),
         columns: { id: true, name: true },
       });
-      if (tenant) {
+      for (const tenant of tenantRows) {
         tenantMap.set(tenant.id, tenant.name);
       }
     }
