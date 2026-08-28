@@ -139,7 +139,7 @@
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "exceljs": "^4.4.0",
-    "ioredis": "5.10.1",
+    "ioredis": "6.0.0",
     "jose": "6.2.10",
     "lucide-react": "0.511.0",
     "mathjs": "^15.2.0",
