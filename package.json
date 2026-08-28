@@ -172,7 +172,6 @@
     "@testing-library/user-event": "14.6.1",
     "@types/bcryptjs": "3.0.0",
     "@types/dompurify": "^3.0.5",
-    "@types/ioredis": "^4.28.10",
     "@types/node": "22.19.17",
     "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.20.0",
