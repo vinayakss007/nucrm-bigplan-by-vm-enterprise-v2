@@ -9,6 +9,8 @@ import { db } from '@/drizzle/db';
 import { users, tenants } from '@/drizzle/schema';
 import { eq, sql, desc } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
+import { logError } from '@/lib/errors-server';
+import { redactEmail } from '@/lib/logger/pii';
 
 interface TelegramMessage {
   message?: {
@@ -18,15 +20,41 @@ interface TelegramMessage {
   };
 }
 
-function sendReply(chatId: number, text: string) {
+/**
+ * #1295: send a Telegram reply and surface failures instead of swallowing them.
+ * Previously this fired the fetch without awaiting, so Telegram rate-limits
+ * (HTTP 429) and network errors failed silently. Callers now await this so a
+ * failed send is logged via the structured error logger. The 10s AbortSignal
+ * timeout keeps the webhook responsive — the request still returns 200 promptly
+ * after (at most) a single bounded send attempt.
+ */
+async function sendReply(chatId: number, text: string): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return;
-  fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
-    signal: AbortSignal.timeout(10_000),
-  }).catch((e) => console.error('[telegram bot] Error:', e));
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      // Telegram returns 429 with a retry_after when rate-limited. Log the
+      // status so throttling/formatting failures are observable, not silent.
+      await logError({
+        error: new Error(`Telegram sendMessage failed: HTTP ${res.status}`),
+        context: 'telegram-bot:sendReply',
+        level: 'warning',
+        metadata: { status: res.status },
+      });
+    }
+  } catch (e) {
+    await logError({
+      error: e,
+      context: 'telegram-bot:sendReply',
+      level: 'warning',
+    });
+  }
 }
 
 /**
@@ -106,12 +134,12 @@ export async function POST(req: NextRequest) {
   }
 
   if (!user) {
-    sendReply(chatId, `Hello! I'm NuCRM Bot.\n\nTo link your account:\n1. Go to Settings → Telegram in NuCRM\n2. Enter your bot token and chat ID\n3. Save and message me /start again`);
+    await sendReply(chatId, `Hello! I'm NuCRM Bot.\n\nTo link your account:\n1. Go to Settings → Telegram in NuCRM\n2. Enter your bot token and chat ID\n3. Save and message me /start again`);
     return NextResponse.json({ ok: true });
   }
 
   if (!user.telegramEnabled && !isAdmin) {
-    sendReply(chatId, 'Your Telegram is not enabled. Go to Settings → Telegram in NuCRM to enable it.');
+    await sendReply(chatId, 'Your Telegram is not enabled. Go to Settings → Telegram in NuCRM to enable it.');
     return NextResponse.json({ ok: true });
   }
 
@@ -122,14 +150,19 @@ export async function POST(req: NextRequest) {
     if (user.isSuperAdmin) {
       msg += `/tenants — List all tenants\n/pending — Pending/approval tenants\n/recent — Recent signups (7d)\n/stats — Platform stats\n`;
     }
-    sendReply(chatId, msg);
+    await sendReply(chatId, msg);
     return NextResponse.json({ ok: true });
   }
 
   if (cmd === '/info') {
-    let msg = `*Account Info*\nName: ${mdEscape(user.fullName)}\nEmail: ${mdEscape(user.email)}`;
+    // #1297: do NOT echo the user's email into the outbound Telegram message.
+    // Telegram's servers (and any bot infrastructure in between) may log the
+    // message body, so the raw email would leak PII off-platform. The chat is
+    // already bound to a linked account, so a non-identifying reference is
+    // enough here.
+    let msg = `*Account Info*\nName: ${mdEscape(user.fullName)}\nEmail: linked to your account`;
     if (user.isSuperAdmin) msg += `\nRole: Super Admin`;
-    sendReply(chatId, msg);
+    await sendReply(chatId, msg);
     return NextResponse.json({ ok: true });
   }
 
@@ -146,14 +179,14 @@ export async function POST(req: NextRequest) {
       .limit(20);
 
     if (all.length === 0) {
-      sendReply(chatId, 'No tenants found.');
+      await sendReply(chatId, 'No tenants found.');
     } else {
       let msg = `*Tenants (${all.length})*\n\n`;
       for (const t of all) {
         msg += `• ${mdEscape(t.name)} (\`${mdEscape(t.slug)}\`) — ${t.planId} [${t.status}]\n`;
       }
       if (all.length >= 20) msg += '\n_Limited to first 20_';
-      sendReply(chatId, msg);
+      await sendReply(chatId, msg);
     }
     return NextResponse.json({ ok: true });
   }
@@ -172,14 +205,14 @@ export async function POST(req: NextRequest) {
       .limit(10);
 
     if (pending.length === 0) {
-      sendReply(chatId, 'No pending tenants.');
+      await sendReply(chatId, 'No pending tenants.');
     } else {
       let msg = `*Pending Tenants (${pending.length})*\n\n`;
       for (const t of pending) {
         const date = t.createdAt ? new Date(t.createdAt).toLocaleDateString() : 'N/A';
-        msg += `• ${mdEscape(t.name)} (\`${mdEscape(t.slug)}\`)\n  Email: ${mdEscape(t.billingEmail || 'N/A')} | Created: ${date}\n`;
+        msg += `• ${mdEscape(t.name)} (\`${mdEscape(t.slug)}\`)\n  Email: ${mdEscape(redactEmail(t.billingEmail))} | Created: ${date}\n`;
       }
-      sendReply(chatId, msg);
+      await sendReply(chatId, msg);
     }
     return NextResponse.json({ ok: true });
   }
@@ -199,14 +232,14 @@ export async function POST(req: NextRequest) {
       .limit(10);
 
     if (recent.length === 0) {
-      sendReply(chatId, 'No signups in the last 7 days.');
+      await sendReply(chatId, 'No signups in the last 7 days.');
     } else {
       let msg = `*Recent Signups (7d)*\n\n`;
       for (const t of recent) {
         const date = t.createdAt ? new Date(t.createdAt).toLocaleDateString() : 'N/A';
         msg += `• ${mdEscape(t.name)} (\`${mdEscape(t.slug)}\`) — ${date}\n  Plan: ${t.planId} [${t.status}]\n`;
       }
-      sendReply(chatId, msg);
+      await sendReply(chatId, msg);
     }
     return NextResponse.json({ ok: true });
   }
@@ -228,10 +261,10 @@ export async function POST(req: NextRequest) {
       recentCount: sql<number>`count(*)`,
     }).from(tenants).where(sql`${tenants.createdAt} > now() - interval '7 days'`);
 
-    sendReply(chatId, `*Platform Stats*\nTotal Tenants: ${tenantRow?.tenantCount ?? 0}\nActive: ${activeRow?.activeCount ?? 0}\nPending: ${pendingRow?.pendingCount ?? 0}\nNew (7d): ${recentRow?.recentCount ?? 0}`);
+    await sendReply(chatId, `*Platform Stats*\nTotal Tenants: ${tenantRow?.tenantCount ?? 0}\nActive: ${activeRow?.activeCount ?? 0}\nPending: ${pendingRow?.pendingCount ?? 0}\nNew (7d): ${recentRow?.recentCount ?? 0}`);
     return NextResponse.json({ ok: true });
   }
 
-  sendReply(chatId, `Unknown command: ${cmd}\nSend /help for available commands.`);
+  await sendReply(chatId, `Unknown command: ${cmd}\nSend /help for available commands.`);
   return NextResponse.json({ ok: true });
 }
