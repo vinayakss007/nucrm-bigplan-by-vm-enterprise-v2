@@ -177,7 +177,7 @@ export default function TenantAnalyticsPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false}/>
               <XAxis type="number" tick={TICK_STYLE} tickLine={false} axisLine={false}/>
               <YAxis type="category" dataKey="stage" tick={TICK_STYLE} tickLine={false} axisLine={false} width={90}/>
-              <Tooltip contentStyle={TIP_STYLE} formatter={(v: unknown, n: string)=>[n==='value'?formatCurrency(v as number):String(v),n==='value'?'Value':'Count']}/>
+              <Tooltip contentStyle={TIP_STYLE} formatter={(v: unknown, n: number | string | undefined)=>[n==='value'?formatCurrency(v as number):String(v),n==='value'?'Value':'Count']}/>
               <Bar dataKey="count" name="Count" radius={[0,3,3,0]}>
                 {byStage.map((s,i) => <Cell key={i} fill={STAGE_COLORS[s.stage.toLowerCase()]||'#7c3aed'}/>)}
               </Bar>
