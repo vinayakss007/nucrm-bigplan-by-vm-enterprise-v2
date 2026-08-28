@@ -214,3 +214,29 @@ jobs:
 
       - name: Check bundle size thresholds
         run: npx tsx scripts/analyze-bundle.ts
+
+  lockfile-guard:
+    name: Single Lockfile Guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # This project installs with `npm ci`, so package-lock.json is the single
+      # source of truth. A committed pnpm-lock.yaml or yarn.lock would let a
+      # contributor (or CI runner) resolve a DIFFERENT dependency tree than
+      # production — a supply-chain/non-determinism hazard. Fail the build if
+      # either reappears.
+      - name: Reject foreign lockfiles
+        run: |
+          set -e
+          foreign=$(git ls-files 'pnpm-lock.yaml' 'yarn.lock' '**/pnpm-lock.yaml' '**/yarn.lock')
+          if [ -n "$foreign" ]; then
+            echo "::error::Found non-npm lockfile(s). This repo installs with 'npm ci'; keep only package-lock.json:"
+            echo "$foreign"
+            exit 1
+          fi
+          if [ ! -f package-lock.json ]; then
+            echo "::error::package-lock.json is missing — it is the required lockfile."
+            exit 1
+          fi
+          echo "OK: package-lock.json is the only committed lockfile."
