@@ -110,45 +110,11 @@ export async function withTransaction<T>(fn: (c: PoolClient) => Promise<T>): Pro
   }
 }
 
-// ── In-process LRU cache for hot read-only data ──────────────
-// FIXED: O(1) eviction using insertion-order Map iteration
-// instead of O(n log n) sort on every eviction.
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface CacheEntry { data: any; expires: number; }
-const _cache = new Map<string, CacheEntry>();
-const MAX_CACHE_ENTRIES = 500;
-
-function _evictCache(): void {
-  // Phase 1: Remove expired entries
-  const now = Date.now();
-  for (const [key, entry] of _cache) {
-    if (entry.expires <= now) {
-      _cache.delete(key);
-      if (_cache.size < MAX_CACHE_ENTRIES) return;
-    }
-  }
-  // Phase 2: Evict oldest by insertion order
-  if (_cache.size >= MAX_CACHE_ENTRIES) {
-    const firstKey = _cache.keys().next().value;
-    if (firstKey !== undefined) _cache.delete(firstKey);
-  }
-}
-
-export function dbCache<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
-  const hit = _cache.get(key);
-  if (hit && hit.expires > Date.now()) return Promise.resolve(hit.data as T);
-  if (hit) _cache.delete(key); // Remove stale
-  return fetcher().then(data => {
-    if (_cache.size >= MAX_CACHE_ENTRIES) _evictCache();
-    _cache.set(key, { data, expires: Date.now() + ttlMs });
-    return data;
-  });
-}
-export function invalidateCache(prefix: string) {
-  for (const key of _cache.keys()) if (key.startsWith(prefix)) _cache.delete(key);
-}
+// ── In-process read-through cache ────────────────────────────
+// The cache implementation (with stampede protection) lives in ./cache.
+// Import { dbCache, invalidateCache } from '@/lib/db/cache' (or the barrel
+// '@/lib/db'). It is intentionally not re-defined here to avoid a second,
+// unprotected copy of the cache.
 
 const PROTECTED = new Set(['id','created_at','is_super_admin',
   'password_hash','totp_secret','totp_backup_codes','totp_enabled','email_verified','role_slug']);

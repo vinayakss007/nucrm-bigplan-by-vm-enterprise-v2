@@ -424,7 +424,7 @@ describe('db/client - integration with Docker PostgreSQL', () => {
       process.env.DATABASE_SSL = 'false';
       process.env.DATABASE_POOL_SIZE = '5';
       
-      const { dbCache } = await import('@/lib/db/client');
+      const { dbCache } = await import('@/lib/db/cache');
       
       let fetchCount = 0;
       const fetcher = async () => {
@@ -460,7 +460,7 @@ describe('db/client - integration with Docker PostgreSQL', () => {
       process.env.DATABASE_SSL = 'false';
       process.env.DATABASE_POOL_SIZE = '5';
       
-      const { dbCache, invalidateCache } = await import('@/lib/db/client');
+      const { dbCache, invalidateCache } = await import('@/lib/db/cache');
       
       await dbCache('user:1:profile', 5000, async () => ({ name: 'user1' }));
       await dbCache('user:2:profile', 5000, async () => ({ name: 'user2' }));
