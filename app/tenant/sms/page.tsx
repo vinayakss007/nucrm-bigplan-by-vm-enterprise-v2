@@ -102,7 +102,10 @@ export default function SmsPage() {
     }
     setSending(true);
     try {
-      const payload: { to: string; templateId?: string; body?: string } = { to: form.to };
+      // Send the same normalized value we validated above; the SMS API stores
+      // and forwards `to` verbatim to the provider, so raw form input (spaces,
+      // parens, dashes) would otherwise reach Twilio unchanged (#1342).
+      const payload: { to: string; templateId?: string; body?: string } = { to: normalizedTo };
       if (useTemplate && form.templateId) {
         payload.templateId = form.templateId;
       } else {

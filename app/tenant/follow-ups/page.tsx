@@ -55,7 +55,9 @@ export default function FollowUpsPage() {
       setError(message);
       toast.error('Failed to load follow-ups');
     } finally {
-      setLoading(false);
+      // Only clear the spinner if this request was not superseded by a newer
+      // one; clearing it for an aborted request causes a loading flicker.
+      if (!signal?.aborted) setLoading(false);
     }
   }, [statusFilter, offset]);
 

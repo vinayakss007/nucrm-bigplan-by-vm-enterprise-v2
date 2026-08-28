@@ -38,7 +38,9 @@ export default function ActivitiesPage() {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       toast.error('Failed to load activities');
     } finally {
-      setLoading(false);
+      // Only clear the spinner if this request was not superseded by a newer
+      // one; clearing it for an aborted request causes a loading flicker.
+      if (!signal?.aborted) setLoading(false);
     }
   }, [offset]);
 
