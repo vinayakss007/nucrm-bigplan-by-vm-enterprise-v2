@@ -9,7 +9,7 @@ import { logError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { sendCriticalErrorAlert } from '@/lib/critical-error-alert';
 import { InvalidJsonBodyError } from '@/lib/api/validate';
-import { ConcurrencyError } from '@/lib/concurrency';
+import { ConcurrencyError, InvalidExpectedUpdatedAtError } from '@/lib/concurrency';
 
 /**
  * @deprecated Use `handleError()` from `@/lib/errors` for new code.
@@ -68,6 +68,13 @@ export function apiError(err: unknown, message = 'Internal server error', status
   // sendCriticalErrorAlert paged someone -- every time a user double-clicked Save.
   // The error already carries statusCode 409; nothing was reading it.
   if (err instanceof ConcurrencyError) {
+    return NextResponse.json({ error: err.message }, { status: err.statusCode });
+  }
+
+  // A caller opted into the optimistic-concurrency check with a missing or
+  // unparseable expectedUpdatedAt. That is a bad request (the client's fault),
+  // not a server fault, so answer 400 without paging anyone.
+  if (err instanceof InvalidExpectedUpdatedAtError) {
     return NextResponse.json({ error: err.message }, { status: err.statusCode });
   }
 
