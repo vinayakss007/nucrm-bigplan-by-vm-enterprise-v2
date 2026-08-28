@@ -188,7 +188,22 @@ export function MagneticButton({
   as?: ElementType;
 }) {
   const ref = useRef<HTMLElement | null>(null);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  // The magnetic pull is applied by writing to the element's style directly
+  // inside a requestAnimationFrame, not through React state. mousemove fires
+  // far more often than the browser paints, so coalescing to one write per
+  // frame caps the work at ~60fps and avoids a React re-render per event.
+  const frame = useRef<number | null>(null);
+  const nextOffset = useRef({ x: 0, y: 0 });
+
+  const applyOffset = useCallback((x: number, y: number) => {
+    const el = ref.current;
+    if (!el) return;
+    const resting = x === 0 && y === 0;
+    el.style.transform = `translate(${x}px, ${y}px)`;
+    el.style.transition = resting
+      ? 'transform 0.4s cubic-bezier(0.16,1,0.3,1)'
+      : 'transform 0.15s ease-out';
+  }, []);
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLElement>) => {
@@ -197,15 +212,35 @@ export function MagneticButton({
       const rect = el.getBoundingClientRect();
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
-      setOffset({
+      nextOffset.current = {
         x: (e.clientX - cx) * intensity,
         y: (e.clientY - cy) * intensity,
+      };
+      if (frame.current != null) return;
+      frame.current = requestAnimationFrame(() => {
+        frame.current = null;
+        applyOffset(nextOffset.current.x, nextOffset.current.y);
       });
     },
-    [intensity],
+    [intensity, applyOffset],
   );
 
-  const handleMouseLeave = useCallback(() => setOffset({ x: 0, y: 0 }), []);
+  const handleMouseLeave = useCallback(() => {
+    if (frame.current != null) {
+      cancelAnimationFrame(frame.current);
+      frame.current = null;
+    }
+    nextOffset.current = { x: 0, y: 0 };
+    applyOffset(0, 0);
+  }, [applyOffset]);
+
+  // Cancel any pending frame if the component unmounts mid-gesture.
+  useEffect(
+    () => () => {
+      if (frame.current != null) cancelAnimationFrame(frame.current);
+    },
+    [],
+  );
 
   return (
     <Tag
@@ -213,10 +248,7 @@ export function MagneticButton({
       className={className}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      style={{
-        transform: `translate(${offset.x}px, ${offset.y}px)`,
-        transition: offset.x === 0 && offset.y === 0 ? 'transform 0.4s cubic-bezier(0.16,1,0.3,1)' : 'transform 0.15s ease-out',
-      }}
+      style={{ transform: 'translate(0px, 0px)', transition: 'transform 0.4s cubic-bezier(0.16,1,0.3,1)' }}
     >
       {children}
     </Tag>
@@ -242,6 +274,23 @@ export function TiltCard({
   const [style, setStyle] = useState<React.CSSProperties>({});
   const [glarePos, setGlarePos] = useState({ x: 50, y: 50, opacity: 0 });
 
+  // mousemove fires per pixel of travel; without throttling each event would
+  // trigger two setState calls (tilt + glare) and a re-render. Coalesce the
+  // latest values into a ref and flush at most once per animation frame.
+  const frame = useRef<number | null>(null);
+  const pending = useRef<{
+    style: React.CSSProperties;
+    glare: { x: number; y: number; opacity: number };
+  } | null>(null);
+
+  const flush = useCallback(() => {
+    frame.current = null;
+    if (!pending.current) return;
+    setStyle(pending.current.style);
+    setGlarePos(pending.current.glare);
+    pending.current = null;
+  }, []);
+
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       const el = ref.current;
@@ -251,18 +300,34 @@ export function TiltCard({
       const y = (e.clientY - rect.top) / rect.height;
       const rotateX = (0.5 - y) * intensity;
       const rotateY = (x - 0.5) * intensity;
-      setStyle({
-        transform: `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02,1.02,1.02)`,
-      });
-      setGlarePos({ x: x * 100, y: y * 100, opacity: 0.15 });
+      pending.current = {
+        style: {
+          transform: `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02,1.02,1.02)`,
+        },
+        glare: { x: x * 100, y: y * 100, opacity: 0.15 },
+      };
+      if (frame.current == null) frame.current = requestAnimationFrame(flush);
     },
-    [intensity],
+    [intensity, flush],
   );
 
   const handleMouseLeave = useCallback(() => {
+    if (frame.current != null) {
+      cancelAnimationFrame(frame.current);
+      frame.current = null;
+    }
+    pending.current = null;
     setStyle({});
     setGlarePos({ x: 50, y: 50, opacity: 0 });
   }, []);
+
+  // Cancel any pending frame if the component unmounts mid-gesture.
+  useEffect(
+    () => () => {
+      if (frame.current != null) cancelAnimationFrame(frame.current);
+    },
+    [],
+  );
 
   return (
     <div
