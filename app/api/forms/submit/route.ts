@@ -21,6 +21,27 @@ const formSubmitSchema = z.object({
 });
 
 /**
+ * #1160: given a form's field definitions and the submitted data, return the
+ * labels of any required fields that are missing/empty. Pure + exported so it
+ * can be unit-tested without the route's DB machinery.
+ */
+export function findMissingRequiredFields(
+  fields: unknown,
+  formData: Record<string, unknown>
+): string[] {
+  const defs = Array.isArray(fields)
+    ? (fields as Array<{ key?: string; label?: string; required?: boolean }>)
+    : [];
+  return defs
+    .filter((f) => f && f.required === true && typeof f.key === 'string' && f.key.length > 0)
+    .filter((f) => {
+      const val = formData[f.key as string];
+      return val === undefined || val === null || (typeof val === 'string' && val.trim() === '');
+    })
+    .map((f) => (f.label as string) || (f.key as string));
+}
+
+/**
  * Escape HTML entities in a string to prevent XSS when values are rendered.
  */
 function escapeHtmlEntities(str: string): string {
@@ -65,7 +86,13 @@ export async function POST(req: NextRequest) {
     const limited = await checkRateLimit(req, { action: 'form_submit', max: 10, windowMinutes: 60 });
     if (limited) return limited;
 
-    const body = await requestToJson(req);
+    // #1160: malformed JSON is a client error (400), not a 500.
+    let body: unknown;
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+    }
     const validated = validateBody(formSubmitSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -79,6 +106,7 @@ export async function POST(req: NextRequest) {
       tenantId: forms.tenantId,
       name: forms.name,
       isActive: forms.isActive,
+      fields: forms.fields,
       settings: forms.settings,
       owner_id: tenants.ownerId,
       tenant_status: tenants.status
@@ -92,6 +120,17 @@ export async function POST(req: NextRequest) {
 
     if (!form) {
       return NextResponse.json({ error: 'Form not found or inactive' }, { status: 404 });
+    }
+
+    // #1160: validate the form's own required fields and return 400 (with the
+    // list of missing fields) instead of proceeding with incomplete data (which
+    // previously succeeded silently or surfaced as a 500 downstream).
+    const missing = findMissingRequiredFields(form.fields, formData);
+    if (missing.length > 0) {
+      return NextResponse.json(
+        { error: 'Missing required fields', fields: missing },
+        { status: 400 }
+      );
     }
 
     // 3. Process contact creation/update
@@ -257,10 +296,4 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function requestToJson(req: NextRequest) {
-  try {
-    return await readJsonBody(req);
-  } catch {
-    throw new Error('Invalid JSON in request body');
-  }
-}
+
