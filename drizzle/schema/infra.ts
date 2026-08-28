@@ -47,7 +47,9 @@ export const tenantBackups = pgTable('tenant_backups', {
 export const tenantRestores = pgTable('tenant_restores', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
-  backupId: uuid('backup_id').references(() => tenantBackups.id),
+  // #1053: SET NULL — a restore record is an audit trail that must survive
+  // deletion of the backup it referenced.
+  backupId: uuid('backup_id').references(() => tenantBackups.id, { onDelete: 'set null' }),
   
   status: text('status').notNull().default('pending'),
   initiatedBy: uuid('initiated_by').references(() => users.id),
