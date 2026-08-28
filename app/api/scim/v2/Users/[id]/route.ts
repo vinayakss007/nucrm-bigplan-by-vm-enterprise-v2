@@ -17,7 +17,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/drizzle/db';
 import { users, tenantMembers, sessions } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, ne } from 'drizzle-orm';
 import {
   toSCIMUser,
   fromSCIMUser,
@@ -26,6 +26,47 @@ import {
   type SCIMUser,
 } from '@/lib/scim';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+
+// ── Session revocation helper ─────────────────────────────────────────────────
+
+/**
+ * Revoke a user's login sessions on SCIM deactivate/delete — but ONLY when the
+ * user has no OTHER active tenant membership.
+ *
+ * `sessions` are per-user and NOT tenant-scoped (the active tenant is resolved
+ * per-request from membership). A blanket `DELETE FROM sessions WHERE user_id`
+ * on a single-tenant deactivate therefore logs the user out of EVERY other
+ * workspace they belong to — a cross-tenant denial of service triggered by one
+ * tenant's IdP. We only clear sessions when this was their last active
+ * workspace; otherwise their remaining workspaces keep them signed in and the
+ * per-request membership check already denies access to the deactivated tenant.
+ *
+ * @param tx    the active transaction (or db)
+ * @param userId  the user being deactivated
+ * @param tenantId  the tenant that just deactivated them (excluded from the check)
+ */
+async function revokeSessionsIfLastActiveTenant(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx: any,
+  userId: string,
+  tenantId: string,
+): Promise<void> {
+  // Any active membership in a DIFFERENT tenant means we must keep the user's
+  // sessions (the deactivated tenant is already denied per-request).
+  const otherActive = await tx
+    .select({ id: tenantMembers.id })
+    .from(tenantMembers)
+    .where(and(
+      eq(tenantMembers.userId, userId),
+      eq(tenantMembers.status, 'active'),
+      ne(tenantMembers.tenantId, tenantId),
+    ))
+    .limit(1);
+
+  if ((otherActive as Array<{ id: string }>).length === 0) {
+    await tx.delete(sessions).where(eq(sessions.userId, userId));
+  }
+}
 
 // ── Auth Helper ──────────────────────────────────────────────────────────────
 
@@ -292,9 +333,10 @@ export async function PATCH(
             { status: 409, headers: { 'Content-Type': 'application/scim+json' } },
           );
 
-          // Revoke all active sessions for deactivated users
+          // Revoke sessions for a deactivated user — but only if this was
+          // their last active workspace (avoid cross-tenant logout DoS).
           if (deactivate) {
-            await tx.delete(sessions).where(eq(sessions.userId, id));
+            await revokeSessionsIfLastActiveTenant(tx, id, tenantId);
           }
         }
       });
@@ -379,13 +421,17 @@ export async function DELETE(
       );
     }
 
-    // Soft-delete: set membership to inactive
-    await db.update(tenantMembers)
-      .set({ status: 'inactive', updatedAt: new Date() })
-      .where(eq(tenantMembers.id, existingUser.memberId));
+    await db.transaction(async (tx) => {
+      // Soft-delete: set THIS tenant's membership to inactive
+      await tx.update(tenantMembers)
+        .set({ status: 'inactive', updatedAt: new Date() })
+        .where(eq(tenantMembers.id, existingUser.memberId));
 
-    // Revoke all active sessions for this user
-    await db.delete(sessions).where(eq(sessions.userId, id));
+      // Revoke sessions only if the user has no other active workspace —
+      // sessions are per-user (not tenant-scoped), so a blanket delete would
+      // log them out of every other tenant (cross-tenant DoS).
+      await revokeSessionsIfLastActiveTenant(tx, id, tenantId);
+    });
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
