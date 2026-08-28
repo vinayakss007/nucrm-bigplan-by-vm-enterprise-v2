@@ -50,9 +50,10 @@ describe('Schema Migration Coverage (Issue #219)', () => {
   // 222 -> 223: webhook_field_mappings (0047_webhook_field_mappings).
   // 223 -> 225: custom_entities + custom_entity_data (0059_custom_entities).
   // 225 -> 223: dropped dead tenant_backups + tenant_restores (0078, #1337/#1378).
-  it('should have exactly 223 tables defined in schema', () => {
+  // 223 -> 222: dropped duplicate pipeline_stages, consolidated to deal_stages (0080, #1337).
+  it('should have exactly 222 tables defined in schema', () => {
     const schemaTables = extractPgTables(schemaDir);
-    expect(schemaTables.size).toBe(223);
+    expect(schemaTables.size).toBe(222);
   });
 
   it('migration 0036 should create all 4 missing tables', () => {
