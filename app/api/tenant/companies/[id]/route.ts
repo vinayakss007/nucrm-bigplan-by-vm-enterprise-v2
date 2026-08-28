@@ -79,6 +79,8 @@ export async function PATCH(req: NextRequest, { params }: any) {
     const validated = validateBody(updateCompanySchema, body);
     if (validated instanceof NextResponse) return validated;
 
+    const v = validated.data;
+
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -86,14 +88,24 @@ export async function PATCH(req: NextRequest, { params }: any) {
       updatedAt: new Date(),
     };
 
-    if (body.name !== undefined) updateData.name = body.name.trim().slice(0, 200);
-    if (body.industry !== undefined) updateData.industry = body.industry;
-    if (body.company_size !== undefined) updateData.companySize = body.company_size;
-    if (body.website !== undefined) updateData.website = body.website;
-    if (body.phone !== undefined) updateData.phone = body.phone;
-    if (body.address !== undefined) updateData.address = body.address;
-    if (body.notes !== undefined) updateData.notes = body.notes;
-    if (body.custom_fields !== undefined) updateData.customFields = body.custom_fields;
+    if (v.name !== undefined) updateData.name = v.name.trim().slice(0, 200);
+    if (v.domain !== undefined) updateData.domain = v.domain;
+    if (v.industry !== undefined) updateData.industry = v.industry;
+    if (v.size !== undefined) updateData.companySize = v.size;
+    if (v.annual_revenue !== undefined) updateData.annualRevenue = v.annual_revenue == null ? null : String(v.annual_revenue);
+    if (v.description !== undefined) updateData.description = v.description;
+    if (v.website !== undefined) updateData.website = v.website;
+    if (v.phone !== undefined) updateData.phone = v.phone;
+    if (v.billing_address !== undefined) updateData.address = v.billing_address;
+    if (v.city !== undefined) updateData.city = v.city;
+    if (v.state !== undefined) updateData.state = v.state;
+    if (v.country !== undefined) updateData.country = v.country;
+    if (v.postal_code !== undefined) updateData.postalCode = v.postal_code;
+    if (v.linkedin_url !== undefined) updateData.linkedinUrl = v.linkedin_url;
+    if (v.twitter_url !== undefined) updateData.twitterUrl = v.twitter_url;
+    if (v.facebook_url !== undefined) updateData.facebookUrl = v.facebook_url;
+    if (v.tags !== undefined) updateData.tags = v.tags;
+    if (v.custom_fields !== undefined) updateData.customFields = v.custom_fields;
 
     // Optimistic concurrency: reject if another update happened since client read
     const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
