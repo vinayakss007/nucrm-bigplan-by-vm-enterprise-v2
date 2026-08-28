@@ -547,6 +547,13 @@
       "when": 1788264000000,
       "tag": "0078_drop_dead_backup_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1788350400000,
+      "tag": "0079_trgm_search_indexes",
+      "breakpoints": true
     }
   ]
 }
