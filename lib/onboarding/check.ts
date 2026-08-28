@@ -11,8 +11,17 @@
  */
 
 import { db } from '@/drizzle/db';
+import type { DbClient } from '@/drizzle/db';
 import { onboardingProgress } from '@/drizzle/schema/infra';
 import { eq, and } from 'drizzle-orm';
+
+/**
+ * A Drizzle client that may be either the shared `db` singleton or a
+ * transaction handle passed by a caller. Both expose the same query surface
+ * used by the onboarding write helpers, so callers can thread a `tx` to make
+ * several onboarding writes atomic.
+ */
+type DbOrTx = DbClient | Parameters<Parameters<DbClient['transaction']>[0]>[0];
 
 const ONBOARDING_COMPLETE_STEP = 'onboarding_complete';
 
@@ -54,69 +63,75 @@ export async function hasCompletedOnboarding(tenantId: string, _userId: string):
  * Mark onboarding as complete for a tenant.
  * Uses a sentinel userId ('__tenant__') so completion is shared across all users.
  * Also records per-user completion for the completing user specifically.
+ *
+ * Accepts an optional `tx` client so callers can make this write part of a
+ * larger transaction (see POST /api/tenant/onboarding/complete). Any error is
+ * propagated to the caller so the surrounding transaction can roll back —
+ * previously the error was swallowed, which left onboarding state inconsistent.
  */
-export async function markOnboardingComplete(tenantId: string, userId: string): Promise<void> {
-  try {
-    // Mark tenant-wide completion (sentinel user ID)
-    await db.insert(onboardingProgress).values({
-      tenantId,
-      userId: '__tenant__',
-      stepName: ONBOARDING_COMPLETE_STEP,
+export async function markOnboardingComplete(
+  tenantId: string,
+  userId: string,
+  tx: DbOrTx = db
+): Promise<void> {
+  // Mark tenant-wide completion (sentinel user ID)
+  await tx.insert(onboardingProgress).values({
+    tenantId,
+    userId: '__tenant__',
+    stepName: ONBOARDING_COMPLETE_STEP,
+    isCompleted: true,
+    completedAt: new Date(),
+  }).onConflictDoUpdate({
+    target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
+    set: {
       isCompleted: true,
       completedAt: new Date(),
-    }).onConflictDoUpdate({
-      target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
-      set: {
-        isCompleted: true,
-        completedAt: new Date(),
-        updatedAt: new Date(),
-      },
-    });
+      updatedAt: new Date(),
+    },
+  });
 
-    // Also mark per-user completion for the completing user
-    await db.insert(onboardingProgress).values({
-      tenantId,
-      userId,
-      stepName: ONBOARDING_COMPLETE_STEP,
+  // Also mark per-user completion for the completing user
+  await tx.insert(onboardingProgress).values({
+    tenantId,
+    userId,
+    stepName: ONBOARDING_COMPLETE_STEP,
+    isCompleted: true,
+    completedAt: new Date(),
+  }).onConflictDoUpdate({
+    target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
+    set: {
       isCompleted: true,
       completedAt: new Date(),
-    }).onConflictDoUpdate({
-      target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
-      set: {
-        isCompleted: true,
-        completedAt: new Date(),
-        updatedAt: new Date(),
-      },
-    });
-  } catch (err) {
-    console.error('[Onboarding] Failed to mark complete:', err);
-  }
+      updatedAt: new Date(),
+    },
+  });
 }
 
 /**
  * Record a specific onboarding step.
+ *
+ * Accepts an optional `tx` client so callers can make this write part of a
+ * larger transaction. Errors propagate to the caller (no longer swallowed) so
+ * a failed step write rolls back the surrounding onboarding transaction.
  */
 export async function recordOnboardingStep(
   tenantId: string,
   userId: string,
-  stepName: string
+  stepName: string,
+  tx: DbOrTx = db
 ): Promise<void> {
-  try {
-    await db.insert(onboardingProgress).values({
-      tenantId,
-      userId,
-      stepName,
+  await tx.insert(onboardingProgress).values({
+    tenantId,
+    userId,
+    stepName,
+    isCompleted: true,
+    completedAt: new Date(),
+  }).onConflictDoUpdate({
+    target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
+    set: {
       isCompleted: true,
       completedAt: new Date(),
-    }).onConflictDoUpdate({
-      target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
-      set: {
-        isCompleted: true,
-        completedAt: new Date(),
-        updatedAt: new Date(),
-      },
-    });
-  } catch (err) {
-    console.error('[Onboarding] Failed to record step:', err);
-  }
+      updatedAt: new Date(),
+    },
+  });
 }
