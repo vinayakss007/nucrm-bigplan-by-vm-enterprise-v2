@@ -18,6 +18,7 @@ import { tenants, tenantMembers } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { logSuperAdminAction } from '@/lib/audit/super-admin';
 
 export async function GET(req: NextRequest) {
   try {
@@ -97,7 +98,7 @@ export async function PATCH(req: NextRequest) {
     if (!incoming || typeof incoming !== 'object') return NextResponse.json({ error: 'settings object required' }, { status: 400 });
 
     const [tenant] = await db
-      .select({ id: tenants.id, settings: tenants.settings })
+      .select({ id: tenants.id, name: tenants.name, settings: tenants.settings })
       .from(tenants)
       .where(eq(tenants.id, tenant_id))
       .limit(1);
@@ -111,8 +112,10 @@ export async function PATCH(req: NextRequest) {
     // Merge only the known editable keys
     const allowedKeys = ['localization', 'login_policy', 'picklists', 'user_defaults'];
     const merged = { ...existing };
+    const changedKeys: string[] = [];
     for (const key of allowedKeys) {
       if (key in incoming) {
+        changedKeys.push(key);
         if (incoming[key] === null) {
           delete merged[key];
         } else {
@@ -128,6 +131,22 @@ export async function PATCH(req: NextRequest) {
       .returning();
 
     if (!updated) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+
+    // Audit-log the settings mutation the same way sibling super-admin routes do
+    // (fire-and-forget; logSuperAdminAction swallows its own errors so a logging
+    // failure never breaks the update response). Record only WHICH top-level
+    // settings sub-trees changed — never the values, which may hold secrets.
+    logSuperAdminAction({
+      adminId: ctx.userId,
+      adminEmail: ctx.user?.email || '',
+      action: 'tenant.settings_changed',
+      targetType: 'tenant',
+      targetId: tenant_id,
+      targetName: tenant.name,
+      tenantId: tenant_id,
+      tenantName: tenant.name,
+      metadata: { changes: changedKeys },
+    });
 
     return NextResponse.json({ ok: true, message: 'Settings updated' });
  
