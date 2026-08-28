@@ -8,7 +8,6 @@ import { apiError } from '@/lib/api-error';
 import { db } from '@/drizzle/db';
 import { portalClients, platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
-import { v4 as uuidv4 } from 'uuid';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimiter } from '@/lib/rate-limit';
 import { PORTAL_SESSION_COOKIE, encodePortalSessionCookie, portalSessionCookieOptions } from '@/lib/portal-session';
@@ -86,7 +85,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Token expired or invalid' }, { status: 401 });
     }
 
-    const sessionToken = uuidv4();
     const sessionExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     await db
@@ -94,10 +92,15 @@ export async function POST(request: NextRequest) {
       .set({ lastLoginAt: new Date() })
       .where(eq(portalClients.id, client.id));
 
+    // #1179: the session of record is the httpOnly `nucrm_portal_session` cookie
+    // set below (validated server-side by getPortalSession(), and revocable by
+    // deactivating/expiring the portal client or rotating its access token).
+    // We no longer return a random uuid "session.token": it was never stored or
+    // validated by anything, so it was a misleading, unrevocable dead token that
+    // also sat readable in the client's localStorage.
     const response = NextResponse.json({
       ok: true,
       session: {
-        token: sessionToken,
         expiresAt: sessionExpiry,
       },
       client: {
