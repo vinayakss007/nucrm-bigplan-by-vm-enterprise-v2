@@ -7,6 +7,7 @@
 
 import { logError } from '@/lib/errors-client';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import toast from 'react-hot-toast';
 import { useState, useRef, useEffect } from 'react';
 import {
   Database,
@@ -180,10 +181,10 @@ export default function SelectiveRestorePage() {
         // Wait for parsing then preview
         await pollForParseCompletion(data.backup_id);
       } else {
-        alert('Upload failed: ' + data.error);
+        toast.error('Upload failed: ' + data.error);
       }
     } catch (err: unknown) {
-      alert('Upload failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Upload failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -203,12 +204,12 @@ export default function SelectiveRestorePage() {
           return;
         }
         if (backup?.parse_status === 'failed') {
-          alert('Backup parsing failed: ' + backup.parse_error);
+          toast.error('Backup parsing failed: ' + backup.parse_error);
           return;
         }
       } catch (err) { logError({ error: err, context: "catch:[context]" }); }
     }
-    alert('Parsing timed out. Please try again later.');
+    toast.error('Parsing timed out. Please try again later.');
   };
 
   const handlePreviewBackup = async (backup: BackupFile) => {
@@ -225,7 +226,7 @@ export default function SelectiveRestorePage() {
       setSelectedTables([]);
       setStep('preview');
     } catch (err: unknown) {
-      alert('Preview failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Preview failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -291,7 +292,7 @@ export default function SelectiveRestorePage() {
       setScopePreview(data);
       setStep('scope');
     } catch (err: unknown) {
-      alert('Scope preview failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Scope preview failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }

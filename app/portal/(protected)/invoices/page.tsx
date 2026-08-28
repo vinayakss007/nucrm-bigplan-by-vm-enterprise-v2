@@ -53,6 +53,7 @@ export default function PortalInvoicesPage() {
         </div>
       ) : (
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead><tr className="border-b border-border bg-muted/20">
               <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase">Invoice</th>
@@ -83,6 +84,7 @@ export default function PortalInvoicesPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

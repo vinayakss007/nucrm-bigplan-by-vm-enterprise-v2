@@ -17,6 +17,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Pagination from '@/components/tenant/pagination';
 import { BulkActionBar } from '@/components/ui/bulk-action-bar';
+import { PromptDialog } from '@/components/ui/prompt-dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 interface Ticket {
   id: string;
@@ -41,6 +43,8 @@ export default function TicketsPage() {
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showPriorityDialog, setShowPriorityDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const limit = 50;
 
   const loadTickets = useCallback(async () => {
@@ -330,14 +334,33 @@ export default function TicketsPage() {
           { label: 'In Progress', icon: Clock, onClick: () => bulkAction('status', { status: 'in_progress' }) },
           { label: 'Resolve', icon: CheckCircle2, onClick: () => bulkAction('status', { status: 'resolved' }) },
           { label: 'Close', icon: CheckCircle2, onClick: () => bulkAction('status', { status: 'closed' }) },
-          { label: 'Priority', icon: ArrowUpCircle, onClick: () => {
-            const p = prompt('Set priority (low, medium, high, urgent):');
-            if (p && ['low', 'medium', 'high', 'urgent'].includes(p)) bulkAction('priority', { priority: p });
-          }},
-          { label: 'Delete', icon: Trash2, variant: 'danger' as const, onClick: () => {
-            if (confirm(`Delete ${selectedIds.size} ticket(s)?`)) bulkAction('delete');
-          }},
+          { label: 'Priority', icon: ArrowUpCircle, onClick: () => setShowPriorityDialog(true) },
+          { label: 'Delete', icon: Trash2, variant: 'danger' as const, onClick: () => setShowDeleteDialog(true) },
         ]}
+      />
+
+      {/* Themed priority prompt (#1114): replaces native prompt() */}
+      <PromptDialog
+        open={showPriorityDialog}
+        onOpenChange={setShowPriorityDialog}
+        title="Set Priority"
+        message="Enter a priority: low, medium, high, or urgent."
+        placeholder="medium"
+        confirmLabel="Apply"
+        validate={(v) => ['low', 'medium', 'high', 'urgent'].includes(v.toLowerCase())}
+        invalidMessage="Priority must be one of: low, medium, high, urgent"
+        onConfirm={(v) => bulkAction('priority', { priority: v.toLowerCase() })}
+      />
+
+      {/* Themed delete confirmation (#1114): replaces native confirm() */}
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title="Delete tickets"
+        message={`Delete ${selectedIds.size} ticket(s)? This action cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => bulkAction('delete')}
       />
 
       {/* Create Ticket Modal */}

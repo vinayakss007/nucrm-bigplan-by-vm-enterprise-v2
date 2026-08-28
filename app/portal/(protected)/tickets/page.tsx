@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { LifeBuoy, Plus } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
@@ -20,6 +20,13 @@ export default function PortalTicketsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [session, setSession] = useState<PortalSession | null>(null);
 
+  const loadTickets = useCallback((email: string) => {
+    setLoading(true);
+    fetch('/api/public/tickets', { headers: { 'x-portal-email': email } }).then(r => r.json()).then(d => {
+      setTickets(d.data || []); setLoading(false);
+    }).catch(() => { setLoading(false); });
+  }, []);
+
   useEffect(() => {
     const raw = localStorage.getItem('portal_session');
     if (!raw) { router.replace('/portal/login'); return; }
@@ -27,11 +34,9 @@ export default function PortalTicketsPage() {
       const s = JSON.parse(raw) as PortalSession;
       if (!s.email || !s.token) { router.replace('/portal/login'); return; }
       setSession(s);
-      fetch('/api/public/tickets', { headers: { 'x-portal-email': s.email } }).then(r => r.json()).then(d => {
-        setTickets(d.data || []); setLoading(false);
-      }).catch(() => { setLoading(false); });
+      loadTickets(s.email);
     } catch { router.replace('/portal/login'); }
-  }, [router]);
+  }, [router, loadTickets]);
 
   const statusColor: Record<string, string> = {
     open: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30',
@@ -85,7 +90,7 @@ export default function PortalTicketsPage() {
         </div>
       )}
 
-      {showCreate && <CreateTicketModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); window.location.reload(); }} sessionEmail={session?.email} />}
+      {showCreate && <CreateTicketModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); if (session?.email) loadTickets(session.email); }} sessionEmail={session?.email} />}
     </div>
   );
 }
