@@ -526,6 +526,13 @@
       "when": 1788004800000,
       "tag": "0075_missing_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1788177600000,
+      "tag": "0077_companies_status_assigned",
+      "breakpoints": true
     }
   ]
 }
