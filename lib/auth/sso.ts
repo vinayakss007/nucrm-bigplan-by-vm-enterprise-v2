@@ -148,27 +148,33 @@ export async function handleSSOCallback(
   let samlAssertion: string | undefined;
 
   if (provider.providerType === 'saml' && params.SAMLResponse) {
-    // Verify SAML assertion signature against IdP certificate
+    // Verify SAML assertion signature against IdP certificate.
     samlAssertion = params.SAMLResponse;
     const decoded = Buffer.from(params.SAMLResponse, 'base64').toString('utf-8');
-    
-    // Get SAML config with certificate
+
     const samlConfig = config as unknown as SAMLConfig;
     if (!samlConfig.certificate) {
       throw new Error('SAML provider missing certificate configuration');
     }
-    
-    // Verify XML signature
-    const signatureValid = await verifySAMLSignature(decoded, samlConfig.certificate);
-    if (!signatureValid) {
+
+    // Verify signature AND read the identity from the validated profile.
+    const profile = await verifySAMLAndGetProfile(decoded, samlConfig);
+    if (!profile) {
       throw new Error('SAML assertion signature verification failed');
     }
-    
-    // Extract email from assertion
-    const emailMatch = decoded.match(/<saml:NameID[^>]*>([^<]+)<\/saml:NameID>/);
-    email = emailMatch?.[1] || '';
+
+    // SECURITY (XSW): take the email from the cryptographically-validated
+    // profile, NOT from a regex over the raw XML. node-saml resolves NameID
+    // from the signed assertion node.
+    const emailFromProfile =
+      (typeof profile.email === 'string' && profile.email) ||
+      (typeof profile.nameID === 'string' && /@/.test(profile.nameID) ? profile.nameID : '') ||
+      (typeof (profile.attributes as Record<string, unknown> | undefined)?.['email'] === 'string'
+        ? String((profile.attributes as Record<string, unknown>)['email'])
+        : '');
+    email = String(emailFromProfile || '');
     if (!email) {
-      throw new Error('Could not extract email from SAML assertion');
+      throw new Error('Could not extract email from validated SAML assertion');
     }
   } else if (params.code) {
     // OIDC/OAuth2: exchange code for token with proper JWT verification
@@ -389,43 +395,82 @@ function escapeXml(str: string): string {
     .replace(/'/g, '&apos;');
 }
 
+/** The subset of the validated SAML profile we consume. */
+export interface VerifiedSamlProfile {
+  nameID?: string;
+  email?: string;
+  attributes?: Record<string, unknown>;
+}
+
 /**
- * Verify SAML assertion XML signature against IdP certificate.
- * Uses @node-saml/node-saml for proper cryptographic verification.
+ * Verify a SAML response's XML signature against the IdP certificate and
+ * return the CRYPTOGRAPHICALLY-VALIDATED profile (or null on failure).
+ *
+ * SECURITY (XSW): the caller must read the identity (NameID/email) from the
+ * returned profile — NEVER from a regex over the raw XML. Reading NameID off
+ * the raw document is a classic XML Signature Wrapping bypass: an attacker
+ * wraps a forged assertion so the text-level regex sees an attacker-controlled
+ * NameID while the signature validates a different, legitimate node.
+ *
+ * The validator is now built with the provider's actual IdP certificate and
+ * issuer as the trust anchor (previously it was constructed with empty
+ * `issuer`/`idpIssuer` and never received the cert, so there was no anchor to
+ * verify against).
  */
-async function verifySAMLSignature(samlXml: string, _idpCertificate: string): Promise<boolean> {
+async function verifySAMLAndGetProfile(
+  samlXml: string,
+  cfg: SAMLConfig,
+): Promise<VerifiedSamlProfile | null> {
+  if (!cfg.certificate) {
+    console.error('[SAML] Missing IdP certificate — cannot verify signature');
+    return null;
+  }
   try {
     const SAMLModule = await import('@node-saml/node-saml');
-    const SAMLClass = (SAMLModule as unknown as { SAML: new (opts: Record<string, unknown>) => { validatePostResponseAsync: (xml: string) => Promise<{ profile?: unknown }> } }).SAML;
+    const SAMLClass = (SAMLModule as unknown as {
+      SAML: new (opts: Record<string, unknown>) => {
+        validatePostResponseAsync: (container: { SAMLResponse: string }) => Promise<{ profile?: VerifiedSamlProfile | null }>;
+      };
+    }).SAML;
+
     const samlValidator = new SAMLClass({
-      issuer: '',
-      idpIssuer: '',
+      // Trust anchor: the IdP's signing certificate. Without this the library
+      // has nothing to verify the signature against.
+      idpCert: cfg.certificate,
+      // Our SP identity / expected audience, so a response minted for another
+      // audience is rejected.
+      issuer: cfg.entityId,
+      callbackUrl: cfg.acsUrl,
+      audience: cfg.entityId,
       wantAssertionsSigned: true,
       wantAuthnResponseSigned: true,
       acceptedClockSkewMs: 5000,
       maxAssertionAgeMs: 300000,
       allowCreate: false,
       requestIdExpirationPeriodMs: 3600000,
+      // Stateless legacy path: we don't persist AuthnRequest IDs, so don't
+      // require InResponseTo correlation (CSRF is covered by the state cookie
+      // in the route handler).
+      validateInResponseTo: 'never',
       cacheProvider: {
-        save: async () => '',
-        get: async () => null,
-        remove: async () => {},
+        saveAsync: async () => null,
+        getAsync: async () => null,
+        removeAsync: async () => null,
       },
     });
-    
-    // Validate the SAML response
-    const validateResult = await samlValidator.validatePostResponseAsync(samlXml);
-    
+
+    // node-saml expects the base64 SAMLResponse in a container object.
+    const b64 = Buffer.from(samlXml, 'utf-8').toString('base64');
+    const validateResult = await samlValidator.validatePostResponseAsync({ SAMLResponse: b64 });
+
     if (validateResult?.profile) {
-      console.log('[SAML] Signature and assertion validated successfully by @node-saml/node-saml');
-      return true;
+      return validateResult.profile;
     }
-    
-    console.error('[SAML] Validation failed: No profile returned');
-    return false;
+    console.error('[SAML] Validation failed: no profile returned');
+    return null;
   } catch (error) {
     console.error('[SAML] Signature verification error:', error);
     // Reject — do NOT fall back to structure-only checks which are trivially forgeable
-    return false;
+    return null;
   }
 }
