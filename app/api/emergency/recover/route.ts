@@ -11,6 +11,8 @@ import bcrypt from 'bcryptjs';
 import { timingSafeEqual } from 'crypto';
 import { readJsonBody } from '@/lib/api/validate';
 import { deleteUserSessions } from '@/lib/cache/sessions';
+import { RateLimiter } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/client-ip';
 
 /**
  * Emergency Admin Recovery Endpoint
@@ -46,28 +48,25 @@ import { deleteUserSessions } from '@/lib/cache/sessions';
  * }
  */
 
-// In-memory rate limit (per-process, resets on restart — acceptable for emergency endpoint)
-const attempts = new Map<string, { count: number; lastAttempt: number }>();
+// Distributed rate limit: 1 attempt per 5 minutes per IP, shared across all
+// instances via the repo's Redis-backed limiter (lib/rate-limit RateLimiter).
+// The previous implementation used a per-process in-memory Map, so the limit
+// was enforced PER INSTANCE (bypassable behind a load balancer). RateLimiter
+// counts through lib/cache (Redis when available, per-process fallback only if
+// Redis is down) and fails OPEN if Redis errors mid-request — the shared
+// helper's own behavior, which we intentionally do not reimplement here.
 const MAX_ATTEMPTS = 1;
-const WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+const WINDOW_SECONDS = 5 * 60; // 5 minutes
+const emergencyLimiter = new RateLimiter({ max: MAX_ATTEMPTS, window: WINDOW_SECONDS });
 
-function checkEmergencyRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = attempts.get(ip);
-
-  if (entry && (now - entry.lastAttempt) < WINDOW_MS) {
-    if (entry.count >= MAX_ATTEMPTS) return false;
-    entry.count++;
-    entry.lastAttempt = now;
-    return true;
-  }
-
-  attempts.set(ip, { count: 1, lastAttempt: now });
-  return true;
+async function checkEmergencyRateLimit(ip: string): Promise<boolean> {
+  const result = await emergencyLimiter.check(`emergency-recover:${ip}`);
+  return result.allowed;
 }
 
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
+  // #1249: header values only honored when TRUST_PROXY=true (see getClientIp)
+  const ip = getClientIp(request);
   const timestamp = new Date().toISOString();
 
   // Always log attempts
@@ -83,8 +82,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 2. Rate limit
-  if (!checkEmergencyRateLimit(ip)) {
+  // 2. Rate limit (distributed, shared across instances)
+  if (!(await checkEmergencyRateLimit(ip))) {
     console.error(`[EMERGENCY RECOVERY] RATE LIMITED — IP: ${ip}`);
     return NextResponse.json(
       { error: 'Too many attempts. Wait 5 minutes.' },
