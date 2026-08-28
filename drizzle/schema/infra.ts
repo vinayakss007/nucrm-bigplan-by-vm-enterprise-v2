@@ -22,48 +22,14 @@ export const systemSettings = pgTable('system_settings', {
 });
 
 // ── 2. BACKUP & RESTORE ───────────────────────────────
-export const tenantBackups = pgTable('tenant_backups', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  
-  filename: text('filename').notNull(),
-  storagePath: text('storage_path').notNull(),
-  sizeBytes: integer('size_bytes'),
-  
-  status: text('status').notNull().default('pending'), // 'pending', 'completed', 'failed'
-  backupType: text('backup_type').notNull().default('automated'), // 'automated', 'manual', 'pre-deletion'
-  
-  metadata: utils.metadata(),
-  
-  ...utils.lifecycle(),
-  expiresAt: timestamp('expires_at', { withTimezone: true }), // 90-day retention
-}, (table) => {
-  return {
-    tenantIdx: utils.tenantIdx(table),
-    metadataGinIdx: utils.metadataIdx(table),
-  };
-});
-
-export const tenantRestores = pgTable('tenant_restores', {
-  id: utils.pk(),
-  tenantId: utils.tenantId(),
-  // #1053: SET NULL — a restore record is an audit trail that must survive
-  // deletion of the backup it referenced.
-  backupId: uuid('backup_id').references(() => tenantBackups.id, { onDelete: 'set null' }),
-  
-  status: text('status').notNull().default('pending'),
-  initiatedBy: uuid('initiated_by').references(() => users.id),
-  
-  metadata: utils.metadata(),
-  
-  ...utils.lifecycle(),
-  completedAt: timestamp('completed_at', { withTimezone: true }),
-}, (table) => {
-  return {
-    tenantIdx: utils.tenantIdx(table),
-    metadataGinIdx: utils.metadataIdx(table),
-  };
-});
+// #1337/#1378: `tenantBackups` (tenant_backups) and `tenantRestores`
+// (tenant_restores) were removed — they had ZERO usages in app/ or lib/ and
+// were pure dead code contributing to the "3 backup tables" confusion. The
+// canonical backup catalog is `backupRecords` (backup_records), written by
+// lib/backups/backup-service.ts and all backup cron/superadmin/tenant routes.
+// The dead tables are dropped by migration 0078_drop_dead_backup_tables.
+// (tenantBackupRecords and superAdminBackups remain — they serve distinct,
+// actively-used purposes: inline-jsonb backups and selective-restore.)
 
 // ── 3. ANALYTICS & DASHBOARDS ─────────────────────────
 export const dashboards = pgTable('dashboards', {
