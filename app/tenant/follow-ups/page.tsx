@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { ListChecks, Calendar, AlertCircle, Plus, CheckCircle, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 interface FollowUp {
@@ -109,7 +110,7 @@ export default function FollowUpsPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this follow-up?')) return;
+    await confirmThen('Delete this follow-up?', async () => {
     try {
       const res = await fetch(`/api/tenant/follow-ups/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed');
@@ -118,6 +119,7 @@ export default function FollowUpsPage() {
     } catch {
       toast.error('Failed to delete follow-up');
     }
+    });
   }
 
   const statusColors: Record<string, string> = {

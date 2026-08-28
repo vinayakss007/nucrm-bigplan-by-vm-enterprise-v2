@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 import { Plus, PieChart, Trash2 } from 'lucide-react';
 
 interface Segment {
@@ -61,13 +62,14 @@ export default function SegmentsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this segment?')) return;
-    try {
-      const res = await fetch(`/api/tenant/segments/${id}`, { method: 'DELETE' });
-      if (!res.ok) { toast.error('Delete failed'); return; }
-      toast.success('Segment deleted');
-      fetchSegments();
-    } catch { toast.error('Delete failed'); }
+    await confirmThen('Delete this segment?', async () => {
+      try {
+        const res = await fetch(`/api/tenant/segments/${id}`, { method: 'DELETE' });
+        if (!res.ok) { toast.error('Delete failed'); return; }
+        toast.success('Segment deleted');
+        fetchSegments();
+      } catch { toast.error('Delete failed'); }
+    });
   };
 
   if (loading) return <div className="p-6 animate-pulse"><div className="h-8 bg-muted rounded w-48 mb-4" /><div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-16 bg-muted rounded" />)}</div></div>;

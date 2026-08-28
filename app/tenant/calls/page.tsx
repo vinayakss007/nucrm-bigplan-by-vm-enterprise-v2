@@ -8,6 +8,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Phone, PhoneIncoming, PhoneOutgoing, Plus, Clock, X, Pencil, Trash2, Search } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { confirmThen } from '@/components/ui/confirm-dialog';
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -82,15 +83,16 @@ export default function CallsPage() {
   };
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this call log?')) return;
-    try {
-      const res = await fetch(`/api/tenant/calls/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
-      toast.success('Call deleted');
-      setCalls(prev => prev.filter(c => c.id !== id));
-    } catch {
-      toast.error('Failed to delete call');
-    }
+    await confirmThen('Delete this call log?', async () => {
+      try {
+        const res = await fetch(`/api/tenant/calls/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Failed');
+        toast.success('Call deleted');
+        setCalls(prev => prev.filter(c => c.id !== id));
+      } catch {
+        toast.error('Failed to delete call');
+      }
+    });
   }
 
   return (
