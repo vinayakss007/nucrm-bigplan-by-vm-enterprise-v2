@@ -1,0 +1,60 @@
+name: "🐛 Bug report"
+description: "Report a defect — something behaves incorrectly."
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Thanks for filing a bug. Please include enough detail to reproduce it."
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: "What is broken? One or two sentences."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: "Exact steps, request payloads, or code path."
+      placeholder: |
+        1. Go to ...
+        2. Call POST /api/tenant/... with ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+      description: "What did you expect, and what happened instead?"
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: File / route (if known)
+      description: "e.g. app/api/tenant/leads/[id]/route.ts:225"
+    validations:
+      required: false
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - "CRITICAL — data loss, security, or outage"
+        - "HIGH — core feature broken"
+        - "MEDIUM — degraded or edge-case"
+        - "LOW — cosmetic / minor"
+    validations:
+      required: true
+  - type: checkboxes
+    id: area
+    attributes:
+      label: Area
+      options:
+        - label: "Security / auth / tenant isolation"
+        - label: "Data integrity (DB, migrations, transactions)"
+        - label: "API"
+        - label: "UI / frontend"
+        - label: "Infra / deploy / CI"
