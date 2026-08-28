@@ -93,7 +93,18 @@ export async function PATCH(req: NextRequest, { params }: any) {
     if (v.industry !== undefined) updateData.industry = v.industry;
     if (v.size !== undefined) updateData.companySize = v.size;
     if (v.annual_revenue !== undefined) updateData.annualRevenue = v.annual_revenue == null ? null : String(v.annual_revenue);
-    if (v.description !== undefined) updateData.description = v.description;
+    // The companies UI persists/reads the memo as `notes`; API/SDK callers may
+    // send `description`. Keep both columns in sync so the user-visible Notes
+    // field (detail page, edit form, list, CSV export) is never silently
+    // dropped when only one key is supplied.
+    if (v.description !== undefined) {
+      updateData.description = v.description;
+      if (v.notes === undefined) updateData.notes = v.description;
+    }
+    if (v.notes !== undefined) {
+      updateData.notes = v.notes;
+      if (v.description === undefined) updateData.description = v.notes;
+    }
     if (v.website !== undefined) updateData.website = v.website;
     if (v.phone !== undefined) updateData.phone = v.phone;
     if (v.billing_address !== undefined) updateData.address = v.billing_address;
