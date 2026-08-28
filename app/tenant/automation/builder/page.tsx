@@ -9,6 +9,7 @@ import { Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
+import { ErrorBoundary } from '@/components/ui/error-boundary'
 
 const WorkflowBuilder = dynamic(() => import('@/components/tenant/workflow-builder'), {
   ssr: false,
@@ -36,7 +37,9 @@ function BuilderInner() {
         </button>
       </div>
       <div className="flex-1">
-        <WorkflowBuilder workflowId={workflowId} />
+        <ErrorBoundary>
+          <WorkflowBuilder workflowId={workflowId} />
+        </ErrorBoundary>
       </div>
     </div>
   )

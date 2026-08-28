@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Search, Trash2, X, DollarSign, Clock, Package, Building2, User, Users } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { Breadcrumb } from '@/components/shared/breadcrumb';
+import { ListSkeleton } from '@/components/shared/page-skeleton';
 import toast from 'react-hot-toast';
 
 interface Service {
@@ -339,7 +340,7 @@ export default function ServicesPage() {
             </div>
 
             {loading ? (
-              <div className="text-center py-12 text-muted-foreground">Loading...</div>
+              <ListSkeleton />
             ) : filteredServices.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Package className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />

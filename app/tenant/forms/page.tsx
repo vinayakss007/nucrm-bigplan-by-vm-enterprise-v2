@@ -13,6 +13,7 @@ import { cn, formatRelativeTime } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import Pagination from '@/components/tenant/pagination';
 import { Breadcrumb } from '@/components/shared/breadcrumb';
+import { ListSkeleton } from '@/components/shared/page-skeleton';
 import toast from 'react-hot-toast';
 
 interface FormFieldDef {
@@ -237,7 +238,7 @@ export default function FormsPage() {
           </div>
         )}
       {/* Forms list */}
-      {loading ? [...Array(3)].map((_,i) => <div key={i} className="h-24 bg-muted rounded-2xl animate-pulse" />) :
+      {loading ? <ListSkeleton /> :
       forms.length === 0 ? (
         <div className="text-center py-16 border border-dashed border-border rounded-2xl">
           <FileText className="w-8 h-8 text-muted-foreground mx-auto mb-3" />

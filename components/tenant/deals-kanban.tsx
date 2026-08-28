@@ -6,6 +6,7 @@
 "use client"
 
 import { useState, useCallback, useMemo, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus, MoreHorizontal, Edit, User, Building, Calendar, GripVertical, Trash2 } from 'lucide-react'
 import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
 import { confirmThen } from '@/components/ui/confirm-dialog'
@@ -80,6 +81,7 @@ interface Props {
 }
 
 export default function DealsKanban({ initialDeals, stages, contacts: initialContacts, companies: initialCompanies, teamMembers, permissions }: Props) {
+  const router = useRouter()
   const [deals, setDeals] = useState(initialDeals)
   const [contactList, setContactList] = useState(initialContacts)
   const [companyList, setCompanyList] = useState(initialCompanies)
@@ -440,7 +442,7 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
                       'hover:shadow-md transition-shadow group',
                       (draggingId === deal.id || touchDragging === deal.id) && 'opacity-50 ring-2 ring-violet-400'
                     )}
-                    onClick={() => window.location.href = `/tenant/deals/${deal.id}`}
+                    onClick={() => router.push(`/tenant/deals/${deal.id}`)}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
@@ -465,7 +467,7 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => window.location.href = `/tenant/deals/${deal.id}`}>
+                            <DropdownMenuItem onClick={() => router.push(`/tenant/deals/${deal.id}`)}>
                               <Edit className="mr-2 h-3.5 w-3.5" />Edit
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
@@ -562,7 +564,7 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => window.location.href = `/tenant/deals/${deal.id}`}>
+                            <DropdownMenuItem onClick={() => router.push(`/tenant/deals/${deal.id}`)}>
                               <Edit className="mr-2 h-3.5 w-3.5" />Edit
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />

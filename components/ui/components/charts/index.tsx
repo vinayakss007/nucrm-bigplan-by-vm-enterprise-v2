@@ -6,6 +6,7 @@
 'use client';
 import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 
 interface ChartProps {
   data: { label: string; value: number; color?: string }[];
@@ -13,7 +14,25 @@ interface ChartProps {
   className?: string;
 }
 
-export function BarChart({ data, height = 200, className }: ChartProps) {
+/**
+ * Minimal inline fallback for a single failed chart.
+ *
+ * Charts do canvas math over externally supplied data (empty arrays, NaN,
+ * malformed values) so a single bad dataset must not take out the whole page
+ * (#1075). Each exported chart is wrapped in an ErrorBoundary that renders this.
+ */
+function ChartFallback({ height }: { height?: number }) {
+  return (
+    <div
+      className="w-full flex items-center justify-center rounded-md border border-dashed border-border text-[11px] text-muted-foreground"
+      style={height ? { height } : undefined}
+    >
+      Chart unavailable
+    </div>
+  );
+}
+
+function BarChartImpl({ data, height = 200, className }: ChartProps) {
   const max = Math.max(...data.map(d => d.value), 1);
   
   return (
@@ -39,7 +58,7 @@ export function BarChart({ data, height = 200, className }: ChartProps) {
   );
 }
 
-export function LineChart({ data, height = 200, className }: ChartProps) {
+function LineChartImpl({ data, height = 200, className }: ChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const max = Math.max(...data.map(d => d.value), 1);
   const min = Math.min(...data.map(d => d.value), 0);
@@ -108,7 +127,7 @@ export function LineChart({ data, height = 200, className }: ChartProps) {
 
 const CHART_COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#84cc16'];
 
-export function PieChart({ data, height = 200, className }: ChartProps) {
+function PieChartImpl({ data, height = 200, className }: ChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
   useEffect(() => {
@@ -159,7 +178,7 @@ export function PieChart({ data, height = 200, className }: ChartProps) {
   );
 }
 
-export function DonutChart({ data, height = 200, className }: ChartProps) {
+function DonutChartImpl({ data, height = 200, className }: ChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
   useEffect(() => {
@@ -217,7 +236,7 @@ export function DonutChart({ data, height = 200, className }: ChartProps) {
   );
 }
 
-export function ProgressBar({ value, max = 100, color = 'bg-violet-500', className }: { value: number; max?: number; color?: string; className?: string }) {
+function ProgressBarImpl({ value, max = 100, color = 'bg-violet-500', className }: { value: number; max?: number; color?: string; className?: string }) {
   const percent = Math.min((value / max) * 100, 100);
   return (
     <div className={cn('w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden', className)}>
@@ -226,7 +245,7 @@ export function ProgressBar({ value, max = 100, color = 'bg-violet-500', classNa
   );
 }
 
-export function Sparkline({ data, width = 100, height = 30, color = '#8b5cf6' }: { data: number[]; width?: number; height?: number; color?: string }) {
+function SparklineImpl({ data, width = 100, height = 30, color = '#8b5cf6' }: { data: number[]; width?: number; height?: number; color?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
   useEffect(() => {
@@ -272,4 +291,58 @@ export function Sparkline({ data, width = 100, height = 30, color = '#8b5cf6' }:
   }, [data, width, height, color]);
   
   return <canvas ref={canvasRef} className="w-full h-full" style={{ width, height }} />;
+}
+
+/*
+ * Public exports: each chart is wrapped in an ErrorBoundary so a single chart
+ * failing (bad/empty data, canvas errors) degrades to a small placeholder
+ * instead of crashing the whole page (#1075).
+ */
+
+export function BarChart(props: ChartProps) {
+  return (
+    <ErrorBoundary fallback={<ChartFallback height={props.height ?? 200} />}>
+      <BarChartImpl {...props} />
+    </ErrorBoundary>
+  );
+}
+
+export function LineChart(props: ChartProps) {
+  return (
+    <ErrorBoundary fallback={<ChartFallback height={props.height ?? 200} />}>
+      <LineChartImpl {...props} />
+    </ErrorBoundary>
+  );
+}
+
+export function PieChart(props: ChartProps) {
+  return (
+    <ErrorBoundary fallback={<ChartFallback height={props.height ?? 200} />}>
+      <PieChartImpl {...props} />
+    </ErrorBoundary>
+  );
+}
+
+export function DonutChart(props: ChartProps) {
+  return (
+    <ErrorBoundary fallback={<ChartFallback height={props.height ?? 200} />}>
+      <DonutChartImpl {...props} />
+    </ErrorBoundary>
+  );
+}
+
+export function ProgressBar(props: { value: number; max?: number; color?: string; className?: string }) {
+  return (
+    <ErrorBoundary fallback={<ChartFallback />}>
+      <ProgressBarImpl {...props} />
+    </ErrorBoundary>
+  );
+}
+
+export function Sparkline(props: { data: number[]; width?: number; height?: number; color?: string }) {
+  return (
+    <ErrorBoundary fallback={<ChartFallback height={props.height ?? 30} />}>
+      <SparklineImpl {...props} />
+    </ErrorBoundary>
+  );
 }

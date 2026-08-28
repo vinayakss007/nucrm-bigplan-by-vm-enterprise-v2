@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
 import { Plus, Video, MapPin, Link as LinkIcon } from 'lucide-react';
 import { Breadcrumb } from '@/components/shared/breadcrumb';
+import { ListSkeleton } from '@/components/shared/page-skeleton';
 
 interface Meeting {
   id: string;
@@ -84,7 +85,7 @@ export default function MeetingsPage() {
     return <span className={`px-2 py-0.5 rounded text-xs font-medium ${colors[s] || 'bg-gray-100 text-gray-700'}`}>{s}</span>;
   };
 
-  if (loading) return <div className="p-6 animate-pulse"><div className="h-8 bg-muted rounded w-48 mb-4" /><div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-16 bg-muted rounded" />)}</div></div>;
+  if (loading) return <div className="p-6"><ListSkeleton /></div>;
 
   return (
     <div className="p-6 space-y-6">

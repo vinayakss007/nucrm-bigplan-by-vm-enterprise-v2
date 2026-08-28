@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { sanitizeHTML } from '@/lib/sanitize';
 import { EmailBuilder, type EmailBlock, blocksToHtml } from '@/components/tenant/email-builder';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 
 const VARIABLES = [
   { key: '{{first_name}}',    label: 'First Name' },
@@ -147,7 +148,9 @@ function TemplateEditor({ template, onSave, onCancel }: EditorProps) {
               />
             ) : editorMode === 'visual' ? (
               <div className="rounded-xl border border-border p-4 bg-muted/20">
-                <EmailBuilder onChange={handleVisualChange} />
+                <ErrorBoundary>
+                  <EmailBuilder onChange={handleVisualChange} />
+                </ErrorBoundary>
               </div>
             ) : (
               <textarea

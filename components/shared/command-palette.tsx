@@ -45,7 +45,13 @@ interface CommandItem {
   label: string
   icon: React.ComponentType<{ className?: string }>
   shortcut?: string
-  onClick: () => void
+  /**
+   * In-app destination. Preferred over `onClick` so navigation uses the Next.js
+   * router (client-side transition) rather than a full-page reload (#1267).
+   */
+  href?: string
+  /** For non-navigation actions (e.g. dispatching a custom event). */
+  onClick?: () => void
   category: 'navigation' | 'create' | 'settings' | 'help'
   keywords?: string[]
   permission?: string
@@ -58,13 +64,13 @@ interface RecentItem {
   timestamp: number
 }
 
-// Navigation items
+// Navigation items — `href` drives a client-side router.push (#1267)
 const NAVIGATION_ITEMS: CommandItem[] = [
   {
     id: 'dashboard',
     label: 'Dashboard',
     icon: LayoutDashboard,
-    onClick: () => window.location.href = '/tenant/dashboard',
+    href: '/tenant/dashboard',
     category: 'navigation',
     keywords: ['home', 'overview', 'stats'],
   },
@@ -72,7 +78,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
     id: 'contacts',
     label: 'Contacts',
     icon: Users,
-    onClick: () => window.location.href = '/tenant/contacts',
+    href: '/tenant/contacts',
     category: 'navigation',
     keywords: ['people', 'leads', 'customers'],
   },
@@ -80,7 +86,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
     id: 'companies',
     label: 'Companies',
     icon: Building2,
-    onClick: () => window.location.href = '/tenant/companies',
+    href: '/tenant/companies',
     category: 'navigation',
     keywords: ['organizations', 'accounts', 'businesses'],
   },
@@ -88,7 +94,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
     id: 'deals',
     label: 'Deals',
     icon: TrendingUp,
-    onClick: () => window.location.href = '/tenant/deals',
+    href: '/tenant/deals',
     category: 'navigation',
     keywords: ['opportunities', 'pipeline', 'sales'],
   },
@@ -96,7 +102,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
     id: 'tasks',
     label: 'Tasks',
     icon: CheckSquare,
-    onClick: () => window.location.href = '/tenant/tasks',
+    href: '/tenant/tasks',
     category: 'navigation',
     keywords: ['todos', 'follow-ups', 'reminders'],
   },
@@ -104,7 +110,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
     id: 'calendar',
     label: 'Calendar',
     icon: Calendar,
-    onClick: () => window.location.href = '/tenant/calendar',
+    href: '/tenant/calendar',
     category: 'navigation',
     keywords: ['meetings', 'schedule', 'events'],
   },
@@ -112,7 +118,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
     id: 'reports',
     label: 'Reports',
     icon: FileBarChart,
-    onClick: () => window.location.href = '/tenant/reports',
+    href: '/tenant/reports',
     category: 'navigation',
     keywords: ['analytics', 'data', 'export'],
   },
@@ -120,7 +126,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
     id: 'analytics',
     label: 'Analytics',
     icon: BarChart3,
-    onClick: () => window.location.href = '/tenant/analytics',
+    href: '/tenant/analytics',
     category: 'navigation',
     keywords: ['charts', 'graphs', 'metrics'],
   },
@@ -128,7 +134,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
     id: 'automation',
     label: 'Automation',
     icon: Zap,
-    onClick: () => window.location.href = '/tenant/automation',
+    href: '/tenant/automation',
     category: 'navigation',
     keywords: ['workflows', 'triggers', 'actions'],
   },
@@ -136,7 +142,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
     id: 'forms',
     label: 'Forms',
     icon: FileText,
-    onClick: () => window.location.href = '/tenant/forms',
+    href: '/tenant/forms',
     category: 'navigation',
     keywords: ['lead capture', 'landing pages'],
   },
@@ -144,7 +150,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
     id: 'notifications',
     label: 'Notifications',
     icon: Bell,
-    onClick: () => window.location.href = '/tenant/notifications',
+    href: '/tenant/notifications',
     category: 'navigation',
     keywords: ['alerts', 'messages'],
   },
@@ -152,7 +158,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
     id: 'modules',
     label: 'Modules',
     icon: Zap,
-    onClick: () => window.location.href = '/tenant/modules',
+    href: '/tenant/modules',
     category: 'navigation',
     keywords: ['integrations', 'addons', 'plugins'],
   },
@@ -160,7 +166,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
     id: 'trash',
     label: 'Trash',
     icon: Trash2,
-    onClick: () => window.location.href = '/tenant/trash',
+    href: '/tenant/trash',
     category: 'navigation',
     keywords: ['deleted', 'recycle bin'],
   },
@@ -168,7 +174,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
     id: 'settings',
     label: 'Settings',
     icon: Settings,
-    onClick: () => window.location.href = '/tenant/settings/general',
+    href: '/tenant/settings/general',
     category: 'navigation',
     keywords: ['preferences', 'configuration'],
   },
@@ -176,7 +182,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
     id: 'superadmin',
     label: 'Super Admin',
     icon: Crown,
-    onClick: () => window.location.href = '/superadmin/dashboard',
+    href: '/superadmin/dashboard',
     category: 'navigation',
     keywords: ['admin', 'platform'],
     permission: 'is_super_admin',
@@ -190,7 +196,7 @@ const CREATE_ITEMS: CommandItem[] = [
     label: 'New Contact',
     icon: Plus,
     shortcut: 'N C',
-    onClick: () => window.location.href = '/tenant/contacts?action=create',
+    href: '/tenant/contacts?action=create',
     category: 'create',
     keywords: ['add', 'person', 'lead'],
   },
@@ -199,7 +205,7 @@ const CREATE_ITEMS: CommandItem[] = [
     label: 'New Deal',
     icon: TrendingUp,
     shortcut: 'N D',
-    onClick: () => window.location.href = '/tenant/deals?action=create',
+    href: '/tenant/deals?action=create',
     category: 'create',
     keywords: ['add', 'opportunity'],
   },
@@ -208,7 +214,7 @@ const CREATE_ITEMS: CommandItem[] = [
     label: 'New Company',
     icon: Building2,
     shortcut: 'N M',
-    onClick: () => window.location.href = '/tenant/companies?action=create',
+    href: '/tenant/companies?action=create',
     category: 'create',
     keywords: ['add', 'organization', 'account'],
   },
@@ -217,7 +223,7 @@ const CREATE_ITEMS: CommandItem[] = [
     label: 'New Task',
     icon: CheckSquare,
     shortcut: 'N T',
-    onClick: () => window.location.href = '/tenant/tasks?action=create',
+    href: '/tenant/tasks?action=create',
     category: 'create',
     keywords: ['add', 'todo', 'follow-up'],
   },
@@ -226,7 +232,7 @@ const CREATE_ITEMS: CommandItem[] = [
     label: 'New Meeting',
     icon: Calendar,
     shortcut: 'N E',
-    onClick: () => window.location.href = '/tenant/calendar?action=create',
+    href: '/tenant/calendar?action=create',
     category: 'create',
     keywords: ['schedule', 'event', 'call'],
   },
@@ -280,7 +286,17 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const [search, setSearch] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [recentItems, setRecentItems] = useState<RecentItem[]>([])
-  const _router = useRouter()
+  const router = useRouter()
+
+  // Run an item: client-side navigate when it has an href, otherwise its action.
+  const runItem = useCallback((item: Pick<CommandItem, 'href' | 'onClick'>) => {
+    if (item.href) {
+      router.push(item.href)
+    } else {
+      item.onClick?.()
+    }
+    onOpenChange(false)
+  }, [router, onOpenChange])
 
   // Load recent items from localStorage
   useEffect(() => {
@@ -297,17 +313,10 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     const newRecent: RecentItem = {
       id: item.id,
       label: item.label,
-      href: '', // Will be set based on item
+      href: item.href ?? '',
       timestamp: Date.now(),
     }
-    
-    // Extract href from onClick by matching known patterns
-    const onClickStr = item.onClick.toString()
-    const hrefMatch = onClickStr.match(/window\.location\.href\s*=\s*['"]([^'"]+)['"]/)
-    if (hrefMatch) {
-      newRecent.href = hrefMatch[1] || ''
-    }
-    
+
     const updated = [newRecent, ...recentItems.filter(r => r.id !== item.id)].slice(0, 5)
     setRecentItems(updated)
     try {
@@ -345,12 +354,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         id: r.id,
         label: r.label,
         icon: NAVIGATION_ITEMS.find(i => i.id === r.id)?.icon || Globe,
-        onClick: () => {
-          if (r.href) {
-            window.location.href = r.href
-          }
-          onOpenChange(false)
-        },
+        href: r.href || undefined,
         category: 'navigation' as const,
       }))
     }
@@ -359,7 +363,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     groups['create'] = CREATE_ITEMS
 
     return groups
-  }, [search, filteredItems, recentItems, onOpenChange])
+  }, [search, filteredItems, recentItems])
 
   // Flatten for keyboard navigation
   const allVisibleItems = useMemo(() => {
@@ -382,8 +386,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         const selectedItem = allVisibleItems[selectedIndex]
         if (selectedItem) {
           saveRecent(selectedItem)
-          selectedItem.onClick()
-          onOpenChange(false)
+          runItem(selectedItem)
         }
       } else if (e.key === 'Escape') {
         e.preventDefault()
@@ -393,7 +396,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [open, selectedIndex, allVisibleItems, saveRecent, onOpenChange])
+  }, [open, selectedIndex, allVisibleItems, saveRecent, runItem, onOpenChange])
 
   // Global keyboard shortcut (⌘K / Ctrl+K)
   useEffect(() => {
@@ -432,8 +435,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         key={item.id}
         onClick={() => {
           saveRecent(item)
-          item.onClick()
-          onOpenChange(false)
+          runItem(item)
         }}
         className={cn(
           'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
