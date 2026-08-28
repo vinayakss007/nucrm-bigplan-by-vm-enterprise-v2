@@ -8,6 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createProjectSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
 import { projects, users } from '@/drizzle/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
@@ -72,6 +73,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await rateLimitMutating(request, 'projects', 'post');
+    if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

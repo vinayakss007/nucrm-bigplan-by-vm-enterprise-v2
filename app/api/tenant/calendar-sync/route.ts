@@ -8,6 +8,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { getProvider, getIntegrationConfig } from '@/lib/calendar-sync/service';
 import { readJsonBody } from '@/lib/api/validate';
 import { signOAuthState } from '@/lib/calendar-sync/state';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -46,6 +47,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await rateLimitMutating(request, 'calendarSync', 'post');
+    if (limited) return limited;
+
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

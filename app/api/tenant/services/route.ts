@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { services } from '@/drizzle/schema';
 import { eq, and, desc, like } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -57,6 +58,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await rateLimitMutating(request, 'services', 'post');
+    if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const { tenantId, userId } = ctx;
