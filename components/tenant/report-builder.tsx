@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { BarChart3, PieChart, TrendingUp, Download, Loader2, Play, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
+import type { TooltipValueType, PieLabelRenderProps } from 'recharts';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -355,7 +356,7 @@ export default function ReportBuilder() {
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip
                       contentStyle={{ borderRadius: 12, border: '1px solid var(--border)', fontSize: 12 }}
-                      formatter={(value: number) => [value.toLocaleString(), 'Value']}
+                      formatter={(value: TooltipValueType | undefined) => [Number(value ?? 0).toLocaleString(), 'Value']}
                     />
                     <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                       {result.data.map((_, i) => (
@@ -376,7 +377,12 @@ export default function ReportBuilder() {
                       outerRadius="80%"
                       dataKey="value"
                       nameKey="label"
-                      label={({ label, percentage }) => `${label} (${percentage}%)`}
+                      label={(props: PieLabelRenderProps) => {
+                        // recharts v3 dropped `label`/`percentage` from PieLabelRenderProps;
+                        // read them from the original datum on `payload` to preserve exact output.
+                        const datum = props.payload as ReportDataPoint;
+                        return `${datum.label} (${datum.percentage}%)`;
+                      }}
                       labelLine={true}
                     >
                       {result.data.map((_, i) => (
@@ -385,7 +391,7 @@ export default function ReportBuilder() {
                     </Pie>
                     <Tooltip
                       contentStyle={{ borderRadius: 12, border: '1px solid var(--border)', fontSize: 12 }}
-                      formatter={(value: number, name: string) => [value.toLocaleString(), name]}
+                      formatter={(value: TooltipValueType | undefined, name: number | string | undefined) => [Number(value ?? 0).toLocaleString(), String(name ?? '')]}
                     />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                   </RePieChart>
@@ -406,7 +412,7 @@ export default function ReportBuilder() {
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip
                       contentStyle={{ borderRadius: 12, border: '1px solid var(--border)', fontSize: 12 }}
-                      formatter={(value: number) => [value.toLocaleString(), 'Value']}
+                      formatter={(value: TooltipValueType | undefined) => [Number(value ?? 0).toLocaleString(), 'Value']}
                     />
                     <Line
                       type="monotone"

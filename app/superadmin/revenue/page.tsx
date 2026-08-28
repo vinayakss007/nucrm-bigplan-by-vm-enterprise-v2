@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, Users, Building2, Zap } from 'lucide-react';
 import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import type { TooltipValueType } from 'recharts';
 
 const TICK  = { fill:'rgba(255,255,255,0.3)', fontSize:10 };
 const TIP   = { background:'hsl(222,32%,9%)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, fontSize:11 };
@@ -110,7 +111,7 @@ export default function RevenuePage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)"/>
                 <XAxis dataKey="month" tick={TICK} tickLine={false} axisLine={false}/>
                 <YAxis tick={TICK} tickLine={false} axisLine={false} tickFormatter={v=>`$${v}`}/>
-                <Tooltip contentStyle={TIP} formatter={(v:number)=>[formatCurrency(v),'MRR']}/>
+                <Tooltip contentStyle={TIP} formatter={(v:TooltipValueType|undefined)=>[formatCurrency(Number(v ?? 0)),'MRR']}/>
                 <Area type="monotone" dataKey="value" stroke="#10b981" fill="url(#m)" strokeWidth={2}/>
               </AreaChart>
             </ResponsiveContainer>

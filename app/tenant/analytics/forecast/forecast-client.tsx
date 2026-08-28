@@ -9,6 +9,7 @@ import useSWR from 'swr';
 import { TrendingUp, DollarSign, BarChart3, Target } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import type { TooltipValueType } from 'recharts';
 import { getStageProbability, calculateWeightedValue } from '@/lib/forecast';
 
 interface Deal {
@@ -143,7 +144,7 @@ export default function ForecastPage() {
               <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
               <XAxis dataKey="name" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(val: number) => formatCurrency(val)} />
+              <Tooltip formatter={(val: TooltipValueType | undefined) => formatCurrency(Number(val ?? 0))} />
               <Bar dataKey="pipeline" fill="#8b5cf6" name="Pipeline" radius={[4, 4, 0, 0]} opacity={0.3} />
               <Bar dataKey="weighted" fill="#8b5cf6" name="Weighted" radius={[4, 4, 0, 0]} />
             </BarChart>
