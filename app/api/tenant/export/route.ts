@@ -14,6 +14,20 @@ import { readJsonBody } from '@/lib/api/validate';
 import { escapeCSV } from '@/lib/export';
 
 /**
+ * GET /api/tenant/export
+ * Not supported: this endpoint is intentionally POST-only (CSRF + mutating
+ * rate-limit gated). Returns 405 with an `Allow: POST` header and a clear
+ * message so clients and load-test tooling get a standard-correct response
+ * instead of a bare 405.
+ */
+export async function GET() {
+  return NextResponse.json(
+    { error: 'Method Not Allowed. Use POST /api/tenant/export with a JSON body { entity, format }.' },
+    { status: 405, headers: { Allow: 'POST' } },
+  );
+}
+
+/**
  * POST /api/tenant/export
  * Exports tenant data as JSON or CSV format.
  *
@@ -175,29 +189,43 @@ export async function POST(request: NextRequest) {
     }
 
     if (format === 'csv') {
-      if (data.length === 0) {
-        return new NextResponse('', {
-          status: 200,
-          headers: { 'Content-Type': 'text/csv', 'Content-Disposition': `attachment; filename="${entity}-export.csv"` },
-        });
-      }
-      // Convert to CSV with formula injection protection via shared escapeCSV
-      const headers = Object.keys(data[0]!);
-      const csvRows = [
-        headers.join(','),
-        ...data.map(row =>
-          headers.map(h => escapeCSV((row as Record<string, unknown>)[h])).join(',')
-        ),
-      ];
-      const csv = csvRows.join('\n');
+      const csvHeaders = {
+        'Content-Type': 'text/csv',
+        'Content-Disposition': `attachment; filename="${entity}-export.csv"`,
+      };
 
-      return new NextResponse(csv, {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/csv',
-          'Content-Disposition': `attachment; filename="${entity}-export.csv"`,
+      if (data.length === 0) {
+        return new NextResponse('', { status: 200, headers: csvHeaders });
+      }
+
+      // Stream the CSV incrementally rather than concatenating every row into a
+      // single in-memory string. #1544 F6: large exports (up to 10k rows here,
+      // and far more on load tests) must not hold the whole serialized CSV in
+      // memory at once. The header row is emitted first, then each data row is
+      // encoded and enqueued one at a time. Content/format is unchanged:
+      // headers derived from the first row's keys, escapeCSV on every cell,
+      // '\n' line separator.
+      const rows = data;
+      const headers = Object.keys(rows[0]!);
+      const encoder = new TextEncoder();
+
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          // Header row.
+          controller.enqueue(encoder.encode(headers.join(',')));
+          // Data rows, each prefixed with the line separator so the output
+          // matches headers + rows joined by '\n' exactly (no trailing newline).
+          for (const row of rows) {
+            const line = headers
+              .map(h => escapeCSV((row as Record<string, unknown>)[h]))
+              .join(',');
+            controller.enqueue(encoder.encode('\n' + line));
+          }
+          controller.close();
         },
       });
+
+      return new NextResponse(stream, { status: 200, headers: csvHeaders });
     }
 
     return NextResponse.json({
