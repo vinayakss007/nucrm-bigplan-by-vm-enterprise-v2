@@ -146,7 +146,7 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
           deal_title: convertDraft.deal_title || null,
           deal_value: convertDraft.deal_value ? Number(convertDraft.deal_value) : 0,
           pipeline_id: convertDraft.pipeline_id || undefined,
-          stage_id: convertDraft.stage_id || undefined,
+          deal_stage: convertDraft.stage_id || undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
