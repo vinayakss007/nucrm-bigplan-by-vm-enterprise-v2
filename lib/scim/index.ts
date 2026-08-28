@@ -314,6 +314,17 @@ export async function verifySCIMToken(
   }
 
   // ── v1 token (deprecated): raw HMAC of tenantId ──
+  //
+  // v1 tokens NEVER expire and derive the tenant from the client-supplied
+  // `x-tenant-id` header, so their only assurance is "knows the global
+  // SCIM_SECRET" — there is no per-token expiry or self-contained tenant
+  // binding. createSCIMToken only ever mints v2 tokens, so nothing issues v1
+  // anymore. It is therefore rejected by default and only accepted when an
+  // operator explicitly opts in via SCIM_ALLOW_V1_TOKENS=true (e.g. during a
+  // migration window). Rotate to v2 tokens and drop the flag.
+  if (process.env['SCIM_ALLOW_V1_TOKENS'] !== 'true') {
+    return null;
+  }
   if (fallbackTenantId) {
     try {
       const expectedHmac = createHmac('sha256', secret)
@@ -326,6 +337,7 @@ export async function verifySCIMToken(
       if (tokenBuf.length !== expectedBuf.length) return null;
       if (!timingSafeEqual(tokenBuf, expectedBuf)) return null;
 
+      warnV1TokenAccepted();
       return { tenantId: fallbackTenantId };
     } catch {
       return null;
@@ -333,6 +345,19 @@ export async function verifySCIMToken(
   }
 
   return null;
+}
+
+let _v1WarnedAt = 0;
+/** Warn (throttled) whenever a deprecated v1 SCIM token is accepted. */
+function warnV1TokenAccepted(): void {
+  const now = Date.now();
+  if (now - _v1WarnedAt >= 60_000) {
+    _v1WarnedAt = now;
+    console.warn(
+      '[SCIM] Accepted a deprecated v1 bearer token (SCIM_ALLOW_V1_TOKENS=true). ' +
+      'v1 tokens never expire and trust the client x-tenant-id header — rotate to v2 tokens and unset the flag.',
+    );
+  }
 }
 
 // ── Token Creation ───────────────────────────────────────────────────────────

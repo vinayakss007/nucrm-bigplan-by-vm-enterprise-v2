@@ -359,17 +359,29 @@ describe('SCIM 2.0 Protocol Handler', () => {
       expect(result).toBeNull();
     });
 
-    it('should verify a v1 token (deprecated format)', async () => {
+    it('should REJECT a v1 token by default (deprecated format now opt-in)', async () => {
       process.env['SCIM_SECRET'] = 'test-secret-key';
+      delete process.env['SCIM_ALLOW_V1_TOKENS'];
       const { verifySCIMToken } = await import('@/lib/scim');
 
       const tenantId = 'tenant-123';
-      const expectedToken = createHmac('sha256', 'test-secret-key')
-        .update(tenantId)
-        .digest('hex');
+      const v1Token = createHmac('sha256', 'test-secret-key').update(tenantId).digest('hex');
 
-      const result = await verifySCIMToken(expectedToken, tenantId);
+      const result = await verifySCIMToken(v1Token, tenantId);
+      expect(result).toBeNull();
+    });
+
+    it('should accept a v1 token only when SCIM_ALLOW_V1_TOKENS=true', async () => {
+      process.env['SCIM_SECRET'] = 'test-secret-key';
+      process.env['SCIM_ALLOW_V1_TOKENS'] = 'true';
+      const { verifySCIMToken } = await import('@/lib/scim');
+
+      const tenantId = 'tenant-123';
+      const v1Token = createHmac('sha256', 'test-secret-key').update(tenantId).digest('hex');
+
+      const result = await verifySCIMToken(v1Token, tenantId);
       expect(result).toEqual({ tenantId });
+      delete process.env['SCIM_ALLOW_V1_TOKENS'];
     });
 
     it('should verify a v2 token with embedded tenant', async () => {
@@ -411,8 +423,9 @@ describe('SCIM 2.0 Protocol Handler', () => {
       expect(await verifySCIMToken('', 'tenant-1')).toBeNull();
     });
 
-    it('should reject v1 token for wrong tenant', async () => {
+    it('should reject v1 token for wrong tenant (even when v1 enabled)', async () => {
       process.env['SCIM_SECRET'] = 'test-secret-key';
+      process.env['SCIM_ALLOW_V1_TOKENS'] = 'true';
       const { verifySCIMToken } = await import('@/lib/scim');
 
       const token = createHmac('sha256', 'test-secret-key')
@@ -421,6 +434,7 @@ describe('SCIM 2.0 Protocol Handler', () => {
 
       const result = await verifySCIMToken(token, 'tenant-B');
       expect(result).toBeNull();
+      delete process.env['SCIM_ALLOW_V1_TOKENS'];
     });
   });
 

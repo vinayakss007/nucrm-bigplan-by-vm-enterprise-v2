@@ -5,7 +5,7 @@
  * The previous code fell back to `admin` when `sales_rep` was absent.
  */
 import { describe, it, expect } from 'vitest';
-import { selectLeastPrivilegeRole, type SelectableRole } from '@/app/api/auth/sso/callback/route';
+import { selectLeastPrivilegeRole, type SelectableRole } from '@/lib/auth/default-role';
 
 const r = (slug: string, sortOrder: number | null = 0, id = slug): SelectableRole => ({ id, slug, sortOrder });
 

@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { escapeLike } from '@/lib/api/sanitize-like';
+import { selectLeastPrivilegeRole } from '@/lib/auth/default-role';
 import { db } from '@/drizzle/db';
 import { users, tenantMembers, roles } from '@/drizzle/schema';
 import { eq, and, ilike, sql } from 'drizzle-orm';
@@ -246,20 +247,16 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (!existingMember) {
-      // Find a default role for this tenant
-      const [defaultRole] = await db
-        .select({ id: roles.id, slug: roles.slug })
+      // SECURITY: pick a LEAST-PRIVILEGE default role. The previous fallback was
+      // an unordered `roles ... limit(1)`, which could return the tenant's
+      // `admin` role — silently provisioning an IdP-managed user as admin.
+      // selectLeastPrivilegeRole never returns admin/super_admin.
+      const tenantRoles = await db
+        .select({ id: roles.id, slug: roles.slug, sortOrder: roles.sortOrder })
         .from(roles)
-        .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, 'member')))
-        .limit(1);
+        .where(eq(roles.tenantId, tenantId));
 
-      const roleToAssign = defaultRole ?? (
-        await db
-          .select({ id: roles.id, slug: roles.slug })
-          .from(roles)
-          .where(eq(roles.tenantId, tenantId))
-          .limit(1)
-      )[0];
+      const roleToAssign = selectLeastPrivilegeRole(tenantRoles);
 
       await db.insert(tenantMembers).values({
         tenantId,

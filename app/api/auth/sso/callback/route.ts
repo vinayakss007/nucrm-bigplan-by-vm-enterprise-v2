@@ -25,6 +25,7 @@ import { eq, and } from 'drizzle-orm';
 import { exchangeAndVerify, loadProviderConfig } from '@/lib/auth/sso/oidc';
 import { readSsoState, clearSsoState, sanitizeRedirectTo } from '@/lib/auth/sso/state';
 import { createToken, hashToken, setSessionCookie } from '@/lib/auth/session';
+import { selectLeastPrivilegeRole } from '@/lib/auth/default-role';
 import { decrypt } from '@/lib/crypto';
 
 const SESSION_TTL_DAYS = 30;
@@ -243,32 +244,6 @@ async function upsertUserAndMembership(args: {
   }
 
   return userId;
-}
-
-/** A tenant role, as needed for least-privilege default selection. */
-export interface SelectableRole {
-  id: string;
-  slug: string;
-  sortOrder: number | null;
-}
-
-/**
- * Choose the least-privilege default role for an auto-provisioned SSO user.
- *
- * SECURITY: never returns an `admin`/`super_admin` role. Prefers the known
- * low-privilege slugs; otherwise the lowest-privilege non-admin role (highest
- * sortOrder in this schema, tie-broken by slug for determinism). Returns
- * `undefined` when only admin-level roles exist, so the caller declines to
- * auto-provision rather than silently granting admin.
- */
-export function selectLeastPrivilegeRole<T extends SelectableRole>(tenantRoles: T[]): T | undefined {
-  const PREFERRED = ['sales_rep', 'member', 'viewer', 'user', 'agent'];
-  const nonAdmin = tenantRoles.filter((r) => r.slug !== 'admin' && r.slug !== 'super_admin');
-  const preferred = PREFERRED.map((slug) => nonAdmin.find((r) => r.slug === slug)).find(Boolean);
-  if (preferred) return preferred;
-  return [...nonAdmin].sort(
-    (a, b) => (b.sortOrder ?? 0) - (a.sortOrder ?? 0) || a.slug.localeCompare(b.slug),
-  )[0];
 }
 
 function absoluteCallbackUrl(request: NextRequest): string {
