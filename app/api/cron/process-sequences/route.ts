@@ -13,6 +13,7 @@ import { sanitizeHTMLServer } from '@/lib/sanitize';
 import { sequenceEnrollments, sequenceSteps, tasks, sequenceStepLogs } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
+import { generateUnsubscribeToken } from '@/lib/email/unsubscribe-token';
 import { acquireLock, releaseLock } from '@/lib/cache';
 
 const SEQUENCE_LOCK_KEY = 'cron:process-sequences';
@@ -155,7 +156,10 @@ export async function POST(req: NextRequest) {
           if (step.stepType === 'email' && enrollment.contact?.email && !enrollment.contact?.doNotContact) {
             try {
               const APP_URL = process.env.NEXT_PUBLIC_APP_URL || '';
-              const unsubLink = `${APP_URL}/api/unsubscribe?contact=${enrollment.contactId}&seq=${enrollment.sequenceId}`;
+              // #1169: include the HMAC token so these links keep working now
+              // that /api/unsubscribe requires and verifies it.
+              const unsubToken = generateUnsubscribeToken(enrollment.contactId);
+              const unsubLink = `${APP_URL}/api/unsubscribe?contact=${encodeURIComponent(enrollment.contactId)}&seq=${encodeURIComponent(enrollment.sequenceId)}&token=${unsubToken}`;
               const emailBody = sanitizeHTMLServer(step.body || step.content || '');
               const html = `<div style="font-family:sans-serif;max-width:600px">${emailBody.replace(/\n/g,'<br>')}<br><br><hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"><p style="font-size:11px;color:#9ca3af">You received this email because you are enrolled in a follow-up sequence. <a href="${unsubLink}" style="color:#9ca3af">Unsubscribe</a></p></div>`;
 
