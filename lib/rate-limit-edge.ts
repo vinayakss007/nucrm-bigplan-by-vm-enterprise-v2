@@ -25,16 +25,44 @@ export interface RateLimitCheckResult {
 
 export class EdgeRateLimiter {
   private windows = new Map<string, SlidingWindowEntry>();
+  // Timestamp of the last expired-entry sweep. Used to throttle sweeps so
+  // check() stays O(1) on the hot path and only pays the O(n) sweep cost
+  // occasionally (at most once per defaultWindowMs).
+  private lastSweepAt = 0;
 
   constructor(
     private defaultMax: number = 60,
     private defaultWindowMs: number = 60_000,
   ) {}
 
+  /**
+   * Lazily evict entries whose window has fully expired.
+   *
+   * Runs at most once per `defaultWindowMs` to keep amortized cost low and
+   * avoid a background timer (setInterval is inappropriate in edge/serverless
+   * contexts and can keep the process alive). Only entries with
+   * `resetAt <= now` are removed, so still-active windows are never dropped
+   * and rate-limit semantics for active keys are preserved.
+   */
+  private sweep(now: number): void {
+    if (now - this.lastSweepAt < this.defaultWindowMs) {
+      return;
+    }
+    this.lastSweepAt = now;
+    for (const [key, entry] of this.windows) {
+      if (entry.resetAt <= now) {
+        this.windows.delete(key);
+      }
+    }
+  }
+
   check(key: string, max?: number, windowMs?: number): RateLimitCheckResult {
     const now = Date.now();
     const effectiveMax = max ?? this.defaultMax;
     const effectiveWindow = windowMs ?? this.defaultWindowMs;
+
+    // Opportunistically reclaim memory from keys that stopped recurring.
+    this.sweep(now);
 
     const entry = this.windows.get(key);
 
