@@ -10,7 +10,7 @@ import { ArrowLeft, Send, Loader2, User, Bot } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; token: string; }
+interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; }
 
 interface Ticket { id: string; subject: string; body: string; status: string; priority: string; category: string; created_at: string; }
 interface Reply { id: string; body: string; isInternal: boolean; userId: string | null; contactId: string | null; createdAt: string; }
@@ -32,7 +32,7 @@ export default function PortalTicketDetailPage() {
     if (!raw) { router.replace('/portal/login'); return; }
     try {
       const s = JSON.parse(raw) as PortalSession;
-      if (!s.email || !s.token) { router.replace('/portal/login'); return; }
+      if (!s.email) { router.replace('/portal/login'); return; }
       setSession(s);
 
       fetch(`/api/public/tickets/${ticketId}`, { headers: { 'x-portal-email': s.email } })

@@ -13,7 +13,6 @@ interface PortalSession {
   email: string;
   name: string;
   permissions: { quotes: boolean; invoices: boolean; cases: boolean };
-  token: string;
 }
 
 function getStoredSession(): PortalSession | null {
@@ -22,7 +21,7 @@ function getStoredSession(): PortalSession | null {
     const raw = localStorage.getItem('portal_session');
     if (!raw) return null;
     const s = JSON.parse(raw) as PortalSession;
-    if (!s.email || !s.token) return null;
+    if (!s.email) return null;
     return s;
   } catch {
     return null;

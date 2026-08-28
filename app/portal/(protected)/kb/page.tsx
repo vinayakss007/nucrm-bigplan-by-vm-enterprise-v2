@@ -30,7 +30,7 @@ export default function PortalKBPage() {
     if (!raw) { router.replace('/portal/login'); return; }
     try {
       const s = JSON.parse(raw);
-      if (!s.email || !s.token) { router.replace('/portal/login'); return; }
+      if (!s.email) { router.replace('/portal/login'); return; }
     } catch { router.replace('/portal/login'); return; }
 
     fetch('/api/public/kb/articles?status=published').then(r => r.json()).then(d => {

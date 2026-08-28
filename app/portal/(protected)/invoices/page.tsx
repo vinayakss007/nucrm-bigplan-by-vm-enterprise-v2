@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import { FileText, Download } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
 
-interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; token: string; }
+interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; }
 
 export default function PortalInvoicesPage() {
   const router = useRouter();
@@ -22,7 +22,7 @@ export default function PortalInvoicesPage() {
     if (!raw) { router.replace('/portal/login'); return; }
     try {
       const s = JSON.parse(raw) as PortalSession;
-      if (!s.email || !s.token) { router.replace('/portal/login'); return; }
+      if (!s.email) { router.replace('/portal/login'); return; }
       fetch(`/api/public/invoices?email=${encodeURIComponent(s.email)}`).then(r => r.json()).then(d => {
         setInvoices(d.data || []); setLoading(false);
       }).catch(() => { setLoading(false); });

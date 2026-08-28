@@ -10,7 +10,7 @@ import { LifeBuoy, Plus } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; token: string; }
+interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; }
 
 export default function PortalTicketsPage() {
   const router = useRouter();
@@ -25,7 +25,7 @@ export default function PortalTicketsPage() {
     if (!raw) { router.replace('/portal/login'); return; }
     try {
       const s = JSON.parse(raw) as PortalSession;
-      if (!s.email || !s.token) { router.replace('/portal/login'); return; }
+      if (!s.email) { router.replace('/portal/login'); return; }
       setSession(s);
       fetch('/api/public/tickets', { headers: { 'x-portal-email': s.email } }).then(r => r.json()).then(d => {
         setTickets(d.data || []); setLoading(false);

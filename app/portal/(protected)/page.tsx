@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import { LifeBuoy, FileText, Book, ArrowRight, Ticket, FileSignature } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; token: string; }
+interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; }
 
 const QUICK_LINKS = [
   { href: '/portal/tickets', label: 'My Tickets', icon: LifeBuoy, desc: 'View and create support tickets', color: 'text-violet-600', bg: 'bg-violet-50 dark:bg-violet-950/20', perm: 'cases' as const },
@@ -28,7 +28,7 @@ export default function PortalPage() {
     if (!raw) { router.replace('/portal/login'); return; }
     try {
       const s = JSON.parse(raw) as PortalSession;
-      if (!s.email || !s.token) { router.replace('/portal/login'); return; }
+      if (!s.email) { router.replace('/portal/login'); return; }
       setSession(s);
     } catch { router.replace('/portal/login'); }
   }, [router]);
