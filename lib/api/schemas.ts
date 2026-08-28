@@ -326,8 +326,14 @@ export const createMeetingSchema = z.object({
 export const updateMeetingSchema = createMeetingSchema.partial();
 
 // ── Note schemas ──
+// The note body accepts either `content` (canonical) or `description` (the
+// wire key the contact-detail client and the integrations SDK actually send).
+// Both are optional at the field level; a superRefine below requires at least
+// one, and the transform normalizes the note text into `content` so route
+// handlers can rely on a single field regardless of which key the caller used.
 export const createNoteSchema = z.object({
-  content: requiredString.max(10000),
+  content: z.string().trim().max(10000).optional(),
+  description: z.string().trim().max(10000).optional(),
   type: z.enum(['note', 'call', 'email', 'meeting', 'task', 'deal_update']).optional().default('note'),
   contact_id: uuid,
   deal_id: uuid,
@@ -335,9 +341,37 @@ export const createNoteSchema = z.object({
   task_id: uuid,
   ticket_id: uuid,
   is_pinned: z.boolean().optional().default(false),
-});
+})
+  .superRefine((val, ctx) => {
+    const text = (val.content ?? val.description ?? '').trim();
+    if (!text) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'content is required',
+        path: ['content'],
+      });
+    }
+  })
+  .transform((val) => ({
+    ...val,
+    // Canonicalize: callers may send the note text as `description`; expose it
+    // as `content` so downstream code reads a single field.
+    content: (val.content ?? val.description ?? '').trim(),
+  }));
 
-export const updateNoteSchema = createNoteSchema.partial();
+// updateNoteSchema mirrors the note-body shape but every field is optional and
+// no cross-field requirement applies (a PATCH may touch only `is_pinned`, etc).
+export const updateNoteSchema = z.object({
+  content: z.string().trim().max(10000).optional(),
+  description: z.string().trim().max(10000).optional(),
+  type: z.enum(['note', 'call', 'email', 'meeting', 'task', 'deal_update']).optional(),
+  contact_id: uuid,
+  deal_id: uuid,
+  company_id: uuid,
+  task_id: uuid,
+  ticket_id: uuid,
+  is_pinned: z.boolean().optional(),
+});
 
 // ── Pipeline schemas ──
 export const createPipelineSchema = z.object({
