@@ -115,11 +115,21 @@ export async function GET(request: NextRequest) {
     dbStats,
     environment: {
       nodeEnv: process.env.NODE_ENV,
-      databaseUrl: (process.env as Record<string, string | undefined>).DATABASE_URL ? 'configured' : 'not configured',
-      resendApiKey: process.env.NODE_ENV === 'development' ? ((process.env as Record<string, string | undefined>).RESEND_API_KEY ? ((process.env as Record<string, string | undefined>).RESEND_API_KEY?.startsWith('re_test_') ? 'test mode': 'configured') : 'not configured') : 'not exposed',
-      sentryDsn: (process.env as Record<string, string | undefined>).SENTRY_DSN ? 'configured' : 'not configured',
-      databaseSsl: (process.env as Record<string, string | undefined>).DATABASE_SSL,
-      databasePoolSize: (process.env as Record<string, string | undefined>).DATABASE_POOL_SIZE,
+      // #1138: infra config presence/values (DATABASE_URL, SENTRY_DSN,
+      // DATABASE_SSL, DATABASE_POOL_SIZE, RESEND_API_KEY) are only exposed in
+      // development. In production this dashboard should not report the
+      // deployment's configuration surface — that belongs in Sentry/Grafana,
+      // not an API response (even a super-admin one). Matches the dev-only
+      // gating already used for GET_QUERIES/GET_LOGS below.
+      ...(process.env.NODE_ENV === 'development'
+        ? {
+            databaseUrl: (process.env as Record<string, string | undefined>).DATABASE_URL ? 'configured' : 'not configured',
+            resendApiKey: (process.env as Record<string, string | undefined>).RESEND_API_KEY ? ((process.env as Record<string, string | undefined>).RESEND_API_KEY?.startsWith('re_test_') ? 'test mode' : 'configured') : 'not configured',
+            sentryDsn: (process.env as Record<string, string | undefined>).SENTRY_DSN ? 'configured' : 'not configured',
+            databaseSsl: (process.env as Record<string, string | undefined>).DATABASE_SSL,
+            databasePoolSize: (process.env as Record<string, string | undefined>).DATABASE_POOL_SIZE,
+          }
+        : { config: 'not exposed outside development' }),
     },
     _meta: {
       accessLevel: 'super-admin-only',
