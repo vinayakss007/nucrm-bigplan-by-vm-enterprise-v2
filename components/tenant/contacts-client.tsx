@@ -199,7 +199,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
     try {
       const params = new URLSearchParams({ offset:String(newOffset), limit: String(limit) });
       if (q) params.set('q', q);
-      if (status !== 'all') params.set('status', status);
+      if (status !== 'all') params.set('lead_status', status);
       router.push(`/tenant/contacts?${params.toString()}`, { scroll: false });
       const res = await fetch('/api/tenant/contacts?'+params.toString());
       const data = await res.json();
