@@ -11,7 +11,7 @@ import { logAudit } from '@/lib/audit';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody, uuidField } from '@/lib/api/validate';
-import { updateLeadSchema } from '@/lib/api/schemas';
+import { updateLeadSchema, LEAD_STATUS_VALUES } from '@/lib/api/schemas';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { withConcurrencyGuard } from '@/lib/concurrency';
@@ -59,8 +59,10 @@ const patchLeadBodySchema = updateLeadSchema
     website: z.string().trim().max(500).nullable().optional(),
     tags: z.array(z.string()).optional(),
     // Canonical wire field for the lead status. Written to the leadStatus
-    // column (aliases/overrides `status`) and also recorded on the activity log.
-    lead_status: z.string().trim().max(50).optional(),
+    // column (aliases/overrides `status`) and also recorded on the activity
+    // log. Constrained to the shared LEAD_STATUS_VALUES allowlist so the
+    // canonical write path can no longer persist arbitrary status strings.
+    lead_status: z.enum(LEAD_STATUS_VALUES).optional(),
   });
 
 /**
