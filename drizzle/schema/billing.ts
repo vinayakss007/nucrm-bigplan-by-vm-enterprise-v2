@@ -14,6 +14,7 @@ import {
   quotes as _quotes,
   deals as _deals,
 } from './crm';
+import { users } from './core';
 
 // Aliases to match existing references in table definitions
 const companies = _companies;
@@ -183,7 +184,9 @@ export const invoicePayments = pgTable('invoice_payments', {
   paymentMethod: text('payment_method'),
   reference: text('reference'),
   notes: text('notes'),
-  recordedBy: uuid('recorded_by'),
+  // #1053: FK with SET NULL — a payment record must survive deletion of the
+  // user who recorded it (audit trail).
+  recordedBy: uuid('recorded_by').references(() => users.id, { onDelete: 'set null' }),
   ...utils.audit(),
 }, (table) => ({
   invoiceIdx: index('idx_invoice_payments_invoice').on(table.invoiceId),
@@ -454,7 +457,8 @@ export const dunningAttempts = pgTable('dunning_attempts', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
   
-  subscriptionId: uuid('subscription_id').references(() => subscriptions.id),
+  // #1053: CASCADE — dunning attempts are meaningless without their subscription.
+  subscriptionId: uuid('subscription_id').references(() => subscriptions.id, { onDelete: 'cascade' }),
   attemptNumber: integer('attempt_number').notNull(),
   status: text('status').notNull().default('pending'),
   

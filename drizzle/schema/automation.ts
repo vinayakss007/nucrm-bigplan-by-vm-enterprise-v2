@@ -335,7 +335,9 @@ export const aiUsageAggregated = pgTable('ai_usage_aggregated', {
 export const automationWorkflows = pgTable('automation_workflows', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
-  workflowId: uuid('workflow_id'),
+  // #1053: CASCADE — an automation_workflows row is a link that should be
+  // removed when its underlying workflow is deleted.
+  workflowId: uuid('workflow_id').references(() => workflows.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   description: text('description'),
   enabled: boolean('enabled').default(true),

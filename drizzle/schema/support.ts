@@ -9,6 +9,7 @@ import * as utils from './utils';
 import { tenants, users } from './core';
 import { contacts, companies, deals, leads } from './crm';
 import { integrations } from './comm';
+import { slaPolicies } from './sla';
 
 // ── 1. ERROR LOGS ─────────────────────────────────────
 // Centralized error tracking across all services
@@ -113,7 +114,8 @@ export const supportTickets = pgTable('support_tickets', {
   
   assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }),
   
-  slaPolicyId: uuid('sla_policy_id'),
+  // #1053: FK with SET NULL — a ticket must survive deletion of its SLA policy.
+  slaPolicyId: uuid('sla_policy_id').references(() => slaPolicies.id, { onDelete: 'set null' }),
   firstResponseAt: timestamp('first_response_at', { withTimezone: true }),
   
   /** Opaque token for unauthenticated public ticket access (email-header auth replaced). */

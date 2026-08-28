@@ -588,7 +588,9 @@ export const formSubmissions = pgTable('form_submissions', {
   formId: uuid('form_id').notNull().references(() => forms.id, { onDelete: 'cascade' }),
   tenantId: utils.tenantId(),
   data: jsonb('data').default({}),
-  contactId: uuid('contact_id').references(() => contacts.id),
+  // #1053: SET NULL — a form submission is a record that must survive deletion
+  // of the contact it was later linked to.
+  contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
   submittedBy: text('submitted_by'),
   sourceUrl: text('source_url'),
   ...utils.lifecycle(),

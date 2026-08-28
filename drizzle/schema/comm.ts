@@ -136,7 +136,8 @@ export const emailDrafts = pgTable('comm_email_drafts', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
   contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'cascade' }),
-  dealId: uuid('deal_id').references(() => deals.id),
+  // #1053: SET NULL — a draft should survive deletion of the deal it referenced.
+  dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'set null' }),
   purpose: text('purpose').notNull(),
   subject: text('subject').notNull(),
   body: text('body').notNull(),
@@ -195,7 +196,9 @@ export const integrations = pgTable('integrations', {
 export const emailLog = pgTable('email_log', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
-  contactId: uuid('contact_id').references(() => contacts.id),
+  // #1053: SET NULL — an email log entry is a record that must survive deletion
+  // of the contact it referenced.
+  contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
   fromEmail: text('from_email').notNull(),
   toEmail: text('to_email').notNull(),
   subject: text('subject'),
