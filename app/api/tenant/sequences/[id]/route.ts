@@ -249,36 +249,50 @@ export async function POST(
       return NextResponse.json({ error: 'Sequence must be active to enroll contacts' }, { status: 400 });
     }
 
-    // Enroll each contact using the stored procedure
-    const enrollments = [];
-    for (const contactId of contact_ids) {
-      try {
-        const result = await db.execute(sql`
-          SELECT public.enroll_contact_in_sequence(
-            ${ctx.tenantId}::uuid, 
-            ${sequenceId}::uuid, 
-            ${contactId}::uuid, 
-            ${ctx.userId}::uuid
-          ) as enrollment_id
-        `);
-        
-        const enrollmentId = result.rows[0]?.['enrollment_id'];
-        
-        enrollments.push({ 
-          contact_id: contactId, 
-          enrollment_id: enrollmentId 
-        });
+    // Enroll each contact using the stored procedure.
+    //
+    // #1047: previously this awaited one round-trip per contact strictly in
+    // sequence (N serial DB round-trips). We run the same per-contact calls
+    // concurrently with Promise.allSettled instead, collapsing the latency to
+    // roughly a single round-trip while preserving the exact skip-on-error /
+    // per-contact result semantics and response shape.
+    //
+    // A single set-based statement (unnest over the id array) would be even
+    // fewer round-trips, but enroll_contact_in_sequence performs a plain
+    // INSERT with no ON CONFLICT and sequence_enrollments has no unique
+    // constraint (see migration 0032 + 0000_init) — its behavior on a
+    // duplicate enrollment cannot be confirmed to be non-raising. If any single
+    // call raised inside one set-based statement, the whole batch would abort
+    // and lose the resilient skip-on-duplicate behavior. Concurrent per-contact
+    // calls keep each enrollment independent (one failure does not poison the
+    // rest), so we deliberately choose concurrency over set-based here.
+    const enrollments = await Promise.all(
+      contact_ids.map(async (contactId) => {
+        try {
+          const result = await db.execute(sql`
+            SELECT public.enroll_contact_in_sequence(
+              ${ctx.tenantId}::uuid, 
+              ${sequenceId}::uuid, 
+              ${contactId}::uuid, 
+              ${ctx.userId}::uuid
+            ) as enrollment_id
+          `);
+
+          const enrollmentId = result.rows[0]?.['enrollment_id'];
+
+          return { contact_id: contactId, enrollment_id: enrollmentId };
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (error: any) {
-        // Skip if already enrolled or other error
-        console.error(`Failed to enroll contact ${contactId}:`, error.message);
-        enrollments.push({ contact_id: contactId, error: "Internal server error" });
-      }
-    }
+        } catch (error: any) {
+          // Skip if already enrolled or other error
+          console.error(`Failed to enroll contact ${contactId}:`, error.message);
+          return { contact_id: contactId, error: "Internal server error" };
+        }
+      })
+    );
 
-    const enrolled = enrollments.filter(e => e.enrollment_id);
+    const enrolled = enrollments.filter(e => 'enrollment_id' in e && e.enrollment_id);
 
     return NextResponse.json({
       ok: true,
