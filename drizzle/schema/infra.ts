@@ -5,7 +5,7 @@
  */
 import { pgTable, uuid, text, jsonb, timestamp, boolean, integer, index, bigint } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { tenants, users } from './core';
+import { tenants, users, apiKeys } from './core';
 import * as utils from './utils';
 
 export { activities } from './activity';
@@ -314,7 +314,7 @@ export const selectiveRestoreAuditLog = pgTable('selective_restore_audit_log', {
 export const selectiveRestoreLogs = pgTable('selective_restore_logs', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
-  backupId: uuid('backup_id').notNull(),
+  backupId: uuid('backup_id').references(() => superAdminBackups.id, { onDelete: 'set null' }),
   action: text('action').notNull(),
   status: text('status').default('pending'),
   startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
@@ -348,7 +348,7 @@ export const superAdminBackups = pgTable('super_admin_backups', {
 // ── 16. API USAGE ─────────────────────────────────────
 export const apiKeyUsageInfra = pgTable('api_key_usage_infra', {
   id: utils.pk(),
-  apiKeyId: uuid('api_key_id').notNull(), 
+  apiKeyId: uuid('api_key_id').notNull().references(() => apiKeys.id, { onDelete: 'cascade' }), 
   tenantId: utils.tenantId(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
