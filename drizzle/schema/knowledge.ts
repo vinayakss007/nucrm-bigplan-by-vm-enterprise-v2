@@ -22,6 +22,8 @@ export const kbCategories = pgTable('kb_categories', {
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
     slugIdx: index('idx_kb_categories_slug').on(table.tenantId, table.slug),
+    // #1054: index the self-referential parentId used to build the category tree.
+    parentIdx: index('idx_kb_categories_parent').on(table.parentId),
   };
 });
 

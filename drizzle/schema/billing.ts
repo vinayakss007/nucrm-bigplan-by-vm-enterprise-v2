@@ -297,6 +297,8 @@ export const contracts = pgTable('contracts', {
   companyIdx: index('idx_contracts_company').on(table.companyId),
   statusIdx: index('idx_contracts_status').on(table.tenantId, table.status),
   activeIdx: utils.activeIdx(table),
+  // #1054: index the self-referential parentContractId used for renewal chains.
+  parentIdx: index('idx_contracts_parent').on(table.parentContractId),
 }));
 
 // ── PLANS (Billing plans) ────────────────────────────
