@@ -12,11 +12,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { resetPassword } from '@/lib/auth/password-reset';
+import { validatePassword } from '@/lib/auth/session';
 import { checkRateLimit } from '@/lib/rate-limit';
 
+// `password` is the user's NEW password, so it must satisfy the full server
+// policy enforced by validatePassword() in lib/auth/session.ts (min 12 chars +
+// uppercase + number + special char). Enforcing it here means weak passwords
+// are rejected with the exact policy message BEFORE resetPassword() runs,
+// instead of failing later with a confusing generic 400 (#1173).
 const schema = z.object({
   token: z.string().min(1),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z.string().superRefine((value, ctx) => {
+    const error = validatePassword(value);
+    if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, message: error });
+  }),
 });
 
 export async function POST(request: NextRequest) {
