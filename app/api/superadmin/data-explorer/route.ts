@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { apiError } from '@/lib/api-error';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -193,7 +194,10 @@ async function handleSearch(searchParams: URLSearchParams) {
     const buildConditions = (tableAlias: string, searchFields: string[]) => {
       const conds = [];
       if (q) {
-        const qPattern = `%${q}%`;
+        // Escape LIKE metacharacters (%, _, \) so user input is matched
+        // literally. Without this, `%`/`_` act as wildcards (LIKE-injection /
+        // slow full scans). Mirrors app/api/superadmin/search/route.ts.
+        const qPattern = `%${escapeLike(q)}%`;
         const searchConds = searchFields.map(f => sql`${sql.identifier(tableAlias)}.${sql.identifier(f)} ILIKE ${qPattern}`);
         conds.push(sql`(${sql.join(searchConds, sql` OR `)})`);
       }
