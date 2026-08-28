@@ -42,11 +42,10 @@ const SHORTCUTS: Shortcut[] = [
   { keys: 'N E', description: 'New Meeting/Event', category: 'actions' },
   
   // Actions
+  // Only globally-wired shortcuts are listed. ⌘S clicks the current form's submit
+  // button (see setupCmdSSave, mounted in the tenant shell). ⌘Enter/⌘E/⌘I/⌘⌫ were
+  // removed — they were advertised but never implemented globally (#1119).
   { keys: '⌘S', description: 'Save current form', category: 'actions' },
-  { keys: '⌘Enter', description: 'Submit form', category: 'actions' },
-  { keys: '⌘E', description: 'Export to CSV', category: 'actions' },
-  { keys: '⌘I', description: 'Import from CSV', category: 'actions' },
-  { keys: '⌘⌫', description: 'Delete selected', category: 'actions' },
 ]
 
 interface ShortcutsModalProps {

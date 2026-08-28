@@ -10,6 +10,7 @@ import { Book, Search, Plus, Clock, Eye, ThumbsUp, ChevronRight, FolderPlus } fr
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { Breadcrumb } from '@/components/shared/breadcrumb';
+import { ListSkeleton } from '@/components/shared/page-skeleton';
 
 export default function KBPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -91,12 +92,7 @@ export default function KBPage() {
       {/* Article list */}
       <div className="grid gap-3">
         {loading ? (
-          Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="bg-card border border-border rounded-xl p-4 animate-pulse">
-              <div className="h-4 bg-muted rounded w-3/4 mb-2" />
-              <div className="h-3 bg-muted rounded w-1/2" />
-            </div>
-          ))
+          <ListSkeleton rows={5} />
         ) : filtered.length === 0 ? (
           <div className="text-center py-12">
             <Book className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />

@@ -48,8 +48,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
+    // suppressHydrationWarning is required on <html> only: next-themes sets the
+    // `class`/`style` (theme) attributes on the <html> element before hydration,
+    // which would otherwise trigger a hydration mismatch warning. The <body> is
+    // server/client identical, so it does not need the suppression (#1306).
     <html lang="en" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable}`}>
-      <body suppressHydrationWarning className="font-sans">
+      <body className="font-sans">
         <script src="/dark-reader-cleanup.js" defer />
         <I18nProvider>
           <SkipLink />

@@ -17,9 +17,14 @@ export default function GlobalError({
     Sentry.captureException(error);
   }, [error]);
 
+  // global-error renders OUTSIDE the themed <html> shell (it replaces the root
+  // layout), so design-system CSS variables / Tailwind theme classes are not
+  // available here. Use CSS system colors + `colorScheme: 'light dark'` so the
+  // last-resort error page follows the OS light/dark preference instead of a
+  // hardcoded light background that looks broken in dark mode (#1115).
   return (
     <html lang="en">
-      <body>
+      <body style={{ margin: 0, colorScheme: 'light dark' }}>
         <div style={{ 
           minHeight: '100vh', 
           display: 'flex', 
@@ -27,13 +32,14 @@ export default function GlobalError({
           justifyContent: 'center', 
           fontFamily: 'system-ui, sans-serif', 
           padding: '20px',
-          backgroundColor: '#f9fafb'
+          backgroundColor: 'Canvas',
+          color: 'CanvasText'
         }}>
           <div style={{ textAlign: 'center', maxWidth: '400px' }}>
             <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '16px' }}>
               Something went wrong!
             </h1>
-            <p style={{ color: '#6b7280', marginBottom: '24px' }}>
+            <p style={{ opacity: 0.7, marginBottom: '24px' }}>
               A critical error occurred.
             </p>
             <button 

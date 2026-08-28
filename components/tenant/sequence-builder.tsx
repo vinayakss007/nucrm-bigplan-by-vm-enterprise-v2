@@ -16,7 +16,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } 
 import { CSS } from '@dnd-kit/utilities'
 import toast from 'react-hot-toast'
 
-interface SequenceStep {
+export interface SequenceStep {
   id?: string
   step_number: number
   type: 'email' | 'task' | 'wait' | 'call' | 'ab_test'
@@ -34,14 +34,14 @@ interface SequenceStep {
   ab_body_b?: string
 }
 
-interface Sequence {
+export interface Sequence {
   id: string
   name: string
   description: string
   status: 'draft' | 'active' | 'paused' | 'archived'
   total_steps: number
   total_duration_days: number
-  steps: SequenceStep[]
+  steps?: SequenceStep[]
 }
 
 interface SequenceBuilderProps {

@@ -48,7 +48,7 @@ export default function TicketDetailPage() {
   useEffect(() => { loadTicket(); }, [loadTicket]);
 
   const sendReply = async () => {
-    if (!replyText.trim()) return;
+    if (!replyText.trim()) { toast.error('Reply cannot be empty'); return; }
     setSending(true);
     try {
       const res = await fetch(`/api/tenant/tickets/${params['id']}/replies`, {

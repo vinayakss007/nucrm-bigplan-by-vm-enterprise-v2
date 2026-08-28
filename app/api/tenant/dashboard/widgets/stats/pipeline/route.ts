@@ -9,10 +9,12 @@ import { db } from '@/drizzle/db';
 import { deals, dealStages } from '@/drizzle/schema';
 import { eq, and, isNull, sql, notInArray } from 'drizzle-orm';
 import { withCache } from '@/lib/dashboard/widget-cache';
+import { logError, tenantMeta } from '@/lib/errors-server';
 
 export async function GET(request: NextRequest) {
+  let ctx: Awaited<ReturnType<typeof requireAuth>> | undefined;
   try {
-    const ctx = await requireAuth(request);
+    ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const tid = ctx.tenantId;
 
@@ -46,7 +48,7 @@ export async function GET(request: NextRequest) {
       });
     });
   } catch (err) {
-    console.error('[widget:stats-pipeline] failed:', err);
+    void logError({ error: err, context: 'GET /api/tenant/dashboard/widgets/stats/pipeline', ...tenantMeta(ctx) });
     return NextResponse.json({ error: 'Widget failed' }, { status: 500 });
   }
 }

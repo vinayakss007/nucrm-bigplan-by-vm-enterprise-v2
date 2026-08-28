@@ -1,0 +1,21 @@
+{
+  "task_id": "task-bucket-c-frontend-ux",
+  "task_description": "Bucket C — Frontend/UX polish, code-quality/tech-debt sweeps, and small PII-in-logs fixes across the NuCRM Enterprise app (~40 GitHub issues). No behavioral security/correctness impact intended. Group into: (F2) themed dialogs + dark mode + duplicate-render + hydration; (F3) loading/error/empty/breadcrumbs/error-boundaries + client navigation + shortcuts; (F4) lead filter feature; (F5) code-quality sweeps (any/console/logError/AbortController/Window any/apiError/response-format/CSP/form-validation/large-files); (F6) PII-in-logs + worker/telegram reliability. Line numbers in issues are stale and several items are already partly fixed — coder must grep to confirm state before editing. Work on branch fix/bucket-c-frontend-ux-codequality; orchestrator publishes the PR.",
+  "status": "completed",
+  "verification": {
+    "build": "skipped",
+    "tests": "pass",
+    "test_quality": "pass",
+    "docker_build": "skipped",
+    "summary": "typecheck 0 errors; lint 0 errors / 152 warnings (below baseline 153, all remaining warnings pre-existing in test files); test:unit 5393 pass (baseline 5387 + 6 new meaningful tests: 2 leadQuerySchema tests exercising #1083 filter params/validation, 4 leads-route where-clause tests covering tag contains-all and score range). v1 semantic review APPROVED; its 2 concrete bugs (AbortController loading flicker in follow-ups/activities/notifications; SMS sending un-normalized phone) were fixed in commit 1a161e83 along with the added route-level leads-filter test. Full next build skipped (5min+, not needed for these polish changes; typecheck covers type safety). Docker build skipped (Dockerfile hosts monitoring only; app runs via pm2 per AGENTS.md)."
+  },
+  "feature_order": [
+    "FEAT-001",
+    "FEAT-002",
+    "FEAT-003",
+    "FEAT-004",
+    "FEAT-005",
+    "FEAT-006"
+  ],
+  "blocked_reason": null
+}

@@ -348,12 +348,10 @@ interface Props {
   companies: CompanyOpt[];
   contacts: ContactOpt[];
   stats: { lead_status: string; count: string }[];
-  sources: Record<string, unknown>[];
+  sources: { lead_source: string | null; count?: unknown }[];
   tenantId: string;
   userId: string;
   defaultView?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  _sources?: any[];
   _tenantId?: string;
   _userId?: string;
 }
@@ -367,13 +365,21 @@ interface Lead {
   tags?: string[];
 }
 
-export default function LeadsClientNew({ permissions, teamMembers, companies, contacts, stats, _sources, _tenantId, _userId, defaultView }: Props) {
+export default function LeadsClientNew({ permissions, teamMembers, companies, contacts, stats, sources, _tenantId, _userId, defaultView }: Props) {
   const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeStatus, setActiveStatus] = useState('all');
+  // #1083 — advanced filters exposed for the leads data model.
+  const [filterSource, setFilterSource] = useState('');
+  const [filterAssignedTo, setFilterAssignedTo] = useState('');
+  const [filterLifecycle, setFilterLifecycle] = useState('');
+  const [filterTags, setFilterTags] = useState('');
+  const [filterScoreMin, setFilterScoreMin] = useState('');
+  const [filterScoreMax, setFilterScoreMax] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState('DESC');
   const [showQuickAdd, setShowQuickAdd] = useState(false);
@@ -398,6 +404,13 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
       const params=new URLSearchParams({limit:String(limit),offset:String(newOffset),sort_by:sortBy,sort_order:sortOrder});
       if(status!=='all')params.set('lead_status',status);
       if(q)params.set('q',q);
+      if(filterSource)params.set('source',filterSource);
+      if(filterAssignedTo)params.set('assigned_to',filterAssignedTo);
+      if(filterLifecycle)params.set('lifecycle_stage',filterLifecycle);
+      const cleanTags=filterTags.split(',').map(t=>t.trim()).filter(Boolean).join(',');
+      if(cleanTags)params.set('tags',cleanTags);
+      if(filterScoreMin!=='')params.set('score_min',filterScoreMin);
+      if(filterScoreMax!=='')params.set('score_max',filterScoreMax);
       
       const res=await fetch('/api/tenant/leads?'+params, { signal });
       if (!res.ok) throw new Error('Failed to fetch');
@@ -422,7 +435,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
       console.error('[Leads load error]', err);
       setLoading(false);
     }
-  },[sortBy,sortOrder,limit, debouncedSearch, activeStatus]);
+  },[sortBy,sortOrder,limit, debouncedSearch, activeStatus, filterSource, filterAssignedTo, filterLifecycle, filterTags, filterScoreMin, filterScoreMax]);
 
   const refreshLeads = useCallback(() => { load(offset, activeStatus, debouncedSearch); }, [load, offset, activeStatus, debouncedSearch]);
   const { deleteEntity } = useDeleteWithUndo('lead', refreshLeads);
@@ -442,10 +455,38 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
     const abort = new AbortController();
     load(0, activeStatus, debouncedSearch, abort.signal);
     return () => abort.abort();
-  }, [debouncedSearch, activeStatus, sortBy, sortOrder, load]);
+  }, [debouncedSearch, activeStatus, sortBy, sortOrder, filterSource, filterAssignedTo, filterLifecycle, filterTags, filterScoreMin, filterScoreMax, load]);
 
   const handleSearch=(q:string)=>{setSearch(q);};
   const handleStatus=(s:string)=>{setActiveStatus(s);};
+
+  // #1083 — filter option lists. Sources come from real distinct data (passed from
+  // the server); fall back to the known source enum labels. Lifecycle stages use
+  // the known enum since there is no per-tenant distribution query for them.
+  const sourceOptions = useMemo(() => {
+    const fromData = (Array.isArray(sources) ? sources : [])
+      .map((s) => s?.lead_source)
+      .filter((v): v is string => Boolean(v));
+    const merged = new Set<string>([...Object.keys(SOURCE_LABELS), ...fromData]);
+    return Array.from(merged);
+  }, [sources]);
+
+  const activeFilterCount =
+    (filterSource ? 1 : 0) +
+    (filterAssignedTo ? 1 : 0) +
+    (filterLifecycle ? 1 : 0) +
+    (filterTags.trim() ? 1 : 0) +
+    (filterScoreMin !== '' ? 1 : 0) +
+    (filterScoreMax !== '' ? 1 : 0);
+
+  const clearFilters = () => {
+    setFilterSource('');
+    setFilterAssignedTo('');
+    setFilterLifecycle('');
+    setFilterTags('');
+    setFilterScoreMin('');
+    setFilterScoreMax('');
+  };
 
   const updateLeadStatus=async(id:string,status:string)=>{
     const res=await fetch(`/api/tenant/leads/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({lead_status:status})});
@@ -541,8 +582,17 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
             </DropdownMenuContent>
           </DropdownMenu>
           
-          <Button variant="outline" size="sm" className="w-9 h-9 p-0 sm:hidden">
-            <Filter className="w-4 h-4" />
+          <Button
+            variant={showFilters || activeFilterCount > 0 ? 'default' : 'outline'}
+            size="sm"
+            className="gap-1.5 text-xs flex-1 sm:flex-none"
+            onClick={() => setShowFilters(v => !v)}
+          >
+            <Filter className="w-3.5 h-3.5" />
+            <span>Filters</span>
+            {activeFilterCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-violet-600 text-white text-[10px] font-bold">{activeFilterCount}</span>
+            )}
           </Button>
         </div>
 
@@ -566,6 +616,91 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
           </div>
         )}
       </div>
+
+      {/* Advanced Filters (#1083) */}
+      {showFilters && (
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Source</label>
+              <select
+                value={filterSource}
+                onChange={e => setFilterSource(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+              >
+                <option value="">All sources</option>
+                {sourceOptions.map(s => (
+                  <option key={s} value={s}>{SOURCE_LABELS[s] || s}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Assigned To</label>
+              <select
+                value={filterAssignedTo}
+                onChange={e => setFilterAssignedTo(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+              >
+                <option value="">Anyone</option>
+                {teamMembers.map(m => (
+                  <option key={m.user_id} value={m.user_id}>{m.full_name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Lifecycle Stage</label>
+              <select
+                value={filterLifecycle}
+                onChange={e => setFilterLifecycle(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+              >
+                <option value="">All stages</option>
+                {Object.entries(LIFECYCLE_STAGES).map(([v, cfg]) => (
+                  <option key={v} value={v}>{cfg.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Tags</label>
+              <input
+                value={filterTags}
+                onChange={e => setFilterTags(e.target.value)}
+                placeholder="e.g. vip, enterprise"
+                className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">Comma separated; matches leads with all listed tags.</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Score Range</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number" min={0} max={1000}
+                  value={filterScoreMin}
+                  onChange={e => setFilterScoreMin(e.target.value)}
+                  placeholder="Min"
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                />
+                <span className="text-muted-foreground text-xs">to</span>
+                <input
+                  type="number" min={0} max={1000}
+                  value={filterScoreMax}
+                  onChange={e => setFilterScoreMax(e.target.value)}
+                  placeholder="Max"
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                />
+              </div>
+            </div>
+          </div>
+          {activeFilterCount > 0 && (
+            <div className="flex items-center justify-between pt-1 border-t border-border/50">
+              <span className="text-xs text-muted-foreground">{activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'} active</span>
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={clearFilters}>
+                <X className="w-3.5 h-3.5" /> Clear filters
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Kanban */}
       {viewMode==='kanban'&&(

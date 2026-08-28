@@ -106,6 +106,34 @@ describe('api/schemas', () => {
     expect(result.score).toBe(0);
   });
 
+  it('leadQuerySchema coerces and validates lead filters (#1083)', async () => {
+    const { leadQuerySchema } = await import('@/lib/api/schemas');
+    const result = leadQuerySchema.parse({
+      source: 'referral',
+      lifecycle_stage: 'opportunity',
+      assigned_to: '00000000-0000-0000-0000-000000000000',
+      tags: 'vip, enterprise',
+      score_min: '20',
+      score_max: '80',
+    });
+    expect(result.source).toBe('referral');
+    expect(result.lifecycle_stage).toBe('opportunity');
+    expect(result.assigned_to).toBe('00000000-0000-0000-0000-000000000000');
+    expect(result.tags).toBe('vip, enterprise');
+    // string query params are coerced to numbers
+    expect(result.score_min).toBe(20);
+    expect(result.score_max).toBe(80);
+    // defaults preserved
+    expect(result.offset).toBe(0);
+    expect(result.limit).toBe(50);
+  });
+
+  it('leadQuerySchema rejects out-of-range score and bad UUID (#1083)', async () => {
+    const { leadQuerySchema } = await import('@/lib/api/schemas');
+    expect(() => leadQuerySchema.parse({ score_min: '5000' })).toThrow();
+    expect(() => leadQuerySchema.parse({ assigned_to: 'not-a-uuid' })).toThrow();
+  });
+
   it('createTaskSchema defaults status and priority', async () => {
     const { createTaskSchema } = await import('@/lib/api/schemas');
     const result = createTaskSchema.parse({

@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, RefreshCw, Activity, Database, Mail, Server, Wifi } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { logError } from '@/lib/errors-client';
+import toast from 'react-hot-toast';
 
 interface HealthCheck {
   service: string;
@@ -169,9 +170,9 @@ export default function HealthPage() {
         <p className="text-sm font-semibold text-white mb-3">Manual Operations</p>
         <div className="flex flex-wrap gap-2">
           {[
-            { label:'Run Cleanup', action:async()=>{ await fetch('/api/cron/cleanup',{method:'POST'}); alert('Cleanup triggered'); } },
-            { label:'Check Backup Health', action:async()=>{ const r=await fetch('/api/cron/backup-health',{method:'POST'}); const d=await r.json(); alert(JSON.stringify(d,null,2)); } },
-            { label:'Take Usage Snapshot', action:async()=>{ await fetch('/api/cron/usage-snapshot',{method:'POST'}); alert('Snapshot taken'); } },
+            { label:'Run Cleanup', action:async()=>{ try { const r=await fetch('/api/cron/cleanup',{method:'POST'}); if(!r.ok) throw new Error(); toast.success('Cleanup triggered'); } catch(err){ logError({ error: err, context: 'health:cleanup' }); toast.error('Cleanup failed'); } } },
+            { label:'Check Backup Health', action:async()=>{ try { const r=await fetch('/api/cron/backup-health',{method:'POST'}); const d=await r.json(); if(!r.ok) throw new Error(); toast.success(`Backup health: ${d.status ?? 'ok'}`); } catch(err){ logError({ error: err, context: 'health:backup-health' }); toast.error('Backup health check failed'); } } },
+            { label:'Take Usage Snapshot', action:async()=>{ try { const r=await fetch('/api/cron/usage-snapshot',{method:'POST'}); if(!r.ok) throw new Error(); toast.success('Snapshot taken'); } catch(err){ logError({ error: err, context: 'health:usage-snapshot' }); toast.error('Snapshot failed'); } } },
           ].map(a => (
             <button key={a.label} onClick={a.action}
               className="px-3 py-1.5 rounded-lg border border-white/10 text-xs text-white/40 hover:text-white hover:border-white/20 transition-colors">

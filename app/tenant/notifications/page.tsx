@@ -4,17 +4,28 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Bell, BellOff, CheckCheck, Trash2, CheckCircle, TrendingUp,
-  AtSign, AlertTriangle, Zap, Clock, Users } from 'lucide-react';
+  AtSign, AlertTriangle, Zap, Clock, Users, type LucideIcon } from 'lucide-react';
 import { cn, formatRelativeTime, toSnakeCase } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import Pagination from '@/components/tenant/pagination';
 import toast from 'react-hot-toast';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const TYPE_CFG: Record<string, { icon: any; color: string; bg: string; label: string }> = {
+interface NotificationItem {
+  id: string;
+  type: string;
+  title?: string;
+  body?: string | null;
+  link?: string | null;
+  created_at?: string;
+  read_at?: string | null;
+  is_read?: boolean;
+  [key: string]: unknown;
+}
+
+const TYPE_CFG: Record<string, { icon: LucideIcon; color: string; bg: string; label: string }> = {
   task_assigned:   { icon: CheckCircle,  color:'text-violet-600', bg:'bg-violet-100 dark:bg-violet-900/20', label:'Task' },
   task_due:        { icon: Clock,        color:'text-amber-600',  bg:'bg-amber-100 dark:bg-amber-900/20',  label:'Due' },
   task_overdue:    { icon: AlertTriangle,color:'text-red-600',    bg:'bg-red-100 dark:bg-red-900/20',      label:'Overdue' },
@@ -29,8 +40,7 @@ const TYPE_CFG: Record<string, { icon: any; color: string; bg: string; label: st
 };
 
 export default function NotificationsPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all'|'unread'>('all');
   const [total, setTotal] = useState(0);
@@ -38,18 +48,28 @@ export default function NotificationsPage() {
   const limit = 20;
   const router = useRouter();
 
-  const load = async () => {
-    const res = await fetch(`/api/tenant/notifications?limit=${limit}&offset=${offset}`);
-    const d = await res.json();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setNotifications((d.data ?? []).map((n: any) => toSnakeCase(n)));
-    setTotal(d.total ?? 0);
-    setLoading(false);
-  };
-  useEffect(() => { load(); }, [offset]);
+  const load = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const res = await fetch(`/api/tenant/notifications?limit=${limit}&offset=${offset}`, { signal });
+      const d = await res.json();
+      setNotifications((d.data ?? []).map((n: Record<string, unknown>) => toSnakeCase(n) as NotificationItem));
+      setTotal(d.total ?? 0);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      toast.error('Failed to load notifications');
+    } finally {
+      // Only clear the spinner if this request was not superseded by a newer
+      // one; clearing it for an aborted request causes a loading flicker.
+      if (!signal?.aborted) setLoading(false);
+    }
+  }, [offset]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const isUnread = (n: any) => !n.read_at && !n.is_read;
+  const isUnread = (n: NotificationItem) => !n.read_at && !n.is_read;
 
   const markRead = async (id: string) => {
     await fetch('/api/tenant/notifications', {
@@ -83,8 +103,7 @@ export default function NotificationsPage() {
     });
   };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleClick = async (n: any) => {
+  const handleClick = async (n: NotificationItem) => {
     if (isUnread(n)) await markRead(n.id);
     if (n.link) router.push(n.link);
   };
@@ -121,8 +140,7 @@ export default function NotificationsPage() {
       {/* Filter tabs */}
       <div className="flex gap-1 bg-muted/30 rounded-xl p-1 w-fit">
         {[['all','All'], ['unread','Unread']].map(([v,l]) => (
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          <button key={v} onClick={() => setFilter(v as any)}
+          <button key={v} onClick={() => setFilter(v as 'all' | 'unread')}
             className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
               filter===v ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
             {l} {v==='unread' && unreadCount > 0 && `(${unreadCount})`}

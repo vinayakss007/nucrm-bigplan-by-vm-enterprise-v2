@@ -38,27 +38,34 @@ export default function FollowUpsPage() {
   const [saving, setSaving] = useState(false);
   const limit = 20;
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       if (statusFilter) params.set('status', statusFilter);
-      const res = await fetch(`/api/tenant/follow-ups?${params}`);
+      const res = await fetch(`/api/tenant/follow-ups?${params}`, { signal });
       if (!res.ok) throw new Error('Failed to fetch follow-ups');
       const json = await res.json();
       setData(json.data ?? []);
       setTotal(json.total ?? 0);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       const message = err instanceof Error ? err.message : 'Failed to load follow-ups';
       setError(message);
       toast.error('Failed to load follow-ups');
     } finally {
-      setLoading(false);
+      // Only clear the spinner if this request was not superseded by a newer
+      // one; clearing it for an aborted request causes a loading flicker.
+      if (!signal?.aborted) setLoading(false);
     }
   }, [statusFilter, offset]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchData(controller.signal);
+    return () => controller.abort();
+  }, [fetchData]);
 
   useEffect(() => { setOffset(0); }, [statusFilter]);
 

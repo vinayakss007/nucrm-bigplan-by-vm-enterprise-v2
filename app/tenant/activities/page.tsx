@@ -27,21 +27,28 @@ export default function ActivitiesPage() {
   const [offset, setOffset] = useState(0);
   const limit = 50;
 
-  const fetchActivities = useCallback(async () => {
+  const fetchActivities = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/tenant/activities?limit=${limit}&offset=${offset}`);
+      const res = await fetch(`/api/tenant/activities?limit=${limit}&offset=${offset}`, { signal });
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
       setActivities(data.data ?? data.activities ?? data ?? []);
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       toast.error('Failed to load activities');
     } finally {
-      setLoading(false);
+      // Only clear the spinner if this request was not superseded by a newer
+      // one; clearing it for an aborted request causes a loading flicker.
+      if (!signal?.aborted) setLoading(false);
     }
   }, [offset]);
 
-  useEffect(() => { fetchActivities(); }, [fetchActivities]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchActivities(controller.signal);
+    return () => controller.abort();
+  }, [fetchActivities]);
 
   const actionColor = (action: string) => {
     if (action.includes('create')) return 'bg-green-500';

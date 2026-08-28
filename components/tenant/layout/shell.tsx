@@ -14,6 +14,7 @@ import ImpersonationBanner from '@/components/shared/impersonation-banner';
 import { CommandPalette } from '@/components/shared/command-palette';
 import { ShortcutsModal } from '@/components/shared/shortcuts-modal';
 import { useHotkeys } from '@/components/shared/use-hotkeys';
+import { setupCmdSSave } from '@/components/shared/save-shortcut';
 import UserPreferencesApplier from '@/components/shared/user-preferences-applier';
 
 interface Props {
@@ -116,6 +117,10 @@ export default function TenantShell({ tenant, profile, roleSlug, permissions, is
     onOpenCommandPalette: () => setOpenCommandPalette(true),
     onToggleShortcutsDialog: () => setOpenShortcutsModal(o => !o),
   });
+
+  // ⌘S / Ctrl+S — save the current form by clicking its submit button (#1119).
+  // Mounted once; returns a cleanup that removes the listener.
+  useEffect(() => setupCmdSSave(), []);
 
   // Listen for custom events from components
   useEffect(() => {

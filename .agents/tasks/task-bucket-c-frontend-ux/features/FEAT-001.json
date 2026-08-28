@@ -1,0 +1,68 @@
+{
+  "id": "FEAT-001",
+  "type": "chore",
+  "description": "Establish a green baseline. Confirm the toolchain works and the repo builds/lints/typechecks cleanly BEFORE making any Bucket C changes, so later regressions are attributable. Also record the current counts for the code-quality sweep issues (console.error/console.log/console.warn/any/eslint-disable/window.location.href) so later features can prove they reduced them.",
+  "status": "completed",
+  "steps": [
+    "Load nvm in every shell: export NVM_DIR=\"$HOME/.nvm\"; [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\"; then verify `node --version` reports v22.x.",
+    "If node_modules is absent, run `npm install` from the repo root.",
+    "Run `npm run typecheck` and capture the result. If it is not clean on a fresh checkout, record the pre-existing errors in findings so they are not blamed on later work.",
+    "Run `npm run lint` and capture pass/fail plus warning count. Note the quality:lint budget is --max-warnings 46.",
+    "Run `npm run test:unit` and capture pass/fail. If the unit suite has pre-existing failures unrelated to Bucket C, record them in findings and treat them as the baseline.",
+    "Record baseline metric counts (put exact numbers in findings): `grep -rc 'console.error' app/api --include=*.ts | wc -l` and total occurrences; occurrences of console.log/console.warn under app/ and components/; occurrences of no-explicit-any eslint-disable under app/ page files; occurrences of window.location.href under app/ and components/; number of files importing lib/api-error."
+  ],
+  "acceptance_criteria": [
+    "`npm run typecheck` result is recorded (pass, or a documented list of pre-existing errors).",
+    "`npm run lint` result and warning count are recorded.",
+    "`npm run test:unit` result is recorded.",
+    "Baseline occurrence counts for the code-quality metrics are written to the feature findings."
+  ],
+  "verification": ["npm run typecheck", "npm run lint", "npm run test:unit"],
+  "blocked_reason": null,
+  "findings": {
+    "environment": {
+      "node": "v22.23.2 (loaded via nvm: export NVM_DIR=\"$HOME/.nvm\"; . \"$NVM_DIR/nvm.sh\")",
+      "npm": "11.4.2",
+      "node_modules": "was MISSING on fresh checkout; ran `npm install` (added 1441 packages, OPEN_INTERNET). npm audit reports 7 vulnerabilities (1 low, 6 moderate) - pre-existing, not addressed as part of this baseline.",
+      "branch": "fix/bucket-c-frontend-ux-codequality"
+    },
+    "verification_results": {
+      "typecheck": "PASS - `npm run typecheck` (npx tsc --noEmit --pretty) clean, 0 errors.",
+      "lint": "PASS - `npm run lint` (eslint .) exits 0 with 0 errors and 153 warnings. The `lint` script has NO --max-warnings cap so it passes; the `quality:lint` script uses --max-warnings 46 and would FAIL at 153 warnings. Warning breakdown by rule: @typescript-eslint/no-explicit-any = 94, unused-imports/no-unused-vars = 48, react-hooks/exhaustive-deps = 11 (remaining ~0). A large share of the any/unused warnings live in tests/unit/* files. Later features must NOT increase these counts.",
+      "test_unit": "PASS - `npm run test:unit` (vitest run tests/unit tests/dashboard): 327 test files passed, 5387 tests passed, 0 failures. No pre-existing failures. Note: some tests emit benign stderr noise ([Cache] Redis not configured, using in-memory cache) - expected, not a failure."
+    },
+    "baseline_metric_counts": {
+      "note": "Counts captured on branch fix/bucket-c-frontend-ux-codequality before any Bucket C source changes. Commands used are recorded next to each metric for reproducibility. Later features should re-run these and prove reductions.",
+      "console_error_in_app_api": {
+        "files_with_matches": 261,
+        "total_occurrences": 488,
+        "cmd_files": "grep -rl 'console\\.error' app/api --include=*.ts | wc -l",
+        "cmd_occurrences": "grep -rho 'console\\.error' app/api --include=*.ts | wc -l"
+      },
+      "console_log_app_and_components": {
+        "total_occurrences": 41,
+        "cmd": "grep -rho 'console\\.log' app components --include=*.ts --include=*.tsx | wc -l"
+      },
+      "console_warn_app_and_components": {
+        "total_occurrences": 42,
+        "cmd": "grep -rho 'console\\.warn' app components --include=*.ts --include=*.tsx | wc -l"
+      },
+      "no_explicit_any_eslint_disable_in_app_page_files": {
+        "page_tsx_files_with_disable": 60,
+        "total_occurrences": 147,
+        "cmd_files": "grep -rl 'eslint-disable.*no-explicit-any' app --include='page.tsx' | wc -l",
+        "cmd_occurrences": "grep -rn 'no-explicit-any' $(grep -rl 'eslint-disable.*no-explicit-any' app --include='page.tsx') | grep -c 'eslint-disable'",
+        "context": "For reference, all no-explicit-any eslint-disable occurrences across all *.ts/*.tsx under app/ = 845."
+      },
+      "window_location_href_app_and_components": {
+        "total_occurrences": 38,
+        "cmd": "grep -rho 'window\\.location\\.href' app components --include=*.ts --include=*.tsx | wc -l"
+      },
+      "files_importing_lib_api_error": {
+        "file_count": 362,
+        "all_import_from": "@/lib/api-error (deprecated per #1222; verified all 362 are genuine `import { apiError, ... } from '@/lib/api-error'` statements, not partial-path false positives)",
+        "cmd": "grep -rlE \"from ['\\\"]@/lib/api-error['\\\"]\" app components lib --include=*.ts --include=*.tsx | wc -l"
+      }
+    }
+  }
+}

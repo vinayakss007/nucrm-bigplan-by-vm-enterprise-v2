@@ -13,6 +13,7 @@ import { notifications } from '@/drizzle/schema';
 import { registerProcessErrorHandlers } from '@/lib/process-errors';
 import { redactEmail, redactPhone, redactUrl } from '@/lib/logger/pii';
 import { escapeHtml } from '@/lib/email/escape-html';
+import { logError } from '@/lib/errors-server';
 
 registerProcessErrorHandlers('worker');
 
@@ -146,6 +147,9 @@ const bulkEmailWorker = new Worker(
     const { recipients, subject, body, tenantId: _tenantId } = job.data;
     console.log(`[Bulk Email Worker] Processing job: ${job.id} - Sending to ${recipients.length} recipients`);
     
+    // #1292/#1288: the per-recipient result is returned from the processor and
+    // persisted in the BullMQ completed set (Redis). Store the masked email so
+    // no raw recipient address sits in Redis or shows up in a job dump.
     const results: Array<{ email: string; success: boolean; error?: string }> = [];
     const { sendEmail } = await import('@/lib/email/service');
 
@@ -167,7 +171,7 @@ const bulkEmailWorker = new Worker(
             html: body.replace(/\{first_name\}/g, safeFirstName),
             text: body.replace(/\{first_name\}/g, rawFirstName),
           });
-          return { email: recipient.email, success: true };
+          return { email: redactEmail(recipient.email), success: true };
         })
       );
 
@@ -178,7 +182,7 @@ const bulkEmailWorker = new Worker(
           results.push(result.value);
         } else {
           console.error(`[Bulk Email Worker] Failed for ${redactEmail(recipient.email)}:`, result.reason?.message);
-          results.push({ email: recipient.email, success: false, error: result.reason?.message });
+          results.push({ email: redactEmail(recipient.email), success: false, error: result.reason?.message });
         }
       }
     }
@@ -313,18 +317,46 @@ const leadWarmingWorker = new Worker(
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({ error: { message: `HTTP ${response.status}` } }));
+          const errMsg = errData.error?.message || `HTTP ${response.status}`;
+
+          // #1294: the WhatsApp access_token stored in integration.config has no
+          // refresh flow here — a long-lived Meta token still expires (or is
+          // revoked), and once stale every send just fails. Meta signals this
+          // with HTTP 401 and OAuthException code 190 (also 102/463 for
+          // session/expiry cases). Surface it as a clear, actionable structured
+          // error so an operator knows to re-connect WhatsApp, instead of the
+          // failure being buried as a generic per-message error.
+          // FOLLOW-UP: implement automatic Meta token refresh/rotation (out of
+          // scope here — no refresh infrastructure exists yet).
+          const errCode = errData.error?.code;
+          const isStaleToken =
+            response.status === 401 || [190, 102, 463].includes(Number(errCode));
+          if (isStaleToken) {
+            await logError({
+              error: new Error(`WhatsApp access token stale/expired — re-connect the WhatsApp integration. (${errMsg})`),
+              context: 'worker:lead-warming:whatsapp:stale-token',
+              tenantId,
+              level: 'error',
+              metadata: {
+                integrationId: integration.id,
+                httpStatus: response.status,
+                metaErrorCode: errCode,
+              },
+            });
+          }
+
           // Release the claim back to failed so the failure is visible and the
           // row isn't stuck in 'sending'. (We do NOT requeue: the message may
           // have been delivered; a stuck 'sending' row is safer than a resend.)
           await database.update(leadWarmingMessages)
-            .set({ status: 'failed', errorMessage: (errData.error?.message || `HTTP ${response.status}`).slice(0, 500) })
+            .set({ status: 'failed', errorMessage: (isStaleToken ? `WhatsApp token expired: ${errMsg}` : errMsg).slice(0, 500) })
             .where(andOp(
               eqOp(leadWarmingMessages.campaignId, campaignId),
               eqOp(leadWarmingMessages.contactId, contactId),
               eqOp(leadWarmingMessages.status, 'sending'),
               eqOp(leadWarmingMessages.channel, 'whatsapp')
             ));
-          throw new Error(errData.error?.message || `HTTP ${response.status}`);
+          throw new Error(errMsg);
         }
 
         // Update message status to sent (claimed as 'sending' above)

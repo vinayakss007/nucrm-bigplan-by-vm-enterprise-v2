@@ -9,10 +9,12 @@ import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines } from '@/drizzle/schema';
 import { eq, and, isNull, notInArray, asc, sql } from 'drizzle-orm';
 import { withCache } from '@/lib/dashboard/widget-cache';
+import { logError, tenantMeta } from '@/lib/errors-server';
 
 export async function GET(request: NextRequest) {
+  let ctx: Awaited<ReturnType<typeof requireAuth>> | undefined;
   try {
-    const ctx = await requireAuth(request);
+    ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const tid = ctx.tenantId;
 
@@ -46,7 +48,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ data: { items } });
     });
   } catch (err) {
-    console.error('[widget:deals-closing] failed:', err);
+    void logError({ error: err, context: 'GET /api/tenant/dashboard/widgets/deals/closing', ...tenantMeta(ctx) });
     return NextResponse.json({ error: 'Widget failed' }, { status: 500 });
   }
 }
