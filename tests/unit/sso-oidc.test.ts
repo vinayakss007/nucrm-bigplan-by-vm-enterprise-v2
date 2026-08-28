@@ -8,6 +8,18 @@ vi.mock('jose', () => ({
   createRemoteJWKSet: mockCreateRemoteJWKSet,
 }));
 
+// Outbound OIDC calls now go through safeFetch (SSRF guard), which resolves
+// DNS and validates every IP before connecting. The test IdP hostnames don't
+// resolve in CI, so mock the resolver to return a public IP — this keeps the
+// SSRF guard exercised (private IPs would still be rejected) while letting the
+// mocked global.fetch handle the actual HTTP behaviour under test.
+vi.mock('dns/promises', () => ({
+  resolve4: vi.fn(async () => [{ address: '93.184.216.34', ttl: 300 }]),
+  resolve6: vi.fn(async () => {
+    throw Object.assign(new Error('ENODATA'), { code: 'ENODATA' });
+  }),
+}));
+
 const origEnv = { ...process.env };
 
 beforeEach(() => {
@@ -124,6 +136,8 @@ describe('discover', () => {
       'https://accounts.example.com/.well-known/openid-configuration',
       expect.objectContaining({
         headers: { Accept: 'application/json' },
+        // safeFetch disables auto-redirects and injects its own timeout signal.
+        redirect: 'manual',
         signal: expect.any(AbortSignal),
       }),
     );
@@ -534,7 +548,7 @@ describe('exchangeAndVerify', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(fetchSpy).toHaveBeenCalledWith(
       'https://direct.example.com/token',
-      expect.objectContaining({ method: 'POST' }),
+      expect.objectContaining({ method: 'POST', redirect: 'manual' }),
     );
   });
 });

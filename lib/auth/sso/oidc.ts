@@ -19,6 +19,7 @@
  * stable code rather than parsing strings.
  */
 import { jwtVerify, createRemoteJWKSet, type JWTPayload } from 'jose';
+import { safeFetch, assertSafeUrl, SsrfBlockedError, getEnvAllowedHosts } from '@/lib/security/ssrf';
 
 export type OidcProviderConfig = {
   /** Identity provider issuer URL, e.g. "https://accounts.google.com". */
@@ -73,10 +74,17 @@ export async function discover(issuer: string): Promise<OidcDiscovery> {
   if (cached && Date.now() - cached.at < DISCOVERY_TTL_MS) return cached.doc;
 
   const url = issuer.replace(/\/$/, '') + '/.well-known/openid-configuration';
-  const res = await fetch(url, {
-    headers: { Accept: 'application/json' },
-    signal: AbortSignal.timeout(10_000),
-  });
+  // Route through safeFetch: issuer is tenant-configured, so a plain fetch here
+  // would let an admin point discovery at internal/metadata addresses (SSRF).
+  let res: Response;
+  try {
+    res = await safeFetch(url, { headers: { Accept: 'application/json' } }, { timeoutMs: 10_000 });
+  } catch (err) {
+    if (err instanceof SsrfBlockedError) {
+      throw new OidcError('discovery_blocked', `Discovery for ${issuer} was blocked: ${err.reason}`);
+    }
+    throw err;
+  }
   if (!res.ok) {
     throw new OidcError('discovery_failed', `Discovery for ${issuer} failed: ${res.status}`);
   }
@@ -150,12 +158,26 @@ export async function exchangeAndVerify(args: {
     client_id: args.provider.client_id,
     client_secret: args.provider.client_secret,
   });
-  const res = await fetch(ep.token_endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-    body: body.toString(),
-    signal: AbortSignal.timeout(10_000),
-  });
+  // Route through safeFetch: token_endpoint comes from tenant config or a
+  // discovery doc served by a tenant-configured issuer, so a plain fetch here
+  // could be pointed at internal/metadata addresses (SSRF).
+  let res: Response;
+  try {
+    res = await safeFetch(
+      ep.token_endpoint,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+        body: body.toString(),
+      },
+      { timeoutMs: 10_000 },
+    );
+  } catch (err) {
+    if (err instanceof SsrfBlockedError) {
+      throw new OidcError('token_exchange_blocked', `Token exchange was blocked: ${err.reason}`);
+    }
+    throw err;
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new OidcError('token_exchange_failed', `Token exchange failed: ${res.status}`, text);
@@ -168,7 +190,22 @@ export async function exchangeAndVerify(args: {
   // Cache JWKS per issuer; createRemoteJWKSet handles internal caching too.
   let jwks = JWKS_CACHE.get(args.provider.issuer);
   if (!jwks) {
-    jwks = createRemoteJWKSet(new URL(ep.jwks_uri));
+    // jwks_uri is also tenant-influenced (config or discovery doc). jose's
+    // createRemoteJWKSet issues its own fetch that we cannot route through
+    // safeFetch, so validate the URL up front to block internal/metadata
+    // targets before the set is created. Residual: jose re-resolves DNS at
+    // fetch time, so this guard does not close a DNS-rebinding TOCTOU on the
+    // JWKS endpoint specifically.
+    let safeJwksUrl: URL;
+    try {
+      safeJwksUrl = assertSafeUrl(ep.jwks_uri, { allowedHosts: getEnvAllowedHosts() });
+    } catch (err) {
+      if (err instanceof SsrfBlockedError) {
+        throw new OidcError('jwks_blocked', `JWKS endpoint was blocked: ${err.reason}`);
+      }
+      throw err;
+    }
+    jwks = createRemoteJWKSet(safeJwksUrl);
     JWKS_CACHE.set(args.provider.issuer, jwks);
   }
 
