@@ -11,26 +11,31 @@ import { confirmThen } from '@/components/ui/confirm-dialog'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { SequenceBuilder } from './sequence-builder'
+import { SequenceBuilder, type Sequence } from './sequence-builder'
 import toast from 'react-hot-toast'
 
-interface _Sequence {
+interface SequenceListItem {
   id: string
   name: string
-  description: string
-  status: 'draft' | 'active' | 'paused' | 'archived'
-  total_steps: number
-  total_duration_days: number
-  enrollment_count: number
-  active_count: number
-  created_at: string
+  description: string | null
+  status: string
+  created_at?: string | Date
+  updated_at?: string | Date | null
+  tenant_id?: string
+  total_steps?: number
+  total_duration_days?: number
+  enrollment_count?: number
+  active_count?: number
+}
+
+interface EnrollmentSummary {
+  id: string
+  [key: string]: unknown
 }
 
 interface SequencesClientProps {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  sequences: any[]
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  recentEnrollments: any[]
+  sequences: SequenceListItem[]
+  recentEnrollments: EnrollmentSummary[]
   permissions: { canView: boolean; canManage: boolean }
   tenantId: string
   userId: string
@@ -47,12 +52,10 @@ const STATUS_CONFIG = {
 
 export default function SequencesClient({ sequences, permissions, _tenantId, _userId }: SequencesClientProps) {
   const [showBuilder, setShowBuilder] = useState(false)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [editingSequence, setEditingSequence] = useState<any>(null)
+  const [editingSequence, setEditingSequence] = useState<SequenceListItem | null>(null)
   const [sequencesList, setSequencesList] = useState(sequences)
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleSaveSequence = async (sequenceData: any) => {
+  const handleSaveSequence = async (sequenceData: Partial<Sequence>) => {
     const url = editingSequence 
       ? `/api/tenant/sequences/${editingSequence.id}`
       : '/api/tenant/sequences'
@@ -119,7 +122,14 @@ export default function SequencesClient({ sequences, permissions, _tenantId, _us
   if (showBuilder || editingSequence) {
     return (
       <SequenceBuilder
-        sequence={editingSequence}
+        sequence={editingSequence ? {
+          id: editingSequence.id,
+          name: editingSequence.name,
+          description: editingSequence.description ?? '',
+          status: (editingSequence.status as Sequence['status']),
+          total_steps: editingSequence.total_steps ?? 0,
+          total_duration_days: editingSequence.total_duration_days ?? 0,
+        } : undefined}
         onSave={handleSaveSequence}
         onCancel={() => {
           setShowBuilder(false)
@@ -171,7 +181,7 @@ export default function SequencesClient({ sequences, permissions, _tenantId, _us
             <Users className="w-4 h-4 text-violet-600" />
           </div>
           <p className="text-2xl font-bold text-violet-600">
-            {sequencesList.reduce((sum, s) => sum + (parseInt(s.enrollment_count) || 0), 0)}
+            {sequencesList.reduce((sum, s) => sum + (Number(s.enrollment_count) || 0), 0)}
           </p>
         </div>
       </div>

@@ -58,8 +58,14 @@ declare module 'crypto' {
   export function createHmac(algorithm: string, key: string | Buffer): Hmac;
 }
 
-// Process extensions
+// Window extensions for app-injected globals.
+// NOTE: Do NOT add a `[key: string]: any` index signature here — it disables
+// type-checking for every window access across the app. Declare specific
+// properties instead (or co-locate them via `declare global` near their usage,
+// as done in hooks/use-plan-features.ts).
 interface Window {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any;
+  /** NuCRM plan feature flags injected by the server layout script. */
+  __NUCRM_PLAN_FEATURES__?: string[];
+  /** Whether the current session belongs to a super admin. */
+  __NUCRM_IS_SUPER_ADMIN__?: boolean;
 }

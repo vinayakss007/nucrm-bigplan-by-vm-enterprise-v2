@@ -36,16 +36,28 @@ const FIELDS: Record<string,{key:string;label:string;type?:string;placeholder?:s
   ],
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const TEST_PAYLOADS: Record<string,any> = {
+type IntegrationType = (typeof INTEGRATION_TYPES)[number];
+
+interface ConnectedIntegration {
+  id: string;
+  type: string;
+  name: string;
+  created_at: string;
+  is_active: boolean;
+}
+
+const TEST_PAYLOADS: Record<string, Record<string, unknown>> = {
   webhook: { event:'contact.created', timestamp:new Date().toISOString(), data:{ id:'test-123', first_name:'Test', last_name:'Contact', email:'test@example.com' } },
   slack:   { text:'✅ NuCRM Slack integration test — this is working correctly!' },
   zapier:  { event:'test', contact:{ name:'Test Contact', email:'test@example.com' }, deal:{ title:'Test Deal', value:1000 } },
   telegram: { text:'✅ NuCRM Telegram integration test — this is working correctly!' },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function IntegrationModal({ type, onSaved, onClose }: any) {
+function IntegrationModal({ type, onSaved, onClose }: {
+  type: IntegrationType;
+  onSaved: () => void;
+  onClose: () => void;
+}) {
   const [config, setConfig] = useState<Record<string,string>>({});
   const [name, setName]     = useState(type?.label||'');
   const [saving, setSaving] = useState(false);
@@ -79,9 +91,8 @@ function IntegrationModal({ type, onSaved, onClose }: any) {
         } else {
           toast.error(d.error || 'Test failed');
         }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
-        toast.error(`Error: ${err.message}`);
+      } catch (err) {
+        toast.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
       }
       setTesting(false);
       return;
@@ -98,9 +109,9 @@ function IntegrationModal({ type, onSaved, onClose }: any) {
       } else {
         toast.error(`Server responded ${res.status}`);
       }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      toast.error(err.message?.includes('abort') ? 'Timeout (8s) — check the URL' : `Error: ${err.message}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(msg.includes('abort') ? 'Timeout (8s) — check the URL' : `Error: ${msg}`);
     }
     setTesting(false);
   };
@@ -148,11 +159,9 @@ function IntegrationModal({ type, onSaved, onClose }: any) {
 }
 
 export default function IntegrationsPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [integrations, setIntegrations] = useState<any[]>([]);
+  const [integrations, setIntegrations] = useState<ConnectedIntegration[]>([]);
   const [loading, setLoading]           = useState(true);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [addType, setAddType]           = useState<any>(null);
+  const [addType, setAddType]           = useState<IntegrationType | null>(null);
 
   const load = async () => { const r=await fetch('/api/tenant/integrations').then(r=>r.json()); setIntegrations(r.data||[]); setLoading(false); };
   useEffect(() => { load(); }, []);

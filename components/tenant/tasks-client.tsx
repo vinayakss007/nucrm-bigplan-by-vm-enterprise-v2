@@ -15,6 +15,31 @@ import { useDeleteWithUndo } from '@/lib/use-delete-with-undo';
 import { showUndoToast } from '@/lib/undo';
 import { EmptyState } from '@/components/shared/empty-state';
 
+interface TaskRow {
+  id: string;
+  title: string;
+  completed?: boolean;
+  priority?: string;
+  due_date?: string | null;
+  description?: string | null;
+  assignee_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  deal_title?: string | null;
+  [key: string]: unknown;
+}
+
+interface ContactOption {
+  id: string;
+  first_name?: string | null;
+  last_name?: string | null;
+}
+
+interface TeamMemberOption {
+  user_id: string;
+  full_name?: string | null;
+}
+
 const PRIORITY_CFG = {
   high:   { label:'High',   dot:'bg-red-500',   badge:'text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400' },
   medium: { label:'Medium', dot:'bg-amber-500', badge:'text-amber-600 bg-amber-100 dark:bg-amber-900/20 dark:text-amber-400' },
@@ -22,11 +47,9 @@ const PRIORITY_CFG = {
 };
 
 export default function TenantTasksClient({ initialTasks, contacts, _deals, teamMembers, permissions }: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  initialTasks: any[]; contacts: any[]; deals: any[]; teamMembers: any[];
+  initialTasks: TaskRow[]; contacts: ContactOption[]; deals?: unknown[]; teamMembers: TeamMemberOption[];
   permissions: { canCreate:boolean; canEdit:boolean; canDelete:boolean; canAssign:boolean };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  _deals?: any[];
+  _deals?: unknown[];
 }) {
   const router = useRouter();
   const [tasks, setTasks]       = useState(initialTasks);

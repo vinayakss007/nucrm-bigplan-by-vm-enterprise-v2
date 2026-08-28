@@ -8,10 +8,12 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, deals, activities, tasks, dealStages, pipelines } from '@/drizzle/schema';
 import { eq, and, isNull, notInArray, sql, desc, asc } from 'drizzle-orm';
+import { logError, tenantMeta } from '@/lib/errors-server';
 
 export async function GET(request: NextRequest) {
+  let ctx: Awaited<ReturnType<typeof requireAuth>> | undefined;
   try {
-    const ctx = await requireAuth(request);
+    ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const tid = ctx.tenantId;
 
@@ -134,11 +136,8 @@ export async function GET(request: NextRequest) {
     };
 
     return NextResponse.json({ data });
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    console.error('[Dashboard Stats Error]', err);
+  } catch (err) {
+    void logError({ error: err, context: 'GET /api/tenant/dashboard/stats', ...tenantMeta(ctx) });
     return NextResponse.json({
       data: {
         contactCount: 0, companyCount: 0, pendingTasks: 0, pipeline: 0, totalDeals: 0,

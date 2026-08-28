@@ -89,6 +89,17 @@ export default function SmsPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Client-side validation: require a plausible E.164-style phone number
+    // (optional leading +, 7-15 digits) before hitting the SMS API (#1342).
+    const normalizedTo = form.to.replace(/[\s()-]/g, '');
+    if (!/^\+?\d{7,15}$/.test(normalizedTo)) {
+      toast.error('Enter a valid phone number (e.g. +15550123456)');
+      return;
+    }
+    if (!useTemplate && !form.body.trim()) {
+      toast.error('Message body cannot be empty');
+      return;
+    }
     setSending(true);
     try {
       const payload: { to: string; templateId?: string; body?: string } = { to: form.to };
