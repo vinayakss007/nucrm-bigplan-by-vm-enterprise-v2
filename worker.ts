@@ -11,7 +11,7 @@ import IORedis from 'ioredis';
 import { db } from '@/drizzle/db';
 import { notifications } from '@/drizzle/schema';
 import { registerProcessErrorHandlers } from '@/lib/process-errors';
-import { redactEmail, redactPhone } from '@/lib/logger/pii';
+import { redactEmail, redactPhone, redactUrl } from '@/lib/logger/pii';
 import { escapeHtml } from '@/lib/email/escape-html';
 
 registerProcessErrorHandlers('worker');
@@ -371,7 +371,8 @@ const webhookWorker = new Worker(
   'webhooks',
   async (job) => {
     const { url, payload, headers, webhookId: _webhookId, deliveryId } = job.data;
-    console.log(`[Webhook Worker] Processing job: ${job.id} - Delivering to ${url}`);
+    // #1293: redact the URL — webhook targets can carry tokens/keys in the query string.
+    console.log(`[Webhook Worker] Processing job: ${job.id} - Delivering to ${redactUrl(url)}`);
     
     try {
       const { processWebhookDelivery } = await import('@/lib/webhooks/delivery');
