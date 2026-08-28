@@ -14,12 +14,16 @@ export {
   queryOne,
   queryMany,
   withTransaction,
-  dbCache,
-  invalidateCache,
   buildInsert,
   buildUpdate,
   countRows,
 } from './client';
+
+// In-memory read-through cache (stampede-protected implementation)
+export {
+  dbCache,
+  invalidateCache,
+} from './cache';
 
 // Row Level Security helpers
 export {

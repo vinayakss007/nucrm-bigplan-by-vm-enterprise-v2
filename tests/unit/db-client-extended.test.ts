@@ -176,7 +176,7 @@ describe('db/client', () => {
 
   describe('dbCache', () => {
     it('caches fetcher result', async () => {
-      const { dbCache } = await import('@/lib/db/client');
+      const { dbCache } = await import('@/lib/db/cache');
       const fetcher = vi.fn().mockResolvedValue({ id: 1, name: 'test' });
       
       const result = await dbCache('test-key', 5000, fetcher);
@@ -190,7 +190,7 @@ describe('db/client', () => {
     });
 
     it('refetches when cache expires', async () => {
-      const { dbCache } = await import('@/lib/db/client');
+      const { dbCache } = await import('@/lib/db/cache');
       const fetcher = vi.fn().mockResolvedValue({ id: 1 });
       
       await dbCache('expire-key', 1, fetcher); // 1ms TTL
@@ -203,7 +203,7 @@ describe('db/client', () => {
 
   describe('invalidateCache', () => {
     it('removes keys with matching prefix', async () => {
-      const { dbCache, invalidateCache } = await import('@/lib/db/client');
+      const { dbCache, invalidateCache } = await import('@/lib/db/cache');
       
       await dbCache('user:1', 5000, async () => ({ name: 'user1' }));
       await dbCache('user:2', 5000, async () => ({ name: 'user2' }));
