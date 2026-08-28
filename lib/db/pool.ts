@@ -48,6 +48,44 @@ function parseIntEnv(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+/**
+ * Extract the username from a PostgreSQL connection string, supporting both
+ * standard TCP URLs and Unix-socket URLs.
+ *
+ * #1544 (F7): a Unix-socket connection string like
+ * `postgresql://user@/db?host=/var/run/postgresql` has no host authority, so
+ * the WHATWG `new URL()` parser throws `ERR_INVALID_URL` (a TypeError) and the
+ * previous validation wrongly rejected it as "not a valid connection string".
+ * The downstream `pg` Pool DOES support socket URLs, so we only need to parse
+ * out the username here. We first try `new URL()` for standard TCP URLs, then
+ * fall back to a manual parse of the `scheme://user[:pass]@` prefix for socket
+ * URLs (and any other form `new URL()` cannot handle).
+ *
+ * Returns the decoded username, or `null` if no username can be determined.
+ */
+function extractUsername(cs: string): string | null {
+  try {
+    const parsed = new URL(cs);
+    return parsed.username ? decodeURIComponent(parsed.username) : null;
+  } catch {
+    // Fall back to manual parse for socket URLs (no host authority) that the
+    // WHATWG URL parser rejects. Match the userinfo component of the authority:
+    //   scheme://USERINFO@...   where USERINFO is `user` or `user:pass`.
+    const match = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/([^/@]+)@/.exec(cs);
+    const userinfo = match?.[1];
+    if (!userinfo) return null;
+    // The username is everything before the first ':' (which separates the
+    // optional password).
+    const rawUser = userinfo.split(':', 1)[0];
+    if (!rawUser) return null;
+    try {
+      return decodeURIComponent(rawUser);
+    } catch {
+      return rawUser;
+    }
+  }
+}
+
 export interface PoolStats {
   totalCount: number;
   idleCount: number;
@@ -111,20 +149,15 @@ export function getPool(): Pool {
     const cs = process.env.DATABASE_URL;
     if (!cs) throw new Error('DATABASE_URL is required');
 
-    // Validate URL has explicit username (prevents pg library fallback to OS user "root")
-    try {
-      const parsed = new URL(cs);
-      if (!parsed.username || parsed.username === 'root') {
-        throw new Error(
-          `DATABASE_URL must contain an explicit username (got "${parsed.username}"). ` +
-          'The pg library falls back to process.env.USER which may be "root" in CI.',
-        );
-      }
-    } catch (e) {
-      if (e instanceof TypeError) {
-        throw new Error('DATABASE_URL is not a valid connection string');
-      }
-      throw e;
+    // Validate URL has explicit username (prevents pg library fallback to OS user "root").
+    // #1544 (F7): extractUsername supports Unix-socket URLs (e.g.
+    // postgresql://user@/db?host=/var/run/postgresql) which new URL() cannot parse.
+    const username = extractUsername(cs);
+    if (!username || username === 'root') {
+      throw new Error(
+        `DATABASE_URL must contain an explicit username (got "${username ?? ''}"). ` +
+        'The pg library falls back to process.env.USER which may be "root" in CI.',
+      );
     }
 
     const poolSize = parseIntEnv(process.env['DATABASE_POOL_SIZE'], 20);
