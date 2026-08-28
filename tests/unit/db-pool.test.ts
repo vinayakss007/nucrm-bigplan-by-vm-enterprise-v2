@@ -121,6 +121,54 @@ describe('db/pool', () => {
     expect(() => getPool()).toThrow(/explicit username/);
   });
 
+  // #1544 (F7): Unix-socket connection strings have no host authority, so
+  // new URL() throws ERR_INVALID_URL. getPool must still accept them while
+  // enforcing the explicit-username guard.
+  it('accepts a Unix-socket DATABASE_URL with a username', async () => {
+    process.env['DATABASE_URL'] = 'postgresql://postgres@/nucrm?host=/var/run/postgresql';
+    const { Pool } = await import('pg');
+    const { getPool } = await import('@/lib/db/pool');
+    const pool = getPool();
+    expect(pool).toBeDefined();
+    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({
+      connectionString: 'postgresql://postgres@/nucrm?host=/var/run/postgresql',
+    }));
+  });
+
+  it('accepts a Unix-socket DATABASE_URL with username and password', async () => {
+    process.env['DATABASE_URL'] = 'postgresql://nucrm:secret@/db?host=/sock/dir';
+    const { Pool } = await import('pg');
+    const { getPool } = await import('@/lib/db/pool');
+    const pool = getPool();
+    expect(pool).toBeDefined();
+    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({
+      connectionString: 'postgresql://nucrm:secret@/db?host=/sock/dir',
+    }));
+  });
+
+  it('rejects a Unix-socket DATABASE_URL with no username', async () => {
+    process.env['DATABASE_URL'] = 'postgresql:///nucrm?host=/var/run/postgresql';
+    const { getPool } = await import('@/lib/db/pool');
+    expect(() => getPool()).toThrow(/explicit username/);
+  });
+
+  it('rejects a Unix-socket DATABASE_URL whose username is root', async () => {
+    process.env['DATABASE_URL'] = 'postgresql://root@/nucrm?host=/var/run/postgresql';
+    const { getPool } = await import('@/lib/db/pool');
+    expect(() => getPool()).toThrow(/explicit username/);
+  });
+
+  it('appends pgbouncer=true to a Unix-socket DATABASE_URL', async () => {
+    process.env['DATABASE_URL'] = 'postgresql://postgres@/nucrm?host=/var/run/postgresql';
+    process.env['PGBOUNCER_ENABLED'] = 'true';
+    const { Pool } = await import('pg');
+    const { getPool } = await import('@/lib/db/pool');
+    getPool();
+    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({
+      connectionString: 'postgresql://postgres@/nucrm?host=/var/run/postgresql&pgbouncer=true',
+    }));
+  });
+
   it('throws when DATABASE_URL is missing', async () => {
     const { getPool } = await import('@/lib/db/pool');
     expect(() => getPool()).toThrow('DATABASE_URL is required');
