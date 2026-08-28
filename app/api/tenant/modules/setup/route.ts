@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { customFieldDefs, pipelines, pipelineStages } from '@/drizzle/schema';
+import { customFieldDefs, pipelines, dealStages } from '@/drizzle/schema';
 import { automations } from '@/drizzle/schema';
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 import { readJsonBody } from '@/lib/api/validate';
@@ -53,7 +53,10 @@ export async function POST(req: NextRequest) {
           }));
           
           if (stageValues.length > 0) {
-            await tx.insert(pipelineStages).values(stageValues);
+            // #1337: write to dealStages (the canonical table that deals.stageId
+            // references). Previously wrote to the duplicate pipelineStages table,
+            // so template-created stages were invisible to deals and the kanban.
+            await tx.insert(dealStages).values(stageValues);
           }
         }
       }

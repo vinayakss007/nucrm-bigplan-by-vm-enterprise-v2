@@ -7,7 +7,7 @@ const TABLE_NAMES = [
   'roles', 'sessions', 'impersonationSessions', 'fieldPermissions',
   'recordPermissions', 'apiKeys', 'apiKeyUsage', 'auditLogs', 'notifications',
   'invitations', 'featureRegistry', 'systemSettings', 'plans', 'subscriptions',
-  'companies', 'contacts', 'leads', 'pipelines', 'pipelineStages', 'deals',
+  'companies', 'contacts', 'leads', 'pipelines', 'deals',
   'dealStages', 'tasks', 'customFieldDefs', 'tags',
   'emailTemplates', 'emailTracking', 'emailLog',
   'automations', 'automationRuns', 'webhooks', 'webhookDeliveries',
