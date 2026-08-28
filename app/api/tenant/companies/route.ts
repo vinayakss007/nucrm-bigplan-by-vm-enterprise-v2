@@ -118,7 +118,11 @@ export async function POST(request: NextRequest) {
         industry: v.industry || null,
         companySize: v.size || null,
         annualRevenue: v.annual_revenue == null ? null : String(v.annual_revenue),
-        description: v.description || null,
+        // The companies UI persists/reads the memo as `notes`; API/SDK callers
+        // may send `description`. Mirror the two so both surfaces stay in sync
+        // and the user-visible Notes field is never silently dropped.
+        description: (v.description ?? v.notes) || null,
+        notes: (v.notes ?? v.description) || null,
         website: v.website || null,
         phone: v.phone || null,
         address: v.billing_address || null,

@@ -96,6 +96,10 @@ export const createCompanySchema = z.object({
   size: z.string().max(50).optional().nullable(),
   annual_revenue: z.coerce.number().min(0).optional().nullable(),
   description: z.string().trim().max(2000).nullable().optional(),
+  // `notes` is the memo field the companies UI (edit form, detail page, list,
+  // CSV export) reads/writes. Accept it alongside `description`; the route
+  // mirrors the two so the user-visible Notes never goes silently empty.
+  notes: z.string().trim().max(2000).nullable().optional(),
   website: urlField,
   phone: z.string().max(30).optional().nullable(),
   billing_address: z.string().max(500).optional().nullable(),
