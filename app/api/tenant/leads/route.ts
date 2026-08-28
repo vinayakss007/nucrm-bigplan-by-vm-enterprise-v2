@@ -4,13 +4,13 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { validateBody, readJsonBody } from '@/lib/api/validate';
-import { createLeadSchema } from '@/lib/api/schemas';
+import { validateBody, validateQuery, readJsonBody } from '@/lib/api/validate';
+import { createLeadSchema, leadQuerySchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
 import { leads, users, companies, leadActivities, activities, contacts } from '@/drizzle/schema';
-import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
+import { eq, and, or, desc, sql, ilike, isNull, gte, lte, arrayContains } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveOrCreateContactForLead } from '@/lib/contacts/resolve';
@@ -45,15 +45,37 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
 
-    const limit  = Math.min(200, Math.max(1, parseInt(searchParams.get('limit')  ?? '50')));
-    const offset = Math.max(0,                parseInt(searchParams.get('offset') ?? '0'));
-    const q              = searchParams.get('q')?.trim() ?? '';
-    const leadStatus     = searchParams.get('lead_status') ?? '';
-    const assignedTo     = searchParams.get('assigned_to') ?? '';
+    // Validate & coerce all query params with zod rather than trusting raw input (#1083).
+    const parsed = validateQuery(leadQuerySchema, {
+      offset: searchParams.get('offset') ?? undefined,
+      limit: searchParams.get('limit') ?? undefined,
+      q: searchParams.get('q') ?? undefined,
+      lead_status: searchParams.get('lead_status') ?? undefined,
+      source: searchParams.get('source') ?? undefined,
+      assigned_to: searchParams.get('assigned_to') ?? undefined,
+      lifecycle_stage: searchParams.get('lifecycle_stage') ?? undefined,
+      tags: searchParams.get('tags') ?? undefined,
+      score_min: searchParams.get('score_min') ?? undefined,
+      score_max: searchParams.get('score_max') ?? undefined,
+      sort_by: searchParams.get('sort_by') ?? undefined,
+      sort_order: searchParams.get('sort_order') ?? undefined,
+    });
+    if (parsed instanceof NextResponse) return parsed;
 
-    const rawSortBy = searchParams.get('sort_by') ?? 'created_at';
-    const sortByColumn = ALLOWED_SORT_COLUMNS[rawSortBy] || leads.createdAt;
-    const sortOrder = searchParams.get('sort_order') === 'ASC' ? sql`ASC` : sql`DESC`;
+    const {
+      offset, limit,
+      lead_status: leadStatus = '',
+      source = '',
+      assigned_to: assignedTo = '',
+      lifecycle_stage: lifecycleStage = '',
+      tags: tagsParam = '',
+      score_min: scoreMin,
+      score_max: scoreMax,
+    } = parsed.data;
+    const q = parsed.data.q?.trim() ?? '';
+
+    const sortByColumn = ALLOWED_SORT_COLUMNS[parsed.data.sort_by ?? 'created_at'] || leads.createdAt;
+    const sortOrder = parsed.data.sort_order === 'ASC' ? sql`ASC` : sql`DESC`;
 
  
  
@@ -72,6 +94,25 @@ export async function GET(request: NextRequest) {
     }
     if (assignedTo) {
       filters.push(eq(leads.assignedTo, assignedTo));
+    }
+    if (source) {
+      filters.push(eq(leads.source, source));
+    }
+    if (lifecycleStage) {
+      filters.push(eq(leads.lifecycleStage, lifecycleStage));
+    }
+    // Tags: comma-separated list; the lead must contain every requested tag (@>).
+    const tagList = tagsParam
+      ? tagsParam.split(',').map((t) => t.trim()).filter(Boolean)
+      : [];
+    if (tagList.length > 0) {
+      filters.push(arrayContains(leads.tags, tagList));
+    }
+    if (scoreMin !== undefined) {
+      filters.push(gte(leads.score, scoreMin));
+    }
+    if (scoreMax !== undefined) {
+      filters.push(lte(leads.score, scoreMax));
     }
 
     if (q) {

@@ -174,6 +174,16 @@ export const leadQuerySchema = z.object({
   q: z.string().optional(),
   status: z.string().optional(),
   source: z.string().optional(),
+  // #1083 — surface the leads data model as filters
+  lead_status: z.string().trim().max(50).optional(),
+  assigned_to: z.string().uuid().optional().or(z.literal('')),
+  lifecycle_stage: z.string().trim().max(50).optional(),
+  // Comma-separated tag list; every provided tag must be present on the lead.
+  tags: z.string().trim().max(500).optional(),
+  score_min: z.coerce.number().int().min(0).max(1000).optional(),
+  score_max: z.coerce.number().int().min(0).max(1000).optional(),
+  sort_by: z.string().trim().max(50).optional(),
+  sort_order: z.enum(['ASC', 'DESC']).optional(),
 });
 
 // ── Task schemas ──
