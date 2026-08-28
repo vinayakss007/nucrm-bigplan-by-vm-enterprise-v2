@@ -214,37 +214,38 @@ export async function PATCH(request: NextRequest) {
     const rawBody = await request.json();
     const validated = validateBody(updateTenantSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
-    const _v = validated.data;
+    // Build the update object ONLY from validated (Zod-coerced) data — never
+    // re-merge rawBody, which would let un-validated / un-coerced values through.
+    const v = validated.data;
+    // id and optimistic-concurrency control fields are NOT part of the entity
+    // schema, so reading them from the raw body is correct.
     const id = rawBody.id;
-    const updates = rawBody;
     const expectedUpdatedAt: string | Date | null | undefined = rawBody.expectedUpdatedAt ?? rawBody._updated_at;
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
-    const allowed = ['name', 'planId', 'status', 'billingEmail', 'primaryColor', 'logoUrl', 'customDomain', 'trialEndsAt', 'adminNotes', 'billingType', 'manualPaidUntil'];
-    
-    // Mapping legacy keys to Drizzle keys if necessary
+    // Map validated snake_case fields to their camelCase Drizzle columns.
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mappedUpdates: any = {};
-    for (const key of Object.keys(updates)) {
-      let mappedKey = key;
-      if (key === 'plan_id') mappedKey = 'planId';
-      if (key === 'billing_email') mappedKey = 'billingEmail';
-      if (key === 'primary_color') mappedKey = 'primaryColor';
-      if (key === 'logo_url') mappedKey = 'logoUrl';
-      if (key === 'custom_domain') mappedKey = 'customDomain';
-      if (key === 'trial_ends_at') mappedKey = 'trialEndsAt';
-      if (key === 'admin_notes') mappedKey = 'adminNotes';
-      if (key === 'billing_type') mappedKey = 'billingType';
-      if (key === 'manual_paid_until') mappedKey = 'manualPaidUntil';
-
-      if (allowed.includes(mappedKey)) {
-        mappedUpdates[mappedKey] = updates[key];
-        if (mappedKey === 'trialEndsAt' || mappedKey === 'manualPaidUntil') {
-          mappedUpdates[mappedKey] = new Date(updates[key]);
-        }
-      }
+    if (v.name !== undefined) mappedUpdates.name = v.name;
+    if (v.status !== undefined) mappedUpdates.status = v.status;
+    if (v.billing_email !== undefined) mappedUpdates.billingEmail = v.billing_email;
+    if (v.primary_color !== undefined) mappedUpdates.primaryColor = v.primary_color;
+    if (v.plan_id !== undefined) mappedUpdates.planId = v.plan_id;
+    if (v.admin_notes !== undefined) mappedUpdates.adminNotes = v.admin_notes;
+    if (v.logo_url !== undefined) mappedUpdates.logoUrl = v.logo_url;
+    if (v.custom_domain !== undefined) mappedUpdates.customDomain = v.custom_domain;
+    if (v.billing_type !== undefined) mappedUpdates.billingType = v.billing_type;
+    if (v.manual_paid_until !== undefined && v.manual_paid_until !== null) {
+      mappedUpdates.manualPaidUntil = new Date(v.manual_paid_until);
+    } else if (v.manual_paid_until === null) {
+      mappedUpdates.manualPaidUntil = null;
+    }
+    if (v.trial_ends_at !== undefined && v.trial_ends_at !== null) {
+      mappedUpdates.trialEndsAt = new Date(v.trial_ends_at);
+    } else if (v.trial_ends_at === null) {
+      mappedUpdates.trialEndsAt = null;
     }
 
     if (!Object.keys(mappedUpdates).length) return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
