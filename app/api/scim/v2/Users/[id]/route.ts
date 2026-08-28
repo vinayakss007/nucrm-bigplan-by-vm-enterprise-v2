@@ -289,7 +289,46 @@ export async function PATCH(
     // Apply user record updates
     const dbUpdates: Record<string, unknown> = { updatedAt: new Date() };
     if (userUpdates['fullName']) dbUpdates['fullName'] = userUpdates['fullName'];
-    if (userUpdates['email']) dbUpdates['email'] = userUpdates['email'];
+
+    // Email is a GLOBAL, cross-tenant identity (users.email is unique and one
+    // user can belong to many tenants). A SCIM email change from one tenant's
+    // IdP would silently rewrite the user's login identity in every OTHER
+    // tenant they're a member of, and breaks SSO email-matching there.
+    if (userUpdates['email']) {
+      const newEmail = String(userUpdates['email']).toLowerCase().trim();
+      if (newEmail && newEmail !== existingUser.email.toLowerCase()) {
+        // Refuse to rename a user who belongs to more than just this tenant.
+        const [elsewhere] = await db
+          .select({ id: tenantMembers.id })
+          .from(tenantMembers)
+          .where(and(eq(tenantMembers.userId, id), ne(tenantMembers.tenantId, tenantId)))
+          .limit(1);
+        if (elsewhere) {
+          return NextResponse.json(
+            generateSCIMError(
+              'Cannot change the email of a user who belongs to other workspaces — email is a shared account identity.',
+              409,
+            ),
+            { status: 409, headers: { 'Content-Type': 'application/scim+json' } },
+          );
+        }
+        // Reject a collision cleanly instead of surfacing a raw 500 from the
+        // unique constraint.
+        const [conflict] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(and(eq(users.email, newEmail), ne(users.id, id)))
+          .limit(1);
+        if (conflict) {
+          return NextResponse.json(
+            generateSCIMError('Email address is already in use', 409),
+            { status: 409, headers: { 'Content-Type': 'application/scim+json' } },
+          );
+        }
+        dbUpdates['email'] = newEmail;
+      }
+      // else: email unchanged — do not include it in the update.
+    }
 
     // Handle activation/deactivation
     const memberUpdates: { table: typeof tenantMembers; id: string; status: string } | null =
