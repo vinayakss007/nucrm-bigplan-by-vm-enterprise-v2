@@ -29,3 +29,25 @@ export function redactPhone(phone: string | null | undefined): string {
   if (digits.length < 4) return '***';
   return `***${digits.slice(-4)}`;
 }
+
+/**
+ * Redacts a URL for logging (Issue #1293). Webhook/callback URLs frequently
+ * carry secrets in the query string (tokens, API keys, signatures) or in
+ * userinfo (user:pass@host). Returns only `origin + pathname`, with a `?…`
+ * marker when a query string was present, so logs remain useful for debugging
+ * without leaking credentials.
+ *
+ *   redactUrl('https://x.com/hook?token=abc') -> 'https://x.com/hook?…'
+ */
+export function redactUrl(url: string | null | undefined): string {
+  if (!url || typeof url !== 'string') return '***';
+  try {
+    const u = new URL(url);
+    const base = `${u.origin}${u.pathname}`;
+    return u.search ? `${base}?…` : base;
+  } catch {
+    // Not a parseable absolute URL — drop anything after the first '?' defensively.
+    const q = url.indexOf('?');
+    return q === -1 ? url : `${url.slice(0, q)}?…`;
+  }
+}
