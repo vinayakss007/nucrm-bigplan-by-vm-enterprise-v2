@@ -214,8 +214,7 @@ export default function QuoteDetailPage() {
               <ShoppingCart className="w-3 h-3" /> Convert to Order
             </Link>
             <button
-              onClick={async () => {
-                if (!confirm('Convert this quote to an invoice?')) return;
+              onClick={() => confirmThen('Convert this quote to an invoice?', async () => {
                 try {
                   const res = await fetch(`/api/tenant/quotes/${id}/convert-to-invoice`, { method: 'POST' });
                   const data = await res.json();
@@ -228,7 +227,7 @@ export default function QuoteDetailPage() {
                 } catch {
                   toast.error('Failed to convert quote');
                 }
-              }}
+              }, 'always', 'Convert')}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
             >
               <Receipt className="w-3 h-3" /> Convert to Invoice
