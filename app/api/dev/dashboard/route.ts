@@ -135,38 +135,6 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * GET /api/dev/logs
- * Get recent HTTP request logs
- */
-export async function GET_LOGS(request: NextRequest) {
-  if (process.env.NODE_ENV !== 'development') {
-    return NextResponse.json({ error: 'Development only' }, { status: 403 });
-  }
-
-  const url = new URL(request.url);
-  const limit = parseInt(url.searchParams.get('limit') || '100');
-
-  const stats = devLogger.getStats();
-
-  return NextResponse.json({
-    requests: stats.recentRequests.slice(-limit),
-    errors: stats.recentErrors.slice(-limit / 2),
-  });
-}
-
-/**
- * GET /api/dev/stats
- * Get current statistics
- */
-export async function GET_STATS(_request: NextRequest) {
-  if (process.env.NODE_ENV !== 'development') {
-    return NextResponse.json({ error: 'Development only' }, { status: 403 });
-  }
-
-  return NextResponse.json(devLogger.getStats());
-}
-
-/**
  * GET /api/dev/queries
  * Get database query logs
  */
