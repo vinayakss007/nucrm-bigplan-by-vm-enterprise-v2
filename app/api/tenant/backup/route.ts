@@ -14,12 +14,25 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 /**
  * GET /api/tenant/backup
- * List backup history for the current tenant.
+ * List full-database backup history.
+ *
+ * SECURITY: backup_records are whole-database pg_dump backups (no tenantId
+ * column), so this exposes infrastructure metadata (storage paths, sizes,
+ * checksums, error messages). Only super-admins may read it, mirroring the
+ * POST handler's gate.
  */
 export async function GET(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // Only super-admins can view full-DB backup history (no tenantId column — these are pg_dump records)
+    if (!ctx.isSuperAdmin) {
+      return NextResponse.json(
+        { error: 'Only super-admins can view database backup history.' },
+        { status: 403 }
+      );
+    }
 
     const backups = await db.query.backupRecords.findMany({
       orderBy: [desc(backupRecords.createdAt)],
