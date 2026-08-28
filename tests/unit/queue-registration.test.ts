@@ -82,4 +82,32 @@ describe('queue adapter registration', () => {
 
     await closeQueue();
   });
+
+  it('registers webhooks in Redis adapter so addJob(webhooks) routes correctly (#1186)', async () => {
+    const { getQueueAdapter, closeQueue } = await import('@/lib/queue/index');
+    const queue = await getQueueAdapter();
+    expect(queue.provider).toBe('redis');
+
+    const registeredTypes = mockBullQueueCtor.mock.calls.map(c => c[0]);
+    expect(registeredTypes).toContain('webhooks');
+
+    // The webhooks worker consumes the 'webhooks' queue; addJob must accept it
+    // instead of throwing "Unknown job type".
+    await expect(queue.addJob('webhooks', { url: 'https://example.com', payload: {} })).resolves.toBeUndefined();
+
+    await closeQueue();
+  });
+
+  it('registers webhooks in pg-boss adapter (#1186)', async () => {
+    delete process.env.REDIS_URL;
+    process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
+
+    const { getQueueAdapter, closeQueue } = await import('@/lib/queue/index');
+    const queue = await getQueueAdapter();
+    expect(queue.provider).toBe('pgboss');
+
+    expect(mockCreateQueue).toHaveBeenCalledWith('webhooks');
+
+    await closeQueue();
+  });
 });
