@@ -143,6 +143,21 @@ describe('validateEnv', () => {
     expect(() => validateEnv()).toThrow('ENCRYPTION_KEY has insufficient entropy');
   });
 
+  it('throws when ENCRYPTION_KEY has >2 unique chars but low entropy (#1309)', async () => {
+    // 'abcabc...' has 3 unique characters (so the old unique-count <= 2 check
+    // passed it) but only ~1.58 bits/char — the entropy gate now rejects it.
+    process.env.ENCRYPTION_KEY = 'abc'.repeat(16);
+    const { validateEnv } = await import('@/lib/env');
+    expect(() => validateEnv()).toThrow('ENCRYPTION_KEY has insufficient entropy');
+  });
+
+  it('throws when ENCRYPTION_KEY is a repeated small-alphabet pattern (#1309)', async () => {
+    // 7 unique characters, still a predictable repeat (~2.81 bits/char).
+    process.env.ENCRYPTION_KEY = 'abcdefg'.repeat(10);
+    const { validateEnv } = await import('@/lib/env');
+    expect(() => validateEnv()).toThrow('ENCRYPTION_KEY has insufficient entropy');
+  });
+
   it('accepts a strong high-entropy ENCRYPTION_KEY', async () => {
     process.env.ENCRYPTION_KEY = STRONG_ENCRYPTION;
     const { validateEnv } = await import('@/lib/env');
