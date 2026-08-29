@@ -5,7 +5,9 @@
  */
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
 import { Plus, Mail, Send } from 'lucide-react';
@@ -21,51 +23,53 @@ interface EmailRecord {
   created_at: string;
 }
 
+// API list responses vary ({data} | {emails} | []); normalize.
+interface EmailsResponse { data?: EmailRecord[]; emails?: EmailRecord[] }
+
+const EMAILS_QUERY = ['tenant', 'email', 'tracking'] as const;
+
 export default function EmailsPage() {
-  const [emails, setEmails] = useState<EmailRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showCompose, setShowCompose] = useState(false);
   const [form, setForm] = useState({ to: '', subject: '', body: '' });
-  const [sending, setSending] = useState(false);
 
-  const fetchEmails = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/email/tracking', { signal });
-      if (!res.ok) throw new Error('Failed to fetch');
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setEmails(data.data ?? data.emails ?? data ?? []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      // tracking endpoint may not exist yet
-      setEmails([]);
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  }, []);
+  // #1328: list via TanStack Query. The tracking endpoint may 404 on older
+  // deploys; treat any error as an empty list (retry disabled) to preserve the
+  // previous behaviour.
+  const { data, isLoading: loading } = useApiQuery<EmailsResponse | EmailRecord[]>(
+    EMAILS_QUERY,
+    '/api/tenant/email/tracking',
+    { retry: false },
+  );
+  const emails: EmailRecord[] = Array.isArray(data)
+    ? data
+    : data?.data ?? data?.emails ?? [];
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchEmails(controller.signal);
-    return () => controller.abort();
-  }, [fetchEmails]);
-
-  const handleSend = async () => {
-    if (!form.to.trim() || !form.subject.trim()) { toast.error('To and Subject required'); return; }
-    setSending(true);
-    try {
+  const sendEmail = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/email/test-send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: form.to, subject: form.subject, body: form.body }),
       });
-      if (!res.ok) { const d = await res.json(); toast.error(d.error || 'Send failed'); return; }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Send failed');
+      }
+    },
+    onSuccess: () => {
       toast.success('Email sent');
       setShowCompose(false);
       setForm({ to: '', subject: '', body: '' });
-      fetchEmails();
-    } catch { toast.error('Send failed'); } finally { setSending(false); }
+      queryClient.invalidateQueries({ queryKey: EMAILS_QUERY });
+    },
+    onError: (e: Error) => toast.error(e.message || 'Send failed'),
+  });
+  const sending = sendEmail.isPending;
+
+  const handleSend = () => {
+    if (!form.to.trim() || !form.subject.trim()) { toast.error('To and Subject required'); return; }
+    sendEmail.mutate();
   };
 
   if (loading) return <div className="p-6 animate-pulse"><div className="h-8 bg-muted rounded w-48 mb-4" /><div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-12 bg-muted rounded" />)}</div></div>;
@@ -96,8 +100,8 @@ export default function EmailsPage() {
           <p>No emails sent yet. Compose your first email above.</p>
         </div>
       ) : (
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full">
+        <div className="border rounded-lg overflow-x-auto">
+          <table className="w-full min-w-[560px]">
             <thead className="bg-muted/50">
               <tr><th className="text-left px-4 py-2 text-sm font-medium">To</th><th className="text-left px-4 py-2 text-sm font-medium">Subject</th><th className="text-left px-4 py-2 text-sm font-medium">Status</th><th className="text-left px-4 py-2 text-sm font-medium">Sent</th></tr>
             </thead>
