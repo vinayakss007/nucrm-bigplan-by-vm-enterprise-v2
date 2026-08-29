@@ -4,53 +4,39 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { FolderPlus, Settings, X, GripVertical, Trash2, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 
+interface KBCategory {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
+const KB_CATEGORIES_QUERY = ['tenant', 'kb', 'categories'] as const;
+
 export default function KBCategoriesPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [categories, setCategories] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [_editing, setEditing] = useState<string | null>(null);
 
-  const load = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/kb/categories', { signal });
-      const d = await res.json();
-      if (signal?.aborted) return;
-      setCategories(d.data || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load categories');
-    }
-    if (signal?.aborted) return;
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const _create = async (data: any) => {
-    try {
-      const res = await fetch('/api/tenant/kb/categories', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
-      });
-      if (res.ok) { toast.success('Category created'); load(); }
-      else { const d = await res.json(); toast.error(d.error || 'Failed'); }
-    } catch { toast.error('Failed'); }
-  };
+  // #1328: list via TanStack Query (types the categories, removes an `any`).
+  const { data, isLoading: loading, error } = useApiQuery<{ data?: KBCategory[] }>(
+    KB_CATEGORIES_QUERY,
+    '/api/tenant/kb/categories',
+  );
+  const categories: KBCategory[] = data?.data ?? [];
+  if (error) toast.error('Failed to load categories');
+  const reload = () => queryClient.invalidateQueries({ queryKey: KB_CATEGORIES_QUERY });
 
   const deleteCategory = async (id: string) => {
     await confirmThen('Delete this category? Articles will be uncategorized.', async () => {
       const res = await fetch(`/api/tenant/kb/categories/${id}`, { method: 'DELETE' });
-      if (res.ok) { toast.success('Deleted'); load(); }
+      if (res.ok) { toast.success('Deleted'); reload(); }
       else toast.error('Failed');
     });
   };
@@ -104,7 +90,7 @@ export default function KBCategoriesPage() {
         </div>
       )}
 
-      {showCreate && <CreateCategoryModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); load(); }} />}
+      {showCreate && <CreateCategoryModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); reload(); }} />}
     </div>
   );
 }
