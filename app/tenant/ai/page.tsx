@@ -36,11 +36,18 @@ export default function AIHubPage() {
   const { hasFeature, loaded: featuresLoaded } = usePlanFeatures();
 
   useEffect(() => {
-    fetch('/api/tenant/ai/status')
+    const controller = new AbortController();
+    fetch('/api/tenant/ai/status', { signal: controller.signal })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(setStatus)
-      .catch(() => setStatus(null))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if ((e as Error)?.name === 'AbortError') return;
+        setStatus(null);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, []);
 
   if (loading) {

@@ -33,24 +33,34 @@ export default function SuperAdminTokenControl() {
   const [apiKeys, setApiKeys] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    loadAll(controller.signal);
+    return () => controller.abort();
+  }, []);
 
-  const loadAll = async () => {
+  const loadAll = async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const [bRes, tRes, aRes, kRes] = await Promise.all([
-        fetch('/api/superadmin/token-control/budgets'),
-        fetch('/api/superadmin/token-control/report/top-spenders'),
-        fetch('/api/superadmin/token-control/alerts?limit=20'),
-        fetch('/api/superadmin/token-control/keys'),
+        fetch('/api/superadmin/token-control/budgets', { signal }),
+        fetch('/api/superadmin/token-control/report/top-spenders', { signal }),
+        fetch('/api/superadmin/token-control/alerts?limit=20', { signal }),
+        fetch('/api/superadmin/token-control/keys', { signal }),
       ]);
       const [b, t, a, k] = await Promise.all([bRes.json(), tRes.json(), aRes.json(), kRes.json()]);
+      if (signal?.aborted) return;
       if (b.budgets) setBudgets(b.budgets);
       if (t.tenants) setTopTenants(t.tenants);
       if (a.alerts) setAlerts(a.alerts);
       if (k.keys) setApiKeys(k.keys);
-    } catch (err) { clientLogError('token-control:load', err); }
-    finally { setLoading(false); }
+    } catch (err) {
+      if ((err as Error)?.name === 'AbortError') return;
+      clientLogError('token-control:load', err);
+    }
+    finally {
+      if (!signal?.aborted) setLoading(false);
+    }
   };
 
   const formatCurrency = (cents: number) => {
@@ -73,7 +83,7 @@ export default function SuperAdminTokenControl() {
           <p className="text-gray-400 mt-1">Manage AI budgets, API keys, and per-tenant limits</p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={loadAll} className="px-3 py-2 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center gap-2">
+          <button onClick={() => loadAll()} className="px-3 py-2 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center gap-2">
             <RotateCw className="w-4 h-4" /> Refresh
           </button>
           <button className="px-3 py-2 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center gap-2">

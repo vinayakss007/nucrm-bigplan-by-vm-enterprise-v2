@@ -39,20 +39,26 @@ export default function UserDetailPage() {
   const [user, setUser] = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(`/api/superadmin/users/${userId}`);
+      const res = await fetch(`/api/superadmin/users/${userId}`, { signal });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
+      if (signal?.aborted) return;
       setUser(data.data);
     } catch (err: unknown) {
+      if ((err as Error)?.name === 'AbortError') return;
       toast.error(err instanceof Error ? err.message : 'Failed to load user');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [userId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   if (loading) {
     return (

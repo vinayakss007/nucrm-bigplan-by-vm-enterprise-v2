@@ -39,14 +39,18 @@ export default function RevenuePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+  const controller = new AbortController();
   let ignore = false;
     Promise.all([
-      fetch('/api/superadmin/revenue').then(r=>r.json()),
-      fetch('/api/superadmin/tenants').then(r=>r.json()),
+      fetch('/api/superadmin/revenue', { signal: controller.signal }).then(r=>r.json()),
+      fetch('/api/superadmin/tenants', { signal: controller.signal }).then(r=>r.json()),
     ]).then(([rev, ten]) => { if (ignore) return; 
       setData(rev as RevenueData); setTenants(ten.data||[]); setLoading(false);
-     } );
-    return () => { ignore = true; };
+     } ).catch((e) => {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
+     });
+    return () => { ignore = true; controller.abort(); };
 }, []);
 
   const m = data?.mrr ?? {};

@@ -67,7 +67,8 @@ export default function AIDraftPage() {
 
   // Load templates (db rows + seeds, the API merges them)
   useEffect(() => {
-    fetch('/api/tenant/admin/ai-templates')
+    const controller = new AbortController();
+    fetch('/api/tenant/admin/ai-templates', { signal: controller.signal })
       .then(async r => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
         return r.json();
@@ -78,18 +79,21 @@ export default function AIDraftPage() {
         setTemplates(all);
         if (all[0]) setSelectedTemplate(all[0]);
       })
-      .catch(() => {
+      .catch((e) => {
+        if ((e as Error)?.name === 'AbortError') return;
         // Fallback: empty templates list — the API still has a generic prompt
         setTemplates([]);
       });
+    return () => controller.abort();
   }, []);
 
   // Search entities as the user types
   useEffect(() => {
+    const controller = new AbortController();
     const t = setTimeout(async () => {
       try {
         const cfg = ENTITY_TYPES.find(e => e.id === entityType)!;
-        const r = await fetch(cfg.api + encodeURIComponent(entitySearch), { cache: 'no-store' });
+        const r = await fetch(cfg.api + encodeURIComponent(entitySearch), { cache: 'no-store', signal: controller.signal });
         if (!r.ok) { setEntityHits([]); return; }
         const data = await r.json();
         const list = data.contacts ?? data.deals ?? data.companies ?? data.data ?? [];
@@ -109,11 +113,12 @@ export default function AIDraftPage() {
           return { id: row.id, entity_type: 'company', label: row.name ?? '—' };
         });
         setEntityHits(hits);
-      } catch {
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return;
         setEntityHits([]);
       }
     }, 250);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); controller.abort(); };
   }, [entityType, entitySearch]);
 
   async function generate() {

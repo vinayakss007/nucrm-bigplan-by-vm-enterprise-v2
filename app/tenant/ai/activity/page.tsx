@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Activity, RefreshCw, ChevronLeft, ChevronRight, AlertCircle,
   Clock, Sparkles, ThumbsUp, ThumbsDown, Filter,
@@ -96,19 +96,28 @@ export default function AIActivityPage() {
     return p.toString();
   }, [page, filters]);
 
-  function load() {
+  const load = useCallback((signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
-    fetch(`/api/tenant/ai/activity?${qs}`, { cache: 'no-store' })
+    fetch(`/api/tenant/ai/activity?${qs}`, { cache: 'no-store', signal })
       .then(async r => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
         return r.json();
       })
       .then(setData)
-      .catch(e => setError(e.message || 'Failed to load'))
-      .finally(() => setLoading(false));
-  }
-  useEffect(load, [qs]);
+      .catch(e => {
+        if (e?.name === 'AbortError') return;
+        setError(e.message || 'Failed to load');
+      })
+      .finally(() => {
+        if (!signal?.aborted) setLoading(false);
+      });
+  }, [qs]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   async function rate(id: string, accepted: boolean) {
     try {
@@ -147,7 +156,7 @@ export default function AIActivityPage() {
           </p>
         </div>
         <button
-          onClick={load}
+          onClick={() => load()}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm transition-colors"
         >
           <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />

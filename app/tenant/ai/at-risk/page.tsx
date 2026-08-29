@@ -34,20 +34,29 @@ export default function AIAtRiskPage() {
   const [_error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
 
-  function load() {
+  function load(signal?: AbortSignal) {
     setLoading(true);
     setError(null);
-    fetch('/api/tenant/ai/at-risk', { cache: 'no-store' })
+    fetch('/api/tenant/ai/at-risk', { cache: 'no-store', signal })
       .then(async r => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
         return r.json();
       })
       .then(d => setDeals(d.data))
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch(e => {
+        if (e?.name === 'AbortError') return;
+        setError(e.message);
+      })
+      .finally(() => {
+        if (!signal?.aborted) setLoading(false);
+      });
   }
 
-  useEffect(load, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const filtered = deals.filter(d => 
     d.title.toLowerCase().includes(q.toLowerCase()) || 
@@ -69,7 +78,7 @@ export default function AIAtRiskPage() {
         </div>
         <div className="flex items-center gap-2">
           <button 
-            onClick={load}
+            onClick={() => load()}
             className="p-2 hover:bg-muted rounded-lg transition-colors"
             title="Refresh"
           >

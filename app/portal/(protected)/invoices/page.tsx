@@ -20,13 +20,19 @@ export default function PortalInvoicesPage() {
   useEffect(() => {
     const raw = localStorage.getItem('portal_session');
     if (!raw) { router.replace('/portal/login'); return; }
+    const controller = new AbortController();
     try {
       const s = JSON.parse(raw) as PortalSession;
       if (!s.email) { router.replace('/portal/login'); return; }
-      fetch(`/api/public/invoices?email=${encodeURIComponent(s.email)}`).then(r => r.json()).then(d => {
+      fetch(`/api/public/invoices?email=${encodeURIComponent(s.email)}`, { signal: controller.signal }).then(r => r.json()).then(d => {
+        if (controller.signal.aborted) return;
         setInvoices(d.data || []); setLoading(false);
-      }).catch(() => { setLoading(false); });
+      }).catch((e) => {
+        if ((e as Error)?.name === 'AbortError') return;
+        setLoading(false);
+      });
     } catch { router.replace('/portal/login'); }
+    return () => controller.abort();
   }, [router]);
 
   const statusColor: Record<string, string> = {

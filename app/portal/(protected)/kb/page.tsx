@@ -33,9 +33,15 @@ export default function PortalKBPage() {
       if (!s.email) { router.replace('/portal/login'); return; }
     } catch { router.replace('/portal/login'); return; }
 
-    fetch('/api/public/kb/articles?status=published').then(r => r.json()).then(d => {
+    const controller = new AbortController();
+    fetch('/api/public/kb/articles?status=published', { signal: controller.signal }).then(r => r.json()).then(d => {
+      if (controller.signal.aborted) return;
       setArticles(d.data || []); setLoading(false);
-    }).catch(() => { setLoading(false); });
+    }).catch((e) => {
+      if ((e as Error)?.name === 'AbortError') return;
+      setLoading(false);
+    });
+    return () => controller.abort();
   }, [router]);
 
   const filtered = articles.filter(a =>

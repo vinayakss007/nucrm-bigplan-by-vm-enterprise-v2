@@ -5,7 +5,7 @@
  */
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Building2, Mail, Users, Calendar, Shield, Edit, Save, Loader2, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -39,7 +39,6 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function TenantDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const tenantId = params['id'] as string;
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,11 +51,12 @@ export default function TenantDetailPage() {
     admin_notes: '',
   });
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(`/api/superadmin/tenants/${tenantId}`);
+      const res = await fetch(`/api/superadmin/tenants/${tenantId}`, { signal });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
+      if (signal?.aborted) return;
       setTenant(data.data);
       setForm({
         plan_id: data.data.plan_id || 'free',
@@ -65,13 +65,18 @@ export default function TenantDetailPage() {
         admin_notes: data.data.admin_notes || '',
       });
     } catch (err: unknown) {
+      if ((err as Error)?.name === 'AbortError') return;
       toast.error(err instanceof Error ? err.message : 'Failed to load tenant');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [tenantId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   const save = async () => {
     setSaving(true);

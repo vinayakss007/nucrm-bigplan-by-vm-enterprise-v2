@@ -26,8 +26,21 @@ export default function AnnouncementsPage() {
   const [saving, setSaving] = useState(false);
   const inp = "w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-violet-500";
 
-  const load = async () => { const d = await fetch('/api/superadmin/announcements').then(r=>r.json()); setItems(d.data||[]); setLoading(false); };
-  useEffect(() => { load(); }, []);
+  const load = async (signal?: AbortSignal) => {
+    try {
+      const d = await fetch('/api/superadmin/announcements', { signal }).then(r=>r.json());
+      if (signal?.aborted) return;
+      setItems(d.data||[]); setLoading(false);
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
+    }
+  };
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);

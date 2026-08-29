@@ -56,12 +56,21 @@ export default function PortalQuotesPage() {
     }
     setSession(s);
 
+    const controller = new AbortController();
     fetch('/api/public/quotes', {
       headers: { 'x-portal-email': s.email },
+      signal: controller.signal,
     })
       .then(r => r.json())
-      .then(d => { setQuotes(d.data || []); setLoading(false); })
-      .catch(() => { setLoading(false); });
+      .then(d => {
+        if (controller.signal.aborted) return;
+        setQuotes(d.data || []); setLoading(false);
+      })
+      .catch((e) => {
+        if ((e as Error)?.name === 'AbortError') return;
+        setLoading(false);
+      });
+    return () => controller.abort();
   }, [router]);
 
   const acceptQuote = async (quoteId: string) => {
