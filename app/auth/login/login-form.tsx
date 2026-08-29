@@ -13,6 +13,7 @@ import { Loader2, Eye, EyeOff, Mail, Lock, Shield, BarChart3,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFormValidation } from '@/lib/hooks/use-form-validation';
+import { track } from '@/lib/analytics/client';
 
 const validationRules = {
   email: {
@@ -73,6 +74,7 @@ export default function LoginForm() {
         } else {
           localStorage.removeItem('nucrm_remember');
         }
+        track('login', { method: 'password' });
         toast.success('Welcome back!');
         setLoading(false);
         setTimeout(() => {

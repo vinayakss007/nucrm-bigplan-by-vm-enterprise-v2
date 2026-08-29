@@ -11,6 +11,7 @@ import { Toaster } from 'react-hot-toast';
 import OfflineDetector from '@/components/shared/offline-detector';
 import PWAInstallPrompt from '@/components/shared/pwa-install-prompt';
 import CsrfProvider from '@/components/shared/csrf-provider';
+import AnalyticsProvider from '@/components/shared/analytics-provider';
 import { ServiceWorkerRegistration } from '@/components/shared/service-worker-registration';
 import { SkipLink } from '@/components/ui/skip-link';
 import { I18nProvider } from '@/lib/i18n/provider';
@@ -72,6 +73,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ThemeProvider>
             <ErrorWrapper>
               <CsrfProvider />
+              <AnalyticsProvider />
               <QueryProvider><SWRProvider>{children}</SWRProvider></QueryProvider>
             </ErrorWrapper>
             <div aria-live="polite" aria-atomic="true" role="status">

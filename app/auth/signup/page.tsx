@@ -13,6 +13,7 @@ import { Loader2, Eye, EyeOff, Mail, Lock, User, Building2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFormValidation } from '@/lib/hooks/use-form-validation';
+import { track } from '@/lib/analytics/client';
 
 function getPasswordStrength(password: string): { level: 'weak' | 'medium' | 'strong'; score: number } {
   let score = 0;
@@ -110,6 +111,7 @@ export default function SignupPage() {
         setLoading(false);
         return;
       }
+      track('signup', { method: 'password' });
       toast.success('Workspace created! Welcome to NuCRM.');
       setTimeout(() => router.push('/tenant/dashboard'), 1500);
     } catch {

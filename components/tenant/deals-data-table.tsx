@@ -26,6 +26,7 @@ import toast from 'react-hot-toast'
 
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo'
 import { InlineContactCreate, InlineCompanyCreate } from '@/components/tenant/inline-create-dialog'
+import { track } from '@/lib/analytics/client'
 
 const STAGES = [
   { id: 'lead', label: 'Lead', color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
@@ -162,6 +163,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
       setSaving(false)
       return
     }
+    track('feature_used', { feature: 'deal.create' })
     toast.success('Deal created')
     setShowAdd(false)
     setForm({ title: '', amount: '', stage_name: 'lead', contact_id: '', company_id: '', assigned_to: '', close_date: '', description: '' })
