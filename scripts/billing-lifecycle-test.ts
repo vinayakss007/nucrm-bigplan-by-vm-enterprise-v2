@@ -369,10 +369,8 @@ async function fetchTenantStateWorkspace(
  */
 async function resolveTenantId(config: HarnessConfig, session: AuthSession): Promise<string> {
   if (config.tenantId) return config.tenantId;
-  const ws = await fetchTenantStateWorkspace(config, session);
   const res = await apiCall(config, session, 'GET', '/api/tenant/workspace');
   const id = (res.json as { data?: { id?: string } | null })?.data?.id;
-  void ws;
   if (id) return id;
   throw new Error(
     'Cannot resolve the tenant id. Set TEST_TENANT_ID to the real tenants.id, ' +
