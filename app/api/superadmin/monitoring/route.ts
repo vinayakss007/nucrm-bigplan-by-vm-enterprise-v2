@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { tenants, plans, errorLogs, backupRecords, selectiveRestoreLogs, superAdminBackups } from '@/drizzle/schema';
 import { eq, and, sql, desc, gt, inArray } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -26,7 +27,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         const result = await fn();
         return result;
       } catch (err) {
-        console.error('[monitoring] safeQuery error:', err);
+        await logError({ error: err, context: 'superadmin/monitoring safeQuery' });
         return fallback;
       }
     };
@@ -62,7 +63,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let stats: any = {};
     try {
-      const statsRes = await db.execute(sql`SELECT public.platform_stats() as data`).catch((err) => { console.error('[monitoring] platform_stats failed', err); return { rows: [{ data: {} }] }; });
+      const statsRes = await db.execute(sql`SELECT public.platform_stats() as data`).catch((err) => { void logError({ error: err, context: 'superadmin/monitoring platform_stats query' }); return { rows: [{ data: {} }] }; });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       stats = (statsRes.rows[0] as any)?.data ?? {};
       // Fill in missing fields computed from query data
@@ -72,7 +73,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       if (stats.mrr === undefined) stats.mrr = planDist.reduce((s: number, p: any) => s + (p.priceMonthly || 0) * (p.tenantCount || 0), 0);
       if (stats.trialing === undefined) stats.trialing = 0;
     } catch (err) {
-      console.error('[monitoring] platform_stats error:', err);
+      await logError({ error: err, context: 'superadmin/monitoring platform_stats processing' });
     }
 
     // Get recent errors
@@ -186,7 +187,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[monitoring] GET error:', err);
+    await logError({ error: err, context: 'superadmin/monitoring GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
