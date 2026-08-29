@@ -132,6 +132,7 @@ services:
       - PAGERDUTY_ENABLED=${PAGERDUTY_ENABLED:-}
       - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-20}
       - DATABASE_SSL=${DATABASE_SSL:-true}
+      - METRICS_SECRET=${METRICS_SECRET:?METRICS_SECRET is required - Prometheus authenticates to /api/metrics with it - run deploy/generate-secrets.sh}
     expose:
       - "3000"
     deploy:
@@ -396,16 +397,27 @@ services:
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: nucrm-prometheus
+    # Write the metrics bearer token (from the env) to the credentials_file that
+    # prometheus.yml references, then exec Prometheus. Keeps the secret out of
+    # the config file and image layers while satisfying credentials_file.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        printf '%s' "$${METRICS_SECRET}" > /etc/prometheus/metrics-token
+        chmod 600 /etc/prometheus/metrics-token
+        exec /bin/prometheus \
+          --config.file=/etc/prometheus/prometheus.yml \
+          --storage.tsdb.path=/prometheus \
+          --storage.tsdb.retention.time=30d \
+          --storage.tsdb.retention.size=2GB \
+          --web.enable-lifecycle
+    environment:
+      - METRICS_SECRET=${METRICS_SECRET:?METRICS_SECRET is required - Prometheus authenticates to /api/metrics with it - run deploy/generate-secrets.sh}
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheusdata:/prometheus
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=30d"
-      - "--storage.tsdb.retention.size=2GB"
-      - "--web.enable-lifecycle"
     ports:
       - "127.0.0.1:9090:9090"
     deploy:
@@ -517,6 +529,25 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # Postgres runs on the HOST (not in this compose), so the exporter reaches it
+  # via host.docker.internal. prometheus.yml scrapes postgres-exporter:9187 and
+  # the PostgresDown alert (up{job="postgres"}) depends on this service existing.
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: nucrm-postgres-exporter
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER:-nucrm}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - run deploy/generate-secrets.sh}@host.docker.internal:5432/${POSTGRES_DB:-nucrm}?sslmode=${POSTGRES_EXPORTER_SSLMODE:-require}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          memory: 48M
+          cpus: "0.1"
     restart: unless-stopped
     networks:
       - nucrm-net
