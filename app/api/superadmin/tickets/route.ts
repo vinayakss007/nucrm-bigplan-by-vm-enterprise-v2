@@ -14,6 +14,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuardById } from '@/lib/api/concurrency';
 import { generatePortalToken } from '@/lib/ticket-portal';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -65,12 +66,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         })
         .from(supportTickets)
         .then(rows => rows[0])
-        .catch((err) => { console.error('[tickets] counts failed', err); return { open: 0, in_progress: 0, resolved: 0, critical: 0 }; }),
+        .catch((err) => { void logError({ error: err, context: 'superadmin/tickets counts query' }); return { open: 0, in_progress: 0, resolved: 0, critical: 0 }; }),
     ]);
 
     return NextResponse.json({ tickets, counts });
   } catch (err: unknown) {
-    console.error('[superadmin/tickets GET]', err);
+    await logError({ error: err, context: 'superadmin/tickets GET', requestMethod: 'GET' });
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
 });
@@ -123,7 +124,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ data: row }, { status: 201 });
   } catch (err: unknown) {
-    console.error('[superadmin/tickets POST]', err);
+    await logError({ error: err, context: 'superadmin/tickets POST', requestMethod: 'POST' });
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
 });
@@ -179,7 +180,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     if (!row) return NextResponse.json({ error: 'Ticket was modified by another user — please refresh' }, { status: 409 });
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {
-    console.error('[superadmin/tickets PATCH]', err);
+    await logError({ error: err, context: 'superadmin/tickets PATCH', requestMethod: 'PATCH' });
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
 });

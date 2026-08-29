@@ -13,6 +13,7 @@ import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 /**
  * Superadmin Cross-Tenant Data Search & Explorer
@@ -370,7 +371,7 @@ async function handleSearch(searchParams: URLSearchParams) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[Superadmin Data Explorer] Search error:', err);
+    await logError({ error: err, context: 'superadmin/data-explorer search' });
     return apiError(err);
   }
 }

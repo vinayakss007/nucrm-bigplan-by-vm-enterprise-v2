@@ -11,6 +11,7 @@ import { db } from '@/drizzle/db';
 import { productTemplates, tenantTemplates } from '@/drizzle/schema';
 import { desc, sql } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
@@ -45,7 +46,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ data: templates });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Internal server error';
-    console.error('[superadmin/templates GET]', err);
+    await logError({ error: err, context: 'superadmin/templates GET', requestMethod: 'GET' });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 });
@@ -94,7 +95,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ data: template }, { status: 201 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Internal server error';
-    console.error('[superadmin/templates POST]', err);
+    await logError({ error: err, context: 'superadmin/templates POST', requestMethod: 'POST' });
     if (message.includes('unique') || message.includes('duplicate')) {
       return NextResponse.json({ error: 'A template with that slug already exists' }, { status: 409 });
     }

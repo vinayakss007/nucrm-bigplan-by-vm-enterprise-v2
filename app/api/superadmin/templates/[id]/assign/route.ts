@@ -12,6 +12,7 @@ import { productTemplates, tenantTemplates } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { installTemplateModules } from '@/lib/modules/auto-install';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const assignSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -70,7 +71,7 @@ export const POST = withApiRoute(async (req: NextRequest,
     return NextResponse.json({ data: assignment }, { status: 201 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Internal server error';
-    console.error('[superadmin/templates/[id]/assign POST]', err);
+    await logError({ error: err, context: 'superadmin/templates/[id]/assign POST', requestMethod: 'POST' });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 });
