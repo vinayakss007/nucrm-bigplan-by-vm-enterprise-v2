@@ -259,13 +259,24 @@ services:
     image: prom/prometheus:v2.53.0
     container_name: nucrm-prometheus
     profiles: ["monitoring"]
+    # prometheus.yml references a bearer-token credentials_file for the app
+    # scrape. Write it from the env (empty in dev is fine — dev /api/metrics does
+    # not require the secret) before launching Prometheus.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        printf '%s' "$${METRICS_SECRET:-}" > /etc/prometheus/metrics-token
+        chmod 600 /etc/prometheus/metrics-token
+        exec /bin/prometheus \
+          --config.file=/etc/prometheus/prometheus.yml \
+          --storage.tsdb.retention.time=30d
+    environment:
+      - METRICS_SECRET=${METRICS_SECRET:-}
     volumes:
       - ./deploy/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
       - promdata:/prometheus
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.retention.time=30d"
     ports:
       - "127.0.0.1:9090:9090"
     restart: unless-stopped
