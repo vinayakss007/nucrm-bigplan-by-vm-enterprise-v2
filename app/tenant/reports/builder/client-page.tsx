@@ -5,6 +5,7 @@
  */
 'use client';
 import dynamic from 'next/dynamic';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 
 const ReportBuilder = dynamic(() => import('@/components/tenant/report-builder'), {
   ssr: false,
@@ -18,5 +19,12 @@ const ReportBuilder = dynamic(() => import('@/components/tenant/report-builder')
 });
 
 export default function ReportBuilderClient() {
-  return <ReportBuilder />
+  // #1075: isolate the report builder in a component-level error boundary so a
+  // render fault shows an inline fallback with in-place retry (matching the
+  // workflow/email builders) instead of bubbling up to the route error page.
+  return (
+    <ErrorBoundary>
+      <ReportBuilder />
+    </ErrorBoundary>
+  );
 }
