@@ -24,7 +24,7 @@ gh api -X PUT repos/vinayakss007/nucrm-bigplan-by-vm-enterprise-v2/branches/main
 {
   "required_status_checks": {
     "strict": true,
-    "contexts": ["Lint & Typecheck", "Unit Tests", "Build"]
+    "contexts": ["Lint & Typecheck", "Unit Tests", "Build", "Single Lockfile Guard"]
   },
   "enforce_admins": true,
   "required_pull_request_reviews": {
@@ -42,9 +42,14 @@ JSON
 - `strict: true` → a branch must be up to date with `main` before it can merge.
 - `enforce_admins: true` → the rule applies to admins too (no silent bypass).
 - Keep the `contexts` list to checks that **always run and can pass**; adding a
-  check that never reports will block all merges. Start with the fast, reliable
-  three above; add `Integration Tests` / `Security Scan (SAST)` once you've
-  confirmed they pass green on PRs consistently.
+  check that never reports will block all merges. The four above are the fast,
+  reliable set that report on every PR (verified across recent PR runs).
+  `Single Lockfile Guard` is a cheap, deterministic supply-chain gate — it
+  rejects a stray `pnpm-lock.yaml`/`yarn.lock` and enforces `package-lock.json`
+  as the single source of truth, which is exactly what keeps dependency-hygiene
+  changes (e.g. the `overrides` bumps in #1650 / #1657 / #1659) deterministic.
+  Add `Integration Tests` / `Security Scan (SAST)` once you've confirmed they
+  pass green on PRs consistently (Integration occasionally lags as `in_progress`).
 
 Verify:
 
@@ -60,7 +65,7 @@ gh api repos/vinayakss007/nucrm-bigplan-by-vm-enterprise-v2/branches/main/protec
 - [x] Require a pull request before merging → **Required approvals: 1**
 - [x] Dismiss stale pull request approvals when new commits are pushed
 - [x] Require status checks to pass before merging → **Require up to date** →
-      select: `Lint & Typecheck`, `Unit Tests`, `Build`
+      select: `Lint & Typecheck`, `Unit Tests`, `Build`, `Single Lockfile Guard`
 - [x] Require linear history
 - [x] Do not allow force pushes
 - [x] Do not allow deletions
