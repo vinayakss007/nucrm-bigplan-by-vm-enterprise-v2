@@ -85,6 +85,7 @@
     "start:app": "next start",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit tests/dashboard",
+    "test:billing": "tsx scripts/billing-lifecycle-test.ts",
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
