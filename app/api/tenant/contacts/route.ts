@@ -126,7 +126,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[contacts GET]', err);
+    await logError({ error: err, context: 'tenant/contacts GET', requestMethod: 'GET' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 });
@@ -214,7 +214,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           action: 'create',
           description: `Created contact ${c.firstName} ${c.lastName}`.trim(),
         })
-        .catch(err => console.error('[contacts POST] activity log failed:', err));
+        .catch(err => { void logError({ error: err, context: 'tenant/contacts POST activity log' }); });
 
       // Increment contact counter
       await tx.update(tenants)
@@ -262,7 +262,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[contacts POST]', err);
+    await logError({ error: err, context: 'tenant/contacts POST', requestMethod: 'POST' });
     return apiError(err, "Internal server error", 500);
   }
 });

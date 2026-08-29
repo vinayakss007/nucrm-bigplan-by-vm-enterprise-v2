@@ -123,7 +123,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           action: 'create',
           description: `Created contact from ${source || 'scan'}: ${c.firstName} ${c.lastName}`.trim(),
         })
-        .catch((err) => console.error('[contacts/scan POST] activity log failed:', err));
+        .catch((err) => { void logError({ error: err, context: 'tenant/contacts/scan POST activity log' }); });
 
       // Increment contact counter
       await tx
@@ -158,7 +158,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       { status: 201 },
     );
   } catch (err: unknown) {
-    console.error('[contacts/scan POST]', err);
+    await logError({ error: err, context: 'tenant/contacts/scan POST', requestMethod: 'POST' });
     return apiError(err, 'Internal server error', 500);
   }
 });

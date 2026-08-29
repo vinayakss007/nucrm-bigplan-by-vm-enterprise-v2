@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { generateExportData } from '@/lib/export';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -37,7 +38,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[contacts export]', err);
+    await logError({ error: err, context: 'tenant/contacts export GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });

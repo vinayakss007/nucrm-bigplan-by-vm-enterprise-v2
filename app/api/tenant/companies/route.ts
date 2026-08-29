@@ -89,7 +89,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[companies GET]', err);
+    await logError({ error: err, context: 'tenant/companies GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -148,7 +148,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[companies POST]', err);
+    await logError({ error: err, context: 'tenant/companies POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
