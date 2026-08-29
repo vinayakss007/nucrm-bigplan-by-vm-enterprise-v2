@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { brandingFormSchema, validateForm } from '@/lib/validation/forms';
 
 interface BrandingFormData {
   logoUrl: string;
@@ -69,8 +70,17 @@ export default function BrandingSettingsPage() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
     setMessage(null);
+
+    const validation = validateForm(brandingFormSchema, form);
+    if (!validation.success) {
+      const firstError =
+        validation.errors._form || Object.values(validation.errors)[0] || 'Please check the form and try again.';
+      setMessage({ type: 'error', text: firstError });
+      return;
+    }
+
+    setSaving(true);
 
     try {
       const payload: Record<string, unknown> = { ...form };

@@ -14,6 +14,7 @@ import {
 import { cn } from '@/lib/utils';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, addMonths, subMonths, getDay, startOfWeek, endOfWeek, addWeeks, subWeeks, addDays, subDays } from 'date-fns';
 import toast from 'react-hot-toast';
+import { meetingFormSchema, validateForm } from '@/lib/validation/forms';
 interface CalEvent {
   id: string;
   type: 'meeting' | 'task';
@@ -453,7 +454,22 @@ function MeetingForm({ contacts, editEvent, onSaved, onClose }: {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   const save = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true);
+    e.preventDefault();
+    const validation = validateForm(meetingFormSchema, {
+      title: form.title,
+      start_time: form.start_time,
+      end_time: form.end_time,
+      contact_id: form.contact_id,
+    });
+    if (!validation.success) {
+      const firstError =
+        validation.errors._form ||
+        Object.values(validation.errors)[0] ||
+        'Please check the form and try again.';
+      toast.error(firstError);
+      return;
+    }
+    setSaving(true);
     try {
       const url = editEvent ? `/api/tenant/meetings/${editEvent.id}` : '/api/tenant/meetings';
       const method = editEvent ? 'PATCH' : 'POST';

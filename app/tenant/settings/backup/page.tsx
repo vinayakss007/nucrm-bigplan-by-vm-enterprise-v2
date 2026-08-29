@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { backupConfigSchema, validateForm } from '@/lib/validation/forms';
 
 // ── Types ──────────────────────────────────────────────────────
 interface BackupConfig {
@@ -152,16 +153,17 @@ export default function TenantBackupSettingsPage() {
   // Save config
   const saveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!config.bucket.trim()) {
-      toast.error('Bucket name is required');
+    const validation = validateForm(backupConfigSchema, {
+      bucket: config.bucket,
+      endpoint_url: config.endpoint_url,
+      access_key: config.access_key,
+      secret_key: config.secret_key,
+      region: config.region,
+      retention_days: config.retention_days,
+    });
+    if (!validation.success) {
+      toast.error(validation.errors._form || Object.values(validation.errors)[0] || 'Please check the form and try again.');
       return;
-    }
-    if (!config.access_key.trim() && !config.secret_key.trim()) {
-      // If both empty, check if we already have stored keys
-      if (!config.endpoint_url) {
-        toast.error('Endpoint URL is required');
-        return;
-      }
     }
     setSaving(true);
     try {

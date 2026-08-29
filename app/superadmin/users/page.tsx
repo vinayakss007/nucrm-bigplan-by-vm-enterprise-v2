@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { Users, Search, Crown, Plus, ArrowRight, AlertTriangle, Loader2, Edit, UserX, X, Save } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { createUserSchema, validateForm } from '@/lib/validation/forms';
 
 interface UserData {
   id: string;
@@ -167,7 +168,13 @@ export default function SuperAdminUsersPage() {
   };
 
   const createUser = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true);
+    e.preventDefault();
+    const validation = validateForm(createUserSchema, form);
+    if (!validation.success) {
+      toast.error(validation.errors._form || Object.values(validation.errors)[0] || 'Please check the form and try again.');
+      return;
+    }
+    setSaving(true);
     const res = await fetch('/api/superadmin/users',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ ...form, is_super_admin: false }) });
     const d = await res.json();
     if (res.ok) { toast.success('User created'); setShowCreate(false); setForm({email:'',full_name:'',password:''}); load(); }

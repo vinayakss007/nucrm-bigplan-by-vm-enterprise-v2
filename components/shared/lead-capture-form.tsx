@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { leadCaptureFormSchema, validateForm } from '@/lib/validation/forms';
 
 interface LeadFormProps {
   apiUrl: string;
@@ -44,8 +45,26 @@ export default function LeadCaptureForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+
+    const validation = validateForm(leadCaptureFormSchema, {
+      first_name: formData.first_name,
+      last_name: formData.last_name,
+      email: formData.email,
+      phone: showPhone ? formData.phone : undefined,
+      company: showCompany ? formData.company : undefined,
+    });
+    if (!validation.success) {
+      const firstError =
+        validation.errors._form || Object.values(validation.errors)[0] || 'Please check the form and try again.';
+      setError(firstError);
+      if (onError) {
+        onError(firstError);
+      }
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const response = await fetch(`${apiUrl}/api/tenant/leads`, {
