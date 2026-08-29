@@ -5,7 +5,9 @@
  */
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -20,63 +22,69 @@ interface Segment {
   created_at: string;
 }
 
+// API list responses vary ({data} | {segments} | []); normalize.
+interface SegmentsResponse { data?: Segment[]; segments?: Segment[] }
+
+const SEGMENTS_QUERY = ['tenant', 'segments'] as const;
+
 export default function SegmentsPage() {
-  const [segments, setSegments] = useState<Segment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ name: '', entity_type: 'contacts', filters: '' });
 
-  const fetchSegments = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/segments', { signal });
-      if (!res.ok) throw new Error('Failed to fetch');
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setSegments(data.data ?? data.segments ?? data ?? []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load segments');
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  }, []);
+  // #1328: list via TanStack Query.
+  const { data, isLoading: loading, error } = useApiQuery<SegmentsResponse | Segment[]>(
+    SEGMENTS_QUERY,
+    '/api/tenant/segments',
+  );
+  const segments: Segment[] = Array.isArray(data)
+    ? data
+    : data?.data ?? data?.segments ?? [];
+  if (error) toast.error('Failed to load segments');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchSegments(controller.signal);
-    return () => controller.abort();
-  }, [fetchSegments]);
+  const reload = () => queryClient.invalidateQueries({ queryKey: SEGMENTS_QUERY });
 
-  const handleCreate = async () => {
-    if (!form.name.trim()) { toast.error('Name required'); return; }
-    let filters = {};
-    if (form.filters.trim()) {
-      try { filters = JSON.parse(form.filters); } catch { toast.error('Invalid JSON filters'); return; }
-    }
-    try {
+  const createSegment = useMutation({
+    mutationFn: async (filters: Record<string, unknown>) => {
       const res = await fetch('/api/tenant/segments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: form.name, entity_type: form.entity_type, filters }),
       });
-      if (!res.ok) { const d = await res.json(); toast.error(d.error || 'Create failed'); return; }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Create failed');
+      }
+    },
+    onSuccess: () => {
       toast.success('Segment created');
       setShowCreate(false);
       setForm({ name: '', entity_type: 'contacts', filters: '' });
-      fetchSegments();
-    } catch { toast.error('Create failed'); }
+      reload();
+    },
+    onError: (e: Error) => toast.error(e.message || 'Create failed'),
+  });
+
+  const deleteSegment = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/tenant/segments/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
+    },
+    onSuccess: () => { toast.success('Segment deleted'); reload(); },
+    onError: () => toast.error('Delete failed'),
+  });
+
+  const handleCreate = () => {
+    if (!form.name.trim()) { toast.error('Name required'); return; }
+    let filters: Record<string, unknown> = {};
+    if (form.filters.trim()) {
+      try { filters = JSON.parse(form.filters); } catch { toast.error('Invalid JSON filters'); return; }
+    }
+    createSegment.mutate(filters);
   };
 
   const handleDelete = async (id: string) => {
-    await confirmThen('Delete this segment?', async () => {
-      try {
-        const res = await fetch(`/api/tenant/segments/${id}`, { method: 'DELETE' });
-        if (!res.ok) { toast.error('Delete failed'); return; }
-        toast.success('Segment deleted');
-        fetchSegments();
-      } catch { toast.error('Delete failed'); }
-    });
+    await confirmThen('Delete this segment?', async () => { deleteSegment.mutate(id); });
   };
 
   if (loading) return <div className="p-6 animate-pulse"><div className="h-8 bg-muted rounded w-48 mb-4" /><div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-16 bg-muted rounded" />)}</div></div>;

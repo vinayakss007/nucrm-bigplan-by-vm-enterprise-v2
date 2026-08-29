@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import { Users, Building2, Briefcase, CheckSquare, MessageSquare, Mail, TrendingUp, TrendingDown, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -43,31 +43,12 @@ const EVENT_ICONS: Record<string, string> = {
 };
 
 export default function UsageDashboardPage() {
-  const [data, setData] = useState<UsageData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tenant/analytics/usage', { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        setData(d.data);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+  // #1328: TanStack Query replaces fetch + useEffect + useState.
+  const { data: resp, isLoading: loading } = useApiQuery<{ data: UsageData }>(
+    ['tenant', 'analytics', 'usage'],
+    '/api/tenant/analytics/usage',
+  );
+  const data: UsageData | null = resp?.data ?? null;
 
   const formatCurrency = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
