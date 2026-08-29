@@ -16,6 +16,7 @@ import { db } from '@/drizzle/db';
 import { quotes, quoteLineItems, invoices, invoiceLineItems, activities } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { logAudit } from '@/lib/audit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -181,7 +182,7 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       totalAmount: invoice.totalAmount,
     });
   } catch (err) {
-    console.error('[convert-to-invoice POST]', err);
+    await logError({ error: err, context: 'tenant/quotes/[id]/convert-to-invoice POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

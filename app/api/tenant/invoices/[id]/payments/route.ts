@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { invoices } from '@/drizzle/schema';
@@ -70,7 +71,7 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
     const payments = await listInvoicePayments(invoiceId, ctx.tenantId);
     return NextResponse.json({ data: payments, total: payments.length });
   } catch (err) {
-    console.error('[invoices payments GET]', err);
+    await logError({ error: err, context: 'tenant/invoices/[id]/payments GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -128,7 +129,7 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     if (err instanceof PaymentError) {
       return apiError(err, err.message, err.status);
     }
-    console.error('[invoices payments POST]', err);
+    await logError({ error: err, context: 'tenant/invoices/[id]/payments POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

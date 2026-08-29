@@ -13,6 +13,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -61,7 +62,7 @@ export const DELETE = withApiRoute(async (req: NextRequest,
     if (err instanceof PaymentError) {
       return apiError(err, err.message, err.status);
     }
-    console.error('[invoices payments DELETE]', err);
+    await logError({ error: err, context: 'tenant/invoices/[id]/payments/[paymentId] DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });

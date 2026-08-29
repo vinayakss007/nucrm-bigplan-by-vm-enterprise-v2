@@ -16,6 +16,7 @@ import { db } from '@/drizzle/db';
 import { invoices, contacts, activities } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { logAudit } from '@/lib/audit';
 import { sendEmail } from '@/lib/email/service';
 import { sanitizeHTMLServer } from '@/lib/sanitize';
@@ -112,7 +113,7 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
 
     return NextResponse.json({ ok: true, status: 'sent', to_email: toEmail, email: emailResult });
   } catch (err) {
-    console.error('[invoices/send POST]', err);
+    await logError({ error: err, context: 'tenant/invoices/[id]/send POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

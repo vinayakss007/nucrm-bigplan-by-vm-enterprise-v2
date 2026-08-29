@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { documentTotal, money } from '@/lib/money';
 import { db } from '@/drizzle/db';
@@ -46,7 +47,7 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[quotes [id] GET]', err);
+    await logError({ error: err, context: 'tenant/quotes/[id] GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -158,7 +159,7 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[quotes [id] PUT]', err);
+    await logError({ error: err, context: 'tenant/quotes/[id] PUT', requestMethod: 'PUT' });
     return apiError(err);
   }
 });
@@ -206,7 +207,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[quotes [id] DELETE]', err);
+    await logError({ error: err, context: 'tenant/quotes/[id] DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });

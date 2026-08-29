@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { concurrencyGuard } from '@/lib/api/concurrency';
@@ -44,7 +45,7 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[contracts [id] GET]', err);
+    await logError({ error: err, context: 'tenant/contracts/[id] GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -149,7 +150,7 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[contracts [id] PUT]', err);
+    await logError({ error: err, context: 'tenant/contracts/[id] PUT', requestMethod: 'PUT' });
     return apiError(err);
   }
 });
@@ -196,7 +197,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[contracts [id] DELETE]', err);
+    await logError({ error: err, context: 'tenant/contracts/[id] DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });

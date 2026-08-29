@@ -12,6 +12,7 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -38,7 +39,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ data: results, total, page, limit, totalPages: Math.ceil(total / limit) });
   } catch (error) {
-    console.error('[subscriptions/GET]', error);
+    await logError({ error, context: 'tenant/subscriptions GET', requestMethod: 'GET' });
     return NextResponse.json({ error: 'Failed to fetch subscriptions' }, { status: 500 });
   }
 });
@@ -84,7 +85,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ data: subscription }, { status: 201 });
   } catch (error) {
-    console.error('[subscriptions/POST]', error);
+    await logError({ error, context: 'tenant/subscriptions POST', requestMethod: 'POST' });
     return NextResponse.json({ error: 'Failed to create subscription' }, { status: 500 });
   }
 });

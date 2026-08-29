@@ -15,6 +15,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contracts, contacts, companies, tenants } from '@/drizzle/schema';
@@ -113,7 +114,7 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
       },
     });
   } catch (err) {
-    console.error('[contracts [id] pdf GET]', err);
+    await logError({ error: err, context: 'tenant/contracts/[id]/pdf GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
