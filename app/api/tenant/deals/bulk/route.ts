@@ -230,6 +230,17 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             )
           );
         affected = res.rowCount ?? 0;
+
+        // Decrement the tenant's usage counter by the number actually deleted.
+        // Mirrors the single-deal DELETE route and the inverse of bulk 'restore';
+        // without this, bulk deletes leave currentDeals inflated and can wrongly
+        // exhaust the plan's maxDeals limit. Clamp at 0 to avoid drift below zero.
+        if (affected > 0) {
+          await db
+            .update(tenants)
+            .set({ currentDeals: sql`greatest(0, ${tenants.currentDeals} - ${affected})` })
+            .where(eq(tenants.id, ctx.tenantId));
+        }
         break;
       }
 
