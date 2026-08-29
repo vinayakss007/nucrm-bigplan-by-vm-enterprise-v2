@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { tenants, plans, billingEvents } from '@/drizzle/schema';
 import { eq, sql, desc } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -45,7 +46,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .leftJoin(tenants, eq(tenants.id, billingEvents.tenantId))
         .orderBy(desc(billingEvents.createdAt))
         .limit(20)
-        .catch((err) => { console.error('[revenue] events failed', err); return []; }),
+        .catch((err) => { void logError({ error: err, context: 'superadmin/revenue events query' }); return []; }),
     ]);
 
     return NextResponse.json({ mrr: mrrRes, events });
@@ -53,7 +54,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/revenue GET]', err);
+    await logError({ error: err, context: 'superadmin/revenue GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
