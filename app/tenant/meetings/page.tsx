@@ -5,7 +5,9 @@
  */
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
 import { Plus, Video, MapPin, Link as LinkIcon } from 'lucide-react';
@@ -26,40 +28,32 @@ interface Meeting {
   created_at: string;
 }
 
+// API list responses vary across endpoints ({data} | {meetings} | []); normalize.
+interface MeetingsResponse { data?: Meeting[]; meetings?: Meeting[] }
+
+const MEETINGS_KEY = ['tenant', 'meetings'] as const;
+
 export default function MeetingsPage() {
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
     title: '', description: '', start_time: '', end_time: '',
     location: '', meeting_url: '', contact_id: '', deal_id: '', status: 'scheduled',
   });
 
-  const fetchMeetings = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/meetings', { signal });
-      if (!res.ok) throw new Error('Failed to fetch meetings');
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setMeetings(data.data ?? data.meetings ?? data ?? []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load meetings');
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  }, []);
+  // #1328: TanStack Query replaces the raw fetch + useEffect + useState trio —
+  // cache, background refetch and dedup come for free.
+  const { data, isLoading, error } = useApiQuery<MeetingsResponse | Meeting[]>(
+    MEETINGS_KEY,
+    '/api/tenant/meetings',
+  );
+  const meetings: Meeting[] = Array.isArray(data)
+    ? data
+    : data?.data ?? data?.meetings ?? [];
+  if (error) toast.error('Failed to load meetings');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchMeetings(controller.signal);
-    return () => controller.abort();
-  }, [fetchMeetings]);
-
-  const handleCreate = async () => {
-    if (!form.title.trim()) { toast.error('Title required'); return; }
-    try {
+  const createMeeting = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/meetings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,12 +69,24 @@ export default function MeetingsPage() {
           status: form.status,
         }),
       });
-      if (!res.ok) { const d = await res.json(); toast.error(d.error || 'Create failed'); return; }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Create failed');
+      }
+    },
+    onSuccess: () => {
       toast.success('Meeting created');
       setShowCreate(false);
       setForm({ title: '', description: '', start_time: '', end_time: '', location: '', meeting_url: '', contact_id: '', deal_id: '', status: 'scheduled' });
-      fetchMeetings();
-    } catch { toast.error('Create failed'); }
+      // Invalidate so the list refetches with the new meeting.
+      queryClient.invalidateQueries({ queryKey: MEETINGS_KEY });
+    },
+    onError: (e: Error) => toast.error(e.message || 'Create failed'),
+  });
+
+  const handleCreate = () => {
+    if (!form.title.trim()) { toast.error('Title required'); return; }
+    createMeeting.mutate();
   };
 
   const statusBadge = (s: string) => {
@@ -92,7 +98,7 @@ export default function MeetingsPage() {
     return <span className={`px-2 py-0.5 rounded text-xs font-medium ${colors[s] || 'bg-gray-100 text-gray-700'}`}>{s}</span>;
   };
 
-  if (loading) return <div className="p-6"><ListSkeleton /></div>;
+  if (isLoading) return <div className="p-6"><ListSkeleton /></div>;
 
   return (
     <div className="p-6 space-y-6">
@@ -123,7 +129,7 @@ export default function MeetingsPage() {
             <option value="cancelled">Cancelled</option>
           </select>
           <div className="flex gap-2">
-            <Button onClick={handleCreate}>Create</Button>
+            <Button onClick={handleCreate} disabled={createMeeting.isPending}>{createMeeting.isPending ? 'Creating…' : 'Create'}</Button>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
           </div>
         </div>
