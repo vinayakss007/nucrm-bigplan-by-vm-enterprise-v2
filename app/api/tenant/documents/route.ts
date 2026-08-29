@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
@@ -194,7 +195,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not sign upload URL';
-      console.error('[documents POST] sign failed', msg);
+      await logError({ error: err, context: 'tenant/documents POST sign URL', requestMethod: 'POST' });
       return NextResponse.json({ error: msg }, { status: 502 });
     }
 

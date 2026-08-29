@@ -15,6 +15,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { getSignedUrl, deleteObject } from '@/lib/storage/s3';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest,
   context: { params: Promise<{ id: string }> },) => {
@@ -50,7 +51,7 @@ export const GET = withApiRoute(async (request: NextRequest,
     downloadUrl = await getSignedUrl(row.s3Key, 600, row.s3Bucket || undefined);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Could not sign URL';
-    console.error('[documents GET] sign failed', msg);
+    await logError({ error: err, context: 'tenant/documents/[id] GET sign URL', requestMethod: 'GET' });
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 

@@ -75,7 +75,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       hasMore: offset + data.length < total,
     });
   } catch (error: unknown) {
-    console.error('[products GET]', error);
+    await logError({ error, context: 'tenant/products GET', requestMethod: 'GET' });
     return apiError(error);
   }
 });
@@ -121,7 +121,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       created_at: inserted.createdAt,
     } }, { status: 201 });
   } catch (error: unknown) {
-    console.error('[products POST]', error);
+    await logError({ error, context: 'tenant/products POST', requestMethod: 'POST' });
     return apiError(error);
   }
 });

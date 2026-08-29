@@ -12,6 +12,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { invoices, invoiceLineItems, contacts, tenants } from '@/drizzle/schema';
@@ -214,7 +215,7 @@ export const GET = withApiRoute(async (req: NextRequest,
       },
     });
   } catch (err) {
-    console.error('[invoices [id] pdf GET]', err);
+    await logError({ error: err, context: 'tenant/invoices/[id]/pdf GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });

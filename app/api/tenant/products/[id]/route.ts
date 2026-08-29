@@ -53,7 +53,7 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: RouteCo
       updated_at: product.updatedAt,
     });
   } catch (error) {
-    console.error('[products GET by id]', error);
+    await logError({ error, context: 'tenant/products/[id] GET', requestMethod: 'GET' });
     return apiError(error);
   }
 });
@@ -117,7 +117,7 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: Route
       updated_at: updated.updatedAt,
     });
   } catch (error) {
-    console.error('[products PATCH]', error);
+    await logError({ error, context: 'tenant/products/[id] PATCH', requestMethod: 'PATCH' });
     return apiError(error);
   }
 });
@@ -149,7 +149,7 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: Rout
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('[products DELETE]', error);
+    await logError({ error, context: 'tenant/products/[id] DELETE', requestMethod: 'DELETE' });
     return apiError(error);
   }
 });

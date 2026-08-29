@@ -24,6 +24,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const uploadUrlSchema = z.object({
   name: z.string().min(1, 'name is required'),
@@ -107,7 +108,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Could not sign upload URL';
-    console.error('[documents/upload-url] sign failed', msg);
+    await logError({ error: err, context: 'tenant/documents/upload-url sign URL' });
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 
