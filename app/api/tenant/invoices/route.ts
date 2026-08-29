@@ -23,9 +23,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const { searchParams } = new URL(request.url);
     const qParams = Object.fromEntries(searchParams.entries());
     const qValidated = validateQuery(invoiceQuerySchema, qParams);
-    const q = qValidated instanceof NextResponse
-      ? { offset: 0, limit: 50 }
-      : qValidated.data;
+    // Surface invalid pagination params instead of silently falling back to
+    // defaults (which hides client bugs and returns unexpected result sets).
+    if (qValidated instanceof NextResponse) return qValidated;
+    const q = qValidated.data;
     const status = searchParams.get('status');
     const contactId = searchParams.get('contactId');
     const _search = searchParams.get('search');
@@ -45,11 +46,16 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const offset = (page - 1) * limit;
     const results = await db.select().from(invoices).where(and(...whereConditions)).orderBy(desc(invoices.createdAt)).limit(limit).offset(offset);
 
-    const [countResult] = await db.select({ count: count() }).from(invoices).where(and(eq(invoices.tenantId, tenantId), isNull(invoices.deletedAt)));
+    // Count must apply the SAME filters as the results query, otherwise
+    // pagination totals are wrong whenever a status/contactId filter is set.
+    const [countResult] = await db.select({ count: count() }).from(invoices).where(and(...whereConditions));
     const total = countResult?.count ?? 0;
 
-    return NextResponse.json({ 
-      invoices: results, 
+    // Standard list envelope: { data, total, page, limit, totalPages }.
+    // The frontend and SDK read `data`; returning `invoices` here left the
+    // invoices page permanently empty.
+    return NextResponse.json({
+      data: results,
       total,
       page,
       limit,
@@ -198,7 +204,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: 'Failed to create invoice' }, { status: 500 });
     }
 
-    return NextResponse.json({ invoice }, { status: 201 });
+    return NextResponse.json({ data: invoice }, { status: 201 });
   } catch (error) {
     console.error('[invoices/POST]', error);
     return NextResponse.json({ error: 'Failed to create invoice' }, { status: 500 });
