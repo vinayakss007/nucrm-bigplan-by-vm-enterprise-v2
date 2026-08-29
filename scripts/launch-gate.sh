@@ -10,19 +10,27 @@
 #   Stage 2  Lint                 npm run lint        (eslint .; warnings OK)
 #   Stage 3  Unit tests           npm run test:unit   (vitest)
 #   Stage 4  Fresh-migrate dry    npx tsx scripts/migrate.ts --dry-run --yes
+#                                 (reads local journal only; no DB connect —
+#                                  needs DATABASE_URL set, not reachable)
 #   Stage 5  Smoke test           scripts/smoke-test.sh (needs server :3000)
-#   Stage 6  Health check         GET /api/health     (needs server :3000)
+#   Stage 6  Health check         GET /api/health     (needs server :3000;
+#                                 asserts readiness: status ok + db connected
+#                                 + schema ready)
 #
 # GRACEFUL DEGRADATION (default, for local/dev boxes):
 #   - Stages 1-3 always run. Any failure is a HARD failure (non-zero exit).
-#   - Stage 4 needs DATABASE_URL + a reachable DB. If DATABASE_URL is unset
-#     or the DB is unreachable, the stage prints an explicit SKIP and the
-#     gate continues WITHOUT failing. When DATABASE_URL is set and the DB is
-#     reachable, a dry-run failure is a HARD failure.
+#   - Stage 4 (migrate dry-run) only reads the local drizzle journal and
+#     exits before opening any DB connection, so it needs DATABASE_URL to be
+#     SET but does NOT require a reachable database. If DATABASE_URL is unset,
+#     the stage prints an explicit SKIP and the gate continues WITHOUT
+#     failing. When DATABASE_URL is set, the dry-run runs and its exit code is
+#     the result — a dry-run failure is a HARD failure.
 #   - Stages 5-6 need a running server on http://localhost:3000. If the
 #     server is not up, they print an explicit SKIP and the gate continues.
-#     When the server IS up, a smoke assertion failure or a non-ok health
-#     response is a HARD failure.
+#     When the server IS up, Stage 5 hard-fails on a smoke assertion failure,
+#     and Stage 6 asserts READINESS (not just liveness): it requires the
+#     health body to report status ok AND db connected AND schema ready — any
+#     of those missing on a live server is a HARD failure.
 #   - SKIP is always distinct from PASS — a skipped stage is never counted
 #     as passed.
 #
@@ -110,43 +118,27 @@ else
 fi
 
 # ── Stage 4: Fresh-migrate dry-run (graceful unless STRICT) ─────────────────
+# migrate.ts --dry-run reads the local drizzle/migrations/meta/_journal.json,
+# reports pending migrations, and EXITS before constructing a DB Pool — it
+# never opens a connection. So this stage only needs DATABASE_URL to be SET
+# (the migrator errors if it is unset); it does NOT need a reachable DB. When
+# DATABASE_URL is set we simply run the dry-run and use its exit code. No
+# long-connect risk exists, so there is nothing to guard with a probe.
 header "▶ 4/6 Fresh-migrate dry-run (scripts/migrate.ts --dry-run --yes)"
 if [ -z "${DATABASE_URL:-}" ]; then
   if [ "$STRICT" = "1" ]; then
-    echo "   ❌ DATABASE_URL is unset (STRICT mode requires a reachable database)"
+    echo "   ❌ DATABASE_URL is unset (STRICT mode requires DATABASE_URL to be set)"
     record_fail "Migrate dry-run"
   else
-    echo "   ⚠  SKIP (no reachable database) — DATABASE_URL is unset"
+    echo "   ⚠  SKIP (DATABASE_URL is unset) — dry-run needs DATABASE_URL set"
     record_skip "Migrate dry-run"
   fi
+elif npx tsx scripts/migrate.ts --dry-run --yes; then
+  echo "   ✅ Migrate dry-run passed"
+  record_pass "Migrate dry-run"
 else
-  # Probe reachability with a bounded connection check before invoking the
-  # migrator, so an unreachable DB degrades to SKIP rather than a long hang.
-  DB_REACHABLE=0
-  if command -v pg_isready >/dev/null 2>&1; then
-    if pg_isready -d "$DATABASE_URL" -t 5 >/dev/null 2>&1; then
-      DB_REACHABLE=1
-    fi
-  else
-    # No pg_isready available; let the migrator's own bounded connect decide.
-    DB_REACHABLE=1
-  fi
-
-  if [ "$DB_REACHABLE" -ne 1 ]; then
-    if [ "$STRICT" = "1" ]; then
-      echo "   ❌ Database unreachable (STRICT mode requires a reachable database)"
-      record_fail "Migrate dry-run"
-    else
-      echo "   ⚠  SKIP (no reachable database) — DATABASE_URL set but DB not reachable"
-      record_skip "Migrate dry-run"
-    fi
-  elif npx tsx scripts/migrate.ts --dry-run --yes; then
-    echo "   ✅ Migrate dry-run passed"
-    record_pass "Migrate dry-run"
-  else
-    echo "   ❌ Migrate dry-run failed"
-    record_fail "Migrate dry-run"
-  fi
+  echo "   ❌ Migrate dry-run failed"
+  record_fail "Migrate dry-run"
 fi
 
 # ── Server reachability probe (shared by stages 5 & 6) ──────────────────────
@@ -188,13 +180,20 @@ if [ "$SERVER_UP" -ne 1 ]; then
     record_skip "Health check"
   fi
 else
+  # /api/health returns top-level "status":"ok" even when the DB is down
+  # (db => "disconnected"/"error", schema_ready => false). To assert genuine
+  # READINESS (not just that the server is alive) we require all three signals
+  # in the compact JSON that NextResponse.json emits (no spaces):
+  #   "status":"ok"  AND  "db":"connected"  AND  "schema_ready":true
   HEALTH_BODY=$(curl -s --max-time 10 "${SERVER_URL}/api/health" 2>/dev/null || true)
   echo "   Response: ${HEALTH_BODY}"
-  if echo "$HEALTH_BODY" | grep -q '"status":"ok"'; then
-    echo "   ✅ Health check ok"
+  if echo "$HEALTH_BODY" | grep -q '"status":"ok"' \
+    && echo "$HEALTH_BODY" | grep -q '"db":"connected"' \
+    && echo "$HEALTH_BODY" | grep -q '"schema_ready":true'; then
+    echo "   ✅ Health check ready (status:ok, db:connected, schema_ready:true)"
     record_pass "Health check"
   else
-    echo "   ❌ Health check not ok (expected status:ok)"
+    echo "   ❌ Health check not ready (need status:ok + db:connected + schema_ready:true)"
     record_fail "Health check"
   fi
 fi
