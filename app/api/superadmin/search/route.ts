@@ -21,7 +21,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get('q')?.trim();
     if (!q || q.length < 2) {
-      return NextResponse.json({ results: [] });
+      // #1093: standard { data, ... } envelope; legacy `results` kept.
+      return NextResponse.json({ data: [], results: [] });
     }
 
     const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 25);
@@ -74,7 +75,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       })
       .slice(0, limit);
 
-    return NextResponse.json({ results });
+    return NextResponse.json({ data: results, results });
   } catch (err) {
     return apiError(err, 'Search failed', 500);
   }

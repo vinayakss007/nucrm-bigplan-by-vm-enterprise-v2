@@ -56,7 +56,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .catch((err) => { void logError({ error: err, context: 'superadmin/usage growth query' }); return []; }),
     ]);
 
-    return NextResponse.json({ tenantUsage, growth });
+    // #1093: standardize on { data, ... } while keeping the legacy keys
+    // (tenantUsage/growth) for backwards compatibility with existing consumers.
+    return NextResponse.json({ data: tenantUsage, tenantUsage, growth });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

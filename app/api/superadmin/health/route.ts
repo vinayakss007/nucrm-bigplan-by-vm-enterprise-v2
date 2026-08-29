@@ -81,7 +81,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .limit(300)
       .catch((err) => { void logError({ error: err, context: 'superadmin/health history query' }); return []; });
 
-    return NextResponse.json({ checks, history });
+    // #1093: standard { data, ... } envelope; legacy checks/history kept for
+    // backwards compatibility with existing health consumers.
+    return NextResponse.json({ data: checks, checks, history });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
