@@ -76,7 +76,7 @@ describe('cache/queries', () => {
   });
 
   it('cachedQuery decorator wraps method with caching', async () => {
-    const { cachedQuery, CacheTTL } = await import('@/lib/cache/queries');
+    const { cachedQuery } = await import('@/lib/cache/queries');
     const decorator = cachedQuery({ key: (id: string) => `item:${id}`, ttl: 600 });
     const method = vi.fn().mockResolvedValue('result');
     const descriptor = { value: method };

@@ -12,13 +12,11 @@ const mockOrderBy = vi.fn(() => ({
 }));
 const mockWhere = vi.fn(() => ({ orderBy: mockOrderBy }));
 const mockFrom = vi.fn(() => ({ where: mockWhere }));
-const mockSelect = vi.fn(() => ({ from: mockFrom }));
 
 const mockActivityWhere = vi.fn();
 const mockActivityFrom = vi.fn(() => ({ where: mockActivityWhere }));
-const mockActivitySelect = vi.fn(() => ({ from: mockActivityFrom }));
 
-const mockCreditsTx = vi.hoisted(() => vi.fn<[(tx: any) => Promise<any>], any>());
+const mockCreditsTx = vi.hoisted(() => vi.fn<[(tx: unknown) => Promise<unknown>], unknown>());
 
 vi.mock('@/drizzle/db', () => ({
   db: {
@@ -132,7 +130,7 @@ describe('ai/credits', () => {
     const balance = { allocatedTokens: 100000, usedTokens: 100, allocatedCostCents: 5000, usedCostCents: 10, hardCapEnabled: true, softCapPct: 80, status: 'active' };
     mockFindFirst.mockResolvedValue(balance);
     mockReturning.mockResolvedValue([]);
-    mockCreditsTx.mockImplementation(async (cb: (tx: any) => Promise<any>) => cb({
+    mockCreditsTx.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({
       select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([balance]) })) })) })),
       update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) })),
       insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([]) })) })),

@@ -22,10 +22,6 @@ const mockLimitPipeline = vi.fn().mockResolvedValue([]);
 const mockWherePipeline = vi.fn().mockReturnValue({ limit: mockLimitPipeline });
 const mockFromPipeline = vi.fn().mockReturnValue({ where: mockWherePipeline });
 
-function selectChain(from: ReturnType<typeof mockFromPipeline>) {
-  return { from };
-}
-
 vi.mock('@/drizzle/db', () => ({
   db: {
     select: mockSelect,

@@ -1,13 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const mockWarmupTx = vi.hoisted(() => vi.fn());
-
 vi.mock('@/drizzle/db', () => ({
   db: {
     select: vi.fn(),
     insert: vi.fn(),
     update: vi.fn(),
-    transaction: vi.fn((cb: (tx: any) => Promise<any>) => cb({
+    transaction: vi.fn((cb: (tx: unknown) => Promise<unknown>) => cb({
       update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) })),
       insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn() })) })),
     })),

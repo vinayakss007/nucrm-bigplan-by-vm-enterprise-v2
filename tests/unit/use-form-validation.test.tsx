@@ -22,7 +22,7 @@ describe('useFormValidation', () => {
   it('returns no error for unknown rule', () => {
     const { result } = renderHook(() => useFormValidation(rules));
     act(() => {
-      const err = result.current.validate('nonexistent', 'value');
+      result.current.validate('nonexistent', 'value');
     });
     expect(result.current.errors.nonexistent).toBeUndefined();
   });

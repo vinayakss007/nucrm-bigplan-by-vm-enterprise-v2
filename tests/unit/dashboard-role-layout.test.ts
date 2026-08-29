@@ -13,7 +13,7 @@ vi.mock('@/drizzle/db', () => ({
 }));
 
 vi.mock('@/components/tenant/dashboard/widget-registry', () => ({
-  getWidgetsForPlan: vi.fn((planId: string) => [
+  getWidgetsForPlan: vi.fn((_planId: string) => [
     { id: 'stats-contacts', defaultSize: '1x1' },
     { id: 'stats-pipeline', defaultSize: '1x1' },
   ]),

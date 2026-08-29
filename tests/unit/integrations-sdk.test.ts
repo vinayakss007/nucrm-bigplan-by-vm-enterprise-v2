@@ -88,9 +88,7 @@ describe('integrations/sdk', () => {
     });
 
     it('forms.submit uses direct fetch without Bearer auth', async () => {
-      let capturedRequest: RequestInit | undefined;
-      const mockFetch = vi.fn((url: string, opts: RequestInit) => {
-        capturedRequest = opts;
+      const mockFetch = vi.fn((_url: string, _opts: RequestInit) => {
         return Promise.resolve({ json: () => Promise.resolve({ success: true }), ok: true });
       });
       vi.stubGlobal('fetch', mockFetch);

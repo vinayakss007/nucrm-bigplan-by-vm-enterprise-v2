@@ -18,18 +18,13 @@ vi.mock('server-only', () => ({}));
 
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { NextResponse } from 'next/server';
-
-function makeSelectable(resolvedValue: unknown) {
-  return vi.fn(() => ({
-    where: vi.fn(() => Promise.resolve(resolvedValue)),
-  }));
-}
+import { NextResponse, type NextRequest } from 'next/server';
+import type { AuthContext } from '@/lib/auth/middleware';
 
 describe('Notifications Dashboard Widget API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(requireAuth).mockResolvedValue({ tenantId: 'tenant-1', userId: 'user-1', role: 'admin' } as any);
+    vi.mocked(requireAuth).mockResolvedValue({ tenantId: 'tenant-1', userId: 'user-1', role: 'admin' } as unknown as AuthContext);
   });
 
   it('returns notifications for the current user', async () => {
@@ -48,7 +43,7 @@ describe('Notifications Dashboard Widget API', () => {
 
     const { GET } = await import('@/app/api/tenant/dashboard/widgets/notifications/route');
     const req = new Request('http://localhost/api/tenant/dashboard/widgets/notifications');
-    const res = await GET(req as any);
+    const res = await GET(req as unknown as NextRequest);
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -67,7 +62,7 @@ describe('Notifications Dashboard Widget API', () => {
 
     const { GET } = await import('@/app/api/tenant/dashboard/widgets/notifications/route');
     const req = new Request('http://localhost/api/tenant/dashboard/widgets/notifications');
-    const res = await GET(req as any);
+    const res = await GET(req as unknown as NextRequest);
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -76,22 +71,20 @@ describe('Notifications Dashboard Widget API', () => {
   });
 
   it('returns 401 when not authenticated', async () => {
-    vi.mocked(requireAuth).mockResolvedValue(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) as any);
+    vi.mocked(requireAuth).mockResolvedValue(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
 
     const { GET } = await import('@/app/api/tenant/dashboard/widgets/notifications/route');
     const req = new Request('http://localhost/api/tenant/dashboard/widgets/notifications');
-    const res = await GET(req as any);
+    const res = await GET(req as unknown as NextRequest);
 
     expect(res.status).toBe(401);
   });
 
   it('queries only for the authenticated user and tenant with limit 5', async () => {
-    let capturedWhere: unknown[] = [];
     const limitFn = vi.fn().mockResolvedValue([]);
     const orderByFn = vi.fn(() => ({ limit: limitFn }));
     const mockItems = {
-      where: vi.fn((...args: unknown[]) => {
-        capturedWhere = args;
+      where: vi.fn(() => {
         return { orderBy: orderByFn };
       }),
     };
@@ -102,7 +95,7 @@ describe('Notifications Dashboard Widget API', () => {
 
     const { GET } = await import('@/app/api/tenant/dashboard/widgets/notifications/route');
     const req = new Request('http://localhost/api/tenant/dashboard/widgets/notifications');
-    await GET(req as any);
+    await GET(req as unknown as NextRequest);
 
     expect(orderByFn).toHaveBeenCalled();
     expect(limitFn).toHaveBeenCalledWith(5);

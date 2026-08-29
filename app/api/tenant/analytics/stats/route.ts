@@ -8,7 +8,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 
 export async function GET(request: NextRequest) {
   try {
-    const ctx = await requireAuth(request);
+    await requireAuth(request);
     return NextResponse.json({
       data: {
         totalContacts: 0,
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
         totalDeals: 0,
       },
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 }
