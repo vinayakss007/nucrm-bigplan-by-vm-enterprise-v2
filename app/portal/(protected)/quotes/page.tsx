@@ -29,6 +29,23 @@ function getStoredSession(): PortalSession | null {
   }
 }
 
+interface PortalQuote {
+  id: string;
+  status?: string | null;
+  quote_number?: string | null;
+  title?: string | null;
+  created_at?: string | null;
+  expires_at?: string | null;
+  accepted_at?: string | null;
+  declined_at?: string | null;
+  total_amount?: number | null;
+  subtotal?: number | null;
+  discount?: number | null;
+  tax?: number | null;
+  notes?: string | null;
+  terms?: string | null;
+}
+
 const STATUS_STYLE: Record<string, string> = {
   draft: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
   sent: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
@@ -41,8 +58,7 @@ const STATUS_STYLE: Record<string, string> = {
 
 export default function PortalQuotesPage() {
   const router = useRouter();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [quotes, setQuotes] = useState<any[]>([]);
+  const [quotes, setQuotes] = useState<PortalQuote[]>([]);
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<PortalSession | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -142,7 +158,7 @@ export default function PortalQuotesPage() {
         <div className="space-y-3">
           {quotes.map(quote => {
             const isExpanded = expandedId === quote.id;
-            const canAct = ['sent', 'viewed'].includes(quote.status);
+            const canAct = ['sent', 'viewed'].includes(quote.status ?? '');
             return (
               <div key={quote.id} className="bg-card border border-border rounded-2xl overflow-hidden transition-all hover:border-violet-200 dark:hover:border-violet-800">
                 <button
@@ -151,7 +167,7 @@ export default function PortalQuotesPage() {
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full capitalize', STATUS_STYLE[quote.status] || STATUS_STYLE.draft)}>
+                      <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full capitalize', STATUS_STYLE[quote.status ?? 'draft'] || STATUS_STYLE.draft)}>
                         {quote.status}
                       </span>
                       {quote.quote_number && (
@@ -194,8 +210,8 @@ export default function PortalQuotesPage() {
                     <div className="flex items-center justify-between pt-2 border-t border-border">
                       <div className="text-xs text-muted-foreground">
                         <span>Subtotal: {formatCurrency(quote.subtotal || 0)}</span>
-                        {Number(quote.discount || 0) > 0 && <span className="ml-3">Discount: -{formatCurrency(quote.discount)}</span>}
-                        {Number(quote.tax || 0) > 0 && <span className="ml-3">Tax: {formatCurrency(quote.tax)}</span>}
+                        {Number(quote.discount || 0) > 0 && <span className="ml-3">Discount: -{formatCurrency(quote.discount ?? 0)}</span>}
+                        {Number(quote.tax || 0) > 0 && <span className="ml-3">Tax: {formatCurrency(quote.tax ?? 0)}</span>}
                       </div>
                       {canAct && (
                         <div className="flex gap-2">
