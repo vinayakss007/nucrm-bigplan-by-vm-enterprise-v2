@@ -10,6 +10,7 @@ import { leadAssignments, leads, users } from '@/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { aliasedTable } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { parseLimitOffset } from '@/lib/api/query-params';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -56,7 +57,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err:any) { 
-    console.error('[leads/history]', err);
+    await logError({ error: err, context: 'tenant/leads/history GET', requestMethod: 'GET' });
     return apiError(err); 
   }
 });

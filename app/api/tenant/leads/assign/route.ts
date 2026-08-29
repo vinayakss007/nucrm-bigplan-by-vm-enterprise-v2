@@ -13,6 +13,7 @@ import { eq, and, inArray, sql } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -76,7 +77,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       await db.execute(sql`
         INSERT INTO public.lead_assignments (tenant_id, contact_id, assigned_to, assigned_by, reason)
         VALUES (${ctx.tenantId}, ${cid}, ${assign_to}, ${ctx.userId}, ${reason || null})
-      `).catch((err) => console.error('History log failed:', err));
+      `).catch((err) => { void logError({ error: err, context: 'tenant/leads/assign history log' }); });
     }
 
     // Notify assignee

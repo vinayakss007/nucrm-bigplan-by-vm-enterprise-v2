@@ -142,7 +142,7 @@ export const GET = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('Error fetching lead:', error);
+    await logError({ error, context: 'tenant/leads/[id] GET', requestMethod: 'GET' });
     return apiError(error);
   }
 });
@@ -267,7 +267,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('Error updating lead:', error);
+    await logError({ error, context: 'tenant/leads/[id] PATCH', requestMethod: 'PATCH' });
     return apiError(error);
   }
 });
@@ -321,7 +321,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('Error deleting lead:', error);
+    await logError({ error, context: 'tenant/leads/[id] DELETE', requestMethod: 'DELETE' });
     return apiError(error);
   }
 });

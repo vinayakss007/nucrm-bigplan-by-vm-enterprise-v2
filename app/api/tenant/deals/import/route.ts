@@ -12,6 +12,7 @@ import { deals, contacts, companies, pipelines, dealStages, activities, tenants,
 import { eq, and, sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { logAudit } from '@/lib/audit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -399,7 +400,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ ok: true, results });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[deals import POST]', err);
+    await logError({ error: err, context: 'tenant/deals import POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

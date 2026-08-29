@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 /**
  * POST /api/tenant/leads/[id]/convert
  *
@@ -30,7 +31,7 @@ export const POST = withApiRoute(async (request: NextRequest,
 
     const { id } = await params;
     let rawBody;
-    try { rawBody = await readJsonBody(request); } catch (err) { console.error('[leads/convert] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { rawBody = await readJsonBody(request); } catch (err) { void logError({ error: err, context: 'tenant/leads/[id]/convert JSON parse', level: 'warning' }); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const validated = validateBody(convertLeadSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -69,7 +70,7 @@ export const POST = withApiRoute(async (request: NextRequest,
   
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[lead convert] error:', error);
+    await logError({ error, context: 'tenant/leads/[id]/convert POST', requestMethod: 'POST' });
     return apiError(error);
   }
 });

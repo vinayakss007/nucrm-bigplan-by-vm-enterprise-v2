@@ -10,6 +10,7 @@ import { deals, dealStages, pipelines, contacts, companies } from '@/drizzle/sch
 import { eq, asc } from 'drizzle-orm';
 import { escapeCSV } from '@/lib/export';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -62,7 +63,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       },
     });
   } catch (err: unknown) {
-    console.error('[deals export GET]', err);
+    await logError({ error: err, context: 'tenant/deals export GET', requestMethod: 'GET' });
     return NextResponse.json({ error: 'Export failed' }, { status: 500 });
   }
 });

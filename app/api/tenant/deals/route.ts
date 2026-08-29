@@ -96,7 +96,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[tenant deals GET]', err);
+    await logError({ error: err, context: 'tenant/deals GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -233,9 +233,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         userId: ctx.userId,
         event: 'deal.created',
         data: { ...deal, id: deal.id },
-      }).catch(err => console.error('[deals POST] deal.created automation failed:', err));
+      }).catch(err => { void logError({ error: err, context: 'tenant/deals POST deal.created automation' }); });
     } catch (e) {
-      console.error('[deals POST] automation import failed:', e);
+      await logError({ error: e, context: 'tenant/deals POST automation import' });
     }
 
     cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`);
@@ -243,7 +243,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[tenant deals POST]', err);
+    await logError({ error: err, context: 'tenant/deals POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

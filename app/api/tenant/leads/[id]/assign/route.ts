@@ -176,7 +176,7 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[leads/assign] error:', error);
+    await logError({ error, context: 'tenant/leads/[id]/assign POST', requestMethod: 'POST' });
     return apiError(error, "Internal server error", 500);
   }
 });
