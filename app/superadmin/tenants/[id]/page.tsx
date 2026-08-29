@@ -51,11 +51,12 @@ export default function TenantDetailPage() {
     admin_notes: '',
   });
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(`/api/superadmin/tenants/${tenantId}`);
+      const res = await fetch(`/api/superadmin/tenants/${tenantId}`, { signal });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
+      if (signal?.aborted) return;
       setTenant(data.data);
       setForm({
         plan_id: data.data.plan_id || 'free',
@@ -64,13 +65,18 @@ export default function TenantDetailPage() {
         admin_notes: data.data.admin_notes || '',
       });
     } catch (err: unknown) {
+      if ((err as Error)?.name === 'AbortError') return;
       toast.error(err instanceof Error ? err.message : 'Failed to load tenant');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [tenantId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   const save = async () => {
     setSaving(true);

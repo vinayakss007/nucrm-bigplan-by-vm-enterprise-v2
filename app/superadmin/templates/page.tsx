@@ -26,18 +26,25 @@ export default function SuperAdminTemplatesPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/superadmin/templates');
+      const res = await fetch('/api/superadmin/templates', { signal });
       const d = await res.json();
+      if (signal?.aborted) return;
       setTemplates(d.data ?? []);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       toast.error('Failed to load templates');
+    } finally {
+      if (!signal?.aborted) setLoading(false);
     }
-    setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const createTemplate = async () => {
     try {

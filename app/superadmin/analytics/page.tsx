@@ -23,13 +23,17 @@ export default function SuperAdminAnalyticsPage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
+  const controller = new AbortController();
   let ignore = false;
     Promise.all([
-      fetch('/api/superadmin/tenants').then(r => r.ok ? r.json() : { data: [] }),
-      fetch('/api/superadmin/monitoring').then(r => r.ok ? r.json() : null),
+      fetch('/api/superadmin/tenants', { signal: controller.signal }).then(r => r.ok ? r.json() : { data: [] }),
+      fetch('/api/superadmin/monitoring', { signal: controller.signal }).then(r => r.ok ? r.json() : null),
     ]).then(([t, m]) => { if (ignore) return;  setTenants(t.data||[]); setMonitoring(m); setLoading(false);  } )
-    .catch(err => { setFetchError(err.message); setLoading(false); });
-    return () => { ignore = true; };
+    .catch(err => {
+      if ((err as Error)?.name === 'AbortError') return;
+      setFetchError(err.message); setLoading(false);
+    });
+    return () => { ignore = true; controller.abort(); };
 }, []);
 
   // Compute metrics

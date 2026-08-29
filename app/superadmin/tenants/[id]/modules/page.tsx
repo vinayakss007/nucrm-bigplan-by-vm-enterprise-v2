@@ -29,15 +29,25 @@ export default function TenantModulesPage() {
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/superadmin/tenants/${tenantId}/modules`);
-    const d = await res.json();
-    setModules(d.data || []);
-    setPlan(d.plan || 'free');
-    setLoading(false);
+  const load = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const res = await fetch(`/api/superadmin/tenants/${tenantId}/modules`, { signal });
+      const d = await res.json();
+      if (signal?.aborted) return;
+      setModules(d.data || []);
+      setPlan(d.plan || 'free');
+      setLoading(false);
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
+    }
   }, [tenantId]);
 
-  useEffect(() => { load(); }, [, load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   interface ModuleData {
     id: string;
@@ -81,7 +91,7 @@ export default function TenantModulesPage() {
             Plan: <span className="capitalize font-semibold text-white/60">{plan}</span> · {totalEnabled}/{modules.length} active
           </p>
         </div>
-        <button onClick={load} className="p-2 rounded-lg border border-white/10 text-white/40 hover:text-white hover:bg-white/5 transition-colors">
+        <button onClick={() => load()} className="p-2 rounded-lg border border-white/10 text-white/40 hover:text-white hover:bg-white/5 transition-colors">
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>

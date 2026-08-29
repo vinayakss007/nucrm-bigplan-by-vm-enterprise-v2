@@ -57,20 +57,28 @@ export default function TenantSettingsAuditPage() {
   const [saving, setSaving] = useState(false);
   const [editedSettings, setEditedSettings] = useState<TenantSettingsData['settings'] | null>(null);
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback((signal?: AbortSignal) => {
     if (!params?.id) return;
     setLoading(true);
-    fetch(`/api/superadmin/tenant-settings?tenant_id=${params.id}`)
+    fetch(`/api/superadmin/tenant-settings?tenant_id=${params.id}`, { signal })
       .then(r => r.ok ? r.json() : Promise.reject(r))
       .then((d) => {
+        if (signal?.aborted) return;
         setData(d);
         setEditedSettings(JSON.parse(JSON.stringify(d.settings)));
       })
-      .catch((err) => { clientLogError('tenant-settings:fetch', err); setData({ tenant: { name: '', slug: '', plan_id: '', status: '', active_members: 0, current_users: 0, current_contacts: 0, current_deals: 0 }, settings: {}, error: true }); })
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if ((err as Error)?.name === 'AbortError') return;
+        clientLogError('tenant-settings:fetch', err); setData({ tenant: { name: '', slug: '', plan_id: '', status: '', active_members: 0, current_users: 0, current_contacts: 0, current_deals: 0 }, settings: {}, error: true });
+      })
+      .finally(() => { if (!signal?.aborted) setLoading(false); });
   }, [params?.id]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    const controller = new AbortController();
+    loadData(controller.signal);
+    return () => controller.abort();
+  }, [loadData]);
 
   const handleSave = async () => {
     if (!params?.id || !editedSettings) return;

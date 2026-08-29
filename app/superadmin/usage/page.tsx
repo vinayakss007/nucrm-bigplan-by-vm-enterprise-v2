@@ -48,13 +48,23 @@ export default function UsagePage() {
   const [sortBy, setSortBy] = useState<'contacts'|'deals'|'users'>('contacts');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('desc');
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true);
-    const res = await fetch('/api/superadmin/usage');
-    const d = await res.json();
-    setData(d); setLoading(false);
+    try {
+      const res = await fetch('/api/superadmin/usage', { signal });
+      const d = await res.json();
+      if (signal?.aborted) return;
+      setData(d); setLoading(false);
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
+    }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const toggleSort = (col: typeof sortBy) => {
     if (sortBy === col) setSortDir(d => d==='desc'?'asc':'desc');
@@ -94,7 +104,7 @@ export default function UsagePage() {
           <h1 className="text-lg font-bold text-white flex items-center gap-2"><BarChart3 className="w-5 h-5 text-violet-400"/>Usage Monitoring</h1>
           <p className="text-xs text-white/30">Per-tenant resource consumption and limit enforcement</p>
         </div>
-        <button onClick={load} className="p-2 rounded-lg border border-white/10 text-white/30 hover:text-white transition-colors"><RefreshCw className="w-3.5 h-3.5"/></button>
+        <button onClick={() => load()} className="p-2 rounded-lg border border-white/10 text-white/30 hover:text-white transition-colors"><RefreshCw className="w-3.5 h-3.5"/></button>
       </div>
 
       {/* Near limit alert */}

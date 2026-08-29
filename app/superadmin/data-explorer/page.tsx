@@ -153,15 +153,19 @@ export default function SuperAdminDataExplorer() {
 
   // Load summary on mount
   useEffect(() => {
-    loadSummary();
+    const controller = new AbortController();
+    loadSummary(controller.signal);
+    return () => controller.abort();
   }, []);
 
-  const loadSummary = async () => {
+  const loadSummary = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/superadmin/data-explorer?action=summary');
+      const res = await fetch('/api/superadmin/data-explorer?action=summary', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       if (data.summary) setSummary(data.summary);
     } catch (err) {
+      if ((err as Error)?.name === 'AbortError') return;
       clientLogError('data-explorer:load-summary', err);
     }
   };
@@ -318,7 +322,7 @@ export default function SuperAdminDataExplorer() {
               Export CSV
             </button>
           )}
-          <button onClick={loadSummary} className="px-3 py-2 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center gap-2">
+          <button onClick={() => loadSummary()} className="px-3 py-2 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center gap-2">
             <RefreshCw className="w-4 h-4" />
             Refresh
           </button>

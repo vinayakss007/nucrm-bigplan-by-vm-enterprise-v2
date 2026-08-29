@@ -26,24 +26,31 @@ export default function TicketsPage() {
 
   // #1089: check res.ok before parsing and surface errors instead of silently
   // swallowing them / always claiming success.
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
       const q = status ? `?status=${status}` : '';
-      const res = await fetch('/api/superadmin/tickets' + q);
+      const res = await fetch('/api/superadmin/tickets' + q, { signal });
       if (!res.ok) {
         toast.error('Failed to load tickets');
         setData(null);
         return;
       }
-      setData(await res.json());
-    } catch {
+      const json = await res.json();
+      if (signal?.aborted) return;
+      setData(json);
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       toast.error('Failed to load tickets');
       setData(null);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [status]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   const update = async (id: string, updates: Record<string, unknown>) => {
     try {

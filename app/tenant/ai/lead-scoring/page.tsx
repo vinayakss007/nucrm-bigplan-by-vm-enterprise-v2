@@ -39,10 +39,10 @@ export default function AILeadScoringPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [stats, setStats] = useState({ total: 0, avg: 0, high: 0 });
 
-  function load() {
+  function load(signal?: AbortSignal) {
     setLoading(true);
     setError(null);
-    fetch('/api/tenant/leads?sort_by=score&sort_order=DESC&limit=100', { cache: 'no-store' })
+    fetch('/api/tenant/leads?sort_by=score&sort_order=DESC&limit=100', { cache: 'no-store', signal })
       .then(async r => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
         return r.json();
@@ -56,10 +56,19 @@ export default function AILeadScoringPage() {
           setStats({ total: data.length, avg, high });
         }
       })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch(e => {
+        if (e?.name === 'AbortError') return;
+        setError(e.message);
+      })
+      .finally(() => {
+        if (!signal?.aborted) setLoading(false);
+      });
   }
-  useEffect(load, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   async function runScoring() {
     setRunning(true);

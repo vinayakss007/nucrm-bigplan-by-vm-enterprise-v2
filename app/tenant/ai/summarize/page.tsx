@@ -47,10 +47,11 @@ export default function AISummarizePage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
     const t = setTimeout(async () => {
       try {
         const cfg = ENTITY_TYPES.find(e => e.id === entityType)!;
-        const r = await fetch(cfg.api + encodeURIComponent(entitySearch), { cache: 'no-store' });
+        const r = await fetch(cfg.api + encodeURIComponent(entitySearch), { cache: 'no-store', signal: controller.signal });
         if (!r.ok) { setEntityHits([]); return; }
         const data = await r.json();
         const list = data.contacts ?? data.deals ?? data.companies ?? data.data ?? [];
@@ -70,11 +71,12 @@ export default function AISummarizePage() {
           return { id: row.id, entity_type: 'company', label: row.name ?? '—' };
         });
         setEntityHits(hits);
-      } catch {
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return;
         setEntityHits([]);
       }
     }, 250);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); controller.abort(); };
   }, [entityType, entitySearch]);
 
   async function generate() {

@@ -35,10 +35,18 @@ export default function PortalTicketDetailPage() {
       if (!s.email) { router.replace('/portal/login'); return; }
       setSession(s);
 
-      fetch(`/api/public/tickets/${ticketId}`, { headers: { 'x-portal-email': s.email } })
+      const controller = new AbortController();
+      fetch(`/api/public/tickets/${ticketId}`, { headers: { 'x-portal-email': s.email }, signal: controller.signal })
         .then(r => { if (!r.ok) throw new Error('not found'); return r.json(); })
-        .then(d => { setTicket(d.data.ticket); setReplies(d.data.replies); setLoading(false); })
-        .catch(() => { toast.error('Ticket not found'); router.replace('/portal/tickets'); });
+        .then(d => {
+          if (controller.signal.aborted) return;
+          setTicket(d.data.ticket); setReplies(d.data.replies); setLoading(false);
+        })
+        .catch((e) => {
+          if ((e as Error)?.name === 'AbortError') return;
+          toast.error('Ticket not found'); router.replace('/portal/tickets');
+        });
+      return () => controller.abort();
     } catch { router.replace('/portal/login'); }
   }, [router, ticketId]);
 

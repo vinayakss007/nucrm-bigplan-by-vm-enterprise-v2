@@ -20,22 +20,28 @@ export default function PortalTicketsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [session, setSession] = useState<PortalSession | null>(null);
 
-  const loadTickets = useCallback((email: string) => {
+  const loadTickets = useCallback((email: string, signal?: AbortSignal) => {
     setLoading(true);
-    fetch('/api/public/tickets', { headers: { 'x-portal-email': email } }).then(r => r.json()).then(d => {
+    fetch('/api/public/tickets', { headers: { 'x-portal-email': email }, signal }).then(r => r.json()).then(d => {
+      if (signal?.aborted) return;
       setTickets(d.data || []); setLoading(false);
-    }).catch(() => { setLoading(false); });
+    }).catch((e) => {
+      if ((e as Error)?.name === 'AbortError') return;
+      setLoading(false);
+    });
   }, []);
 
   useEffect(() => {
     const raw = localStorage.getItem('portal_session');
     if (!raw) { router.replace('/portal/login'); return; }
+    const controller = new AbortController();
     try {
       const s = JSON.parse(raw) as PortalSession;
       if (!s.email) { router.replace('/portal/login'); return; }
       setSession(s);
-      loadTickets(s.email);
+      loadTickets(s.email, controller.signal);
     } catch { router.replace('/portal/login'); }
+    return () => controller.abort();
   }, [router, loadTickets]);
 
   const statusColor: Record<string, string> = {

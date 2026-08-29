@@ -57,17 +57,21 @@ export default function TemplateEditorPage({ params }: { params: Promise<{ id: s
   const [showAssign, setShowAssign] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
     Promise.all([
-      fetch(`/api/superadmin/templates/${id}`).then(r => r.json()),
-      fetch('/api/superadmin/modules').then(r => r.json()),
+      fetch(`/api/superadmin/templates/${id}`, { signal: controller.signal }).then(r => r.json()),
+      fetch('/api/superadmin/modules', { signal: controller.signal }).then(r => r.json()),
     ]).then(([tmpl, mods]) => {
+      if (controller.signal.aborted) return;
       setTemplate(tmpl.data ?? tmpl);
       setAvailableModules((mods.data ?? []).map((m: { id: string; name: string; icon: string }) => ({ id: m.id, name: m.name, icon: m.icon })));
       setLoading(false);
-    }).catch(() => {
+    }).catch((e) => {
+      if ((e as Error)?.name === 'AbortError') return;
       toast.error('Failed to load template');
       setLoading(false);
     });
+    return () => controller.abort();
   }, [id]);
 
   const update = (patch: Partial<TemplateData>) => {

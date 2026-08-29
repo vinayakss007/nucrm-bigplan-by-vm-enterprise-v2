@@ -36,19 +36,24 @@ export default function DunningDashboard() {
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed' | 'failed'>('all');
 
   useEffect(() => {
-    fetchAttempts();
+    const controller = new AbortController();
+    fetchAttempts(controller.signal);
+    return () => controller.abort();
   }, []);
 
-  const fetchAttempts = async () => {
+  const fetchAttempts = async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/superadmin/billing/dunning');
+      const res = await fetch('/api/superadmin/billing/dunning', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       setAttempts(data.data || []);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       toast.error('Failed to load dunning data');
+    } finally {
+      if (!signal?.aborted) setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleRetry = async (subscriptionId: string) => {
@@ -101,7 +106,7 @@ export default function DunningDashboard() {
           <p className="text-sm text-muted-foreground">Manage failed payments and retries</p>
         </div>
         <button
-          onClick={fetchAttempts}
+          onClick={() => fetchAttempts()}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border hover:bg-accent text-xs font-medium transition-colors"
         >
           <RefreshCw className="w-3 h-3" />

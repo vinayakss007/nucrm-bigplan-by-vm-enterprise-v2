@@ -54,22 +54,32 @@ export default function SuperAdminModulesPage() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
 
-  const load = async () => {
-    const res = await fetch('/api/superadmin/modules');
-    const d = await res.json();
-    setModules((d.data ?? []).map((m: Record<string, unknown>) => ({
-      ...m,
-      planAccess: (m.pricing as Record<string, PlanAccess>) || {
-        free: { enabled: false },
-        starter: { enabled: false },
-        pro: { enabled: false },
-        enterprise: { enabled: false },
-      }
-    } as Module)) as unknown as Module[]);
-    setLoading(false);
+  const load = async (signal?: AbortSignal) => {
+    try {
+      const res = await fetch('/api/superadmin/modules', { signal });
+      const d = await res.json();
+      if (signal?.aborted) return;
+      setModules((d.data ?? []).map((m: Record<string, unknown>) => ({
+        ...m,
+        planAccess: (m.pricing as Record<string, PlanAccess>) || {
+          free: { enabled: false },
+          starter: { enabled: false },
+          pro: { enabled: false },
+          enterprise: { enabled: false },
+        }
+      } as Module)) as unknown as Module[]);
+      setLoading(false);
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
+    }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const markDirty = (moduleId: string) => {
     setDirty(prev => new Set(prev).add(moduleId));

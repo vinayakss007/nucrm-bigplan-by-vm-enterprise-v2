@@ -137,26 +137,32 @@ export default function SelectiveRestorePage() {
 
   // Load data on mount
   useEffect(() => {
-    loadBackups();
-    loadRestoreLogs();
+    const controller = new AbortController();
+    loadBackups(controller.signal);
+    loadRestoreLogs(controller.signal);
+    return () => controller.abort();
   }, []);
 
-  const loadBackups = async () => {
+  const loadBackups = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/superadmin/selective-restore/backups');
+      const res = await fetch('/api/superadmin/selective-restore/backups', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       if (data.backups) setBackups(data.backups);
     } catch (err) {
+      if ((err as Error)?.name === 'AbortError') return;
       clientLogError('selective-restore:load-backups', err);
     }
   };
 
-  const loadRestoreLogs = async () => {
+  const loadRestoreLogs = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/superadmin/selective-restore/logs');
+      const res = await fetch('/api/superadmin/selective-restore/logs', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       if (data.logs) setRestoreLogs(data.logs);
     } catch (err) {
+      if ((err as Error)?.name === 'AbortError') return;
       clientLogError('selective-restore:load-logs', err);
     }
   };

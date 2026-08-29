@@ -36,23 +36,29 @@ export default function TenantRolesPage() {
   const [showEditor, setShowEditor] = useState(false);
   const [, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
       const [tenantRes, rolesRes] = await Promise.all([
-        fetch(`/api/superadmin/tenants/${tenantId}`).then(r => r.json()),
-        fetch(`/api/tenant/roles`).then(r => r.json()),
+        fetch(`/api/superadmin/tenants/${tenantId}`, { signal }).then(r => r.json()),
+        fetch(`/api/tenant/roles`, { signal }).then(r => r.json()),
       ]);
+      if (signal?.aborted) return;
       setTenant(tenantRes.data || tenantRes);
       setRoles(rolesRes.data || []);
     } catch (error) {
+      if ((error as Error)?.name === 'AbortError') return;
       clientLogError('tenant-roles:load', error);
       toast.error('Failed to load tenant data');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [tenantId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   const saveRole = async (roleId: string, permissions: Record<string, boolean>) => {
     setSaving(true);

@@ -82,19 +82,28 @@ export default function LeadWarmingPage() {
   const [tab, setTab] = useState<Tab>('campaigns');
   const [showBuilder, setShowBuilder] = useState(false);
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback((signal?: AbortSignal) => {
     Promise.all([
-      fetch('/api/tenant/lead-warming/stats').then(r => r.ok ? r.json() : null),
-      fetch('/api/tenant/lead-warming/replies?limit=50').then(r => r.ok ? r.json() : null),
-      fetch('/api/tenant/lead-warming/campaigns').then(r => r.ok ? r.json() : null),
+      fetch('/api/tenant/lead-warming/stats', { signal }).then(r => r.ok ? r.json() : null),
+      fetch('/api/tenant/lead-warming/replies?limit=50', { signal }).then(r => r.ok ? r.json() : null),
+      fetch('/api/tenant/lead-warming/campaigns', { signal }).then(r => r.ok ? r.json() : null),
     ]).then(([statsData, repliesData, campaignsData]) => {
+      if (signal?.aborted) return;
       if (statsData) setStats(statsData);
       if (repliesData?.data) setReplies(repliesData.data);
       if (campaignsData?.data) setCampaigns(campaignsData.data);
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).catch((e) => {
+      if ((e as Error)?.name === 'AbortError') return;
+    }).finally(() => {
+      if (!signal?.aborted) setLoading(false);
+    });
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    const controller = new AbortController();
+    loadData(controller.signal);
+    return () => controller.abort();
+  }, [loadData]);
 
   const toggleCampaignStatus = async (id: string, currentStatus: string) => {
     const newStatus = currentStatus === 'active' ? 'paused' : 'active';
