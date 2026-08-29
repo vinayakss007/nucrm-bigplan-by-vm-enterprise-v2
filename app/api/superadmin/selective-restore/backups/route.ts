@@ -14,6 +14,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { parseBackupFile, formatFileSize } from '@/lib/restore/backup-parser';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const UPLOAD_DIR = join(process.cwd(), 'uploads', 'backups');
 
@@ -49,7 +50,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .leftJoin(users, eq(users.id, sql`(metadata->>'uploaded_by')::uuid`))
       .orderBy(desc(superAdminBackups.createdAt))
       .limit(50)
-      .catch((err) => { console.error('[selective-restore] list failed', err); return []; });
+      .catch((err) => { void logError({ error: err, context: 'selective-restore/backups list query' }); return []; });
 
     const [stats] = await db
       .select({
@@ -81,7 +82,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[selective-restore/backups GET]', err);
+    await logError({ error: err, context: 'selective-restore/backups GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -157,7 +158,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[selective-restore/backups POST]', err);
+    await logError({ error: err, context: 'selective-restore/backups POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
@@ -202,7 +203,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[selective-restore/backups DELETE]', err);
+    await logError({ error: err, context: 'selective-restore/backups DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });
@@ -225,7 +226,7 @@ async function parseBackupAsync(backupId: string, filePath: string) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[parseBackupAsync]', err);
+    await logError({ error: err, context: 'selective-restore/backups parseBackupAsync', metadata: { backupId } });
     await db
       .update(superAdminBackups)
       .set({ status: 'failed' })

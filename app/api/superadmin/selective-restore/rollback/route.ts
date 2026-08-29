@@ -13,6 +13,7 @@ import { selectiveRestoreLogs, selectiveRestoreAuditLog } from '@/drizzle/schema
 import { eq, sql } from 'drizzle-orm';
 import { rollbackToSnapshot } from '@/lib/restore/restore-executor';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const schema = z.object({ restore_log_id: z.string().min(1) });
 
@@ -93,7 +94,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      console.error('[rollback]', err);
+      await logError({
+        error: err,
+        context: 'selective-restore/rollback',
+        userId: ctx.userId,
+        metadata: { restoreLogId: restore_log_id, tenantId: restoreLog.tenantId },
+      });
 
       await db
         .update(selectiveRestoreLogs)
@@ -113,7 +119,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[selective-restore/rollback POST]', err);
+    await logError({ error: err, context: 'selective-restore/rollback POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
