@@ -11,11 +11,14 @@ import { quotes, quoteLineItems, contacts, companies, tenants } from '@/drizzle/
 import { eq, and, asc, sql } from 'drizzle-orm';
 import { escapeHtml } from '@/lib/email/escape-html';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { renderQuotePdf } from '@/lib/pdf/render';
+import { mapQuoteToPdfData, type QuoteRow, type LineItemRow } from '@/lib/pdf/mappers';
 
 /**
  * GET /api/tenant/quotes/:id/pdf
- * Generate a PDF for a quote (HTML-based, rendered server-side).
- * Returns Content-Type: application/pdf with Content-Disposition: attachment.
+ * Returns a real application/pdf document by default. The original styled HTML
+ * print view is kept reachable behind ?format=html so existing consumers do
+ * not break.
  */
 export const GET = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -70,28 +73,41 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
       .where(and(eq(quoteLineItems.quoteId, id), eq(quoteLineItems.tenantId, ctx.tenantId)))
       .orderBy(asc(quoteLineItems.sortOrder));
 
-    // Generate HTML for PDF
-    const html = generateQuoteHtml({
-      title: quote.title || `Quote #${id.slice(0, 8)}`,
-      tenantName: tenant?.name || 'NuCRM',
-      contactName: [quote.contactFirstName, quote.contactLastName].filter(Boolean).join(' ') || 'N/A',
-      contactEmail: quote.contactEmail || '',
-      companyName: quote.companyName || '',
-      totalAmount: Number(quote.totalAmount || 0),
-      validUntil: quote.validUntil ? new Date(quote.validUntil).toLocaleDateString() : 'N/A',
-      notes: quote.notes || '',
-      lineItems: items,
-      createdAt: new Date(quote.createdAt).toLocaleDateString(),
-      status: quote.status || 'draft',
-    });
+    // ?format=html preserves the original styled print view unchanged.
+    if (request.nextUrl.searchParams.get('format') === 'html') {
+      const html = generateQuoteHtml({
+        title: quote.title || `Quote #${id.slice(0, 8)}`,
+        tenantName: tenant?.name || 'NuCRM',
+        contactName: [quote.contactFirstName, quote.contactLastName].filter(Boolean).join(' ') || 'N/A',
+        contactEmail: quote.contactEmail || '',
+        companyName: quote.companyName || '',
+        totalAmount: Number(quote.totalAmount || 0),
+        validUntil: quote.validUntil ? new Date(quote.validUntil).toLocaleDateString() : 'N/A',
+        notes: quote.notes || '',
+        lineItems: items,
+        createdAt: new Date(quote.createdAt).toLocaleDateString(),
+        status: quote.status || 'draft',
+      });
 
-    // Return HTML as a "printable" page that can be saved as PDF via browser
-    // For server-side PDF generation, you'd use puppeteer/playwright or @react-pdf/renderer
-    // This gives immediate value without adding heavy dependencies
-    return new NextResponse(html, {
+      return new NextResponse(html, {
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Disposition': `inline; filename="quote-${id.slice(0, 8)}.html"`,
+        },
+      });
+    }
+
+    // Default: return real PDF bytes. Branding = tenant name (only source today).
+    // The mapper preserves the authoritative line-item total rule (item.total wins).
+    const pdf = await renderQuotePdf(
+      mapQuoteToPdfData(quote as unknown as QuoteRow, items as unknown as LineItemRow[], tenant?.name),
+    );
+
+    // A Node Buffer is wrapped as Uint8Array so the Response body type is satisfied.
+    return new NextResponse(new Uint8Array(pdf), {
       headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Content-Disposition': `inline; filename="quote-${id.slice(0, 8)}.html"`,
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="quote-${id.slice(0, 8)}.pdf"`,
       },
     });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
