@@ -16,6 +16,7 @@ import { SkipLink } from '@/components/ui/skip-link';
 import { I18nProvider } from '@/lib/i18n/provider';
 import { ConfirmPolyfill } from '@/components/shared/confirm-polyfill';
 import { SWRProvider } from '@/lib/swr-config';
+import { QueryProvider } from '@/lib/query/client';
 import Script from 'next/script';
 import './globals.css';
 
@@ -71,7 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ThemeProvider>
             <ErrorWrapper>
               <CsrfProvider />
-              <SWRProvider>{children}</SWRProvider>
+              <QueryProvider><SWRProvider>{children}</SWRProvider></QueryProvider>
             </ErrorWrapper>
             <div aria-live="polite" aria-atomic="true" role="status">
               <Toaster position="bottom-right" toastOptions={{
