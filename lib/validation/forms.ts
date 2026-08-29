@@ -25,7 +25,10 @@ const optionalUrl = (max = 500) =>
 
 const hexColor = z
   .string()
-  .regex(/^#[0-9a-fA-F]{6}$/, 'Must be a hex color like #7c3aed');
+  .regex(
+    /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/,
+    'Must be a hex color like #7c3aed'
+  );
 
 // Phone: optional, allows leading + and digits/spaces/dashes/parens, max 30 chars.
 const optionalPhone = z

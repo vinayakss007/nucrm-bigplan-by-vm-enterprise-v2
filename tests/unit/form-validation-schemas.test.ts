@@ -176,6 +176,10 @@ describe('brandingFormSchema', () => {
     expect(fieldErrorKeys(brandingFormSchema, { ...valid, primaryColor: 'purple' })).toContain('primaryColor');
   });
 
+  it('accepts a 3-digit hex color', () => {
+    expect(brandingFormSchema.safeParse({ ...valid, primaryColor: '#fff' }).success).toBe(true);
+  });
+
   it('rejects an invalid logo url', () => {
     expect(fieldErrorKeys(brandingFormSchema, { ...valid, logoUrl: 'not a url' })).toContain('logoUrl');
   });
