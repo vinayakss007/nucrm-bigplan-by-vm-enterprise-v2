@@ -62,6 +62,34 @@ describe('email/service', () => {
     });
   });
 
+  describe('isEmailConfigured / getEmailProviderStatus (#1041)', () => {
+    it('reports not configured when neither Resend nor SMTP is set', async () => {
+      const { isEmailConfigured, getEmailProviderStatus } = await import('@/lib/email/service');
+      expect(isEmailConfigured()).toBe(false);
+      process.env.NODE_ENV = 'production';
+      expect(getEmailProviderStatus()).toEqual({ configured: false, provider: 'none' });
+    });
+
+    it('reports resend when RESEND_API_KEY is set', async () => {
+      process.env.RESEND_API_KEY = 're_test_123';
+      const { isEmailConfigured, getEmailProviderStatus } = await import('@/lib/email/service');
+      expect(isEmailConfigured()).toBe(true);
+      expect(getEmailProviderStatus()).toEqual({ configured: true, provider: 'resend' });
+    });
+
+    it('reports smtp when only SMTP_HOST is set', async () => {
+      process.env.SMTP_HOST = 'smtp.example.com';
+      const { getEmailProviderStatus } = await import('@/lib/email/service');
+      expect(getEmailProviderStatus()).toEqual({ configured: true, provider: 'smtp' });
+    });
+
+    it('reports console(dev) when unconfigured outside production', async () => {
+      process.env.NODE_ENV = 'development';
+      const { getEmailProviderStatus } = await import('@/lib/email/service');
+      expect(getEmailProviderStatus()).toEqual({ configured: false, provider: 'console (dev)' });
+    });
+  });
+
   describe('renderTemplate', () => {
     it('replaces template variables', async () => {
       const { renderTemplate } = await import('@/lib/email/service');
