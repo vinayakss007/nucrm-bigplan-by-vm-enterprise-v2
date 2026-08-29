@@ -268,6 +268,37 @@ const leadWarmingWorker = new Worker(
           throw new Error('WhatsApp credentials incomplete');
         }
 
+        // #1294: proactive expiry check. Meta access tokens expire (long-lived
+        // tokens last ~60 days; system-user tokens can be set to never expire).
+        // When the integration config carries a known expiry, honour it BEFORE
+        // calling Meta so we fail fast with an actionable error instead of
+        // burning an API round-trip on a token we already know is dead. This is
+        // forward-compatible: the save flow can persist `token_expires_at`; when
+        // absent we fall back to the reactive 401/190 detection below (unchanged
+        // behaviour for existing integrations).
+        const { isTokenExpired, getTokenExpiry, isStaleTokenResponse } = await import('@/lib/whatsapp/token');
+        if (isTokenExpired(config)) {
+          const expiresAt = getTokenExpiry(config)!;
+          await logError({
+            error: new Error(
+              `WhatsApp access token expired at ${expiresAt.toISOString()} — re-connect the WhatsApp integration.`
+            ),
+            context: 'worker:lead-warming:whatsapp:token-expired',
+            tenantId,
+            level: 'error',
+            metadata: { integrationId: integration.id, tokenExpiresAt: expiresAt.toISOString() },
+          });
+          await database.update(leadWarmingMessages)
+            .set({ status: 'failed', errorMessage: 'WhatsApp token expired — re-connect the integration' })
+            .where(andOp(
+              eqOp(leadWarmingMessages.campaignId, campaignId),
+              eqOp(leadWarmingMessages.contactId, contactId),
+              eqOp(leadWarmingMessages.status, 'queued'),
+              eqOp(leadWarmingMessages.channel, 'whatsapp')
+            ));
+          return { sent: false, error: 'WhatsApp token expired' };
+        }
+
         // M-E: claim the message BEFORE sending. Atomically flip queued->sending
         // and only proceed if this attempt actually won the row. On a retry
         // (after a successful send whose status update didn't persist, or a
@@ -329,8 +360,7 @@ const leadWarmingWorker = new Worker(
           // FOLLOW-UP: implement automatic Meta token refresh/rotation (out of
           // scope here — no refresh infrastructure exists yet).
           const errCode = errData.error?.code;
-          const isStaleToken =
-            response.status === 401 || [190, 102, 463].includes(Number(errCode));
+          const isStaleToken = isStaleTokenResponse(response.status, errCode);
           if (isStaleToken) {
             await logError({
               error: new Error(`WhatsApp access token stale/expired — re-connect the WhatsApp integration. (${errMsg})`),

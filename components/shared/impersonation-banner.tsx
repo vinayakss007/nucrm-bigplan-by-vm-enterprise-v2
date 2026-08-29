@@ -31,7 +31,8 @@ export default function ImpersonationBanner() {
     sessionStorage.removeItem('impersonateSessionId');
     // Clear session cookie
     document.cookie = 'session=; Path=/; Max-Age=0';
-    // Go back to superadmin
+    // #1267: intentional full reload — the impersonation session cookie was
+    // just cleared, so reload to restore the superadmin session context.
     window.location.href = '/superadmin/tenants';
   };
 

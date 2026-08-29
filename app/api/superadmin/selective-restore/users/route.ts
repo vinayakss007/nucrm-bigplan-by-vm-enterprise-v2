@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { users, tenantMembers } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 /**
  * GET: List users for a tenant (for selective restore user filtering)
@@ -49,7 +50,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[selective-restore/users GET]', err);
+    await logError({ error: err, context: 'selective-restore/users GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });

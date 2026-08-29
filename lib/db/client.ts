@@ -19,15 +19,12 @@ function sleep(ms: number) {
   return new Promise<void>(r => { const t = setTimeout(r, ms); if (t.unref) t.unref(); });
 }
 const RETRYABLE = ['ECONNREFUSED','ECONNRESET','ETIMEDOUT','EPIPE','40001','40P01','08006','08001'];
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function isRetryable(e: any) { return RETRYABLE.some(c => e?.message?.includes(c) || e?.code===c); }
+function isRetryable(e: unknown) {
+  const err = e as { message?: string; code?: string } | null | undefined;
+  return RETRYABLE.some(c => err?.message?.includes(c) || err?.code === c);
+}
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function query<T extends QueryResultRow = any>(sql: string, params?: any[], retries = 2): Promise<QueryResult<T>> {
+export async function query<T extends QueryResultRow = QueryResultRow>(sql: string, params?: unknown[], retries = 2): Promise<QueryResult<T>> {
   // Check if we are inside a withTransaction block
   const clientFromStorage = transactionStorage.getStore();
   
@@ -46,17 +43,15 @@ export async function query<T extends QueryResultRow = any>(sql: string, params?
     
     return result;
   }
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  catch (err: any) {
+  catch (err: unknown) {
     const _duration = Date.now() - startTime;
     // Only retry if NOT in a transaction
     if (!clientFromStorage && retries > 0 && isRetryable(err)) { 
       await sleep(150 * Math.pow(2, 2-retries)); 
       return query(sql, params, retries-1); 
     }
-    console.error('[db] query error:', err.message, '|', sql.slice(0,120));
+    const errMessage = err instanceof Error ? err.message : String(err);
+    console.error('[db] query error:', errMessage, '|', sql.slice(0,120));
     
     // Log error in development
     if (process.env.NODE_ENV === 'development') {
@@ -66,16 +61,10 @@ export async function query<T extends QueryResultRow = any>(sql: string, params?
     throw err;
   }
 }
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function queryOne<T extends QueryResultRow = any>(sql: string, params?: any[]): Promise<T|null> {
+export async function queryOne<T extends QueryResultRow = QueryResultRow>(sql: string, params?: unknown[]): Promise<T|null> {
   return (await query<T>(sql, params)).rows[0] ?? null;
 }
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function queryMany<T extends QueryResultRow = any>(sql: string, params?: any[]): Promise<T[]> {
+export async function queryMany<T extends QueryResultRow = QueryResultRow>(sql: string, params?: unknown[]): Promise<T[]> {
   return (await query<T>(sql, params)).rows;
 }
 export async function withTransaction<T>(fn: (c: PoolClient) => Promise<T>): Promise<T> {
@@ -141,8 +130,7 @@ function validateTableName(table: string): string {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function buildInsert(table: string, data: Record<string,any>) {
+export function buildInsert(table: string, data: Record<string, unknown>) {
   const validTable = validateTableName(table);
   const keys = Object.keys(data).filter(k => !PROTECTED.has(k));
   if (!keys.length) throw new Error('buildInsert: no fields');
@@ -154,8 +142,7 @@ export function buildInsert(table: string, data: Record<string,any>) {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function buildUpdate(table: string, data: Record<string,any>, where: Record<string,any>) {
+export function buildUpdate(table: string, data: Record<string, unknown>, where: Record<string, unknown>) {
   const validTable = validateTableName(table);
   const dk = Object.keys(data).filter(k => data[k] !== undefined && !PROTECTED.has(k));
   if (!dk.length) throw new Error('buildUpdate: no fields');
@@ -168,8 +155,7 @@ export function buildUpdate(table: string, data: Record<string,any>, where: Reco
 }
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function countRows(table: string, where: Record<string,any>): Promise<number> {
+export async function countRows(table: string, where: Record<string, unknown>): Promise<number> {
   // FIX CRITICAL-06: Add table name validation (was missing unlike buildInsert/buildUpdate)
   const validTable = validateTableName(table);
   const keys = Object.keys(where);

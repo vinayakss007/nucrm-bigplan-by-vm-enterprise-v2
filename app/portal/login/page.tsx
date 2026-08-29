@@ -90,7 +90,19 @@ function LoginInner() {
       setError('All fields are required');
       return;
     }
-    doLogin(form.email, form.token, form.tenant_id);
+    // #1342: validate the shape of the inputs before hitting the API.
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) {
+      setError('Enter a valid email address');
+      return;
+    }
+    // Access tokens are long opaque strings — reject obviously malformed input
+    // (too short, or containing whitespace) before submitting.
+    const token = form.token.trim();
+    if (token.length < 16 || /\s/.test(token)) {
+      setError('That access token looks invalid. Paste the full token from your invitation email.');
+      return;
+    }
+    doLogin(form.email.trim(), token, form.tenant_id.trim());
   };
 
   const inp = "w-full px-3 py-2.5 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all";
@@ -130,6 +142,7 @@ function LoginInner() {
               <input
                 type="text"
                 required
+                minLength={16}
                 value={form.token}
                 onChange={e => setForm(p => ({ ...p, token: e.target.value }))}
                 className={inp}

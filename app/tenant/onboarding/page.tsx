@@ -5,6 +5,7 @@
  */
 'use client';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   FileText, Brain, MessageCircle, LifeBuoy, Users, Home, ShoppingCart, Receipt,
   CheckCircle, ArrowRight, ArrowLeft, Rocket, Package, GitBranch,
@@ -24,6 +25,10 @@ function getIcon(name: string) {
 const STEPS = ['Choose Product', 'Confirm Modules', 'Quick Setup', 'Complete'] as const;
 
 export default function OnboardingPage() {
+  const router = useRouter();
+  // #1267: navigate client-side, then refresh so the dashboard's server
+  // components pick up the modules/product just enabled during onboarding.
+  const goToDashboard = () => { router.push('/tenant/dashboard'); router.refresh(); };
   const [step, setStep] = useState(0);
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
   const [enabledModules, setEnabledModules] = useState<string[]>([]);
@@ -137,7 +142,7 @@ export default function OnboardingPage() {
             } catch {
               // Skip onboarding error
             }
-            window.location.href = '/tenant/dashboard';
+            goToDashboard();
           }}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
@@ -296,7 +301,7 @@ export default function OnboardingPage() {
             capabilities - this product is your curated starting point.
           </p>
           <button
-            onClick={() => { window.location.href = '/tenant/dashboard'; }}
+            onClick={goToDashboard}
             className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition-colors mt-4"
           >
             Go to Dashboard <ArrowRight className="w-4 h-4" />

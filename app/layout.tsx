@@ -16,6 +16,7 @@ import { SkipLink } from '@/components/ui/skip-link';
 import { I18nProvider } from '@/lib/i18n/provider';
 import { ConfirmPolyfill } from '@/components/shared/confirm-polyfill';
 import { SWRProvider } from '@/lib/swr-config';
+import Script from 'next/script';
 import './globals.css';
 
 const inter = Inter({
@@ -48,13 +49,23 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    // suppressHydrationWarning is required on <html> only: next-themes sets the
-    // `class`/`style` (theme) attributes on the <html> element before hydration,
-    // which would otherwise trigger a hydration mismatch warning. The <body> is
-    // server/client identical, so it does not need the suppression (#1306).
+    // suppressHydrationWarning is scoped to <html> ONLY and is unavoidable:
+    // next-themes writes the `class`/`style` (theme) attributes onto the <html>
+    // element before React hydrates, so without it React would report a
+    // benign mismatch on those two attributes. Crucially, suppressHydrationWarning
+    // does NOT cascade to descendants — hydration errors inside the app tree
+    // (and on <body>) are still surfaced normally (#1306).
+    //
+    // Do NOT add suppressHydrationWarning to <body>. Browser extensions
+    // (Dark Reader, Grammarly, …) mutate <body> before hydration; instead of
+    // hiding those with a blanket suppression, dark-reader-cleanup runs with
+    // Next.js `beforeInteractive` strategy so the injected attributes are
+    // stripped BEFORE React reconciles, keeping <body> server/client identical.
     <html lang="en" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable}`}>
+      <head>
+        <Script src="/dark-reader-cleanup.js" strategy="beforeInteractive" />
+      </head>
       <body className="font-sans">
-        <script src="/dark-reader-cleanup.js" defer />
         <I18nProvider>
           <SkipLink />
           <ThemeProvider>

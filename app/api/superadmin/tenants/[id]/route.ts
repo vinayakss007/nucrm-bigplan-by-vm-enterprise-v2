@@ -9,6 +9,7 @@ import { db } from '@/drizzle/db';
 import { tenants, users, tenantMembers, plans } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest,
   { params }: { params: Promise<{ id: string }> }) => {
@@ -67,7 +68,7 @@ export const GET = withApiRoute(async (request: NextRequest,
 
     return NextResponse.json({ data: tenant });
   } catch (error) {
-    console.error('[superadmin/tenants/[id]/GET]', error);
+    await logError({ error, context: 'superadmin/tenants/[id] GET', requestMethod: 'GET' });
     return NextResponse.json({ error: 'Failed to fetch tenant' }, { status: 500 });
   }
 });

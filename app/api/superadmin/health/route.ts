@@ -79,14 +79,14 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .where(gt(healthChecks.checkedAt, sql`now() - interval '24 hours'`))
       .orderBy(desc(healthChecks.checkedAt))
       .limit(300)
-      .catch((err) => { console.error('[health] history failed', err); return []; });
+      .catch((err) => { void logError({ error: err, context: 'superadmin/health history query' }); return []; });
 
     return NextResponse.json({ checks, history });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/health GET]', err);
+    await logError({ error: err, context: 'superadmin/health GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });

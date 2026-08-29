@@ -478,9 +478,28 @@ function FieldFormModal({ mode, field, fieldTypes, onClose, onSubmit }: {
       ? optionsText.split('\n').filter(o => o.trim())
       : undefined;
 
+    // #1342: validate before POST.
+    const normalizedKey = fieldKey.replace(/[^a-z0-9_]/gi, '_').toLowerCase();
+    if (!fieldLabel.trim()) {
+      toast.error('Field label is required');
+      return;
+    }
+    if (!normalizedKey || normalizedKey.replace(/_/g, '') === '') {
+      toast.error('Field key must contain at least one letter or number');
+      return;
+    }
+    if ((fieldType === 'select' || fieldType === 'multiselect') && (!fieldOptions || fieldOptions.length === 0)) {
+      toast.error('Add at least one option for a select field');
+      return;
+    }
+    if (isCalculated && !formula.trim()) {
+      toast.error('A calculated field requires a formula');
+      return;
+    }
+
     onSubmit({
       ...(mode === 'edit' ? { fieldId: field?.id } : {}),
-      fieldKey: fieldKey.replace(/[^a-z0-9_]/gi, '_').toLowerCase(),
+      fieldKey: normalizedKey,
       fieldLabel,
       fieldType,
       fieldOptions,

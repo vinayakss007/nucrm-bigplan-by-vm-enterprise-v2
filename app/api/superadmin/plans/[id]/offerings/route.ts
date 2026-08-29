@@ -14,6 +14,7 @@ import { BUILTIN_MODULES } from '@/lib/modules/registry';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (_req: NextRequest,
   { params }: { params: Promise<{ id: string }> }) => {
@@ -49,7 +50,7 @@ export const GET = withApiRoute(async (_req: NextRequest,
     return NextResponse.json({ plan_id: planId, offerings });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/plans/[id]/offerings GET]', err);
+    await logError({ error: err, context: 'superadmin/plans/[id]/offerings GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -119,7 +120,7 @@ export const PUT = withApiRoute(async (req: NextRequest,
     return NextResponse.json({ ok: true });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/plans/[id]/offerings PUT]', err);
+    await logError({ error: err, context: 'superadmin/plans/[id]/offerings PUT', requestMethod: 'PUT' });
     return apiError(err);
   }
 });

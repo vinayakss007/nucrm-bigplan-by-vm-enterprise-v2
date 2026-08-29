@@ -7,9 +7,11 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Plus, MoreHorizontal, Edit, Trash2, Building2, Globe, Tag, UserPlus, Archive, RotateCcw } from 'lucide-react'
 
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo'
+import { clientLogWarn } from '@/lib/client-logger'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -46,6 +48,7 @@ interface Props {
 }
 
 export default function CompaniesDataTable({ initialCompanies, permissions, _tenantId, _userId, teamMembers = [] }: Props) {
+  const router = useRouter()
   const [companies, setCompanies] = useState(initialCompanies)
   const [total, setTotal] = useState(initialCompanies.length)
   const [loading, setLoading] = useState(false)
@@ -210,7 +213,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => window.location.href = `/tenant/companies/${company.id}`}>
+              <DropdownMenuItem onClick={() => router.push(`/tenant/companies/${company.id}`)}>
                 <Edit className="mr-2 h-4 w-4" />
                 Edit
               </DropdownMenuItem>
@@ -229,7 +232,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
         )
       },
     },
-  ], [deleteEntity])
+  ], [deleteEntity, router])
 
   // ── Bulk actions ──────────────────────────────────────────
   const [_bulkBusy, setBulkBusy] = useState(false)
@@ -241,7 +244,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
     fetch('/api/tenant/custom-fields?entityType=company', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { fields: [] })
       .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[companies-data-table] Failed to load custom fields:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('companies-data-table', 'Failed to load custom fields', err); });
     return () => abort.abort();
   }, [])
 
@@ -250,7 +253,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
     fetch('/api/tenant/segments?entity_type=company', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[companies-data-table] Failed to load segments:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('companies-data-table', 'Failed to load segments', err); });
     return () => abort.abort();
   }, [])
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

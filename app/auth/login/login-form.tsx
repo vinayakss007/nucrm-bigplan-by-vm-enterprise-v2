@@ -76,6 +76,9 @@ export default function LoginForm() {
         toast.success('Welcome back!');
         setLoading(false);
         setTimeout(() => {
+          // #1267: intentional full reload after login — the session cookie was
+          // just set, so we need middleware + all server components to re-run
+          // under the authenticated session (client-side navigation would not).
           window.location.href = '/tenant/dashboard';
         }, 800);
       } else {
