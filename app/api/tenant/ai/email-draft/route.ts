@@ -14,6 +14,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { can } from '@/lib/auth/middleware';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 /**
  * POST /api/tenant/ai/email-draft
@@ -245,7 +246,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const { searchParams } = new URL(request.url);
     const contact_id = searchParams.get('contact_id');
     const deal_id = searchParams.get('deal_id');
-    const limit = parseInt(searchParams.get('limit') || '20');
+    // #1612: clamp `limit` to [1, 200] with a default of 20 so `?limit=100000`
+    // can't dump every email draft (memory/DoS) and `?limit=0`/negative can't
+    // produce an invalid query.
+    const { limit } = parseLimitOffset(searchParams, { defaultLimit: 20 });
 
     const conditions = [eq(emailDrafts.tenantId, ctx.tenantId)];
 
