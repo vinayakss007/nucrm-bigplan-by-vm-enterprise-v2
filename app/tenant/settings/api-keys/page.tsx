@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Key, Plus, Trash2, Copy, CheckCircle } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatDate, formatRelativeTime, apiFetch } from '@/lib/utils';
@@ -12,10 +14,21 @@ import toast from 'react-hot-toast';
 
 const SCOPES = ['contacts:read','contacts:write','deals:read','deals:write','tasks:read','tasks:write','companies:read'];
 
+interface ApiKey {
+  id: string;
+  name: string;
+  key_prefix: string;
+  is_active?: boolean;
+  scopes?: string[];
+  created_at: string;
+  last_used_at?: string | null;
+  expires_at?: string | null;
+}
+
+const API_KEYS_QUERY = ['tenant', 'api-keys'] as const;
+
 export default function APIKeysPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [keys, setKeys]       = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm]       = useState({ name:'', scopes:[] as string[], expires_days:'' });
   const [creating, setCreating] = useState(false);
@@ -23,8 +36,13 @@ export default function APIKeysPage() {
   const [copied, setCopied]   = useState(false);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = (signal?: AbortSignal) => fetch('/api/tenant/api-keys', { signal }).then(r=>r.json()).then(d=>{if(signal?.aborted)return;setKeys(d.data??[]);setLoading(false);}).catch(e=>{if(e?.name==='AbortError')return;throw e;});
-  useEffect(()=>{const controller=new AbortController();load(controller.signal);return()=>controller.abort();},[]);
+  // #1328: list via TanStack Query.
+  const { data, isLoading: loading } = useApiQuery<{ data?: ApiKey[] }>(
+    API_KEYS_QUERY,
+    '/api/tenant/api-keys',
+  );
+  const keys: ApiKey[] = data?.data ?? [];
+  const reload = () => queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY });
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault(); setCreating(true);
@@ -34,13 +52,13 @@ export default function APIKeysPage() {
     setNewKey(data.key);
     setShowForm(false);
     setForm({name:'',scopes:[],expires_days:''});
-    load(); setCreating(false);
+    reload(); setCreating(false);
   };
 
   const del = async (id:string) => {
     await confirmThen('Revoke this API key? Applications using this key will lose access.', async () => {
       await apiFetch(`/api/tenant/api-keys/${id}`,{method:'DELETE'});
-      toast.success('Key revoked'); load();
+      toast.success('Key revoked'); reload();
     });
   };
 
@@ -117,7 +135,7 @@ export default function APIKeysPage() {
                     {k.last_used_at&&<span>Last used {formatRelativeTime(k.last_used_at)}</span>}
                     {k.expires_at&&<span>Expires {formatDate(k.expires_at)}</span>}
                   </div>
-                  {k.scopes?.length>0&&<div className="flex flex-wrap gap-1 mt-1.5">{k.scopes.map((s:string)=><span key={s} className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">{s}</span>)}</div>}
+                  {(k.scopes?.length ?? 0) > 0 && <div className="flex flex-wrap gap-1 mt-1.5">{k.scopes?.map((s:string)=><span key={s} className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">{s}</span>)}</div>}
                 </div>
                 <button onClick={()=>del(k.id)} className="p-1.5 rounded hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/20 text-muted-foreground transition-colors shrink-0">
                   <Trash2 className="w-4 h-4" />

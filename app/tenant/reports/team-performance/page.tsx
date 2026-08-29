@@ -5,8 +5,9 @@
  */
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
+import { useApiQuery } from '@/lib/query/client';
 import { ArrowLeft, RefreshCw, Users, User, Loader2, Download } from 'lucide-react';
 import { formatCurrency, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -99,33 +100,21 @@ function Table({ rows, label, icon }: { rows: Row[]; label: string; icon: React.
   );
 }
 
-export default function TeamPerformancePage() {
-  const [byRep, setByRep] = useState<Row[]>([]);
-  const [byTeam, setByTeam] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
+interface TeamPerformanceResponse { data?: { byRep?: Row[]; byTeam?: Row[] } }
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tenant/reports/team-performance', { signal });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to load report');
-      if (!signal?.aborted) {
-        setByRep(data.data?.byRep ?? []);
-        setByTeam(data.data?.byTeam ?? []);
-      }
-    } catch (err) {
-      if ((err as Error)?.name !== 'AbortError') toast.error((err as Error)?.message || 'Failed to load report');
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, []);
+export default function TeamPerformancePage() {
+  // #1328: TanStack Query — the Refresh button just calls refetch().
+  const { data, isLoading: loading, error, refetch } = useApiQuery<TeamPerformanceResponse>(
+    ['tenant', 'reports', 'team-performance'],
+    '/api/tenant/reports/team-performance',
+  );
+  const byRep: Row[] = data?.data?.byRep ?? [];
+  const byTeam: Row[] = data?.data?.byTeam ?? [];
+  const load = () => refetch();
 
   useEffect(() => {
-    const abort = new AbortController();
-    load(abort.signal);
-    return () => abort.abort();
-  }, [load]);
+    if (error) toast.error(error.message || 'Failed to load report');
+  }, [error]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
