@@ -12,6 +12,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -24,7 +25,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ data: [], total: 0 });
   } catch (err) {
-    console.error('[super-admin plans GET]', err);
+    void logError({ error: err, context: 'super-admin/plans GET' });
     return apiError(err);
   }
 });

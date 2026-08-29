@@ -15,6 +15,7 @@ import { superAdminAuditLogs } from '@/drizzle/schema';
 import { requireAuth } from '@/lib/auth/middleware';
 import { eq, and, gte, lte, desc, count } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -79,7 +80,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     });
 
   } catch (err) {
-    console.error('[super-admin audit-logs GET]', err);
+    void logError({ error: err, context: 'super-admin/audit-logs GET' });
     return apiError(err);
   }
 });

@@ -15,6 +15,7 @@ import { tenants, users } from '@/drizzle/schema';
 import { eq, desc, count, and, like, or } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -93,7 +94,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[super-admin tenants GET]', err);
+    void logError({ error: err, context: 'super-admin/tenants GET' });
     return apiError(err);
   }
 });
