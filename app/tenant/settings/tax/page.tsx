@@ -83,6 +83,16 @@ export default function TaxSettingsPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // #1342: bound the tax rate. A percentage rate must be within 0..100;
+    // a fixed-amount rate must simply be non-negative.
+    if (!Number.isFinite(form.rate) || form.rate < 0) {
+      toast.error('Tax rate must be a non-negative number');
+      return;
+    }
+    if (form.type === 'percentage' && form.rate > 100) {
+      toast.error('Percentage tax rate cannot exceed 100%');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -240,7 +250,7 @@ export default function TaxSettingsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Rate *</label>
-                  <input type="number" step="0.01" min={0} value={form.rate} onChange={e => setForm(f => ({ ...f, rate: Number(e.target.value) }))} required className={inp} />
+                  <input type="number" step="0.01" min={0} max={form.type === 'percentage' ? 100 : undefined} value={form.rate} onChange={e => setForm(f => ({ ...f, rate: Number(e.target.value) }))} required className={inp} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Type *</label>
