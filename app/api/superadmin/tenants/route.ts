@@ -18,6 +18,7 @@ import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { invalidateTenantCache } from '@/lib/cache';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -92,7 +93,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/tenants GET]', err);
+    await logError({ error: err, context: 'superadmin/tenants GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -201,7 +202,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/tenants POST]', err);
+    await logError({ error: err, context: 'superadmin/tenants POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
@@ -278,7 +279,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/tenants PATCH]', err);
+    await logError({ error: err, context: 'superadmin/tenants PATCH', requestMethod: 'PATCH' });
     return apiError(err);
   }
 });
@@ -388,7 +389,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/tenants DELETE]', err);
+    await logError({ error: err, context: 'superadmin/tenants DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });

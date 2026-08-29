@@ -15,6 +15,7 @@ import { eq, and, sql, ilike, desc, or } from 'drizzle-orm';
 import { hashPassword, validatePassword } from '@/lib/auth/session';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 /**
  * Super Admin Users API
@@ -73,7 +74,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/users GET]', err);
+    await logError({ error: err, context: 'superadmin/users GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -121,7 +122,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (err.code === '23505' || err.message?.includes('unique constraint')) {
       return NextResponse.json({ error: 'Email already exists' }, { status: 409 });
     }
-    console.error('[superadmin/users POST]', err);
+    await logError({ error: err, context: 'superadmin/users POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
@@ -211,7 +212,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/users PATCH]', err);
+    await logError({ error: err, context: 'superadmin/users PATCH', requestMethod: 'PATCH' });
     return apiError(err);
   }
 });
