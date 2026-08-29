@@ -30,7 +30,7 @@ describe.each([
     tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
     calendarUrl: 'https://graph.microsoft.com/v1.0',
   },
-])('$name Calendar Provider', ({ name: _name, factory, mod, envPrefix, authUrl, tokenUrl, calendarUrl }) => {
+])('$name Calendar Provider', ({ name: _name, factory, mod, envPrefix, authUrl, tokenUrl: _tokenUrl, calendarUrl: _calendarUrl }) => {
   beforeEach(() => {
     process.env[`${envPrefix}_CLIENT_ID`] = 'test-client-id';
     process.env[`${envPrefix}_CLIENT_SECRET`] = 'test-client-secret';

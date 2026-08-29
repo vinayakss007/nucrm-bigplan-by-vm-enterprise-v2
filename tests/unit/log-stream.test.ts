@@ -7,7 +7,7 @@ describe('log-stream', () => {
   });
 
   function createMockController() {
-    return { enqueue: vi.fn(), close: vi.fn() } as any;
+    return { enqueue: vi.fn(), close: vi.fn() } as unknown as ReadableStreamDefaultController;
   }
 
   it('subscribe adds a client and returns an id', async () => {
@@ -54,8 +54,8 @@ describe('log-stream', () => {
   it('broadcast removes clients that fail', async () => {
     const { logStream } = await import('@/lib/log-stream');
     let callCount = 0;
-    const badCtrl = { enqueue: vi.fn().mockImplementation(() => { if (callCount++ > 0) throw new Error('broken'); }) } as any;
-    const id = logStream.subscribe(badCtrl);
+    const badCtrl = { enqueue: vi.fn().mockImplementation(() => { if (callCount++ > 0) throw new Error('broken'); }) } as unknown as ReadableStreamDefaultController;
+    logStream.subscribe(badCtrl);
     expect(logStream.clientCount).toBe(1);
     logStream.broadcast({ level: 'error', ts: '', msg: 'boom' });
     expect(logStream.clientCount).toBe(0);

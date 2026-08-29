@@ -1,5 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Test-only view of the private members exercised by these unit tests.
+interface ClientInternals {
+  baseUrl: string;
+  _request: (
+    method: string,
+    path: string,
+    body?: unknown,
+    query?: Record<string, string>,
+  ) => Promise<unknown>;
+}
+
 describe('sdk/client', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -15,7 +26,7 @@ describe('sdk/client', () => {
   it('NuCRMClient strips trailing slash from baseUrl', async () => {
     const { NuCRMClient } = await import('@/lib/sdk/client');
     const client = new NuCRMClient({ apiKey: 'ak_test', baseUrl: 'https://crm.com/' });
-    expect((client as any).baseUrl).toBe('https://crm.com');
+    expect((client as unknown as ClientInternals).baseUrl).toBe('https://crm.com');
   });
 
   it('NuCRMClient lazy-loads contacts resource', async () => {
@@ -78,7 +89,7 @@ describe('sdk/client', () => {
     globalThis.fetch = mockFetch;
     const { NuCRMClient } = await import('@/lib/sdk/client');
     const client = new NuCRMClient({ apiKey: 'ak_test', baseUrl: 'https://crm.com' });
-    const result = await (client as any)._request('GET', '/contacts');
+    const result = await (client as unknown as ClientInternals)._request('GET', '/contacts');
     expect(mockFetch).toHaveBeenCalledWith('https://crm.com/api/tenant/contacts', expect.objectContaining({
       method: 'GET',
       headers: { 'Authorization': 'Bearer ak_test', 'Content-Type': 'application/json' },
@@ -93,7 +104,7 @@ describe('sdk/client', () => {
     globalThis.fetch = mockFetch;
     const { NuCRMClient } = await import('@/lib/sdk/client');
     const client = new NuCRMClient({ apiKey: 'ak_test', baseUrl: 'https://crm.com' });
-    await (client as any)._request('GET', '/search', undefined, { q: 'test', limit: '10' });
+    await (client as unknown as ClientInternals)._request('GET', '/search', undefined, { q: 'test', limit: '10' });
     expect(mockFetch).toHaveBeenCalledWith('https://crm.com/api/tenant/search?q=test&limit=10', expect.any(Object));
     globalThis.fetch = originalFetch;
   });
@@ -104,7 +115,7 @@ describe('sdk/client', () => {
     globalThis.fetch = mockFetch;
     const { NuCRMClient, NuCRMError } = await import('@/lib/sdk/client');
     const client = new NuCRMClient({ apiKey: 'ak_test', baseUrl: 'https://crm.com' });
-    await expect((client as any)._request('POST', '/contacts')).rejects.toThrow(NuCRMError);
+    await expect((client as unknown as ClientInternals)._request('POST', '/contacts')).rejects.toThrow(NuCRMError);
     globalThis.fetch = originalFetch;
   });
 
@@ -114,7 +125,7 @@ describe('sdk/client', () => {
     globalThis.fetch = mockFetch;
     const { NuCRMClient } = await import('@/lib/sdk/client');
     const client = new NuCRMClient({ apiKey: 'ak_test', baseUrl: 'https://crm.com' });
-    const result = await (client as any)._request('DELETE', '/contacts/1');
+    const result = await (client as unknown as ClientInternals)._request('DELETE', '/contacts/1');
     expect(result).toBeUndefined();
     globalThis.fetch = originalFetch;
   });
@@ -125,7 +136,7 @@ describe('sdk/client', () => {
     globalThis.fetch = mockFetch;
     const { NuCRMClient, NuCRMError } = await import('@/lib/sdk/client');
     const client = new NuCRMClient({ apiKey: 'ak_test', baseUrl: 'https://crm.com', timeout: 100 });
-    await expect((client as any)._request('GET', '/slow')).rejects.toThrow(NuCRMError);
+    await expect((client as unknown as ClientInternals)._request('GET', '/slow')).rejects.toThrow(NuCRMError);
     globalThis.fetch = originalFetch;
   });
 
@@ -135,7 +146,7 @@ describe('sdk/client', () => {
     globalThis.fetch = mockFetch;
     const { NuCRMClient, NuCRMError } = await import('@/lib/sdk/client');
     const client = new NuCRMClient({ apiKey: 'ak_test', baseUrl: 'https://crm.com' });
-    await expect((client as any)._request('GET', '/offline')).rejects.toThrow(NuCRMError);
+    await expect((client as unknown as ClientInternals)._request('GET', '/offline')).rejects.toThrow(NuCRMError);
     globalThis.fetch = originalFetch;
   });
 });

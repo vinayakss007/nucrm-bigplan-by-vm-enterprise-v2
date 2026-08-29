@@ -65,9 +65,9 @@ describe('pagerduty', () => {
 
   it('includes optional fields in payload', async () => {
     process.env['PAGERDUTY_ROUTING_KEY'] = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6';
-    let requestBody: any;
-    const mockFetch = vi.fn().mockImplementation(async (url: string, opts: any) => {
-      requestBody = JSON.parse(opts.body);
+    let requestBody!: { payload: { summary: string; source: string; custom_details: unknown } };
+    const mockFetch = vi.fn().mockImplementation(async (url: string, opts: RequestInit) => {
+      requestBody = JSON.parse(opts.body as string);
       return { ok: true, json: vi.fn().mockResolvedValue({ status: 'success' }) };
     });
     const originalFetch = globalThis.fetch;

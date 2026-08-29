@@ -1,11 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockTransaction = vi.hoisted(() => vi.fn());
-const mockQuery = vi.hoisted(() => vi.fn());
-const mockInsert = vi.hoisted(() => vi.fn());
-const mockUpdate = vi.hoisted(() => vi.fn());
-const mockSelect = vi.hoisted(() => vi.fn());
-const mockExecute = vi.hoisted(() => vi.fn());
 
 const mockDb = vi.hoisted(() => ({
   query: { automations: { findMany: vi.fn() }, integrations: { findFirst: vi.fn() } },
@@ -29,7 +24,6 @@ describe('automation/engine transactions', () => {
 
   describe('evaluateAutomations', () => {
     it('wraps action execution + audit log in a transaction', async () => {
-      const actionFn = vi.fn();
       mockTransaction.mockImplementation(async (cb: (tx: typeof mockDb) => Promise<void>) => {
         await cb(mockDb);
       });
@@ -50,9 +44,7 @@ describe('automation/engine transactions', () => {
     });
 
     it('logs success run within the same transaction', async () => {
-      let capturedTx: typeof mockDb | null = null;
       mockTransaction.mockImplementation(async (cb: (tx: typeof mockDb) => Promise<void>) => {
-        capturedTx = mockDb;
         await cb(mockDb);
       });
       mockDb.query.automations.findMany.mockResolvedValue([

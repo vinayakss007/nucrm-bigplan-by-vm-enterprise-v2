@@ -5,12 +5,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // In-memory stand-in for lib/cache getOrSet: memoises per key.
 const store = new Map<string, unknown>();
-let getOrSetCalls = 0;
 let failMode = false;
 
 vi.mock('@/lib/cache/index', () => ({
   getOrSet: vi.fn(async (key: string, fn: () => Promise<unknown>) => {
-    getOrSetCalls++;
     if (failMode) throw new Error('cache down');
     if (store.has(key)) return store.get(key);
     const v = await fn();
@@ -35,7 +33,7 @@ describe('buildFilterKey', () => {
 });
 
 describe('cachedListCount', () => {
-  beforeEach(() => { store.clear(); getOrSetCalls = 0; failMode = false; });
+  beforeEach(() => { store.clear(); failMode = false; });
 
   it('computes once then serves from cache for the same key', async () => {
     const compute = vi.fn(async () => 42);

@@ -8,7 +8,7 @@ vi.mock('@/drizzle/db', () => {
       get(_t, prop) {
         if (prop === Symbol.toPrimitive || prop === 'then') return undefined;
         if (prop === 'transaction' && handleTransaction) {
-          return (cb: (tx: any) => Promise<any>) => cb(makeChain());
+          return (cb: (tx: unknown) => Promise<unknown>) => cb(makeChain());
         }
         return makeChain();
       },

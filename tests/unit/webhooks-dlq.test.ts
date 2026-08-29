@@ -29,7 +29,7 @@ vi.mock('@/drizzle/db', () => ({
         returning: vi.fn(() => Promise.resolve([{ id: 'dlq-1' }])),
       })),
     })),
-    transaction: vi.fn((cb: (tx: any) => Promise<any>) => cb({
+    transaction: vi.fn((cb: (tx: unknown) => Promise<unknown>) => cb({
       update: mockDlqTxUpdate,
       insert: mockDlqTxInsert,
     })),

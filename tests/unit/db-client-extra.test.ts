@@ -208,7 +208,7 @@ describe('db/client — query()', () => {
 
     it('retries on error with message containing ECONNREFUSED', async () => {
       const { query } = await import('@/lib/db/client');
-      const err: any = new Error('something ECONNREFUSED happened');
+      const err: Error & { code?: string } = new Error('something ECONNREFUSED happened');
       mocks.poolQuery.mockRejectedValueOnce(err).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
       await query('SELECT 1');
@@ -218,7 +218,7 @@ describe('db/client — query()', () => {
 
     it('retries on error with code 40001 (serialization failure)', async () => {
       const { query } = await import('@/lib/db/client');
-      const err: any = new Error('could not serialize access');
+      const err: Error & { code?: string } = new Error('could not serialize access');
       err.code = '40001';
       mocks.poolQuery.mockRejectedValueOnce(err).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
@@ -229,7 +229,7 @@ describe('db/client — query()', () => {
 
     it('retries on error with code 40P01 (deadlock detected)', async () => {
       const { query } = await import('@/lib/db/client');
-      const err: any = new Error('deadlock detected');
+      const err: Error & { code?: string } = new Error('deadlock detected');
       err.code = '40P01';
       mocks.poolQuery.mockRejectedValueOnce(err).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
@@ -240,7 +240,7 @@ describe('db/client — query()', () => {
 
     it('retries on error with code 08006 (connection failure)', async () => {
       const { query } = await import('@/lib/db/client');
-      const err: any = new Error('connection failure');
+      const err: Error & { code?: string } = new Error('connection failure');
       err.code = '08006';
       mocks.poolQuery.mockRejectedValueOnce(err).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
@@ -251,7 +251,7 @@ describe('db/client — query()', () => {
 
     it('retries on error with code 08001 (unable to connect)', async () => {
       const { query } = await import('@/lib/db/client');
-      const err: any = new Error('unable to connect');
+      const err: Error & { code?: string } = new Error('unable to connect');
       err.code = '08001';
       mocks.poolQuery.mockRejectedValueOnce(err).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
@@ -312,7 +312,7 @@ describe('db/client — query()', () => {
 
     it('does not retry on 42703 (undefined column)', async () => {
       const { query } = await import('@/lib/db/client');
-      const err: any = new Error('column "x" does not exist');
+      const err: Error & { code?: string } = new Error('column "x" does not exist');
       err.code = '42703';
       mocks.poolQuery.mockRejectedValue(err);
 
@@ -322,7 +322,7 @@ describe('db/client — query()', () => {
 
     it('does not retry on 23505 (unique violation)', async () => {
       const { query } = await import('@/lib/db/client');
-      const err: any = new Error('duplicate key value violates unique constraint');
+      const err: Error & { code?: string } = new Error('duplicate key value violates unique constraint');
       err.code = '23505';
       mocks.poolQuery.mockRejectedValue(err);
 
@@ -332,7 +332,7 @@ describe('db/client — query()', () => {
 
     it('does not retry on 42P01 (undefined table)', async () => {
       const { query } = await import('@/lib/db/client');
-      const err: any = new Error('relation "foo" does not exist');
+      const err: Error & { code?: string } = new Error('relation "foo" does not exist');
       err.code = '42P01';
       mocks.poolQuery.mockRejectedValue(err);
 
@@ -342,7 +342,7 @@ describe('db/client — query()', () => {
 
     it('does not retry on 22001 (string too long)', async () => {
       const { query } = await import('@/lib/db/client');
-      const err: any = new Error('value too long for type character varying');
+      const err: Error & { code?: string } = new Error('value too long for type character varying');
       err.code = '22001';
       mocks.poolQuery.mockRejectedValue(err);
 

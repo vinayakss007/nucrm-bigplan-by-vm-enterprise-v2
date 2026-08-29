@@ -13,7 +13,7 @@ describe('ai/sentiment', () => {
   describe('analyzeSentiment', () => {
     it('returns parsed sentiment result from AI response', async () => {
       const { chat } = await import('@/lib/ai/gateway');
-      (chat as any).mockResolvedValue({
+      vi.mocked(chat).mockResolvedValue({
         text: JSON.stringify({ score: 85, label: 'positive', confidence: 90, summary: 'Very positive tone' }),
       });
 
@@ -26,7 +26,7 @@ describe('ai/sentiment', () => {
 
     it('strips markdown code fences from AI response', async () => {
       const { chat } = await import('@/lib/ai/gateway');
-      (chat as any).mockResolvedValue({
+      vi.mocked(chat).mockResolvedValue({
         text: '```json\n{"score": 30, "label": "negative", "confidence": 75, "summary": "Negative sentiment"}\n```',
       });
 
@@ -38,7 +38,7 @@ describe('ai/sentiment', () => {
 
     it('uses fallback when AI response is invalid JSON', async () => {
       const { chat } = await import('@/lib/ai/gateway');
-      (chat as any).mockResolvedValue({ text: 'not json at all' });
+      vi.mocked(chat).mockResolvedValue({ text: 'not json at all' });
 
       const { analyzeSentiment } = await import('@/lib/ai/sentiment');
       const result = await analyzeSentiment('Terrible experience', 'tenant-1');
@@ -48,7 +48,7 @@ describe('ai/sentiment', () => {
 
     it('uses fallback when AI call throws', async () => {
       const { chat } = await import('@/lib/ai/gateway');
-      (chat as any).mockRejectedValue(new Error('AI gateway error'));
+      vi.mocked(chat).mockRejectedValue(new Error('AI gateway error'));
 
       const { analyzeSentiment } = await import('@/lib/ai/sentiment');
       const result = await analyzeSentiment('great very happy excellent perfect', 'tenant-1');
@@ -57,7 +57,7 @@ describe('ai/sentiment', () => {
 
     it('returns neutral for mixed sentiment text via fallback', async () => {
       const { chat } = await import('@/lib/ai/gateway');
-      (chat as any).mockRejectedValue(new Error('error'));
+      vi.mocked(chat).mockRejectedValue(new Error('error'));
 
       const { analyzeSentiment } = await import('@/lib/ai/sentiment');
       const result = await analyzeSentiment('The product is okay', 'tenant-1');
@@ -66,7 +66,7 @@ describe('ai/sentiment', () => {
 
     it('clamps score to 0-100 range', async () => {
       const { chat } = await import('@/lib/ai/gateway');
-      (chat as any).mockResolvedValue({
+      vi.mocked(chat).mockResolvedValue({
         text: JSON.stringify({ score: 999, label: 'positive', confidence: 200, summary: 'Out of range' }),
       });
 

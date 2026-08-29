@@ -232,7 +232,7 @@ describe('GET /api/tenant/reports/builder', () => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const invoices = json.entities.find((e: any) => e.id === 'invoices');
-    expect(invoices.metricOptions.some((m: any) => m.field === 'total_amount')).toBe(true);
+    expect(invoices.metricOptions.some((m: { field: string }) => m.field === 'total_amount')).toBe(true);
   });
 });
 
