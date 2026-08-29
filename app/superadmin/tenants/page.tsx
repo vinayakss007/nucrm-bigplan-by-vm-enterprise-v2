@@ -11,6 +11,7 @@ import { Building2, Plus, Search, X, LogIn, Trash2, Loader2, Crown, Mail,
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen, ConfirmDialog, ConfirmWithInput } from '@/components/ui/confirm-dialog';
+import { PromptDialog } from '@/components/ui/prompt-dialog';
 import TenantFeaturesPanel from '@/components/superadmin/tenant-features-panel';
 
 const STATUS_COLORS: Record<string,string> = {
@@ -256,6 +257,7 @@ export default function SuperAdminTenantsPage() {
   const [saving, setSaving]       = useState(false);
   const [suspendTarget, setSuspendTarget] = useState<{id: string; name: string} | null>(null);
   const [deleteTarget, setDeleteTarget]   = useState<{id: string; name: string} | null>(null);
+  const [extendTarget, setExtendTarget]   = useState<{id: string; name: string} | null>(null);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-muted/30 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500";
   const lbl = "block text-xs font-medium text-muted-foreground mb-1";
 
@@ -301,10 +303,17 @@ export default function SuperAdminTenantsPage() {
     });
   };
   const extendTrial = async (id:string) => {
-    const days = prompt('Extend trial by how many days?','14'); if(!days) return;
+    const tenant = tenants.find(t=>t.id===id);
+    setExtendTarget({id, name: tenant?.name || ''});
+  };
+  const executeExtendTrial = async (value:string) => {
+    if (!extendTarget) return;
+    const days = parseInt(value, 10);
+    if (!Number.isInteger(days) || days <= 0) { toast.error('Enter a positive whole number of days'); return; }
+    const id = extendTarget.id;
     const tenant = tenants.find(t=>t.id===id);
     const base = new Date(Math.max(Date.now(), new Date(tenant?.trial_ends_at||Date.now()).getTime()));
-    base.setDate(base.getDate() + parseInt(days));
+    base.setDate(base.getDate() + days);
     const res = await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,trial_ends_at:base.toISOString(),status:'trialing'})});
     if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error || 'Failed to extend trial'); return; }
     toast.success(`Trial extended ${days} days`); load();
@@ -369,6 +378,19 @@ export default function SuperAdminTenantsPage() {
         confirmLabel="Permanently Delete"
         confirmText={deleteTarget?.name || ''}
         onConfirm={executeDelete}
+      />
+
+      {/* Themed extend-trial prompt (#1114): replaces native prompt() */}
+      <PromptDialog
+        open={!!extendTarget}
+        onOpenChange={(open) => { if (!open) setExtendTarget(null); }}
+        title={`Extend trial for "${extendTarget?.name}"`}
+        message="Extend trial by how many days?"
+        placeholder="14"
+        confirmLabel="Extend"
+        validate={(v) => { const n = Number(v); return Number.isInteger(n) && n > 0; }}
+        invalidMessage="Enter a positive whole number of days"
+        onConfirm={executeExtendTrial}
       />
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
