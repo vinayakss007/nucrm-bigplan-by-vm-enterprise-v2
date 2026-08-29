@@ -43,12 +43,22 @@ export default function PipelinesSettingsPage() {
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = useCallback(async () => {
-    const r = await fetch('/api/tenant/pipelines');
-    if (r.ok) { const d = await r.json(); setPipelines(d.data??[]); if (!selected && d.data?.length) setSelected(d.data[0]); }
-    setLoading(false);
+  const load = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const r = await fetch('/api/tenant/pipelines', { signal });
+      if (signal?.aborted) return;
+      if (r.ok) { const d = await r.json(); if (signal?.aborted) return; setPipelines(d.data??[]); if (!selected && d.data?.length) setSelected(d.data[0]); }
+      setLoading(false);
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
+    }
   }, [selected]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   const createPipeline = async () => {
     if (!newName.trim()) return;

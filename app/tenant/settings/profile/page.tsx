@@ -22,11 +22,12 @@ export default function ProfileSettingsPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   useEffect(() => {
+  const controller = new AbortController();
   let ignore = false;
-    fetch('/api/tenant/me').then(r=>r.json()).then(d=>{ if (ignore) return;
+    fetch('/api/tenant/me', { signal: controller.signal }).then(r=>r.json()).then(d=>{ if (ignore) return;
       if(d.user){ setUser(d.user); setProfile({ full_name:d.user.full_name||'', phone:d.user.phone||'', timezone:d.user.timezone||'UTC', avatar_url:d.user.avatar_url||'' }); }
-    });
-    return () => { ignore = true; };
+    }).catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; });
+    return () => { ignore = true; controller.abort(); };
 }, []);
 
   const saveProfile = async (e: React.FormEvent) => {

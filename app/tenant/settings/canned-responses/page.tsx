@@ -31,23 +31,31 @@ export default function CannedResponsesPage() {
   const [form, setForm] = useState({ category: 'general', title: '', content: '', shortcut: '' });
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (categoryFilter) params.set('category', categoryFilter);
       if (search) params.set('search', search);
-      const res = await fetch(`/api/tenant/canned-responses?${params}`);
+      const res = await fetch(`/api/tenant/canned-responses?${params}`, { signal });
       if (res.ok) {
         const d = await res.json();
+        if (signal?.aborted) return;
         setResponses(d.data ?? []);
       }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [categoryFilter, search]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   const startEdit = (r: CannedResponse) => {
     setEditing(r);

@@ -60,17 +60,20 @@ export default function AIProvidersPage() {
   const [newProviderUrl, setNewProviderUrl] = useState('');
 
   useEffect(() => {
+    const controller = new AbortController();
     let ignore = false;
     Promise.all([
-      fetch('/api/tenant/admin/ai-providers').then(r => r.ok ? r.json() : { providers: {} }),
-      fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
+      fetch('/api/tenant/admin/ai-providers', { signal: controller.signal }).then(r => r.ok ? r.json() : { providers: {} }),
+      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ]).then(([d, me]: any[]) => { if (ignore) return;
       setData(d.providers ?? {} );
       setOriginal(d.providers ?? {});
       setIsAdmin(me?.is_admin ?? false);
-    }).finally(() => setLoading(false));
-    return () => { ignore = true; };
+    }).catch(e => {
+      if ((e as Error)?.name === 'AbortError') return;
+    }).finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; controller.abort(); };
   }, []);
 
   const dirty = useMemo(() => JSON.stringify(data) !== JSON.stringify(original), [data, original]);

@@ -46,15 +46,17 @@ export default function PortalSettingsPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   useEffect(() => {
+  const controller = new AbortController();
   let ignore = false;
     Promise.all([
-      fetch('/api/tenant/portal/config').then(r => r.json()),
-      fetch('/api/tenant/portal/clients').then(r => r.json()),
+      fetch('/api/tenant/portal/config', { signal: controller.signal }).then(r => r.json()),
+      fetch('/api/tenant/portal/clients', { signal: controller.signal }).then(r => r.json()),
     ]).then(([cfg, clt]) => { if (ignore) return; 
       if (cfg.data) setConfig(cfg.data);
       setClients(clt.data || []);
-     } ).finally(() => setLoading(false));
-    return () => { ignore = true; };
+     } ).catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; controller.abort(); };
 }, []);
 
   const saveConfig = async () => {

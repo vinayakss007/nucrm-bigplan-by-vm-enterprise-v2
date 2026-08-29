@@ -59,16 +59,19 @@ export default function SubscriptionPage() {
   const [cancelFeedback, setCancelFeedback] = useState('');
 
   useEffect(() => {
+    const controller = new AbortController();
     Promise.all([
-      fetch('/api/tenant/billing/subscription').then(r => r.json()),
-      fetch('/api/tenant/plans').then(r => r.json()).catch(() => ({ data: [] })),
-      fetch('/api/tenant/workspace').then(r => r.json()),
+      fetch('/api/tenant/billing/subscription', { signal: controller.signal }).then(r => r.json()),
+      fetch('/api/tenant/plans', { signal: controller.signal }).then(r => r.json()).catch(() => ({ data: [] })),
+      fetch('/api/tenant/workspace', { signal: controller.signal }).then(r => r.json()),
     ]).then(([sub, pl, ws]) => {
+      if (controller.signal.aborted) return;
       setSubscription(sub.data);
       setPlans(pl.data || []);
       setWorkspace(ws.data);
       setLoading(false);
-    });
+    }).catch((e) => { if ((e as Error)?.name === 'AbortError') return; throw e; });
+    return () => controller.abort();
   }, []);
 
   const handleUpgrade = async (planId: string) => {

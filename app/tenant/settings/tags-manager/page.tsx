@@ -25,19 +25,29 @@ export default function TagsManagerPage() {
   const [mergeTarget, setMergeTarget] = useState('');
   const [mergeOpen, setMergeOpen] = useState(false);
 
-  const reload = async () => {
+  const reload = async (signal?: AbortSignal) => {
     setLoading(true);
-    const res = await fetch('/api/tenant/admin/tags');
-    if (res.ok) {
-      const d = await res.json();
-      setTags(d.tags ?? []);
+    try {
+      const res = await fetch('/api/tenant/admin/tags', { signal });
+      if (res.ok) {
+        const d = await res.json();
+        if (signal?.aborted) return;
+        setTags(d.tags ?? []);
+      }
+      setLoading(false);
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
     }
-    setLoading(false);
   };
 
   useEffect(() => {
-    fetch('/api/tenant/me').then(r => r.json()).then(d => setIsAdmin(d?.is_admin ?? false));
-    reload();
+    const controller = new AbortController();
+    fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.json())
+      .then(d => { if (controller.signal.aborted) return; setIsAdmin(d?.is_admin ?? false); })
+      .catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; });
+    reload(controller.signal);
+    return () => controller.abort();
   }, []);
 
   const q = query.trim().toLowerCase();
@@ -146,7 +156,7 @@ export default function TagsManagerPage() {
           />
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={reload} disabled={loading}
+          <button onClick={() => reload()} disabled={loading}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs hover:bg-accent transition-colors disabled:opacity-50">
             <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
             Refresh

@@ -21,14 +21,21 @@ export default function AIAutoFollowupPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    fetch('/api/tenant/admin/ai-auto-followup', { cache: 'no-store' })
+    const controller = new AbortController();
+    fetch('/api/tenant/admin/ai-auto-followup', { cache: 'no-store', signal: controller.signal })
       .then(async r => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
         return r.json();
       })
       .then(data => setSettings({ autoAiEnabled: data.autoAiEnabled ?? false }))
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch(e => {
+        if (e?.name === 'AbortError') return;
+        setError(e.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, []);
 
   async function toggle() {

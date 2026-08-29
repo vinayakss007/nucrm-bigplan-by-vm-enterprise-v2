@@ -25,8 +25,11 @@ export default function SettingsMobilePicker() {
   const [query, setQuery] = useState('');
 
   useEffect(() => {
-    fetch('/api/tenant/me').then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => setIsAdmin(d.is_admin ?? false)).catch((e) => console.error('[mobile-picker] admin check failed:', e));
+    const controller = new AbortController();
+    fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => { if (controller.signal.aborted) return; setIsAdmin(d.is_admin ?? false); })
+      .catch((e) => { if ((e as Error)?.name === 'AbortError') return; console.error('[mobile-picker] admin check failed:', e); });
+    return () => controller.abort();
   }, []);
 
   // Close sheet on route change

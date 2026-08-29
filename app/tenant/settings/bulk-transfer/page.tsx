@@ -45,11 +45,12 @@ export default function BulkTransferPage() {
 
   // Initial loads
   useEffect(() => {
+  const controller = new AbortController();
   let ignore = false;
     Promise.all([
-      fetch('/api/tenant/members').then(r => r.ok ? r.json() : { data: [] }),
-      fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
-      fetch('/api/tenant/teams').then(r => r.ok ? r.json() : { data: [] }),
+      fetch('/api/tenant/members', { signal: controller.signal }).then(r => r.ok ? r.json() : { data: [] }),
+      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
+      fetch('/api/tenant/teams', { signal: controller.signal }).then(r => r.ok ? r.json() : { data: [] }),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ]).then(([mem, me, tms]: any[]) => { if (ignore) return; 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,18 +59,22 @@ export default function BulkTransferPage() {
        } )));
       setMe({ id: me?.user?.id ?? '', is_admin: me?.is_admin ?? false });
       setTeams(tms.data ?? []);
-    }).finally(() => setLoadingMembers(false));
-    return () => { ignore = true; };
+    }).catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
+      .finally(() => { if (!ignore) setLoadingMembers(false); });
+    return () => { ignore = true; controller.abort(); };
 }, []);
 
   // Preview counts whenever from-user / only-open changes
   useEffect(() => {
     if (!fromUser) { setCounts(null); return; }
+    const controller = new AbortController();
     setPreviewLoading(true);
-    fetch(`/api/tenant/admin/bulk-transfer?from_user_id=${fromUser}&only_open=${onlyOpen}`)
+    fetch(`/api/tenant/admin/bulk-transfer?from_user_id=${fromUser}&only_open=${onlyOpen}`, { signal: controller.signal })
       .then(r => r.ok ? r.json() : { counts: null })
-      .then(d => setCounts(d.counts ?? null))
-      .finally(() => setPreviewLoading(false));
+      .then(d => { if (controller.signal.aborted) return; setCounts(d.counts ?? null); })
+      .catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
+      .finally(() => { if (!controller.signal.aborted) setPreviewLoading(false); });
+    return () => controller.abort();
   }, [fromUser, onlyOpen]);
 
   const totalSelected = useMemo(() => {

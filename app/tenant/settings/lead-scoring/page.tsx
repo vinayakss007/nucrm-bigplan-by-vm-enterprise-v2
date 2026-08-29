@@ -38,19 +38,28 @@ export default function LeadScoringRulesPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [recomputeResult, setRecomputeResult] = useState<{ count: number } | null>(null);
 
-  function load() {
+  function load(signal?: AbortSignal) {
     setLoading(true);
     setError(null);
-    fetch('/api/tenant/admin/lead-scoring', { cache: 'no-store' })
+    fetch('/api/tenant/admin/lead-scoring', { cache: 'no-store', signal })
       .then(async r => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
         return r.json();
       })
       .then(d => setRules(d.rules))
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch(e => {
+        if (e?.name === 'AbortError') return;
+        setError(e.message);
+      })
+      .finally(() => {
+        if (!signal?.aborted) setLoading(false);
+      });
   }
-  useEffect(load, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   async function save(r: Partial<Rule>) {
     setBusy('save');
@@ -127,7 +136,7 @@ export default function LeadScoringRulesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={load} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm">
+          <button onClick={() => load()} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm">
             <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} /> Refresh
           </button>
           <button

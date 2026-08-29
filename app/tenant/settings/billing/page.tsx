@@ -55,10 +55,13 @@ export default function BillingPage() {
       toast.success('Payment successful! Your plan has been upgraded.');
       window.history.replaceState({}, '', '/tenant/settings/billing');
     }
+    const controller = new AbortController();
     Promise.all([
-      fetch('/api/tenant/workspace').then(r=>r.json()),
-      fetch('/api/tenant/plans').then(r=>r.json()).catch(()=>({data:[]})),
-    ]).then(([ws, pl]) => { setWorkspace(ws.data); setPlans(pl.data||[]); setLoading(false); });
+      fetch('/api/tenant/workspace', { signal: controller.signal }).then(r=>r.json()),
+      fetch('/api/tenant/plans', { signal: controller.signal }).then(r=>r.json()).catch(()=>({data:[]})),
+    ]).then(([ws, pl]) => { if (controller.signal.aborted) return; setWorkspace(ws.data); setPlans(pl.data||[]); setLoading(false); })
+      .catch((e) => { if ((e as Error)?.name === 'AbortError') return; throw e; });
+    return () => controller.abort();
   }, []);
 
   const startCheckout = async (planId: string) => {

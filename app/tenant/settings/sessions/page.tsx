@@ -17,10 +17,14 @@ export default function SessionsPage() {
   const [loading, setLoading] = useState(true);
   const [revoking, setRevoking] = useState<string|null>(null);
 
-  const load = () => {
-    fetch('/api/user/sessions').then(r=>r.json()).then(d=>{setSessions(d.data??[]); setLoading(false);});
+  const load = (signal?: AbortSignal) => {
+    fetch('/api/user/sessions', { signal }).then(r=>r.json()).then(d=>{if(signal?.aborted)return;setSessions(d.data??[]); setLoading(false);}).catch(e=>{if(e?.name==='AbortError')return;throw e;});
   };
-  useEffect(load, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const revoke = async (sessionId: string) => {
     await confirmThen('Revoke this session? The device will be signed out.', async () => {

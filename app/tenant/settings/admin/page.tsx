@@ -30,15 +30,17 @@ export default function OrganizationAdminPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [usage, setUsage] = useState<any>(cachedData?.usage || {});
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
       const [orgRes, membersRes] = await Promise.all([
-        fetch('/api/tenant/workspace'),
-        fetch('/api/tenant/members')
+        fetch('/api/tenant/workspace', { signal }),
+        fetch('/api/tenant/members', { signal })
       ]);
 
       const orgData = await orgRes.json();
       const membersData = await membersRes.json();
+
+      if (signal?.aborted) return;
 
       const data = {
         org: orgData,
@@ -55,14 +57,16 @@ export default function OrganizationAdminPage() {
       // Cache for 5 minutes
       setInCache(cacheKey, data, { ttl: 5 * 60 * 1000 });
       setLoading(false);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       toast.error('Failed to load organization data');
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    load();
+    const controller = new AbortController();
+    load(controller.signal);
     
     // Auto-refresh every 3 minutes
     const interval = setInterval(() => {
@@ -76,7 +80,10 @@ export default function OrganizationAdminPage() {
       }
     }, 3 * 60 * 1000);
     
-    return () => clearInterval(interval);
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [load]);
 
   if (loading) {

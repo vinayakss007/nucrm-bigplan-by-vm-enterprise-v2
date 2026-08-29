@@ -32,20 +32,28 @@ export default function CSATDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/tenant/csat/stats?days=${days}`);
+      const res = await fetch(`/api/tenant/csat/stats?days=${days}`, { signal });
       if (res.ok) {
         const d = await res.json();
+        if (signal?.aborted) return;
         setStats(d.data);
       }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [days]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   const emojis = ['😞', '😕', '😐', '😊', '😄'];
 

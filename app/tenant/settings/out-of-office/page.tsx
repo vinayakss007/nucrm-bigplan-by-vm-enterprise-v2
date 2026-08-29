@@ -36,11 +36,12 @@ export default function OutOfOfficePage() {
   const [meId, setMeId] = useState<string | null>(null);
 
   useEffect(() => {
+  const controller = new AbortController();
   let ignore = false;
     Promise.all([
-      fetch('/api/user/out-of-office').then(r => r.ok ? r.json() : { out_of_office: DEFAULT }),
-      fetch('/api/tenant/members').then(r => r.ok ? r.json() : { data: [] }),
-      fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
+      fetch('/api/user/out-of-office', { signal: controller.signal }).then(r => r.ok ? r.json() : { out_of_office: DEFAULT }),
+      fetch('/api/tenant/members', { signal: controller.signal }).then(r => r.ok ? r.json() : { data: [] }),
+      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ]).then(([oooRes, members, me]: any[]) => { if (ignore) return; 
       setOoo(oooRes.out_of_office ?? DEFAULT);
@@ -51,8 +52,9 @@ export default function OutOfOfficePage() {
        } ));
       setMembers(mapped);
       setMeId(me?.user?.id ?? null);
-    }).finally(() => setLoading(false));
-    return () => { ignore = true; };
+    }).catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; controller.abort(); };
 }, []);
 
   const dirty = JSON.stringify(ooo) !== JSON.stringify(original);

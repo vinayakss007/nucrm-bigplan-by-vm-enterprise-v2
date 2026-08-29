@@ -43,27 +43,35 @@ export default function WebhookLogsPage() {
   const [eventTypes, setEventTypes] = useState<string[]>([]);
   const limit = 20;
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (eventFilter) params.set('event', eventFilter);
-      const res = await fetch(`/api/tenant/webhooks/logs?${params}`);
+      const res = await fetch(`/api/tenant/webhooks/logs?${params}`, { signal });
       if (res.ok) {
         const d = await res.json();
+        if (signal?.aborted) return;
         setLogs(d.data ?? []);
         setTotal(d.total ?? 0);
         // Extract unique event types for filter dropdown
         const events = [...new Set((d.data ?? []).map((l: WebhookLog) => l.eventType).filter(Boolean))] as string[];
         if (events.length) setEventTypes(events);
       }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [page, statusFilter, eventFilter]);
 
-  useEffect(() => { load(); }, [page, statusFilter, eventFilter, load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [page, statusFilter, eventFilter, load]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 

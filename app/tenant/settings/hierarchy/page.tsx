@@ -41,21 +41,29 @@ export default function HierarchyPage() {
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/tenant/hierarchy');
+      const res = await fetch('/api/tenant/hierarchy', { signal });
       if (res.ok) {
         const d = await res.json();
+        if (signal?.aborted) return;
         setChildren(d.data?.children ?? []);
         setParents(d.data?.parents ?? []);
       }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const openCreate = () => {
     setForm({ childTenantId: '', relationship: 'subsidiary', permissions: [] });

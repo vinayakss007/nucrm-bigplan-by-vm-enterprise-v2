@@ -41,14 +41,15 @@ export default function SettingsIndex() {
   const [summary, setSummary] = useState<{ configured: number; default: number; attention: number; unknown: number }>({ configured: 0, default: 0, attention: 0, unknown: 0 });
 
   useEffect(() => {
-  let _ignore = false;
-    fetch('/api/tenant/me').then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => setIsAdmin(d.is_admin ?? false)).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
-    fetch('/api/tenant/settings-status').then(r => r.ok ? r.json() : null)
-      .then(d => { if (d && !_ignore) { setStatuses(d.statuses ?? {}); setSummary(d.summary ?? { configured: 0, default: 0, attention: 0, unknown: 0 }); } })
-      .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+  const controller = new AbortController();
+    fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => { if (controller.signal.aborted) return; setIsAdmin(d.is_admin ?? false); })
+      .catch((err) => { if ((err as Error)?.name === 'AbortError') return; logError({ error: err, context: "async-catch:[context]" }); });
+    fetch('/api/tenant/settings-status', { signal: controller.signal }).then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && !controller.signal.aborted) { setStatuses(d.statuses ?? {}); setSummary(d.summary ?? { configured: 0, default: 0, attention: 0, unknown: 0 }); } })
+      .catch((err) => { if ((err as Error)?.name === 'AbortError') return; logError({ error: err, context: "async-catch:[context]" }); });
      
-    return () => { _ignore = true; };
+    return () => { controller.abort(); };
 }, []);
 
   const q = query.trim().toLowerCase();
