@@ -45,6 +45,7 @@
     "check": "npm run typecheck && npm run lint && npm run test:unit && echo '✅ All checks passed'",
     "premerge": "bash scripts/pre-merge-check.sh",
     "smoke": "bash scripts/smoke-test.sh",
+    "launch-gate": "bash scripts/launch-gate.sh",
     "up": "bash scripts/bootstrap.sh",
     "start-clean": "bash scripts/start-clean.sh",
     "db:generate": "npx tsx scripts/generate-migration.ts",
