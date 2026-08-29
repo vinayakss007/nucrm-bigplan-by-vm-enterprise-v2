@@ -316,4 +316,22 @@ describe('api/schemas', () => {
     const { createNoteSchema } = await import('@/lib/api/schemas');
     expect(() => createNoteSchema.parse({ content: 'x', type: 'bogus' })).toThrow();
   });
+
+  // #1072 — POST /api/tenant/backup now validates its body with createBackupSchema.
+  it('createBackupSchema defaults backup_type to full when omitted', async () => {
+    const { createBackupSchema } = await import('@/lib/api/schemas');
+    const result = createBackupSchema.parse({});
+    expect(result.backup_type).toBe('full');
+  });
+
+  it('createBackupSchema accepts the allowed backup_type values', async () => {
+    const { createBackupSchema } = await import('@/lib/api/schemas');
+    expect(createBackupSchema.parse({ backup_type: 'schema' }).backup_type).toBe('schema');
+    expect(createBackupSchema.parse({ backup_type: 'selective' }).backup_type).toBe('selective');
+  });
+
+  it('createBackupSchema rejects an out-of-enum backup_type', async () => {
+    const { createBackupSchema } = await import('@/lib/api/schemas');
+    expect(() => createBackupSchema.parse({ backup_type: 'bogus' })).toThrow();
+  });
 });

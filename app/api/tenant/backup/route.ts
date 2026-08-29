@@ -9,7 +9,8 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { backupRecords } from '@/drizzle/schema';
 import { desc } from 'drizzle-orm';
-import { readJsonBody } from '@/lib/api/validate';
+import { readJsonBody, validateBody } from '@/lib/api/validate';
+import { createBackupSchema } from '@/lib/api/schemas';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -75,7 +76,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     let body;
     try { body = await readJsonBody(request); } catch (err) { console.error('[backup] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
-    const backupType = body.backup_type === 'schema' ? 'schema' : 'full';
+
+    // Validate the request body (#1072) — bounds backup_type to the allowed
+    // enum and rejects unexpected shapes with a 400 before triggering pg_dump.
+    const validated = validateBody(createBackupSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const backupType = validated.data.backup_type === 'schema' ? 'schema' : 'full';
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const controller = new AbortController();
