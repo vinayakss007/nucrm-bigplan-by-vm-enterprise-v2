@@ -17,9 +17,18 @@ const TYPE_CFG: Record<string,{badge:string;border:string}> = {
   critical:    { badge:'bg-red-500/15 text-red-400',      border:'border-red-500/20' },
 };
 
+interface Announcement {
+  id: string;
+  title?: string | null;
+  content?: string | null;
+  type?: string | null;
+  target?: string | null;
+  is_active?: boolean | null;
+  ends_at?: string | null;
+}
+
 export default function AnnouncementsPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [items, setItems]   = useState<any[]>([]);
+  const [items, setItems]   = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm]     = useState({ title:'', content:'', type:'info', target:'all', is_active:true, ends_at:'' });
@@ -127,7 +136,7 @@ export default function AnnouncementsPage() {
       ) : (
         <div className="space-y-3">
           {items.map(a => {
-            const cfg = TYPE_CFG[a.type] || TYPE_CFG['info'];
+            const cfg = TYPE_CFG[a.type ?? 'info'] || TYPE_CFG['info'];
             if (!cfg) return null;
             return (
               <div key={a.id} className={cn('rounded-xl border p-4 transition-all', cfg.border, a.is_active?'bg-white/[0.03]':'bg-white/[0.01] opacity-60')}>

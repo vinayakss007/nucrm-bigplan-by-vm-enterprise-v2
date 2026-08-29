@@ -116,9 +116,8 @@ export default function TenantSettingsAuditPage() {
   const updateLoginPolicy = (section: string, key: string, value: string | number | boolean) => {
     setEditedSettings(prev => {
       if (!prev) return prev;
-      const lp = prev.login_policy ?? {};
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sectionData = (lp as any)[section] ?? {};
+      const lp = (prev.login_policy ?? {}) as Record<string, Record<string, unknown> | undefined>;
+      const sectionData = lp[section] ?? {};
       return {
         ...prev,
         login_policy: { ...lp, [section]: { ...sectionData, [key]: value } },

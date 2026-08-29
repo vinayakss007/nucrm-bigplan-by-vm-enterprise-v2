@@ -21,16 +21,53 @@ import {
   Loader2,
 } from 'lucide-react';
 
+interface TokenBudget {
+  id: string;
+  service?: string | null;
+  current_month_cents?: number | null;
+  monthly_budget_cents?: number | null;
+  hard_cap_enabled?: boolean | null;
+  alert_at_50pct?: boolean | null;
+  alert_at_80pct?: boolean | null;
+  alert_at_100pct?: boolean | null;
+}
+
+interface TopTenant {
+  tenant_id: string;
+  tenant_name?: string | null;
+  openai_cents?: number | null;
+  whatsapp_cents?: number | null;
+  voice_cents?: number | null;
+  total_cents?: number | null;
+  pct_of_total?: number | null;
+}
+
+interface UsageAlert {
+  id: string;
+  acknowledged?: boolean | null;
+  alert_type: string;
+  target_type?: string | null;
+  service?: string | null;
+  message?: string | null;
+  created_at: string;
+}
+
+interface TokenApiKey {
+  id: string;
+  service?: string | null;
+  key_prefix?: string | null;
+  is_primary?: boolean | null;
+  is_active?: boolean | null;
+  current_month_cents?: number | null;
+  last_used_at?: string | null;
+}
+
 export default function SuperAdminTokenControl() {
   const [activeTab, setActiveTab] = useState<'budgets' | 'tenants' | 'keys' | 'alerts'>('budgets');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [budgets, setBudgets] = useState<any[]>([]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [topTenants, setTopTenants] = useState<any[]>([]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [alerts, setAlerts] = useState<any[]>([]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [apiKeys, setApiKeys] = useState<any[]>([]);
+  const [budgets, setBudgets] = useState<TokenBudget[]>([]);
+  const [topTenants, setTopTenants] = useState<TopTenant[]>([]);
+  const [alerts, setAlerts] = useState<UsageAlert[]>([]);
+  const [apiKeys, setApiKeys] = useState<TokenApiKey[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -154,8 +191,10 @@ export default function SuperAdminTokenControl() {
       {!loading && activeTab === 'budgets' && (
         <div className="space-y-4">
           {budgets.map(budget => {
-            const pct = budget.monthly_budget_cents > 0
-              ? Math.min(100, (budget.current_month_cents / budget.monthly_budget_cents) * 100)
+            const monthlyBudget = budget.monthly_budget_cents ?? 0;
+            const currentMonth = budget.current_month_cents ?? 0;
+            const pct = monthlyBudget > 0
+              ? Math.min(100, (currentMonth / monthlyBudget) * 100)
               : 0;
             const isWarning = pct >= 80;
             const isDanger = pct >= 100;
@@ -180,8 +219,8 @@ export default function SuperAdminTokenControl() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-lg font-bold text-white">{formatCurrency(budget.current_month_cents)}</p>
-                    <p className="text-xs text-gray-500">of {formatCurrency(budget.monthly_budget_cents)}</p>
+                    <p className="text-lg font-bold text-white">{formatCurrency(currentMonth)}</p>
+                    <p className="text-xs text-gray-500">of {formatCurrency(monthlyBudget)}</p>
                   </div>
                 </div>
 
