@@ -11,6 +11,7 @@
  * dropped straight into the tenant layout without a client/server
  * boundary cost.
  */
+import { headers } from 'next/headers';
 import { brandingToCssVars, type TenantBranding } from '@/lib/branding';
 
 interface BrandingProviderProps {
@@ -18,7 +19,7 @@ interface BrandingProviderProps {
   children: React.ReactNode;
 }
 
-export default function BrandingProvider({ branding, children }: BrandingProviderProps) {
+export default async function BrandingProvider({ branding, children }: BrandingProviderProps) {
   const vars = brandingToCssVars(branding);
   // Build "key:value;" pairs without inline JSX.style[] noise so the markup
   // stays small and the colour values are easy to scan in dev tools.
@@ -26,9 +27,14 @@ export default function BrandingProvider({ branding, children }: BrandingProvide
     .map(([k, v]) => `${k}:${v};`)
     .join('');
 
+  // Per-request CSP nonce set by proxy.ts (#1070). Passed to the inline
+  // <style> as defense-in-depth; style-src still allows 'unsafe-inline'.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
+
   return (
     <div data-brand-root="true" style={{ display: 'contents' }}>
       <style
+        nonce={nonce}
         dangerouslySetInnerHTML={{
           __html: `[data-brand-root]{${styleString}}`,
         }}
