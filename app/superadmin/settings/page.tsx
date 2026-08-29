@@ -12,6 +12,7 @@ import {
   Database, Zap, Eye, EyeOff,
 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import { clientLogError } from '@/lib/client-logger';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
@@ -60,7 +61,7 @@ export default function SuperAdminSettingsPage() {
         setS(prev => ({...prev, ...nonSecret}));
       }
       setLoading(false);
-    }).catch((err) => { if (err instanceof DOMException && err.name === 'AbortError') return; console.error('[settings] fetch failed', err); setLoading(false); });
+    }).catch((err) => { if (err instanceof DOMException && err.name === 'AbortError') return; clientLogError('settings:fetch', err); setLoading(false); });
     return () => abort.abort();
   }, []);
 

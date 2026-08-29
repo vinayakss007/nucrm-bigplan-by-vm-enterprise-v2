@@ -6,6 +6,7 @@
 'use client';
 
 import { logError } from '@/lib/errors-client';
+import { clientLogError } from '@/lib/client-logger';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { useState, useRef, useEffect } from 'react';
@@ -146,7 +147,7 @@ export default function SelectiveRestorePage() {
       const data = await res.json();
       if (data.backups) setBackups(data.backups);
     } catch (err) {
-      console.error('Failed to load backups:', err);
+      clientLogError('selective-restore:load-backups', err);
     }
   };
 
@@ -156,7 +157,7 @@ export default function SelectiveRestorePage() {
       const data = await res.json();
       if (data.logs) setRestoreLogs(data.logs);
     } catch (err) {
-      console.error('Failed to load restore logs:', err);
+      clientLogError('selective-restore:load-logs', err);
     }
   };
 
@@ -248,7 +249,7 @@ export default function SelectiveRestorePage() {
         setTenantUsers([]);
       }
     } catch (err) {
-      console.error('Failed to load tenant users:', err);
+      clientLogError('selective-restore:load-tenant-users', err);
       setTenantUsers([]);
     } finally {
       setLoadingUsers(false);
@@ -383,7 +384,7 @@ export default function SelectiveRestorePage() {
         await fetch(`/api/superadmin/selective-restore/backups?id=${backupId}`, { method: 'DELETE' });
         loadBackups();
       } catch (err) {
-        console.error('Delete failed:', err);
+        clientLogError('selective-restore:delete', err);
       }
     });
   };

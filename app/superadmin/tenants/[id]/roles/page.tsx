@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Shield, Plus, Edit, Trash2, Save, Lock, ChevronDown, Check, Crown, X, Loader2 } from 'lucide-react';
+import { clientLogError } from '@/lib/client-logger';
 import { PERMISSIONS, PERMISSION_CATEGORIES } from '@/lib/permissions/definitions';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
@@ -44,7 +45,7 @@ export default function TenantRolesPage() {
       setTenant(tenantRes.data || tenantRes);
       setRoles(rolesRes.data || []);
     } catch (error) {
-      console.error('Failed to load', error);
+      clientLogError('tenant-roles:load', error);
       toast.error('Failed to load tenant data');
     } finally {
       setLoading(false);

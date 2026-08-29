@@ -7,6 +7,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { clientLogError } from '@/lib/client-logger';
 import {
   Crown, Loader2, Globe, Lock, ListChecks, ArrowLeft, Clock, ShieldCheck, KeyRound, AlertCircle, Eye, Save, Pencil,
 } from 'lucide-react';
@@ -65,7 +66,7 @@ export default function TenantSettingsAuditPage() {
         setData(d);
         setEditedSettings(JSON.parse(JSON.stringify(d.settings)));
       })
-      .catch((err) => { console.error('[tenant-settings] fetch failed', err); setData({ tenant: { name: '', slug: '', plan_id: '', status: '', active_members: 0, current_users: 0, current_contacts: 0, current_deals: 0 }, settings: {}, error: true }); })
+      .catch((err) => { clientLogError('tenant-settings:fetch', err); setData({ tenant: { name: '', slug: '', plan_id: '', status: '', active_members: 0, current_users: 0, current_contacts: 0, current_deals: 0 }, settings: {}, error: true }); })
       .finally(() => setLoading(false));
   }, [params?.id]);
 

@@ -5,6 +5,7 @@
  */
 'use client';
 import { useState, useEffect } from 'react';
+import { clientLogDebug } from '@/lib/client-logger';
 
 export default function TestPage() {
   const [test, setTest] = useState('Loading...');
@@ -27,7 +28,7 @@ export default function TestPage() {
       <h1>NuCRM JS Test</h1>
       <p className="text-2xl text-green-600">{test}</p>
       <button 
-        onClick={() => console.log('Button works!')}
+        onClick={() => clientLogDebug('test-js:button-click', 'Button works!')}
         className="px-8 py-4 text-lg bg-violet-600 text-white rounded-xl cursor-pointer hover:bg-violet-700"
       >
         Click Me

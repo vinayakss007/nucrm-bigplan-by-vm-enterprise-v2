@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { clientLogError } from '@/lib/client-logger';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import {
   Search,
@@ -161,7 +162,7 @@ export default function SuperAdminDataExplorer() {
       const data = await res.json();
       if (data.summary) setSummary(data.summary);
     } catch (err) {
-      console.error('Failed to load summary:', err);
+      clientLogError('data-explorer:load-summary', err);
     }
   };
 
@@ -181,7 +182,7 @@ export default function SuperAdminDataExplorer() {
       const data = await res.json();
       setResults(data);
     } catch (err) {
-      console.error('Search failed:', err);
+      clientLogError('data-explorer:search', err);
     } finally {
       setLoading(false);
     }
@@ -204,7 +205,7 @@ export default function SuperAdminDataExplorer() {
       setEditTarget(null);
       handleSearch(); // Refresh
     } catch (err) {
-      console.error('Edit failed:', err);
+      clientLogError('data-explorer:edit', err);
     }
   };
 
@@ -218,7 +219,7 @@ export default function SuperAdminDataExplorer() {
         });
         handleSearch(); // Refresh
       } catch (err) {
-        console.error('Delete failed:', err);
+        clientLogError('data-explorer:delete', err);
       }
     });
   };
