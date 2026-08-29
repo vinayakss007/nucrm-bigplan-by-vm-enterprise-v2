@@ -105,7 +105,9 @@ export default function SuperAdminBackups() {
     try {
       const res = await fetch('/api/superadmin/backups', { signal: abortSignal });
       const data = await res.json();
-      if (data.schedules) setSchedules(data.schedules);
+      // #1300: prefer the standardized { data } envelope, fall back to legacy key.
+      const list = data.data ?? data.schedules;
+      if (list) setSchedules(list);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       clientLogError('backups:load-schedules', err);
@@ -116,7 +118,9 @@ export default function SuperAdminBackups() {
     try {
       const res = await fetch('/api/superadmin/backups?list=recent', { signal: abortSignal });
       const data = await res.json();
-      if (data.backups) setBackups(data.backups);
+      // #1300: prefer the standardized { data } envelope, fall back to legacy key.
+      const list = data.data ?? data.backups;
+      if (list) setBackups(list);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       clientLogError('backups:load-backups', err);
