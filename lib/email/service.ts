@@ -203,34 +203,98 @@ async function sendViaSMTP(payload: EmailPayload): Promise<SendResult> {
 }
 
 /**
+ * True when at least one real email provider (Resend or SMTP) is configured.
+ * Health checks and callers can use this to surface the gap up front instead of
+ * discovering it only when a password-reset silently fails (#1041).
+ */
+export function isEmailConfigured(): boolean {
+  return Boolean(process.env.RESEND_API_KEY || process.env.SMTP_HOST);
+}
+
+/** Which email provider will actually be used, for diagnostics/health. */
+export function getEmailProviderStatus(): {
+  configured: boolean;
+  provider: 'resend' | 'smtp' | 'console (dev)' | 'none';
+} {
+  if (process.env.RESEND_API_KEY) return { configured: true, provider: 'resend' };
+  if (process.env.SMTP_HOST) return { configured: true, provider: 'smtp' };
+  if (process.env.NODE_ENV !== 'production') return { configured: false, provider: 'console (dev)' };
+  return { configured: false, provider: 'none' };
+}
+
+/**
  * Send an email using whichever provider is configured.
  * Tries Resend first, falls back to SMTP.
  * In development with no provider configured, logs to console.
+ *
+ * #1041: email failures must NOT be silent. When no provider is configured in
+ * production, or when every configured provider fails, we record a structured
+ * error (errorLogs + Sentry via logError) so the gap is observable in the
+ * dashboard instead of password resets/invites vanishing without a trace.
  */
 export async function sendEmail(payload: EmailPayload): Promise<SendResult> {
+  const recipients = Array.isArray(payload.to) ? payload.to.join(', ') : payload.to;
+
   // Try Resend first
   if (process.env.RESEND_API_KEY) {
     const result = await sendViaResend(payload);
     if (result.success) return result;
     console.warn('[email] Resend failed, trying SMTP fallback:', result.error);
+
+    // If Resend was the only provider, this is a hard failure — make it loud.
+    if (!process.env.SMTP_HOST) {
+      await reportEmailFailure(`Resend send failed: ${result.error}`, payload.subject, recipients);
+      return result;
+    }
   }
 
   // Try SMTP
   if (process.env.SMTP_HOST) {
-    return sendViaSMTP(payload);
+    const result = await sendViaSMTP(payload);
+    if (!result.success) {
+      await reportEmailFailure(`SMTP send failed: ${result.error}`, payload.subject, recipients);
+    }
+    return result;
   }
 
   // Development fallback - log to console
   if (process.env.NODE_ENV !== 'production') {
-    const to = Array.isArray(payload.to) ? payload.to.join(', ') : payload.to;
-    console.log(`\n📧 [DEV EMAIL - not sent]\nTo: ${to}\nSubject: ${payload.subject}\n`);
+    console.log(`\n📧 [DEV EMAIL - not sent]\nTo: ${recipients}\nSubject: ${payload.subject}\n`);
     return { success: true, provider: 'console (dev)' };
   }
 
+  // Production with NO provider configured — the exact #1041 scenario. Loudly
+  // record it rather than returning a result the caller may ignore.
+  await reportEmailFailure(
+    'No email provider configured (set RESEND_API_KEY or SMTP_HOST). Email was NOT sent.',
+    payload.subject,
+    recipients,
+  );
   return {
     success: false,
     error: 'No email provider configured. Set RESEND_API_KEY or SMTP_HOST in your environment.',
   };
+}
+
+/** Record an email failure to the structured error log (best-effort, never throws). */
+async function reportEmailFailure(reason: string, subject: string, recipients: string): Promise<void> {
+  console.error(`[email] ${reason} | subject="${subject}"`);
+  try {
+    const { logError } = await import('@/lib/errors-server');
+    const { redactEmail } = await import('@/lib/logger/pii');
+    const redacted = recipients
+      .split(',')
+      .map((r) => redactEmail(r.trim()))
+      .join(', ');
+    await logError({
+      error: new Error(reason),
+      context: 'email:send-failure',
+      level: 'error',
+      metadata: { subject, recipients: redacted },
+    });
+  } catch {
+    // logging must never break the send path
+  }
 }
 
 /** Render a simple template string with {{variable}} placeholders */
