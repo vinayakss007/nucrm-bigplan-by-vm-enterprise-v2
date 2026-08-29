@@ -16,10 +16,9 @@ vi.mock('@/lib/dashboard/widget-cache', () => ({
 
 vi.mock('server-only', () => ({}));
 
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, type AuthContext } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { NextResponse, type NextRequest } from 'next/server';
-import type { AuthContext } from '@/lib/auth/middleware';
 
 describe('Notifications Dashboard Widget API', () => {
   beforeEach(() => {

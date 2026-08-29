@@ -143,8 +143,8 @@ describe.each(ALL)('$cls', ({ cls, mod, endpoint, noUpdate, noDelete, extras }) 
       it(`calls ${method} ${path}`, async () => {
         const req = vi.fn().mockResolvedValue(null);
         const modExports = await import(`@/lib/sdk/resources/${mod}`);
-        const r = new modExports[cls](req);
-        await (r as any)[name](...args);
+        const r = new modExports[cls](req) as Record<string, (...a: unknown[]) => Promise<unknown>>;
+        await r[name](...args);
         const expectedArgs = (params !== undefined) ? [method, path, undefined, params]
           : body !== undefined ? [method, path, body]
           : [method, path];

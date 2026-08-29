@@ -23,7 +23,7 @@ vi.mock('@/drizzle/db', () => ({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       chatSessions: { findFirst: (...args: any[]) => mockFindFirst(...args) },
     },
-    transaction: vi.fn(async (cb: (tx: any) => Promise<any>) => {
+    transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
       return await cb({ insert: mockTxInsert, update: mockTxUpdate });
     }),
   },

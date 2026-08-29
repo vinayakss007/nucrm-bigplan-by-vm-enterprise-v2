@@ -24,9 +24,15 @@ function makeRequest(q: string, extra = '') {
   return new NextRequest(`http://localhost/api/superadmin/search?q=${encodeURIComponent(q)}${extra}`);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeChain(result: any[]) {
-  const chain: any = {};
+interface QueryChain {
+  from: ReturnType<typeof vi.fn>;
+  where: ReturnType<typeof vi.fn>;
+  orderBy: ReturnType<typeof vi.fn>;
+  limit: ReturnType<typeof vi.fn>;
+}
+
+function makeChain(result: unknown[]) {
+  const chain = {} as QueryChain;
   chain.from = vi.fn(() => chain);
   chain.where = vi.fn(() => chain);
   chain.orderBy = vi.fn(() => chain);

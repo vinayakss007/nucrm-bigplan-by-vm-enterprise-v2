@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { RequestFn } from '@/lib/sdk/types';
 
 describe('sdk/templates', () => {
   beforeEach(() => {
@@ -11,7 +12,7 @@ describe('sdk/templates', () => {
   it('getCurrent calls request with GET /templates/current', async () => {
     mockRequest.mockResolvedValue({ template: { id: 't1', name: 'Real Estate' }, modules: ['crm'], features: ['contacts'] });
     const { TemplateSDK } = await import('@/lib/sdk/templates');
-    const sdk = new TemplateSDK(mockRequest as any);
+    const sdk = new TemplateSDK(mockRequest as unknown as RequestFn);
     const result = await sdk.getCurrent();
     expect(mockRequest).toHaveBeenCalledWith('GET', '/templates/current');
     expect(result.template.name).toBe('Real Estate');
@@ -20,7 +21,7 @@ describe('sdk/templates', () => {
   it('getAvailableModules calls request with GET /templates/modules', async () => {
     mockRequest.mockResolvedValue([{ id: 'm1', name: 'Email' }]);
     const { TemplateSDK } = await import('@/lib/sdk/templates');
-    const sdk = new TemplateSDK(mockRequest as any);
+    const sdk = new TemplateSDK(mockRequest as unknown as RequestFn);
     const result = await sdk.getAvailableModules();
     expect(mockRequest).toHaveBeenCalledWith('GET', '/templates/modules');
     expect(result).toHaveLength(1);
@@ -29,7 +30,7 @@ describe('sdk/templates', () => {
   it('enableModule calls request with POST /templates/modules/:id/enable', async () => {
     mockRequest.mockResolvedValue(undefined);
     const { TemplateSDK } = await import('@/lib/sdk/templates');
-    const sdk = new TemplateSDK(mockRequest as any);
+    const sdk = new TemplateSDK(mockRequest as unknown as RequestFn);
     await sdk.enableModule('email');
     expect(mockRequest).toHaveBeenCalledWith('POST', '/templates/modules/email/enable');
   });
@@ -37,7 +38,7 @@ describe('sdk/templates', () => {
   it('getConfig calls request with GET /templates/config', async () => {
     mockRequest.mockResolvedValue({ maxUsers: 10 });
     const { TemplateSDK } = await import('@/lib/sdk/templates');
-    const sdk = new TemplateSDK(mockRequest as any);
+    const sdk = new TemplateSDK(mockRequest as unknown as RequestFn);
     const result = await sdk.getConfig();
     expect(mockRequest).toHaveBeenCalledWith('GET', '/templates/config');
     expect(result.maxUsers).toBe(10);

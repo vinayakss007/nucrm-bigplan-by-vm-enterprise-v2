@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { IntegrationInstance } from '@/lib/integrations/types';
 
 // Bypass the SSRF guard so stubbed global fetch is reached (guard has its own suite).
 vi.mock('@/lib/security/ssrf', async (importOriginal) => {
@@ -29,7 +30,7 @@ describe('integrations/ai-connector', () => {
 
       const { aiConnector } = await import('../../lib/integrations/ai-connector');
       const result = await aiConnector(
-        { providerId: 'custom', config: {} } as any,
+        { providerId: 'custom', config: {} } as unknown as IntegrationInstance,
         'send_email',
         { to: 'test@test.com', subject: 'Hi', body: 'Hello' }
       );
@@ -48,7 +49,7 @@ describe('integrations/ai-connector', () => {
 
       const { aiConnector } = await import('../../lib/integrations/ai-connector');
       const result = await aiConnector(
-        { providerId: 'sendgrid', config: { api_key: 'test-key' } } as any,
+        { providerId: 'sendgrid', config: { api_key: 'test-key' } } as unknown as IntegrationInstance,
         'send_email',
         { to: 'test@test.com', subject: 'Hi', body: 'Hello' }
       );
@@ -66,7 +67,7 @@ describe('integrations/ai-connector', () => {
 
       const { aiConnector } = await import('../../lib/integrations/ai-connector');
       const result = await aiConnector(
-        { providerId: 'stripe', config: {} } as any,
+        { providerId: 'stripe', config: {} } as unknown as IntegrationInstance,
         'send_email',
         { to: 'test@test.com' }
       );
@@ -76,8 +77,8 @@ describe('integrations/ai-connector', () => {
 
     it('uses basic auth when specified in config', async () => {
       let capturedHeaders: Record<string, string> = {};
-      const mockFetch = vi.fn().mockImplementation((url: string, opts: any) => {
-        capturedHeaders = opts.headers;
+      const mockFetch = vi.fn().mockImplementation((url: string, opts: RequestInit) => {
+        capturedHeaders = opts.headers as Record<string, string>;
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -89,7 +90,7 @@ describe('integrations/ai-connector', () => {
 
       const { aiConnector } = await import('../../lib/integrations/ai-connector');
       await aiConnector(
-        { providerId: 'stripe', config: { api_key: 'sk_test_123', base_url: 'https://api.stripe.com/v1' } } as any,
+        { providerId: 'stripe', config: { api_key: 'sk_test_123', base_url: 'https://api.stripe.com/v1' } } as unknown as IntegrationInstance,
         'list',
         { resource: 'charges' }
       );

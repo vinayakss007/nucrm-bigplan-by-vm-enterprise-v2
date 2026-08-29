@@ -13,7 +13,7 @@ vi.mock('@/drizzle/db', () => ({
       signingRequests: { findFirst: vi.fn() },
       signingEvents: { findFirst: vi.fn() },
     },
-    transaction: vi.fn(async (cb: (tx: any) => Promise<any>) => {
+    transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
       return await cb({ insert: mockTxInsert, update: mockTxUpdate });
     }),
   },

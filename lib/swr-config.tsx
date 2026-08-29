@@ -7,13 +7,18 @@
 
 import { SWRConfig, type SWRConfiguration } from 'swr';
 
+export interface FetchError extends Error {
+  status: number;
+  info: unknown;
+}
+
 export const defaultFetcher = async (url: string) => {
   const res = await fetch(url);
   if (!res.ok) {
-    const err = new Error('An error occurred while fetching the data.');
+    const err = new Error('An error occurred while fetching the data.') as FetchError;
     const body = await res.json().catch(() => ({}));
-    (err as any).status = res.status;
-    (err as any).info = body;
+    err.status = res.status;
+    err.info = body;
     throw err;
   }
   return res.json();

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { IntegrationInstance } from '@/lib/integrations/types';
 
 // Bypass the SSRF guard so stubbed global fetch is reached (guard has its own suite).
 vi.mock('@/lib/security/ssrf', async (importOriginal) => {
@@ -55,7 +56,7 @@ describe('integrations/registry', () => {
 
       const { executeAction } = await import('../../lib/integrations/registry');
       const result = await executeAction(
-        { providerId: 'sendgrid', config: { api_key: 'test', from_email: 'a@b.com' } } as any,
+        { providerId: 'sendgrid', config: { api_key: 'test', from_email: 'a@b.com' } } as unknown as IntegrationInstance,
         'unknown_action',
         {}
       );
@@ -68,7 +69,7 @@ describe('integrations/registry', () => {
 
       const { executeAction } = await import('../../lib/integrations/registry');
       const result = await executeAction(
-        { providerId: 'sendgrid', config: { api_key: 'test', from_email: 'a@b.com' } } as any,
+        { providerId: 'sendgrid', config: { api_key: 'test', from_email: 'a@b.com' } } as unknown as IntegrationInstance,
         'send_email',
         {}
       );
@@ -81,7 +82,7 @@ describe('integrations/registry', () => {
 
       const { executeAction } = await import('../../lib/integrations/registry');
       const result = await executeAction(
-        { providerId: 'sendgrid', config: { api_key: 'test', from_email: 'a@b.com' } } as any,
+        { providerId: 'sendgrid', config: { api_key: 'test', from_email: 'a@b.com' } } as unknown as IntegrationInstance,
         'send_email',
         { to: 'user@test.com', subject: 'Test', body: '<p>Hi</p>' }
       );
@@ -95,7 +96,7 @@ describe('integrations/registry', () => {
 
       const { executeAction } = await import('../../lib/integrations/registry');
       const result = await executeAction(
-        { providerId: 'nonexistent', config: {} } as any,
+        { providerId: 'nonexistent', config: {} } as unknown as IntegrationInstance,
         'send_email',
         { to: 'test@test.com' }
       );

@@ -11,7 +11,7 @@ describe('db/pool', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.resetModules();
-    delete (globalThis as any).__pgPool;
+    delete (globalThis as typeof globalThis & { __pgPool?: unknown }).__pgPool;
     delete process.env['DATABASE_URL'];
     delete process.env['DATABASE_SSL'];
     delete process.env['DATABASE_POOL_SIZE'];
