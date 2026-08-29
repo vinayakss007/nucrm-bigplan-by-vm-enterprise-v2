@@ -150,8 +150,15 @@ async function handleCheckoutCompleted(session: any) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleSubscriptionUpdated(subscription: any) {
-  const tenantId = subscription.metadata?.tenant_id;
-  if (!tenantId) return;
+  // #1640: Stripe does not guarantee metadata.tenant_id on every
+  // customer.subscription.* event. Prefer the fast metadata path, but fall
+  // back to resolving the tenant by Stripe customer id (as the invoice
+  // handlers do) so genuine status transitions are never silently dropped.
+  const tenantId = await resolveTenantId(subscription);
+  if (!tenantId) {
+    console.warn('[Stripe] subscription.updated: could not resolve tenant from metadata or customer — skipping');
+    return;
+  }
 
   const status = subscription.status;
   const cancelAtPeriodEnd = subscription.cancel_at_period_end;
@@ -223,8 +230,14 @@ async function handleSubscriptionUpdated(subscription: any) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleSubscriptionDeleted(subscription: any) {
-  const tenantId = subscription.metadata?.tenant_id;
-  if (!tenantId) return;
+  // #1640: mirror handleSubscriptionUpdated — resolve the tenant by metadata
+  // first, then fall back to the Stripe customer id so genuine cancellations
+  // without metadata are not silently dropped.
+  const tenantId = await resolveTenantId(subscription);
+  if (!tenantId) {
+    console.warn('[Stripe] subscription.deleted: could not resolve tenant from metadata or customer — skipping');
+    return;
+  }
 
   // Downgrade to free plan
   await db.update(tenants)
@@ -312,6 +325,34 @@ async function handlePaymentFailed(invoice: any) {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * #1640: Resolve the NuCRM tenant id for a subscription event.
+ *
+ * Stripe only populates `metadata.tenant_id` when we set it at creation time;
+ * it is NOT echoed onto every `customer.subscription.*` event. When it is
+ * missing we fall back to the Stripe customer id (mirroring the invoice
+ * handlers) so that genuine updates/cancellations are not silently dropped.
+ * Returns null only when NEITHER metadata NOR the customer lookup resolves.
+ */
+ 
+ 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolveTenantId(subscription: any): Promise<string | null> {
+  const metadataTenantId = subscription.metadata?.tenant_id;
+  if (metadataTenantId) return metadataTenantId;
+
+  // `subscription.customer` is a string id, or an expanded object with `.id`.
+  const rawCustomer = subscription.customer;
+  const customerId = typeof rawCustomer === 'string' ? rawCustomer : rawCustomer?.id;
+  if (!customerId) return null;
+
+  const tenant = await db.query.tenants.findFirst({
+    where: eq(tenants.stripeCustomerId, customerId),
+    columns: { id: true },
+  });
+  return tenant?.id ?? null;
+}
 
  
  
