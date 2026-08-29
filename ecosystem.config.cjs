@@ -19,6 +19,7 @@
  *
  * Tunables (env):
  *   NUCRM_INSTANCES         frontend instances        (default: "max")
+ *   NUCRM_HOST              frontend bind address      (default: 127.0.0.1)
  *   NUCRM_PORT              frontend base port         (default: 3000)
  *   NUCRM_MAX_MEMORY        MB before frontend restart (default: 512)
  *   NUCRM_WORKER_INSTANCES  worker processes           (default: 2)
@@ -33,7 +34,11 @@ module.exports = {
     {
       name: 'web',
       script: 'node_modules/.bin/next',
-      args: 'start',
+      // Bind to loopback by default (#1042): `next start` binds 0.0.0.0 unless
+      // given -H, which would expose port 3000 on the VM's public interface.
+      // nginx (the only public service) proxies to 127.0.0.1:3000. Override
+      // NUCRM_HOST=0.0.0.0 only when nginx runs in a separate network namespace.
+      args: `start -H ${process.env.NUCRM_HOST || '127.0.0.1'}`,
       cwd: __dirname,
 
       instances: process.env.NUCRM_INSTANCES || 'max',
