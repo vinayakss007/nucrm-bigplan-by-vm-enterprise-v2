@@ -27,6 +27,17 @@
  * });
  */
 
+/**
+ * A single file attachment. `content` may be a Node Buffer (raw bytes) or a
+ * base64-encoded string; each provider adapter serializes it to that provider's
+ * required JSON shape.
+ */
+interface EmailAttachment {
+  filename: string;
+  content: Buffer | string;
+  contentType?: string;
+}
+
 interface EmailOptions {
   to: string;
   subject: string;
@@ -34,6 +45,17 @@ interface EmailOptions {
   text?: string;
   type?: 'critical' | 'transactional' | 'marketing' | 'bulk';
   from?: string;
+  /** Optional file attachments; serialized per-provider by each adapter. */
+  attachments?: EmailAttachment[];
+}
+
+/**
+ * Normalize an attachment's content to a base64 string for JSON HTTP APIs.
+ * A Buffer is base64-encoded; a string is assumed to be base64 already and
+ * passed through unchanged.
+ */
+function toBase64(content: Buffer | string): string {
+  return Buffer.isBuffer(content) ? content.toString('base64') : content;
 }
 
 /** Error thrown when provider fallback routing exceeds its depth limit. */
@@ -183,6 +205,15 @@ async function sendViaResend(options: EmailOptions) {
       subject: options.subject,
       html: options.html,
       text: options.text,
+      // Resend: attachments: [{ filename, content: base64 }]. Only include
+      // the key when non-empty so bodies stay unchanged otherwise.
+      attachments: options.attachments && options.attachments.length > 0
+        ? options.attachments.map((a) => ({
+            filename: a.filename,
+            content: toBase64(a.content),
+            ...(a.contentType ? { content_type: a.contentType } : {}),
+          }))
+        : undefined,
     }),
     signal: AbortSignal.timeout(10_000),
   });
@@ -212,6 +243,14 @@ async function sendViaBrevo(options: EmailOptions) {
       subject: options.subject,
       htmlContent: options.html,
       textContent: options.text,
+      // Brevo v3 uses `attachment: [{ name, content: base64 }]`. Only include
+      // the key when non-empty.
+      attachment: options.attachments && options.attachments.length > 0
+        ? options.attachments.map((a) => ({
+            name: a.filename,
+            content: toBase64(a.content),
+          }))
+        : undefined,
     }),
     signal: AbortSignal.timeout(10_000),
   });
@@ -239,6 +278,16 @@ async function sendViaSendGrid(options: EmailOptions) {
       from: { email: options.from || 'noreply@yourdomain.com' },
       subject: options.subject,
       content: [{ type: 'text/html', value: options.html }],
+      // SendGrid: attachments: [{ filename, content: base64, type, disposition }].
+      // Only include the key when non-empty.
+      attachments: options.attachments && options.attachments.length > 0
+        ? options.attachments.map((a) => ({
+            filename: a.filename,
+            content: toBase64(a.content),
+            ...(a.contentType ? { type: a.contentType } : {}),
+            disposition: 'attachment',
+          }))
+        : undefined,
     }),
     signal: AbortSignal.timeout(10_000),
   });
