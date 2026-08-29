@@ -53,12 +53,20 @@ function generateCspNonce(): string {
  * directives are byte-for-byte equivalent to the prior hardened policy EXCEPT
  * script-src, which now uses a per-request nonce instead of 'unsafe-inline'.
  *
- * style-src RETAINS 'unsafe-inline' by design: next/font injects inline styles,
- * react-hot-toast sets inline style attributes, and tenant branding renders
- * server-component <style> blocks. Removing it would break tenant branding,
- * fonts, and toasts. First-party <style> tags still receive the nonce as
- * defense-in-depth (see components/branding/*). A follow-up may migrate
- * style-src to nonces/hashes.
+ * style-src is now nonce-based (#1070): inline <style> ELEMENTS must carry the
+ * per-request nonce. next/font's injected styles and our first-party branding
+ * <style> blocks (components/branding/*, components/shared/branded-header.tsx)
+ * already receive it. Per the CSP spec, once style-src carries a nonce the
+ * browser IGNORES 'unsafe-inline' for <style> elements — so an injected
+ * (un-nonced) <style> XSS payload is blocked, which was the whole point of the
+ * directive that previously used a blanket 'unsafe-inline'.
+ *
+ * style-src-attr RETAINS 'unsafe-inline' by necessity: inline style="..."
+ * ATTRIBUTES cannot be nonced/hashed in practice and are unavoidable here
+ * (react-hot-toast and React's style={{...}} props emit them). Scoping the
+ * exception to style-src-attr keeps those working while <style>/<link>
+ * elements stay locked to the nonce. style-src-elem is set explicitly so
+ * browsers that split the directives treat elements the same as style-src.
  *
  * In dev, 'unsafe-eval' is added to script-src for React Fast Refresh.
  */
@@ -70,7 +78,9 @@ function buildCsp(nonce: string): string {
   return [
     "default-src 'self'",
     scriptSrc,
-    "style-src 'self' 'unsafe-inline'",
+    `style-src 'self' 'nonce-${nonce}'`,
+    `style-src-elem 'self' 'nonce-${nonce}'`,
+    "style-src-attr 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
     "connect-src 'self' ws: wss:",

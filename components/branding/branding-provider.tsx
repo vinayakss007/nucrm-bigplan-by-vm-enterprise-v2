@@ -27,8 +27,9 @@ export default async function BrandingProvider({ branding, children }: BrandingP
     .map(([k, v]) => `${k}:${v};`)
     .join('');
 
-  // Per-request CSP nonce set by proxy.ts (#1070). Passed to the inline
-  // <style> as defense-in-depth; style-src still allows 'unsafe-inline'.
+  // Per-request CSP nonce set by proxy.ts (#1070). REQUIRED on this inline
+  // <style>: style-src is now nonce-based (no 'unsafe-inline' for elements), so
+  // an un-nonced <style> would be blocked by the browser.
   const nonce = (await headers()).get('x-nonce') ?? undefined;
 
   return (

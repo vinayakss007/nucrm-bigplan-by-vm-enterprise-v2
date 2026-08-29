@@ -135,6 +135,18 @@ describe('nonce-based CSP (#1070)', () => {
     expect(csp).toContain(`'nonce-${nonce}'`);
   });
 
+  it('uses the SAME per-request nonce for script-src and style-src', async () => {
+    const { proxy } = await import('@/proxy');
+    const res = await proxy(makeReq('/auth/login'));
+    const nonce = res.headers.get('x-nonce');
+    const csp = res.headers.get('content-security-policy');
+    expect(nonce).toBeTruthy();
+    // Both directives must carry the identical request nonce.
+    expect(csp).toContain(`script-src 'self' 'nonce-${nonce}'`);
+    expect(csp).toContain(`style-src 'self' 'nonce-${nonce}'`);
+    expect(csp).toContain(`style-src-elem 'self' 'nonce-${nonce}'`);
+  });
+
   it('sets the CSP on the forwarded request headers so Next app-render sees the nonce', async () => {
     const { proxy } = await import('@/proxy');
     const res = await proxy(makeReq('/auth/login'));
@@ -158,7 +170,12 @@ describe('nonce-based CSP (#1070)', () => {
     const res = await proxy(makeReq('/auth/login'));
     const csp = res.headers.get('content-security-policy');
     expect(csp).toContain("default-src 'self'");
-    expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    // style-src is nonce-based now (#1070); 'unsafe-inline' only survives for
+    // style ATTRIBUTES via style-src-attr, never for <style> elements.
+    expect(csp).toContain("style-src 'self' 'nonce-");
+    expect(csp).toContain("style-src-elem 'self' 'nonce-");
+    expect(csp).toContain("style-src-attr 'unsafe-inline'");
+    expect(csp).not.toContain("style-src 'self' 'unsafe-inline'");
     expect(csp).toContain("img-src 'self' data: blob:");
     expect(csp).toContain("font-src 'self' data:");
     expect(csp).toContain("connect-src 'self' ws: wss:");
@@ -220,11 +237,14 @@ describe('CSP single-source-of-truth file assertions (#1070)', () => {
     expect(content).not.toContain('add_header Content-Security-Policy');
   });
 
-  it('proxy.ts emits a nonce-based script-src and retains style-src unsafe-inline', async () => {
+  it('proxy.ts emits nonce-based script-src AND style-src, with unsafe-inline scoped to style-src-attr only', async () => {
     const fs = await import('fs');
     const content = fs.readFileSync('proxy.ts', 'utf-8');
     expect(content).toContain("script-src 'self' 'nonce-");
-    expect(content).toContain("style-src 'self' 'unsafe-inline'");
+    expect(content).toContain("style-src 'self' 'nonce-");
+    expect(content).toContain("style-src-attr 'unsafe-inline'");
+    // No blanket element-level unsafe-inline for scripts or styles.
     expect(content).not.toContain("script-src 'self' 'unsafe-inline'");
+    expect(content).not.toContain("style-src 'self' 'unsafe-inline'");
   });
 });
